@@ -5,7 +5,7 @@ import {
   Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt,
   ListTodo, MessagesSquare, ChevronRight, ChevronLeft, X, Camera,
   MapPin, Check, Clock, Users, Settings, Plus, Search, Navigation,
-  FileText, TrendingUp, Bell, ClipboardCheck, AlertOctagon, Lock, PackageCheck, RotateCcw, PackageX, Image as ImageIcon,
+  FileText, Bell, ClipboardCheck, AlertOctagon, Lock, PackageCheck, RotateCcw, PackageX, Image as ImageIcon,
   Building2, PhoneCall, ArrowLeft, Flag, Mail, User, Paperclip, Radio, Flame, Award, Send
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
@@ -59,6 +59,9 @@ function mapFailure(row) {
     completeTime: row.complete_time,
     processResult: row.process_result,
     processNote: row.process_note,
+    etaMinutes: row.eta_minutes,
+    dispatchedAt: row.dispatched_at,
+    escalation: row.escalation,
   };
 }
 
@@ -182,13 +185,25 @@ function addDays(dateStr, days) {
   return d.toISOString().slice(0, 10);
 }
 
+// 고장 1건이 지금 어느 단계인지: 대기(미확인) → 출동중 → 도착(결과입력 대기) → 완료
+function failureStage(f) {
+  if (f.status === "완료") return "done";
+  if (f.arrivalTime) return "arrived";
+  if (f.dispatchedAt) return "dispatched";
+  return "pending";
+}
+
+// 실제 SMS 게이트웨이 연동 전이라, 발송 자체는 콘솔 로그로 시뮬레이션합니다.
+function simulateSms(phone, message) {
+  console.log(`[SMS 발송 시뮬레이션] ${phone ?? "번호 없음"} → ${message}`);
+}
+
+function kakaoNaviUrl(address) {
+  return `https://map.kakao.com/link/search/${encodeURIComponent(address ?? "")}`;
+}
+
 const FAULT_TYPES = ["운행정지", "문닫힘 이상", "소음/진동", "기타"];
 const KIT_PARTS = ["도어 롤러", "리미트 스위치", "인터폰 배터리", "비상통화장치 배터리", "컨트롤러 퓨즈", "브레이크 패드", "기타"];
-const FAULT_FACTORS = ["부품노후", "사용자과실", "외부요인(정전 등)", "원인불명", "기타"];
-const FAULT_PARTS = ["도어", "권상기", "제어반", "인터폰", "비상통화장치", "와이어로프", "기타"];
-const DETAIL_PARTS = ["상부", "하부", "좌측", "우측", "전체", "기타"];
-const PROCESS_CONTENTS = ["부품교체", "조정/조립", "청소", "리셋", "기타"];
-const PROCESS_RESULTS = ["정상처리", "부분처리(재방문 필요)", "처리불가(자재 대기)"];
 
 // 자재 신청, 할일 관련 안내:
 // m1은 아직 '승인대기'(관리자가 지급완료 처리 전), m2는 이미 지급완료되어
@@ -869,11 +884,46 @@ function SiteTab({ inspections, failures, billings, onUpdateSiteNotes }) {
   );
 }
 
+function FailureHistoryDetailScreen({ site, failures, onBack }) {
+  const history = failures.filter((f) => f.siteId === site.id);
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden bg-white">
+      <DrillHeader title="고장처리내역 상세" onBack={onBack} onHome={onBack} />
+      <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="bg-slate-100 rounded-xl p-3 mb-4">
+          <p className="font-bold text-slate-800">{site.name} · {site.elevatorNo}</p>
+          <p className="text-xs text-slate-400 mt-0.5">{site.address}</p>
+        </div>
+        <div className="space-y-2.5">
+          {history.length === 0 ? (
+            <p className="text-xs text-slate-400 text-center py-10">고장 이력이 없습니다</p>
+          ) : (
+            history.map((f) => (
+              <div key={f.id} className="border border-slate-200 rounded-xl p-3.5">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="font-bold text-slate-800 text-sm">{f.errorCode}</p>
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${f.status === "완료" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{f.status}</span>
+                </div>
+                <p className="text-xs text-slate-500 mb-1">{f.reportedAt} 접수 · {f.assignee ?? "미배정"}</p>
+                {f.escalation && <p className="text-xs font-bold text-red-600">조치 결과: {f.escalation}</p>}
+                {f.processResult && <p className="text-xs text-slate-500">처리결과: {f.processResult}</p>}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HomeTab({ inspections, failures }) {
   const sites = useContext(SitesContext);
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const mySites = role === "admin" ? sites : sites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER);
-  const hotSites = mySites.filter((s) => s.failures30d >= 3);
+  const escalatedSiteIds = new Set(failures.filter((f) => f.escalation && f.status !== "완료").map((f) => f.siteId));
+  const criticalSites = mySites.filter((s) => s.failures30d >= 3 || escalatedSiteIds.has(s.id));
+  const [detailTarget, setDetailTarget] = useState(null);
+  const [historySite, setHistorySite] = useState(null);
 
   const dueSoon = inspections
     .filter((i) => !i.result)
@@ -886,75 +936,43 @@ function HomeTab({ inspections, failures }) {
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
   const mine = failures.filter((f) => f.assignee === CURRENT_ENGINEER);
-  const doneCount = mine.filter((f) => f.status === "완료").length;
-  const processingCount = mine.filter((f) => f.status === "진행중").length;
-  const pendingCount = mine.filter((f) => f.status === "미처리").length;
-  const arrivalList = mine.filter((f) => f.status === "미처리");
-  const [arrived, setArrived] = useState({});
+  const activeMine = mine.filter((f) => f.status !== "완료");
+  const stageLabel = { pending: "승인대기", dispatched: "출동중", arrived: "도착완료 · 처리대기" };
+  const stageCls = {
+    pending: "bg-red-100 text-red-700",
+    dispatched: "bg-blue-100 text-blue-700",
+    arrived: "bg-emerald-100 text-emerald-700",
+  };
+
+  if (historySite) {
+    return <FailureHistoryDetailScreen site={historySite} failures={failures} onBack={() => setHistorySite(null)} />;
+  }
 
   return (
     <div className="flex-1 overflow-y-auto pb-4">
-      {/* 고장처리현황 */}
+      {/* 고장 처리 현황 */}
       <div className="px-5 pt-4">
-        <div className="bg-white rounded-2xl border border-slate-200 p-4">
-          <h3 className="font-bold text-slate-800 text-sm mb-3">고장처리현황</h3>
-          <div className="grid grid-cols-4 gap-2">
-            <div className="flex flex-col items-center gap-1.5">
-              <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-                <TrendingUp size={18} className="text-blue-600" />
-              </div>
-              <span className="text-lg font-extrabold text-blue-600">{hotSites.length}</span>
-              <span className="text-[11px] text-slate-500">예측</span>
-            </div>
-            <div className="flex flex-col items-center gap-1.5">
-              <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
-                <ClipboardCheck size={18} className="text-emerald-600" />
-              </div>
-              <span className="text-lg font-extrabold text-emerald-600">{doneCount}</span>
-              <span className="text-[11px] text-slate-500">처리</span>
-            </div>
-            <div className="flex flex-col items-center gap-1.5">
-              <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center">
-                <ClipboardCheck size={18} className="text-amber-600" />
-              </div>
-              <span className="text-lg font-extrabold text-amber-600">{processingCount}</span>
-              <span className="text-[11px] text-slate-500">처리중</span>
-            </div>
-            <div className="flex flex-col items-center gap-1.5">
-              <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center">
-                <ClipboardCheck size={18} className="text-red-600" />
-              </div>
-              <span className="text-lg font-extrabold text-red-600">{pendingCount}</span>
-              <span className="text-[11px] text-slate-500">미처리</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 고장 현장 도착 */}
-      <div className="px-5 pt-4">
-        <div className="flex items-center gap-1.5 mb-2">
-          <MapPin size={16} className="text-slate-700" />
-          <h3 className="font-bold text-slate-800 text-sm">고장 현장 도착</h3>
-        </div>
+        <h3 className="font-bold text-slate-800 text-sm mb-2">고장 처리 현황</h3>
         <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
-          {arrivalList.length === 0 ? (
-            <p className="text-xs text-slate-400 text-center py-5">도착 대기 중인 고장 현장이 없습니다</p>
+          {activeMine.length === 0 ? (
+            <p className="text-xs text-slate-400 text-center py-5">진행 중인 고장이 없습니다</p>
           ) : (
-            arrivalList.map((f) => (
-              <div key={f.id} className="flex items-center justify-between px-4 py-3">
-                <p className="text-sm font-semibold text-slate-700">{f.siteName} {f.elevatorNo}</p>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-slate-400 font-mono">{arrived[f.id] ?? "--:--"}</span>
-                  <button
-                    onClick={() => setArrived((prev) => ({ ...prev, [f.id]: new Date().toTimeString().slice(0, 5) }))}
-                    className={`text-xs font-bold px-4 py-2 rounded-lg ${arrived[f.id] ? "bg-emerald-100 text-emerald-700" : "bg-blue-700 text-white active:bg-blue-800"}`}
-                  >
-                    {arrived[f.id] ? "도착완료" : "도착"}
-                  </button>
-                </div>
-              </div>
-            ))
+            activeMine.map((f) => {
+              const stage = failureStage(f);
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => setDetailTarget(f)}
+                  className="w-full flex items-center justify-between px-4 py-3 text-left active:bg-slate-50"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700">{f.siteName} {f.elevatorNo}</p>
+                    <p className="text-[11px] text-slate-400">{f.errorCode}</p>
+                  </div>
+                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${stageCls[stage]}`}>{stageLabel[stage]}</span>
+                </button>
+              );
+            })
           )}
         </div>
       </div>
@@ -964,22 +982,26 @@ function HomeTab({ inspections, failures }) {
         <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-2">
             <AlertOctagon size={18} className="text-red-600" />
-            <h3 className="font-extrabold text-red-700 text-sm whitespace-nowrap">집중 관리현장(한달 내 고장 3회 이상)</h3>
+            <h3 className="font-extrabold text-red-700 text-sm whitespace-nowrap">집중 관리현장(고장 3회 이상 · 지원요청/운행정지)</h3>
           </div>
-          {hotSites.length === 0 ? (
+          {criticalSites.length === 0 ? (
             <p className="text-xs text-red-500">현재 집중 관리 대상 현장이 없습니다.</p>
           ) : (
             <div className="space-y-2">
-              {hotSites.map((s) => (
-                <div key={s.id} className="flex items-center justify-between bg-white rounded-xl px-3 py-2.5 border border-red-100">
+              {criticalSites.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setHistorySite(s)}
+                  className="w-full flex items-center justify-between bg-white rounded-xl px-3 py-2.5 border border-red-100 text-left active:bg-red-50"
+                >
                   <div>
                     <p className="font-bold text-slate-800 text-sm">{s.name} · {s.elevatorNo}</p>
                     <p className="text-[11px] text-slate-400">{s.address}</p>
                   </div>
-                  <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">
-                    {s.failures30d}회 고장
+                  <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full shrink-0">
+                    {escalatedSiteIds.has(s.id) ? "조치필요" : `${s.failures30d}회 고장`}
                   </span>
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -1050,6 +1072,8 @@ function HomeTab({ inspections, failures }) {
           <p className="px-4 pb-3 text-[9.5px] text-slate-300">* 프로토타입 시연용 시뮬레이션 데이터입니다</p>
         </div>
       </div>
+
+      {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} />}
     </div>
   );
 }
@@ -1199,10 +1223,179 @@ function FailureRegisterForm({ setFailures, goToUnassigned }) {
   );
 }
 
-function FailureUnassignedList({ failures, setFailures }) {
+function SmsToast({ message }) {
+  if (!message) return null;
+  return (
+    <div className="absolute left-1/2 bottom-24 -translate-x-1/2 z-40 bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-1.5 whitespace-nowrap">
+      <Check size={13} className="text-emerald-400" /> {message}
+    </div>
+  );
+}
+
+function FailureDetailSheet({ failure, onClose }) {
   const sites = useContext(SitesContext);
-  const { name: CURRENT_ENGINEER } = useContext(AuthContext);
+  const site = sites.find((s) => s.id === failure.siteId);
+  return (
+    <Sheet title="고장신고 상세" onClose={onClose}>
+      <div className="bg-slate-100 rounded-xl p-3 mb-3">
+        <p className="font-bold text-slate-800">{failure.siteName} · {failure.elevatorNo}</p>
+        <p className="text-sm text-blue-700 font-semibold mt-1">{failure.errorCode}</p>
+      </div>
+      <div className="space-y-2.5 mb-4">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-400">주소</span>
+          <span className="font-semibold text-slate-700 text-right">{site?.address ?? "-"}</span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-400">신고자 전화번호</span>
+          <span className="font-semibold text-slate-700">{failure.reporterPhone || "-"}</span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-400">접수일시</span>
+          <span className="font-semibold text-slate-700">{failure.reportedAt}</span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-400">담당 기사</span>
+          <span className="font-semibold text-slate-700">{failure.assignee || "미정"}</span>
+        </div>
+        {failure.dispatchedAt && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-400">출동 확정</span>
+            <span className="font-semibold text-slate-700">{failure.dispatchedAt} · {failure.etaMinutes}분 후 도착예정</span>
+          </div>
+        )}
+        {failure.arrivalTime && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-400">실제 도착</span>
+            <span className="font-semibold text-slate-700">{failure.arrivalTime}</span>
+          </div>
+        )}
+        {failure.escalation && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-400">조치 결과</span>
+            <span className="font-semibold text-red-600">{failure.escalation}</span>
+          </div>
+        )}
+      </div>
+      <a
+        href={kakaoNaviUrl(site?.address)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="w-full flex items-center justify-center gap-1.5 bg-amber-400 text-amber-950 text-sm font-bold py-3 rounded-xl active:bg-amber-500"
+      >
+        <Navigation size={15} /> 카카오맵으로 길찾기
+      </a>
+    </Sheet>
+  );
+}
+
+function DispatchEtaModal({ failure, onConfirm, onClose }) {
+  const [eta, setEta] = useState(20);
+  return (
+    <Sheet title="도착 예정 시간 입력" onClose={onClose}>
+      <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {failure.elevatorNo}</p>
+      <Field label="도착 예정 시간">
+        <div className="flex gap-2 flex-wrap">
+          {[10, 20, 30, 40, 60].map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setEta(m)}
+              className={`px-3.5 py-2 rounded-lg text-xs font-bold border ${eta === m ? "bg-blue-700 text-white border-blue-700" : "bg-white text-slate-500 border-slate-300"}`}
+            >
+              {m}분 후
+            </button>
+          ))}
+        </div>
+      </Field>
+      <p className="text-xs font-bold text-orange-600 bg-orange-50 rounded-lg px-3 py-2.5 mb-4 leading-relaxed">
+        ⚠️ 확인을 누르면 고객에게 도착 시간이 문자로 자동 발송됩니다
+      </p>
+      <PrimaryButton onClick={() => onConfirm(eta)}>출동 확정</PrimaryButton>
+    </Sheet>
+  );
+}
+
+function ArrivalResultModal({ failure, onConfirm, onClose }) {
+  const options = [
+    { value: "처리완료", emoji: "🟢", cls: "border-emerald-300 bg-emerald-50 text-emerald-700" },
+    { value: "지원요청", emoji: "🟡", cls: "border-amber-300 bg-amber-50 text-amber-700" },
+    { value: "운행정지", emoji: "🔴", cls: "border-red-300 bg-red-50 text-red-700" },
+  ];
+  return (
+    <Sheet title="고장처리결과 입력" onClose={onClose}>
+      <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {failure.elevatorNo}</p>
+      <div className="space-y-2.5">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => onConfirm(o.value)}
+            className={`w-full flex items-center gap-2.5 rounded-xl border-2 py-3.5 px-4 font-bold ${o.cls}`}
+          >
+            <span className="text-lg leading-none">{o.emoji}</span> {o.value}
+          </button>
+        ))}
+      </div>
+    </Sheet>
+  );
+}
+
+function FailureResponseCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult }) {
+  const stage = failureStage(f);
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <button type="button" onClick={() => onOpenDetail(f)} className="w-full text-left p-3.5">
+        <div className="flex items-center justify-between mb-1">
+          <p className="font-bold text-slate-800 text-[15px]">{f.siteName} · {f.elevatorNo}</p>
+          {f.escalation && (
+            <span className="text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{f.escalation}</span>
+          )}
+        </div>
+        <p className="text-sm text-slate-500 mb-2">{f.reportedAt}</p>
+        <div className="bg-blue-500 text-white text-sm font-semibold rounded-lg px-3 py-2.5">{f.errorCode}</div>
+      </button>
+      <div className="px-3.5 pb-3.5">
+        {stage === "pending" && (
+          <button
+            onClick={() => onDispatch(f)}
+            className="w-full bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800"
+          >
+            {f.assignee ? "출동 응답" : "내가 출동하기"}
+          </button>
+        )}
+        {stage === "dispatched" && (
+          <div className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2.5">
+            <span className="text-xs font-semibold text-blue-700">
+              출동 {f.dispatchedAt} · {f.etaMinutes}분 후 도착예정
+            </span>
+            <button
+              onClick={() => onArrive(f)}
+              className="text-xs font-bold text-white bg-blue-700 px-3 py-1.5 rounded-lg active:bg-blue-800"
+            >
+              도착
+            </button>
+          </div>
+        )}
+        {stage === "arrived" && (
+          <button
+            onClick={() => onOpenResult(f)}
+            className="w-full bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg active:bg-emerald-700"
+          >
+            🛠️ 고장처리결과 입력 (도착 {f.arrivalTime})
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FailureUnassignedList({ failures, onDispatch, onArrive, onResult }) {
   const list = failures.filter((f) => !f.assignee && f.status === "미처리");
+  const [detailTarget, setDetailTarget] = useState(null);
+  const [dispatchTarget, setDispatchTarget] = useState(null);
+  const [resultTarget, setResultTarget] = useState(null);
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <FilterBar startDate="2026년 07월 10일 金" endDate="2026년 07월 10일 金" />
@@ -1210,254 +1403,53 @@ function FailureUnassignedList({ failures, setFailures }) {
         {list.length === 0 ? (
           <p className="text-xs text-slate-400 text-center py-10">미배정 고장이 없습니다</p>
         ) : (
-          list.map((f) => {
-            const site = sites.find((s) => s.id === f.siteId);
-            return (
-              <div key={f.id} className="flex rounded-xl overflow-hidden border border-slate-200 bg-white">
-                <div className="w-1.5 bg-red-500 shrink-0" />
-                <div className="flex-1 p-3.5">
-                  <p className="font-bold text-slate-800 text-[15px]">
-                    {f.siteName} {f.elevatorNo} <span className="text-slate-400 font-normal text-sm">({site?.contractType ?? "일반계약"})</span>
-                  </p>
-                  <p className="text-sm text-slate-500 mt-1">{f.reportedAt.replace(" ", " / ")}</p>
-                  <div className="mt-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg px-3 py-2.5">
-                    {f.errorCode}
-                  </div>
-                  <button
-                    onClick={async () => {
-                      await supabase.from("failures").update({ assignee: CURRENT_ENGINEER }).eq("id", f.id);
-                      setFailures((prev) => prev.map((x) => (x.id === f.id ? { ...x, assignee: CURRENT_ENGINEER } : x)));
-                    }}
-                    className="w-full mt-2.5 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800"
-                  >
-                    나에게 배정하기
-                  </button>
-                </div>
-              </div>
-            );
-          })
+          list.map((f) => (
+            <FailureResponseCard
+              key={f.id}
+              f={f}
+              onOpenDetail={setDetailTarget}
+              onDispatch={setDispatchTarget}
+              onArrive={onArrive}
+              onOpenResult={setResultTarget}
+            />
+          ))
         )}
       </div>
+
+      {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} />}
+      {dispatchTarget && (
+        <DispatchEtaModal
+          failure={dispatchTarget}
+          onClose={() => setDispatchTarget(null)}
+          onConfirm={(eta) => {
+            onDispatch(dispatchTarget, eta);
+            setDispatchTarget(null);
+          }}
+        />
+      )}
+      {resultTarget && (
+        <ArrivalResultModal
+          failure={resultTarget}
+          onClose={() => setResultTarget(null)}
+          onConfirm={(result) => {
+            onResult(resultTarget, result);
+            setResultTarget(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function FailureProcessDetail({ failure, onBack, onSave }) {
-  const sites = useContext(SitesContext);
-  const { name: CURRENT_ENGINEER, engineerNames } = useContext(AuthContext);
-  const site = sites.find((s) => s.id === failure.siteId);
-  const [form, setForm] = useState({
-    arrivalTime: "",
-    completeTime: "",
-    processor2: "",
-    result: "",
-    faultFactor: "",
-    faultPart: "",
-    detailPart: "",
-    processContent: "",
-    faultDetailNote: "",
-    processDetailNote: "",
-    postCareNote: "",
-    customerRequestNote: "",
-  });
-  const nowTime = () => new Date().toTimeString().slice(0, 5);
-
-  const resultToStatus = {
-    "정상처리": "완료",
-    "부분처리(재방문 필요)": "진행중",
-    "처리불가(자재 대기)": "진행중",
-  };
-
-  function submit() {
-    if (!form.result) return;
-    onSave({
-      status: resultToStatus[form.result] ?? failure.status,
-      arrivalTime: form.arrivalTime,
-      completeTime: form.completeTime,
-      processResult: form.result,
-      processNote: form.processDetailNote,
-    });
-  }
-
-  return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-white">
-      <DrillHeader title="고장 처리등록" onBack={onBack} onHome={onBack} />
-      <div className="flex-1 overflow-y-auto bg-slate-50 pb-24">
-        <div className="bg-white overflow-visible">
-          <TimelineRow icon={PhoneCall} label="전화번호" value={site?.phone ?? "-"} />
-          <TimelineRow icon={Home} label="주소" value={site?.address ?? "-"} />
-          <TimelineInput icon={Settings} label="호기">
-            <span className={tlInputCls}>{failure.elevatorNo}</span>
-          </TimelineInput>
-          <TimelineRow icon={PackageX} label="고장아님(다발아님)" value={failure.notFault ? "비고장" : "고장"} />
-          <TimelineInput icon={ClipboardCheck} label="도착시간">
-            {form.arrivalTime ? (
-              <span className={tlInputCls}>{form.arrivalTime}</span>
-            ) : (
-              <div className="flex gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, arrivalTime: nowTime() })}
-                  className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1.5 rounded-lg"
-                >
-                  직접등록
-                </button>
-                <button type="button" className="text-xs font-bold text-slate-400 bg-slate-100 px-2.5 py-1.5 rounded-lg">
-                  QR 코드등록
-                </button>
-              </div>
-            )}
-          </TimelineInput>
-          <TimelineInput icon={ClipboardCheck} label="완료시간">
-            {form.completeTime ? (
-              <span className={tlInputCls}>{form.completeTime}</span>
-            ) : (
-              <div className="flex gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, completeTime: nowTime() })}
-                  className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1.5 rounded-lg"
-                >
-                  직접등록
-                </button>
-                <button type="button" className="text-xs font-bold text-slate-400 bg-slate-100 px-2.5 py-1.5 rounded-lg">
-                  QR 코드등록
-                </button>
-              </div>
-            )}
-          </TimelineInput>
-          <TimelineRow icon={User} label="처리자" value={CURRENT_ENGINEER} />
-          <TimelineInput icon={User} label="(지원)처리자2" last>
-            <select className={tlInputCls} value={form.processor2} onChange={(e) => setForm({ ...form, processor2: e.target.value })}>
-              <option value="">선택하세요</option>
-              {engineerNames.filter((e) => e !== CURRENT_ENGINEER).map((e) => <option key={e} value={e}>{e}</option>)}
-            </select>
-          </TimelineInput>
-        </div>
-
-        <p className="px-5 pt-5 pb-2 flex items-center justify-between text-xs font-bold text-slate-400">
-          입력란 <span className="text-blue-600">필수입력</span>
-        </p>
-        <div className="bg-white overflow-visible">
-          <TimelineInput icon={Check} label="처리결과" required>
-            <select className={tlInputCls} value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })}>
-              <option value="">선택하세요</option>
-              {PROCESS_RESULTS.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </TimelineInput>
-          <TimelineRow icon={PackageX} label="고장내용" value={failure.errorCode} />
-          <TimelineInput icon={PackageX} label="고장요인">
-            <select className={tlInputCls} value={form.faultFactor} onChange={(e) => setForm({ ...form, faultFactor: e.target.value })}>
-              <option value="">선택하세요</option>
-              {FAULT_FACTORS.map((f) => <option key={f} value={f}>{f}</option>)}
-            </select>
-          </TimelineInput>
-          <TimelineInput icon={ClipboardCheck} label="고장부위">
-            <select className={tlInputCls} value={form.faultPart} onChange={(e) => setForm({ ...form, faultPart: e.target.value })}>
-              <option value="">선택하세요</option>
-              {FAULT_PARTS.map((f) => <option key={f} value={f}>{f}</option>)}
-            </select>
-          </TimelineInput>
-          <TimelineInput icon={ClipboardCheck} label="상세부위">
-            <select className={tlInputCls} value={form.detailPart} onChange={(e) => setForm({ ...form, detailPart: e.target.value })}>
-              <option value="">선택하세요</option>
-              {DETAIL_PARTS.map((d) => <option key={d} value={d}>{d}</option>)}
-            </select>
-          </TimelineInput>
-          <TimelineInput icon={ClipboardCheck} label="처리내용" last>
-            <select className={tlInputCls} value={form.processContent} onChange={(e) => setForm({ ...form, processContent: e.target.value })}>
-              <option value="">선택하세요</option>
-              {PROCESS_CONTENTS.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </TimelineInput>
-        </div>
-
-        <div className="px-5 pt-5">
-          <p className="text-xs font-bold text-slate-400 mb-2">고장원인상세</p>
-          <textarea
-            className={inputCls}
-            rows={2}
-            placeholder="입력하세요"
-            value={form.faultDetailNote}
-            onChange={(e) => setForm({ ...form, faultDetailNote: e.target.value })}
-          />
-        </div>
-        <div className="px-5 pt-4">
-          <p className="text-xs font-bold text-slate-400 mb-2">처리내용상세</p>
-          <textarea
-            className={inputCls}
-            rows={2}
-            placeholder="입력하세요"
-            value={form.processDetailNote}
-            onChange={(e) => setForm({ ...form, processDetailNote: e.target.value })}
-          />
-        </div>
-        <div className="px-5 pt-4">
-          <p className="text-xs font-bold text-slate-400 mb-2">사후관리사항</p>
-          <textarea
-            className={inputCls}
-            rows={2}
-            placeholder="입력하세요"
-            value={form.postCareNote}
-            onChange={(e) => setForm({ ...form, postCareNote: e.target.value })}
-          />
-        </div>
-        <div className="px-5 pt-4">
-          <p className="text-xs font-bold text-slate-400 mb-2">고객요구사항</p>
-          <textarea
-            className={inputCls}
-            rows={2}
-            placeholder="입력하세요"
-            value={form.customerRequestNote}
-            onChange={(e) => setForm({ ...form, customerRequestNote: e.target.value })}
-          />
-        </div>
-
-        <div className="px-5 pt-5 flex items-center justify-between">
-          <span className="text-sm font-bold text-slate-600">첨부</span>
-          <button type="button" className="flex items-center gap-1.5 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full">
-            <Camera size={13} /> 사진
-          </button>
-        </div>
-
-        <div className="px-5 pt-6">
-          <PrimaryButton onClick={submit} disabled={!form.result}>처리완료</PrimaryButton>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FailureProcessRegister({ failures, setFailures }) {
+function FailureProcessRegister({ failures, onDispatch, onArrive, onResult }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
-  const [showProcessing, setShowProcessing] = useState(false);
-  const [selected, setSelected] = useState(null);
+  const [showDone, setShowDone] = useState(false);
+  const [detailTarget, setDetailTarget] = useState(null);
+  const [dispatchTarget, setDispatchTarget] = useState(null);
+  const [resultTarget, setResultTarget] = useState(null);
   const mine = failures.filter((f) => f.assignee === CURRENT_ENGINEER);
-  const waiting = mine.filter((f) => f.status === "미처리" || (showProcessing && f.status === "진행중"));
+  const active = mine.filter((f) => f.status !== "완료");
   const done = mine.filter((f) => f.status === "완료");
-
-  if (selected) {
-    return (
-      <FailureProcessDetail
-        failure={selected}
-        onBack={() => setSelected(null)}
-        onSave={async (updates) => {
-          await supabase
-            .from("failures")
-            .update({
-              status: updates.status,
-              arrival_time: updates.arrivalTime,
-              complete_time: updates.completeTime,
-              process_result: updates.processResult,
-              process_note: updates.processNote,
-            })
-            .eq("id", selected.id);
-          setFailures((prev) => prev.map((x) => (x.id === selected.id ? { ...x, ...updates } : x)));
-          setSelected(null);
-        }}
-      />
-    );
-  }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -1471,54 +1463,73 @@ function FailureProcessRegister({ failures, setFailures }) {
         endDate="2026년 07월 31일 金"
       />
       <div className="flex-1 overflow-y-auto px-5 py-4">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-sm font-bold text-slate-700">등록대기</p>
-        </div>
-        <div className="space-y-2 mb-5">
-          {waiting.length === 0 ? (
-            <p className="text-xs text-slate-400 py-3">등록 대기중인 고장이 없습니다</p>
+        <p className="text-sm font-bold text-slate-700 mb-2">처리중인 고장</p>
+        <div className="space-y-2.5 mb-5">
+          {active.length === 0 ? (
+            <p className="text-xs text-slate-400 py-3">처리중인 고장이 없습니다</p>
           ) : (
-            waiting.map((f) => (
-              <button
+            active.map((f) => (
+              <FailureResponseCard
                 key={f.id}
-                onClick={() => setSelected(f)}
-                className="w-full text-left bg-white rounded-xl border border-slate-200 p-3.5 active:bg-slate-50"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <p className="font-bold text-slate-800 text-sm">{f.siteName} · {f.elevatorNo}</p>
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${f.status === "진행중" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>{f.status}</span>
-                </div>
-                <p className="text-xs text-slate-500">{f.errorCode}</p>
-              </button>
+                f={f}
+                onOpenDetail={setDetailTarget}
+                onDispatch={setDispatchTarget}
+                onArrive={onArrive}
+                onOpenResult={setResultTarget}
+              />
             ))
           )}
         </div>
 
         <div className="flex items-center justify-between mb-2">
           <p className="text-sm font-bold text-slate-700">처리완료</p>
-          <button onClick={() => setShowProcessing((v) => !v)} className="flex items-center gap-1.5">
-            <div className={`w-9 h-5 rounded-full flex items-center px-0.5 ${showProcessing ? "bg-blue-600 justify-end" : "bg-slate-300 justify-start"}`}>
+          <button onClick={() => setShowDone((v) => !v)} className="flex items-center gap-1.5">
+            <div className={`w-9 h-5 rounded-full flex items-center px-0.5 ${showDone ? "bg-blue-600 justify-end" : "bg-slate-300 justify-start"}`}>
               <div className="w-4 h-4 rounded-full bg-white" />
             </div>
-            <span className="text-xs font-bold text-slate-500">처리중 보기</span>
+            <span className="text-xs font-bold text-slate-500">완료 보기</span>
           </button>
         </div>
-        <div className="space-y-2">
-          {done.length === 0 ? (
-            <p className="text-xs text-slate-400 py-3">처리완료된 고장이 없습니다</p>
-          ) : (
-            done.map((f) => (
-              <div key={f.id} className="bg-white rounded-xl border border-slate-200 p-3.5 opacity-70">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="font-bold text-slate-800 text-sm">{f.siteName} · {f.elevatorNo}</p>
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">완료</span>
-                </div>
-                <p className="text-xs text-slate-500">{f.errorCode}</p>
-              </div>
-            ))
-          )}
-        </div>
+        {showDone && (
+          <div className="space-y-2">
+            {done.length === 0 ? (
+              <p className="text-xs text-slate-400 py-3">처리완료된 고장이 없습니다</p>
+            ) : (
+              done.map((f) => (
+                <button key={f.id} onClick={() => setDetailTarget(f)} className="w-full text-left bg-white rounded-xl border border-slate-200 p-3.5 opacity-70">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="font-bold text-slate-800 text-sm">{f.siteName} · {f.elevatorNo}</p>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">완료</span>
+                  </div>
+                  <p className="text-xs text-slate-500">{f.errorCode}</p>
+                </button>
+              ))
+            )}
+          </div>
+        )}
       </div>
+
+      {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} />}
+      {dispatchTarget && (
+        <DispatchEtaModal
+          failure={dispatchTarget}
+          onClose={() => setDispatchTarget(null)}
+          onConfirm={(eta) => {
+            onDispatch(dispatchTarget, eta);
+            setDispatchTarget(null);
+          }}
+        />
+      )}
+      {resultTarget && (
+        <ArrivalResultModal
+          failure={resultTarget}
+          onClose={() => setResultTarget(null)}
+          onConfirm={(result) => {
+            onResult(resultTarget, result);
+            setResultTarget(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1586,13 +1597,49 @@ function FailureStatusOverview({ failures }) {
 function FailureTab({ failures, setFailures }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
+  const [toast, setToast] = useState("");
   const subTabs = ["접수등록", "미배정", "처리등록", "처리현황"];
   const unassignedCount = failures.filter((f) => !f.assignee && f.status === "미처리").length;
   const waitingCount = failures.filter((f) => f.assignee === CURRENT_ENGINEER && f.status === "미처리").length;
   const badgeCount = { 미배정: unassignedCount, 처리등록: waitingCount };
 
+  function notify(message) {
+    setToast(message);
+    setTimeout(() => setToast(""), 3000);
+  }
+
+  async function handleDispatch(failure, etaMinutes) {
+    const assignee = failure.assignee || CURRENT_ENGINEER;
+    const dispatchedAt = new Date().toTimeString().slice(0, 5);
+    await supabase
+      .from("failures")
+      .update({ assignee, dispatched_at: dispatchedAt, eta_minutes: etaMinutes, status: "진행중" })
+      .eq("id", failure.id);
+    setFailures((prev) =>
+      prev.map((x) => (x.id === failure.id ? { ...x, assignee, dispatchedAt, etaMinutes, status: "진행중" } : x))
+    );
+    simulateSms(failure.reporterPhone, `구일엘리베이터입니다. 담당 기사가 약 ${etaMinutes}분 후 도착 예정입니다.`);
+    notify(`문자 발송 완료 · ${failure.reporterPhone || "신고자"}에게 도착예정시간 안내`);
+  }
+
+  async function handleArrive(failure) {
+    const arrivalTime = new Date().toTimeString().slice(0, 5);
+    await supabase.from("failures").update({ arrival_time: arrivalTime }).eq("id", failure.id);
+    setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, arrivalTime } : x)));
+  }
+
+  async function handleResult(failure, result) {
+    if (result === "처리완료") {
+      await supabase.from("failures").update({ status: "완료", process_result: result, escalation: null }).eq("id", failure.id);
+      setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, status: "완료", processResult: result, escalation: null } : x)));
+    } else {
+      await supabase.from("failures").update({ process_result: result, escalation: result }).eq("id", failure.id);
+      setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, processResult: result, escalation: result } : x)));
+    }
+  }
+
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden relative">
       <div className="flex border-b border-slate-100 shrink-0 overflow-x-auto">
         {subTabs.map((t) => (
           <button
@@ -1608,9 +1655,14 @@ function FailureTab({ failures, setFailures }) {
         ))}
       </div>
       {subTab === "접수등록" && <FailureRegisterForm setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />}
-      {subTab === "미배정" && <FailureUnassignedList failures={failures} setFailures={setFailures} />}
-      {subTab === "처리등록" && <FailureProcessRegister failures={failures} setFailures={setFailures} />}
+      {subTab === "미배정" && (
+        <FailureUnassignedList failures={failures} onDispatch={handleDispatch} onArrive={handleArrive} onResult={handleResult} />
+      )}
+      {subTab === "처리등록" && (
+        <FailureProcessRegister failures={failures} onDispatch={handleDispatch} onArrive={handleArrive} onResult={handleResult} />
+      )}
       {subTab === "처리현황" && <FailureStatusOverview failures={failures} />}
+      <SmsToast message={toast} />
     </div>
   );
 }
