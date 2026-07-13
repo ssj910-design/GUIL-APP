@@ -62,6 +62,9 @@ function mapFailure(row) {
     etaMinutes: row.eta_minutes,
     dispatchedAt: row.dispatched_at,
     escalation: row.escalation,
+    faultCause: row.fault_cause,
+    processContent: row.process_content,
+    photoCount: row.photo_count,
   };
 }
 
@@ -956,7 +959,7 @@ function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast 
             </div>
           ) : (
             activeMine.map((f) => (
-              <FailureResponseCard
+              <FailureMiniCard
                 key={f.id}
                 f={f}
                 onOpenDetail={setDetailTarget}
@@ -1330,11 +1333,58 @@ function DispatchEtaModal({ failure, onConfirm, onClose }) {
 }
 
 function ArrivalResultModal({ failure, onConfirm, onClose }) {
+  const [step, setStep] = useState("choose");
+  const [cause, setCause] = useState("");
+  const [processContent, setProcessContent] = useState("");
+  const [note, setNote] = useState("");
+  const [photos, setPhotos] = useState([]);
   const options = [
     { value: "처리완료", emoji: "🟢", cls: "border-emerald-300 bg-emerald-50 text-emerald-700" },
     { value: "지원요청", emoji: "🟡", cls: "border-amber-300 bg-amber-50 text-amber-700" },
     { value: "운행정지", emoji: "🔴", cls: "border-red-300 bg-red-50 text-red-700" },
   ];
+
+  function pick(value) {
+    if (value === "처리완료") setStep("complete");
+    else onConfirm({ result: value });
+  }
+
+  if (step === "complete") {
+    return (
+      <Sheet title="고장처리결과 입력 · 처리완료" onClose={onClose}>
+        <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {failure.elevatorNo}</p>
+        <div className="space-y-3.5">
+          <div>
+            <label className="text-xs font-bold text-slate-600 mb-1 block">발생원인</label>
+            <input className={inputCls} value={cause} onChange={(e) => setCause(e.target.value)} placeholder="예: 도어 센서 오작동" />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-600 mb-1 block">처리내용</label>
+            <input className={inputCls} value={processContent} onChange={(e) => setProcessContent(e.target.value)} placeholder="예: 센서 교체 및 재조정" />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-600 mb-1 block">비고</label>
+            <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} placeholder="추가 전달사항 (선택)" />
+          </div>
+          <MultiPhotoUpload
+            photos={photos}
+            onAdd={() => setPhotos((p) => [...p, Date.now()])}
+            onRemove={(idx) => setPhotos((p) => p.filter((_, i) => i !== idx))}
+            label="처리 사진"
+            required={false}
+          />
+          <button
+            type="button"
+            onClick={() => onConfirm({ result: "처리완료", cause, processContent, note, photoCount: photos.length })}
+            className="w-full bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl active:bg-emerald-700"
+          >
+            처리완료 등록
+          </button>
+        </div>
+      </Sheet>
+    );
+  }
+
   return (
     <Sheet title="고장처리결과 입력" onClose={onClose}>
       <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {failure.elevatorNo}</p>
@@ -1343,7 +1393,7 @@ function ArrivalResultModal({ failure, onConfirm, onClose }) {
           <button
             key={o.value}
             type="button"
-            onClick={() => onConfirm(o.value)}
+            onClick={() => pick(o.value)}
             className={`w-full flex items-center gap-2.5 rounded-xl border-2 py-3.5 px-4 font-bold ${o.cls}`}
           >
             <span className="text-lg leading-none">{o.emoji}</span> {o.value}
@@ -1399,6 +1449,45 @@ function FailureResponseCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResu
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult }) {
+  const stage = failureStage(f);
+  return (
+    <div className="w-full flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+      <button type="button" onClick={() => onOpenDetail(f)} className="min-w-0 flex-1 text-left">
+        <p className="font-bold text-slate-800 text-sm truncate">{f.siteName} · {f.elevatorNo}</p>
+        <p className="text-[11px] text-slate-400 truncate">{f.errorCode}</p>
+      </button>
+      {stage === "pending" && (
+        <button
+          type="button"
+          onClick={() => onDispatch(f)}
+          className="shrink-0 bg-blue-700 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:bg-blue-800"
+        >
+          {f.assignee ? "출동 응답" : "내가 출동하기"}
+        </button>
+      )}
+      {stage === "dispatched" && (
+        <button
+          type="button"
+          onClick={() => onArrive(f)}
+          className="shrink-0 bg-blue-700 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:bg-blue-800"
+        >
+          도착 ({f.etaMinutes}분)
+        </button>
+      )}
+      {stage === "arrived" && (
+        <button
+          type="button"
+          onClick={() => onOpenResult(f)}
+          className="shrink-0 bg-emerald-600 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:bg-emerald-700"
+        >
+          🛠️ 결과입력
+        </button>
+      )}
     </div>
   );
 }
@@ -4297,10 +4386,28 @@ export default function App() {
     setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, arrivalTime } : x)));
   }
 
-  async function handleFailureResult(failure, result) {
+  async function handleFailureResult(failure, payload) {
+    const { result, cause, processContent, note, photoCount } = payload;
     if (result === "처리완료") {
-      await supabase.from("failures").update({ status: "완료", process_result: result, escalation: null }).eq("id", failure.id);
-      setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, status: "완료", processResult: result, escalation: null } : x)));
+      await supabase
+        .from("failures")
+        .update({
+          status: "완료",
+          process_result: result,
+          escalation: null,
+          fault_cause: cause || null,
+          process_content: processContent || null,
+          process_note: note || null,
+          photo_count: photoCount || 0,
+        })
+        .eq("id", failure.id);
+      setFailures((prev) =>
+        prev.map((x) =>
+          x.id === failure.id
+            ? { ...x, status: "완료", processResult: result, escalation: null, faultCause: cause || null, processContent: processContent || null, processNote: note || null, photoCount: photoCount || 0 }
+            : x
+        )
+      );
     } else {
       await supabase.from("failures").update({ process_result: result, escalation: result }).eq("id", failure.id);
       setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, processResult: result, escalation: result } : x)));
