@@ -39,6 +39,7 @@ function mapSite(row) {
     overdueTotal: row.overdue_total,
     failures30d: row.failures_30d,
     assignedEngineer: row.assigned_engineer,
+    notes: row.notes,
   };
 }
 
@@ -276,7 +277,8 @@ function PhotoThumb({ caption }) {
 }
 
 /* 엘맨PRO 스타일 타임라인 항목 (아이콘-라벨-값, 세로 연결선) */
-function TimelineRow({ icon: Icon, label, value, valueColor = "text-slate-700", highlight, last }) {
+function TimelineRow({ icon: Icon, label, value, valueColor = "text-slate-700", highlight, last, onClick }) {
+  const Wrapper = onClick ? "button" : "div";
   return (
     <div className={`flex px-5 ${highlight ? "bg-red-600" : ""}`}>
       <div className="flex flex-col items-center mr-3 pt-3">
@@ -285,10 +287,13 @@ function TimelineRow({ icon: Icon, label, value, valueColor = "text-slate-700", 
         </div>
         {!last && <div className={`w-px flex-1 mt-1 ${highlight ? "bg-red-400" : "bg-slate-200"}`} />}
       </div>
-      <div className={`flex-1 flex items-center justify-between py-3 ${last ? "" : "border-b border-slate-100"}`}>
+      <Wrapper
+        onClick={onClick}
+        className={`flex-1 flex items-center justify-between py-3 text-left ${last ? "" : "border-b border-slate-100"} ${onClick ? "active:bg-slate-50" : ""}`}
+      >
         <span className={`text-sm ${highlight ? "text-white font-bold" : "text-slate-500"}`}>{label}</span>
         <span className={`text-sm font-bold text-right ${highlight ? "text-white" : valueColor}`}>{value}</span>
-      </div>
+      </Wrapper>
     </div>
   );
 }
@@ -644,8 +649,10 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
 }
 
 /* ---- 현장정보 화면 ---- */
-function SiteDetailScreen({ site, onBack, onHome, onOpenUnit }) {
+function SiteDetailScreen({ site, onBack, onHome, onOpenUnit, onUpdateSiteNotes }) {
   const units = siteUnits(site);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState(site.notes ?? "");
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
@@ -674,7 +681,17 @@ function SiteDetailScreen({ site, onBack, onHome, onOpenUnit }) {
           <TimelineRow icon={Mail} label="메일주소" value="-" />
           <TimelineRow icon={PhoneCall} label="휴대폰번호" value={site.phone} valueColor="text-blue-600" />
           <TimelineRow icon={Radio} label="원격점검 사용여부" value="미사용" />
-          <TimelineRow icon={ClipboardCheck} label="비고(전달사항)" value="터치하면 보입니다" valueColor="text-slate-400" last />
+          <TimelineRow
+            icon={ClipboardCheck}
+            label="비고(전달사항)"
+            value={site.notes ? site.notes : "터치해서 입력"}
+            valueColor={site.notes ? "text-slate-700" : "text-slate-400"}
+            last
+            onClick={() => {
+              setNotesDraft(site.notes ?? "");
+              setEditingNotes(true);
+            }}
+          />
         </div>
 
         <div className="px-5 pt-5 pb-2 flex items-center justify-between">
@@ -701,11 +718,33 @@ function SiteDetailScreen({ site, onBack, onHome, onOpenUnit }) {
           ))}
         </div>
       </div>
+
+      {editingNotes && (
+        <Sheet title="비고(전달사항)" onClose={() => setEditingNotes(false)}>
+          <Field label="현장 전달사항">
+            <textarea
+              className={inputCls}
+              rows={4}
+              placeholder="예: 지하 기계실 열쇠는 경비실에 있음"
+              value={notesDraft}
+              onChange={(e) => setNotesDraft(e.target.value)}
+            />
+          </Field>
+          <PrimaryButton
+            onClick={async () => {
+              await onUpdateSiteNotes(site.id, notesDraft.trim());
+              setEditingNotes(false);
+            }}
+          >
+            저장
+          </PrimaryButton>
+        </Sheet>
+      )}
     </div>
   );
 }
 
-function SiteTab({ inspections, failures, billings }) {
+function SiteTab({ inspections, failures, billings, onUpdateSiteNotes }) {
   const allSites = useContext(SitesContext);
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const sites = role === "admin" ? allSites : allSites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER);
@@ -734,10 +773,13 @@ function SiteTab({ inspections, failures, billings }) {
     setSelectedUnit(null);
   }
 
-  if (view === "elevator" && selectedSite && selectedUnit) {
+  // sites 배열이 갱신돼도(예: 비고 저장 후) 최신 정보가 보이도록 id로 다시 찾습니다.
+  const liveSelectedSite = selectedSite ? sites.find((s) => s.id === selectedSite.id) ?? selectedSite : null;
+
+  if (view === "elevator" && liveSelectedSite && selectedUnit) {
     return (
       <ElevatorDetailScreen
-        site={selectedSite}
+        site={liveSelectedSite}
         unit={selectedUnit}
         subTab={elevatorSubTab}
         setSubTab={setElevatorSubTab}
@@ -750,12 +792,13 @@ function SiteTab({ inspections, failures, billings }) {
     );
   }
 
-  if (view === "site" && selectedSite) {
+  if (view === "site" && liveSelectedSite) {
     return (
       <SiteDetailScreen
-        site={selectedSite}
+        site={liveSelectedSite}
         onBack={backToList}
         onHome={backToList}
+        onUpdateSiteNotes={onUpdateSiteNotes}
         onOpenUnit={(u) => {
           setSelectedUnit(u);
           setElevatorSubTab("정보");
@@ -3159,26 +3202,130 @@ function AdminMenuRow({ icon: Icon, label, badge, onClick }) {
   );
 }
 
-function EngineerAssignScreen({ onBack }) {
-  const { engineerNames } = useContext(AuthContext);
+const emptySiteForm = {
+  name: "", siteCode: "", elevatorNo: "", region: "", address: "",
+  contractType: "", phone: "", elevatorModel: "", unitCount: "1",
+  manager: "", managerPhone: "", assignedEngineer: "",
+};
+
+function SiteEditorSheet({ initial, engineerNames, onSave, onClose }) {
+  const [form, setForm] = useState(initial);
+  const canSave = form.name.trim().length > 0;
+
+  return (
+    <Sheet title={initial === emptySiteForm ? "새 현장 등록" : "현장 정보 수정"} onClose={onClose}>
+      <Field label="현장명"><input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="예: 대박빌딩" /></Field>
+      <Field label="현장코드"><input className={inputCls} value={form.siteCode} onChange={(e) => setForm({ ...form, siteCode: e.target.value })} placeholder="예: 00007" /></Field>
+      <Field label="대표 호기"><input className={inputCls} value={form.elevatorNo} onChange={(e) => setForm({ ...form, elevatorNo: e.target.value })} placeholder="예: 1호기" /></Field>
+      <Field label="대수"><input type="number" min={1} className={inputCls} value={form.unitCount} onChange={(e) => setForm({ ...form, unitCount: e.target.value })} /></Field>
+      <Field label="지역"><input className={inputCls} value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} placeholder="예: 가산" /></Field>
+      <Field label="주소"><input className={inputCls} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
+      <Field label="계약구분"><input className={inputCls} value={form.contractType} onChange={(e) => setForm({ ...form, contractType: e.target.value })} placeholder="예: 월정료(개인건물주)" /></Field>
+      <Field label="현장 전화번호"><input className={inputCls} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+      <Field label="승강기 모델"><input className={inputCls} value={form.elevatorModel} onChange={(e) => setForm({ ...form, elevatorModel: e.target.value })} /></Field>
+      <Field label="담당자"><input className={inputCls} value={form.manager} onChange={(e) => setForm({ ...form, manager: e.target.value })} /></Field>
+      <Field label="담당자 전화번호"><input className={inputCls} value={form.managerPhone} onChange={(e) => setForm({ ...form, managerPhone: e.target.value })} /></Field>
+      <Field label="담당 기사 배정">
+        <select className={inputCls} value={form.assignedEngineer} onChange={(e) => setForm({ ...form, assignedEngineer: e.target.value })}>
+          <option value="">미배정</option>
+          {engineerNames.map((e) => <option key={e} value={e}>{e}</option>)}
+        </select>
+      </Field>
+      <PrimaryButton onClick={() => onSave(form)} disabled={!canSave}>저장</PrimaryButton>
+    </Sheet>
+  );
+}
+
+function SiteManagementScreen({ sites, engineerNames, onAddSite, onUpdateSite, onDeleteSite, onBack }) {
+  const [editingSite, setEditingSite] = useState(null); // null | "new" | site object
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  function siteToForm(s) {
+    return {
+      name: s.name ?? "", siteCode: s.siteCode ?? "", elevatorNo: s.elevatorNo ?? "",
+      region: s.region ?? "", address: s.address ?? "", contractType: s.contractType ?? "",
+      phone: s.phone ?? "", elevatorModel: s.elevatorModel ?? "", unitCount: String(s.unitCount ?? 1),
+      manager: s.manager ?? "", managerPhone: s.managerPhone ?? "", assignedEngineer: s.assignedEngineer ?? "",
+    };
+  }
+
+  async function handleSave(form) {
+    if (editingSite === "new") {
+      await onAddSite(form);
+    } else {
+      await onUpdateSite(editingSite.id, form);
+    }
+    setEditingSite(null);
+  }
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
-      <DrillHeader title="기사별 현장 배분" onBack={onBack} onHome={onBack} />
+      <DrillHeader title="현장관리" onBack={onBack} onHome={onBack} />
       <div className="flex-1 overflow-y-auto px-5 py-4">
-        <div className="bg-white rounded-2xl border border-slate-200 p-4">
-          <div className="space-y-3">
-            {engineerNames.map((e, idx) => (
-              <div key={e} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold">{e[0]}</div>
-                  <span className="text-sm text-slate-700 font-semibold">{e}</span>
-                </div>
-                <span className="text-xs text-slate-400">{120 + idx * 6}개 현장</span>
+        <PrimaryButton onClick={() => setEditingSite("new")} className="mb-4">
+          + 새 현장 등록
+        </PrimaryButton>
+        <div className="space-y-2.5">
+          {sites.map((s) => (
+            <div key={s.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
+              <div className="flex items-center justify-between mb-1">
+                <p className="font-bold text-slate-800 text-sm">{s.name} · {s.elevatorNo}</p>
+                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">{s.region || "-"}</span>
               </div>
-            ))}
-          </div>
+              <p className="text-[11px] text-slate-400 mb-2">{s.address || "주소 미등록"}</p>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-500">
+                  담당 기사: <span className="font-semibold text-slate-700">{s.assignedEngineer || "미배정"}</span>
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setEditingSite(s)}
+                    className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1.5 rounded-lg"
+                  >
+                    수정
+                  </button>
+                  <button
+                    onClick={() => setDeleteTarget(s)}
+                    className="text-[11px] font-bold text-red-600 bg-red-50 px-2.5 py-1.5 rounded-lg"
+                  >
+                    삭제
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+          {sites.length === 0 && <p className="text-xs text-slate-400 text-center py-10">등록된 현장이 없습니다</p>}
         </div>
       </div>
+
+      {editingSite && (
+        <SiteEditorSheet
+          initial={editingSite === "new" ? emptySiteForm : siteToForm(editingSite)}
+          engineerNames={engineerNames}
+          onSave={handleSave}
+          onClose={() => setEditingSite(null)}
+        />
+      )}
+
+      {deleteTarget && (
+        <Sheet title="현장 삭제" onClose={() => setDeleteTarget(null)}>
+          <p className="text-sm text-slate-700 mb-1">
+            <span className="font-bold">{deleteTarget.name}</span> 현장을 삭제하시겠습니까?
+          </p>
+          <p className="text-[11px] text-slate-400 mb-4">
+            이 현장과 연결된 고장·검사·자재 이력은 남아있지만, 더 이상 이 현장을 참조하지 않게 됩니다.
+          </p>
+          <PrimaryButton
+            tone="red"
+            onClick={async () => {
+              await onDeleteSite(deleteTarget.id);
+              setDeleteTarget(null);
+            }}
+          >
+            삭제
+          </PrimaryButton>
+        </Sheet>
+      )}
     </div>
   );
 }
@@ -3567,7 +3714,7 @@ function RestockScreen({ restockRequests, onAttachRestockPhoto, onCompleteRestoc
 }
 
 
-function RoomTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, feed, onSendChat, onSupplyComplete, onReprocess, onAttachPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onCompleteQuoteSupply, onAdminToggleTodo, onAttachRestockPhoto, onCompleteRestock }) {
+function RoomTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, feed, onSendChat, onSupplyComplete, onReprocess, onAttachPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onCompleteQuoteSupply, onAdminToggleTodo, onAttachRestockPhoto, onCompleteRestock, onAddSite, onUpdateSite, onDeleteSite }) {
   const sites = useContext(SitesContext);
   const { name: CURRENT_ENGINEER, role, engineerNames, signOut } = useContext(AuthContext);
   const isAdmin = role === "admin";
@@ -3603,8 +3750,17 @@ function RoomTab({ inspections, materialRequests, billings, quoteRequests, resto
     return <TodoManageScreen todos={todos} onToggle={onAdminToggleTodo} onBack={() => setTodoViewOpen(false)} />;
   }
 
-  if (adminScreen === "assign") {
-    return <EngineerAssignScreen onBack={() => setAdminScreen(null)} />;
+  if (adminScreen === "sites") {
+    return (
+      <SiteManagementScreen
+        sites={sites}
+        engineerNames={engineerNames}
+        onAddSite={onAddSite}
+        onUpdateSite={onUpdateSite}
+        onDeleteSite={onDeleteSite}
+        onBack={() => setAdminScreen(null)}
+      />
+    );
   }
 
   if (adminScreen === "materials") {
@@ -3701,7 +3857,7 @@ function RoomTab({ inspections, materialRequests, billings, quoteRequests, resto
       ) : (
         <div className="flex-1 overflow-y-auto px-5 pb-4">
           <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
-            <AdminMenuRow icon={Users} label="기사별 현장 배분" onClick={() => setAdminScreen("assign")} />
+            <AdminMenuRow icon={Building2} label="현장관리" badge={sites.length} onClick={() => setAdminScreen("sites")} />
             <AdminMenuRow icon={PackageCheck} label="자재 지급 대기" badge={pendingCount} onClick={() => setAdminScreen("materials")} />
             <AdminMenuRow icon={Package} label="상비부품 보충" badge={restockRequests.filter((r) => r.status === "대기").length} onClick={() => setAdminScreen("restock")} />
             <AdminMenuRow icon={FileText} label="견적 요청 관리" badge={quoteActiveCount} onClick={() => setAdminScreen("quotes")} />
@@ -3749,6 +3905,11 @@ function RoomTab({ inspections, materialRequests, billings, quoteRequests, resto
 /* App shell                                                            */
 /* ------------------------------------------------------------------ */
 
+// 앱 구성이 끝날 때까지 로그인 화면을 잠시 꺼두는 스위치입니다.
+// 다시 로그인을 켜려면 이 값을 false로 바꾸면 됩니다.
+const SKIP_LOGIN = true;
+const DEV_FAKE_PROFILE = { name: "관리자", role: "admin" };
+
 export default function App() {
   // undefined = 아직 로그인 여부 확인 중, null = 로그인 안 됨, 객체 = 로그인 됨
   const [session, setSession] = useState(undefined);
@@ -3771,6 +3932,7 @@ export default function App() {
 
   // 로그인 상태를 확인하고, 로그인/로그아웃이 일어날 때마다 알림을 받습니다.
   useEffect(() => {
+    if (SKIP_LOGIN) return;
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
@@ -3780,6 +3942,10 @@ export default function App() {
 
   // 로그인이 되면 profiles 테이블에서 이 계정의 이름/역할을 가져옵니다.
   useEffect(() => {
+    if (SKIP_LOGIN) {
+      setProfile(DEV_FAKE_PROFILE);
+      return;
+    }
     if (!session) {
       setProfile(null);
       return;
@@ -3806,7 +3972,7 @@ export default function App() {
   // 로그인이 완료된 뒤에만 Supabase에서 실제 데이터를 불러옵니다.
   // (예전에는 INITIAL_FAILURES 같은 가짜 배열로 시작했지만, 이제는 DB가 기준입니다)
   useEffect(() => {
-    if (!session) return;
+    if (!SKIP_LOGIN && !session) return;
     async function loadData() {
       const [
         sitesRes,
@@ -3845,6 +4011,99 @@ export default function App() {
     }
     loadData();
   }, [session]);
+
+  // ★ 관리자가 현장관리 메뉴에서 현장을 새로 등록
+  async function handleAddSite(form) {
+    const newSite = {
+      id: "site-" + Date.now(),
+      siteCode: form.siteCode,
+      name: form.name,
+      elevatorNo: form.elevatorNo,
+      address: form.address,
+      region: form.region,
+      contractType: form.contractType,
+      phone: form.phone,
+      elevatorModel: form.elevatorModel,
+      unitCount: Number(form.unitCount) || 1,
+      manager: form.manager,
+      managerPhone: form.managerPhone,
+      overdueLong: 0,
+      overdueTotal: 0,
+      failures30d: 0,
+      assignedEngineer: form.assignedEngineer || null,
+      notes: null,
+    };
+    await supabase.from("sites").insert({
+      id: newSite.id,
+      site_code: newSite.siteCode,
+      name: newSite.name,
+      elevator_no: newSite.elevatorNo,
+      address: newSite.address,
+      region: newSite.region,
+      contract_type: newSite.contractType,
+      phone: newSite.phone,
+      elevator_model: newSite.elevatorModel,
+      unit_count: newSite.unitCount,
+      manager: newSite.manager,
+      manager_phone: newSite.managerPhone,
+      assigned_engineer: newSite.assignedEngineer,
+    });
+    setSites((prev) => [...prev, newSite]);
+  }
+
+  // ★ 관리자가 현장관리 메뉴에서 현장 정보(담당 기사 배정 포함)를 수정
+  async function handleUpdateSite(siteId, form) {
+    await supabase
+      .from("sites")
+      .update({
+        site_code: form.siteCode,
+        name: form.name,
+        elevator_no: form.elevatorNo,
+        address: form.address,
+        region: form.region,
+        contract_type: form.contractType,
+        phone: form.phone,
+        elevator_model: form.elevatorModel,
+        unit_count: Number(form.unitCount) || 1,
+        manager: form.manager,
+        manager_phone: form.managerPhone,
+        assigned_engineer: form.assignedEngineer || null,
+      })
+      .eq("id", siteId);
+    setSites((prev) =>
+      prev.map((s) =>
+        s.id === siteId
+          ? {
+              ...s,
+              siteCode: form.siteCode,
+              name: form.name,
+              elevatorNo: form.elevatorNo,
+              address: form.address,
+              region: form.region,
+              contractType: form.contractType,
+              phone: form.phone,
+              elevatorModel: form.elevatorModel,
+              unitCount: Number(form.unitCount) || 1,
+              manager: form.manager,
+              managerPhone: form.managerPhone,
+              assignedEngineer: form.assignedEngineer || null,
+            }
+          : s
+      )
+    );
+  }
+
+  // ★ 관리자가 현장관리 메뉴에서 현장을 삭제
+  async function handleDeleteSite(siteId) {
+    await supabase.from("sites").delete().eq("id", siteId);
+    setSites((prev) => prev.filter((s) => s.id !== siteId));
+  }
+
+  // ★ 기사·관리자 누구나 현장정보의 "비고(전달사항)"을 수정
+  async function handleUpdateSiteNotes(siteId, notes) {
+    await supabase.from("sites").update({ notes }).eq("id", siteId);
+    setSites((prev) => prev.map((s) => (s.id === siteId ? { ...s, notes } : s)));
+  }
 
   async function handleSubmitBilling({ type, siteName, part, cost, replaceDate, contactPhone }) {
     const newBilling = {
@@ -4115,7 +4374,7 @@ export default function App() {
     room: "사내 피드 및 관리자 대시보드",
   };
 
-  if (session === undefined) {
+  if (!SKIP_LOGIN && session === undefined) {
     return (
       <div className="h-screen w-screen bg-slate-200 flex items-center justify-center overflow-hidden">
         <div
@@ -4128,7 +4387,7 @@ export default function App() {
     );
   }
 
-  if (!session) {
+  if (!SKIP_LOGIN && !session) {
     return <LoginScreen onLogin={handleLogin} error={authError} submitting={authSubmitting} />;
   }
 
@@ -4171,14 +4430,14 @@ export default function App() {
           />
 
           {tab === "home" && <HomeTab inspections={inspections} failures={failures} />}
-          {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} />}
+          {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} onUpdateSiteNotes={handleUpdateSiteNotes} />}
           {tab === "failure" && <FailureTab failures={failures} setFailures={setFailures} />}
           {tab === "checkup" && <CheckupTab />}
           {tab === "inspection" && <InspectionTab inspections={inspections} setInspections={setInspections} />}
           {tab === "material" && <MaterialTab requests={materialRequests} setRequests={setMaterialRequests} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} setQuoteRequests={setQuoteRequests} restockRequests={restockRequests} />}
           {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} />}
           {tab === "todo" && <TodoTab todos={todos} setTodos={setTodos} />}
-          {tab === "room" && <RoomTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} feed={feed} onSendChat={handleSendFeedPost} onSupplyComplete={handleSupplyComplete} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onCompleteRestock={handleCompleteRestock} />}
+          {tab === "room" && <RoomTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} feed={feed} onSendChat={handleSendFeedPost} onSupplyComplete={handleSupplyComplete} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onCompleteRestock={handleCompleteRestock} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} />}
 
           {/* bottom nav */}
           <div
