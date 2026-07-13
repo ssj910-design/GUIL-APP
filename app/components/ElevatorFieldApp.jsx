@@ -108,6 +108,7 @@ function mapTodo(row) {
     assignedDate: row.assigned_date,
     dueDate: row.due_date,
     done: row.done,
+    photoCount: row.photo_count,
   };
 }
 
@@ -208,6 +209,7 @@ const TABS = [
   { id: "billing", label: "비용청구", icon: Receipt },
   { id: "todo", label: "할일관리", icon: ListTodo },
   { id: "room", label: "우리방", icon: MessagesSquare },
+  { id: "admin", label: "관리자 모드", icon: Settings },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -1989,7 +1991,7 @@ function SiteSearchSelect({ value, onChange, placeholder = "현장명을 검색�
   );
 }
 
-function MultiPhotoUpload({ photos, onAdd, onRemove, label }) {
+function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = true }) {
   return (
     <div>
       <div className="grid grid-cols-4 gap-2 mb-2">
@@ -2014,8 +2016,8 @@ function MultiPhotoUpload({ photos, onAdd, onRemove, label }) {
           <span className="text-[9px] font-semibold mt-0.5">추가</span>
         </button>
       </div>
-      <p className={`text-[10px] ${photos.length === 0 ? "text-red-500 font-semibold" : "text-slate-400"}`}>
-        {label} · 최소 1장 필수, 장수 제한 없음 · 현재 {photos.length}장
+      <p className={`text-[10px] ${required && photos.length === 0 ? "text-red-500 font-semibold" : "text-slate-400"}`}>
+        {label} · {required ? "최소 1장 필수, " : ""}장수 제한 없음 · 현재 {photos.length}장
       </p>
     </div>
   );
@@ -3093,10 +3095,10 @@ function BillingHistoryScreen({ billings, onBack }) {
   );
 }
 
-function TodoRow({ t, onToggle }) {
+function TodoRow({ t, onToggle, onOpenDetail }) {
   return (
     <div className={`border rounded-xl p-3 ${t.done ? "border-slate-100 opacity-60" : "border-slate-200"}`}>
-      <div className="flex items-start justify-between gap-2">
+      <button type="button" onClick={() => onOpenDetail(t)} className="w-full flex items-start justify-between gap-2 text-left">
         <div className="flex-1">
           <p className={`text-sm font-bold text-slate-800 ${t.done ? "line-through" : ""}`}>{t.title}</p>
           <p className="text-[11px] text-slate-400 mt-0.5">
@@ -3104,7 +3106,7 @@ function TodoRow({ t, onToggle }) {
           </p>
         </div>
         {!t.done && <DDay dueDate={t.dueDate} />}
-      </div>
+      </button>
       <button
         onClick={() => onToggle(t.id)}
         className={`w-full mt-2.5 text-xs font-bold py-2 rounded-lg ${t.done ? "bg-slate-100 text-slate-500 active:bg-slate-200" : "bg-blue-700 text-white active:bg-blue-800"}`}
@@ -3115,9 +3117,138 @@ function TodoRow({ t, onToggle }) {
   );
 }
 
-function TodoManageScreen({ todos, onToggle, onBack }) {
+function TodoDetailSheet({ todo, onToggle, onClose }) {
+  const sourceLabel = todo.source === "manual" ? "관리자 부여" : todo.source === "quote" ? "견적 연동" : "자재 연동";
+  return (
+    <Sheet title="할 일 상세" onClose={onClose}>
+      <div className="bg-slate-100 rounded-xl p-3 mb-4">
+        <p className="font-bold text-slate-800">{todo.title}</p>
+      </div>
+      <div className="space-y-2.5 mb-4">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-400">담당자</span>
+          <span className="font-semibold text-slate-700">{todo.assignee}</span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-400">현장</span>
+          <span className="font-semibold text-slate-700">{todo.siteName}</span>
+        </div>
+        {todo.part && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-400">부품/공사</span>
+            <span className="font-semibold text-slate-700">{todo.part}</span>
+          </div>
+        )}
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-400">출처</span>
+          <span className="font-semibold text-slate-700">{sourceLabel}</span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-400">부여일</span>
+          <span className="font-semibold text-slate-700">{todo.assignedDate}</span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-400">마감일</span>
+          <span className="font-semibold text-slate-700">{todo.dueDate}</span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-400">상태</span>
+          <span className={`font-semibold ${todo.done ? "text-emerald-600" : "text-amber-600"}`}>{todo.done ? "완료" : "미완료"}</span>
+        </div>
+      </div>
+      {todo.photoCount > 0 && (
+        <div className="mb-4">
+          <p className="text-xs font-bold text-slate-500 mb-2">첨부 사진 ({todo.photoCount}장)</p>
+          <div className="grid grid-cols-3 gap-2">
+            {Array.from({ length: todo.photoCount }).map((_, i) => <PhotoThumb key={i} />)}
+          </div>
+        </div>
+      )}
+      <PrimaryButton
+        onClick={() => {
+          onToggle(todo.id);
+          onClose();
+        }}
+      >
+        {todo.done ? "완료 취소" : "완료 처리"}
+      </PrimaryButton>
+    </Sheet>
+  );
+}
+
+function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
+  const sites = useContext(SitesContext);
+  const [form, setForm] = useState({ assignees: [], siteId: "", title: "", dueDate: addDays(TODAY_STR, 7), photos: [] });
+
+  function toggleAssignee(name) {
+    setForm((f) => ({
+      ...f,
+      assignees: f.assignees.includes(name) ? f.assignees.filter((a) => a !== name) : [...f.assignees, name],
+    }));
+  }
+
+  const site = sites.find((s) => s.id === form.siteId);
+  const canSubmit = form.assignees.length > 0 && !!site && form.title.trim().length > 0;
+
+  return (
+    <Sheet title="할 일 부여" onClose={onClose}>
+      <Field label="담당자 (1명 이상 선택)">
+        <div className="flex flex-wrap gap-1.5">
+          {engineerNames.map((e) => (
+            <button
+              key={e}
+              type="button"
+              onClick={() => toggleAssignee(e)}
+              className={`text-xs font-bold px-3 py-1.5 rounded-full border ${form.assignees.includes(e) ? "bg-blue-700 text-white border-blue-700" : "bg-white text-slate-500 border-slate-300"}`}
+            >
+              {e}
+            </button>
+          ))}
+          {engineerNames.length === 0 && <p className="text-xs text-slate-400">등록된 기사 계정이 없습니다</p>}
+        </div>
+      </Field>
+      <Field label="현장">
+        <SiteSearchSelect value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id })} />
+      </Field>
+      <Field label="할 일 내용">
+        <textarea
+          className={inputCls}
+          rows={3}
+          placeholder="예: 소방연동 점검 서류 제출"
+          value={form.title}
+          onChange={(e) => setForm({ ...form, title: e.target.value })}
+        />
+      </Field>
+      <Field label="마감일">
+        <input type="date" className={inputCls} value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
+      </Field>
+      <Field label="첨부 사진">
+        <MultiPhotoUpload
+          required={false}
+          photos={form.photos}
+          onAdd={() => setForm({ ...form, photos: [...form.photos, Date.now()] })}
+          onRemove={(idx) => setForm({ ...form, photos: form.photos.filter((_, i) => i !== idx) })}
+          label="작업 관련 참고 사진 (선택)"
+        />
+      </Field>
+      <PrimaryButton
+        disabled={!canSubmit}
+        onClick={() => {
+          onSubmit({ assignees: form.assignees, siteName: site.name, title: form.title.trim(), dueDate: form.dueDate, photoCount: form.photos.length });
+          onClose();
+        }}
+      >
+        할 일 부여하기
+      </PrimaryButton>
+    </Sheet>
+  );
+}
+
+function TodoManageScreen({ todos, onToggle, onAssignTodo, engineerNames, onBack }) {
   const [query, setQuery] = useState("");
   const [source, setSource] = useState("전체");
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [detailTarget, setDetailTarget] = useState(null);
   const sourceMatch = { 전체: null, 자재연동: "material", 견적연동: "quote", 관리자부여: "manual" };
 
   const filtered = todos.filter((t) => {
@@ -3135,7 +3266,7 @@ function TodoManageScreen({ todos, onToggle, onBack }) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
-      <DrillHeader title="직원 할일 관리" onBack={onBack} onHome={onBack} />
+      <DrillHeader title="할 일 관리" onBack={onBack} onHome={onBack} />
 
       <div className="px-5 py-3 bg-blue-950 shrink-0 flex items-center justify-between">
         <span className="text-xs text-blue-200">조건에 맞는 할 일 {filtered.length}건</span>
@@ -3143,6 +3274,9 @@ function TodoManageScreen({ todos, onToggle, onBack }) {
       </div>
 
       <div className="px-5 pt-3 pb-2 shrink-0">
+        <PrimaryButton onClick={() => setAssignOpen(true)} className="mb-3">
+          + 새 할 일 부여
+        </PrimaryButton>
         <div className="relative mb-2.5">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -3175,12 +3309,28 @@ function TodoManageScreen({ todos, onToggle, onBack }) {
                 {a} · {groups[a].filter((t) => !t.done).length}건 미완료 / 총 {groups[a].length}건
               </p>
               <div className="space-y-2">
-                {groups[a].map((t) => <TodoRow key={t.id} t={t} onToggle={onToggle} />)}
+                {groups[a].map((t) => <TodoRow key={t.id} t={t} onToggle={onToggle} onOpenDetail={setDetailTarget} />)}
               </div>
             </div>
           ))
         )}
       </div>
+
+      {assignOpen && (
+        <TodoAssignSheet
+          engineerNames={engineerNames}
+          onSubmit={onAssignTodo}
+          onClose={() => setAssignOpen(false)}
+        />
+      )}
+
+      {detailTarget && (
+        <TodoDetailSheet
+          todo={todos.find((t) => t.id === detailTarget.id) ?? detailTarget}
+          onToggle={onToggle}
+          onClose={() => setDetailTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -3714,27 +3864,9 @@ function RestockScreen({ restockRequests, onAttachRestockPhoto, onCompleteRestoc
 }
 
 
-function RoomTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, feed, onSendChat, onSupplyComplete, onReprocess, onAttachPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onCompleteQuoteSupply, onAdminToggleTodo, onAttachRestockPhoto, onCompleteRestock, onAddSite, onUpdateSite, onDeleteSite }) {
-  const sites = useContext(SitesContext);
-  const { name: CURRENT_ENGINEER, role, engineerNames, signOut } = useContext(AuthContext);
-  const isAdmin = role === "admin";
-  const [admin, setAdmin] = useState(false);
-  const [billingViewOpen, setBillingViewOpen] = useState(false);
-  const [todoViewOpen, setTodoViewOpen] = useState(false);
-  const [adminScreen, setAdminScreen] = useState(null); // null | "assign" | "materials" | "quotes" | "inspections"
-  const [assignOpen, setAssignOpen] = useState(false);
-  const [assignForm, setAssignForm] = useState({ assignee: engineerNames[0] ?? "", siteId: "", title: "", dueDate: addDays(TODAY_STR, 7) });
+function RoomTab({ feed, onSendChat }) {
+  const { name: CURRENT_ENGINEER, role, signOut } = useContext(AuthContext);
   const [chatInput, setChatInput] = useState("");
-  const pendingCount = materialRequests.filter((r) => r.status === "승인대기").length;
-  const quoteActiveCount = quoteRequests.filter((q) => q.status !== "자재지급완료").length;
-
-  function submitAssign() {
-    const site = sites.find((s) => s.id === assignForm.siteId);
-    if (!site || !assignForm.title.trim() || !assignForm.dueDate) return;
-    onAssignTodo({ assignee: assignForm.assignee, siteName: site.name, title: assignForm.title.trim(), dueDate: assignForm.dueDate });
-    setAssignForm({ assignee: engineerNames[0] ?? "", siteId: "", title: "", dueDate: addDays(TODAY_STR, 7) });
-    setAssignOpen(false);
-  }
 
   function sendChat() {
     if (!chatInput.trim()) return;
@@ -3742,12 +3874,77 @@ function RoomTab({ inspections, materialRequests, billings, quoteRequests, resto
     setChatInput("");
   }
 
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="px-5 pt-4 pb-2 flex items-center justify-between shrink-0">
+        <p className="text-sm font-bold text-slate-800">사내 피드</p>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-slate-400">{CURRENT_ENGINEER}{role === "admin" ? " · 관리자" : ""}</span>
+          <button onClick={signOut} className="text-[11px] font-bold text-slate-400 active:text-slate-600">
+            로그아웃
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-3">
+        {feed.map((p) => {
+          const mine = p.author === CURRENT_ENGINEER;
+          return (
+            <div key={p.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-[80%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
+                {!mine && <p className="text-[11px] font-bold text-slate-500 mb-1 px-1">{p.author}</p>}
+                <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${mine ? "bg-blue-700 text-white rounded-br-sm" : "bg-white border border-slate-200 text-slate-700 rounded-bl-sm"}`}>
+                  {p.text}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1 px-1">{p.time}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="shrink-0 border-t border-slate-100 bg-white px-4 py-3 flex items-center gap-2">
+        <input
+          className="flex-1 border border-slate-300 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="메시지를 입력하세요"
+          value={chatInput}
+          onChange={(e) => setChatInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && sendChat()}
+        />
+        <button
+          onClick={sendChat}
+          disabled={!chatInput.trim()}
+          className="w-10 h-10 rounded-full bg-blue-700 disabled:bg-slate-300 text-white flex items-center justify-center shrink-0 active:bg-blue-800"
+        >
+          <Send size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AdminTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onReprocess, onAttachPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onCompleteQuoteSupply, onAdminToggleTodo, onAttachRestockPhoto, onCompleteRestock, onAddSite, onUpdateSite, onDeleteSite }) {
+  const sites = useContext(SitesContext);
+  const { engineerNames } = useContext(AuthContext);
+  const [billingViewOpen, setBillingViewOpen] = useState(false);
+  const [todoViewOpen, setTodoViewOpen] = useState(false);
+  const [adminScreen, setAdminScreen] = useState(null); // null | "sites" | "materials" | "quotes" | "inspections" | "restock"
+  const pendingCount = materialRequests.filter((r) => r.status === "승인대기").length;
+  const quoteActiveCount = quoteRequests.filter((q) => q.status !== "자재지급완료").length;
+
   if (billingViewOpen) {
     return <BillingHistoryScreen billings={billings} onBack={() => setBillingViewOpen(false)} />;
   }
 
   if (todoViewOpen) {
-    return <TodoManageScreen todos={todos} onToggle={onAdminToggleTodo} onBack={() => setTodoViewOpen(false)} />;
+    return (
+      <TodoManageScreen
+        todos={todos}
+        onToggle={onAdminToggleTodo}
+        onAssignTodo={onAssignTodo}
+        engineerNames={engineerNames}
+        onBack={() => setTodoViewOpen(false)}
+      />
+    );
   }
 
   if (adminScreen === "sites") {
@@ -3804,99 +4001,17 @@ function RoomTab({ inspections, materialRequests, billings, quoteRequests, resto
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="px-5 pt-4 pb-2 flex items-center justify-between shrink-0">
-        <div className="flex bg-slate-100 rounded-full p-1">
-          <button onClick={() => setAdmin(false)} className={`px-3.5 py-1.5 rounded-full text-xs font-bold ${!admin ? "bg-white shadow text-blue-700" : "text-slate-500"}`}>사내 피드</button>
-          {isAdmin && (
-            <button onClick={() => setAdmin(true)} className={`px-3.5 py-1.5 rounded-full text-xs font-bold ${admin ? "bg-white shadow text-blue-700" : "text-slate-500"}`}>관리자 모드</button>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-slate-400">{CURRENT_ENGINEER}{isAdmin ? " · 관리자" : ""}</span>
-          <button onClick={signOut} className="text-[11px] font-bold text-slate-400 active:text-slate-600">
-            로그아웃
-          </button>
+      <div className="flex-1 overflow-y-auto px-5 pt-4 pb-4">
+        <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+          <AdminMenuRow icon={Building2} label="현장관리" badge={sites.length} onClick={() => setAdminScreen("sites")} />
+          <AdminMenuRow icon={PackageCheck} label="자재 지급 대기" badge={pendingCount} onClick={() => setAdminScreen("materials")} />
+          <AdminMenuRow icon={Package} label="상비부품 보충" badge={restockRequests.filter((r) => r.status === "대기").length} onClick={() => setAdminScreen("restock")} />
+          <AdminMenuRow icon={FileText} label="견적 요청 관리" badge={quoteActiveCount} onClick={() => setAdminScreen("quotes")} />
+          <AdminMenuRow icon={ListTodo} label="할 일 관리" badge={todos.filter((t) => !t.done).length} onClick={() => setTodoViewOpen(true)} />
+          <AdminMenuRow icon={Receipt} label="비용청구 내역" badge={billings.length} onClick={() => setBillingViewOpen(true)} />
+          <AdminMenuRow icon={ShieldCheck} label="검사결과 및 합격증 모니터링" onClick={() => setAdminScreen("inspections")} />
         </div>
       </div>
-
-      {!admin ? (
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-3">
-            {feed.map((p) => {
-              const mine = p.author === CURRENT_ENGINEER;
-              return (
-                <div key={p.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[80%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
-                    {!mine && <p className="text-[11px] font-bold text-slate-500 mb-1 px-1">{p.author}</p>}
-                    <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${mine ? "bg-blue-700 text-white rounded-br-sm" : "bg-white border border-slate-200 text-slate-700 rounded-bl-sm"}`}>
-                      {p.text}
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-1 px-1">{p.time}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="shrink-0 border-t border-slate-100 bg-white px-4 py-3 flex items-center gap-2">
-            <input
-              className="flex-1 border border-slate-300 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="메시지를 입력하세요"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendChat()}
-            />
-            <button
-              onClick={sendChat}
-              disabled={!chatInput.trim()}
-              className="w-10 h-10 rounded-full bg-blue-700 disabled:bg-slate-300 text-white flex items-center justify-center shrink-0 active:bg-blue-800"
-            >
-              <Send size={16} />
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex-1 overflow-y-auto px-5 pb-4">
-          <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
-            <AdminMenuRow icon={Building2} label="현장관리" badge={sites.length} onClick={() => setAdminScreen("sites")} />
-            <AdminMenuRow icon={PackageCheck} label="자재 지급 대기" badge={pendingCount} onClick={() => setAdminScreen("materials")} />
-            <AdminMenuRow icon={Package} label="상비부품 보충" badge={restockRequests.filter((r) => r.status === "대기").length} onClick={() => setAdminScreen("restock")} />
-            <AdminMenuRow icon={FileText} label="견적 요청 관리" badge={quoteActiveCount} onClick={() => setAdminScreen("quotes")} />
-            <AdminMenuRow icon={Plus} label="할 일 부여" onClick={() => setAssignOpen(true)} />
-            <AdminMenuRow icon={ListTodo} label="직원 할일 관리" badge={todos.filter((t) => !t.done).length} onClick={() => setTodoViewOpen(true)} />
-            <AdminMenuRow icon={Receipt} label="비용청구 내역" badge={billings.length} onClick={() => setBillingViewOpen(true)} />
-            <AdminMenuRow icon={ShieldCheck} label="검사결과 및 합격증 모니터링" onClick={() => setAdminScreen("inspections")} />
-          </div>
-        </div>
-      )}
-
-      {assignOpen && (
-        <Sheet title="할 일 부여" onClose={() => setAssignOpen(false)}>
-          <Field label="담당자">
-            <select className={inputCls} value={assignForm.assignee} onChange={(e) => setAssignForm({ ...assignForm, assignee: e.target.value })}>
-              {engineerNames.map((e) => <option key={e} value={e}>{e}</option>)}
-            </select>
-          </Field>
-          <Field label="현장">
-            <SiteSearchSelect value={assignForm.siteId} onChange={(id) => setAssignForm({ ...assignForm, siteId: id })} />
-          </Field>
-          <Field label="할 일 내용">
-            <textarea
-              className={inputCls}
-              rows={3}
-              placeholder="예: 소방연동 점검 서류 제출"
-              value={assignForm.title}
-              onChange={(e) => setAssignForm({ ...assignForm, title: e.target.value })}
-            />
-          </Field>
-          <Field label="마감일">
-            <input type="date" className={inputCls} value={assignForm.dueDate} onChange={(e) => setAssignForm({ ...assignForm, dueDate: e.target.value })} />
-          </Field>
-          <PrimaryButton onClick={submitAssign} disabled={!assignForm.siteId || !assignForm.title.trim()}>
-            할 일 부여하기
-          </PrimaryButton>
-        </Sheet>
-      )}
-
     </div>
   );
 }
@@ -4295,10 +4410,10 @@ export default function App() {
     setTodos((prev) => [newTodo, ...prev]);
   }
 
-  // ★ 관리자가 직원에게 할 일을 직접 부여
-  async function handleAssignTodo({ assignee, siteName, title, dueDate }) {
-    const newTodo = {
-      id: "todo-manual-" + Date.now(),
+  // ★ 관리자가 직원(1명 이상)에게 할 일을 직접 부여 — 담당자마다 할 일을 하나씩 만듭니다
+  async function handleAssignTodo({ assignees, siteName, title, dueDate, photoCount }) {
+    const newTodos = assignees.map((assignee, idx) => ({
+      id: "todo-manual-" + Date.now() + "-" + idx,
       materialRequestId: null,
       source: "manual",
       title,
@@ -4308,18 +4423,22 @@ export default function App() {
       assignedDate: TODAY_STR,
       dueDate,
       done: false,
-    };
-    await supabase.from("todos").insert({
-      id: newTodo.id,
-      source: newTodo.source,
-      title: newTodo.title,
-      site_name: newTodo.siteName,
-      assignee: newTodo.assignee,
-      assigned_date: newTodo.assignedDate,
-      due_date: newTodo.dueDate,
-      done: newTodo.done,
-    });
-    setTodos((prev) => [newTodo, ...prev]);
+      photoCount: photoCount || 0,
+    }));
+    await supabase.from("todos").insert(
+      newTodos.map((t) => ({
+        id: t.id,
+        source: t.source,
+        title: t.title,
+        site_name: t.siteName,
+        assignee: t.assignee,
+        assigned_date: t.assignedDate,
+        due_date: t.dueDate,
+        done: t.done,
+        photo_count: t.photoCount,
+      }))
+    );
+    setTodos((prev) => [...newTodos, ...prev]);
   }
 
   // ★ 관리자 권한: 어떤 할 일이든(자재/견적 연동건 포함) 임의로 완료·완료취소 처리할 수 있음
@@ -4371,8 +4490,10 @@ export default function App() {
     material: "자재 신청 · 견적 요청",
     billing: "부품 교체 및 수리비 청구",
     todo: "자재 지급일 기준 D-30 관리",
-    room: "사내 피드 및 관리자 대시보드",
+    room: "사내 피드",
+    admin: "현장·기사·자재 전체 관리",
   };
+  const visibleTabs = TABS.filter((t) => t.id !== "admin" || profile?.role === "admin");
 
   if (!SKIP_LOGIN && session === undefined) {
     return (
@@ -4437,14 +4558,15 @@ export default function App() {
           {tab === "material" && <MaterialTab requests={materialRequests} setRequests={setMaterialRequests} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} setQuoteRequests={setQuoteRequests} restockRequests={restockRequests} />}
           {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} />}
           {tab === "todo" && <TodoTab todos={todos} setTodos={setTodos} />}
-          {tab === "room" && <RoomTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} feed={feed} onSendChat={handleSendFeedPost} onSupplyComplete={handleSupplyComplete} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onCompleteRestock={handleCompleteRestock} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} />}
+          {tab === "room" && <RoomTab feed={feed} onSendChat={handleSendFeedPost} />}
+          {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onCompleteRestock={handleCompleteRestock} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} />}
 
           {/* bottom nav */}
           <div
             className="shrink-0 bg-slate-50 border-t-2 border-slate-300 flex overflow-x-auto"
             style={{ boxShadow: "0 -4px 6px -1px rgba(0,0,0,0.1)" }}
           >
-            {TABS.map((t) => {
+            {visibleTabs.map((t) => {
               const Icon = t.icon;
               const active = tab === t.id;
               return (
