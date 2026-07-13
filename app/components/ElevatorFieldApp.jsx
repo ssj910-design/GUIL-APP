@@ -916,13 +916,15 @@ function FailureHistoryDetailScreen({ site, failures, onBack }) {
   );
 }
 
-function HomeTab({ inspections, failures }) {
+function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast }) {
   const sites = useContext(SitesContext);
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const mySites = role === "admin" ? sites : sites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER);
   const escalatedSiteIds = new Set(failures.filter((f) => f.escalation && f.status !== "완료").map((f) => f.siteId));
   const criticalSites = mySites.filter((s) => s.failures30d >= 3 || escalatedSiteIds.has(s.id));
   const [detailTarget, setDetailTarget] = useState(null);
+  const [dispatchTarget, setDispatchTarget] = useState(null);
+  const [resultTarget, setResultTarget] = useState(null);
   const [historySite, setHistorySite] = useState(null);
 
   const dueSoon = inspections
@@ -937,42 +939,32 @@ function HomeTab({ inspections, failures }) {
 
   const mine = failures.filter((f) => f.assignee === CURRENT_ENGINEER);
   const activeMine = mine.filter((f) => f.status !== "완료");
-  const stageLabel = { pending: "승인대기", dispatched: "출동중", arrived: "도착완료 · 처리대기" };
-  const stageCls = {
-    pending: "bg-red-100 text-red-700",
-    dispatched: "bg-blue-100 text-blue-700",
-    arrived: "bg-emerald-100 text-emerald-700",
-  };
 
   if (historySite) {
     return <FailureHistoryDetailScreen site={historySite} failures={failures} onBack={() => setHistorySite(null)} />;
   }
 
   return (
-    <div className="flex-1 overflow-y-auto pb-4">
+    <div className="flex-1 overflow-y-auto pb-4 relative">
       {/* 고장 처리 현황 */}
       <div className="px-5 pt-4">
         <h3 className="font-bold text-slate-800 text-sm mb-2">고장 처리 현황</h3>
-        <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+        <div className="space-y-2.5">
           {activeMine.length === 0 ? (
-            <p className="text-xs text-slate-400 text-center py-5">진행 중인 고장이 없습니다</p>
+            <div className="bg-white rounded-2xl border border-slate-200 py-5">
+              <p className="text-xs text-slate-400 text-center">진행 중인 고장이 없습니다</p>
+            </div>
           ) : (
-            activeMine.map((f) => {
-              const stage = failureStage(f);
-              return (
-                <button
-                  key={f.id}
-                  onClick={() => setDetailTarget(f)}
-                  className="w-full flex items-center justify-between px-4 py-3 text-left active:bg-slate-50"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-slate-700">{f.siteName} {f.elevatorNo}</p>
-                    <p className="text-[11px] text-slate-400">{f.errorCode}</p>
-                  </div>
-                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${stageCls[stage]}`}>{stageLabel[stage]}</span>
-                </button>
-              );
-            })
+            activeMine.map((f) => (
+              <FailureResponseCard
+                key={f.id}
+                f={f}
+                onOpenDetail={setDetailTarget}
+                onDispatch={setDispatchTarget}
+                onArrive={onArrive}
+                onOpenResult={setResultTarget}
+              />
+            ))
           )}
         </div>
       </div>
@@ -1074,6 +1066,27 @@ function HomeTab({ inspections, failures }) {
       </div>
 
       {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} />}
+      {dispatchTarget && (
+        <DispatchEtaModal
+          failure={dispatchTarget}
+          onClose={() => setDispatchTarget(null)}
+          onConfirm={(eta) => {
+            onDispatch(dispatchTarget, eta);
+            setDispatchTarget(null);
+          }}
+        />
+      )}
+      {resultTarget && (
+        <ArrivalResultModal
+          failure={resultTarget}
+          onClose={() => setResultTarget(null)}
+          onConfirm={(result) => {
+            onResult(resultTarget, result);
+            setResultTarget(null);
+          }}
+        />
+      )}
+      <SmsToast message={toast} />
     </div>
   );
 }
@@ -1594,49 +1607,13 @@ function FailureStatusOverview({ failures }) {
   );
 }
 
-function FailureTab({ failures, setFailures }) {
+function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, toast }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
-  const [toast, setToast] = useState("");
   const subTabs = ["접수등록", "미배정", "처리등록", "처리현황"];
   const unassignedCount = failures.filter((f) => !f.assignee && f.status === "미처리").length;
   const waitingCount = failures.filter((f) => f.assignee === CURRENT_ENGINEER && f.status === "미처리").length;
   const badgeCount = { 미배정: unassignedCount, 처리등록: waitingCount };
-
-  function notify(message) {
-    setToast(message);
-    setTimeout(() => setToast(""), 3000);
-  }
-
-  async function handleDispatch(failure, etaMinutes) {
-    const assignee = failure.assignee || CURRENT_ENGINEER;
-    const dispatchedAt = new Date().toTimeString().slice(0, 5);
-    await supabase
-      .from("failures")
-      .update({ assignee, dispatched_at: dispatchedAt, eta_minutes: etaMinutes, status: "진행중" })
-      .eq("id", failure.id);
-    setFailures((prev) =>
-      prev.map((x) => (x.id === failure.id ? { ...x, assignee, dispatchedAt, etaMinutes, status: "진행중" } : x))
-    );
-    simulateSms(failure.reporterPhone, `구일엘리베이터입니다. 담당 기사가 약 ${etaMinutes}분 후 도착 예정입니다.`);
-    notify(`문자 발송 완료 · ${failure.reporterPhone || "신고자"}에게 도착예정시간 안내`);
-  }
-
-  async function handleArrive(failure) {
-    const arrivalTime = new Date().toTimeString().slice(0, 5);
-    await supabase.from("failures").update({ arrival_time: arrivalTime }).eq("id", failure.id);
-    setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, arrivalTime } : x)));
-  }
-
-  async function handleResult(failure, result) {
-    if (result === "처리완료") {
-      await supabase.from("failures").update({ status: "완료", process_result: result, escalation: null }).eq("id", failure.id);
-      setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, status: "완료", processResult: result, escalation: null } : x)));
-    } else {
-      await supabase.from("failures").update({ process_result: result, escalation: result }).eq("id", failure.id);
-      setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, processResult: result, escalation: result } : x)));
-    }
-  }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -1656,10 +1633,10 @@ function FailureTab({ failures, setFailures }) {
       </div>
       {subTab === "접수등록" && <FailureRegisterForm setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />}
       {subTab === "미배정" && (
-        <FailureUnassignedList failures={failures} onDispatch={handleDispatch} onArrive={handleArrive} onResult={handleResult} />
+        <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} />
       )}
       {subTab === "처리등록" && (
-        <FailureProcessRegister failures={failures} onDispatch={handleDispatch} onArrive={handleArrive} onResult={handleResult} />
+        <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} />
       )}
       {subTab === "처리현황" && <FailureStatusOverview failures={failures} />}
       <SmsToast message={toast} />
@@ -4116,6 +4093,7 @@ export default function App() {
   const [quoteRequests, setQuoteRequests] = useState([]);
   const [restockRequests, setRestockRequests] = useState([]);
   const [feed, setFeed] = useState([]);
+  const [failureToast, setFailureToast] = useState("");
   const [loading, setLoading] = useState(true);
 
   // 로그인 상태를 확인하고, 로그인/로그아웃이 일어날 때마다 알림을 받습니다.
@@ -4291,6 +4269,42 @@ export default function App() {
   async function handleUpdateSiteNotes(siteId, notes) {
     await supabase.from("sites").update({ notes }).eq("id", siteId);
     setSites((prev) => prev.map((s) => (s.id === siteId ? { ...s, notes } : s)));
+  }
+
+  // ★ 고장 출동 응답/내가 출동하기 → ETA 확정 (홈, 고장접수 탭 공용)
+  function notifyFailure(message) {
+    setFailureToast(message);
+    setTimeout(() => setFailureToast(""), 3000);
+  }
+
+  async function handleDispatchFailure(failure, etaMinutes) {
+    const assignee = failure.assignee || profile.name;
+    const dispatchedAt = new Date().toTimeString().slice(0, 5);
+    await supabase
+      .from("failures")
+      .update({ assignee, dispatched_at: dispatchedAt, eta_minutes: etaMinutes, status: "진행중" })
+      .eq("id", failure.id);
+    setFailures((prev) =>
+      prev.map((x) => (x.id === failure.id ? { ...x, assignee, dispatchedAt, etaMinutes, status: "진행중" } : x))
+    );
+    simulateSms(failure.reporterPhone, `구일엘리베이터입니다. 담당 기사가 약 ${etaMinutes}분 후 도착 예정입니다.`);
+    notifyFailure(`문자 발송 완료 · ${failure.reporterPhone || "신고자"}에게 도착예정시간 안내`);
+  }
+
+  async function handleArriveFailure(failure) {
+    const arrivalTime = new Date().toTimeString().slice(0, 5);
+    await supabase.from("failures").update({ arrival_time: arrivalTime }).eq("id", failure.id);
+    setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, arrivalTime } : x)));
+  }
+
+  async function handleFailureResult(failure, result) {
+    if (result === "처리완료") {
+      await supabase.from("failures").update({ status: "완료", process_result: result, escalation: null }).eq("id", failure.id);
+      setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, status: "완료", processResult: result, escalation: null } : x)));
+    } else {
+      await supabase.from("failures").update({ process_result: result, escalation: result }).eq("id", failure.id);
+      setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, processResult: result, escalation: result } : x)));
+    }
   }
 
   async function handleSubmitBilling({ type, siteName, part, cost, replaceDate, contactPhone }) {
@@ -4623,9 +4637,27 @@ export default function App() {
             }
           />
 
-          {tab === "home" && <HomeTab inspections={inspections} failures={failures} />}
+          {tab === "home" && (
+            <HomeTab
+              inspections={inspections}
+              failures={failures}
+              onDispatch={handleDispatchFailure}
+              onArrive={handleArriveFailure}
+              onResult={handleFailureResult}
+              toast={failureToast}
+            />
+          )}
           {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} onUpdateSiteNotes={handleUpdateSiteNotes} />}
-          {tab === "failure" && <FailureTab failures={failures} setFailures={setFailures} />}
+          {tab === "failure" && (
+            <FailureTab
+              failures={failures}
+              setFailures={setFailures}
+              onDispatch={handleDispatchFailure}
+              onArrive={handleArriveFailure}
+              onResult={handleFailureResult}
+              toast={failureToast}
+            />
+          )}
           {tab === "checkup" && <CheckupTab />}
           {tab === "inspection" && <InspectionTab inspections={inspections} setInspections={setInspections} />}
           {tab === "material" && <MaterialTab requests={materialRequests} setRequests={setMaterialRequests} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} setQuoteRequests={setQuoteRequests} restockRequests={restockRequests} />}
