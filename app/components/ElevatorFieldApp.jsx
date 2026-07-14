@@ -4708,7 +4708,7 @@ export default function App() {
     };
     await supabase.from("sites").insert({
       id: newSite.id,
-      site_code: newSite.siteCode,
+      site_code: newSite.siteCode || null,
       name: newSite.name,
       elevator_no: newSite.elevatorNo,
       address: newSite.address,
@@ -4730,7 +4730,7 @@ export default function App() {
     await supabase
       .from("sites")
       .update({
-        site_code: form.siteCode,
+        site_code: form.siteCode || null,
         name: form.name,
         elevator_no: form.elevatorNo,
         address: form.address,
