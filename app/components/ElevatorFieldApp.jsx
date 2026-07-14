@@ -4495,6 +4495,17 @@ function AdminTab({ inspections, materialRequests, billings, quoteRequests, rest
 const SKIP_LOGIN = true;
 const DEV_FAKE_PROFILE = { name: "관리자", role: "admin" };
 
+// SKIP_LOGIN 상태에서 로그인 없이 URL만으로 관리자/기사 화면을 바꿔볼 수 있게 해줍니다.
+// 예: ?as=engineer (기본 이름 "신석주"), ?as=engineer&name=김기사, ?as=admin
+function getDevProfileOverride() {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  const as = params.get("as");
+  if (as === "admin") return { name: params.get("name") || "관리자", role: "admin" };
+  if (as === "engineer") return { name: params.get("name") || "신석주", role: "engineer" };
+  return null;
+}
+
 export default function App() {
   // undefined = 아직 로그인 여부 확인 중, null = 로그인 안 됨, 객체 = 로그인 됨
   const [session, setSession] = useState(undefined);
@@ -4532,7 +4543,7 @@ export default function App() {
   // 로그인이 되면 profiles 테이블에서 이 계정의 이름/역할을 가져옵니다.
   useEffect(() => {
     if (SKIP_LOGIN) {
-      setProfile(DEV_FAKE_PROFILE);
+      setProfile(getDevProfileOverride() ?? DEV_FAKE_PROFILE);
       return;
     }
     if (!session) {
