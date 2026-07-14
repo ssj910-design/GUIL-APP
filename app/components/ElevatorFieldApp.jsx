@@ -790,12 +790,10 @@ function SiteTab({ inspections, failures, billings, siteManagers, onUpdateSiteNo
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const sites = role === "admin" ? allSites : allSites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER);
   const [query, setQuery] = useState("");
-  const [region, setRegion] = useState("전체");
   const [view, setView] = useState("list"); // list | site | elevator
   const [selectedSite, setSelectedSite] = useState(null);
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [elevatorSubTab, setElevatorSubTab] = useState("정보");
-  const regions = ["전체", "가산", "양재"];
 
   // ★ 고장 출동 확정 후 해당 현장의 현장정보 화면으로 자동 이동
   useEffect(() => {
@@ -808,9 +806,7 @@ function SiteTab({ inspections, failures, billings, siteManagers, onUpdateSiteNo
     onFocusSiteHandled();
   }, [focusSiteId]);
 
-  const list = sites.filter(
-    (s) => (region === "전체" || s.region === region) && s.name.includes(query.trim())
-  );
+  const list = sites.filter((s) => s.name.includes(query.trim()));
 
   function latestInspection(siteId) {
     return inspections.find((i) => i.siteId === siteId) ?? null;
@@ -873,17 +869,6 @@ function SiteTab({ inspections, failures, billings, siteManagers, onUpdateSiteNo
             className="w-full border border-slate-300 rounded-xl pl-9 pr-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <div className="flex gap-2 mt-2.5 overflow-x-auto">
-          {regions.map((r) => (
-            <button
-              key={r}
-              onClick={() => setRegion(r)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold shrink-0 ${region === r ? "bg-blue-700 text-white" : "bg-white text-slate-500 border border-slate-200"}`}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
         <p className="text-[11px] text-slate-400 mt-2">총 720개 현장 중 {list.length}건 표시 (샘플 데이터)</p>
       </div>
 
@@ -897,10 +882,7 @@ function SiteTab({ inspections, failures, billings, siteManagers, onUpdateSiteNo
               onClick={() => { setSelectedSite(s); setView("site"); }}
               className="w-full text-left bg-white rounded-xl border border-slate-200 p-3.5 active:bg-slate-50"
             >
-              <div className="flex items-center justify-between mb-1">
-                <p className="font-bold text-slate-800 text-sm">{s.name} · {s.elevatorNo}</p>
-                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">{s.region}</span>
-              </div>
+              <p className="font-bold text-slate-800 text-sm mb-1">{s.name} · {siteUnits(s).length}대</p>
               <p className="text-[11px] text-slate-400 mb-2">{s.address}</p>
               <div className="flex items-center gap-1.5 flex-wrap">
                 {s.failures30d >= 3 && (
