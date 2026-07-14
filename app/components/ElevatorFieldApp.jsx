@@ -40,7 +40,7 @@ function mapSite(row) {
     failures30d: row.failures_30d,
     assignedEngineer: row.assigned_engineer,
     notes: row.notes,
-    govElevatorNo: row.gov_elevator_no,
+    govElevatorNos: row.gov_elevator_nos ?? [],
   };
 }
 
@@ -201,27 +201,36 @@ function mapGovResultToCode(resultNm) {
 }
 
 // 승강기고유번호가 등록된 현장들의 검사결과를 국가승강기정보센터 API에서 실시간으로 가져옵니다.
-function useLiveInspections(sites) {
+// 현장의 등록된 승강기고유번호(호기별)를 조회 대상 목록으로 펼쳐줍니다.
+function siteToUnitQueries(site) {
+  return (site.govElevatorNos ?? [])
+    .map((no, idx) => ({ key: `${site.id}-${idx}`, siteId: site.id, siteName: site.name, govElevatorNo: no }))
+    .filter((q) => q.govElevatorNo);
+}
+
+// queries: [{ key, siteId, siteName, govElevatorNo }] — 호기 하나당 하나씩 실시간 조회합니다.
+function useLiveInspections(queries) {
   const [live, setLive] = useState([]);
-  const registered = sites.filter((s) => s.govElevatorNo);
-  const key = registered.map((s) => `${s.id}:${s.govElevatorNo}`).join(",");
+  const key = queries.map((q) => `${q.key}:${q.govElevatorNo}`).join(",");
 
   useEffect(() => {
-    if (registered.length === 0) {
+    if (queries.length === 0) {
       setLive([]);
       return;
     }
     let cancelled = false;
     async function loadAll() {
       const results = await Promise.all(
-        registered.map(async (s) => {
+        queries.map(async (q) => {
           try {
-            const res = await fetch(`/api/elevator-info?elevatorNo=${encodeURIComponent(s.govElevatorNo)}`);
+            const res = await fetch(`/api/elevator-info?elevatorNo=${encodeURIComponent(q.govElevatorNo)}`);
             const data = await res.json();
-            return (data.items ?? []).map((item) => ({
-              id: `gov-${s.id}-${item.elevatorNo}`,
-              siteId: s.id,
-              siteName: s.name,
+            // 같은 건물의 다른 호기가 함께 반환될 수 있어, 실제로 등록한 번호와 일치하는 항목만 남깁니다.
+            const items = (data.items ?? []).filter((item) => item.elevatorNo === q.govElevatorNo);
+            return items.map((item) => ({
+              id: `gov-${q.key}`,
+              siteId: q.siteId,
+              siteName: q.siteName,
               elevatorNo: item.installationPlace || item.elevatorNo,
               dueDate: item.applcEnDt,
               startDate: item.applcBeDt,
@@ -611,7 +620,11 @@ function DrillHeader({ title, onBack, onHome }) {
 /* ---- 승강기정보 화면 (정보 / 고장 / 검사) ---- */
 function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspections, billings, onBack, onHome }) {
   const unitFailures = failures.filter((f) => f.siteId === site.id);
-  const liveInspections = useLiveInspections([site]);
+  const unitIndex = Number(unit?.split("-")[1]) - 1;
+  const unitGovNo = site.govElevatorNos?.[unitIndex];
+  const liveInspections = useLiveInspections(
+    unitGovNo ? [{ key: `${site.id}-${unitIndex}`, siteId: site.id, siteName: site.name, govElevatorNo: unitGovNo }] : []
+  );
   const unitInspections = liveInspections.length > 0
     ? liveInspections
     : [...inspections.filter((i) => i.siteId === site.id)].sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate));
@@ -803,7 +816,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
                 {idx !== units.length - 1 && <div className="w-px flex-1 bg-slate-200 mt-1" />}
               </div>
               <div className="flex-1 pb-3">
-                <p className="text-sm font-bold text-slate-800 py-2.5">{u} (--------)</p>
+                <p className="text-sm font-bold text-slate-800 py-2.5">{u} ({site.govElevatorNos?.[idx] || "승강기고유번호 미등록"})</p>
                 <button
                   onClick={() => onOpenUnit(u)}
                   className="w-full bg-blue-500 text-white text-sm font-bold py-2.5 rounded-md active:bg-blue-600 mb-1"
@@ -1005,7 +1018,7 @@ function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast 
   const [historySite, setHistorySite] = useState(null);
 
   // 승강기고유번호가 등록된 현장은 국가승강기정보센터에서 실시간으로, 나머지는 기존 수기입력 기록을 보여줍니다.
-  const liveInspections = useLiveInspections(mySites);
+  const liveInspections = useLiveInspections(mySites.flatMap(siteToUnitQueries));
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
   const combinedInspections = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId))];
 
@@ -2065,7 +2078,7 @@ function InspectionTab({ inspections, setInspections }) {
   const [form, setForm] = useState({});
 
   // 승강기고유번호가 등록된 현장은 국가승강기정보센터에서 실시간으로, 나머지는 기존 수기입력 기록을 보여줍니다.
-  const liveInspections = useLiveInspections(sites);
+  const liveInspections = useLiveInspections(sites.flatMap(siteToUnitQueries));
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
   const combined = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId))];
 
@@ -3717,7 +3730,7 @@ function AdminMenuRow({ icon: Icon, label, badge, onClick }) {
 const emptySiteForm = {
   name: "", siteCode: "", elevatorNo: "", region: "", address: "",
   contractType: "", phone: "", elevatorModel: "", unitCount: "1",
-  manager: "", managerPhone: "", assignedEngineer: "", govElevatorNo: "",
+  manager: "", managerPhone: "", assignedEngineer: "", govElevatorNos: [""],
 };
 
 function ManagerRow({ manager, onSave, onDelete }) {
@@ -3739,6 +3752,15 @@ function ManagerRow({ manager, onSave, onDelete }) {
 function SiteEditorSheet({ initial, engineerNames, siteId, managers, onAddManager, onUpdateManager, onDeleteManager, onSave, onClose }) {
   const [form, setForm] = useState(initial);
   const canSave = form.name.trim().length > 0;
+  const unitN = Number(form.unitCount) || 1;
+
+  function setGovNo(idx, value) {
+    setForm((f) => {
+      const arr = [...(f.govElevatorNos ?? [])];
+      arr[idx] = value.replace(/[^0-9]/g, "");
+      return { ...f, govElevatorNos: arr };
+    });
+  }
 
   return (
     <Sheet title={initial === emptySiteForm ? "새 현장 등록" : "현장 정보 수정"} onClose={onClose}>
@@ -3758,13 +3780,18 @@ function SiteEditorSheet({ initial, engineerNames, siteId, managers, onAddManage
         </select>
       </Field>
       <Field label="승강기 모델"><input className={inputCls} value={form.elevatorModel} onChange={(e) => setForm({ ...form, elevatorModel: e.target.value })} /></Field>
-      <Field label="승강기고유번호 (국가승강기정보센터)">
-        <input
-          className={inputCls}
-          value={form.govElevatorNo}
-          onChange={(e) => setForm({ ...form, govElevatorNo: e.target.value.replace(/[^0-9]/g, "") })}
-          placeholder="예: 0075681"
-        />
+      <Field label="승강기고유번호 (국가승강기정보센터, 호기별)">
+        <div className="space-y-2">
+          {Array.from({ length: unitN }, (_, i) => (
+            <input
+              key={i}
+              className={inputCls}
+              value={(form.govElevatorNos ?? [])[i] ?? ""}
+              onChange={(e) => setGovNo(i, e.target.value)}
+              placeholder={`${i + 1}호기 고유번호 (예: 0075681)`}
+            />
+          ))}
+        </div>
       </Field>
       <Field label="담당 기사 배정">
         <select className={inputCls} value={form.assignedEngineer} onChange={(e) => setForm({ ...form, assignedEngineer: e.target.value })}>
@@ -3808,7 +3835,7 @@ function SiteManagementScreen({ sites, engineerNames, onAddSite, onUpdateSite, o
       region: s.region ?? "", address: s.address ?? "", contractType: s.contractType ?? "",
       phone: s.phone ?? "", elevatorModel: s.elevatorModel ?? "", unitCount: String(s.unitCount ?? 1),
       manager: s.manager ?? "", managerPhone: s.managerPhone ?? "", assignedEngineer: s.assignedEngineer ?? "",
-      govElevatorNo: s.govElevatorNo ?? "",
+      govElevatorNos: Array.from({ length: Number(s.unitCount) || 1 }, (_, i) => s.govElevatorNos?.[i] ?? ""),
     };
   }
 
@@ -4635,7 +4662,7 @@ export default function App() {
       failures30d: 0,
       assignedEngineer: form.assignedEngineer || null,
       notes: null,
-      govElevatorNo: form.govElevatorNo || null,
+      govElevatorNos: (form.govElevatorNos ?? []).map((v) => v || null),
     };
     await supabase.from("sites").insert({
       id: newSite.id,
@@ -4651,7 +4678,7 @@ export default function App() {
       manager: newSite.manager,
       manager_phone: newSite.managerPhone,
       assigned_engineer: newSite.assignedEngineer,
-      gov_elevator_no: newSite.govElevatorNo,
+      gov_elevator_nos: newSite.govElevatorNos,
     });
     setSites((prev) => [...prev, newSite]);
   }
@@ -4673,7 +4700,7 @@ export default function App() {
         manager: form.manager,
         manager_phone: form.managerPhone,
         assigned_engineer: form.assignedEngineer || null,
-        gov_elevator_no: form.govElevatorNo || null,
+        gov_elevator_nos: (form.govElevatorNos ?? []).map((v) => v || null),
       })
       .eq("id", siteId);
     setSites((prev) =>
@@ -4693,7 +4720,7 @@ export default function App() {
               manager: form.manager,
               managerPhone: form.managerPhone,
               assignedEngineer: form.assignedEngineer || null,
-              govElevatorNo: form.govElevatorNo || null,
+              govElevatorNos: (form.govElevatorNos ?? []).map((v) => v || null),
             }
           : s
       )
