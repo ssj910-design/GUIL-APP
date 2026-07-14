@@ -1628,7 +1628,6 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult }) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <FilterBar startDate="2026년 07월 10일 金" endDate="2026년 07월 10일 金" />
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
         {list.length === 0 ? (
           <p className="text-xs text-slate-400 text-center py-10">미배정 고장이 없습니다</p>
@@ -1695,15 +1694,6 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult }) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <FilterBar
-        pills={[
-          { label: "현장", value: "전체" },
-          { label: "담당자", value: CURRENT_ENGINEER, active: true },
-          { label: "부서", value: "전체" },
-        ]}
-        startDate="2026년 07월 01일 水"
-        endDate="2026년 07월 31일 金"
-      />
       <div className="flex-1 overflow-y-auto px-5 py-4">
         <p className="text-sm font-bold text-slate-700 mb-2">처리중인 고장</p>
         <div className="space-y-2.5 mb-5">
@@ -1825,16 +1815,6 @@ function FailureStatusOverview({ failures }) {
           </div>
         </div>
       </div>
-      <FilterBar
-        pills={[
-          { label: "현장", value: "전체" },
-          { label: "고장", value: "전체" },
-          { label: "담당자", value: "전체", active: true },
-          { label: "부서", value: "전체" },
-        ]}
-        startDate="2026년 07월 10일 金"
-        endDate="2026년 07월 10일 金"
-      />
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2.5">
         {failures.length === 0 ? (
           <p className="text-xs text-slate-400 text-center py-10">고장 접수 이력이 없습니다</p>
