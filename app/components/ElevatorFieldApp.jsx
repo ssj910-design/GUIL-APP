@@ -700,7 +700,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
           <TimelineRow icon={Flag} label="현장명" value={site.name} />
           <TimelineRow icon={Flag} label="대수" value={`${units.length} 대`} />
           <TimelineRow icon={MapPin} label="주소" value={site.address} valueColor="text-blue-600" />
-          <TimelineRow icon={Flame} label="계약구분" value={site.contractType || "-"} valueColor="text-red-600 font-bold" />
+          <TimelineRow icon={Flame} label="계약구분" value={site.contractType || "-"} valueColor={site.contractType === "FM(종합계약)" ? "text-red-600 font-bold" : "text-slate-700"} />
           {siteManagers.map((m, idx) => {
             const n = siteManagers.length > 1 ? `${idx + 1}` : "";
             return (
@@ -3539,11 +3539,10 @@ function SiteEditorSheet({ initial, engineerNames, siteId, managers, onAddManage
       <Field label="현장명"><input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="예: 대박빌딩" /></Field>
       <Field label="승강기 번호"><input className={inputCls} value={form.elevatorNo} onChange={(e) => setForm({ ...form, elevatorNo: e.target.value })} placeholder="예: 1호기" /></Field>
       <Field label="대수"><input type="number" min={1} className={inputCls} value={form.unitCount} onChange={(e) => setForm({ ...form, unitCount: e.target.value })} /></Field>
-      <Field label="지역"><input className={inputCls} value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} placeholder="예: 가산" /></Field>
       <Field label="주소"><input className={inputCls} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
       <Field label="계약구분">
         <select
-          className={`${inputCls} text-red-600 font-bold`}
+          className={`${inputCls} ${form.contractType === "FM(종합계약)" ? "text-red-600 font-bold" : ""}`}
           value={form.contractType}
           onChange={(e) => setForm({ ...form, contractType: e.target.value })}
         >
