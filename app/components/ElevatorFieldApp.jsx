@@ -18,7 +18,7 @@ import { supabase } from "@/lib/supabaseClient";
 const SitesContext = createContext([]);
 
 // 로그인한 사용자 정보(이름/역할)와 전체 기사 이름 목록을 어디서든 꺼내 쓸 수 있게 합니다.
-const AuthContext = createContext({ name: "", role: "engineer", engineerNames: [], signOut: () => {} });
+const AuthContext = createContext({ name: "", role: "engineer", engineerNames: [], engineers: [], signOut: () => {} });
 
 // Supabase 테이블의 snake_case 컬럼명을 화면 코드가 쓰던 camelCase 이름으로 바꿔줍니다.
 function mapSite(row) {
@@ -40,6 +40,17 @@ function mapSite(row) {
     failures30d: row.failures_30d,
     assignedEngineer: row.assigned_engineer,
     notes: row.notes,
+  };
+}
+
+function mapSiteManager(row) {
+  return {
+    id: row.id,
+    siteId: row.site_id,
+    name: row.name,
+    phone: row.phone,
+    email: row.email,
+    fax: row.fax,
   };
 }
 
@@ -672,10 +683,12 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
 }
 
 /* ---- 현장정보 화면 ---- */
-function SiteDetailScreen({ site, onBack, onHome, onOpenUnit, onUpdateSiteNotes }) {
+function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUpdateSiteNotes }) {
   const units = siteUnits(site);
+  const { engineers } = useContext(AuthContext);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState(site.notes ?? "");
+  const assignedEngineerProfile = engineers.find((e) => e.name === site.assignedEngineer) ?? null;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
@@ -683,27 +696,23 @@ function SiteDetailScreen({ site, onBack, onHome, onOpenUnit, onUpdateSiteNotes 
       <div className="flex-1 overflow-y-auto bg-slate-50 pb-6">
         <p className="px-5 pt-4 pb-2 text-xs font-bold text-slate-400">상세정보</p>
         <div className="bg-white">
-          <TimelineRow icon={Flag} label="현장코드" value={site.siteCode} valueColor="text-blue-600" />
+          <TimelineRow icon={Flag} label="승강기 번호" value={site.elevatorNo} valueColor="text-blue-600" />
           <TimelineRow icon={Flag} label="현장명" value={site.name} />
           <TimelineRow icon={Flag} label="대수" value={`${units.length} 대`} />
-          <TimelineRow icon={PhoneCall} label="현장전화번호" value="-" />
           <TimelineRow icon={MapPin} label="주소" value={site.address} valueColor="text-blue-600" />
-          <TimelineRow icon={Navigation} label="상세주소" value="-" />
-          <TimelineRow icon={Flame} label="회사구분" value="자사" />
-          <TimelineRow icon={Flame} label="프로젝트No(협력사코드)" value="-" />
-          <TimelineRow icon={Flame} label="보수업체명" value="가산엘리베이터(주)" />
-          <TimelineRow icon={User} label="담당자" value={site.manager} />
-          <TimelineRow icon={PhoneCall} label="담당전화번호" value={site.managerPhone} valueColor="text-blue-600" />
           <TimelineRow icon={Flame} label="계약구분" value={site.contractType} />
-          <TimelineRow icon={Flame} label="점검시행안내문" value="사용" valueColor="text-blue-600" last />
-        </div>
-
-        <p className="px-5 pt-5 pb-2 text-xs font-bold text-slate-400">담당자 정보</p>
-        <div className="bg-white">
-          <TimelineRow icon={User} label="이름" value="-" />
-          <TimelineRow icon={Mail} label="메일주소" value="-" />
-          <TimelineRow icon={PhoneCall} label="휴대폰번호" value={site.phone} valueColor="text-blue-600" />
-          <TimelineRow icon={Radio} label="원격점검 사용여부" value="미사용" />
+          {siteManagers.map((m, idx) => {
+            const n = siteManagers.length > 1 ? `${idx + 1}` : "";
+            return (
+              <React.Fragment key={m.id}>
+                <TimelineRow icon={User} label={`담당자${n}`} value={m.name || "-"} />
+                <TimelineRow icon={PhoneCall} label={`담당자${n} 전화번호`} value={m.phone || "-"} valueColor="text-blue-600" />
+                <TimelineRow icon={Mail} label={`담당자${n} 메일주소`} value={m.email || "-"} />
+                <TimelineRow icon={Paperclip} label={`담당자${n} FAX`} value={m.fax || "-"} />
+              </React.Fragment>
+            );
+          })}
+          {siteManagers.length === 0 && <TimelineRow icon={User} label="담당자" value="등록된 담당자가 없습니다" />}
           <TimelineRow
             icon={ClipboardCheck}
             label="비고(전달사항)"
@@ -715,6 +724,13 @@ function SiteDetailScreen({ site, onBack, onHome, onOpenUnit, onUpdateSiteNotes 
               setEditingNotes(true);
             }}
           />
+        </div>
+
+        <p className="px-5 pt-5 pb-2 text-xs font-bold text-slate-400">담당기사 정보</p>
+        <div className="bg-white">
+          <TimelineRow icon={User} label="이름" value={site.assignedEngineer || "미배정"} />
+          <TimelineRow icon={Mail} label="메일주소" value={assignedEngineerProfile?.email || "-"} />
+          <TimelineRow icon={PhoneCall} label="휴대폰번호" value={assignedEngineerProfile?.phone || "-"} valueColor="text-blue-600" last />
         </div>
 
         <div className="px-5 pt-5 pb-2 flex items-center justify-between">
@@ -767,7 +783,7 @@ function SiteDetailScreen({ site, onBack, onHome, onOpenUnit, onUpdateSiteNotes 
   );
 }
 
-function SiteTab({ inspections, failures, billings, onUpdateSiteNotes }) {
+function SiteTab({ inspections, failures, billings, siteManagers, onUpdateSiteNotes }) {
   const allSites = useContext(SitesContext);
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const sites = role === "admin" ? allSites : allSites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER);
@@ -819,6 +835,7 @@ function SiteTab({ inspections, failures, billings, onUpdateSiteNotes }) {
     return (
       <SiteDetailScreen
         site={liveSelectedSite}
+        siteManagers={siteManagers.filter((m) => m.siteId === liveSelectedSite.id)}
         onBack={backToList}
         onHome={backToList}
         onUpdateSiteNotes={onUpdateSiteNotes}
@@ -3497,7 +3514,23 @@ const emptySiteForm = {
   manager: "", managerPhone: "", assignedEngineer: "",
 };
 
-function SiteEditorSheet({ initial, engineerNames, onSave, onClose }) {
+function ManagerRow({ manager, onSave, onDelete }) {
+  const [draft, setDraft] = useState({ name: manager.name ?? "", phone: manager.phone ?? "", email: manager.email ?? "", fax: manager.fax ?? "" });
+  return (
+    <div className="border border-slate-200 rounded-lg p-3 mb-2.5 space-y-2">
+      <input className={inputCls} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="담당자 이름" />
+      <input className={inputCls} value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} placeholder="전화번호" />
+      <input className={inputCls} value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="메일주소" />
+      <input className={inputCls} value={draft.fax} onChange={(e) => setDraft({ ...draft, fax: e.target.value })} placeholder="FAX" />
+      <div className="flex gap-2">
+        <button type="button" onClick={() => onSave(draft)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2 rounded-lg active:bg-blue-800">저장</button>
+        <button type="button" onClick={onDelete} className="flex-1 bg-red-50 text-red-600 text-xs font-bold py-2 rounded-lg active:bg-red-100">삭제</button>
+      </div>
+    </div>
+  );
+}
+
+function SiteEditorSheet({ initial, engineerNames, siteId, managers, onAddManager, onUpdateManager, onDeleteManager, onSave, onClose }) {
   const [form, setForm] = useState(initial);
   const canSave = form.name.trim().length > 0;
 
@@ -3512,8 +3545,6 @@ function SiteEditorSheet({ initial, engineerNames, onSave, onClose }) {
       <Field label="계약구분"><input className={inputCls} value={form.contractType} onChange={(e) => setForm({ ...form, contractType: e.target.value })} placeholder="예: 월정료(개인건물주)" /></Field>
       <Field label="현장 전화번호"><input className={inputCls} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
       <Field label="승강기 모델"><input className={inputCls} value={form.elevatorModel} onChange={(e) => setForm({ ...form, elevatorModel: e.target.value })} /></Field>
-      <Field label="담당자"><input className={inputCls} value={form.manager} onChange={(e) => setForm({ ...form, manager: e.target.value })} /></Field>
-      <Field label="담당자 전화번호"><input className={inputCls} value={form.managerPhone} onChange={(e) => setForm({ ...form, managerPhone: e.target.value })} /></Field>
       <Field label="담당 기사 배정">
         <select className={inputCls} value={form.assignedEngineer} onChange={(e) => setForm({ ...form, assignedEngineer: e.target.value })}>
           <option value="">미배정</option>
@@ -3521,11 +3552,32 @@ function SiteEditorSheet({ initial, engineerNames, onSave, onClose }) {
         </select>
       </Field>
       <PrimaryButton onClick={() => onSave(form)} disabled={!canSave}>저장</PrimaryButton>
+
+      {siteId && (
+        <div className="mt-6 pt-5 border-t border-slate-100">
+          <p className="text-xs font-bold text-slate-500 mb-2.5">담당자 관리 (여러 명 등록 가능)</p>
+          {managers.map((m) => (
+            <ManagerRow
+              key={m.id}
+              manager={m}
+              onSave={(draft) => onUpdateManager(m.id, draft)}
+              onDelete={() => onDeleteManager(m.id)}
+            />
+          ))}
+          <button
+            type="button"
+            onClick={() => onAddManager(siteId, { name: "", phone: "", email: "", fax: "" })}
+            className="w-full border-2 border-dashed border-slate-300 rounded-lg py-2.5 text-xs font-bold text-slate-500 active:bg-slate-50"
+          >
+            + 담당자 추가
+          </button>
+        </div>
+      )}
     </Sheet>
   );
 }
 
-function SiteManagementScreen({ sites, engineerNames, onAddSite, onUpdateSite, onDeleteSite, onBack }) {
+function SiteManagementScreen({ sites, engineerNames, onAddSite, onUpdateSite, onDeleteSite, siteManagers, onAddSiteManager, onUpdateSiteManager, onDeleteSiteManager, onBack }) {
   const [editingSite, setEditingSite] = useState(null); // null | "new" | site object
   const [deleteTarget, setDeleteTarget] = useState(null);
 
@@ -3591,6 +3643,11 @@ function SiteManagementScreen({ sites, engineerNames, onAddSite, onUpdateSite, o
         <SiteEditorSheet
           initial={editingSite === "new" ? emptySiteForm : siteToForm(editingSite)}
           engineerNames={engineerNames}
+          siteId={editingSite === "new" ? null : editingSite.id}
+          managers={editingSite === "new" ? [] : siteManagers.filter((m) => m.siteId === editingSite.id)}
+          onAddManager={onAddSiteManager}
+          onUpdateManager={onUpdateSiteManager}
+          onDeleteManager={onDeleteSiteManager}
           onSave={handleSave}
           onClose={() => setEditingSite(null)}
         />
@@ -3615,6 +3672,43 @@ function SiteManagementScreen({ sites, engineerNames, onAddSite, onUpdateSite, o
           </PrimaryButton>
         </Sheet>
       )}
+    </div>
+  );
+}
+
+function EngineerContactRow({ engineer, onSave }) {
+  const [draft, setDraft] = useState({ phone: engineer.phone ?? "", email: engineer.email ?? "" });
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-3.5 mb-2.5">
+      <p className="font-bold text-slate-800 text-sm mb-2">{engineer.name}</p>
+      <div className="space-y-2">
+        <input className={inputCls} value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} placeholder="전화번호" />
+        <input className={inputCls} value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="메일주소" />
+      </div>
+      <button
+        type="button"
+        onClick={() => onSave(draft)}
+        className="w-full mt-2.5 bg-blue-700 text-white text-xs font-bold py-2 rounded-lg active:bg-blue-800"
+      >
+        저장
+      </button>
+    </div>
+  );
+}
+
+function EngineerManageScreen({ engineers, onUpdateEngineerContact, onBack }) {
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden bg-white">
+      <DrillHeader title="기사관리" onBack={onBack} onHome={onBack} />
+      <div className="flex-1 overflow-y-auto px-5 py-4">
+        {engineers.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-10">등록된 기사 계정이 없습니다</p>
+        ) : (
+          engineers.map((e) => (
+            <EngineerContactRow key={e.id} engineer={e} onSave={(draft) => onUpdateEngineerContact(e.id, draft)} />
+          ))
+        )}
+      </div>
     </div>
   );
 }
@@ -4061,9 +4155,9 @@ function RoomTab({ feed, onSendChat }) {
   );
 }
 
-function AdminTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onReprocess, onAttachPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onCompleteQuoteSupply, onAdminToggleTodo, onAttachRestockPhoto, onCompleteRestock, onAddSite, onUpdateSite, onDeleteSite }) {
+function AdminTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onReprocess, onAttachPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onCompleteQuoteSupply, onAdminToggleTodo, onAttachRestockPhoto, onCompleteRestock, onAddSite, onUpdateSite, onDeleteSite, siteManagers, onAddSiteManager, onUpdateSiteManager, onDeleteSiteManager, onUpdateEngineerContact }) {
   const sites = useContext(SitesContext);
-  const { engineerNames } = useContext(AuthContext);
+  const { engineerNames, engineers } = useContext(AuthContext);
   const [billingViewOpen, setBillingViewOpen] = useState(false);
   const [todoViewOpen, setTodoViewOpen] = useState(false);
   const [adminScreen, setAdminScreen] = useState(null); // null | "sites" | "materials" | "quotes" | "inspections" | "restock"
@@ -4094,6 +4188,20 @@ function AdminTab({ inspections, materialRequests, billings, quoteRequests, rest
         onAddSite={onAddSite}
         onUpdateSite={onUpdateSite}
         onDeleteSite={onDeleteSite}
+        siteManagers={siteManagers}
+        onAddSiteManager={onAddSiteManager}
+        onUpdateSiteManager={onUpdateSiteManager}
+        onDeleteSiteManager={onDeleteSiteManager}
+        onBack={() => setAdminScreen(null)}
+      />
+    );
+  }
+
+  if (adminScreen === "engineers") {
+    return (
+      <EngineerManageScreen
+        engineers={engineers}
+        onUpdateEngineerContact={onUpdateEngineerContact}
         onBack={() => setAdminScreen(null)}
       />
     );
@@ -4143,6 +4251,7 @@ function AdminTab({ inspections, materialRequests, billings, quoteRequests, rest
       <div className="flex-1 overflow-y-auto px-5 pt-4 pb-4">
         <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
           <AdminMenuRow icon={Building2} label="현장관리" badge={sites.length} onClick={() => setAdminScreen("sites")} />
+          <AdminMenuRow icon={Users} label="기사관리" badge={engineers.length} onClick={() => setAdminScreen("engineers")} />
           <AdminMenuRow icon={PackageCheck} label="자재 지급 대기" badge={pendingCount} onClick={() => setAdminScreen("materials")} />
           <AdminMenuRow icon={Package} label="상비부품 보충" badge={restockRequests.filter((r) => r.status === "대기").length} onClick={() => setAdminScreen("restock")} />
           <AdminMenuRow icon={FileText} label="견적 요청 관리" badge={quoteActiveCount} onClick={() => setAdminScreen("quotes")} />
@@ -4170,10 +4279,12 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [authError, setAuthError] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
-  const [engineerNames, setEngineerNames] = useState([]);
+  const [engineers, setEngineers] = useState([]);
+  const engineerNames = engineers.map((e) => e.name);
 
   const [tab, setTab] = useState("home");
   const [sites, setSites] = useState([]);
+  const [siteManagers, setSiteManagers] = useState([]);
   const [failures, setFailures] = useState([]);
   const [inspections, setInspections] = useState([]);
   const [todos, setTodos] = useState([]);
@@ -4231,6 +4342,7 @@ export default function App() {
     async function loadData() {
       const [
         sitesRes,
+        siteManagersRes,
         failuresRes,
         inspectionsRes,
         materialRes,
@@ -4242,6 +4354,7 @@ export default function App() {
         engineersRes,
       ] = await Promise.all([
         supabase.from("sites").select("*"),
+        supabase.from("site_managers").select("*"),
         supabase.from("failures").select("*").order("created_at", { ascending: false }),
         supabase.from("inspections").select("*"),
         supabase.from("material_requests").select("*").order("created_at", { ascending: false }),
@@ -4250,9 +4363,10 @@ export default function App() {
         supabase.from("billings").select("*").order("created_at", { ascending: false }),
         supabase.from("restock_requests").select("*").order("created_at", { ascending: false }),
         supabase.from("feed_posts").select("*").order("created_at", { ascending: false }),
-        supabase.from("profiles").select("name").eq("role", "engineer").order("name"),
+        supabase.from("profiles").select("id,name,phone,email").eq("role", "engineer").order("name"),
       ]);
       setSites((sitesRes.data ?? []).map(mapSite));
+      setSiteManagers((siteManagersRes.data ?? []).map(mapSiteManager));
       setFailures((failuresRes.data ?? []).map(mapFailure));
       setInspections((inspectionsRes.data ?? []).map(mapInspection));
       setMaterialRequests((materialRes.data ?? []).map(mapMaterialRequest));
@@ -4261,7 +4375,7 @@ export default function App() {
       setBillings((billingsRes.data ?? []).map(mapBilling));
       setRestockRequests((restockRes.data ?? []).map(mapRestockRequest));
       setFeed((feedRes.data ?? []).map(mapFeedPost));
-      setEngineerNames((engineersRes.data ?? []).map((r) => r.name));
+      setEngineers(engineersRes.data ?? []);
       setLoading(false);
     }
     loadData();
@@ -4358,6 +4472,41 @@ export default function App() {
   async function handleUpdateSiteNotes(siteId, notes) {
     await supabase.from("sites").update({ notes }).eq("id", siteId);
     setSites((prev) => prev.map((s) => (s.id === siteId ? { ...s, notes } : s)));
+  }
+
+  // ★ 관리자가 현장구성에서 담당자(보수업체 담당자)를 추가
+  async function handleAddSiteManager(siteId, form) {
+    const newManager = { id: "sm-" + Date.now(), siteId, name: form.name, phone: form.phone, email: form.email, fax: form.fax };
+    await supabase.from("site_managers").insert({
+      id: newManager.id,
+      site_id: siteId,
+      name: newManager.name,
+      phone: newManager.phone,
+      email: newManager.email,
+      fax: newManager.fax,
+    });
+    setSiteManagers((prev) => [...prev, newManager]);
+  }
+
+  // ★ 관리자가 현장구성에서 담당자 정보를 수정
+  async function handleUpdateSiteManager(managerId, form) {
+    await supabase
+      .from("site_managers")
+      .update({ name: form.name, phone: form.phone, email: form.email, fax: form.fax })
+      .eq("id", managerId);
+    setSiteManagers((prev) => prev.map((m) => (m.id === managerId ? { ...m, ...form } : m)));
+  }
+
+  // ★ 관리자가 현장구성에서 담당자를 삭제
+  async function handleDeleteSiteManager(managerId) {
+    await supabase.from("site_managers").delete().eq("id", managerId);
+    setSiteManagers((prev) => prev.filter((m) => m.id !== managerId));
+  }
+
+  // ★ 관리자가 기사관리에서 기사 개인의 전화번호/메일주소를 입력
+  async function handleUpdateEngineerContact(engineerId, { phone, email }) {
+    await supabase.from("profiles").update({ phone, email }).eq("id", engineerId);
+    setEngineers((prev) => prev.map((e) => (e.id === engineerId ? { ...e, phone, email } : e)));
   }
 
   // ★ 고장 출동 응답/내가 출동하기 → ETA 확정 (홈, 고장접수 탭 공용)
@@ -4720,7 +4869,7 @@ export default function App() {
   }
 
   return (
-    <AuthContext.Provider value={{ name: profile.name, role: profile.role, engineerNames, signOut: handleLogout }}>
+    <AuthContext.Provider value={{ name: profile.name, role: profile.role, engineerNames, engineers, signOut: handleLogout }}>
     <SitesContext.Provider value={sites}>
       <div className="h-screen w-screen bg-slate-200 flex items-center justify-center overflow-hidden">
         <div
@@ -4754,7 +4903,7 @@ export default function App() {
               toast={failureToast}
             />
           )}
-          {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} onUpdateSiteNotes={handleUpdateSiteNotes} />}
+          {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} siteManagers={siteManagers} onUpdateSiteNotes={handleUpdateSiteNotes} />}
           {tab === "failure" && (
             <FailureTab
               failures={failures}
@@ -4771,7 +4920,7 @@ export default function App() {
           {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} />}
           {tab === "todo" && <TodoTab todos={todos} setTodos={setTodos} />}
           {tab === "room" && <RoomTab feed={feed} onSendChat={handleSendFeedPost} />}
-          {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onCompleteRestock={handleCompleteRestock} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} />}
+          {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onCompleteRestock={handleCompleteRestock} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
 
           {/* bottom nav */}
           <div
