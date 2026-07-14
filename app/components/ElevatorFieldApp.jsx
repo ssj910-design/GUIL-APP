@@ -961,6 +961,7 @@ function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast 
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [resultTarget, setResultTarget] = useState(null);
+  const [arriveTarget, setArriveTarget] = useState(null);
   const [historySite, setHistorySite] = useState(null);
 
   const dueSoon = inspections
@@ -997,7 +998,7 @@ function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast 
                 f={f}
                 onOpenDetail={setDetailTarget}
                 onDispatch={setDispatchTarget}
-                onArrive={onArrive}
+                onArrive={setArriveTarget}
                 onOpenResult={setResultTarget}
               />
             ))
@@ -1106,7 +1107,7 @@ function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast 
           failure={detailTarget}
           onClose={() => setDetailTarget(null)}
           onDispatch={setDispatchTarget}
-          onArrive={onArrive}
+          onArrive={setArriveTarget}
           onOpenResult={setResultTarget}
         />
       )}
@@ -1117,6 +1118,16 @@ function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast 
           onConfirm={(eta) => {
             onDispatch(dispatchTarget, eta);
             setDispatchTarget(null);
+          }}
+        />
+      )}
+      {arriveTarget && (
+        <ArrivalTimeModal
+          failure={arriveTarget}
+          onClose={() => setArriveTarget(null)}
+          onConfirm={(time) => {
+            onArrive(arriveTarget, time);
+            setArriveTarget(null);
           }}
         />
       )}
@@ -1397,6 +1408,33 @@ function DispatchEtaModal({ failure, onConfirm, onClose }) {
   );
 }
 
+function formatTimeInput(raw) {
+  const digits = raw.replace(/[^0-9]/g, "").slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+}
+
+function ArrivalTimeModal({ failure, onConfirm, onClose }) {
+  const [time, setTime] = useState("");
+  const valid = /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
+  return (
+    <Sheet title="실제 도착 시간 입력" onClose={onClose}>
+      <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {failure.elevatorNo}</p>
+      <Field label="도착 시간 *">
+        <input
+          type="text"
+          inputMode="numeric"
+          value={time}
+          onChange={(e) => setTime(formatTimeInput(e.target.value))}
+          placeholder="예: 14:30"
+          className={inputCls}
+        />
+      </Field>
+      <PrimaryButton onClick={() => valid && onConfirm(time)} disabled={!valid}>도착 확인</PrimaryButton>
+    </Sheet>
+  );
+}
+
 function ArrivalResultModal({ failure, onConfirm, onClose }) {
   const [step, setStep] = useState("choose");
   const [cause, setCause] = useState("");
@@ -1498,6 +1536,50 @@ function FailureResponseCard({ f, onOpenDetail }) {
   );
 }
 
+function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult }) {
+  const stage = failureStage(f);
+  const unitLabel = f.elevatorNo && !f.elevatorNo.includes("호기") ? `${f.elevatorNo}호기` : f.elevatorNo;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <button type="button" onClick={() => onOpenDetail(f)} className="w-full text-left p-3.5">
+        <div className="flex items-center justify-between mb-1">
+          <p className="font-bold text-slate-800 text-[15px]">{f.siteName} · {unitLabel}</p>
+          {f.escalation && (
+            <span className="text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{f.escalation}</span>
+          )}
+        </div>
+        <p className="text-sm text-slate-500">{f.reportedAt}</p>
+      </button>
+      <div className="px-3.5 pb-3.5">
+        {stage === "pending" && (
+          <button
+            onClick={() => onDispatch(f)}
+            className="w-full bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800"
+          >
+            {f.assignee ? "출동 응답" : "내가 출동하기"}
+          </button>
+        )}
+        {stage === "dispatched" && (
+          <button
+            onClick={() => onArrive(f)}
+            className="w-full bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800"
+          >
+            도착
+          </button>
+        )}
+        {stage === "arrived" && (
+          <button
+            onClick={() => onOpenResult(f)}
+            className="w-full bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg active:bg-emerald-700"
+          >
+            🛠️ 고장처리결과 입력
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult }) {
   const stage = failureStage(f);
   return (
@@ -1542,6 +1624,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult }) {
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [resultTarget, setResultTarget] = useState(null);
+  const [arriveTarget, setArriveTarget] = useState(null);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -1561,7 +1644,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult }) {
           failure={detailTarget}
           onClose={() => setDetailTarget(null)}
           onDispatch={setDispatchTarget}
-          onArrive={onArrive}
+          onArrive={setArriveTarget}
           onOpenResult={setResultTarget}
         />
       )}
@@ -1572,6 +1655,16 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult }) {
           onConfirm={(eta) => {
             onDispatch(dispatchTarget, eta);
             setDispatchTarget(null);
+          }}
+        />
+      )}
+      {arriveTarget && (
+        <ArrivalTimeModal
+          failure={arriveTarget}
+          onClose={() => setArriveTarget(null)}
+          onConfirm={(time) => {
+            onArrive(arriveTarget, time);
+            setArriveTarget(null);
           }}
         />
       )}
@@ -1595,6 +1688,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult }) {
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [resultTarget, setResultTarget] = useState(null);
+  const [arriveTarget, setArriveTarget] = useState(null);
   const mine = failures.filter((f) => f.assignee === CURRENT_ENGINEER);
   const active = mine.filter((f) => f.status !== "완료");
   const done = mine.filter((f) => f.status === "완료");
@@ -1617,7 +1711,14 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult }) {
             <p className="text-xs text-slate-400 py-3">처리중인 고장이 없습니다</p>
           ) : (
             active.map((f) => (
-              <FailureResponseCard key={f.id} f={f} onOpenDetail={setDetailTarget} />
+              <FailureActionCard
+                key={f.id}
+                f={f}
+                onOpenDetail={setDetailTarget}
+                onDispatch={setDispatchTarget}
+                onArrive={setArriveTarget}
+                onOpenResult={setResultTarget}
+              />
             ))
           )}
         </div>
@@ -1655,7 +1756,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult }) {
           failure={detailTarget}
           onClose={() => setDetailTarget(null)}
           onDispatch={setDispatchTarget}
-          onArrive={onArrive}
+          onArrive={setArriveTarget}
           onOpenResult={setResultTarget}
         />
       )}
@@ -1666,6 +1767,16 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult }) {
           onConfirm={(eta) => {
             onDispatch(dispatchTarget, eta);
             setDispatchTarget(null);
+          }}
+        />
+      )}
+      {arriveTarget && (
+        <ArrivalTimeModal
+          failure={arriveTarget}
+          onClose={() => setArriveTarget(null)}
+          onConfirm={(time) => {
+            onArrive(arriveTarget, time);
+            setArriveTarget(null);
           }}
         />
       )}
@@ -4569,8 +4680,7 @@ export default function App() {
     setTab("sites");
   }
 
-  async function handleArriveFailure(failure) {
-    const arrivalTime = new Date().toTimeString().slice(0, 5);
+  async function handleArriveFailure(failure, arrivalTime) {
     await supabase.from("failures").update({ arrival_time: arrivalTime }).eq("id", failure.id);
     setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, arrivalTime } : x)));
   }
