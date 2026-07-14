@@ -1041,7 +1041,7 @@ function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast 
   const combinedInspections = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId))];
 
   const dueSoon = combinedInspections
-    .filter((i) => i.id?.startsWith("gov-") || !i.result)
+    .filter((i) => (i.id?.startsWith("gov-") ? i.result === "pass" : !i.result))
     .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) }))
     .filter((i) => i.daysLeft >= 0 && i.daysLeft <= 60)
     .sort((a, b) => a.daysLeft - b.daysLeft);
@@ -1167,7 +1167,13 @@ function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast 
                       <Badge result={i.result} />
                     </div>
                     <p className="text-[11px] text-slate-500 mb-1.5">{i.type} · {i.org}</p>
-                    <p className="text-[11px] text-red-600 leading-relaxed">지적사항: {i.notes}</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] text-red-600 leading-relaxed">{i.notes || "지적사항 확인 필요"}</p>
+                      <span className="shrink-0 ml-2 flex items-center gap-1">
+                        <span className="text-[10px] text-slate-400">보완기한</span>
+                        <DDay dueDate={i.dueDate} />
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -2103,6 +2109,8 @@ function InspectionTab({ inspections, setInspections }) {
   const dueSoon = combined
     .filter((i) => {
       if (!i.id?.startsWith("gov-")) return !i.result;
+      // 조건부합격/불합격은 도래현장이 아닌 조건부/불합격 탭에서만 보여줍니다.
+      if (i.result !== "pass") return false;
       // 실시간 데이터는 항상 판정결과가 있으므로, 유효기간 만료가 임박했는지로 "도래"를 판단합니다.
       const daysLeft = Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000);
       return daysLeft >= 0 && daysLeft <= 60;
@@ -2234,7 +2242,11 @@ function InspectionTab({ inspections, setInspections }) {
                   <span className="text-slate-300 text-xs">·</span>
                   <span className="text-xs text-slate-500">{insp.org}</span>
                 </div>
-                {insp.notes && <p className="text-[11px] text-red-600 leading-relaxed mb-2.5">지적사항: {insp.notes}</p>}
+                {insp.notes && <p className="text-[11px] text-red-600 leading-relaxed mb-1.5">지적사항: {insp.notes}</p>}
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <span className="text-[10px] text-slate-400">보완기한</span>
+                  <DDay dueDate={insp.dueDate} />
+                </div>
                 <div className="flex items-center justify-between">
                   {insp.result === "fail" && <span className="text-[11px] text-red-500 font-semibold">재검사 필요</span>}
                   {isLive ? (
