@@ -592,25 +592,28 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
               <p className="text-xs text-slate-400 text-center py-10">등록된 고장 이력이 없습니다</p>
             ) : (
               unitFailures.map((f) => {
-                const seed = f.id.charCodeAt(1) || 1;
                 const barColor = f.status === "완료" ? "#10b981" : f.status === "진행중" ? "#f59e0b" : "#ef4444";
+                const rows = [
+                  { label: "접수", value: f.errorCode },
+                  { label: "처리상태", value: f.escalation ? `${f.status} (${f.escalation})` : f.status },
+                  { label: "원인", value: f.faultCause || (f.status === "완료" ? "-" : "확인중") },
+                ];
+                if (f.processContent) rows.push({ label: "처리내용", value: f.processContent });
+                if (f.processNote) rows.push({ label: "비고", value: f.processNote });
+                if (f.photoCount > 0) rows.push({ label: "사진", value: `${f.photoCount}장` });
                 return (
                   <HistoryCard
                     key={f.id}
                     barColor={barColor}
                     title={f.errorCode.split(" ")[0]}
                     badge={1}
-                    rows={[
-                      { label: "접수", value: f.errorCode },
-                      { label: "처리", value: f.status },
-                      { label: "원인", value: f.status === "완료" ? "부품 교체" : "확인중" },
-                    ]}
+                    rows={rows}
                     date={`2026-${f.reportedAt.replace("/", "-")}`}
-                    tags={["김기사", "가산엘리베이터"]}
+                    tags={[f.assignee ?? "미배정", site.name]}
                     timeCols={[
-                      { label: "접수-배정", value: `${(seed * 3) % 20 + 2}분`, color: "text-red-500" },
-                      { label: "배정-도착", value: `${(seed * 7) % 40 + 10}분`, color: "text-amber-500" },
-                      { label: "도착-완료", value: `${(seed * 11) % 60 + 20}분`, color: "text-emerald-600" },
+                      { label: "접수", value: f.reportedAt, color: "text-red-500" },
+                      { label: "출동", value: f.dispatchedAt ? `${f.dispatchedAt} (${f.etaMinutes}분)` : "-", color: "text-amber-500" },
+                      { label: "도착", value: f.arrivalTime ?? "-", color: "text-emerald-600" },
                     ]}
                   />
                 );
@@ -1306,28 +1309,26 @@ function FailureDetailSheet({ failure, onClose }) {
 }
 
 function DispatchEtaModal({ failure, onConfirm, onClose }) {
-  const [eta, setEta] = useState(20);
+  const [eta, setEta] = useState("");
+  const minutes = parseInt(eta, 10);
+  const valid = eta.trim() !== "" && Number.isInteger(minutes) && minutes > 0;
   return (
     <Sheet title="도착 예정 시간 입력" onClose={onClose}>
       <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {failure.elevatorNo}</p>
-      <Field label="도착 예정 시간">
-        <div className="flex gap-2 flex-wrap">
-          {[10, 20, 30, 40, 60].map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setEta(m)}
-              className={`px-3.5 py-2 rounded-lg text-xs font-bold border ${eta === m ? "bg-blue-700 text-white border-blue-700" : "bg-white text-slate-500 border-slate-300"}`}
-            >
-              {m}분 후
-            </button>
-          ))}
-        </div>
+      <Field label="도착 예정 시간(분) *">
+        <input
+          type="text"
+          inputMode="numeric"
+          value={eta}
+          onChange={(e) => setEta(e.target.value.replace(/[^0-9]/g, ""))}
+          placeholder="숫자만 입력 (예: 25)"
+          className={inputCls}
+        />
       </Field>
       <p className="text-xs font-bold text-orange-600 bg-orange-50 rounded-lg px-3 py-2.5 mb-4 leading-relaxed">
         ⚠️ 확인을 누르면 고객에게 도착 시간이 문자로 자동 발송됩니다
       </p>
-      <PrimaryButton onClick={() => onConfirm(eta)}>출동 확정</PrimaryButton>
+      <PrimaryButton onClick={() => valid && onConfirm(minutes)} disabled={!valid}>출동 확정</PrimaryButton>
     </Sheet>
   );
 }
