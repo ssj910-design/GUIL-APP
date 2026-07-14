@@ -224,6 +224,7 @@ function useLiveInspections(sites) {
               siteName: s.name,
               elevatorNo: item.installationPlace || item.elevatorNo,
               dueDate: item.applcEnDt,
+              startDate: item.applcBeDt,
               result: mapGovResultToCode(item.resultNm),
               org: "한국승강기안전공단",
               type: "정기검사",
@@ -610,9 +611,10 @@ function DrillHeader({ title, onBack, onHome }) {
 /* ---- 승강기정보 화면 (정보 / 고장 / 검사) ---- */
 function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspections, billings, onBack, onHome }) {
   const unitFailures = failures.filter((f) => f.siteId === site.id);
-  const unitInspections = [...inspections.filter((i) => i.siteId === site.id)].sort(
-    (a, b) => new Date(b.dueDate) - new Date(a.dueDate)
-  );
+  const liveInspections = useLiveInspections([site]);
+  const unitInspections = liveInspections.length > 0
+    ? liveInspections
+    : [...inspections.filter((i) => i.siteId === site.id)].sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate));
   const unitBillings = billings.filter((b) => b.siteName === site.name);
 
   return (
@@ -697,8 +699,8 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
             ) : (
               unitInspections.map((insp) => {
                 const runEnd = insp.dueDate;
-                const runStart = addDays(runEnd, -365);
-                const inspDate = addDays(runStart, -5);
+                const runStart = insp.startDate || addDays(runEnd, -365);
+                const inspDate = insp.startDate || addDays(runStart, -5);
                 return (
                   <HistoryCard
                     key={insp.id}
