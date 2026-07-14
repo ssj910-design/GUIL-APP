@@ -700,7 +700,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
           <TimelineRow icon={Flag} label="현장명" value={site.name} />
           <TimelineRow icon={Flag} label="대수" value={`${units.length} 대`} />
           <TimelineRow icon={MapPin} label="주소" value={site.address} valueColor="text-blue-600" />
-          <TimelineRow icon={Flame} label="계약구분" value={site.contractType} />
+          <TimelineRow icon={Flame} label="계약구분" value={site.contractType || "-"} valueColor="text-red-600 font-bold" />
           {siteManagers.map((m, idx) => {
             const n = siteManagers.length > 1 ? `${idx + 1}` : "";
             return (
@@ -3537,13 +3537,21 @@ function SiteEditorSheet({ initial, engineerNames, siteId, managers, onAddManage
   return (
     <Sheet title={initial === emptySiteForm ? "새 현장 등록" : "현장 정보 수정"} onClose={onClose}>
       <Field label="현장명"><input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="예: 대박빌딩" /></Field>
-      <Field label="현장코드"><input className={inputCls} value={form.siteCode} onChange={(e) => setForm({ ...form, siteCode: e.target.value })} placeholder="예: 00007" /></Field>
-      <Field label="대표 호기"><input className={inputCls} value={form.elevatorNo} onChange={(e) => setForm({ ...form, elevatorNo: e.target.value })} placeholder="예: 1호기" /></Field>
+      <Field label="승강기 번호"><input className={inputCls} value={form.elevatorNo} onChange={(e) => setForm({ ...form, elevatorNo: e.target.value })} placeholder="예: 1호기" /></Field>
       <Field label="대수"><input type="number" min={1} className={inputCls} value={form.unitCount} onChange={(e) => setForm({ ...form, unitCount: e.target.value })} /></Field>
       <Field label="지역"><input className={inputCls} value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} placeholder="예: 가산" /></Field>
       <Field label="주소"><input className={inputCls} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
-      <Field label="계약구분"><input className={inputCls} value={form.contractType} onChange={(e) => setForm({ ...form, contractType: e.target.value })} placeholder="예: 월정료(개인건물주)" /></Field>
-      <Field label="현장 전화번호"><input className={inputCls} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+      <Field label="계약구분">
+        <select
+          className={`${inputCls} text-red-600 font-bold`}
+          value={form.contractType}
+          onChange={(e) => setForm({ ...form, contractType: e.target.value })}
+        >
+          <option value="">선택해주세요</option>
+          <option value="POG(일반계약)">POG(일반계약)</option>
+          <option value="FM(종합계약)">FM(종합계약)</option>
+        </select>
+      </Field>
       <Field label="승강기 모델"><input className={inputCls} value={form.elevatorModel} onChange={(e) => setForm({ ...form, elevatorModel: e.target.value })} /></Field>
       <Field label="담당 기사 배정">
         <select className={inputCls} value={form.assignedEngineer} onChange={(e) => setForm({ ...form, assignedEngineer: e.target.value })}>
