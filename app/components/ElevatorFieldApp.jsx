@@ -1308,27 +1308,26 @@ function FailureDetailSheet({ failure, onClose }) {
   );
 }
 
+const ETA_OPTIONS = Array.from({ length: 12 }, (_, i) => (i + 1) * 10);
+
 function DispatchEtaModal({ failure, onConfirm, onClose }) {
   const [eta, setEta] = useState("");
-  const minutes = parseInt(eta, 10);
-  const valid = eta.trim() !== "" && Number.isInteger(minutes) && minutes > 0;
+  const valid = eta !== "";
   return (
     <Sheet title="도착 예정 시간 입력" onClose={onClose}>
       <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {failure.elevatorNo}</p>
-      <Field label="도착 예정 시간(분) *">
-        <input
-          type="text"
-          inputMode="numeric"
-          value={eta}
-          onChange={(e) => setEta(e.target.value.replace(/[^0-9]/g, ""))}
-          placeholder="숫자만 입력 (예: 25)"
-          className={inputCls}
-        />
+      <Field label="도착 예정 시간 *">
+        <select value={eta} onChange={(e) => setEta(e.target.value)} className={inputCls}>
+          <option value="">선택해주세요</option>
+          {ETA_OPTIONS.map((m) => (
+            <option key={m} value={m}>{m}분 후</option>
+          ))}
+        </select>
       </Field>
       <p className="text-xs font-bold text-orange-600 bg-orange-50 rounded-lg px-3 py-2.5 mb-4 leading-relaxed">
         ⚠️ 확인을 누르면 고객에게 도착 시간이 문자로 자동 발송됩니다
       </p>
-      <PrimaryButton onClick={() => valid && onConfirm(minutes)} disabled={!valid}>출동 확정</PrimaryButton>
+      <PrimaryButton onClick={() => valid && onConfirm(parseInt(eta, 10))} disabled={!valid}>출동 확정</PrimaryButton>
     </Sheet>
   );
 }
