@@ -882,17 +882,19 @@ function SiteTab({ inspections, failures, billings, siteManagers, onUpdateSiteNo
               onClick={() => { setSelectedSite(s); setView("site"); }}
               className="w-full text-left bg-white rounded-xl border border-slate-200 p-3.5 active:bg-slate-50"
             >
-              <p className="font-bold text-slate-800 text-sm mb-1">{s.name} · {siteUnits(s).length}대</p>
-              <p className="text-[11px] text-slate-400 mb-2">{s.address}</p>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {s.failures30d >= 3 && (
-                  <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">집중관리</span>
-                )}
-                {openF > 0 && (
-                  <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">미처리 고장 {openF}건</span>
-                )}
-                {insp?.result && <Badge result={insp.result} />}
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <p className="font-bold text-slate-800 text-sm">{s.name} · {siteUnits(s).length}대</p>
+                <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                  {s.failures30d >= 3 && (
+                    <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">집중관리</span>
+                  )}
+                  {openF > 0 && (
+                    <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">미처리 고장 {openF}건</span>
+                  )}
+                  {insp?.result && <Badge result={insp.result} />}
+                </div>
               </div>
+              <p className="text-[11px] text-slate-400">{s.address}</p>
             </button>
           );
         })}
