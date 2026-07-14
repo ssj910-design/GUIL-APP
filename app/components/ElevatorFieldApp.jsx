@@ -1356,7 +1356,7 @@ function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onOpenResu
           </div>
         )}
       </div>
-      {stage === "pending" && (
+      {stage === "pending" && onDispatch && (
         <button
           onClick={() => { onDispatch(failure); onClose(); }}
           className="w-full bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800"
@@ -1364,7 +1364,7 @@ function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onOpenResu
           {failure.assignee ? "출동 응답" : "내가 출동하기"}
         </button>
       )}
-      {stage === "dispatched" && (
+      {stage === "dispatched" && onArrive && (
         <button
           onClick={() => { onArrive(failure); onClose(); }}
           className="w-full bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800"
@@ -1372,7 +1372,7 @@ function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onOpenResu
           도착
         </button>
       )}
-      {stage === "arrived" && (
+      {stage === "arrived" && onOpenResult && (
         <button
           onClick={() => { onOpenResult(failure); onClose(); }}
           className="w-full bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl active:bg-emerald-700"
@@ -1796,6 +1796,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult }) {
 
 function FailureStatusOverview({ failures }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
+  const [detailTarget, setDetailTarget] = useState(null);
   const mine = failures.filter((f) => f.assignee === CURRENT_ENGINEER);
   const myDone = mine.filter((f) => f.status === "완료").length;
   const myUndone = mine.filter((f) => f.status !== "완료").length;
@@ -1839,17 +1840,23 @@ function FailureStatusOverview({ failures }) {
           <p className="text-xs text-slate-400 text-center py-10">고장 접수 이력이 없습니다</p>
         ) : (
           failures.map((f) => (
-            <div key={f.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
+            <button
+              key={f.id}
+              onClick={() => setDetailTarget(f)}
+              className="w-full text-left bg-white rounded-xl border border-slate-200 p-3.5 active:bg-slate-50"
+            >
               <div className="flex items-center justify-between mb-1">
                 <p className="font-bold text-slate-800 text-sm">{f.siteName} · {f.elevatorNo}</p>
                 <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${statusColor[f.status]}`}>{f.status}</span>
               </div>
               <p className="text-xs text-slate-500">{f.errorCode}</p>
               <p className="text-[11px] text-slate-400 mt-1">{f.reportedAt} 접수 · {f.assignee ?? "미배정"}</p>
-            </div>
+            </button>
           ))
         )}
       </div>
+
+      {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} />}
     </div>
   );
 }
