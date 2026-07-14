@@ -99,6 +99,7 @@ function mapMaterialRequest(row) {
     id: row.id,
     siteId: row.site_id,
     siteName: row.site_name,
+    elevatorNo: row.elevator_no,
     part: row.part,
     urgency: row.urgency,
     note: row.note,
@@ -121,6 +122,7 @@ function mapTodo(row) {
     source: row.source,
     title: row.title,
     siteName: row.site_name,
+    elevatorNo: row.elevator_no,
     part: row.part,
     assignee: row.assignee,
     assignedDate: row.assigned_date,
@@ -135,6 +137,7 @@ function mapQuoteRequest(row) {
     id: row.id,
     siteId: row.site_id,
     siteName: row.site_name,
+    elevatorNo: row.elevator_no,
     constructionType: row.construction_type,
     contactPhone: row.contact_phone,
     note: row.note,
@@ -154,6 +157,7 @@ function mapBilling(row) {
     id: row.id,
     type: row.type,
     siteName: row.site_name,
+    elevatorNo: row.elevator_no,
     part: row.part,
     cost: row.cost,
     replaceDate: row.replace_date,
@@ -238,6 +242,18 @@ function useLiveInspections(queries) {
               org: "한국승강기안전공단",
               type: "정기검사",
               notes: item.resultNm === "조건부합격" || item.resultNm === "불합격" ? `국가승강기정보센터 최종검사판정결과: ${item.resultNm}` : "",
+              // 승강기정보(정보 탭)에서 쓰는 실제 제원 정보
+              govElevatorNo: item.elevatorNo,
+              kindNm: item.elvtrKindNm,
+              form: item.elvtrForm,
+              detailForm: item.elvtrDetailForm,
+              statusNm: item.elvtrSttsNm,
+              liveLoad: item.liveLoad,
+              ratedCap: item.ratedCap,
+              groundFloorCnt: item.groundFloorCnt,
+              undgrndFloorCnt: item.undgrndFloorCnt,
+              frstInstallationDe: item.frstInstallationDe,
+              shuttleSection: item.shuttleSection,
             }));
           } catch {
             return [];
@@ -619,7 +635,7 @@ function DrillHeader({ title, onBack, onHome }) {
 
 /* ---- 승강기정보 화면 (정보 / 고장 / 검사) ---- */
 function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspections, billings, onBack, onHome }) {
-  const unitFailures = failures.filter((f) => f.siteId === site.id);
+  const unitFailures = failures.filter((f) => f.siteId === site.id && f.elevatorNo === unit);
   const unitIndex = Number(unit?.split("-")[1]) - 1;
   const unitGovNo = site.govElevatorNos?.[unitIndex];
   const liveInspections = useLiveInspections(
@@ -628,7 +644,9 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
   const unitInspections = liveInspections.length > 0
     ? liveInspections
     : [...inspections.filter((i) => i.siteId === site.id)].sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate));
-  const unitBillings = billings.filter((b) => b.siteName === site.name);
+  const liveInfo = liveInspections[0];
+  // 호기가 지정된 청구건은 그 호기에서만, 호기 미지정(기존) 청구건은 현장 전체에서 계속 보여줍니다.
+  const unitBillings = billings.filter((b) => b.siteName === site.name && (!b.elevatorNo || b.elevatorNo === unit));
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
@@ -651,19 +669,19 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
             <p className="px-5 pt-4 pb-2 text-xs font-bold text-slate-400">기본정보</p>
             <div className="bg-white">
               <TimelineRow icon={Flag} label="호기코드" value={unit} />
-              <TimelineRow icon={Flag} label="승강기번호" value="-" />
-              <TimelineRow icon={Flag} label="구분" value="승객용" />
-              <TimelineRow icon={Flag} label="종류" value="로프식" />
-              <TimelineRow icon={Flag} label="형식" value="MRL" />
-              <TimelineRow icon={Flag} label="CCTV" value="있음" valueColor="text-blue-600" />
-              <TimelineRow icon={Flag} label="도어방식" value="1중앙 열림식" />
+              <TimelineRow icon={Flag} label="승강기고유번호" value={liveInfo?.govElevatorNo || "미등록"} valueColor={liveInfo ? "text-blue-600" : "text-slate-700"} />
+              <TimelineRow icon={Flag} label="구분" value={liveInfo?.kindNm || "승객용"} />
+              <TimelineRow icon={Flag} label="종류" value={liveInfo?.detailForm || "로프식"} />
+              <TimelineRow icon={Flag} label="형식" value={liveInfo?.form || "MRL"} />
+              <TimelineRow icon={Flag} label="운행상태" value={liveInfo?.statusNm || "-"} valueColor="text-blue-600" />
+              <TimelineRow icon={Flag} label="운행구간" value={liveInfo?.shuttleSection || "-"} />
               <TimelineRow icon={Flag} label="점검기종" value={site.elevatorModel} />
-              <TimelineRow icon={Flag} label="제어반" value="MR" />
               <TimelineRow icon={Flag} label="모델명" value={site.elevatorModel} valueColor="text-blue-600" />
-              <TimelineRow icon={Flag} label="제조업체" value="-" />
-              <TimelineRow icon={Flag} label="층수[지상/지하]" value="15 / 2" />
-              <TimelineRow icon={Flag} label="최대정원/적재하중" value="17인승 / 1150kg" last />
+              <TimelineRow icon={Flag} label="최초설치일" value={liveInfo?.frstInstallationDe || "-"} />
+              <TimelineRow icon={Flag} label="층수[지상/지하]" value={liveInfo ? `${liveInfo.groundFloorCnt} / ${liveInfo.undgrndFloorCnt}` : "15 / 2"} />
+              <TimelineRow icon={Flag} label="최대정원/적재하중" value={liveInfo ? `${liveInfo.ratedCap}인승 / ${liveInfo.liveLoad}kg` : "17인승 / 1150kg"} last />
             </div>
+            {liveInfo && <p className="px-5 pt-2 text-[10px] text-slate-400">* 국가승강기정보센터 실시간 데이터</p>}
           </div>
         )}
 
@@ -2672,8 +2690,8 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
   const sites = useContext(SitesContext);
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [sub, setSub] = useState("material");
-  const [form, setForm] = useState({ siteId: "", parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
-  const [quoteForm, setQuoteForm] = useState({ siteId: "", parts: [emptyPartRow()], contactPhone: "", photos: [], note: "" });
+  const [form, setForm] = useState({ siteId: "", unit: "", parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
+  const [quoteForm, setQuoteForm] = useState({ siteId: "", unit: "", parts: [emptyPartRow()], contactPhone: "", photos: [], note: "" });
   const [rejectTarget, setRejectTarget] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
   const [photoViewTarget, setPhotoViewTarget] = useState(null);
@@ -2690,6 +2708,7 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
       id: "m" + Date.now(),
       siteId: form.siteId,
       siteName: site.name,
+      elevatorNo: form.unit || null,
       part: formPartText,
       urgency: form.urgency,
       note: form.note,
@@ -2704,6 +2723,7 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
       id: newRequest.id,
       site_id: newRequest.siteId,
       site_name: newRequest.siteName,
+      elevator_no: newRequest.elevatorNo,
       part: newRequest.part,
       urgency: newRequest.urgency,
       note: newRequest.note,
@@ -2713,7 +2733,7 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
       status: newRequest.status,
     });
     setRequests((prev) => [newRequest, ...prev]);
-    setForm({ siteId: "", parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
+    setForm({ siteId: "", unit: "", parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
   }
 
   function submitReject() {
@@ -2746,6 +2766,7 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
       id: "q" + Date.now(),
       siteId: quoteForm.siteId,
       siteName: site.name,
+      elevatorNo: quoteForm.unit || null,
       constructionType: quoteFormText,
       contactPhone: quoteForm.contactPhone,
       note: quoteForm.note,
@@ -2762,6 +2783,7 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
       id: newQuote.id,
       site_id: newQuote.siteId,
       site_name: newQuote.siteName,
+      elevator_no: newQuote.elevatorNo,
       construction_type: newQuote.constructionType,
       contact_phone: newQuote.contactPhone,
       note: newQuote.note,
@@ -2771,7 +2793,7 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
       status: newQuote.status,
     });
     setQuoteRequests((prev) => [newQuote, ...prev]);
-    setQuoteForm({ siteId: "", parts: [emptyPartRow()], contactPhone: "", photos: [], note: "" });
+    setQuoteForm({ siteId: "", unit: "", parts: [emptyPartRow()], contactPhone: "", photos: [], note: "" });
   }
 
   if (showMaterialHistory) {
@@ -2819,7 +2841,13 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
           <div className="px-5 pt-4">
             <div className="bg-white rounded-2xl border border-slate-200 p-4 overflow-visible">
               <Field label="현장 선택">
-                <SiteSearchSelect value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id })} />
+                <SiteSearchSelect value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unit: "" })} />
+              </Field>
+              <Field label="호기 선택">
+                <select className={inputCls} value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} disabled={!form.siteId}>
+                  <option value="">호기를 선택해주세요</option>
+                  {form.siteId && siteUnits(sites.find((s) => s.id === form.siteId)).map((u) => <option key={u} value={u}>{u}</option>)}
+                </select>
               </Field>
               <Field label="부품 내역 (부품명, 수량, 단위)">
                 <PartsRowsInput rows={form.parts} setRows={(rows) => setForm({ ...form, parts: rows })} />
@@ -2969,7 +2997,13 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
         <div className="px-5 pt-4">
           <div className="bg-white rounded-2xl border border-slate-200 p-4 overflow-visible">
             <Field label="현장 선택">
-              <SiteSearchSelect value={quoteForm.siteId} onChange={(id) => setQuoteForm({ ...quoteForm, siteId: id })} />
+              <SiteSearchSelect value={quoteForm.siteId} onChange={(id) => setQuoteForm({ ...quoteForm, siteId: id, unit: "" })} />
+            </Field>
+            <Field label="호기 선택">
+              <select className={inputCls} value={quoteForm.unit} onChange={(e) => setQuoteForm({ ...quoteForm, unit: e.target.value })} disabled={!quoteForm.siteId}>
+                <option value="">호기를 선택해주세요</option>
+                {quoteForm.siteId && siteUnits(sites.find((s) => s.id === quoteForm.siteId)).map((u) => <option key={u} value={u}>{u}</option>)}
+              </select>
             </Field>
             <Field label="견적 내역 (부품명, 수량, 단위)">
               <PartsRowsInput rows={quoteForm.parts} setRows={(rows) => setQuoteForm({ ...quoteForm, parts: rows })} />
@@ -3112,7 +3146,7 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const [selectedId, setSelectedId] = useState(openTodos[0]?.id ?? "");
   const [materialCost, setMaterialCost] = useState("");
   const [submitted, setSubmitted] = useState(null);
-  const [manualForm, setManualForm] = useState({ siteId: "", part: "", replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
+  const [manualForm, setManualForm] = useState({ siteId: "", unit: "", part: "", replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
 
   const selected = todos.find((t) => t.id === selectedId);
   const manualValid = manualForm.siteId && manualForm.part.trim() && manualForm.replaceDate && manualForm.contactPhone.trim();
@@ -3124,6 +3158,7 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     onSubmitBilling({
       type: "material",
       siteName: selected.siteName,
+      elevatorNo: selected.elevatorNo,
       part: selected.part,
       cost: materialCost,
       replaceDate: TODAY_STR,
@@ -3141,6 +3176,7 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     onSubmitBilling({
       type: "manual",
       siteName: site.name,
+      elevatorNo: manualForm.unit,
       part: manualForm.part,
       cost: manualForm.cost,
       replaceDate: manualForm.replaceDate,
@@ -3150,7 +3186,7 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       onUseKitPart({ part: manualForm.part, siteName: site.name });
     }
     setSubmitted({ siteName: site.name, part: manualForm.part, manual: true, fromKit: manualForm.fromKit });
-    setManualForm({ siteId: "", part: "", replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
+    setManualForm({ siteId: "", unit: "", part: "", replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
     setTimeout(() => setSubmitted(null), 2600);
   }
 
@@ -3184,7 +3220,7 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
               <Field label="청구 대상 건 (지급완료된 자재)">
                 <select className={inputCls} value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
                   {openTodos.map((t) => (
-                    <option key={t.id} value={t.id}>{t.siteName} · {t.part ?? t.title}</option>
+                    <option key={t.id} value={t.id}>{t.siteName}{t.elevatorNo ? ` · ${t.elevatorNo}` : ""} · {t.part ?? t.title}</option>
                   ))}
                 </select>
               </Field>
@@ -3220,7 +3256,13 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
           <p className="text-[11px] text-slate-400 mb-3 px-1">자재 신청 없이 현장에서 바로 교체한 부품(예비 재고 사용 등)을 직접 입력해 청구합니다.</p>
           <div className="bg-white rounded-2xl border border-slate-200 p-4 overflow-visible">
             <Field label="현장 선택">
-              <SiteSearchSelect value={manualForm.siteId} onChange={(id) => setManualForm({ ...manualForm, siteId: id })} />
+              <SiteSearchSelect value={manualForm.siteId} onChange={(id) => setManualForm({ ...manualForm, siteId: id, unit: "" })} />
+            </Field>
+            <Field label="호기 선택">
+              <select className={inputCls} value={manualForm.unit} onChange={(e) => setManualForm({ ...manualForm, unit: e.target.value })} disabled={!manualForm.siteId}>
+                <option value="">호기를 선택해주세요</option>
+                {manualForm.siteId && siteUnits(sites.find((s) => s.id === manualForm.siteId)).map((u) => <option key={u} value={u}>{u}</option>)}
+              </select>
             </Field>
             <button
               type="button"
@@ -4829,11 +4871,12 @@ export default function App() {
     }
   }
 
-  async function handleSubmitBilling({ type, siteName, part, cost, replaceDate, contactPhone }) {
+  async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone }) {
     const newBilling = {
       id: "bill-" + Date.now(),
       type,
       siteName,
+      elevatorNo: elevatorNo || null,
       part,
       cost,
       replaceDate,
@@ -4845,6 +4888,7 @@ export default function App() {
       id: newBilling.id,
       type: newBilling.type,
       site_name: newBilling.siteName,
+      elevator_no: newBilling.elevatorNo,
       part: newBilling.part,
       cost: newBilling.cost || null,
       replace_date: newBilling.replaceDate,
@@ -4896,6 +4940,7 @@ export default function App() {
       source: "material",
       title: `${req.siteName} ${req.part} 교체 및 확인서 제출`,
       siteName: req.siteName,
+      elevatorNo: req.elevatorNo,
       part: req.part,
       assignee: req.engineer,
       assignedDate: TODAY_STR,
@@ -4908,6 +4953,7 @@ export default function App() {
       source: newTodo.source,
       title: newTodo.title,
       site_name: newTodo.siteName,
+      elevator_no: newTodo.elevatorNo,
       part: newTodo.part,
       assignee: newTodo.assignee,
       assigned_date: newTodo.assignedDate,
@@ -4998,6 +5044,7 @@ export default function App() {
       source: "quote",
       title: `${q.siteName} ${q.constructionType} 시공 확인 및 서류 제출`,
       siteName: q.siteName,
+      elevatorNo: q.elevatorNo,
       part: q.constructionType,
       assignee: q.engineer,
       assignedDate: TODAY_STR,
@@ -5010,6 +5057,7 @@ export default function App() {
       source: newTodo.source,
       title: newTodo.title,
       site_name: newTodo.siteName,
+      elevator_no: newTodo.elevatorNo,
       part: newTodo.part,
       assignee: newTodo.assignee,
       assigned_date: newTodo.assignedDate,
