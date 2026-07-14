@@ -40,6 +40,7 @@ function mapSite(row) {
     failures30d: row.failures_30d,
     assignedEngineer: row.assigned_engineer,
     notes: row.notes,
+    govElevatorNo: row.gov_elevator_no,
   };
 }
 
@@ -190,6 +191,59 @@ function siteUnits(site) {
 }
 
 const RESULT_LABEL = { pass: "합격", conditional: "조건부합격", fail: "불합격" };
+
+// 국가승강기정보센터 API의 최종검사판정결과 문자열을 앱 내부 코드로 변환합니다.
+function mapGovResultToCode(resultNm) {
+  if (resultNm === "합격") return "pass";
+  if (resultNm === "조건부합격") return "conditional";
+  if (resultNm === "불합격") return "fail";
+  return null;
+}
+
+// 승강기고유번호가 등록된 현장들의 검사결과를 국가승강기정보센터 API에서 실시간으로 가져옵니다.
+function useLiveInspections(sites) {
+  const [live, setLive] = useState([]);
+  const registered = sites.filter((s) => s.govElevatorNo);
+  const key = registered.map((s) => `${s.id}:${s.govElevatorNo}`).join(",");
+
+  useEffect(() => {
+    if (registered.length === 0) {
+      setLive([]);
+      return;
+    }
+    let cancelled = false;
+    async function loadAll() {
+      const results = await Promise.all(
+        registered.map(async (s) => {
+          try {
+            const res = await fetch(`/api/elevator-info?elevatorNo=${encodeURIComponent(s.govElevatorNo)}`);
+            const data = await res.json();
+            return (data.items ?? []).map((item) => ({
+              id: `gov-${s.id}-${item.elevatorNo}`,
+              siteId: s.id,
+              siteName: s.name,
+              elevatorNo: item.installationPlace || item.elevatorNo,
+              dueDate: item.applcEnDt,
+              result: mapGovResultToCode(item.resultNm),
+              org: "한국승강기안전공단",
+              type: "정기검사",
+              notes: item.resultNm === "조건부합격" || item.resultNm === "불합격" ? `국가승강기정보센터 최종검사판정결과: ${item.resultNm}` : "",
+            }));
+          } catch {
+            return [];
+          }
+        })
+      );
+      if (!cancelled) setLive(results.flat());
+    }
+    loadAll();
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
+
+  return live;
+}
 
 const TODAY_STR = "2026-07-10";
 
@@ -948,13 +1002,18 @@ function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast 
   const [arriveTarget, setArriveTarget] = useState(null);
   const [historySite, setHistorySite] = useState(null);
 
-  const dueSoon = inspections
-    .filter((i) => !i.result)
+  // 승강기고유번호가 등록된 현장은 국가승강기정보센터에서 실시간으로, 나머지는 기존 수기입력 기록을 보여줍니다.
+  const liveInspections = useLiveInspections(mySites);
+  const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
+  const combinedInspections = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId))];
+
+  const dueSoon = combinedInspections
+    .filter((i) => i.id?.startsWith("gov-") || !i.result)
     .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) }))
     .filter((i) => i.daysLeft >= 0 && i.daysLeft <= 60)
     .sort((a, b) => a.daysLeft - b.daysLeft);
 
-  const flagged = inspections
+  const flagged = combinedInspections
     .filter((i) => i.result === "conditional" || i.result === "fail")
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
@@ -1082,7 +1141,11 @@ function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast 
             )}
           </div>
 
-          <p className="px-4 pb-3 text-[9.5px] text-slate-300">* 프로토타입 시연용 시뮬레이션 데이터입니다</p>
+          <p className="px-4 pb-3 text-[9.5px] text-slate-300">
+            {liveInspections.length > 0
+              ? "* 승강기고유번호가 등록된 현장은 국가승강기정보센터 실시간 데이터, 나머지는 수기입력 데이터입니다"
+              : "* 프로토타입 시연용 시뮬레이션 데이터입니다 (현장관리에서 승강기고유번호를 등록하면 실시간 데이터로 전환됩니다)"}
+          </p>
         </div>
       </div>
 
@@ -1999,10 +2062,20 @@ function InspectionTab({ inspections, setInspections }) {
   const [openRegister, setOpenRegister] = useState(null); // inspection object or null
   const [form, setForm] = useState({});
 
-  const dueSoon = [...inspections]
-    .filter((i) => !i.result)
+  // 승강기고유번호가 등록된 현장은 국가승강기정보센터에서 실시간으로, 나머지는 기존 수기입력 기록을 보여줍니다.
+  const liveInspections = useLiveInspections(sites);
+  const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
+  const combined = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId))];
+
+  const dueSoon = combined
+    .filter((i) => {
+      if (!i.id?.startsWith("gov-")) return !i.result;
+      // 실시간 데이터는 항상 판정결과가 있으므로, 유효기간 만료가 임박했는지로 "도래"를 판단합니다.
+      const daysLeft = Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000);
+      return daysLeft >= 0 && daysLeft <= 60;
+    })
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-  const flagged = [...inspections]
+  const flagged = combined
     .filter((i) => i.result === "conditional" || i.result === "fail")
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
@@ -2077,55 +2150,74 @@ function InspectionTab({ inspections, setInspections }) {
           dueSoon.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-10">도래한 검사 현장이 없습니다</p>
           ) : (
-            dueSoon.map((insp) => (
-              <div key={insp.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
+            dueSoon.map((insp) => {
+              const isLive = insp.id?.startsWith("gov-");
+              return (
+                <div key={insp.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
+                    <DDay dueDate={insp.dueDate} />
+                  </div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs text-slate-500">{insp.type}</span>
+                    <span className="text-slate-300 text-xs">·</span>
+                    <span className="text-xs text-slate-500">{insp.org}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    {isLive ? (
+                      <>
+                        <span className="text-[11px] text-emerald-600 font-semibold">국가승강기정보센터 실시간 조회 · {RESULT_LABEL[insp.result]}</span>
+                        <span className="text-[11px] text-slate-400">유효기간 ~{insp.dueDate}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-[11px] text-slate-400">검사 결과 미등록</span>
+                        <button
+                          onClick={() => startRegister(insp)}
+                          className="text-xs font-bold text-white bg-blue-700 px-3 py-1.5 rounded-lg active:bg-blue-800"
+                        >
+                          결과 등록
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )
+        ) : flagged.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-10">조건부·불합격 현장이 없습니다</p>
+        ) : (
+          flagged.map((insp) => {
+            const isLive = insp.id?.startsWith("gov-");
+            return (
+              <div key={insp.id} className="bg-white rounded-xl border border-red-100 p-3.5">
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
-                  <DDay dueDate={insp.dueDate} />
+                  <Badge result={insp.result} />
                 </div>
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-xs text-slate-500">{insp.type}</span>
                   <span className="text-slate-300 text-xs">·</span>
                   <span className="text-xs text-slate-500">{insp.org}</span>
                 </div>
+                {insp.notes && <p className="text-[11px] text-red-600 leading-relaxed mb-2.5">지적사항: {insp.notes}</p>}
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-slate-400">검사 결과 미등록</span>
-                  <button
-                    onClick={() => startRegister(insp)}
-                    className="text-xs font-bold text-white bg-blue-700 px-3 py-1.5 rounded-lg active:bg-blue-800"
-                  >
-                    결과 등록
-                  </button>
+                  {insp.result === "fail" && <span className="text-[11px] text-red-500 font-semibold">재검사 필요</span>}
+                  {isLive ? (
+                    <span className="ml-auto text-[11px] text-emerald-600 font-semibold">국가승강기정보센터 실시간 조회</span>
+                  ) : (
+                    <button
+                      onClick={() => startRegister(insp)}
+                      className="ml-auto text-xs font-bold text-white bg-blue-700 px-3 py-1.5 rounded-lg active:bg-blue-800"
+                    >
+                      재검사 결과 등록
+                    </button>
+                  )}
                 </div>
               </div>
-            ))
-          )
-        ) : flagged.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-10">조건부·불합격 현장이 없습니다</p>
-        ) : (
-          flagged.map((insp) => (
-            <div key={insp.id} className="bg-white rounded-xl border border-red-100 p-3.5">
-              <div className="flex items-center justify-between mb-1.5">
-                <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
-                <Badge result={insp.result} />
-              </div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs text-slate-500">{insp.type}</span>
-                <span className="text-slate-300 text-xs">·</span>
-                <span className="text-xs text-slate-500">{insp.org}</span>
-              </div>
-              <p className="text-[11px] text-red-600 leading-relaxed mb-2.5">지적사항: {insp.notes}</p>
-              <div className="flex items-center justify-between">
-                {insp.result === "fail" && <span className="text-[11px] text-red-500 font-semibold">재검사 필요</span>}
-                <button
-                  onClick={() => startRegister(insp)}
-                  className="ml-auto text-xs font-bold text-white bg-blue-700 px-3 py-1.5 rounded-lg active:bg-blue-800"
-                >
-                  재검사 결과 등록
-                </button>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
@@ -3623,7 +3715,7 @@ function AdminMenuRow({ icon: Icon, label, badge, onClick }) {
 const emptySiteForm = {
   name: "", siteCode: "", elevatorNo: "", region: "", address: "",
   contractType: "", phone: "", elevatorModel: "", unitCount: "1",
-  manager: "", managerPhone: "", assignedEngineer: "",
+  manager: "", managerPhone: "", assignedEngineer: "", govElevatorNo: "",
 };
 
 function ManagerRow({ manager, onSave, onDelete }) {
@@ -3664,6 +3756,14 @@ function SiteEditorSheet({ initial, engineerNames, siteId, managers, onAddManage
         </select>
       </Field>
       <Field label="승강기 모델"><input className={inputCls} value={form.elevatorModel} onChange={(e) => setForm({ ...form, elevatorModel: e.target.value })} /></Field>
+      <Field label="승강기고유번호 (국가승강기정보센터)">
+        <input
+          className={inputCls}
+          value={form.govElevatorNo}
+          onChange={(e) => setForm({ ...form, govElevatorNo: e.target.value.replace(/[^0-9]/g, "") })}
+          placeholder="예: 0075681"
+        />
+      </Field>
       <Field label="담당 기사 배정">
         <select className={inputCls} value={form.assignedEngineer} onChange={(e) => setForm({ ...form, assignedEngineer: e.target.value })}>
           <option value="">미배정</option>
@@ -3706,6 +3806,7 @@ function SiteManagementScreen({ sites, engineerNames, onAddSite, onUpdateSite, o
       region: s.region ?? "", address: s.address ?? "", contractType: s.contractType ?? "",
       phone: s.phone ?? "", elevatorModel: s.elevatorModel ?? "", unitCount: String(s.unitCount ?? 1),
       manager: s.manager ?? "", managerPhone: s.managerPhone ?? "", assignedEngineer: s.assignedEngineer ?? "",
+      govElevatorNo: s.govElevatorNo ?? "",
     };
   }
 
@@ -4521,6 +4622,7 @@ export default function App() {
       failures30d: 0,
       assignedEngineer: form.assignedEngineer || null,
       notes: null,
+      govElevatorNo: form.govElevatorNo || null,
     };
     await supabase.from("sites").insert({
       id: newSite.id,
@@ -4536,6 +4638,7 @@ export default function App() {
       manager: newSite.manager,
       manager_phone: newSite.managerPhone,
       assigned_engineer: newSite.assignedEngineer,
+      gov_elevator_no: newSite.govElevatorNo,
     });
     setSites((prev) => [...prev, newSite]);
   }
@@ -4557,6 +4660,7 @@ export default function App() {
         manager: form.manager,
         manager_phone: form.managerPhone,
         assigned_engineer: form.assignedEngineer || null,
+        gov_elevator_no: form.govElevatorNo || null,
       })
       .eq("id", siteId);
     setSites((prev) =>
@@ -4576,6 +4680,7 @@ export default function App() {
               manager: form.manager,
               managerPhone: form.managerPhone,
               assignedEngineer: form.assignedEngineer || null,
+              govElevatorNo: form.govElevatorNo || null,
             }
           : s
       )
