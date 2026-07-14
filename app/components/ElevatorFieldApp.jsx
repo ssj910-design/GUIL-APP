@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, useContext, createContext } from "
 import {
   Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt,
   ListTodo, MessagesSquare, ChevronRight, ChevronLeft, X, Camera,
-  MapPin, Check, Clock, Users, Settings, Plus, Search, Navigation,
+  MapPin, Check, Clock, Users, Settings, Plus, Search,
   FileText, Bell, ClipboardCheck, AlertOctagon, Lock, PackageCheck, RotateCcw, PackageX, Image as ImageIcon,
   Building2, PhoneCall, ArrowLeft, Flag, Mail, User, Paperclip, Radio, Flame, Award, Send
 } from "lucide-react";
@@ -212,8 +212,10 @@ function simulateSms(phone, message) {
   console.log(`[SMS 발송 시뮬레이션] ${phone ?? "번호 없음"} → ${message}`);
 }
 
-function kakaoNaviUrl(address) {
-  return `https://map.kakao.com/link/search/${encodeURIComponent(address ?? "")}`;
+// errorCode는 "고장구분 (고장상세내역)" 형태로 저장돼 있어, 화면 표시용으로 다시 나눠줍니다.
+function parseErrorCode(errorCode) {
+  const m = /^(.+?)(?:\s\((.+)\))?$/.exec(errorCode ?? "");
+  return { faultType: m?.[1] ?? errorCode ?? "", faultDetail: m?.[2] ?? "" };
 }
 
 const FAULT_TYPES = ["운행정지", "문닫힘 이상", "소음/진동", "기타"];
@@ -783,7 +785,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
   );
 }
 
-function SiteTab({ inspections, failures, billings, siteManagers, onUpdateSiteNotes }) {
+function SiteTab({ inspections, failures, billings, siteManagers, onUpdateSiteNotes, focusSiteId, onFocusSiteHandled }) {
   const allSites = useContext(SitesContext);
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const sites = role === "admin" ? allSites : allSites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER);
@@ -794,6 +796,17 @@ function SiteTab({ inspections, failures, billings, siteManagers, onUpdateSiteNo
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [elevatorSubTab, setElevatorSubTab] = useState("정보");
   const regions = ["전체", "가산", "양재"];
+
+  // ★ 고장 출동 확정 후 해당 현장의 현장정보 화면으로 자동 이동
+  useEffect(() => {
+    if (!focusSiteId) return;
+    const site = allSites.find((s) => s.id === focusSiteId);
+    if (site) {
+      setSelectedSite(site);
+      setView("site");
+    }
+    onFocusSiteHandled();
+  }, [focusSiteId]);
 
   const list = sites.filter(
     (s) => (region === "전체" || s.region === region) && s.name.includes(query.trim())
@@ -960,8 +973,8 @@ function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast 
     .filter((i) => i.result === "conditional" || i.result === "fail")
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
-  const mine = failures.filter((f) => f.assignee === CURRENT_ENGINEER);
-  const activeMine = mine.filter((f) => f.status !== "완료");
+  // 배정자를 지정해 접수한 건은 그 배정자에게만, 미배정(미정) 건은 전원에게 노출됩니다.
+  const activeMine = failures.filter((f) => f.status !== "완료" && (f.assignee === CURRENT_ENGINEER || !f.assignee));
 
   if (historySite) {
     return <FailureHistoryDetailScreen site={historySite} failures={failures} onBack={() => setHistorySite(null)} />;
@@ -1088,7 +1101,15 @@ function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast 
         </div>
       </div>
 
-      {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} />}
+      {detailTarget && (
+        <FailureDetailSheet
+          failure={detailTarget}
+          onClose={() => setDetailTarget(null)}
+          onDispatch={setDispatchTarget}
+          onArrive={onArrive}
+          onOpenResult={setResultTarget}
+        />
+      )}
       {dispatchTarget && (
         <DispatchEtaModal
           failure={dispatchTarget}
@@ -1183,6 +1204,9 @@ function FailureRegisterForm({ setFailures, goToUnassigned }) {
         <TimelineInput icon={User} label="담당자">
           <span className={tlInputCls}>{site ? site.manager : "현장을 선택해주세요"}</span>
         </TimelineInput>
+        <TimelineInput icon={User} label="담당 기사">
+          <span className={tlInputCls}>{site ? site.assignedEngineer || "미배정" : "현장을 선택해주세요"}</span>
+        </TimelineInput>
         <TimelineInput icon={Settings} label="호기" last>
           <select className={tlInputCls} value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} disabled={!site}>
             <option value="">호기를 선택해주세요</option>
@@ -1268,14 +1292,18 @@ function SmsToast({ message }) {
   );
 }
 
-function FailureDetailSheet({ failure, onClose }) {
+function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onOpenResult }) {
   const sites = useContext(SitesContext);
   const site = sites.find((s) => s.id === failure.siteId);
+  const stage = failureStage(failure);
+  const { faultType, faultDetail } = parseErrorCode(failure.errorCode);
+  const unitLabel = failure.elevatorNo && !failure.elevatorNo.includes("호기") ? `${failure.elevatorNo}호기` : failure.elevatorNo;
   return (
     <Sheet title="고장신고 상세" onClose={onClose}>
-      <div className="bg-slate-100 rounded-xl p-3 mb-3">
-        <p className="font-bold text-slate-800">{failure.siteName} · {failure.elevatorNo}</p>
-        <p className="text-sm text-blue-700 font-semibold mt-1">{failure.errorCode}</p>
+      <div className="bg-slate-100 rounded-xl p-3 mb-3 text-center">
+        <p className="font-bold text-slate-800">{failure.siteName} · {unitLabel}</p>
+        <p className="text-sm text-blue-700 font-semibold mt-1">{faultType}</p>
+        {faultDetail && <p className="text-xs text-slate-500 mt-0.5">{faultDetail}</p>}
       </div>
       <div className="space-y-2.5 mb-4">
         <div className="flex items-center justify-between text-sm">
@@ -1292,6 +1320,10 @@ function FailureDetailSheet({ failure, onClose }) {
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">담당 기사</span>
+          <span className="font-semibold text-slate-700">{site?.assignedEngineer || "미배정"}</span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-400">배정자</span>
           <span className="font-semibold text-slate-700">{failure.assignee || "미정"}</span>
         </div>
         {failure.dispatchedAt && (
@@ -1313,14 +1345,30 @@ function FailureDetailSheet({ failure, onClose }) {
           </div>
         )}
       </div>
-      <a
-        href={kakaoNaviUrl(site?.address)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="w-full flex items-center justify-center gap-1.5 bg-amber-400 text-amber-950 text-sm font-bold py-3 rounded-xl active:bg-amber-500"
-      >
-        <Navigation size={15} /> 카카오맵으로 길찾기
-      </a>
+      {stage === "pending" && (
+        <button
+          onClick={() => { onDispatch(failure); onClose(); }}
+          className="w-full bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800"
+        >
+          {failure.assignee ? "출동 응답" : "내가 출동하기"}
+        </button>
+      )}
+      {stage === "dispatched" && (
+        <button
+          onClick={() => { onArrive(failure); onClose(); }}
+          className="w-full bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800"
+        >
+          도착
+        </button>
+      )}
+      {stage === "arrived" && (
+        <button
+          onClick={() => { onOpenResult(failure); onClose(); }}
+          className="w-full bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl active:bg-emerald-700"
+        >
+          🛠️ 고장처리결과 입력
+        </button>
+      )}
     </Sheet>
   );
 }
@@ -1421,52 +1469,32 @@ function ArrivalResultModal({ failure, onConfirm, onClose }) {
   );
 }
 
-function FailureResponseCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult }) {
+function FailureResponseCard({ f, onOpenDetail }) {
   const stage = failureStage(f);
+  const { faultType, faultDetail } = parseErrorCode(f.errorCode);
+  const unitLabel = f.elevatorNo && !f.elevatorNo.includes("호기") ? `${f.elevatorNo}호기` : f.elevatorNo;
   return (
-    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      <button type="button" onClick={() => onOpenDetail(f)} className="w-full text-left p-3.5">
-        <div className="flex items-center justify-between mb-1">
-          <p className="font-bold text-slate-800 text-[15px]">{f.siteName} · {f.elevatorNo}</p>
-          {f.escalation && (
-            <span className="text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{f.escalation}</span>
-          )}
-        </div>
-        <p className="text-sm text-slate-500 mb-2">{f.reportedAt}</p>
-        <div className="bg-blue-500 text-white text-sm font-semibold rounded-lg px-3 py-2.5">{f.errorCode}</div>
-      </button>
-      <div className="px-3.5 pb-3.5">
-        {stage === "pending" && (
-          <button
-            onClick={() => onDispatch(f)}
-            className="w-full bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800"
-          >
-            {f.assignee ? "출동 응답" : "내가 출동하기"}
-          </button>
-        )}
-        {stage === "dispatched" && (
-          <div className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2.5">
-            <span className="text-xs font-semibold text-blue-700">
-              출동 {f.dispatchedAt} · {f.etaMinutes}분 후 도착예정
-            </span>
-            <button
-              onClick={() => onArrive(f)}
-              className="text-xs font-bold text-white bg-blue-700 px-3 py-1.5 rounded-lg active:bg-blue-800"
-            >
-              도착
-            </button>
-          </div>
-        )}
-        {stage === "arrived" && (
-          <button
-            onClick={() => onOpenResult(f)}
-            className="w-full bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg active:bg-emerald-700"
-          >
-            🛠️ 고장처리결과 입력 (도착 {f.arrivalTime})
-          </button>
+    <button type="button" onClick={() => onOpenDetail(f)} className="w-full text-left rounded-xl border border-slate-200 bg-white overflow-hidden p-3.5">
+      <div className="flex items-center justify-between mb-1">
+        <p className="font-bold text-slate-800 text-[15px]">{f.siteName} · {unitLabel}</p>
+        {f.escalation && (
+          <span className="text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{f.escalation}</span>
         )}
       </div>
-    </div>
+      <p className="text-sm text-slate-500 mb-2">{f.reportedAt}</p>
+      <div className="bg-blue-500 text-white rounded-lg px-3 py-2.5 text-center">
+        <p className="text-sm font-semibold">{faultType}</p>
+        {faultDetail && <p className="text-xs mt-0.5 text-blue-50">{faultDetail}</p>}
+      </div>
+      {stage === "dispatched" && (
+        <p className="text-xs font-semibold text-blue-700 mt-2.5 text-center">
+          출동 {f.dispatchedAt} · {f.etaMinutes}분 후 도착예정
+        </p>
+      )}
+      {stage === "arrived" && (
+        <p className="text-xs font-semibold text-emerald-700 mt-2.5 text-center">도착 {f.arrivalTime} · 상세보기에서 결과 입력</p>
+      )}
+    </button>
   );
 }
 
@@ -1523,19 +1551,20 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult }) {
           <p className="text-xs text-slate-400 text-center py-10">미배정 고장이 없습니다</p>
         ) : (
           list.map((f) => (
-            <FailureResponseCard
-              key={f.id}
-              f={f}
-              onOpenDetail={setDetailTarget}
-              onDispatch={setDispatchTarget}
-              onArrive={onArrive}
-              onOpenResult={setResultTarget}
-            />
+            <FailureResponseCard key={f.id} f={f} onOpenDetail={setDetailTarget} />
           ))
         )}
       </div>
 
-      {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} />}
+      {detailTarget && (
+        <FailureDetailSheet
+          failure={detailTarget}
+          onClose={() => setDetailTarget(null)}
+          onDispatch={setDispatchTarget}
+          onArrive={onArrive}
+          onOpenResult={setResultTarget}
+        />
+      )}
       {dispatchTarget && (
         <DispatchEtaModal
           failure={dispatchTarget}
@@ -1588,14 +1617,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult }) {
             <p className="text-xs text-slate-400 py-3">처리중인 고장이 없습니다</p>
           ) : (
             active.map((f) => (
-              <FailureResponseCard
-                key={f.id}
-                f={f}
-                onOpenDetail={setDetailTarget}
-                onDispatch={setDispatchTarget}
-                onArrive={onArrive}
-                onOpenResult={setResultTarget}
-              />
+              <FailureResponseCard key={f.id} f={f} onOpenDetail={setDetailTarget} />
             ))
           )}
         </div>
@@ -1628,7 +1650,15 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult }) {
         )}
       </div>
 
-      {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} />}
+      {detailTarget && (
+        <FailureDetailSheet
+          failure={detailTarget}
+          onClose={() => setDetailTarget(null)}
+          onDispatch={setDispatchTarget}
+          onArrive={onArrive}
+          onOpenResult={setResultTarget}
+        />
+      )}
       {dispatchTarget && (
         <DispatchEtaModal
           failure={dispatchTarget}
@@ -4290,6 +4320,7 @@ export default function App() {
   const engineerNames = engineers.map((e) => e.name);
 
   const [tab, setTab] = useState("home");
+  const [focusSiteId, setFocusSiteId] = useState(null);
   const [sites, setSites] = useState([]);
   const [siteManagers, setSiteManagers] = useState([]);
   const [failures, setFailures] = useState([]);
@@ -4534,6 +4565,8 @@ export default function App() {
     );
     simulateSms(failure.reporterPhone, `구일엘리베이터입니다. 담당 기사가 약 ${etaMinutes}분 후 도착 예정입니다.`);
     notifyFailure(`문자 발송 완료 · ${failure.reporterPhone || "신고자"}에게 도착예정시간 안내`);
+    setFocusSiteId(failure.siteId);
+    setTab("sites");
   }
 
   async function handleArriveFailure(failure) {
@@ -4910,7 +4943,7 @@ export default function App() {
               toast={failureToast}
             />
           )}
-          {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} siteManagers={siteManagers} onUpdateSiteNotes={handleUpdateSiteNotes} />}
+          {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} siteManagers={siteManagers} onUpdateSiteNotes={handleUpdateSiteNotes} focusSiteId={focusSiteId} onFocusSiteHandled={() => setFocusSiteId(null)} />}
           {tab === "failure" && (
             <FailureTab
               failures={failures}
