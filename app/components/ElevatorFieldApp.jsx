@@ -3297,8 +3297,8 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
                 <MultiPhotoUpload
                   photos={form.photos}
                   uploadFolder={`materials/${uploadSession}`}
-                  onUploaded={(url) => setForm({ ...form, photos: [...form.photos, { url }] })}
-                  onRemove={(idx) => setForm({ ...form, photos: form.photos.filter((_, i) => i !== idx) })}
+                  onUploaded={(url) => setForm((f) => ({ ...f, photos: [...f.photos, { url }] }))}
+                  onRemove={(idx) => setForm((f) => ({ ...f, photos: f.photos.filter((_, i) => i !== idx) }))}
                   label="교체할 부품 규격/모델명이 보이도록 촬영"
                 />
               </Field>
@@ -3453,8 +3453,8 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
               <MultiPhotoUpload
                 photos={quoteForm.photos}
                 uploadFolder={`quotes/${uploadSession}`}
-                onUploaded={(url) => setQuoteForm({ ...quoteForm, photos: [...quoteForm.photos, { url }] })}
-                onRemove={(idx) => setQuoteForm({ ...quoteForm, photos: quoteForm.photos.filter((_, i) => i !== idx) })}
+                onUploaded={(url) => setQuoteForm((f) => ({ ...f, photos: [...f.photos, { url }] }))}
+                onRemove={(idx) => setQuoteForm((f) => ({ ...f, photos: f.photos.filter((_, i) => i !== idx) }))}
                 label="견적이 필요한 현장 상태 촬영"
               />
             </Field>
@@ -4157,8 +4157,8 @@ function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
           required={false}
           photos={form.photos}
           uploadFolder={`todos/${uploadSession}`}
-          onUploaded={(url) => setForm({ ...form, photos: [...form.photos, { url }] })}
-          onRemove={(idx) => setForm({ ...form, photos: form.photos.filter((_, i) => i !== idx) })}
+          onUploaded={(url) => setForm((f) => ({ ...f, photos: [...f.photos, { url }] }))}
+          onRemove={(idx) => setForm((f) => ({ ...f, photos: f.photos.filter((_, i) => i !== idx) }))}
           label="작업 관련 참고 사진 (선택)"
         />
       </Field>
