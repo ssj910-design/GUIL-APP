@@ -300,7 +300,7 @@ function parseErrorCode(errorCode) {
   return { faultType: m?.[1] ?? errorCode ?? "", faultDetail: m?.[2] ?? "" };
 }
 
-const FAULT_TYPES = ["운행정지", "문닫힘 이상", "소음/진동", "기타"];
+const FAULT_TYPES = ["갇힘사고", "운행정지", "문닫힘 이상", "소음/진동", "기타"];
 const KIT_PARTS = ["도어 롤러", "리미트 스위치", "인터폰 배터리", "비상통화장치 배터리", "컨트롤러 퓨즈", "브레이크 패드", "기타"];
 
 // 자재 신청, 할일 관련 안내:
