@@ -1213,13 +1213,11 @@ function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast 
               <div className="space-y-2">
                 {flagged.map((i) => {
                   const isLive = i.id?.startsWith("gov-");
-                  const Wrapper = isLive ? "button" : "div";
                   return (
-                    <Wrapper
+                    <div
                       key={i.id}
-                      type={isLive ? "button" : undefined}
                       onClick={isLive ? () => setInspectionFailTarget(i) : undefined}
-                      className="w-full text-left bg-red-50 border border-red-100 rounded-lg px-3 py-2.5"
+                      className={`bg-red-50 border border-red-100 rounded-lg px-3 py-2.5 ${isLive ? "active:bg-red-100" : ""}`}
                     >
                       <div className="flex items-center justify-between mb-1">
                         <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
@@ -1234,7 +1232,7 @@ function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast 
                         </span>
                       </div>
                       {isLive && <p className="text-[10px] text-blue-600 font-semibold mt-1.5">터치해서 부적합 상세 항목 보기</p>}
-                    </Wrapper>
+                    </div>
                   );
                 })}
               </div>
