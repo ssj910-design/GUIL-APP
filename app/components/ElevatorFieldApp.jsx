@@ -697,6 +697,7 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
   const liveInfo = liveInspections[0];
   // 호기가 지정된 청구건은 그 호기에서만, 호기 미지정(기존) 청구건은 현장 전체에서 계속 보여줍니다.
   const unitBillings = billings.filter((b) => b.siteName === site.name && (!b.elevatorNo || b.elevatorNo === unit));
+  const [inspectionFailTarget, setInspectionFailTarget] = useState(null);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
@@ -782,7 +783,9 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
                 const runEnd = insp.dueDate;
                 const runStart = insp.startDate || addDays(runEnd, -365);
                 const inspDate = insp.startDate || addDays(runStart, -5);
-                return (
+                const isLive = insp.id?.startsWith("gov-");
+                const clickable = isLive && (insp.result === "conditional" || insp.result === "fail");
+                const card = (
                   <HistoryCard
                     key={insp.id}
                     barColor={insp.result === "fail" ? "#ef4444" : insp.result === "conditional" ? "#f59e0b" : "#10b981"}
@@ -798,6 +801,18 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
                       { label: "운행종료일", value: runEnd, color: "text-emerald-600" },
                     ]}
                   />
+                );
+                if (!clickable) return card;
+                return (
+                  <div
+                    key={insp.id}
+                    onClick={() => setInspectionFailTarget(insp)}
+                    onTouchEnd={(e) => { e.preventDefault(); setInspectionFailTarget(insp); }}
+                    className="touch-manipulation cursor-pointer active:opacity-70"
+                  >
+                    {card}
+                    <p className="px-5 -mt-3 pb-3 text-[10px] text-blue-600 font-semibold">터치해서 부적합 상세 항목 보기</p>
+                  </div>
                 );
               })
             )}
@@ -817,6 +832,9 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
           </div>
         )}
       </div>
+      {inspectionFailTarget && (
+        <InspectionFailDetailSheet inspection={inspectionFailTarget} onClose={() => setInspectionFailTarget(null)} />
+      )}
     </div>
   );
 }
