@@ -74,6 +74,8 @@ function mapFailure(row) {
     etaMinutes: row.eta_minutes,
     dispatchedAt: row.dispatched_at,
     escalation: row.escalation,
+    faultSymptom: row.fault_symptom,
+    faultErrorCode: row.fault_error_code,
     faultCause: row.fault_cause,
     processContent: row.process_content,
     photoCount: row.photo_count,
@@ -747,8 +749,10 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
                 const rows = [
                   { label: "접수", value: f.errorCode },
                   { label: "처리상태", value: f.escalation ? `${f.status} (${f.escalation})` : f.status },
-                  { label: "원인", value: f.faultCause || (f.status === "완료" ? "-" : "확인중") },
                 ];
+                if (f.faultSymptom) rows.push({ label: "증상", value: f.faultSymptom });
+                if (f.faultErrorCode) rows.push({ label: "에러코드", value: f.faultErrorCode });
+                rows.push({ label: "원인", value: f.faultCause || (f.status === "완료" ? "-" : "확인중") });
                 if (f.processContent) rows.push({ label: "처리내용", value: f.processContent });
                 if (f.processNote) rows.push({ label: "비고", value: f.processNote });
                 if (f.photoCount > 0) rows.push({ label: "사진", value: `${f.photoCount}장` });
@@ -1628,6 +1632,8 @@ function ArrivalTimeModal({ failure, onConfirm, onClose }) {
 
 function ArrivalResultModal({ failure, onConfirm, onClose }) {
   const [step, setStep] = useState("choose");
+  const [symptom, setSymptom] = useState("");
+  const [errorCode, setErrorCode] = useState("");
   const [cause, setCause] = useState("");
   const [processContent, setProcessContent] = useState("");
   const [note, setNote] = useState("");
@@ -1649,6 +1655,14 @@ function ArrivalResultModal({ failure, onConfirm, onClose }) {
         <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {failure.elevatorNo}</p>
         <div className="space-y-3.5">
           <div>
+            <label className="text-xs font-bold text-slate-600 mb-1 block">증상</label>
+            <input className={inputCls} value={symptom} onChange={(e) => setSymptom(e.target.value)} placeholder="예: 도어가 완전히 닫히지 않음" />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-600 mb-1 block">에러코드</label>
+            <input className={inputCls} value={errorCode} onChange={(e) => setErrorCode(e.target.value)} placeholder="예: E-32" />
+          </div>
+          <div>
             <label className="text-xs font-bold text-slate-600 mb-1 block">발생원인</label>
             <input className={inputCls} value={cause} onChange={(e) => setCause(e.target.value)} placeholder="예: 도어 센서 오작동" />
           </div>
@@ -1669,7 +1683,7 @@ function ArrivalResultModal({ failure, onConfirm, onClose }) {
           />
           <button
             type="button"
-            onClick={() => onConfirm({ result: "처리완료", cause, processContent, note, photoCount: photos.length })}
+            onClick={() => onConfirm({ result: "처리완료", symptom, errorCode, cause, processContent, note, photoCount: photos.length })}
             className="w-full bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl active:bg-emerald-700"
           >
             처리완료 등록
@@ -4972,7 +4986,7 @@ export default function App() {
   }
 
   async function handleFailureResult(failure, payload) {
-    const { result, cause, processContent, note, photoCount } = payload;
+    const { result, symptom, errorCode, cause, processContent, note, photoCount } = payload;
     if (result === "처리완료") {
       await supabase
         .from("failures")
@@ -4980,6 +4994,8 @@ export default function App() {
           status: "완료",
           process_result: result,
           escalation: null,
+          fault_symptom: symptom || null,
+          fault_error_code: errorCode || null,
           fault_cause: cause || null,
           process_content: processContent || null,
           process_note: note || null,
@@ -4989,7 +5005,7 @@ export default function App() {
       setFailures((prev) =>
         prev.map((x) =>
           x.id === failure.id
-            ? { ...x, status: "완료", processResult: result, escalation: null, faultCause: cause || null, processContent: processContent || null, processNote: note || null, photoCount: photoCount || 0 }
+            ? { ...x, status: "완료", processResult: result, escalation: null, faultSymptom: symptom || null, faultErrorCode: errorCode || null, faultCause: cause || null, processContent: processContent || null, processNote: note || null, photoCount: photoCount || 0 }
             : x
         )
       );
