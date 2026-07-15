@@ -596,7 +596,7 @@ function PrimaryButton({ children, onClick, disabled, tone = "blue", className =
 
 function Sheet({ title, onClose, children }) {
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-30 flex flex-col bg-black/40" onClick={onClose}>
       <div className="mt-auto" />
       <div
         className="bg-slate-50 rounded-t-3xl max-h-[88%] flex flex-col shadow-2xl"
@@ -5482,7 +5482,7 @@ export default function App() {
     <SitesContext.Provider value={sites}>
       <div className="h-screen w-screen bg-slate-200 flex items-center justify-center overflow-hidden">
         <div
-          className="bg-slate-50 flex flex-col overflow-hidden shadow-2xl border-4 border-slate-900 rounded-[2.5rem]"
+          className="bg-slate-50 flex flex-col overflow-hidden shadow-2xl border-4 border-slate-900 rounded-[2.5rem] relative transform-gpu"
           style={{ width: "375px", height: "min(812px, 100vh - 24px)", maxHeight: "100vh" }}
         >
           {/* status bar */}
