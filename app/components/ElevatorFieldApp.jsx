@@ -813,42 +813,40 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
             {unitInspections.length === 0 ? (
               <p className="text-xs text-slate-400 text-center py-10">등록된 검사 이력이 없습니다</p>
             ) : (
-              unitInspections.map((insp) => {
-                const runEnd = insp.dueDate;
-                const runStart = insp.startDate || addDays(runEnd, -365);
-                const inspDate = insp.startDate || addDays(runStart, -5);
-                const isLive = insp.id?.startsWith("gov-");
-                const clickable = isLive && (insp.result === "conditional" || insp.result === "fail");
-                const card = (
-                  <HistoryCard
-                    key={insp.id}
-                    barColor={insp.result === "fail" ? "#ef4444" : insp.result === "conditional" ? "#f59e0b" : "#10b981"}
-                    title={insp.type}
-                    rows={[
-                      { label: "상태", value: insp.result ? "완료" : "예정" },
-                      { label: "결과", value: insp.result ? RESULT_LABEL[insp.result] : "미정" },
-                      { label: "검사기관", value: insp.org },
-                    ]}
-                    timeCols={[
-                      { label: "검사일", value: inspDate, color: "text-red-500" },
-                      { label: "운행시작일", value: runStart, color: "text-amber-500" },
-                      { label: "운행종료일", value: runEnd, color: "text-emerald-600" },
-                    ]}
-                  />
-                );
-                if (!clickable) return card;
-                return (
-                  <div
-                    key={insp.id}
-                    onClick={() => setInspectionFailTarget(insp)}
-                    onTouchEnd={(e) => { e.preventDefault(); setInspectionFailTarget(insp); }}
-                    className="touch-manipulation cursor-pointer active:opacity-70"
-                  >
-                    {card}
-                    <p className="px-5 -mt-3 pb-3 text-[10px] text-blue-600 font-semibold">터치해서 부적합 상세 항목 보기</p>
-                  </div>
-                );
-              })
+              <div className="px-5 space-y-4">
+                {unitInspections.map((insp) => {
+                  const runEnd = insp.dueDate;
+                  const runStart = insp.startDate || addDays(runEnd, -365);
+                  const inspDate = insp.startDate || addDays(runStart, -5);
+                  const isLive = insp.id?.startsWith("gov-");
+                  const clickable = isLive && (insp.result === "conditional" || insp.result === "fail");
+                  return (
+                    <div
+                      key={insp.id}
+                      onClick={clickable ? () => setInspectionFailTarget(insp) : undefined}
+                      onTouchEnd={clickable ? (e) => { e.preventDefault(); setInspectionFailTarget(insp); } : undefined}
+                      className={`bg-white rounded-xl border border-slate-100 shadow-sm p-4 ${clickable ? "touch-manipulation cursor-pointer active:opacity-70" : ""}`}
+                    >
+                      <HistoryCard
+                        noPadding
+                        barColor={insp.result === "fail" ? "#ef4444" : insp.result === "conditional" ? "#f59e0b" : "#10b981"}
+                        title={insp.type}
+                        rows={[
+                          { label: "상태", value: insp.result ? "완료" : "예정" },
+                          { label: "결과", value: insp.result ? RESULT_LABEL[insp.result] : "미정" },
+                          { label: "검사기관", value: insp.org },
+                        ]}
+                        timeCols={[
+                          { label: "검사일", value: inspDate, color: "text-red-500" },
+                          { label: "운행시작일", value: runStart, color: "text-amber-500" },
+                          { label: "운행종료일", value: runEnd, color: "text-emerald-600" },
+                        ]}
+                      />
+                      {clickable && <p className="mt-2 text-[10px] text-blue-600 font-semibold">터치해서 부적합 상세 항목 보기</p>}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         )}
