@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useContext, createContext } from "react";
+import React, { useState, useMemo, useEffect, useContext, createContext, useRef } from "react";
 import {
   Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt,
   ListTodo, MessagesSquare, ChevronRight, ChevronLeft, X, Camera,
@@ -79,6 +79,7 @@ function mapFailure(row) {
     faultCause: row.fault_cause,
     processContent: row.process_content,
     photoCount: row.photo_count,
+    photoUrls: row.photo_urls ?? [],
   };
 }
 
@@ -292,6 +293,17 @@ function failureStage(f) {
 // 실제 SMS 게이트웨이 연동 전이라, 발송 자체는 콘솔 로그로 시뮬레이션합니다.
 function simulateSms(phone, message) {
   console.log(`[SMS 발송 시뮬레이션] ${phone ?? "번호 없음"} → ${message}`);
+}
+
+// Supabase Storage의 "photos" 버킷에 사진을 업로드하고 공개 URL을 돌려줍니다.
+const PHOTO_BUCKET = "photos";
+async function uploadPhoto(file, folder) {
+  const safeName = file.name.replace(/[^\w.\-]/g, "_");
+  const path = `${folder}/${Date.now()}-${safeName}`;
+  const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, file);
+  if (error) throw error;
+  const { data } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
 }
 
 // errorCode는 "고장구분 (고장상세내역)" 형태로 저장돼 있어, 화면 표시용으로 다시 나눠줍니다.
@@ -756,20 +768,30 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
                 if (f.processNote) rows.push({ label: "비고", value: f.processNote });
                 if (f.photoCount > 0) rows.push({ label: "사진", value: `${f.photoCount}장` });
                 return (
-                  <HistoryCard
-                    key={f.id}
-                    barColor={barColor}
-                    title={f.errorCode.split(" ")[0]}
-                    badge={1}
-                    rows={rows}
-                    date={`2026-${f.reportedAt.replace("/", "-")}`}
-                    tags={[f.assignee ?? "미배정", site.name]}
-                    timeCols={[
-                      { label: "접수", value: f.reportedAt, color: "text-red-500" },
-                      { label: "출동", value: f.dispatchedAt ? `${f.dispatchedAt} (${f.etaMinutes}분)` : "-", color: "text-amber-500" },
-                      { label: "도착", value: f.arrivalTime ?? "-", color: "text-emerald-600" },
-                    ]}
-                  />
+                  <div key={f.id}>
+                    <HistoryCard
+                      barColor={barColor}
+                      title={f.errorCode.split(" ")[0]}
+                      badge={1}
+                      rows={rows}
+                      date={`2026-${f.reportedAt.replace("/", "-")}`}
+                      tags={[f.assignee ?? "미배정", site.name]}
+                      timeCols={[
+                        { label: "접수", value: f.reportedAt, color: "text-red-500" },
+                        { label: "출동", value: f.dispatchedAt ? `${f.dispatchedAt} (${f.etaMinutes}분)` : "-", color: "text-amber-500" },
+                        { label: "도착", value: f.arrivalTime ?? "-", color: "text-emerald-600" },
+                      ]}
+                    />
+                    {f.photoUrls?.length > 0 && (
+                      <div className="flex gap-2 px-5 -mt-2 pb-3 overflow-x-auto">
+                        {f.photoUrls.map((url, i) => (
+                          <a key={i} href={url} target="_blank" rel="noreferrer" className="shrink-0">
+                            <img src={url} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 );
               })
             )}
@@ -1675,14 +1697,15 @@ function ArrivalResultModal({ failure, onConfirm, onClose }) {
           </div>
           <MultiPhotoUpload
             photos={photos}
-            onAdd={() => setPhotos((p) => [...p, Date.now()])}
+            uploadFolder={`failures/${failure.id}`}
+            onUploaded={(url) => setPhotos((p) => [...p, { url }])}
             onRemove={(idx) => setPhotos((p) => p.filter((_, i) => i !== idx))}
             label="처리 사진"
             required={false}
           />
           <button
             type="button"
-            onClick={() => onConfirm({ result: "처리완료", symptom, errorCode, cause, processContent, note, photoCount: photos.length })}
+            onClick={() => onConfirm({ result: "처리완료", symptom, errorCode, cause, processContent, note, photoCount: photos.length, photoUrls: photos.map((p) => p.url) })}
             className="w-full bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl active:bg-emerald-700"
           >
             처리완료 등록
@@ -2502,13 +2525,32 @@ function SiteSearchSelect({ value, onChange, placeholder = "현장명을 검색�
   );
 }
 
-function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = true }) {
+function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = true, uploadFolder, onUploaded }) {
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleFiles(e) {
+    const files = [...(e.target.files ?? [])];
+    e.target.value = "";
+    if (files.length === 0) return;
+    setUploading(true);
+    for (const file of files) {
+      try {
+        const url = await uploadPhoto(file, uploadFolder);
+        onUploaded(url);
+      } catch (err) {
+        alert("사진 업로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
+      }
+    }
+    setUploading(false);
+  }
+
   return (
     <div>
       <div className="grid grid-cols-4 gap-2 mb-2">
         {photos.map((p, idx) => (
-          <div key={idx} className="relative aspect-square rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center">
-            <ImageIcon size={16} className="text-slate-400" />
+          <div key={idx} className="relative aspect-square rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden">
+            {p?.url ? <img src={p.url} alt="" className="w-full h-full object-cover" /> : <ImageIcon size={16} className="text-slate-400" />}
             <button
               type="button"
               onClick={() => onRemove(idx)}
@@ -2518,14 +2560,37 @@ function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = true }) {
             </button>
           </div>
         ))}
-        <button
-          type="button"
-          onClick={onAdd}
-          className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 active:bg-slate-50"
-        >
-          <Camera size={16} />
-          <span className="text-[9px] font-semibold mt-0.5">추가</span>
-        </button>
+        {uploadFolder ? (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              multiple
+              className="hidden"
+              onChange={handleFiles}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 active:bg-slate-50 disabled:opacity-50"
+            >
+              <Camera size={16} />
+              <span className="text-[9px] font-semibold mt-0.5">{uploading ? "업로드 중" : "추가"}</span>
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={onAdd}
+            className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 active:bg-slate-50"
+          >
+            <Camera size={16} />
+            <span className="text-[9px] font-semibold mt-0.5">추가</span>
+          </button>
+        )}
       </div>
       <p className={`text-[10px] ${required && photos.length === 0 ? "text-red-500 font-semibold" : "text-slate-400"}`}>
         {label} · {required ? "최소 1장 필수, " : ""}장수 제한 없음 · 현재 {photos.length}장
@@ -4992,7 +5057,7 @@ export default function App() {
   }
 
   async function handleFailureResult(failure, payload) {
-    const { result, symptom, errorCode, cause, processContent, note, photoCount } = payload;
+    const { result, symptom, errorCode, cause, processContent, note, photoCount, photoUrls } = payload;
     if (result === "처리완료") {
       await supabase
         .from("failures")
@@ -5006,12 +5071,13 @@ export default function App() {
           process_content: processContent || null,
           process_note: note || null,
           photo_count: photoCount || 0,
+          photo_urls: photoUrls?.length ? photoUrls : null,
         })
         .eq("id", failure.id);
       setFailures((prev) =>
         prev.map((x) =>
           x.id === failure.id
-            ? { ...x, status: "완료", processResult: result, escalation: null, faultSymptom: symptom || null, faultErrorCode: errorCode || null, faultCause: cause || null, processContent: processContent || null, processNote: note || null, photoCount: photoCount || 0 }
+            ? { ...x, status: "완료", processResult: result, escalation: null, faultSymptom: symptom || null, faultErrorCode: errorCode || null, faultCause: cause || null, processContent: processContent || null, processNote: note || null, photoCount: photoCount || 0, photoUrls: photoUrls ?? [] }
             : x
         )
       );
