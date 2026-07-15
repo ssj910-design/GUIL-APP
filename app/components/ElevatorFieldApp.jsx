@@ -6,7 +6,7 @@ import {
   ListTodo, MessagesSquare, ChevronRight, ChevronLeft, X, Camera,
   MapPin, Check, Clock, Users, Settings, Plus, Search,
   FileText, Bell, ClipboardCheck, AlertOctagon, Lock, PackageCheck, RotateCcw, PackageX, Image as ImageIcon,
-  Building2, PhoneCall, ArrowLeft, Flag, Mail, User, Paperclip, Radio, Flame, Award, Send
+  Building2, PhoneCall, ArrowLeft, Flag, Mail, User, Paperclip, Radio, Flame, Award, Send, Download
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -304,6 +304,20 @@ async function uploadPhoto(file, folder) {
   if (error) throw error;
   const { data } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
   return data.publicUrl;
+}
+
+// 사진 URL을 실제 파일로 다운로드합니다 (교차 출처라 <a download>만으로는 강제 다운로드가 안 되어, blob으로 받아서 내려줍니다).
+async function downloadPhoto(url) {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = url.split("/").pop() || "photo.png";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(objectUrl);
 }
 
 // errorCode는 "고장구분 (고장상세내역)" 형태로 저장돼 있어, 화면 표시용으로 다시 나눠줍니다.
@@ -878,9 +892,35 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
 function PhotoViewerSheet({ urls, index, onClose }) {
   const [current, setCurrent] = useState(index);
   const [dragX, setDragX] = useState(0);
+  const [downloading, setDownloading] = useState(false);
   const startXRef = useRef(null);
   const draggingRef = useRef(false);
   const dragXRef = useRef(0);
+
+  async function handleDownloadOne() {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      await downloadPhoto(urls[current]);
+    } catch {
+      alert("사진 다운로드에 실패했습니다");
+    }
+    setDownloading(false);
+  }
+
+  async function handleDownloadAll() {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      for (const url of urls) {
+        await downloadPhoto(url);
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    } catch {
+      alert("사진 다운로드에 실패했습니다");
+    }
+    setDownloading(false);
+  }
 
   function handleStart(clientX) {
     startXRef.current = clientX;
@@ -934,12 +974,32 @@ function PhotoViewerSheet({ urls, index, onClose }) {
         />
       </div>
       {urls.length > 1 && (
-        <div className="flex justify-center gap-1.5 pb-5 pt-2 shrink-0">
+        <div className="flex justify-center gap-1.5 pt-2 shrink-0">
           {urls.map((_, i) => (
             <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === current ? "bg-white" : "bg-white/30"}`} />
           ))}
         </div>
       )}
+      <div className="flex gap-2 px-4 pt-3 pb-5 shrink-0">
+        <button
+          type="button"
+          onClick={handleDownloadOne}
+          disabled={downloading}
+          className="flex-1 flex items-center justify-center gap-1.5 bg-white/10 text-white text-xs font-bold py-2.5 rounded-xl active:bg-white/20 disabled:opacity-50"
+        >
+          <Download size={14} /> 이 사진 다운로드
+        </button>
+        {urls.length > 1 && (
+          <button
+            type="button"
+            onClick={handleDownloadAll}
+            disabled={downloading}
+            className="flex-1 flex items-center justify-center gap-1.5 bg-white text-slate-900 text-xs font-bold py-2.5 rounded-xl active:bg-slate-200 disabled:opacity-50"
+          >
+            <Download size={14} /> 전체 다운로드 ({urls.length}장)
+          </button>
+        )}
+      </div>
     </div>
   );
 }
