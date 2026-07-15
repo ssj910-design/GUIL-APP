@@ -1217,7 +1217,8 @@ function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast 
                     <div
                       key={i.id}
                       onClick={isLive ? () => setInspectionFailTarget(i) : undefined}
-                      className={`bg-red-50 border border-red-100 rounded-lg px-3 py-2.5 ${isLive ? "active:bg-red-100" : ""}`}
+                      onTouchEnd={isLive ? (e) => { e.preventDefault(); setInspectionFailTarget(i); } : undefined}
+                      className={`bg-red-50 border border-red-100 rounded-lg px-3 py-2.5 touch-manipulation ${isLive ? "active:bg-red-100 cursor-pointer" : ""}`}
                     >
                       <div className="flex items-center justify-between mb-1">
                         <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
@@ -2298,7 +2299,8 @@ function InspectionTab({ inspections, setInspections }) {
               <div
                 key={insp.id}
                 onClick={isLive ? () => setInspectionFailTarget(insp) : undefined}
-                className={`bg-white rounded-xl border border-red-100 p-3.5 ${isLive ? "active:bg-slate-50" : ""}`}
+                onTouchEnd={isLive ? (e) => { e.preventDefault(); setInspectionFailTarget(insp); } : undefined}
+                className={`bg-white rounded-xl border border-red-100 p-3.5 touch-manipulation ${isLive ? "active:bg-slate-50 cursor-pointer" : ""}`}
               >
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
