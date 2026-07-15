@@ -159,6 +159,7 @@ function mapQuoteRequest(row) {
     suppliedDate: row.supplied_date,
     hasSupplyPhoto: row.has_supply_photo,
     supplyPhotoUrl: row.supply_photo_url,
+    supplyPhotoUrls: row.supply_photo_urls ?? (row.supply_photo_url ? [row.supply_photo_url] : []),
   };
 }
 
@@ -191,6 +192,7 @@ function mapRestockRequest(row) {
     suppliedDate: row.supplied_date,
     hasSupplyPhoto: row.has_supply_photo,
     supplyPhotoUrl: row.supply_photo_url,
+    supplyPhotoUrls: row.supply_photo_urls ?? (row.supply_photo_url ? [row.supply_photo_url] : []),
   };
 }
 
@@ -4757,7 +4759,7 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
   );
 }
 
-function QuoteRequestsScreen({ quoteRequests, onAdvanceQuote, onAttachQuotePhoto, onCompleteQuoteSupply, onBack }) {
+function QuoteRequestsScreen({ quoteRequests, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onBack }) {
   const [detailTarget, setDetailTarget] = useState(null);
 
   return (
@@ -4806,25 +4808,16 @@ function QuoteRequestsScreen({ quoteRequests, onAdvanceQuote, onAttachQuotePhoto
                 )}
                 {q.status === "승인" && (
                   <>
-                    {q.hasSupplyPhoto ? (
-                      <div className="flex items-center gap-2 bg-white border border-emerald-200 rounded-lg px-2.5 py-2 mb-2">
-                        {q.supplyPhotoUrl ? (
-                          <img src={q.supplyPhotoUrl} alt="" className="w-9 h-9 rounded-md object-cover shrink-0" />
-                        ) : (
-                          <div className="w-9 h-9 rounded-md bg-emerald-50 flex items-center justify-center shrink-0">
-                            <ImageIcon size={16} className="text-emerald-500" />
-                          </div>
-                        )}
-                        <span className="text-[11px] text-emerald-600 font-semibold">자재 사진 등록 완료</span>
-                      </div>
-                    ) : (
-                      <SupplyPhotoButton
-                        label="지급할 자재 사진 촬영"
+                    <div className="mb-2">
+                      <MultiPhotoUpload
+                        photos={(q.supplyPhotoUrls ?? (q.supplyPhotoUrl ? [q.supplyPhotoUrl] : [])).map((url) => ({ url }))}
                         uploadFolder={`quotes/${q.id}/supply`}
                         onUploaded={(url) => onAttachQuotePhoto(q.id, url)}
-                        spacingClassName="mb-2"
+                        onRemove={(idx) => onRemoveQuoteSupplyPhoto(q.id, idx)}
+                        label="지급할 자재 사진 촬영"
+                        required={false}
                       />
-                    )}
+                    </div>
                     <button
                       onClick={() => q.hasSupplyPhoto && onCompleteQuoteSupply(q.id)}
                       disabled={!q.hasSupplyPhoto}
@@ -4920,7 +4913,7 @@ function InspectionMonitorScreen({ inspections, onBack }) {
 }
 
 
-function RestockScreen({ restockRequests, onAttachRestockPhoto, onCompleteRestock, onBack }) {
+function RestockScreen({ restockRequests, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onBack }) {
   const pending = restockRequests.filter((r) => r.status === "대기");
   const done = restockRequests.filter((r) => r.status === "완료");
 
@@ -4939,24 +4932,16 @@ function RestockScreen({ restockRequests, onAttachRestockPhoto, onCompleteRestoc
                 <p className="text-sm font-bold text-slate-800">{r.part}</p>
                 <p className="text-[11px] text-slate-500 mt-0.5">{r.engineer} 기사 · {r.siteName}에서 사용 · {r.requestedDate}</p>
 
-                {r.hasSupplyPhoto ? (
-                  <div className="mt-2.5 flex items-center gap-2 bg-white border border-emerald-200 rounded-lg px-2.5 py-2">
-                    {r.supplyPhotoUrl ? (
-                      <img src={r.supplyPhotoUrl} alt="" className="w-9 h-9 rounded-md object-cover shrink-0" />
-                    ) : (
-                      <div className="w-9 h-9 rounded-md bg-emerald-50 flex items-center justify-center shrink-0">
-                        <ImageIcon size={16} className="text-emerald-500" />
-                      </div>
-                    )}
-                    <span className="text-[11px] text-emerald-600 font-semibold">보충 부품 사진 등록 완료</span>
-                  </div>
-                ) : (
-                  <SupplyPhotoButton
-                    label="보충할 부품 사진 촬영"
+                <div className="mt-2.5">
+                  <MultiPhotoUpload
+                    photos={(r.supplyPhotoUrls ?? (r.supplyPhotoUrl ? [r.supplyPhotoUrl] : [])).map((url) => ({ url }))}
                     uploadFolder={`restock/${r.id}/supply`}
                     onUploaded={(url) => onAttachRestockPhoto(r.id, url)}
+                    onRemove={(idx) => onRemoveRestockSupplyPhoto(r.id, idx)}
+                    label="보충할 부품 사진 촬영"
+                    required={false}
                   />
-                )}
+                </div>
 
                 <button
                   onClick={() => r.hasSupplyPhoto && onCompleteRestock(r.id)}
@@ -5053,7 +5038,7 @@ function RoomTab({ feed, onSendChat }) {
   );
 }
 
-function AdminTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onCompleteQuoteSupply, onAdminToggleTodo, onAttachRestockPhoto, onCompleteRestock, onAddSite, onUpdateSite, onDeleteSite, siteManagers, onAddSiteManager, onUpdateSiteManager, onDeleteSiteManager, onUpdateEngineerContact }) {
+function AdminTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onAdminToggleTodo, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onAddSite, onUpdateSite, onDeleteSite, siteManagers, onAddSiteManager, onUpdateSiteManager, onDeleteSiteManager, onUpdateEngineerContact }) {
   const sites = useContext(SitesContext);
   const { engineerNames, engineers } = useContext(AuthContext);
   const [billingViewOpen, setBillingViewOpen] = useState(false);
@@ -5124,6 +5109,7 @@ function AdminTab({ inspections, materialRequests, billings, quoteRequests, rest
         quoteRequests={quoteRequests}
         onAdvanceQuote={onAdvanceQuote}
         onAttachQuotePhoto={onAttachQuotePhoto}
+        onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
         onCompleteQuoteSupply={onCompleteQuoteSupply}
         onBack={() => setAdminScreen(null)}
       />
@@ -5139,6 +5125,7 @@ function AdminTab({ inspections, materialRequests, billings, quoteRequests, rest
       <RestockScreen
         restockRequests={restockRequests}
         onAttachRestockPhoto={onAttachRestockPhoto}
+        onRemoveRestockSupplyPhoto={onRemoveRestockSupplyPhoto}
         onCompleteRestock={onCompleteRestock}
         onBack={() => setAdminScreen(null)}
       />
@@ -5205,6 +5192,9 @@ export default function App() {
   const [quoteRequests, setQuoteRequests] = useState([]);
   const [restockRequests, setRestockRequests] = useState([]);
   const [feed, setFeed] = useState([]);
+  // 지급 사진을 여러 장 연달아 올릴 때, setState 업데이터 함수가 React 렌더링 타이밍에 따라
+  // 아직 반영되지 않은 상태를 기준으로 계산될 수 있어(경쟁 상태) ref에 최신값을 직접 보관합니다.
+  const supplyPhotoUrlsRef = useRef({ material: {}, quote: {}, restock: {} });
   const [failureToast, setFailureToast] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -5551,45 +5541,29 @@ export default function App() {
   }
 
   // ★ 자재 담당자가 지급할 자재 사진을 한 장 추가하는 순간 (지급완료 체크의 선행 조건)
-  // 여러 장을 연달아 올릴 때 각 호출이 서로의 결과를 덮어쓰지 않도록, 최신 상태를 기준으로 누적합니다.
+  // 여러 장을 연달아 올릴 때 setState 업데이터만으로는 React 렌더링 타이밍에 따라 아직 반영되지
+  // 않은 상태를 기준으로 계산될 수 있어(경쟁 상태), ref에 최신 배열을 직접 동기적으로 보관합니다.
   async function handleAttachPhoto(requestId, newUrl) {
-    let persistUrls = null;
-    setMaterialRequests((prev) =>
-      prev.map((r) => {
-        if (r.id !== requestId) return r;
-        const existing = r.supplyPhotoUrls ?? [];
-        // 동일한 URL로 두 번 호출돼도(예: 개발 모드 이중 호출) 중복 추가되지 않도록 방지합니다.
-        if (existing.includes(newUrl)) {
-          persistUrls = existing;
-          return r;
-        }
-        const urls = [...existing, newUrl];
-        persistUrls = urls;
-        return { ...r, hasSupplyPhoto: true, supplyPhotoUrls: urls };
-      })
-    );
-    if (persistUrls) {
-      await supabase.from("material_requests").update({ has_supply_photo: true, supply_photo_urls: persistUrls }).eq("id", requestId);
-    }
+    const ref = supplyPhotoUrlsRef.current.material;
+    const existing = ref[requestId] ?? materialRequests.find((r) => r.id === requestId)?.supplyPhotoUrls ?? [];
+    if (existing.includes(newUrl)) return;
+    const urls = [...existing, newUrl];
+    ref[requestId] = urls;
+    setMaterialRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, hasSupplyPhoto: true, supplyPhotoUrls: urls } : r)));
+    await supabase.from("material_requests").update({ has_supply_photo: true, supply_photo_urls: urls }).eq("id", requestId);
   }
 
   // ★ 등록된 지급 사진을 한 장 삭제
   async function handleRemoveSupplyPhoto(requestId, idx) {
-    let persistUrls = null;
-    setMaterialRequests((prev) =>
-      prev.map((r) => {
-        if (r.id !== requestId) return r;
-        const urls = (r.supplyPhotoUrls ?? []).filter((_, i) => i !== idx);
-        persistUrls = urls;
-        return { ...r, hasSupplyPhoto: urls.length > 0, supplyPhotoUrls: urls };
-      })
-    );
-    if (persistUrls) {
-      await supabase
-        .from("material_requests")
-        .update({ has_supply_photo: persistUrls.length > 0, supply_photo_urls: persistUrls.length ? persistUrls : null })
-        .eq("id", requestId);
-    }
+    const ref = supplyPhotoUrlsRef.current.material;
+    const existing = ref[requestId] ?? materialRequests.find((r) => r.id === requestId)?.supplyPhotoUrls ?? [];
+    const urls = existing.filter((_, i) => i !== idx);
+    ref[requestId] = urls;
+    setMaterialRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, hasSupplyPhoto: urls.length > 0, supplyPhotoUrls: urls } : r)));
+    await supabase
+      .from("material_requests")
+      .update({ has_supply_photo: urls.length > 0, supply_photo_urls: urls.length ? urls : null })
+      .eq("id", requestId);
   }
 
   // ★ 자재 지급 완료 트리거: 이 순간에만 할 일이 자동 생성됩니다 (D-30 시작)
@@ -5658,9 +5632,28 @@ export default function App() {
   }
 
   // ★ 관리자가 보충할 부품 사진을 등록 (지급완료의 선행 조건)
-  async function handleAttachRestockPhoto(restockId, photoUrl) {
-    await supabase.from("restock_requests").update({ has_supply_photo: true, supply_photo_url: photoUrl || null }).eq("id", restockId);
-    setRestockRequests((prev) => prev.map((r) => (r.id === restockId ? { ...r, hasSupplyPhoto: true, supplyPhotoUrl: photoUrl || null } : r)));
+  // 여러 장을 연달아 올릴 때 setState 업데이터만으로는 React 렌더링 타이밍에 따라 아직 반영되지
+  // 않은 상태를 기준으로 계산될 수 있어(경쟁 상태), ref에 최신 배열을 직접 동기적으로 보관합니다.
+  async function handleAttachRestockPhoto(restockId, newUrl) {
+    const ref = supplyPhotoUrlsRef.current.restock;
+    const existing = ref[restockId] ?? restockRequests.find((r) => r.id === restockId)?.supplyPhotoUrls ?? [];
+    if (existing.includes(newUrl)) return;
+    const urls = [...existing, newUrl];
+    ref[restockId] = urls;
+    setRestockRequests((prev) => prev.map((r) => (r.id === restockId ? { ...r, hasSupplyPhoto: true, supplyPhotoUrls: urls } : r)));
+    await supabase.from("restock_requests").update({ has_supply_photo: true, supply_photo_urls: urls }).eq("id", restockId);
+  }
+
+  async function handleRemoveRestockSupplyPhoto(restockId, idx) {
+    const ref = supplyPhotoUrlsRef.current.restock;
+    const existing = ref[restockId] ?? restockRequests.find((r) => r.id === restockId)?.supplyPhotoUrls ?? [];
+    const urls = existing.filter((_, i) => i !== idx);
+    ref[restockId] = urls;
+    setRestockRequests((prev) => prev.map((r) => (r.id === restockId ? { ...r, hasSupplyPhoto: urls.length > 0, supplyPhotoUrls: urls } : r)));
+    await supabase
+      .from("restock_requests")
+      .update({ has_supply_photo: urls.length > 0, supply_photo_urls: urls.length ? urls : null })
+      .eq("id", restockId);
   }
 
   // ★ 보충 지급완료 처리
@@ -5693,9 +5686,28 @@ export default function App() {
   }
 
   // ★ 관리자가 지급할 자재 사진을 등록 (자재지급완료 처리의 선행 조건)
-  async function handleAttachQuotePhoto(quoteId, photoUrl) {
-    await supabase.from("quote_requests").update({ has_supply_photo: true, supply_photo_url: photoUrl || null }).eq("id", quoteId);
-    setQuoteRequests((prev) => prev.map((q) => (q.id === quoteId ? { ...q, hasSupplyPhoto: true, supplyPhotoUrl: photoUrl || null } : q)));
+  // 여러 장을 연달아 올릴 때 setState 업데이터만으로는 React 렌더링 타이밍에 따라 아직 반영되지
+  // 않은 상태를 기준으로 계산될 수 있어(경쟁 상태), ref에 최신 배열을 직접 동기적으로 보관합니다.
+  async function handleAttachQuotePhoto(quoteId, newUrl) {
+    const ref = supplyPhotoUrlsRef.current.quote;
+    const existing = ref[quoteId] ?? quoteRequests.find((q) => q.id === quoteId)?.supplyPhotoUrls ?? [];
+    if (existing.includes(newUrl)) return;
+    const urls = [...existing, newUrl];
+    ref[quoteId] = urls;
+    setQuoteRequests((prev) => prev.map((q) => (q.id === quoteId ? { ...q, hasSupplyPhoto: true, supplyPhotoUrls: urls } : q)));
+    await supabase.from("quote_requests").update({ has_supply_photo: true, supply_photo_urls: urls }).eq("id", quoteId);
+  }
+
+  async function handleRemoveQuoteSupplyPhoto(quoteId, idx) {
+    const ref = supplyPhotoUrlsRef.current.quote;
+    const existing = ref[quoteId] ?? quoteRequests.find((q) => q.id === quoteId)?.supplyPhotoUrls ?? [];
+    const urls = existing.filter((_, i) => i !== idx);
+    ref[quoteId] = urls;
+    setQuoteRequests((prev) => prev.map((q) => (q.id === quoteId ? { ...q, hasSupplyPhoto: urls.length > 0, supplyPhotoUrls: urls } : q)));
+    await supabase
+      .from("quote_requests")
+      .update({ has_supply_photo: urls.length > 0, supply_photo_urls: urls.length ? urls : null })
+      .eq("id", quoteId);
   }
 
   // ★ 자재지급완료 트리거: 이 순간 담당 기사에게 할 일이 자동 생성됩니다
@@ -5907,7 +5919,7 @@ export default function App() {
           {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} />}
           {tab === "todo" && <TodoTab todos={todos} setTodos={setTodos} />}
           {tab === "room" && <RoomTab feed={feed} onSendChat={handleSendFeedPost} />}
-          {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onCompleteRestock={handleCompleteRestock} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
+          {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
 
           {/* bottom nav */}
           <div
