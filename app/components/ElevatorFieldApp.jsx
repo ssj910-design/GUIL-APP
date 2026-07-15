@@ -535,9 +535,9 @@ function FilterBar({ pills = [], startDate, endDate }) {
 
 
 /* 엘맨PRO 스타일 이력 카드 (고장/검사 이력 공용) */
-function HistoryCard({ barColor, title, badge, rows, tags, date, timeCols }) {
+function HistoryCard({ barColor, title, badge, rows, tags, date, timeCols, noPadding }) {
   return (
-    <div className="flex px-5 pb-5">
+    <div className={`flex ${noPadding ? "" : "px-5 pb-5"}`}>
       <div className="w-1 rounded-full mr-3 shrink-0" style={{ background: barColor }} />
       <div className="flex-1 pt-0.5">
         <div className="flex items-center gap-1.5 mb-2">
@@ -756,50 +756,53 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
             {unitFailures.length === 0 ? (
               <p className="text-xs text-slate-400 text-center py-10">등록된 고장 이력이 없습니다</p>
             ) : (
-              unitFailures.map((f) => {
-                const barColor = f.status === "완료" ? "#10b981" : f.status === "진행중" ? "#f59e0b" : "#ef4444";
-                const rows = [
-                  { label: "접수", value: f.errorCode },
-                  { label: "처리상태", value: f.escalation ? `${f.status} (${f.escalation})` : f.status },
-                ];
-                if (f.faultSymptom) rows.push({ label: "증상", value: f.faultSymptom });
-                if (f.faultErrorCode) rows.push({ label: "에러코드", value: f.faultErrorCode });
-                rows.push({ label: "원인", value: f.faultCause || (f.status === "완료" ? "-" : "확인중") });
-                if (f.processContent) rows.push({ label: "처리내용", value: f.processContent });
-                if (f.processNote) rows.push({ label: "비고", value: f.processNote });
-                if (f.photoCount > 0) rows.push({ label: "사진", value: `${f.photoCount}장` });
-                return (
-                  <div key={f.id}>
-                    <HistoryCard
-                      barColor={barColor}
-                      title={f.errorCode.split(" ")[0]}
-                      badge={1}
-                      rows={rows}
-                      date={`2026-${f.reportedAt.replace("/", "-")}`}
-                      tags={[f.assignee ?? "미배정", site.name]}
-                      timeCols={[
-                        { label: "접수", value: f.reportedAt, color: "text-red-500" },
-                        { label: "출동", value: f.dispatchedAt ? `${f.dispatchedAt} (${f.etaMinutes}분)` : "-", color: "text-amber-500" },
-                        { label: "도착", value: f.arrivalTime ?? "-", color: "text-emerald-600" },
-                      ]}
-                    />
-                    {f.photoUrls?.length > 0 && (
-                      <div className="flex gap-2 px-5 -mt-2 pb-3 overflow-x-auto">
-                        {f.photoUrls.map((url, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => setPhotoViewer({ urls: f.photoUrls, index: i })}
-                            className="shrink-0"
-                          >
-                            <img src={url} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
+              <div className="px-5 space-y-4">
+                {unitFailures.map((f) => {
+                  const barColor = f.status === "완료" ? "#10b981" : f.status === "진행중" ? "#f59e0b" : "#ef4444";
+                  const rows = [
+                    { label: "접수", value: f.errorCode },
+                    { label: "처리상태", value: f.escalation ? `${f.status} (${f.escalation})` : f.status },
+                  ];
+                  if (f.faultSymptom) rows.push({ label: "증상", value: f.faultSymptom });
+                  if (f.faultErrorCode) rows.push({ label: "에러코드", value: f.faultErrorCode });
+                  rows.push({ label: "원인", value: f.faultCause || (f.status === "완료" ? "-" : "확인중") });
+                  if (f.processContent) rows.push({ label: "처리내용", value: f.processContent });
+                  if (f.processNote) rows.push({ label: "비고", value: f.processNote });
+                  if (f.photoCount > 0) rows.push({ label: "사진", value: `${f.photoCount}장` });
+                  return (
+                    <div key={f.id} className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+                      <HistoryCard
+                        noPadding
+                        barColor={barColor}
+                        title={f.errorCode.split(" ")[0]}
+                        badge={1}
+                        rows={rows}
+                        date={`2026-${f.reportedAt.replace("/", "-")}`}
+                        tags={[f.assignee ?? "미배정", site.name]}
+                        timeCols={[
+                          { label: "접수", value: f.reportedAt, color: "text-red-500" },
+                          { label: "출동", value: f.dispatchedAt ? `${f.dispatchedAt} (${f.etaMinutes}분)` : "-", color: "text-amber-500" },
+                          { label: "도착", value: f.arrivalTime ?? "-", color: "text-emerald-600" },
+                        ]}
+                      />
+                      {f.photoUrls?.length > 0 && (
+                        <div className="flex gap-2 mt-2 overflow-x-auto">
+                          {f.photoUrls.map((url, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => setPhotoViewer({ urls: f.photoUrls, index: i })}
+                              className="shrink-0"
+                            >
+                              <img src={url} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         )}
