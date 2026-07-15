@@ -712,6 +712,7 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
   // 호기가 지정된 청구건은 그 호기에서만, 호기 미지정(기존) 청구건은 현장 전체에서 계속 보여줍니다.
   const unitBillings = billings.filter((b) => b.siteName === site.name && (!b.elevatorNo || b.elevatorNo === unit));
   const [inspectionFailTarget, setInspectionFailTarget] = useState(null);
+  const [photoViewer, setPhotoViewer] = useState(null);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
@@ -785,9 +786,14 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
                     {f.photoUrls?.length > 0 && (
                       <div className="flex gap-2 px-5 -mt-2 pb-3 overflow-x-auto">
                         {f.photoUrls.map((url, i) => (
-                          <a key={i} href={url} target="_blank" rel="noreferrer" className="shrink-0">
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setPhotoViewer({ urls: f.photoUrls, index: i })}
+                            className="shrink-0"
+                          >
                             <img src={url} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
-                          </a>
+                          </button>
                         ))}
                       </div>
                     )}
@@ -859,6 +865,79 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
       </div>
       {inspectionFailTarget && (
         <InspectionFailDetailSheet inspection={inspectionFailTarget} onClose={() => setInspectionFailTarget(null)} />
+      )}
+      {photoViewer && (
+        <PhotoViewerSheet urls={photoViewer.urls} index={photoViewer.index} onClose={() => setPhotoViewer(null)} />
+      )}
+    </div>
+  );
+}
+
+// 사진이 여러 장이면 좌우로 드래그해서 넘겨볼 수 있는 전체화면 뷰어입니다.
+function PhotoViewerSheet({ urls, index, onClose }) {
+  const [current, setCurrent] = useState(index);
+  const [dragX, setDragX] = useState(0);
+  const startXRef = useRef(null);
+  const draggingRef = useRef(false);
+  const dragXRef = useRef(0);
+
+  function handleStart(clientX) {
+    startXRef.current = clientX;
+    draggingRef.current = true;
+  }
+  function handleMove(clientX) {
+    if (!draggingRef.current || startXRef.current === null) return;
+    const delta = clientX - startXRef.current;
+    dragXRef.current = delta;
+    setDragX(delta);
+  }
+  function handleEnd() {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    const threshold = 60;
+    const delta = dragXRef.current;
+    if (delta <= -threshold && current < urls.length - 1) {
+      setCurrent((c) => c + 1);
+    } else if (delta >= threshold && current > 0) {
+      setCurrent((c) => c - 1);
+    }
+    dragXRef.current = 0;
+    setDragX(0);
+    startXRef.current = null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
+      <div className="flex items-center justify-between px-4 py-3 shrink-0">
+        <span className="text-white text-xs font-semibold">{current + 1} / {urls.length}</span>
+        <button type="button" onClick={onClose} className="text-white p-1">
+          <X size={22} />
+        </button>
+      </div>
+      <div
+        className="flex-1 flex items-center justify-center overflow-hidden select-none"
+        onTouchStart={(e) => handleStart(e.touches[0].clientX)}
+        onTouchMove={(e) => handleMove(e.touches[0].clientX)}
+        onTouchEnd={handleEnd}
+        onMouseDown={(e) => handleStart(e.clientX)}
+        onMouseMove={(e) => { if (draggingRef.current) handleMove(e.clientX); }}
+        onMouseUp={handleEnd}
+        onMouseLeave={() => { if (draggingRef.current) handleEnd(); }}
+      >
+        <img
+          src={urls[current]}
+          alt=""
+          draggable={false}
+          className="max-w-full max-h-full object-contain"
+          style={{ transform: `translateX(${dragX}px)`, transition: draggingRef.current ? "none" : "transform 0.2s" }}
+        />
+      </div>
+      {urls.length > 1 && (
+        <div className="flex justify-center gap-1.5 pb-5 pt-2 shrink-0">
+          {urls.map((_, i) => (
+            <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === current ? "bg-white" : "bg-white/30"}`} />
+          ))}
+        </div>
       )}
     </div>
   );
