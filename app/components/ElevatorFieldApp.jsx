@@ -356,6 +356,56 @@ function Badge({ result }) {
   );
 }
 
+function InspectionFailDetailSheet({ inspection, onClose }) {
+  const [state, setState] = useState({ loading: true, items: [], error: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch(
+          `/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(inspection.govElevatorNo)}&anchorDate=${encodeURIComponent(inspection.startDate)}`
+        );
+        const data = await res.json();
+        if (!cancelled) setState({ loading: false, items: data.items ?? [], error: data.error ?? null });
+      } catch {
+        if (!cancelled) setState({ loading: false, items: [], error: "조회에 실패했습니다" });
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [inspection.govElevatorNo, inspection.startDate]);
+
+  return (
+    <Sheet title="조건부·불합격 상세" onClose={onClose}>
+      <div className="bg-slate-100 rounded-xl p-3 mb-3 flex items-center justify-between">
+        <p className="font-bold text-slate-800">{inspection.siteName} · {inspection.elevatorNo}</p>
+        <Badge result={inspection.result} />
+      </div>
+      {state.loading ? (
+        <p className="text-xs text-slate-400 text-center py-8">국가승강기정보센터에서 부적합 항목을 조회하는 중...</p>
+      ) : state.error ? (
+        <p className="text-xs text-red-500 text-center py-8">{state.error}</p>
+      ) : state.items.length === 0 ? (
+        <p className="text-xs text-slate-400 text-center py-8">부적합 상세 항목을 찾을 수 없습니다</p>
+      ) : (
+        <div className="space-y-3">
+          {state.items.map((item, idx) => (
+            <div key={idx} className="border border-red-100 bg-red-50 rounded-xl p-3">
+              <p className="text-[11px] font-bold text-red-600 mb-1">기준 {item.standardArticle}</p>
+              <p className="text-xs text-slate-700 mb-1.5">{item.standardTitle1}</p>
+              <p className="text-sm font-semibold text-slate-800">{item.failDesc}</p>
+              {item.failDescInspector && <p className="text-[11px] text-slate-500 mt-1">검사원 의견: {item.failDescInspector}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
 function DDay({ dueDate }) {
   const today = new Date("2026-07-10");
   const due = new Date(dueDate);
@@ -1034,6 +1084,7 @@ function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast 
   const [resultTarget, setResultTarget] = useState(null);
   const [arriveTarget, setArriveTarget] = useState(null);
   const [historySite, setHistorySite] = useState(null);
+  const [inspectionFailTarget, setInspectionFailTarget] = useState(null);
 
   // 승강기고유번호가 등록된 현장은 국가승강기정보센터에서 실시간으로, 나머지는 기존 수기입력 기록을 보여줍니다.
   const liveInspections = useLiveInspections(mySites.flatMap(siteToUnitQueries));
@@ -1160,22 +1211,32 @@ function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast 
               <p className="text-xs text-slate-400 py-1.5">조건부·불합격 현장이 없습니다.</p>
             ) : (
               <div className="space-y-2">
-                {flagged.map((i) => (
-                  <div key={i.id} className="bg-red-50 border border-red-100 rounded-lg px-3 py-2.5">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
-                      <Badge result={i.result} />
-                    </div>
-                    <p className="text-[11px] text-slate-500 mb-1.5">{i.type} · {i.org}</p>
-                    <div className="flex items-center justify-between">
-                      <p className="text-[11px] text-red-600 leading-relaxed">{i.notes || "지적사항 확인 필요"}</p>
-                      <span className="shrink-0 ml-2 flex items-center gap-1">
-                        <span className="text-[10px] text-slate-400">보완기한</span>
-                        <DDay dueDate={i.dueDate} />
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                {flagged.map((i) => {
+                  const isLive = i.id?.startsWith("gov-");
+                  const Wrapper = isLive ? "button" : "div";
+                  return (
+                    <Wrapper
+                      key={i.id}
+                      type={isLive ? "button" : undefined}
+                      onClick={isLive ? () => setInspectionFailTarget(i) : undefined}
+                      className="w-full text-left bg-red-50 border border-red-100 rounded-lg px-3 py-2.5"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
+                        <Badge result={i.result} />
+                      </div>
+                      <p className="text-[11px] text-slate-500 mb-1.5">{i.type} · {i.org}</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] text-red-600 leading-relaxed">{i.notes || "지적사항 확인 필요"}</p>
+                        <span className="shrink-0 ml-2 flex items-center gap-1">
+                          <span className="text-[10px] text-slate-400">보완기한</span>
+                          <DDay dueDate={i.dueDate} />
+                        </span>
+                      </div>
+                      {isLive && <p className="text-[10px] text-blue-600 font-semibold mt-1.5">터치해서 부적합 상세 항목 보기</p>}
+                    </Wrapper>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1226,6 +1287,9 @@ function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast 
             setResultTarget(null);
           }}
         />
+      )}
+      {inspectionFailTarget && (
+        <InspectionFailDetailSheet inspection={inspectionFailTarget} onClose={() => setInspectionFailTarget(null)} />
       )}
       <SmsToast message={toast} />
     </div>
@@ -2100,6 +2164,7 @@ function InspectionTab({ inspections, setInspections }) {
   const [subTab, setSubTab] = useState("검사도래현장");
   const [openRegister, setOpenRegister] = useState(null); // inspection object or null
   const [form, setForm] = useState({});
+  const [inspectionFailTarget, setInspectionFailTarget] = useState(null);
 
   // 승강기고유번호가 등록된 현장은 국가승강기정보센터에서 실시간으로, 나머지는 기존 수기입력 기록을 보여줍니다.
   const liveInspections = useLiveInspections(sites.flatMap(siteToUnitQueries));
@@ -2232,7 +2297,11 @@ function InspectionTab({ inspections, setInspections }) {
           flagged.map((insp) => {
             const isLive = insp.id?.startsWith("gov-");
             return (
-              <div key={insp.id} className="bg-white rounded-xl border border-red-100 p-3.5">
+              <div
+                key={insp.id}
+                onClick={isLive ? () => setInspectionFailTarget(insp) : undefined}
+                className={`bg-white rounded-xl border border-red-100 p-3.5 ${isLive ? "active:bg-slate-50" : ""}`}
+              >
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
                   <Badge result={insp.result} />
@@ -2250,7 +2319,7 @@ function InspectionTab({ inspections, setInspections }) {
                 <div className="flex items-center justify-between">
                   {insp.result === "fail" && <span className="text-[11px] text-red-500 font-semibold">재검사 필요</span>}
                   {isLive ? (
-                    <span className="ml-auto text-[11px] text-emerald-600 font-semibold">국가승강기정보센터 실시간 조회</span>
+                    <span className="ml-auto text-[11px] text-blue-600 font-semibold">터치해서 부적합 상세 항목 보기</span>
                   ) : (
                     <button
                       onClick={() => startRegister(insp)}
@@ -2326,6 +2395,9 @@ function InspectionTab({ inspections, setInspections }) {
           </PrimaryButton>
           <p className="text-[11px] text-slate-400 text-center mt-2">제출 시 본사 관리자 페이지로 즉시 연동됩니다</p>
         </Sheet>
+      )}
+      {inspectionFailTarget && (
+        <InspectionFailDetailSheet inspection={inspectionFailTarget} onClose={() => setInspectionFailTarget(null)} />
       )}
     </div>
   );
