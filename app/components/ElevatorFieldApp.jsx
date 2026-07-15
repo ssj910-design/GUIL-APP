@@ -1731,84 +1731,75 @@ function ArrivalTimeModal({ failure, onConfirm, onClose }) {
   );
 }
 
+const FAILURE_RESULT_OPTIONS = [
+  { value: "처리완료", emoji: "🟢" },
+  { value: "지원요청", emoji: "🟡" },
+  { value: "운행정지", emoji: "🔴" },
+  { value: "오신고", emoji: "⚪" },
+];
+const FAILURE_RESULT_BTN_CLS = {
+  처리완료: "bg-emerald-600 active:bg-emerald-700",
+  지원요청: "bg-amber-500 active:bg-amber-600",
+  운행정지: "bg-red-600 active:bg-red-700",
+  오신고: "bg-slate-500 active:bg-slate-600",
+};
+
 function ArrivalResultModal({ failure, onConfirm, onClose }) {
-  const [step, setStep] = useState("choose");
+  const [result, setResult] = useState("처리완료");
   const [symptom, setSymptom] = useState("");
   const [errorCode, setErrorCode] = useState("");
   const [cause, setCause] = useState("");
   const [processContent, setProcessContent] = useState("");
   const [note, setNote] = useState("");
   const [photos, setPhotos] = useState([]);
-  const options = [
-    { value: "처리완료", emoji: "🟢", cls: "border-emerald-300 bg-emerald-50 text-emerald-700" },
-    { value: "지원요청", emoji: "🟡", cls: "border-amber-300 bg-amber-50 text-amber-700" },
-    { value: "운행정지", emoji: "🔴", cls: "border-red-300 bg-red-50 text-red-700" },
-  ];
-
-  function pick(value) {
-    if (value === "처리완료") setStep("complete");
-    else onConfirm({ result: value });
-  }
-
-  if (step === "complete") {
-    return (
-      <Sheet title="고장처리결과 입력 · 처리완료" onClose={onClose}>
-        <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {failure.elevatorNo}</p>
-        <div className="space-y-3.5">
-          <div>
-            <label className="text-xs font-bold text-slate-600 mb-1 block">증상</label>
-            <input className={inputCls} value={symptom} onChange={(e) => setSymptom(e.target.value)} placeholder="예: 도어가 완전히 닫히지 않음" />
-          </div>
-          <div>
-            <label className="text-xs font-bold text-slate-600 mb-1 block">에러코드</label>
-            <input className={inputCls} value={errorCode} onChange={(e) => setErrorCode(e.target.value)} placeholder="예: E-32" />
-          </div>
-          <div>
-            <label className="text-xs font-bold text-slate-600 mb-1 block">발생원인</label>
-            <input className={inputCls} value={cause} onChange={(e) => setCause(e.target.value)} placeholder="예: 도어 센서 오작동" />
-          </div>
-          <div>
-            <label className="text-xs font-bold text-slate-600 mb-1 block">처리내용</label>
-            <input className={inputCls} value={processContent} onChange={(e) => setProcessContent(e.target.value)} placeholder="예: 센서 교체 및 재조정" />
-          </div>
-          <div>
-            <label className="text-xs font-bold text-slate-600 mb-1 block">비고</label>
-            <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} placeholder="추가 전달사항 (선택)" />
-          </div>
-          <MultiPhotoUpload
-            photos={photos}
-            uploadFolder={`failures/${failure.id}`}
-            onUploaded={(url) => setPhotos((p) => [...p, { url }])}
-            onRemove={(idx) => setPhotos((p) => p.filter((_, i) => i !== idx))}
-            label="처리 사진"
-            required={false}
-          />
-          <button
-            type="button"
-            onClick={() => onConfirm({ result: "처리완료", symptom, errorCode, cause, processContent, note, photoCount: photos.length, photoUrls: photos.map((p) => p.url) })}
-            className="w-full bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl active:bg-emerald-700"
-          >
-            처리완료 등록
-          </button>
-        </div>
-      </Sheet>
-    );
-  }
 
   return (
     <Sheet title="고장처리결과 입력" onClose={onClose}>
       <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {failure.elevatorNo}</p>
-      <div className="space-y-2.5">
-        {options.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            onClick={() => pick(o.value)}
-            className={`w-full flex items-center gap-2.5 rounded-xl border-2 py-3.5 px-4 font-bold ${o.cls}`}
-          >
-            <span className="text-lg leading-none">{o.emoji}</span> {o.value}
-          </button>
-        ))}
+      <div className="space-y-3.5">
+        <div>
+          <label className="text-xs font-bold text-slate-600 mb-1 block">처리결과</label>
+          <select className={inputCls} value={result} onChange={(e) => setResult(e.target.value)}>
+            {FAILURE_RESULT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.emoji} {o.value}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-bold text-slate-600 mb-1 block">증상</label>
+          <input className={inputCls} value={symptom} onChange={(e) => setSymptom(e.target.value)} placeholder="예: 도어가 완전히 닫히지 않음" />
+        </div>
+        <div>
+          <label className="text-xs font-bold text-slate-600 mb-1 block">에러코드</label>
+          <input className={inputCls} value={errorCode} onChange={(e) => setErrorCode(e.target.value)} placeholder="예: E-32" />
+        </div>
+        <div>
+          <label className="text-xs font-bold text-slate-600 mb-1 block">발생원인</label>
+          <input className={inputCls} value={cause} onChange={(e) => setCause(e.target.value)} placeholder="예: 도어 센서 오작동" />
+        </div>
+        <div>
+          <label className="text-xs font-bold text-slate-600 mb-1 block">처리내용</label>
+          <input className={inputCls} value={processContent} onChange={(e) => setProcessContent(e.target.value)} placeholder="예: 센서 교체 및 재조정" />
+        </div>
+        <div>
+          <label className="text-xs font-bold text-slate-600 mb-1 block">비고</label>
+          <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} placeholder="추가 전달사항 (선택)" />
+        </div>
+        <MultiPhotoUpload
+          photos={photos}
+          uploadFolder={`failures/${failure.id}`}
+          onUploaded={(url) => setPhotos((p) => [...p, { url }])}
+          onRemove={(idx) => setPhotos((p) => p.filter((_, i) => i !== idx))}
+          label="처리 사진"
+          required={false}
+        />
+        <button
+          type="button"
+          onClick={() => onConfirm({ result, symptom, errorCode, cause, processContent, note, photoCount: photos.length, photoUrls: photos.map((p) => p.url) })}
+          className={`w-full text-white text-sm font-bold py-3 rounded-xl ${FAILURE_RESULT_BTN_CLS[result]}`}
+        >
+          {result} 등록
+        </button>
       </div>
     </Sheet>
   );
@@ -5137,33 +5128,42 @@ export default function App() {
 
   async function handleFailureResult(failure, payload) {
     const { result, symptom, errorCode, cause, processContent, note, photoCount, photoUrls } = payload;
-    if (result === "처리완료") {
-      await supabase
-        .from("failures")
-        .update({
-          status: "완료",
-          process_result: result,
-          escalation: null,
-          fault_symptom: symptom || null,
-          fault_error_code: errorCode || null,
-          fault_cause: cause || null,
-          process_content: processContent || null,
-          process_note: note || null,
-          photo_count: photoCount || 0,
-          photo_urls: photoUrls?.length ? photoUrls : null,
-        })
-        .eq("id", failure.id);
-      setFailures((prev) =>
-        prev.map((x) =>
-          x.id === failure.id
-            ? { ...x, status: "완료", processResult: result, escalation: null, faultSymptom: symptom || null, faultErrorCode: errorCode || null, faultCause: cause || null, processContent: processContent || null, processNote: note || null, photoCount: photoCount || 0, photoUrls: photoUrls ?? [] }
-            : x
-        )
-      );
-    } else {
-      await supabase.from("failures").update({ process_result: result, escalation: result }).eq("id", failure.id);
-      setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, processResult: result, escalation: result } : x)));
-    }
+    const isClosed = result === "처리완료" || result === "오신고";
+    const escalation = result === "처리완료" ? null : result;
+    await supabase
+      .from("failures")
+      .update({
+        status: isClosed ? "완료" : failure.status,
+        process_result: result,
+        escalation,
+        fault_symptom: symptom || null,
+        fault_error_code: errorCode || null,
+        fault_cause: cause || null,
+        process_content: processContent || null,
+        process_note: note || null,
+        photo_count: photoCount || 0,
+        photo_urls: photoUrls?.length ? photoUrls : null,
+      })
+      .eq("id", failure.id);
+    setFailures((prev) =>
+      prev.map((x) =>
+        x.id === failure.id
+          ? {
+              ...x,
+              status: isClosed ? "완료" : x.status,
+              processResult: result,
+              escalation,
+              faultSymptom: symptom || null,
+              faultErrorCode: errorCode || null,
+              faultCause: cause || null,
+              processContent: processContent || null,
+              processNote: note || null,
+              photoCount: photoCount || 0,
+              photoUrls: photoUrls ?? [],
+            }
+          : x
+      )
+    );
   }
 
   async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone }) {
