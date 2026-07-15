@@ -9,6 +9,7 @@ import {
   Building2, PhoneCall, ArrowLeft, Flag, Mail, User, Paperclip, Radio, Flame, Award, Send, Download
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import JSZip from "jszip";
 
 /* ------------------------------------------------------------------ */
 /* Supabase 연동                                                        */
@@ -314,6 +315,26 @@ async function downloadPhoto(url) {
   const a = document.createElement("a");
   a.href = objectUrl;
   a.download = url.split("/").pop() || "photo.png";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+// 여러 장을 순차적으로 개별 다운로드하면 모바일 브라우저(특히 iOS/Android)가 첫 장 이후는
+// 사용자 제스처로 인정하지 않고 막아버려서, 하나의 zip 파일로 묶어 한 번만 다운로드합니다.
+async function downloadPhotosAsZip(urls, zipName) {
+  const zip = new JSZip();
+  for (let i = 0; i < urls.length; i++) {
+    const res = await fetch(urls[i]);
+    const blob = await res.blob();
+    zip.file(urls[i].split("/").pop() || `photo-${i + 1}.png`, blob);
+  }
+  const zipBlob = await zip.generateAsync({ type: "blob" });
+  const objectUrl = URL.createObjectURL(zipBlob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = zipName;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -912,10 +933,7 @@ function PhotoViewerSheet({ urls, index, onClose }) {
     if (downloading) return;
     setDownloading(true);
     try {
-      for (const url of urls) {
-        await downloadPhoto(url);
-        await new Promise((r) => setTimeout(r, 400));
-      }
+      await downloadPhotosAsZip(urls, `photos-${Date.now()}.zip`);
     } catch {
       alert("사진 다운로드에 실패했습니다");
     }
@@ -996,7 +1014,7 @@ function PhotoViewerSheet({ urls, index, onClose }) {
             disabled={downloading}
             className="flex-1 flex items-center justify-center gap-1.5 bg-white text-slate-900 text-xs font-bold py-2.5 rounded-xl active:bg-slate-200 disabled:opacity-50"
           >
-            <Download size={14} /> 전체 다운로드 ({urls.length}장)
+            <Download size={14} /> 전체 다운로드 ({urls.length}장 · zip)
           </button>
         )}
       </div>
