@@ -173,8 +173,8 @@ function mapBilling(row) {
     contactPhone: row.contact_phone,
     engineer: row.engineer,
     submittedAt: row.submitted_at,
-    beforePhotoUrl: row.before_photo_url,
-    afterPhotoUrl: row.after_photo_url,
+    beforePhotoUrls: row.before_photo_urls ?? (row.before_photo_url ? [row.before_photo_url] : []),
+    afterPhotoUrls: row.after_photo_urls ?? (row.after_photo_url ? [row.after_photo_url] : []),
     confirmPhotoUrl: row.confirm_photo_url,
   };
 }
@@ -3047,7 +3047,7 @@ function RestockHistoryScreen({ restockRequests, onBack }) {
               </p>
               {r.status === "완료" && (
                 <button
-                  onClick={() => setPhotoViewTarget({ title: r.part, subtitle: `${r.suppliedDate} 보충 · 자재 담당자 등록` })}
+                  onClick={() => setPhotoViewTarget({ title: r.part, subtitle: `${r.suppliedDate} 보충 · 자재 담당자 등록`, url: r.supplyPhotoUrl })}
                   className="w-full mt-2 flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 active:bg-emerald-100"
                 >
                   <span className="text-[11px] text-emerald-600 font-semibold">지급완료 사진 확인하기</span>
@@ -3065,7 +3065,11 @@ function RestockHistoryScreen({ restockRequests, onBack }) {
             <p className="text-sm font-bold text-slate-800">{photoViewTarget.title}</p>
             <p className="text-[11px] text-slate-400 mt-0.5">{photoViewTarget.subtitle}</p>
           </div>
-          <PhotoThumb caption="자재 담당자가 등록한 지급 자재 사진" />
+          {photoViewTarget.url ? (
+            <img src={photoViewTarget.url} alt="" className="w-full rounded-xl object-cover mb-3" />
+          ) : (
+            <PhotoThumb caption="자재 담당자가 등록한 지급 자재 사진" />
+          )}
         </Sheet>
       )}
     </div>
@@ -3382,7 +3386,14 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
                     <>
                       {r.hasSupplyPhoto && (
                         <div className="mt-2">
-                          <PhotoThumb caption="자재 담당자가 등록한 사진 · 이 자재를 챙겨가세요" />
+                          {r.supplyPhotoUrl ? (
+                            <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-lg px-2.5 py-2">
+                              <img src={r.supplyPhotoUrl} alt="" className="w-9 h-9 rounded-md object-cover shrink-0" />
+                              <span className="text-[11px] text-emerald-600 font-semibold">자재 담당자가 등록한 사진 · 이 자재를 챙겨가세요</span>
+                            </div>
+                          ) : (
+                            <PhotoThumb caption="자재 담당자가 등록한 사진 · 이 자재를 챙겨가세요" />
+                          )}
                         </div>
                       )}
                       <p className="text-[11px] text-emerald-600 font-semibold mt-1.5 flex items-center gap-1">
@@ -3451,7 +3462,7 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
                     </p>
                     {r.status === "완료" && (
                       <button
-                        onClick={() => setPhotoViewTarget({ title: r.part, subtitle: `${r.suppliedDate} 보충 · 자재 담당자 등록` })}
+                        onClick={() => setPhotoViewTarget({ title: r.part, subtitle: `${r.suppliedDate} 보충 · 자재 담당자 등록`, url: r.supplyPhotoUrl })}
                         className="w-full mt-2 flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 active:bg-emerald-100"
                       >
                         <span className="text-[11px] text-emerald-600 font-semibold">지급완료 사진 확인하기</span>
@@ -3555,7 +3566,7 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
                   </div>
                   {q.status === "자재지급완료" && (
                     <button
-                      onClick={() => setPhotoViewTarget({ title: `${q.siteName} · ${q.constructionType}`, subtitle: `${q.suppliedDate} 지급 · 자재 담당자 등록` })}
+                      onClick={() => setPhotoViewTarget({ title: `${q.siteName} · ${q.constructionType}`, subtitle: `${q.suppliedDate} 지급 · 자재 담당자 등록`, url: q.supplyPhotoUrl })}
                       className="w-full mt-2.5 flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 active:bg-emerald-100"
                     >
                       <span className="text-[11px] text-emerald-600 font-semibold">지급 자재 사진 확인하기</span>
@@ -3600,7 +3611,11 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
             <p className="text-sm font-bold text-slate-800">{photoViewTarget.title}</p>
             <p className="text-[11px] text-slate-400 mt-0.5">{photoViewTarget.subtitle}</p>
           </div>
-          <PhotoThumb caption="자재 담당자가 등록한 지급 자재 사진" />
+          {photoViewTarget.url ? (
+            <img src={photoViewTarget.url} alt="" className="w-full rounded-xl object-cover mb-3" />
+          ) : (
+            <PhotoThumb caption="자재 담당자가 등록한 지급 자재 사진" />
+          )}
         </Sheet>
       )}
     </div>
@@ -3620,8 +3635,8 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const [materialCost, setMaterialCost] = useState("");
   const [submitted, setSubmitted] = useState(null);
   const [manualForm, setManualForm] = useState({ siteId: "", unit: "", part: "", replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
-  const [materialPhotos, setMaterialPhotos] = useState({ before: null, after: null, confirm: null });
-  const [manualPhotos, setManualPhotos] = useState({ before: null, after: null, confirm: null });
+  const [materialPhotos, setMaterialPhotos] = useState({ before: [], after: [], confirm: null });
+  const [manualPhotos, setManualPhotos] = useState({ before: [], after: [], confirm: null });
 
   const selected = todos.find((t) => t.id === selectedId);
   const manualValid = manualForm.siteId && manualForm.part.trim() && manualForm.replaceDate && manualForm.contactPhone.trim();
@@ -3638,14 +3653,14 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       cost: materialCost,
       replaceDate: TODAY_STR,
       contactPhone: null,
-      beforePhotoUrl: materialPhotos.before,
-      afterPhotoUrl: materialPhotos.after,
+      beforePhotoUrls: materialPhotos.before.map((p) => p.url),
+      afterPhotoUrls: materialPhotos.after.map((p) => p.url),
       confirmPhotoUrl: materialPhotos.confirm,
     });
     setSubmitted({ siteName: selected.siteName, part: selected.part, manual: false });
     setSelectedId(openTodos.find((t) => t.id !== selected.id)?.id ?? "");
     setMaterialCost("");
-    setMaterialPhotos({ before: null, after: null, confirm: null });
+    setMaterialPhotos({ before: [], after: [], confirm: null });
     setTimeout(() => setSubmitted(null), 2600);
   }
 
@@ -3658,8 +3673,8 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       elevatorNo: manualForm.unit,
       part: manualForm.part,
       cost: manualForm.cost,
-      beforePhotoUrl: manualPhotos.before,
-      afterPhotoUrl: manualPhotos.after,
+      beforePhotoUrls: manualPhotos.before.map((p) => p.url),
+      afterPhotoUrls: manualPhotos.after.map((p) => p.url),
       confirmPhotoUrl: manualPhotos.confirm,
       replaceDate: manualForm.replaceDate,
       contactPhone: manualForm.contactPhone,
@@ -3669,7 +3684,7 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     }
     setSubmitted({ siteName: site.name, part: manualForm.part, manual: true, fromKit: manualForm.fromKit });
     setManualForm({ siteId: "", unit: "", part: "", replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
-    setManualPhotos({ before: null, after: null, confirm: null });
+    setManualPhotos({ before: [], after: [], confirm: null });
     setTimeout(() => setSubmitted(null), 2600);
   }
 
@@ -3714,21 +3729,23 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                 </div>
               )}
               <Field label="교체 전 사진">
-                <SinglePhotoUpload
+                <MultiPhotoUpload
+                  photos={materialPhotos.before}
+                  uploadFolder={`billings/${uploadSession}/before`}
+                  onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, before: [...p.before, { url }] }))}
+                  onRemove={(idx) => setMaterialPhotos((p) => ({ ...p, before: p.before.filter((_, i) => i !== idx) }))}
                   label="교체 전 표준 화질 사진 등록"
-                  url={materialPhotos.before}
-                  uploadFolder={`billings/${uploadSession}`}
-                  onUploaded={(url) => setMaterialPhotos({ ...materialPhotos, before: url })}
-                  onRemove={() => setMaterialPhotos({ ...materialPhotos, before: null })}
+                  required={false}
                 />
               </Field>
               <Field label="교체 후 사진">
-                <SinglePhotoUpload
+                <MultiPhotoUpload
+                  photos={materialPhotos.after}
+                  uploadFolder={`billings/${uploadSession}/after`}
+                  onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, after: [...p.after, { url }] }))}
+                  onRemove={(idx) => setMaterialPhotos((p) => ({ ...p, after: p.after.filter((_, i) => i !== idx) }))}
                   label="교체 후 표준 화질 사진 등록"
-                  url={materialPhotos.after}
-                  uploadFolder={`billings/${uploadSession}`}
-                  onUploaded={(url) => setMaterialPhotos({ ...materialPhotos, after: url })}
-                  onRemove={() => setMaterialPhotos({ ...materialPhotos, after: null })}
+                  required={false}
                 />
               </Field>
               <Field label="교체확인서">
@@ -3736,8 +3753,8 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                   label="교체확인서 종이 사진 등록"
                   url={materialPhotos.confirm}
                   uploadFolder={`billings/${uploadSession}`}
-                  onUploaded={(url) => setMaterialPhotos({ ...materialPhotos, confirm: url })}
-                  onRemove={() => setMaterialPhotos({ ...materialPhotos, confirm: null })}
+                  onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, confirm: url }))}
+                  onRemove={() => setMaterialPhotos((p) => ({ ...p, confirm: null }))}
                 />
               </Field>
               <Field label="수리비">
@@ -3820,21 +3837,23 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
               />
             </Field>
             <Field label="교체 전 사진">
-              <SinglePhotoUpload
+              <MultiPhotoUpload
+                photos={manualPhotos.before}
+                uploadFolder={`billings/${uploadSession}/before`}
+                onUploaded={(url) => setManualPhotos((p) => ({ ...p, before: [...p.before, { url }] }))}
+                onRemove={(idx) => setManualPhotos((p) => ({ ...p, before: p.before.filter((_, i) => i !== idx) }))}
                 label="교체 전 표준 화질 사진 등록"
-                url={manualPhotos.before}
-                uploadFolder={`billings/${uploadSession}`}
-                onUploaded={(url) => setManualPhotos({ ...manualPhotos, before: url })}
-                onRemove={() => setManualPhotos({ ...manualPhotos, before: null })}
+                required={false}
               />
             </Field>
             <Field label="교체 후 사진">
-              <SinglePhotoUpload
+              <MultiPhotoUpload
+                photos={manualPhotos.after}
+                uploadFolder={`billings/${uploadSession}/after`}
+                onUploaded={(url) => setManualPhotos((p) => ({ ...p, after: [...p.after, { url }] }))}
+                onRemove={(idx) => setManualPhotos((p) => ({ ...p, after: p.after.filter((_, i) => i !== idx) }))}
                 label="교체 후 표준 화질 사진 등록"
-                url={manualPhotos.after}
-                uploadFolder={`billings/${uploadSession}`}
-                onUploaded={(url) => setManualPhotos({ ...manualPhotos, after: url })}
-                onRemove={() => setManualPhotos({ ...manualPhotos, after: null })}
+                required={false}
               />
             </Field>
             <Field label="교체확인서">
@@ -3842,8 +3861,8 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                 label="교체확인서 종이 사진 등록"
                 url={manualPhotos.confirm}
                 uploadFolder={`billings/${uploadSession}`}
-                onUploaded={(url) => setManualPhotos({ ...manualPhotos, confirm: url })}
-                onRemove={() => setManualPhotos({ ...manualPhotos, confirm: null })}
+                onUploaded={(url) => setManualPhotos((p) => ({ ...p, confirm: url }))}
+                onRemove={() => setManualPhotos((p) => ({ ...p, confirm: null }))}
               />
             </Field>
             <Field label="수리비">
@@ -3952,10 +3971,10 @@ function TodoTab({ todos, setTodos }) {
 
 function BillingCard({ b }) {
   const photoSlots = [
-    { label: "교체 전", url: b.beforePhotoUrl },
-    { label: "교체 후", url: b.afterPhotoUrl },
-    { label: "확인서", url: b.confirmPhotoUrl },
-  ].filter((s) => s.url);
+    ...(b.beforePhotoUrls ?? []).map((url) => ({ label: "교체 전", url })),
+    ...(b.afterPhotoUrls ?? []).map((url) => ({ label: "교체 후", url })),
+    ...(b.confirmPhotoUrl ? [{ label: "확인서", url: b.confirmPhotoUrl }] : []),
+  ];
   return (
     <div className="border border-slate-100 rounded-xl p-3">
       <div className="flex items-center justify-between mb-1">
@@ -5466,7 +5485,7 @@ export default function App() {
     );
   }
 
-  async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone, beforePhotoUrl, afterPhotoUrl, confirmPhotoUrl }) {
+  async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl }) {
     const newBilling = {
       id: "bill-" + Date.now(),
       type,
@@ -5478,8 +5497,8 @@ export default function App() {
       contactPhone,
       engineer: profile.name,
       submittedAt: TODAY_STR,
-      beforePhotoUrl: beforePhotoUrl || null,
-      afterPhotoUrl: afterPhotoUrl || null,
+      beforePhotoUrls: beforePhotoUrls?.length ? beforePhotoUrls : [],
+      afterPhotoUrls: afterPhotoUrls?.length ? afterPhotoUrls : [],
       confirmPhotoUrl: confirmPhotoUrl || null,
     };
     await supabase.from("billings").insert({
@@ -5493,8 +5512,8 @@ export default function App() {
       contact_phone: newBilling.contactPhone,
       engineer: newBilling.engineer,
       submitted_at: newBilling.submittedAt,
-      before_photo_url: newBilling.beforePhotoUrl,
-      after_photo_url: newBilling.afterPhotoUrl,
+      before_photo_urls: newBilling.beforePhotoUrls.length ? newBilling.beforePhotoUrls : null,
+      after_photo_urls: newBilling.afterPhotoUrls.length ? newBilling.afterPhotoUrls : null,
       confirm_photo_url: newBilling.confirmPhotoUrl,
     });
     setBillings((prev) => [newBilling, ...prev]);
