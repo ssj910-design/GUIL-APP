@@ -116,6 +116,7 @@ function mapMaterialRequest(row) {
     rejectReason: row.reject_reason,
     rejectedDate: row.rejected_date,
     hasSupplyPhoto: row.has_supply_photo,
+    supplyPhotoUrl: row.supply_photo_url,
   };
 }
 
@@ -156,6 +157,7 @@ function mapQuoteRequest(row) {
     approvedDate: row.approved_date,
     suppliedDate: row.supplied_date,
     hasSupplyPhoto: row.has_supply_photo,
+    supplyPhotoUrl: row.supply_photo_url,
   };
 }
 
@@ -187,6 +189,7 @@ function mapRestockRequest(row) {
     status: row.status,
     suppliedDate: row.supplied_date,
     hasSupplyPhoto: row.has_supply_photo,
+    supplyPhotoUrl: row.supply_photo_url,
   };
 }
 
@@ -2822,6 +2825,41 @@ function SinglePhotoUpload({ label, url, uploadFolder, onUploaded, onRemove }) {
   );
 }
 
+// 관리자가 자재/견적/상비부품 지급 시 찍는 "지급 사진" 한 장을 올리는 버튼입니다.
+function SupplyPhotoButton({ label, uploadFolder, onUploaded, spacingClassName = "mt-2.5" }) {
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadPhoto(file, uploadFolder);
+      onUploaded(url);
+    } catch (err) {
+      alert("사진 업로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
+    }
+    setUploading(false);
+  }
+
+  return (
+    <>
+      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={uploading}
+        className={`w-full ${spacingClassName} border-2 border-dashed border-slate-300 rounded-lg py-3 flex flex-col items-center gap-1 text-slate-500 active:bg-slate-50 disabled:opacity-50`}
+      >
+        <Camera size={18} />
+        <span className="text-[11px] font-semibold">{uploading ? "업로드 중..." : label}</span>
+      </button>
+    </>
+  );
+}
+
 function MaterialHistoryScreen({ requests, isBilled, onBack }) {
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState("전체");
@@ -4582,19 +4620,21 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
 
                 {r.hasSupplyPhoto ? (
                   <div className="mt-2.5 flex items-center gap-2 bg-white border border-emerald-200 rounded-lg px-2.5 py-2">
-                    <div className="w-9 h-9 rounded-md bg-emerald-50 flex items-center justify-center shrink-0">
-                      <ImageIcon size={16} className="text-emerald-500" />
-                    </div>
+                    {r.supplyPhotoUrl ? (
+                      <img src={r.supplyPhotoUrl} alt="" className="w-9 h-9 rounded-md object-cover shrink-0" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-md bg-emerald-50 flex items-center justify-center shrink-0">
+                        <ImageIcon size={16} className="text-emerald-500" />
+                      </div>
+                    )}
                     <span className="text-[11px] text-emerald-600 font-semibold">자재 사진 등록 완료</span>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => onAttachPhoto(r.id)}
-                    className="w-full mt-2.5 border-2 border-dashed border-slate-300 rounded-lg py-3 flex flex-col items-center gap-1 text-slate-500 active:bg-slate-50"
-                  >
-                    <Camera size={18} />
-                    <span className="text-[11px] font-semibold">지급할 자재 사진 촬영</span>
-                  </button>
+                  <SupplyPhotoButton
+                    label="지급할 자재 사진 촬영"
+                    uploadFolder={`materials/${r.id}/supply`}
+                    onUploaded={(url) => onAttachPhoto(r.id, url)}
+                  />
                 )}
 
                 <button
@@ -4735,19 +4775,22 @@ function QuoteRequestsScreen({ quoteRequests, onAdvanceQuote, onAttachQuotePhoto
                   <>
                     {q.hasSupplyPhoto ? (
                       <div className="flex items-center gap-2 bg-white border border-emerald-200 rounded-lg px-2.5 py-2 mb-2">
-                        <div className="w-9 h-9 rounded-md bg-emerald-50 flex items-center justify-center shrink-0">
-                          <ImageIcon size={16} className="text-emerald-500" />
-                        </div>
+                        {q.supplyPhotoUrl ? (
+                          <img src={q.supplyPhotoUrl} alt="" className="w-9 h-9 rounded-md object-cover shrink-0" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-md bg-emerald-50 flex items-center justify-center shrink-0">
+                            <ImageIcon size={16} className="text-emerald-500" />
+                          </div>
+                        )}
                         <span className="text-[11px] text-emerald-600 font-semibold">자재 사진 등록 완료</span>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => onAttachQuotePhoto(q.id)}
-                        className="w-full mb-2 border-2 border-dashed border-slate-300 rounded-lg py-3 flex flex-col items-center gap-1 text-slate-500 active:bg-slate-50"
-                      >
-                        <Camera size={18} />
-                        <span className="text-[11px] font-semibold">지급할 자재 사진 촬영</span>
-                      </button>
+                      <SupplyPhotoButton
+                        label="지급할 자재 사진 촬영"
+                        uploadFolder={`quotes/${q.id}/supply`}
+                        onUploaded={(url) => onAttachQuotePhoto(q.id, url)}
+                        spacingClassName="mb-2"
+                      />
                     )}
                     <button
                       onClick={() => q.hasSupplyPhoto && onCompleteQuoteSupply(q.id)}
@@ -4865,19 +4908,21 @@ function RestockScreen({ restockRequests, onAttachRestockPhoto, onCompleteRestoc
 
                 {r.hasSupplyPhoto ? (
                   <div className="mt-2.5 flex items-center gap-2 bg-white border border-emerald-200 rounded-lg px-2.5 py-2">
-                    <div className="w-9 h-9 rounded-md bg-emerald-50 flex items-center justify-center shrink-0">
-                      <ImageIcon size={16} className="text-emerald-500" />
-                    </div>
+                    {r.supplyPhotoUrl ? (
+                      <img src={r.supplyPhotoUrl} alt="" className="w-9 h-9 rounded-md object-cover shrink-0" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-md bg-emerald-50 flex items-center justify-center shrink-0">
+                        <ImageIcon size={16} className="text-emerald-500" />
+                      </div>
+                    )}
                     <span className="text-[11px] text-emerald-600 font-semibold">보충 부품 사진 등록 완료</span>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => onAttachRestockPhoto(r.id)}
-                    className="w-full mt-2.5 border-2 border-dashed border-slate-300 rounded-lg py-3 flex flex-col items-center gap-1 text-slate-500 active:bg-slate-50"
-                  >
-                    <Camera size={18} />
-                    <span className="text-[11px] font-semibold">보충할 부품 사진 촬영</span>
-                  </button>
+                  <SupplyPhotoButton
+                    label="보충할 부품 사진 촬영"
+                    uploadFolder={`restock/${r.id}/supply`}
+                    onUploaded={(url) => onAttachRestockPhoto(r.id, url)}
+                  />
                 )}
 
                 <button
@@ -5472,9 +5517,9 @@ export default function App() {
   }
 
   // ★ 자재 담당자가 지급할 자재 사진을 등록하는 순간 (지급완료 체크의 선행 조건)
-  async function handleAttachPhoto(requestId) {
-    await supabase.from("material_requests").update({ has_supply_photo: true }).eq("id", requestId);
-    setMaterialRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, hasSupplyPhoto: true } : r)));
+  async function handleAttachPhoto(requestId, photoUrl) {
+    await supabase.from("material_requests").update({ has_supply_photo: true, supply_photo_url: photoUrl || null }).eq("id", requestId);
+    setMaterialRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, hasSupplyPhoto: true, supplyPhotoUrl: photoUrl || null } : r)));
   }
 
   // ★ 자재 지급 완료 트리거: 이 순간에만 할 일이 자동 생성됩니다 (D-30 시작)
@@ -5543,9 +5588,9 @@ export default function App() {
   }
 
   // ★ 관리자가 보충할 부품 사진을 등록 (지급완료의 선행 조건)
-  async function handleAttachRestockPhoto(restockId) {
-    await supabase.from("restock_requests").update({ has_supply_photo: true }).eq("id", restockId);
-    setRestockRequests((prev) => prev.map((r) => (r.id === restockId ? { ...r, hasSupplyPhoto: true } : r)));
+  async function handleAttachRestockPhoto(restockId, photoUrl) {
+    await supabase.from("restock_requests").update({ has_supply_photo: true, supply_photo_url: photoUrl || null }).eq("id", restockId);
+    setRestockRequests((prev) => prev.map((r) => (r.id === restockId ? { ...r, hasSupplyPhoto: true, supplyPhotoUrl: photoUrl || null } : r)));
   }
 
   // ★ 보충 지급완료 처리
@@ -5578,9 +5623,9 @@ export default function App() {
   }
 
   // ★ 관리자가 지급할 자재 사진을 등록 (자재지급완료 처리의 선행 조건)
-  async function handleAttachQuotePhoto(quoteId) {
-    await supabase.from("quote_requests").update({ has_supply_photo: true }).eq("id", quoteId);
-    setQuoteRequests((prev) => prev.map((q) => (q.id === quoteId ? { ...q, hasSupplyPhoto: true } : q)));
+  async function handleAttachQuotePhoto(quoteId, photoUrl) {
+    await supabase.from("quote_requests").update({ has_supply_photo: true, supply_photo_url: photoUrl || null }).eq("id", quoteId);
+    setQuoteRequests((prev) => prev.map((q) => (q.id === quoteId ? { ...q, hasSupplyPhoto: true, supplyPhotoUrl: photoUrl || null } : q)));
   }
 
   // ★ 자재지급완료 트리거: 이 순간 담당 기사에게 할 일이 자동 생성됩니다
