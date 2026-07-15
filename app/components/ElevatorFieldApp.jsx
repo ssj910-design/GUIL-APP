@@ -940,7 +940,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
   );
 }
 
-function SiteTab({ inspections, failures, billings, siteManagers, onUpdateSiteNotes, focusSiteId, onFocusSiteHandled }) {
+function SiteTab({ inspections, failures, billings, siteManagers, onUpdateSiteNotes, focusSiteId, focusUnit, onFocusSiteHandled }) {
   const allSites = useContext(SitesContext);
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const sites = role === "admin" ? allSites : allSites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER);
@@ -950,13 +950,19 @@ function SiteTab({ inspections, failures, billings, siteManagers, onUpdateSiteNo
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [elevatorSubTab, setElevatorSubTab] = useState("정보");
 
-  // ★ 고장 출동 확정 후 해당 현장의 현장정보 화면으로 자동 이동
+  // ★ 고장 출동 확정 후 해당 현장(호기)의 상세 화면으로 자동 이동
   useEffect(() => {
     if (!focusSiteId) return;
     const site = allSites.find((s) => s.id === focusSiteId);
     if (site) {
       setSelectedSite(site);
-      setView("site");
+      if (focusUnit && siteUnits(site).includes(focusUnit)) {
+        setSelectedUnit(focusUnit);
+        setElevatorSubTab("정보");
+        setView("elevator");
+      } else {
+        setView("site");
+      }
     }
     onFocusSiteHandled();
   }, [focusSiteId]);
@@ -1476,6 +1482,12 @@ function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onOpenResu
   const stage = failureStage(failure);
   const { faultType, faultDetail } = parseErrorCode(failure.errorCode);
   const unitLabel = failure.elevatorNo && !failure.elevatorNo.includes("호기") ? `${failure.elevatorNo}호기` : failure.elevatorNo;
+  const unitIndex = failure.elevatorNo ? Number(failure.elevatorNo.split("-")[1]) - 1 : NaN;
+  const unitGovNo = site?.govElevatorNos?.[unitIndex];
+  const liveInspections = useLiveInspections(
+    unitGovNo ? [{ key: `${failure.siteId}-${unitIndex}`, siteId: failure.siteId, siteName: failure.siteName, govElevatorNo: unitGovNo }] : []
+  );
+  const liveInfo = liveInspections[0];
   return (
     <Sheet title="고장신고 상세" onClose={onClose}>
       <div className="bg-slate-100 rounded-xl p-3 mb-3 text-center">
@@ -1484,6 +1496,18 @@ function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onOpenResu
         {faultDetail && <p className="text-xs text-slate-500 mt-0.5">{faultDetail}</p>}
       </div>
       <div className="space-y-2.5 mb-4">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-400">구분</span>
+          <span className="font-semibold text-slate-700">{liveInfo?.kindNm || "승객용"}</span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-400">모델명</span>
+          <span className="font-semibold text-slate-700">{site?.elevatorModel || "-"}</span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-400">층수[지상/지하]</span>
+          <span className="font-semibold text-slate-700">{liveInfo ? `${liveInfo.groundFloorCnt} / ${liveInfo.undgrndFloorCnt}` : "-"}</span>
+        </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">주소</span>
           <span className="font-semibold text-slate-700 text-right">{site?.address ?? "-"}</span>
@@ -4688,6 +4712,7 @@ export default function App() {
 
   const [tab, setTab] = useState("home");
   const [focusSiteId, setFocusSiteId] = useState(null);
+  const [focusUnit, setFocusUnit] = useState(null);
   const [sites, setSites] = useState([]);
   const [siteManagers, setSiteManagers] = useState([]);
   const [failures, setFailures] = useState([]);
@@ -4937,6 +4962,7 @@ export default function App() {
     simulateSms(failure.reporterPhone, `구일엘리베이터입니다. 담당 기사가 약 ${etaMinutes}분 후 도착 예정입니다.`);
     notifyFailure(`문자 발송 완료 · ${failure.reporterPhone || "신고자"}에게 도착예정시간 안내`);
     setFocusSiteId(failure.siteId);
+    setFocusUnit(failure.elevatorNo || null);
     setTab("sites");
   }
 
@@ -5319,7 +5345,7 @@ export default function App() {
               toast={failureToast}
             />
           )}
-          {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} siteManagers={siteManagers} onUpdateSiteNotes={handleUpdateSiteNotes} focusSiteId={focusSiteId} onFocusSiteHandled={() => setFocusSiteId(null)} />}
+          {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} siteManagers={siteManagers} onUpdateSiteNotes={handleUpdateSiteNotes} focusSiteId={focusSiteId} focusUnit={focusUnit} onFocusSiteHandled={() => { setFocusSiteId(null); setFocusUnit(null); }} />}
           {tab === "failure" && (
             <FailureTab
               failures={failures}
