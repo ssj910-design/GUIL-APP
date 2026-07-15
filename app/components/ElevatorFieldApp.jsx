@@ -2566,7 +2566,6 @@ function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = true, upl
               ref={fileInputRef}
               type="file"
               accept="image/*"
-              capture="environment"
               multiple
               className="hidden"
               onChange={handleFiles}
