@@ -4740,6 +4740,13 @@ export default function App() {
   const [failureToast, setFailureToast] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // 상단 상태바 시각을 실제 현재 시각으로 실시간 표시합니다.
+  const [clockNow, setClockNow] = useState(() => new Date().toTimeString().slice(0, 5));
+  useEffect(() => {
+    const id = setInterval(() => setClockNow(new Date().toTimeString().slice(0, 5)), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   // 로그인 상태를 확인하고, 로그인/로그아웃이 일어날 때마다 알림을 받습니다.
   useEffect(() => {
     if (SKIP_LOGIN) return;
@@ -5336,7 +5343,7 @@ export default function App() {
         >
           {/* status bar */}
           <div className="bg-blue-950 text-white text-[11px] px-6 pt-2.5 pb-1 flex justify-between shrink-0">
-            <span>9:41</span>
+            <span>{clockNow}</span>
             <span>구일엘리베이터(주)</span>
           </div>
 
