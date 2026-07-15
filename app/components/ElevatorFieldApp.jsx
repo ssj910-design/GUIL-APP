@@ -307,14 +307,25 @@ async function uploadPhoto(file, folder) {
   return data.publicUrl;
 }
 
+// 파일 이름에 쓸 수 없는 문자(경로 구분자 등)를 안전한 문자로 바꿔줍니다.
+function sanitizeFilename(str) {
+  return String(str ?? "").replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, "_");
+}
+
+// URL의 확장자를 그대로 유지해서 다운로드 파일에 붙여줍니다.
+function extOf(url) {
+  const m = /\.([a-zA-Z0-9]+)(?:\?.*)?$/.exec(url);
+  return m ? m[1] : "png";
+}
+
 // 사진 URL을 실제 파일로 다운로드합니다 (교차 출처라 <a download>만으로는 강제 다운로드가 안 되어, blob으로 받아서 내려줍니다).
-async function downloadPhoto(url) {
+async function downloadPhoto(url, filename) {
   const res = await fetch(url);
   const blob = await res.blob();
   const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = objectUrl;
-  a.download = url.split("/").pop() || "photo.png";
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -323,12 +334,12 @@ async function downloadPhoto(url) {
 
 // 여러 장을 순차적으로 개별 다운로드하면 모바일 브라우저(특히 iOS/Android)가 첫 장 이후는
 // 사용자 제스처로 인정하지 않고 막아버려서, 하나의 zip 파일로 묶어 한 번만 다운로드합니다.
-async function downloadPhotosAsZip(urls, zipName) {
+async function downloadPhotosAsZip(urls, zipName, baseName) {
   const zip = new JSZip();
   for (let i = 0; i < urls.length; i++) {
     const res = await fetch(urls[i]);
     const blob = await res.blob();
-    zip.file(urls[i].split("/").pop() || `photo-${i + 1}.png`, blob);
+    zip.file(`${baseName}_${i + 1}.${extOf(urls[i])}`, blob);
   }
   const zipBlob = await zip.generateAsync({ type: "blob" });
   const objectUrl = URL.createObjectURL(zipBlob);
@@ -826,7 +837,7 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
                             <button
                               key={i}
                               type="button"
-                              onClick={() => setPhotoViewer({ urls: f.photoUrls, index: i })}
+                              onClick={() => setPhotoViewer({ urls: f.photoUrls, index: i, siteName: site.name, date: `2026-${f.reportedAt.replace("/", "-")}` })}
                               className="shrink-0"
                             >
                               <img src={url} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
@@ -903,26 +914,34 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
         <InspectionFailDetailSheet inspection={inspectionFailTarget} onClose={() => setInspectionFailTarget(null)} />
       )}
       {photoViewer && (
-        <PhotoViewerSheet urls={photoViewer.urls} index={photoViewer.index} onClose={() => setPhotoViewer(null)} />
+        <PhotoViewerSheet
+          urls={photoViewer.urls}
+          index={photoViewer.index}
+          siteName={photoViewer.siteName}
+          date={photoViewer.date}
+          onClose={() => setPhotoViewer(null)}
+        />
       )}
     </div>
   );
 }
 
 // 사진이 여러 장이면 좌우로 드래그해서 넘겨볼 수 있는 전체화면 뷰어입니다.
-function PhotoViewerSheet({ urls, index, onClose }) {
+function PhotoViewerSheet({ urls, index, siteName, date, onClose }) {
   const [current, setCurrent] = useState(index);
   const [dragX, setDragX] = useState(0);
   const [downloading, setDownloading] = useState(false);
   const startXRef = useRef(null);
   const draggingRef = useRef(false);
   const dragXRef = useRef(0);
+  const baseName = sanitizeFilename(`${siteName || "사진"}_${date || ""}`.replace(/_$/, ""));
 
   async function handleDownloadOne() {
     if (downloading) return;
     setDownloading(true);
     try {
-      await downloadPhoto(urls[current]);
+      const filename = urls.length > 1 ? `${baseName}_${current + 1}.${extOf(urls[current])}` : `${baseName}.${extOf(urls[current])}`;
+      await downloadPhoto(urls[current], filename);
     } catch {
       alert("사진 다운로드에 실패했습니다");
     }
@@ -933,7 +952,7 @@ function PhotoViewerSheet({ urls, index, onClose }) {
     if (downloading) return;
     setDownloading(true);
     try {
-      await downloadPhotosAsZip(urls, `photos-${Date.now()}.zip`);
+      await downloadPhotosAsZip(urls, `${baseName}.zip`, baseName);
     } catch {
       alert("사진 다운로드에 실패했습니다");
     }
