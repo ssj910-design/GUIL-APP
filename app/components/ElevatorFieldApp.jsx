@@ -117,6 +117,7 @@ function mapMaterialRequest(row) {
     rejectedDate: row.rejected_date,
     hasSupplyPhoto: row.has_supply_photo,
     supplyPhotoUrl: row.supply_photo_url,
+    supplyPhotoUrls: row.supply_photo_urls ?? (row.supply_photo_url ? [row.supply_photo_url] : []),
   };
 }
 
@@ -2714,7 +2715,9 @@ function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = true, upl
     for (const file of files) {
       try {
         const url = await uploadPhoto(file, uploadFolder);
-        onUploaded(url);
+        // onUploaded가 서버에 저장까지 끝내고 나서 다음 파일로 넘어가야, 여러 장을 연달아
+        // 올릴 때 저장 요청들이 순서가 뒤섞여 서로 덮어쓰는 일이 없습니다.
+        await onUploaded(url);
       } catch (err) {
         alert("사진 업로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
       }
@@ -3165,6 +3168,7 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
   const [rejectTarget, setRejectTarget] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
   const [photoViewTarget, setPhotoViewTarget] = useState(null);
+  const [photoViewer, setPhotoViewer] = useState(null);
   const [showMaterialHistory, setShowMaterialHistory] = useState(false);
   const [showQuoteHistory, setShowQuoteHistory] = useState(false);
   const [showRestockHistory, setShowRestockHistory] = useState(false);
@@ -3386,13 +3390,21 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
                     <>
                       {r.hasSupplyPhoto && (
                         <div className="mt-2">
-                          {r.supplyPhotoUrl ? (
-                            <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-lg px-2.5 py-2">
-                              <img src={r.supplyPhotoUrl} alt="" className="w-9 h-9 rounded-md object-cover shrink-0" />
-                              <span className="text-[11px] text-emerald-600 font-semibold">자재 담당자가 등록한 사진 · 이 자재를 챙겨가세요</span>
+                          {r.supplyPhotoUrls?.length > 0 ? (
+                            <div className="flex gap-2">
+                              {r.supplyPhotoUrls.map((url, i) => (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  onClick={() => setPhotoViewer({ urls: r.supplyPhotoUrls, index: i })}
+                                  className="shrink-0"
+                                >
+                                  <img src={url} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
+                                </button>
+                              ))}
                             </div>
                           ) : (
-                            <PhotoThumb caption="자재 담당자가 등록한 사진 · 이 자재를 챙겨가세요" />
+                            <PhotoThumb caption="자재 담당자가 등록한 사진" />
                           )}
                         </div>
                       )}
@@ -3617,6 +3629,16 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
             <PhotoThumb caption="자재 담당자가 등록한 지급 자재 사진" />
           )}
         </Sheet>
+      )}
+
+      {photoViewer && (
+        <PhotoViewerSheet
+          urls={photoViewer.urls}
+          index={photoViewer.index}
+          siteName="자재 지급 사진"
+          date=""
+          onClose={() => setPhotoViewer(null)}
+        />
       )}
     </div>
   );
@@ -4582,7 +4604,7 @@ function EngineerManageScreen({ engineers, onUpdateEngineerContact, onBack }) {
   );
 }
 
-function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReprocess, onAttachPhoto, onBack }) {
+function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onBack }) {
   const [detailTarget, setDetailTarget] = useState(null);
   const pending = materialRequests.filter((r) => r.status === "승인대기");
   const supplied = materialRequests.filter((r) => r.status === "지급완료");
@@ -4637,24 +4659,16 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
                 </div>
                 <p className="text-[11px] text-slate-500 mt-0.5">{r.engineer} 기사 신청 · {r.requestedDate} · {r.urgency}</p>
 
-                {r.hasSupplyPhoto ? (
-                  <div className="mt-2.5 flex items-center gap-2 bg-white border border-emerald-200 rounded-lg px-2.5 py-2">
-                    {r.supplyPhotoUrl ? (
-                      <img src={r.supplyPhotoUrl} alt="" className="w-9 h-9 rounded-md object-cover shrink-0" />
-                    ) : (
-                      <div className="w-9 h-9 rounded-md bg-emerald-50 flex items-center justify-center shrink-0">
-                        <ImageIcon size={16} className="text-emerald-500" />
-                      </div>
-                    )}
-                    <span className="text-[11px] text-emerald-600 font-semibold">자재 사진 등록 완료</span>
-                  </div>
-                ) : (
-                  <SupplyPhotoButton
-                    label="지급할 자재 사진 촬영"
+                <div className="mt-2.5">
+                  <MultiPhotoUpload
+                    photos={(r.supplyPhotoUrls ?? (r.supplyPhotoUrl ? [r.supplyPhotoUrl] : [])).map((url) => ({ url }))}
                     uploadFolder={`materials/${r.id}/supply`}
                     onUploaded={(url) => onAttachPhoto(r.id, url)}
+                    onRemove={(idx) => onRemoveSupplyPhoto(r.id, idx)}
+                    label="지급할 자재 사진 촬영"
+                    required={false}
                   />
-                )}
+                </div>
 
                 <button
                   onClick={() => r.hasSupplyPhoto && onSupplyComplete(r.id)}
@@ -5039,7 +5053,7 @@ function RoomTab({ feed, onSendChat }) {
   );
 }
 
-function AdminTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onReprocess, onAttachPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onCompleteQuoteSupply, onAdminToggleTodo, onAttachRestockPhoto, onCompleteRestock, onAddSite, onUpdateSite, onDeleteSite, siteManagers, onAddSiteManager, onUpdateSiteManager, onDeleteSiteManager, onUpdateEngineerContact }) {
+function AdminTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onCompleteQuoteSupply, onAdminToggleTodo, onAttachRestockPhoto, onCompleteRestock, onAddSite, onUpdateSite, onDeleteSite, siteManagers, onAddSiteManager, onUpdateSiteManager, onDeleteSiteManager, onUpdateEngineerContact }) {
   const sites = useContext(SitesContext);
   const { engineerNames, engineers } = useContext(AuthContext);
   const [billingViewOpen, setBillingViewOpen] = useState(false);
@@ -5098,6 +5112,7 @@ function AdminTab({ inspections, materialRequests, billings, quoteRequests, rest
         onSupplyComplete={onSupplyComplete}
         onReprocess={onReprocess}
         onAttachPhoto={onAttachPhoto}
+        onRemoveSupplyPhoto={onRemoveSupplyPhoto}
         onBack={() => setAdminScreen(null)}
       />
     );
@@ -5535,10 +5550,46 @@ export default function App() {
     setFeed((prev) => [...prev, newPost]);
   }
 
-  // ★ 자재 담당자가 지급할 자재 사진을 등록하는 순간 (지급완료 체크의 선행 조건)
-  async function handleAttachPhoto(requestId, photoUrl) {
-    await supabase.from("material_requests").update({ has_supply_photo: true, supply_photo_url: photoUrl || null }).eq("id", requestId);
-    setMaterialRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, hasSupplyPhoto: true, supplyPhotoUrl: photoUrl || null } : r)));
+  // ★ 자재 담당자가 지급할 자재 사진을 한 장 추가하는 순간 (지급완료 체크의 선행 조건)
+  // 여러 장을 연달아 올릴 때 각 호출이 서로의 결과를 덮어쓰지 않도록, 최신 상태를 기준으로 누적합니다.
+  async function handleAttachPhoto(requestId, newUrl) {
+    let persistUrls = null;
+    setMaterialRequests((prev) =>
+      prev.map((r) => {
+        if (r.id !== requestId) return r;
+        const existing = r.supplyPhotoUrls ?? [];
+        // 동일한 URL로 두 번 호출돼도(예: 개발 모드 이중 호출) 중복 추가되지 않도록 방지합니다.
+        if (existing.includes(newUrl)) {
+          persistUrls = existing;
+          return r;
+        }
+        const urls = [...existing, newUrl];
+        persistUrls = urls;
+        return { ...r, hasSupplyPhoto: true, supplyPhotoUrls: urls };
+      })
+    );
+    if (persistUrls) {
+      await supabase.from("material_requests").update({ has_supply_photo: true, supply_photo_urls: persistUrls }).eq("id", requestId);
+    }
+  }
+
+  // ★ 등록된 지급 사진을 한 장 삭제
+  async function handleRemoveSupplyPhoto(requestId, idx) {
+    let persistUrls = null;
+    setMaterialRequests((prev) =>
+      prev.map((r) => {
+        if (r.id !== requestId) return r;
+        const urls = (r.supplyPhotoUrls ?? []).filter((_, i) => i !== idx);
+        persistUrls = urls;
+        return { ...r, hasSupplyPhoto: urls.length > 0, supplyPhotoUrls: urls };
+      })
+    );
+    if (persistUrls) {
+      await supabase
+        .from("material_requests")
+        .update({ has_supply_photo: persistUrls.length > 0, supply_photo_urls: persistUrls.length ? persistUrls : null })
+        .eq("id", requestId);
+    }
   }
 
   // ★ 자재 지급 완료 트리거: 이 순간에만 할 일이 자동 생성됩니다 (D-30 시작)
@@ -5856,7 +5907,7 @@ export default function App() {
           {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} />}
           {tab === "todo" && <TodoTab todos={todos} setTodos={setTodos} />}
           {tab === "room" && <RoomTab feed={feed} onSendChat={handleSendFeedPost} />}
-          {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onCompleteRestock={handleCompleteRestock} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
+          {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onCompleteRestock={handleCompleteRestock} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
 
           {/* bottom nav */}
           <div
