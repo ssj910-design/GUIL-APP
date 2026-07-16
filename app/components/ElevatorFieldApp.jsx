@@ -129,6 +129,11 @@ export default function App() {
   }, [session, skipLogin]);
 
   async function handleLogin(email, password) {
+    // Phase 2 전 미리보기: SKIP_LOGIN 동안 ?auth=1 로그인은 아무 값이나 통과시켜 화면 흐름만 확인한다.
+    if (SKIP_LOGIN) {
+      setForceAuth(false);
+      return;
+    }
     setAuthSubmitting(true);
     setAuthError("");
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -870,7 +875,7 @@ export default function App() {
   }
 
   if (!skipLogin && !session) {
-    return <LoginScreen onLogin={handleLogin} error={authError} submitting={authSubmitting} />;
+    return <LoginScreen onLogin={handleLogin} error={authError} submitting={authSubmitting} demo={SKIP_LOGIN} />;
   }
 
   if (loading || !profile) {

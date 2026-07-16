@@ -6,7 +6,7 @@ import { PrimaryButton, Field, inputCls } from "@/app/components/ui";
 /* LOGIN                                                                */
 /* ------------------------------------------------------------------ */
 
-export function LoginScreen({ onLogin, error, submitting }) {
+export function LoginScreen({ onLogin, error, submitting, demo }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -43,8 +43,13 @@ export function LoginScreen({ onLogin, error, submitting }) {
             {submitting ? "로그인 중..." : "로그인"}
           </PrimaryButton>
           <p className="text-[11px] text-slate-400 text-center mt-4">
-            계정이 없으신가요? 관리자에게 계정 발급을 요청하세요.
+            계정이 없으신가요? <a href="/signup" className="text-blue-600 font-bold">회사 가입</a>
           </p>
+          {demo && (
+            <p className="text-[11px] text-amber-500 text-center mt-2">
+              미리보기 — 아무 값이나 입력해도 로그인됩니다
+            </p>
+          )}
         </div>
       </div>
     </div>
