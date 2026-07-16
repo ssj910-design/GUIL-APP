@@ -13,7 +13,7 @@ const btnCls = "w-full bg-blue-700 disabled:bg-slate-300 text-white font-bold py
 const STEPS = [
   { icon: Building2, label: "사업자 확인" },
   { icon: Mail, label: "메일 인증" },
-  { icon: KeyRound, label: "공단 연동" },
+  { icon: KeyRound, label: "자동 보고(선택)" },
   { icon: UserRound, label: "관리자 계정" },
 ];
 
@@ -112,34 +112,40 @@ export default function SignupPreview() {
 
           {step === 2 && (
             <>
+              <div className="bg-slate-50 rounded-xl px-4 py-3 text-xs text-slate-600 leading-relaxed">
+                승강기 정보·검사이력 조회는 <b>별도 키 없이 기본 제공</b>됩니다.
+                아래는 <b>자체점검 결과를 공단에 자동 보고</b>하는 기능(선택)이에요 —
+                기사가 앱에서 점검을 완료하면 승강기민원24에 이중 입력할 필요가 없어집니다.
+              </div>
               <div>
-                <label className={labelCls}>국가승강기정보센터 API 인증키</label>
-                <input className={inputCls} placeholder="공공데이터포털에서 발급받은 인증키" value={form.govKey} onChange={(e) => set({ govKey: e.target.value })} />
+                <label className={labelCls}>승강기민원24 인증키 (certKey)</label>
+                <input className={inputCls} placeholder="민원24에서 발급받은 인증키" value={form.govKey} onChange={(e) => set({ govKey: e.target.value })} />
+              </div>
+              <div>
+                <label className={labelCls}>암호키</label>
+                <input className={inputCls} placeholder="인증키와 함께 발급된 암호키" value={form.govSecret ?? ""} onChange={(e) => set({ govSecret: e.target.value })} />
                 <p className="text-[10px] text-slate-400 mt-1">
-                  이 키는 귀사만 발급받을 수 있어 <b>업체 증명</b>이 됩니다 · 검사정보 실시간 연동에 사용
+                  이 키는 <b>유지관리업체 본인만</b> 발급받을 수 있어 등록 시 업체 인증이 완료됩니다 · 암호화되어 서버에만 보관
                 </p>
               </div>
-
               <details className="bg-slate-50 rounded-xl px-4 py-3 text-xs text-slate-600">
-                <summary className="font-bold cursor-pointer text-slate-700">인증키가 없어요 — 발급 방법 보기 (무료 · 약 5분)</summary>
+                <summary className="font-bold cursor-pointer text-slate-700">키 발급 방법 보기 (무료)</summary>
                 <ol className="mt-2 space-y-1.5 list-decimal list-inside leading-relaxed">
-                  <li><a href="https://www.data.go.kr" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline">공공데이터포털(data.go.kr)</a> 회원가입 후 로그인</li>
-                  <li><a href="https://www.data.go.kr/data/15038198/openapi.do" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline">&quot;한국승강기안전공단 건물별 승강기 정보&quot;</a> 페이지에서 <b>활용신청</b> (자동 승인)</li>
-                  <li>마이페이지 → 개인 API 인증키 복사 → 위 칸에 붙여넣기</li>
+                  <li><a href="https://minwon.koelsa.or.kr" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline">승강기민원24(minwon.koelsa.or.kr)</a> 업체계정 로그인</li>
+                  <li>오픈API 인증키 발급 메뉴에서 <b>인증키·암호키</b> 발급</li>
+                  <li>두 값을 위 칸에 붙여넣기 — 발급이 어려우면 가입 후 전화 지원을 도와드려요</li>
                 </ol>
-                <p className="mt-2 text-[10px] text-slate-400">* 같은 키로 검사이력 API도 함께 신청해두면 좋습니다. 발급이 어려우면 아래 &quot;수동으로 등록&quot;을 선택하세요 — 가입 후 언제든 추가할 수 있어요.</p>
               </details>
               {!form.govVerified ? (
-                <button className={btnCls} disabled={form.govKey.length < 20} onClick={() => set({ govVerified: true, matched: 876 })}>
-                  키 검증 + 담당 승강기 조회
+                <button className={btnCls} disabled={form.govKey.length < 10 || !(form.govSecret ?? "").length} onClick={() => set({ govVerified: true })}>
+                  키 검증 + 자동 보고 켜기
                 </button>
               ) : (
                 <>
                   <div className="bg-blue-50 rounded-xl px-4 py-3">
                     <p className="text-sm font-bold text-blue-800 flex items-center gap-1.5">
-                      <Check size={15} /> 키 유효 · &quot;{form.company || "귀사"}&quot; 담당 승강기 {form.matched}대 확인
+                      <Check size={15} /> 업체 인증 완료 · 자체점검 자동 보고 활성화 <span className="font-normal">(미리보기)</span>
                     </p>
-                    <p className="text-[10px] text-blue-500 mt-1">가입 완료 후 현장·호기로 자동 등록할 수 있습니다 (미리보기 수치)</p>
                   </div>
                   <button className={btnCls} onClick={() => setStep(3)}>다음</button>
                 </>
@@ -147,14 +153,11 @@ export default function SignupPreview() {
               {!form.govVerified && (
                 <button
                   className="w-full border border-slate-200 text-slate-600 font-bold py-3 rounded-xl text-sm"
-                  onClick={() => { set({ govVerified: false, matched: null }); setStep(3); }}
+                  onClick={() => setStep(3)}
                 >
-                  키 없이 수동으로 등록할게요
+                  나중에 설정에서 등록할게요
                 </button>
               )}
-              <p className="text-[10px] text-slate-400 text-center -mt-1">
-                수동 선택 시: 현장·승강기를 공단 엑셀 업로드나 직접 입력으로 등록합니다 (키는 설정에서 언제든 추가)
-              </p>
             </>
           )}
 
@@ -189,7 +192,7 @@ export default function SignupPreview() {
               <p className="text-lg font-extrabold text-slate-800">{form.company || "회사"} 개설 완료</p>
               <p className="text-xs text-slate-400 mt-2 leading-relaxed">
                 미리보기 화면입니다 — 실제 가입은 로그인·보안(Phase 2) 오픈과 함께 활성화됩니다.<br />
-                다음 단계: 담당 승강기 {form.matched ?? "-"}대 자동 등록 → 기사 계정 발급
+                다음 단계: 담당 현장·승강기 등록 (공단 엑셀 업로드 또는 자동 매칭) → 기사 계정 발급
               </p>
             </div>
           )}
