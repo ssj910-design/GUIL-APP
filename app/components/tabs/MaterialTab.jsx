@@ -1,10 +1,10 @@
 import React, { useState, useContext } from "react";
 import { ChevronRight, X, Plus, Search, PackageCheck, PackageX } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnits } from "@/lib/utils";
+import { siteUnits, unitIdFor, profileIdByName } from "@/lib/utils";
 import { TODAY_STR, QUOTE_STAGES } from "@/lib/constants";
 import { PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
-import { SitesContext, AuthContext } from "@/app/components/context";
+import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
 
@@ -317,7 +317,9 @@ export function PartsRowsInput({ rows, setRows, nameOptions, namePlaceholder = "
 
 export function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, setQuoteRequests, restockRequests }) {
   const sites = useContext(SitesContext);
-  const { name: CURRENT_ENGINEER } = useContext(AuthContext);
+  const { name: CURRENT_ENGINEER, selfId } = useContext(AuthContext);
+  const units = useContext(UnitsContext);
+  const v2Ready = units.length > 0;
   const [uploadSession] = useState(() => Date.now());
   const [sub, setSub] = useState("material");
   const [form, setForm] = useState({ siteId: "", unit: "", parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
@@ -364,6 +366,10 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
       engineer: newRequest.engineer,
       requested_date: newRequest.requestedDate,
       status: newRequest.status,
+      ...(v2Ready ? {
+        unit_id: unitIdFor(units, newRequest.siteId, newRequest.elevatorNo),
+        requester_id: selfId,
+      } : {}),
     });
     setRequests((prev) => [newRequest, ...prev]);
     setForm({ siteId: "", unit: "", parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
@@ -426,6 +432,10 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
       engineer: newQuote.engineer,
       requested_date: newQuote.requestedDate,
       status: newQuote.status,
+      ...(v2Ready ? {
+        unit_id: unitIdFor(units, newQuote.siteId, newQuote.elevatorNo),
+        requester_id: selfId,
+      } : {}),
     });
     setQuoteRequests((prev) => [newQuote, ...prev]);
     setQuoteForm({ siteId: "", unit: "", parts: [emptyPartRow()], contactPhone: "", photos: [], note: "" });

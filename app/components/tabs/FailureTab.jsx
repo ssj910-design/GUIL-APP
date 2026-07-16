@@ -1,11 +1,11 @@
 import { useState, useContext } from "react";
 import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnits, failureStage, parseErrorCode } from "@/lib/utils";
+import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName } from "@/lib/utils";
 import { FAULT_TYPES } from "@/lib/constants";
 import { useLiveInspections } from "@/app/hooks/useLiveInspections";
 import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast } from "@/app/components/ui";
-import { SitesContext, AuthContext } from "@/app/components/context";
+import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 
 
@@ -15,7 +15,9 @@ import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets
 
 function FailureRegisterForm({ setFailures, goToUnassigned }) {
   const sites = useContext(SitesContext);
-  const { engineerNames } = useContext(AuthContext);
+  const units = useContext(UnitsContext);
+  const { engineerNames, profiles: allProfiles, selfId } = useContext(AuthContext);
+  const v2Ready = units.length > 0;
   const [form, setForm] = useState({
     siteId: "", unit: "", faultType: "", faultDetail: "", notFault: false, assignee: "", reporterPhone: "", sendSms: false,
   });
@@ -48,6 +50,11 @@ function FailureRegisterForm({ setFailures, goToUnassigned }) {
       assignee: newFailure.assignee,
       not_fault: newFailure.notFault,
       reporter_phone: newFailure.reporterPhone,
+      ...(v2Ready ? {
+        unit_id: unitIdFor(units, newFailure.siteId, newFailure.elevatorNo),
+        assignee_id: profileIdByName(allProfiles, newFailure.assignee),
+        created_by: selfId,
+      } : {}),
     });
     setFailures((prev) => [newFailure, ...prev]);
     setForm({ siteId: "", unit: "", faultType: "", faultDetail: "", notFault: false, assignee: "", reporterPhone: "", sendSms: false });

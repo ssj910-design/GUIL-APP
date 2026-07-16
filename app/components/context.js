@@ -8,6 +8,9 @@ import { createContext } from "react";
 // prop으로 일일이 넘기는 대신 Context로 어디서든 꺼내 쓸 수 있게 했습니다.
 export const SitesContext = createContext([]);
 
+// v2: units(호기) 테이블 — 마이그레이션 전 DB에서는 빈 배열 (siteUnitList가 fallback 처리)
+export const UnitsContext = createContext([]);
+
 
 // 로그인한 사용자 정보(이름/역할)와 전체 기사 이름 목록을 어디서든 꺼내 쓸 수 있게 합니다.
 export const AuthContext = createContext({ name: "", role: "engineer", engineerNames: [], engineers: [], signOut: () => {} });
