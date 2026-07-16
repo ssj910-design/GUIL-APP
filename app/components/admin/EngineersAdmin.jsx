@@ -6,14 +6,15 @@ import { supabase } from "@/lib/supabaseClient";
 import { StatusBadge, AdminTable, inputCls } from "@/app/components/admin/adminShared";
 
 function EngineerRow({ p, stats, onSave }) {
-  const [form, setForm] = useState({ phone: p.phone ?? "", email: p.email ?? "", region: p.region ?? "" });
-  const dirty = form.phone !== (p.phone ?? "") || form.email !== (p.email ?? "") || form.region !== (p.region ?? "");
+  const [form, setForm] = useState({ phone: p.phone ?? "", email: p.email ?? "", region: p.region ?? "", minwonId: p.minwon_id ?? "" });
+  const dirty = form.phone !== (p.phone ?? "") || form.email !== (p.email ?? "") || form.region !== (p.region ?? "") || form.minwonId !== (p.minwon_id ?? "");
   return (
     <tr className="border-b border-slate-50">
       <td className="pl-5 pr-3 py-2.5 font-bold whitespace-nowrap">{p.name}</td>
       <td className="px-3 py-2.5 w-36"><input className={inputCls} placeholder="연락처" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></td>
       <td className="px-3 py-2.5 w-48"><input className={inputCls} placeholder="이메일" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></td>
       <td className="px-3 py-2.5 w-28"><input className={inputCls} placeholder="담당지역" value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} /></td>
+      <td className="px-3 py-2.5 w-32"><input className={inputCls} placeholder="민원24 점검자 ID" value={form.minwonId} onChange={(e) => setForm({ ...form, minwonId: e.target.value })} /></td>
       <td className="px-3 py-2.5 text-center">{stats.sites}</td>
       <td className="px-3 py-2.5 text-center">{stats.activeFailures}</td>
       <td className="px-3 py-2.5 text-center">{stats.openTodos}</td>
@@ -45,10 +46,11 @@ export default function EngineersAdmin({ data, setData }) {
   async function save(p, form) {
     await supabase.from("profiles").update({
       phone: form.phone || null, email: form.email || null, region: form.region || null,
+      minwon_id: form.minwonId || null,
     }).eq("id", p.id);
     setData((prev) => ({
       ...prev,
-      profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, ...{ phone: form.phone || null, email: form.email || null, region: form.region || null } } : x)),
+      profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, phone: form.phone || null, email: form.email || null, region: form.region || null, minwon_id: form.minwonId || null } : x)),
     }));
   }
 
@@ -56,9 +58,9 @@ export default function EngineersAdmin({ data, setData }) {
     <div className="max-w-6xl">
       <h1 className="text-xl font-extrabold mb-1">인사관리</h1>
       <p className="text-xs text-slate-500 mb-4">
-        계정 연결 = 로그인 계정(Supabase Auth)과 연결된 프로필. Phase 2 로그인 활성화 때 계정 없는 기사는 가입만 하면 자동 연결됩니다.
+        계정 연결 = 로그인 계정과 연결된 프로필 (Phase 2에서 가입 시 자동 연결). 민원24 ID = 공단에 등록된 점검자 ID — 자체점검 자동 보고(SELCHK_USID)에 사용됩니다.
       </p>
-      <AdminTable head={["이름", "연락처", "이메일", "담당지역", "담당 현장", "진행 고장", "미완료 할일", "로그인", ""]}>
+      <AdminTable head={["이름", "연락처", "이메일", "담당지역", "민원24 ID", "담당 현장", "진행 고장", "미완료 할일", "로그인", ""]}>
         {engineers.map((p) => (
           <EngineerRow key={p.id} p={p} stats={statsOf(p)} onSave={save} />
         ))}

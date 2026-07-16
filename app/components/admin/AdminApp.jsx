@@ -55,7 +55,7 @@ export default function AdminApp() {
           supabase.from("todos").select("*").order("created_at", { ascending: false }),
           supabase.from("billings").select("*").order("created_at", { ascending: false }),
           supabase.from("self_checks").select("*"),
-          supabase.from("profiles").select("id,name,role,phone,email,region,auth_user_id").order("name"),
+          supabase.from("profiles").select("id,name,role,phone,email,region,auth_user_id,minwon_id").order("name"),
         ]);
       setData({
         sites: (sites.data ?? []).map(mapSite),
