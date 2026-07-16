@@ -451,6 +451,7 @@ export function SiteTab({ inspections, failures, billings, siteManagers, onUpdat
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const sites = role === "admin" ? allSites : allSites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER);
   const [query, setQuery] = useState("");
+  const [onlyMine, setOnlyMine] = useState(false);
   const [view, setView] = useState("list"); // list | site | elevator
   const [selectedSite, setSelectedSite] = useState(null);
   const [selectedUnit, setSelectedUnit] = useState(null);
@@ -473,7 +474,9 @@ export function SiteTab({ inspections, failures, billings, siteManagers, onUpdat
     onFocusSiteHandled();
   }, [focusSiteId]);
 
-  const list = sites.filter((s) => s.name.includes(query.trim()));
+  const list = sites
+    .filter((s) => s.name.includes(query.trim()))
+    .filter((s) => !onlyMine || s.assignedEngineer === CURRENT_ENGINEER);
 
   function latestInspection(siteId) {
     return inspections.find((i) => i.siteId === siteId) ?? null;
@@ -536,7 +539,13 @@ export function SiteTab({ inspections, failures, billings, siteManagers, onUpdat
             className="w-full border border-slate-300 rounded-xl pl-9 pr-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <p className="text-[11px] text-slate-400 mt-2">총 720개 현장 중 {list.length}건 표시 (샘플 데이터)</p>
+        <div className="flex items-center justify-between mt-2">
+          <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+            <input type="checkbox" checked={onlyMine} onChange={(e) => setOnlyMine(e.target.checked)} />
+            내 현장만 보기
+          </label>
+          <p className="text-[11px] text-slate-400">총 720개 현장 중 {list.length}건 표시 (샘플 데이터)</p>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-2.5">

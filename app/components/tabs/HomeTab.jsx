@@ -45,7 +45,11 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
   const sites = useContext(SitesContext);
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const mySites = role === "admin" ? sites : sites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER);
-  const escalatedSiteIds = new Set(failures.filter((f) => f.escalation && f.status !== "완료").map((f) => f.siteId));
+  // 지원요청/운행정지는 각각 독립적으로 판단해 배지를 함께 표시합니다 (관리자 대시보드와 동일 기준).
+  const openEscalations = failures.filter((f) => f.escalation && f.status !== "완료");
+  const supportSiteIds = new Set(openEscalations.filter((f) => f.escalation === "지원요청").map((f) => f.siteId));
+  const stoppedSiteIds = new Set(openEscalations.filter((f) => f.escalation === "운행정지").map((f) => f.siteId));
+  const escalatedSiteIds = new Set([...supportSiteIds, ...stoppedSiteIds]);
   const criticalSites = mySites.filter((s) => s.failures30d >= 3 || escalatedSiteIds.has(s.id));
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
@@ -112,21 +116,27 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
             <p className="text-xs text-red-500">현재 집중 관리 대상 현장이 없습니다.</p>
           ) : (
             <div className="space-y-2">
-              {criticalSites.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => setHistorySite(s)}
-                  className="w-full flex items-center justify-between bg-white rounded-xl px-3 py-2.5 border border-red-100 text-left active:bg-red-50"
-                >
-                  <div>
-                    <p className="font-bold text-slate-800 text-sm">{s.name} · {s.elevatorNo}</p>
-                    <p className="text-[11px] text-slate-400">{s.address}</p>
-                  </div>
-                  <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full shrink-0">
-                    {escalatedSiteIds.has(s.id) ? "조치필요" : `${s.failures30d}회 고장`}
-                  </span>
-                </button>
-              ))}
+              {criticalSites.map((s) => {
+                const stopped = stoppedSiteIds.has(s.id);
+                const support = supportSiteIds.has(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setHistorySite(s)}
+                    className={`w-full flex items-center justify-between bg-white rounded-xl px-3 py-2.5 border text-left active:bg-red-50 ${stopped ? "border-red-300" : "border-red-100"}`}
+                  >
+                    <div>
+                      <p className="font-bold text-slate-800 text-sm">{s.name} · {s.elevatorNo}</p>
+                      <p className="text-[11px] text-slate-400">{s.address}</p>
+                    </div>
+                    <span className="flex gap-1 shrink-0">
+                      {support && <span className="text-xs font-extrabold text-amber-600 bg-amber-100 px-2 py-1 rounded-full">지원요청</span>}
+                      {stopped && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">운행정지</span>}
+                      {s.failures30d > 0 && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">{s.failures30d}회 고장</span>}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
