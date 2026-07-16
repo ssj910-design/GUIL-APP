@@ -33,6 +33,7 @@
 | 사진 업로드/다운로드/zip | lib/photos.js |
 | 상수(오늘날짜·고장구분·부품목록) | lib/constants.js |
 | 국가승강기정보센터 연동 | app/api/*/route.js(서버 프록시) + app/hooks/useLiveInspections.js |
+| PC 관리자 콘솔 (/admin) | admin/AdminApp.jsx(셸·데이터로딩) + admin/*.jsx — **v2 FK 기반, 옛 컬럼 쓰지 말 것** |
 
 ## 데이터 흐름 (3줄 요약)
 
