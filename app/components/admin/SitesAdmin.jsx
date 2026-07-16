@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { mapUnit } from "@/lib/mappers";
 
 const CONTRACT_TYPES = ["POG(일반계약)", "FM(종합계약)"];
+const CONTACT_ROLES = ["관리소장", "건물주", "경비실", "입주민 대표", "기타"];
 const UNIT_TYPES = ["엘리베이터", "에스컬레이터", "휠체어리프트", "카리프트"];
 const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
 
@@ -53,8 +54,35 @@ function UnitRow({ unit, onSave, onToggleActive }) {
   );
 }
 
+// 현장 담당자(관리소장·건물주 등) 한 명 — 인라인 편집 행
+function ContactRow({ c, onSave, onDelete, onSetPrimary }) {
+  const [form, setForm] = useState({ name: c.name ?? "", phone: c.phone ?? "", email: c.email ?? "", fax: c.fax ?? "", role: c.role ?? CONTACT_ROLES[0] });
+  const dirty = ["name", "phone", "email", "fax", "role"].some((k) => form[k] !== (c[k] ?? (k === "role" ? CONTACT_ROLES[0] : "")));
+  return (
+    <tr className="border-b border-slate-50">
+      <td className="pl-4 py-2 w-8 text-center">
+        <button title="대표 담당자로 지정" onClick={() => onSetPrimary(c)} className={c.isPrimary ? "text-amber-500" : "text-slate-200 hover:text-slate-400"}>★</button>
+      </td>
+      <td className="px-2 py-2 w-32">
+        <select className={inputCls} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+          {CONTACT_ROLES.map((r) => <option key={r}>{r}</option>)}
+          {!CONTACT_ROLES.includes(form.role) && <option>{form.role}</option>}
+        </select>
+      </td>
+      <td className="px-2 py-2 w-28"><input className={inputCls} placeholder="이름" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></td>
+      <td className="px-2 py-2 w-36"><input className={inputCls} placeholder="전화번호" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></td>
+      <td className="px-2 py-2"><input className={inputCls} placeholder="이메일" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></td>
+      <td className="px-2 py-2 w-32"><input className={inputCls} placeholder="팩스" value={form.fax} onChange={(e) => setForm({ ...form, fax: e.target.value })} /></td>
+      <td className="px-2 py-2 whitespace-nowrap text-right pr-3">
+        <button disabled={!dirty} onClick={() => onSave(c, form)} className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-3 py-1.5 mr-1">저장</button>
+        <button onClick={() => onDelete(c)} className="text-xs font-bold text-red-400 border border-red-100 rounded-lg px-2 py-1.5">삭제</button>
+      </td>
+    </tr>
+  );
+}
+
 export default function SitesAdmin({ data, setData }) {
-  const { sites, units, profiles, failures } = data;
+  const { sites, units, profiles, failures, siteManagers } = data;
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState(null);
   const [siteForm, setSiteForm] = useState(null); // 선택 현장 기본정보 편집값
@@ -65,9 +93,11 @@ export default function SitesAdmin({ data, setData }) {
   const filtered = sites.filter((s) => !search || s.name.includes(search) || (s.address ?? "").includes(search));
   const engineers = profiles.filter((p) => p.role === "engineer");
 
+  const contacts = siteManagers.filter((m) => m.siteId === selectedId);
+
   function select(s) {
     setSelectedId(s.id);
-    setSiteForm({ name: s.name, address: s.address ?? "", contractType: s.contractType ?? CONTRACT_TYPES[0], notes: s.notes ?? "" });
+    setSiteForm({ name: s.name, address: s.address ?? "", contractType: s.contractType ?? CONTRACT_TYPES[0], notes: s.notes ?? "", managerId: s.managerId ?? "" });
   }
 
   // ---- 저장 핸들러들 (units 우선 + sites 옛 컬럼 동기화) ----
@@ -115,6 +145,7 @@ export default function SitesAdmin({ data, setData }) {
   async function saveSiteInfo() {
     await supabase.from("sites").update({
       name: siteForm.name, address: siteForm.address, contract_type: siteForm.contractType, notes: siteForm.notes || null,
+      manager_id: siteForm.managerId || null,
     }).eq("id", selectedId);
     setData((prev) => ({
       ...prev,
@@ -128,6 +159,41 @@ export default function SitesAdmin({ data, setData }) {
     if (p) await supabase.from("site_assignments").insert({ site_id: selectedId, tech_id: p.id, is_lead: true });
     await supabase.from("sites").update({ assigned_engineer: engineerName || null }).eq("id", selectedId); // 듀얼라이트
     setData((prev) => ({ ...prev, sites: prev.sites.map((s) => (s.id === selectedId ? { ...s, assignedEngineer: engineerName || null } : s)) }));
+  }
+
+  // ---- 현장 담당자(연락처부) ----
+
+  async function addContact() {
+    const row = { id: "sm-" + Date.now(), site_id: selectedId, name: "", phone: "", role: CONTACT_ROLES[0], is_primary: contacts.length === 0 };
+    const { data: created, error } = await supabase.from("site_managers").insert(row).select().single();
+    if (error) { alert("추가 실패: " + error.message); return; }
+    setData((prev) => ({ ...prev, siteManagers: [...prev.siteManagers, { id: created.id, siteId: selectedId, name: "", phone: "", email: "", fax: "", role: created.role, isPrimary: created.is_primary }] }));
+  }
+
+  async function saveContact(c, form) {
+    await supabase.from("site_managers").update({
+      name: form.name, phone: form.phone || null, email: form.email || null, fax: form.fax || null, role: form.role,
+    }).eq("id", c.id);
+    setData((prev) => ({ ...prev, siteManagers: prev.siteManagers.map((m) => (m.id === c.id ? { ...m, ...form } : m)) }));
+  }
+
+  async function deleteContact(c) {
+    if (!confirm(`담당자 "${c.name || "(이름 없음)"}"를 삭제할까요?`)) return;
+    await supabase.from("site_managers").delete().eq("id", c.id);
+    setData((prev) => ({ ...prev, siteManagers: prev.siteManagers.filter((m) => m.id !== c.id) }));
+  }
+
+  async function setPrimary(c) {
+    await supabase.from("site_managers").update({ is_primary: false }).eq("site_id", c.siteId);
+    await supabase.from("site_managers").update({ is_primary: true }).eq("id", c.id);
+    setData((prev) => ({ ...prev, siteManagers: prev.siteManagers.map((m) => (m.siteId === c.siteId ? { ...m, isPrimary: m.id === c.id } : m)) }));
+  }
+
+  // 계약종료/복구 (soft delete — 설계 원칙 4)
+  async function toggleSiteActive() {
+    const next = !(site.isActive !== false);
+    await supabase.from("sites").update({ is_active: next }).eq("id", selectedId);
+    setData((prev) => ({ ...prev, sites: prev.sites.map((x) => (x.id === selectedId ? { ...x, isActive: next } : x)) }));
   }
 
   async function createSite() {
@@ -201,8 +267,13 @@ export default function SitesAdmin({ data, setData }) {
                   <button onClick={() => select(s)}
                     className={`w-full text-left px-4 py-3 border-b border-slate-50 ${selectedId === s.id ? "bg-blue-50" : "hover:bg-slate-50"}`}>
                     <div className="flex items-center justify-between">
-                      <p className="font-bold text-sm">{s.name} <span className="text-slate-400 font-semibold">· {cnt}대</span></p>
-                      {open > 0 && <span className="text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-2 py-0.5">고장 {open}</span>}
+                      <p className={`font-bold text-sm ${s.isActive === false ? "text-slate-300 line-through" : ""}`}>
+                        {s.name} <span className="text-slate-400 font-semibold">· {cnt}대</span>
+                      </p>
+                      <span className="flex gap-1">
+                        {s.isActive === false && <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">계약종료</span>}
+                        {open > 0 && <span className="text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-2 py-0.5">고장 {open}</span>}
+                      </span>
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5">{s.address}</p>
                   </button>
@@ -234,9 +305,48 @@ export default function SitesAdmin({ data, setData }) {
                       <option value="">미배정</option>
                       {engineers.map((p) => <option key={p.id}>{p.name}</option>)}
                     </select></div>
-                  <div className="col-span-5"><p className="text-xs font-bold text-slate-500 mb-1">비고(전달사항)</p><input className={inputCls} value={siteForm.notes} onChange={(e) => setSiteForm({ ...siteForm, notes: e.target.value })} /></div>
-                  <button onClick={saveSiteInfo} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5">기본정보 저장</button>
+                  <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">사무실 담당자</p>
+                    <select className={inputCls} value={siteForm.managerId} onChange={(e) => setSiteForm({ ...siteForm, managerId: e.target.value })}>
+                      <option value="">미지정</option>
+                      {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select></div>
+                  <div className="col-span-3"><p className="text-xs font-bold text-slate-500 mb-1">비고(전달사항)</p><input className={inputCls} value={siteForm.notes} onChange={(e) => setSiteForm({ ...siteForm, notes: e.target.value })} /></div>
+                  <div className="flex gap-2">
+                    <button onClick={saveSiteInfo} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">저장</button>
+                    <button onClick={toggleSiteActive} className="text-sm font-bold text-slate-400 border border-slate-200 rounded-xl px-3 py-2.5 whitespace-nowrap">
+                      {site.isActive === false ? "계약 복구" : "계약종료"}
+                    </button>
+                  </div>
                 </div>
+              </div>
+
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                  <h2 className="text-sm font-bold">현장 담당자 <span className="text-slate-400">({contacts.length})</span> <span className="text-[10px] text-slate-400 font-normal">★ = 대표(SMS·안내 수신)</span></h2>
+                  <button onClick={addContact} className="flex items-center gap-1 text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-2.5 py-1.5">
+                    <Plus size={13} /> 담당자 추가
+                  </button>
+                </div>
+                {contacts.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-6">등록된 담당자가 없습니다</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-xs text-slate-400 border-b border-slate-100">
+                        <th className="w-8" /><th className="text-left px-2 py-2 font-semibold">역할</th>
+                        <th className="text-left px-2 py-2 font-semibold">이름</th>
+                        <th className="text-left px-2 py-2 font-semibold">전화번호</th>
+                        <th className="text-left px-2 py-2 font-semibold">이메일</th>
+                        <th className="text-left px-2 py-2 font-semibold">팩스</th><th className="w-28" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {contacts.map((c) => (
+                        <ContactRow key={c.id} c={c} onSave={saveContact} onDelete={deleteContact} onSetPrimary={setPrimary} />
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
 
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
