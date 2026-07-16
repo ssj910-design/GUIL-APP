@@ -3,12 +3,12 @@
 import { useState, useEffect, useRef } from "react";
 import { Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost } from "@/lib/mappers";
+import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit } from "@/lib/mappers";
 import { addDays } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { simulateSms } from "@/lib/sms";
 import { ScreenHeader } from "@/app/components/ui";
-import { SitesContext, AuthContext } from "@/app/components/context";
+import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { LoginScreen } from "@/app/components/LoginScreen";
 import { SiteTab } from "@/app/components/tabs/SiteTab";
 import { HomeTab } from "@/app/components/tabs/HomeTab";
@@ -72,6 +72,7 @@ export default function App() {
   const [focusSiteId, setFocusSiteId] = useState(null);
   const [focusUnit, setFocusUnit] = useState(null);
   const [sites, setSites] = useState([]);
+  const [units, setUnits] = useState([]); // v2: 호기 목록 (마이그레이션 전 DB에서는 빈 배열)
   const [siteManagers, setSiteManagers] = useState([]);
   const [failures, setFailures] = useState([]);
   const [inspections, setInspections] = useState([]);
@@ -150,6 +151,7 @@ export default function App() {
         restockRes,
         feedRes,
         engineersRes,
+        unitsRes,
       ] = await Promise.all([
         supabase.from("sites").select("*"),
         supabase.from("site_managers").select("*"),
@@ -162,6 +164,7 @@ export default function App() {
         supabase.from("restock_requests").select("*").order("created_at", { ascending: false }),
         supabase.from("feed_posts").select("*").order("created_at", { ascending: false }),
         supabase.from("profiles").select("id,name,phone,email").eq("role", "engineer").order("name"),
+        supabase.from("units").select("*").order("seq"),
       ]);
       setSites((sitesRes.data ?? []).map(mapSite));
       setSiteManagers((siteManagersRes.data ?? []).map(mapSiteManager));
@@ -174,6 +177,7 @@ export default function App() {
       setRestockRequests((restockRes.data ?? []).map(mapRestockRequest));
       setFeed((feedRes.data ?? []).map(mapFeedPost));
       setEngineers(engineersRes.data ?? []);
+      setUnits((unitsRes.data ?? []).map(mapUnit)); // 테이블 없으면(마이그레이션 전) error → 빈 배열
       setLoading(false);
     }
     loadData();
@@ -759,6 +763,7 @@ export default function App() {
   return (
     <AuthContext.Provider value={{ name: profile.name, role: profile.role, engineerNames, engineers, signOut: handleLogout }}>
     <SitesContext.Provider value={sites}>
+    <UnitsContext.Provider value={units}>
       <div className="h-screen w-screen bg-slate-200 flex items-center justify-center overflow-hidden">
         <div
           className="bg-slate-50 flex flex-col overflow-hidden shadow-2xl border-4 border-slate-900 rounded-[2.5rem] relative transform-gpu"
@@ -833,6 +838,7 @@ export default function App() {
           </div>
         </div>
       </div>
+    </UnitsContext.Provider>
     </SitesContext.Provider>
     </AuthContext.Provider>
   );

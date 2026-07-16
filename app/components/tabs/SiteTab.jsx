@@ -1,20 +1,26 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
 import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Flame, Download } from "lucide-react";
-import { siteUnits, addDays } from "@/lib/utils";
+import { siteUnits, addDays, labelToSeq } from "@/lib/utils";
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
 import { useLiveInspections } from "@/app/hooks/useLiveInspections";
 import { Badge, TimelineRow, HistoryCard, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
-import { SitesContext, AuthContext } from "@/app/components/context";
+import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { BillingCard } from "@/app/components/tabs/BillingTab";
 
 
 /* ---- 승강기정보 화면 (정보 / 고장 / 검사) ---- */
 function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspections, billings, onBack, onHome }) {
-  const unitFailures = failures.filter((f) => f.siteId === site.id && f.elevatorNo === unit);
-  const unitIndex = Number(unit?.split("-")[1]) - 1;
-  const unitGovNo = site.govElevatorNos?.[unitIndex];
+  // v2: units 테이블에서 이 호기의 실제 정보(호기별 모델·설치일·고유번호)를 찾는다.
+  // 마이그레이션 전 DB에서는 realUnit이 없어 기존 방식(site 공통값) 그대로 동작.
+  const allUnits = useContext(UnitsContext);
+  const realUnit = allUnits.find((u) => u.siteId === site.id && u.seq === labelToSeq(unit));
+  const unitFailures = failures.filter((f) =>
+    realUnit?.id && f.unitId ? f.unitId === realUnit.id : f.siteId === site.id && f.elevatorNo === unit
+  );
+  const unitIndex = (realUnit ? realUnit.seq : Number(unit?.split("-")[1])) - 1;
+  const unitGovNo = realUnit?.govNo ?? site.govElevatorNos?.[unitIndex];
   const liveInspections = useLiveInspections(
     unitGovNo ? [{ key: `${site.id}-${unitIndex}`, siteId: site.id, siteName: site.name, govElevatorNo: unitGovNo }] : []
   );
@@ -52,8 +58,8 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
               <TimelineRow icon={Flag} label="승강기번호" value={liveInfo?.govElevatorNo || "미등록"} valueColor={liveInfo ? "text-blue-600" : "text-slate-700"} />
               <TimelineRow icon={Flag} label="승강기종류" value={liveInfo?.kindNm || "-"} />
               <TimelineRow icon={Flag} label="승강기형식" value={liveInfo?.form || "-"} />
-              <TimelineRow icon={Flag} label="승강기모델" value={site.elevatorModel || "-"} />
-              <TimelineRow icon={Flag} label="설치일자" value={liveInfo?.frstInstallationDe || "-"} />
+              <TimelineRow icon={Flag} label="승강기모델" value={realUnit?.model || site.elevatorModel || "-"} />
+              <TimelineRow icon={Flag} label="설치일자" value={liveInfo?.frstInstallationDe || realUnit?.installDate || "-"} />
               <TimelineRow icon={Flag} label="운행층수" value={liveInfo ? `지상 ${liveInfo.groundFloorCnt} / 지하 ${liveInfo.undgrndFloorCnt}` : "-"} />
               <TimelineRow icon={Flag} label="운행구간" value={liveInfo?.shuttleSection || "-"} />
               <TimelineRow icon={Flag} label="적재하중" value={liveInfo ? `${liveInfo.liveLoad}kg` : "-"} />
