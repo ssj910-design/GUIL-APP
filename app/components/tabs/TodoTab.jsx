@@ -39,6 +39,13 @@ function getCoAssignees(todo, todos) {
     .map((t) => t.assignee);
 }
 
+// 연결된 자재/견적 신청에 자재 담당자가 등록한 지급 사진을 찾아옵니다.
+function getSupplyPhotos(todo, materialRequests, quoteRequests) {
+  if (todo.source === "material") return materialRequests?.find((r) => r.id === todo.materialRequestId)?.supplyPhotoUrls ?? [];
+  if (todo.source === "quote") return quoteRequests?.find((q) => q.id === todo.quoteRequestId)?.supplyPhotoUrls ?? [];
+  return [];
+}
+
 function TodoCheckbox({ done, locked, onClick }) {
   if (done) {
     return <CheckCircle2 size={20} className="text-emerald-500 shrink-0" />;
@@ -55,8 +62,9 @@ function TodoCheckbox({ done, locked, onClick }) {
 
 export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescription, materialRequests, quoteRequests }) {
   const { name: CURRENT_ENGINEER, engineerNames, role } = useContext(AuthContext);
-  const mine = todos.filter((t) => t.assignee === CURRENT_ENGINEER);
+  const [showDone, setShowDone] = useState(false);
   const [detailTarget, setDetailTarget] = useState(null);
+  const mine = todos.filter((t) => t.assignee === CURRENT_ENGINEER);
 
   async function completeManualTodo(id) {
     await supabase.from("todos").update({ done: true }).eq("id", id);
@@ -73,12 +81,24 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
     );
   }
 
+  const visible = mine
+    .filter((t) => showDone || !t.done)
+    .slice()
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
   const detailTodo = detailTarget ? mine.find((t) => t.id === detailTarget.id) ?? detailTarget : null;
 
   return (
     <div className="flex-1 overflow-y-auto pb-4">
-      <div className="px-5 pt-4 space-y-2.5">
-        {mine.map((t) => {
+      <label className="flex items-center gap-1.5 px-5 pt-4 text-xs font-bold text-slate-500">
+        <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} className="w-3.5 h-3.5" />
+        완료된 항목 보기
+      </label>
+      <div className="px-5 pt-2.5 space-y-2.5">
+        {visible.length === 0 && (
+          <p className="text-xs text-slate-400 text-center py-10">완료되지 않은 할 일이 없습니다</p>
+        )}
+        {visible.map((t) => {
           const isManual = t.source === "manual";
           const overdue = !t.done && new Date(t.dueDate) < new Date("2026-07-10");
           const requester = getRequesterName(t, materialRequests, quoteRequests);
@@ -109,6 +129,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
           todo={detailTodo}
           requester={getRequesterName(detailTodo, materialRequests, quoteRequests)}
           coAssignees={getCoAssignees(detailTodo, todos)}
+          supplyPhotoUrls={getSupplyPhotos(detailTodo, materialRequests, quoteRequests)}
           onToggle={detailTodo.source === "manual" && !detailTodo.done ? completeManualTodo : null}
           onReassign={onReassignTodo}
           engineerNames={engineerNames}
@@ -144,7 +165,7 @@ function TodoRow({ t, onToggle, onOpenDetail }) {
 }
 
 
-function TodoDetailSheet({ todo, requester, coAssignees = [], onToggle, onReassign, engineerNames, onUpdateDescription, onClose }) {
+function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhotoUrls = [], onToggle, onReassign, engineerNames, onUpdateDescription, onClose }) {
   const [descDraft, setDescDraft] = useState(todo.description ?? "");
   const [editingDesc, setEditingDesc] = useState(false);
   const sourceLabel = todo.source === "manual" ? "관리자 부여" : todo.source === "quote" ? "견적 연동" : "자재 연동";
@@ -283,6 +304,18 @@ function TodoDetailSheet({ todo, requester, coAssignees = [], onToggle, onReassi
           <span className={`font-semibold ${todo.done ? "text-emerald-600" : "text-amber-600"}`}>{todo.done ? "완료" : "미완료"}</span>
         </div>
       </div>
+      {supplyPhotoUrls.length > 0 && (
+        <div className="mb-4">
+          <p className="text-xs font-bold text-slate-500 mb-2">지급된 자재 사진 ({supplyPhotoUrls.length})</p>
+          <div className="grid grid-cols-3 gap-2">
+            {supplyPhotoUrls.map((url, i) => (
+              <a key={i} href={url} target="_blank" rel="noreferrer">
+                <img src={url} alt="" className="w-full aspect-square rounded-xl object-cover border border-slate-200" />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
       {todo.photoUrls?.length > 0 && (
         <div className="mb-4">
           <p className="text-xs font-bold text-slate-500 mb-2">첨부파일 ({todo.photoUrls.length})</p>
@@ -491,6 +524,7 @@ export function TodoManageScreen({ todos, onToggle, onAssignTodo, onReassignTodo
             todo={t}
             requester={getRequesterName(t, materialRequests, quoteRequests)}
             coAssignees={getCoAssignees(t, todos)}
+            supplyPhotoUrls={getSupplyPhotos(t, materialRequests, quoteRequests)}
             onToggle={onToggle}
             onReassign={onReassignTodo}
             engineerNames={engineerNames}
