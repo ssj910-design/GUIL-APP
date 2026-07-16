@@ -3657,13 +3657,14 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const openTodos = todos.filter((t) => !t.done);
   const [selectedId, setSelectedId] = useState(openTodos[0]?.id ?? "");
   const [materialCost, setMaterialCost] = useState("");
+  const [materialReplaceDate, setMaterialReplaceDate] = useState(TODAY_STR);
   const [submitted, setSubmitted] = useState(null);
-  const [manualForm, setManualForm] = useState({ siteId: "", unit: "", part: "", replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
+  const [manualForm, setManualForm] = useState({ siteId: "", unit: "", part: "", partQty: "1", replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
   const [materialPhotos, setMaterialPhotos] = useState({ before: [], after: [], confirm: null });
   const [manualPhotos, setManualPhotos] = useState({ before: [], after: [], confirm: null });
 
   const selected = todos.find((t) => t.id === selectedId);
-  const manualValid = manualForm.siteId && manualForm.part.trim() && manualForm.replaceDate && manualForm.contactPhone.trim();
+  const manualValid = manualForm.siteId && manualForm.part.trim() && manualForm.partQty && manualForm.replaceDate && manualForm.contactPhone.trim();
 
   async function submitMaterial() {
     if (!selected) return;
@@ -3675,7 +3676,7 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       elevatorNo: selected.elevatorNo,
       part: selected.part,
       cost: materialCost,
-      replaceDate: TODAY_STR,
+      replaceDate: materialReplaceDate,
       contactPhone: null,
       beforePhotoUrls: materialPhotos.before.map((p) => p.url),
       afterPhotoUrls: materialPhotos.after.map((p) => p.url),
@@ -3684,6 +3685,7 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     setSubmitted({ siteName: selected.siteName, part: selected.part, manual: false });
     setSelectedId(openTodos.find((t) => t.id !== selected.id)?.id ?? "");
     setMaterialCost("");
+    setMaterialReplaceDate(TODAY_STR);
     setMaterialPhotos({ before: [], after: [], confirm: null });
     setTimeout(() => setSubmitted(null), 2600);
   }
@@ -3691,11 +3693,12 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   function submitManual() {
     if (!manualValid) return;
     const site = sites.find((s) => s.id === manualForm.siteId);
+    const partText = `${manualForm.part.trim()} ${manualForm.partQty}개`;
     onSubmitBilling({
       type: "manual",
       siteName: site.name,
       elevatorNo: manualForm.unit,
-      part: manualForm.part,
+      part: partText,
       cost: manualForm.cost,
       beforePhotoUrls: manualPhotos.before.map((p) => p.url),
       afterPhotoUrls: manualPhotos.after.map((p) => p.url),
@@ -3706,8 +3709,8 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     if (manualForm.fromKit) {
       onUseKitPart({ part: manualForm.part, siteName: site.name });
     }
-    setSubmitted({ siteName: site.name, part: manualForm.part, manual: true, fromKit: manualForm.fromKit });
-    setManualForm({ siteId: "", unit: "", part: "", replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
+    setSubmitted({ siteName: site.name, part: partText, manual: true, fromKit: manualForm.fromKit });
+    setManualForm({ siteId: "", unit: "", part: "", partQty: "1", replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
     setManualPhotos({ before: [], after: [], confirm: null });
     setTimeout(() => setSubmitted(null), 2600);
   }
@@ -3752,6 +3755,14 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                   <DDay dueDate={selected.dueDate} />
                 </div>
               )}
+              <Field label="교체일자">
+                <input
+                  type="date"
+                  className={inputCls}
+                  value={materialReplaceDate}
+                  onChange={(e) => setMaterialReplaceDate(e.target.value)}
+                />
+              </Field>
               <Field label="교체 전 사진">
                 <MultiPhotoUpload
                   photos={materialPhotos.before}
@@ -3825,24 +3836,37 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                 <p className="text-[11px] text-slate-400 mt-0.5">체크하면 자재 담당자에게 보충 요청이 자동으로 전달됩니다</p>
               </div>
             </button>
-            <Field label="교체 부품명">
-              {manualForm.fromKit ? (
-                <select
-                  className={inputCls}
-                  value={manualForm.part}
-                  onChange={(e) => setManualForm({ ...manualForm, part: e.target.value })}
-                >
-                  <option value="">상비부품 목록에서 선택하세요</option>
-                  {KIT_PARTS.map((p) => <option key={p} value={p}>{p}</option>)}
-                </select>
-              ) : (
+            <Field label="교체내역">
+              <div className="flex gap-1.5">
+                <div style={{ flex: 2 }}>
+                  {manualForm.fromKit ? (
+                    <select
+                      className={inputCls}
+                      value={manualForm.part}
+                      onChange={(e) => setManualForm({ ...manualForm, part: e.target.value })}
+                    >
+                      <option value="">상비부품 목록에서 선택하세요</option>
+                      {KIT_PARTS.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  ) : (
+                    <input
+                      className={inputCls}
+                      placeholder="예: 도어 롤러"
+                      value={manualForm.part}
+                      onChange={(e) => setManualForm({ ...manualForm, part: e.target.value })}
+                    />
+                  )}
+                </div>
                 <input
+                  type="number"
+                  min={1}
                   className={inputCls}
-                  placeholder="예: 도어 롤러"
-                  value={manualForm.part}
-                  onChange={(e) => setManualForm({ ...manualForm, part: e.target.value })}
+                  style={{ flex: 1 }}
+                  placeholder="수량"
+                  value={manualForm.partQty}
+                  onChange={(e) => setManualForm({ ...manualForm, partQty: e.target.value })}
                 />
-              )}
+              </div>
             </Field>
             <Field label="교체일자">
               <input
