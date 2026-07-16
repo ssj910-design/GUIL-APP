@@ -34,6 +34,11 @@ export default function Dashboard({ data }) {
   const monthChecks = selfChecks.filter((c) => c.ym === ym);
   const doneChecks = monthChecks.filter((c) => c.status === "완료");
 
+  // 집중 관리현장: 최근 30일 고장 3회 이상, 또는 지원요청/운행정지 등 미해결 에스컬레이션이 있는 현장
+  // (모바일 홈탭과 동일 기준)
+  const escalatedSiteIds = new Set(failures.filter((f) => f.escalation && f.status !== "완료").map((f) => f.siteId));
+  const criticalSites = sites.filter((s) => s.failures30d >= 3 || escalatedSiteIds.has(s.id));
+
   const engineerName = (id, fallback) => profiles.find((p) => p.id === id)?.name ?? fallback ?? "미배정";
 
   return (
@@ -55,6 +60,28 @@ export default function Dashboard({ data }) {
           tone={monthChecks.length && doneChecks.length < monthChecks.length ? "text-amber-600" : "text-slate-900"}
         />
       </div>
+
+      {/* 집중 관리현장 */}
+      <section className="bg-red-50 border border-red-200 rounded-xl p-5 mb-6">
+        <h2 className="text-sm font-extrabold text-red-700 mb-3">집중 관리현장 (고장 3회 이상 · 지원요청/운행정지)</h2>
+        {criticalSites.length === 0 ? (
+          <p className="text-xs text-red-500">현재 집중 관리 대상 현장이 없습니다.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
+            {criticalSites.map((s) => (
+              <div key={s.id} className="flex items-center justify-between bg-white rounded-lg px-3.5 py-2.5 border border-red-100">
+                <div className="min-w-0">
+                  <p className="font-bold text-slate-800 text-sm truncate">{s.name} · {s.elevatorNo}</p>
+                  <p className="text-[11px] text-slate-400 truncate">{s.address}</p>
+                </div>
+                <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full shrink-0 ml-2">
+                  {escalatedSiteIds.has(s.id) ? "조치필요" : `${s.failures30d}회 고장`}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* 최근 고장 */}
