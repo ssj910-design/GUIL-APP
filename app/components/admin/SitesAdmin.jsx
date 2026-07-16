@@ -12,6 +12,7 @@ import { useLiveInspections } from "@/app/hooks/useLiveInspections";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { Modal, StatusBadge } from "@/app/components/admin/adminShared";
+import ImportSites from "@/app/components/admin/ImportSites";
 
 const CONTRACT_TYPES = ["POG(일반계약)", "FM(종합계약)"];
 const CONTACT_ROLES = ["대표", "담당자", "관리소장", "건물주", "경비실", "입주민 대표", "기타"];
@@ -229,6 +230,7 @@ export default function SitesAdmin({ data, setData }) {
   const [editingContacts, setEditingContacts] = useState(false);
   const [editingUnits, setEditingUnits] = useState(false);
   const [newSite, setNewSite] = useState(null);   // 신규 등록 폼 (null=닫힘)
+  const [importing, setImporting] = useState(false); // 공단 엑셀 일괄 등록
   const [unitDetail, setUnitDetail] = useState(null);
 
   const site = sites.find((s) => s.id === selectedId);
@@ -447,11 +449,19 @@ export default function SitesAdmin({ data, setData }) {
           <h1 className="text-xl font-extrabold">현장관리</h1>
           <p className="text-xs text-slate-500 mt-0.5">호기(승강기 1대) 단위로 모델·설치일·승강기고유번호를 관리합니다</p>
         </div>
-        <button onClick={() => setNewSite({ name: "", address: "", contractType: CONTRACT_TYPES[0], unitCount: 1, engineer: "" })}
-          className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5">
-          <Plus size={15} /> 새 현장 등록
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setImporting(true)}
+            className="text-sm font-bold text-blue-700 border border-blue-200 bg-white rounded-xl px-4 py-2.5">
+            공단 엑셀 일괄 등록
+          </button>
+          <button onClick={() => setNewSite({ name: "", address: "", contractType: CONTRACT_TYPES[0], unitCount: 1, engineer: "" })}
+            className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5">
+            <Plus size={15} /> 새 현장 등록
+          </button>
+        </div>
       </div>
+
+      {importing && <ImportSites data={data} setData={setData} onClose={() => setImporting(false)} />}
 
       {/* 신규 등록 폼 */}
       {newSite && (
