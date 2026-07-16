@@ -515,21 +515,40 @@ export default function App() {
     setBillings((prev) => [newBilling, ...prev]);
   }
 
-  // ★ 우리방 피드에 새 글 등록
-  async function handleSendFeedPost(text) {
+  // ★ 우리방 피드에 새 글 등록 (extra: photoUrls 첨부, replyToId 답장)
+  async function handleSendFeedPost(text, extra = {}) {
     const newPost = {
       id: "p" + Date.now(),
       author: profile.name,
       time: new Date().toTimeString().slice(0, 5),
+      createdAt: new Date().toISOString(),
       text,
+      photoUrls: extra.photoUrls ?? [],
+      replyToId: extra.replyToId ?? null,
+      reactions: {},
     };
     await supabase.from("feed_posts").insert({
       id: newPost.id,
       author: newPost.author,
       body: newPost.text,
+      photo_urls: newPost.photoUrls.length ? newPost.photoUrls : null,
+      reply_to_id: newPost.replyToId,
       ...(v2Ready ? { author_id: profileIdByName(profilesAll, newPost.author) } : {}),
     });
     setFeed((prev) => [...prev, newPost]);
+  }
+
+  // ★ 우리방 좋아요 토글
+  // ponytail: 마지막 쓰기 승리 — 두 명이 동시에 누르면 한쪽이 덮일 수 있음(소규모 팀 허용), 문제되면 RPC로
+  async function handleToggleLike(postId) {
+    const me = profile.name;
+    const post = feed.find((p) => p.id === postId);
+    if (!post) return;
+    const cur = post.reactions?.["👍"] ?? [];
+    const next = cur.includes(me) ? cur.filter((n) => n !== me) : [...cur, me];
+    const reactions = { ...(post.reactions ?? {}), "👍": next };
+    setFeed((prev) => prev.map((p) => (p.id === postId ? { ...p, reactions } : p)));
+    await supabase.from("feed_posts").update({ reactions }).eq("id", postId);
   }
 
   // ★ 자재 담당자가 지급할 자재 사진을 한 장 추가하는 순간 (지급완료 체크의 선행 조건)
@@ -953,6 +972,7 @@ export default function App() {
               onArrive={handleArriveFailure}
               onResult={handleFailureResult}
               toast={failureToast}
+              onNotifyRoom={handleSendFeedPost}
             />
           )}
           {tab === "checkup" && <CheckupTab />}
@@ -1026,7 +1046,7 @@ export default function App() {
                     <X size={20} />
                   </button>
                 </div>
-                <RoomTab feed={feed} onSendChat={handleSendFeedPost} />
+                <RoomTab feed={feed} onSendChat={handleSendFeedPost} onToggleLike={handleToggleLike} />
               </div>
             </div>
           )}

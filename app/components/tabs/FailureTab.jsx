@@ -13,7 +13,7 @@ import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets
 /* FAILURE (고장접수)                                                   */
 /* ------------------------------------------------------------------ */
 
-function FailureRegisterForm({ setFailures, goToUnassigned }) {
+function FailureRegisterForm({ setFailures, goToUnassigned, onNotifyRoom }) {
   const sites = useContext(SitesContext);
   const units = useContext(UnitsContext);
   const { engineerNames, profiles: allProfiles, selfId } = useContext(AuthContext);
@@ -57,6 +57,10 @@ function FailureRegisterForm({ setFailures, goToUnassigned }) {
       } : {}),
     });
     setFailures((prev) => [newFailure, ...prev]);
+    // 갇힘사고(사람 갇힘)는 우리방에도 즉시 알린다 — @모두 멘션으로 전원 배지
+    if (form.faultType === "갇힘사고") {
+      onNotifyRoom?.(`🚨 @모두 갇힘사고 접수 — ${newFailure.siteName} · ${newFailure.elevatorNo || "호기 미상"}${form.faultDetail ? ` (${form.faultDetail})` : ""}`);
+    }
     setForm({ siteId: "", unit: "", faultType: "", faultDetail: "", notFault: false, assignee: "", reporterPhone: "", sendSms: false });
     goToUnassigned();
   }
@@ -737,7 +741,7 @@ function FailureStatusOverview({ failures }) {
 }
 
 
-export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, toast }) {
+export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, toast, onNotifyRoom }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
   const subTabs = ["접수등록", "미배정", "처리등록", "처리현황"];
@@ -761,7 +765,7 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
           </button>
         ))}
       </div>
-      {subTab === "접수등록" && <FailureRegisterForm setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />}
+      {subTab === "접수등록" && <FailureRegisterForm setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} onNotifyRoom={onNotifyRoom} />}
       {subTab === "미배정" && (
         <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} />
       )}
