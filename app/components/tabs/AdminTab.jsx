@@ -705,7 +705,7 @@ function RestockScreen({ restockRequests, onAttachRestockPhoto, onRemoveRestockS
 }
 
 
-export function AdminTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onAdminToggleTodo, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onAddSite, onUpdateSite, onDeleteSite, siteManagers, onAddSiteManager, onUpdateSiteManager, onDeleteSiteManager, onUpdateEngineerContact }) {
+export function AdminTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onAdminToggleTodo, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onUpdateTodoDescription, onAddSite, onUpdateSite, onDeleteSite, siteManagers, onAddSiteManager, onUpdateSiteManager, onDeleteSiteManager, onUpdateEngineerContact }) {
   const sites = useContext(SitesContext);
   const { engineerNames, engineers } = useContext(AuthContext);
   const [billingViewOpen, setBillingViewOpen] = useState(false);
@@ -725,6 +725,9 @@ export function AdminTab({ inspections, materialRequests, billings, quoteRequest
         onToggle={onAdminToggleTodo}
         onAssignTodo={onAssignTodo}
         onReassignTodo={onReassignTodo}
+        onUpdateTodoDescription={onUpdateTodoDescription}
+        materialRequests={materialRequests}
+        quoteRequests={quoteRequests}
         engineerNames={engineerNames}
         onBack={() => setTodoViewOpen(false)}
       />

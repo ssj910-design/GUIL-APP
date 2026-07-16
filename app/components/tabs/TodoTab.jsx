@@ -1,9 +1,10 @@
 import { useState, useContext } from "react";
-import { ListTodo, Check, Search, Lock } from "lucide-react";
+import { ListTodo, Check, CheckCircle2, Search, Lock, Image as ImageIcon, Download } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { addDays } from "@/lib/utils";
+import { addDays, formatShortDate } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
-import { DDay, PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
+import { downloadPhoto, sanitizeFilename, extOf } from "@/lib/photos";
+import { DDay, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { SitesContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 
@@ -17,8 +18,43 @@ function confirmToggle(done) {
   return window.confirm(done ? "완료를 취소하시겠습니까?" : "완료 처리하시겠습니까?");
 }
 
-export function TodoTab({ todos, setTodos, onReassignTodo }) {
-  const { name: CURRENT_ENGINEER, engineerNames } = useContext(AuthContext);
+// 자재/견적 신청 시점의 신청자 이름을 찾아옵니다. 지급완료 시 실제 담당자를 신청자와
+// 다르게 지정할 수 있어(★ 담당자 재배정 기능), 요청자와 담당자가 다를 수 있습니다.
+function getRequesterName(todo, materialRequests, quoteRequests) {
+  if (todo.source === "material") return materialRequests?.find((r) => r.id === todo.materialRequestId)?.engineer ?? null;
+  if (todo.source === "quote") return quoteRequests?.find((q) => q.id === todo.quoteRequestId)?.engineer ?? null;
+  return "관리자";
+}
+
+// 같은 견적/자재 요청에 연결된 다른 담당자의 할 일(공동 담당)을 찾습니다.
+function getCoAssignees(todo, todos) {
+  if (!todo.quoteRequestId && !todo.materialRequestId) return [];
+  return todos
+    .filter(
+      (t) =>
+        t.id !== todo.id &&
+        ((todo.quoteRequestId && t.quoteRequestId === todo.quoteRequestId) ||
+          (todo.materialRequestId && t.materialRequestId === todo.materialRequestId))
+    )
+    .map((t) => t.assignee);
+}
+
+function TodoCheckbox({ done, locked, onClick }) {
+  if (done) {
+    return <CheckCircle2 size={20} className="text-emerald-500 shrink-0" />;
+  }
+  if (locked) {
+    return (
+      <div className="w-5 h-5 rounded-full border-2 border-slate-200 flex items-center justify-center shrink-0 text-slate-300">
+        <Lock size={10} />
+      </div>
+    );
+  }
+  return <button type="button" onClick={onClick} className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />;
+}
+
+export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescription, materialRequests, quoteRequests }) {
+  const { name: CURRENT_ENGINEER, engineerNames, role } = useContext(AuthContext);
   const mine = todos.filter((t) => t.assignee === CURRENT_ENGINEER);
   const [detailTarget, setDetailTarget] = useState(null);
 
@@ -37,53 +73,46 @@ export function TodoTab({ todos, setTodos, onReassignTodo }) {
     );
   }
 
+  const detailTodo = detailTarget ? mine.find((t) => t.id === detailTarget.id) ?? detailTarget : null;
+
   return (
     <div className="flex-1 overflow-y-auto pb-4">
       <div className="px-5 pt-4 space-y-2.5">
         {mine.map((t) => {
           const isManual = t.source === "manual";
+          const overdue = !t.done && new Date(t.dueDate) < new Date("2026-07-10");
+          const requester = getRequesterName(t, materialRequests, quoteRequests);
           return (
-            <div key={t.id} className={`bg-white rounded-xl border p-3.5 ${t.done ? "border-slate-200 opacity-50" : "border-slate-200"}`}>
-              <button type="button" onClick={() => setDetailTarget(t)} className="w-full flex items-start justify-between gap-2 text-left">
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <p className={`text-sm font-bold text-slate-800 ${t.done ? "line-through" : ""}`}>{t.title}</p>
-                    {isManual && <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">관리자 부여</span>}
-                  </div>
-                  <p className="text-[11px] text-slate-400">{t.siteName} · {isManual ? `부여일 ${t.assignedDate}` : `자재지급 ${t.assignedDate}`}</p>
+            <div key={t.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
+              <div className="flex items-start gap-2.5">
+                <div className="pt-0.5">
+                  <TodoCheckbox done={t.done} locked={!isManual} onClick={() => confirmToggle(false) && completeManualTodo(t.id)} />
                 </div>
-                {!t.done && <DDay dueDate={t.dueDate} />}
-              </button>
-              <div className="flex items-center justify-between mt-2.5">
-                <span className="text-[11px] text-slate-400">마감 {t.dueDate}</span>
-                {t.done ? (
-                  <span className="text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-700 flex items-center gap-1">
-                    <Check size={12} /> 완료됨
-                  </span>
-                ) : isManual ? (
-                  <button
-                    onClick={() => confirmToggle(false) && completeManualTodo(t.id)}
-                    className="text-xs font-bold px-3 py-1.5 rounded-lg bg-blue-700 text-white active:bg-blue-800"
-                  >
-                    완료 처리
-                  </button>
-                ) : (
-                  <span className="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-400 flex items-center gap-1">
-                    <Lock size={11} /> 비용청구 시 자동완료
-                  </span>
-                )}
+                <button type="button" onClick={() => setDetailTarget(t)} className="flex-1 text-left">
+                  <div className="flex items-center gap-1.5">
+                    {overdue && <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />}
+                    <p className={`text-sm font-bold ${t.done ? "line-through text-slate-400" : "text-slate-800"}`}>{t.title}</p>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    기한: {formatShortDate(t.dueDate)}{requester ? ` · 요청자: ${requester}` : ""}
+                  </p>
+                  {!isManual && !t.done && <p className="text-[10px] text-slate-300 mt-0.5">비용청구 시 자동완료</p>}
+                </button>
               </div>
             </div>
           );
         })}
       </div>
 
-      {detailTarget && (
+      {detailTodo && (
         <TodoDetailSheet
-          todo={mine.find((t) => t.id === detailTarget.id) ?? detailTarget}
-          onToggle={detailTarget.source === "manual" && !detailTarget.done ? completeManualTodo : null}
+          todo={detailTodo}
+          requester={getRequesterName(detailTodo, materialRequests, quoteRequests)}
+          coAssignees={getCoAssignees(detailTodo, todos)}
+          onToggle={detailTodo.source === "manual" && !detailTodo.done ? completeManualTodo : null}
           onReassign={onReassignTodo}
           engineerNames={engineerNames}
+          onUpdateDescription={role === "admin" ? onUpdateTodoDescription : null}
           onClose={() => setDetailTarget(null)}
         />
       )}
@@ -115,14 +144,80 @@ function TodoRow({ t, onToggle, onOpenDetail }) {
 }
 
 
-function TodoDetailSheet({ todo, onToggle, onReassign, engineerNames, onClose }) {
+function TodoDetailSheet({ todo, requester, coAssignees = [], onToggle, onReassign, engineerNames, onUpdateDescription, onClose }) {
+  const [descDraft, setDescDraft] = useState(todo.description ?? "");
+  const [editingDesc, setEditingDesc] = useState(false);
   const sourceLabel = todo.source === "manual" ? "관리자 부여" : todo.source === "quote" ? "견적 연동" : "자재 연동";
+  const allAssignees = [todo.assignee, ...coAssignees];
+
   return (
     <Sheet title="할 일 상세" onClose={onClose}>
-      <div className="bg-slate-100 rounded-xl p-3 mb-4">
+      <span
+        className={`inline-block text-[11px] font-bold px-2 py-1 rounded-md mb-2 ${
+          todo.done ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+        }`}
+      >
+        {todo.done ? "완료된 할 일" : "미완료된 할 일"}
+      </span>
+      <div className="bg-slate-100 rounded-xl p-3 mb-3">
         <p className="font-bold text-slate-800">{todo.title}</p>
       </div>
+
+      {(todo.description || onUpdateDescription) && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs font-bold text-slate-500">내용</p>
+            {onUpdateDescription && !editingDesc && (
+              <button type="button" onClick={() => setEditingDesc(true)} className="text-[11px] font-bold text-blue-600">
+                {todo.description ? "수정" : "내용 추가"}
+              </button>
+            )}
+          </div>
+          {editingDesc ? (
+            <div>
+              <textarea
+                className={inputCls}
+                rows={3}
+                placeholder="예: 7만원, 교체확인서 부탁드립니다"
+                value={descDraft}
+                onChange={(e) => setDescDraft(e.target.value)}
+              />
+              <div className="flex gap-1.5 mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUpdateDescription(todo.id, descDraft.trim());
+                    setEditingDesc(false);
+                  }}
+                  className="flex-1 text-xs font-bold py-2 rounded-lg bg-blue-700 text-white active:bg-blue-800"
+                >
+                  저장
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDescDraft(todo.description ?? "");
+                    setEditingDesc(false);
+                  }}
+                  className="flex-1 text-xs font-bold py-2 rounded-lg bg-slate-100 text-slate-500 active:bg-slate-200"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-700 whitespace-pre-wrap">{todo.description || "등록된 내용이 없습니다"}</p>
+          )}
+        </div>
+      )}
+
       <div className="space-y-2.5 mb-4">
+        {requester && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-400">요청자</span>
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-blue-900 text-white">{requester}</span>
+          </div>
+        )}
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">담당자</span>
           {onReassign ? (
@@ -138,6 +233,29 @@ function TodoDetailSheet({ todo, onToggle, onReassign, engineerNames, onClose })
             <span className="font-semibold text-slate-700">{todo.assignee}</span>
           )}
         </div>
+        {coAssignees.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between text-sm mb-1.5">
+              <span className="text-slate-400">전체 담당자</span>
+              <span className="text-xs text-slate-400">전체 {allAssignees.length}</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {allAssignees.map((name) => (
+                <span key={name} className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
+                  {name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        {todo.source !== "manual" && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-400">완료 조건</span>
+            <span className="font-semibold text-slate-700">
+              {coAssignees.length > 0 ? "담당자 중 1명 비용청구" : "비용청구 시 자동완료"}
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">현장</span>
           <span className="font-semibold text-slate-700">{todo.siteName}</span>
@@ -158,22 +276,29 @@ function TodoDetailSheet({ todo, onToggle, onReassign, engineerNames, onClose })
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">마감일</span>
-          <span className="font-semibold text-slate-700">{todo.dueDate}</span>
+          <span className="font-semibold text-slate-700">{formatShortDate(todo.dueDate)}</span>
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">상태</span>
           <span className={`font-semibold ${todo.done ? "text-emerald-600" : "text-amber-600"}`}>{todo.done ? "완료" : "미완료"}</span>
         </div>
       </div>
-      {todo.photoCount > 0 && (
+      {todo.photoUrls?.length > 0 && (
         <div className="mb-4">
-          <p className="text-xs font-bold text-slate-500 mb-2">첨부 사진 ({todo.photoCount}장)</p>
-          <div className="grid grid-cols-3 gap-2">
-            {todo.photoUrls?.length > 0
-              ? todo.photoUrls.map((url, i) => (
-                  <img key={i} src={url} alt="" className="w-full aspect-square rounded-xl object-cover border border-slate-200" />
-                ))
-              : Array.from({ length: todo.photoCount }).map((_, i) => <PhotoThumb key={i} />)}
+          <p className="text-xs font-bold text-slate-500 mb-2">첨부파일 ({todo.photoUrls.length})</p>
+          <div className="space-y-1.5">
+            {todo.photoUrls.map((url, i) => {
+              const filename = `${sanitizeFilename(todo.siteName)}_${i + 1}.${extOf(url)}`;
+              return (
+                <div key={i} className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2">
+                  <ImageIcon size={16} className="text-slate-400 shrink-0" />
+                  <span className="flex-1 text-xs text-slate-600 truncate">{filename}</span>
+                  <button type="button" onClick={() => downloadPhoto(url, filename)} className="text-blue-600 shrink-0">
+                    <Download size={16} />
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -279,7 +404,7 @@ function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
 }
 
 
-export function TodoManageScreen({ todos, onToggle, onAssignTodo, onReassignTodo, engineerNames, onBack }) {
+export function TodoManageScreen({ todos, onToggle, onAssignTodo, onReassignTodo, onUpdateTodoDescription, materialRequests, quoteRequests, engineerNames, onBack }) {
   const [query, setQuery] = useState("");
   const [source, setSource] = useState("전체");
   const [assignOpen, setAssignOpen] = useState(false);
@@ -359,15 +484,21 @@ export function TodoManageScreen({ todos, onToggle, onAssignTodo, onReassignTodo
         />
       )}
 
-      {detailTarget && (
-        <TodoDetailSheet
-          todo={todos.find((t) => t.id === detailTarget.id) ?? detailTarget}
-          onToggle={onToggle}
-          onReassign={onReassignTodo}
-          engineerNames={engineerNames}
-          onClose={() => setDetailTarget(null)}
-        />
-      )}
+      {detailTarget && (() => {
+        const t = todos.find((x) => x.id === detailTarget.id) ?? detailTarget;
+        return (
+          <TodoDetailSheet
+            todo={t}
+            requester={getRequesterName(t, materialRequests, quoteRequests)}
+            coAssignees={getCoAssignees(t, todos)}
+            onToggle={onToggle}
+            onReassign={onReassignTodo}
+            engineerNames={engineerNames}
+            onUpdateDescription={onUpdateTodoDescription}
+            onClose={() => setDetailTarget(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
