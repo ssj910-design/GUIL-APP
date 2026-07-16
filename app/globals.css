@@ -12,13 +12,8 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* 앱 전체가 라이트 디자인(bg-white 고정)이므로 다크모드를 따라가지 않는다 —
+   기기 다크모드에서 글자색만 연회색으로 바뀌어 placeholder와 구분이 안 되는 문제 방지 */
 body {
   background: var(--background);
   color: var(--foreground);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2 } from "lucide-react";
+import { Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, LayoutGrid, Monitor } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor } from "@/lib/utils";
@@ -34,6 +34,10 @@ const TABS = [
   { id: "room", label: "우리방", icon: MessagesSquare },
   { id: "admin", label: "관리자 모드", icon: Settings },
 ];
+
+// 하단 바에는 매일 쓰는 4개만 고정하고 나머지는 "더보기" 메뉴로 취합한다.
+const BAR_IDS = ["home", "sites", "failure", "checkup"];
+const MORE_TAB = { id: "more", label: "더보기", icon: LayoutGrid };
 
 
 /* ------------------------------------------------------------------ */
@@ -863,8 +867,9 @@ export default function App() {
     );
   }
 
-  const tabTitle = TABS.find((t) => t.id === tab)?.label ?? "";
-  const visibleTabs = TABS.filter((t) => t.id !== "admin" || profile?.role === "admin");
+  const tabTitle = tab === "more" ? "전체 메뉴" : TABS.find((t) => t.id === tab)?.label ?? "";
+  const barTabs = [...TABS.filter((t) => BAR_IDS.includes(t.id)), MORE_TAB];
+  const moreTabs = TABS.filter((t) => !BAR_IDS.includes(t.id) && (t.id !== "admin" || profile?.role === "admin"));
 
   if (!skipLogin && session === undefined) {
     return (
@@ -937,25 +942,43 @@ export default function App() {
             />
           )}
           {tab === "room" && <RoomTab feed={feed} onSendChat={handleSendFeedPost} />}
+          {tab === "more" && (
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="grid grid-cols-3 gap-3">
+                {moreTabs.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => setTab(id)}
+                    className="bg-white border border-slate-200 rounded-xl py-5 flex flex-col items-center gap-2"
+                  >
+                    <Icon size={22} className="text-blue-700" />
+                    <span className="text-xs font-bold text-slate-700">{label}</span>
+                  </button>
+                ))}
+                {profile.role === "admin" && (
+                  <a href="/admin" className="bg-blue-950 rounded-xl py-5 flex flex-col items-center gap-2">
+                    <Monitor size={22} className="text-white" />
+                    <span className="text-xs font-bold text-white">관리자 콘솔</span>
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
           {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onUpdateTodoDescription={handleUpdateTodoDescription} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
 
-          {/* bottom nav */}
-          <div
-            className="shrink-0 bg-slate-50 border-t-2 border-slate-300 flex overflow-x-auto"
-            style={{ boxShadow: "0 -4px 6px -1px rgba(0,0,0,0.1)" }}
-          >
-            {visibleTabs.map((t) => {
+          {/* bottom nav — 고정 4개 + 더보기 (더보기 하위 화면에서도 더보기가 활성 표시) */}
+          <div className="shrink-0 bg-white border-t border-slate-200 flex" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+            {barTabs.map((t) => {
               const Icon = t.icon;
-              const active = tab === t.id;
+              const active = t.id === "more" ? !BAR_IDS.includes(tab) : tab === t.id;
               return (
                 <button
                   key={t.id}
                   onClick={() => setTab(t.id)}
-                  className={`flex flex-col items-center justify-center gap-1 py-3 px-2 shrink-0 border-r border-slate-200 last:border-r-0 ${active ? "bg-blue-900" : "bg-transparent"}`}
-                  style={{ minWidth: "68px" }}
+                  className="flex-1 flex flex-col items-center justify-center gap-1 pt-2.5 pb-2"
                 >
-                  <Icon size={19} className={active ? "text-white" : "text-slate-400"} strokeWidth={active ? 2.75 : 2} />
-                  <span className={`text-[10px] leading-tight text-center font-bold ${active ? "text-white" : "text-slate-500"}`}>{t.label}</span>
+                  <Icon size={20} className={active ? "text-blue-700" : "text-slate-400"} strokeWidth={active ? 2.5 : 2} />
+                  <span className={`text-[10px] leading-tight font-bold ${active ? "text-blue-700" : "text-slate-400"}`}>{t.label}</span>
                 </button>
               );
             })}
