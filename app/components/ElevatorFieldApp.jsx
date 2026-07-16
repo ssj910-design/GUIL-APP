@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit } from "@/lib/mappers";
-import { addDays } from "@/lib/utils";
+import { addDays, profileIdByName, unitIdFor } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { simulateSms } from "@/lib/sms";
 import { ScreenHeader } from "@/app/components/ui";
@@ -73,6 +73,7 @@ export default function App() {
   const [focusUnit, setFocusUnit] = useState(null);
   const [sites, setSites] = useState([]);
   const [units, setUnits] = useState([]); // v2: 호기 목록 (마이그레이션 전 DB에서는 빈 배열)
+  const [profilesAll, setProfilesAll] = useState([]); // v2: 전 직원 프로필 (이름→id 매핑용)
   const [siteManagers, setSiteManagers] = useState([]);
   const [failures, setFailures] = useState([]);
   const [inspections, setInspections] = useState([]);
@@ -163,7 +164,7 @@ export default function App() {
         supabase.from("billings").select("*").order("created_at", { ascending: false }),
         supabase.from("restock_requests").select("*").order("created_at", { ascending: false }),
         supabase.from("feed_posts").select("*").order("created_at", { ascending: false }),
-        supabase.from("profiles").select("id,name,phone,email").eq("role", "engineer").order("name"),
+        supabase.from("profiles").select("id,name,role,phone,email").order("name"),
         supabase.from("units").select("*").order("seq"),
       ]);
       setSites((sitesRes.data ?? []).map(mapSite));
@@ -176,12 +177,18 @@ export default function App() {
       setBillings((billingsRes.data ?? []).map(mapBilling));
       setRestockRequests((restockRes.data ?? []).map(mapRestockRequest));
       setFeed((feedRes.data ?? []).map(mapFeedPost));
-      setEngineers(engineersRes.data ?? []);
+      const allProfiles = engineersRes.data ?? [];
+      setProfilesAll(allProfiles);
+      setEngineers(allProfiles.filter((p) => p.role === "engineer"));
       setUnits((unitsRes.data ?? []).map(mapUnit)); // 테이블 없으면(마이그레이션 전) error → 빈 배열
       setLoading(false);
     }
     loadData();
   }, [session]);
+
+  // v2 마이그레이션이 실행된 DB인지 (units 존재 여부로 판단).
+  // 마이그레이션 전 DB에 새 컬럼을 보내면 insert 전체가 실패하므로 반드시 이 가드를 통과해야 한다.
+  const v2Ready = units.length > 0;
 
   // ★ 관리자가 현장관리 메뉴에서 현장을 새로 등록
   async function handleAddSite(form) {
@@ -222,6 +229,18 @@ export default function App() {
       gov_elevator_nos: newSite.govElevatorNos,
     });
     setSites((prev) => [...prev, newSite]);
+    // v2 듀얼라이트: 호기(units) 생성 + 담당기사 배정 (마이그레이션 전 DB에서는 조용히 무시됨)
+    const unitRows = Array.from({ length: newSite.unitCount }, (_, i) => ({
+      site_id: newSite.id,
+      seq: i + 1,
+      unit_no: `${i + 1}호기`,
+      model: newSite.elevatorModel || null,
+      gov_no: newSite.govElevatorNos[i] || null,
+    }));
+    const { data: createdUnits } = await supabase.from("units").insert(unitRows).select();
+    if (createdUnits) setUnits((prev) => [...prev, ...createdUnits.map(mapUnit)]);
+    const leadId = profileIdByName(profilesAll, newSite.assignedEngineer);
+    if (leadId) await supabase.from("site_assignments").insert({ site_id: newSite.id, tech_id: leadId, is_lead: true });
   }
 
   // ★ 관리자가 현장관리 메뉴에서 현장 정보(담당 기사 배정 포함)를 수정
@@ -266,6 +285,26 @@ export default function App() {
           : s
       )
     );
+    // v2 듀얼라이트: units 동기화 — 없는 호기 생성, gov_no 갱신, 초과분 비활성.
+    // 호기별 모델은 여기서 덮어쓰지 않는다 (신규 생성 시에만 현장 공통 모델을 시드).
+    const count = Number(form.unitCount) || 1;
+    const govNos = (form.govElevatorNos ?? []).map((v) => v || null);
+    await supabase.from("units").upsert(
+      Array.from({ length: count }, (_, i) => ({
+        site_id: siteId, seq: i + 1, unit_no: `${i + 1}호기`,
+        model: form.elevatorModel || null, gov_no: govNos[i],
+      })),
+      { onConflict: "site_id,seq", ignoreDuplicates: true }
+    );
+    for (let i = 0; i < count; i++) {
+      await supabase.from("units").update({ gov_no: govNos[i], is_active: true }).eq("site_id", siteId).eq("seq", i + 1);
+    }
+    await supabase.from("units").update({ is_active: false }).eq("site_id", siteId).gt("seq", count);
+    const { data: freshUnits } = await supabase.from("units").select("*").eq("site_id", siteId).order("seq");
+    if (freshUnits) setUnits((prev) => [...prev.filter((u) => u.siteId !== siteId), ...freshUnits.map(mapUnit)]);
+    await supabase.from("site_assignments").delete().eq("site_id", siteId);
+    const leadId = profileIdByName(profilesAll, form.assignedEngineer);
+    if (leadId) await supabase.from("site_assignments").insert({ site_id: siteId, tech_id: leadId, is_lead: true });
   }
 
   // ★ 관리자가 현장관리 메뉴에서 현장을 삭제
@@ -326,7 +365,13 @@ export default function App() {
     const dispatchedAt = new Date().toTimeString().slice(0, 5);
     await supabase
       .from("failures")
-      .update({ assignee, dispatched_at: dispatchedAt, eta_minutes: etaMinutes, status: "진행중" })
+      .update({
+        assignee,
+        dispatched_at: dispatchedAt,
+        eta_minutes: etaMinutes,
+        status: "진행중",
+        ...(v2Ready ? { assignee_id: profileIdByName(profilesAll, assignee) } : {}),
+      })
       .eq("id", failure.id);
     setFailures((prev) =>
       prev.map((x) => (x.id === failure.id ? { ...x, assignee, dispatchedAt, etaMinutes, status: "진행중" } : x))
@@ -383,7 +428,14 @@ export default function App() {
     );
   }
 
-  async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl }) {
+  async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId }) {
+    // v2: 호기 확정 — 직접 전달받거나(자재건), siteId 또는 유일한 현장명으로 찾는다
+    const billSite = siteId
+      ? sites.find((x) => x.id === siteId)
+      : sites.filter((x) => x.name === siteName).length === 1
+        ? sites.find((x) => x.name === siteName)
+        : null;
+    const billUnitId = unitId ?? (billSite ? unitIdFor(units, billSite.id, elevatorNo) : null);
     const newBilling = {
       id: "bill-" + Date.now(),
       type,
@@ -413,6 +465,11 @@ export default function App() {
       before_photo_urls: newBilling.beforePhotoUrls.length ? newBilling.beforePhotoUrls : null,
       after_photo_urls: newBilling.afterPhotoUrls.length ? newBilling.afterPhotoUrls : null,
       confirm_photo_url: newBilling.confirmPhotoUrl,
+      ...(v2Ready ? {
+        unit_id: billUnitId,
+        engineer_id: profileIdByName(profilesAll, profile.name),
+        material_request_id: materialRequestId ?? null,
+      } : {}),
     });
     setBillings((prev) => [newBilling, ...prev]);
   }
@@ -429,6 +486,7 @@ export default function App() {
       id: newPost.id,
       author: newPost.author,
       body: newPost.text,
+      ...(v2Ready ? { author_id: profileIdByName(profilesAll, newPost.author) } : {}),
     });
     setFeed((prev) => [...prev, newPost]);
   }
@@ -497,6 +555,10 @@ export default function App() {
       assigned_date: newTodo.assignedDate,
       due_date: newTodo.dueDate,
       done: newTodo.done,
+      ...(v2Ready ? {
+        unit_id: req.unitId ?? unitIdFor(units, req.siteId, req.elevatorNo),
+        assignee_id: profileIdByName(profilesAll, req.engineer),
+      } : {}),
     });
     setTodos((prev) => [newTodo, ...prev]);
   }
@@ -520,6 +582,7 @@ export default function App() {
       site_name: newRestock.siteName,
       requested_date: newRestock.requestedDate,
       status: newRestock.status,
+      ...(v2Ready ? { engineer_id: profileIdByName(profilesAll, newRestock.engineer) } : {}),
     });
     setRestockRequests((prev) => [newRestock, ...prev]);
   }
@@ -639,6 +702,10 @@ export default function App() {
       assigned_date: newTodo.assignedDate,
       due_date: newTodo.dueDate,
       done: newTodo.done,
+      ...(v2Ready ? {
+        unit_id: q.unitId ?? unitIdFor(units, q.siteId, q.elevatorNo),
+        assignee_id: profileIdByName(profilesAll, q.engineer),
+      } : {}),
     });
     setTodos((prev) => [newTodo, ...prev]);
   }
@@ -671,6 +738,7 @@ export default function App() {
         done: t.done,
         photo_count: t.photoCount,
         photo_urls: t.photoUrls?.length ? t.photoUrls : null,
+        ...(v2Ready ? { assignee_id: profileIdByName(profilesAll, t.assignee) } : {}),
       }))
     );
     setTodos((prev) => [...newTodos, ...prev]);
@@ -761,7 +829,7 @@ export default function App() {
   }
 
   return (
-    <AuthContext.Provider value={{ name: profile.name, role: profile.role, engineerNames, engineers, signOut: handleLogout }}>
+    <AuthContext.Provider value={{ name: profile.name, role: profile.role, engineerNames, engineers, profiles: profilesAll, selfId: profileIdByName(profilesAll, profile.name), signOut: handleLogout }}>
     <SitesContext.Provider value={sites}>
     <UnitsContext.Provider value={units}>
       <div className="h-screen w-screen bg-slate-200 flex items-center justify-center overflow-hidden">
