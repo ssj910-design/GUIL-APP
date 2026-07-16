@@ -12,6 +12,11 @@ import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets
 /* TODO (할일관리)                                                       */
 /* ------------------------------------------------------------------ */
 
+// 완료 처리/취소는 되돌리기 번거로운 동작이라, 실행 전에 한 번 더 확인을 받습니다.
+function confirmToggle(done) {
+  return window.confirm(done ? "완료를 취소하시겠습니까?" : "완료 처리하시겠습니까?");
+}
+
 export function TodoTab({ todos, setTodos, onReassignTodo }) {
   const { name: CURRENT_ENGINEER, engineerNames } = useContext(AuthContext);
   const mine = todos.filter((t) => t.assignee === CURRENT_ENGINEER);
@@ -57,7 +62,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo }) {
                   </span>
                 ) : isManual ? (
                   <button
-                    onClick={() => completeManualTodo(t.id)}
+                    onClick={() => confirmToggle(false) && completeManualTodo(t.id)}
                     className="text-xs font-bold px-3 py-1.5 rounded-lg bg-blue-700 text-white active:bg-blue-800"
                   >
                     완료 처리
@@ -100,7 +105,7 @@ function TodoRow({ t, onToggle, onOpenDetail }) {
         {!t.done && <DDay dueDate={t.dueDate} />}
       </button>
       <button
-        onClick={() => onToggle(t.id)}
+        onClick={() => confirmToggle(t.done) && onToggle(t.id)}
         className={`w-full mt-2.5 text-xs font-bold py-2 rounded-lg ${t.done ? "bg-slate-100 text-slate-500 active:bg-slate-200" : "bg-blue-700 text-white active:bg-blue-800"}`}
       >
         {t.done ? "완료 취소" : "완료 처리"}
@@ -111,6 +116,7 @@ function TodoRow({ t, onToggle, onOpenDetail }) {
 
 
 function TodoDetailSheet({ todo, onToggle, onReassign, engineerNames, onClose }) {
+  const [reassigning, setReassigning] = useState(false);
   const sourceLabel = todo.source === "manual" ? "관리자 부여" : todo.source === "quote" ? "견적 연동" : "자재 연동";
   return (
     <Sheet title="할 일 상세" onClose={onClose}>
@@ -120,18 +126,34 @@ function TodoDetailSheet({ todo, onToggle, onReassign, engineerNames, onClose })
       <div className="space-y-2.5 mb-4">
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">담당자</span>
-          {onReassign ? (
-            <select
-              className="text-sm font-semibold text-slate-700 border border-slate-200 rounded-lg px-2 py-1"
-              value={todo.assignee}
-              onChange={(e) => onReassign(todo.id, e.target.value)}
-            >
-              {engineerNames?.includes(todo.assignee) ? null : <option value={todo.assignee}>{todo.assignee}</option>}
-              {engineerNames?.map((name) => <option key={name} value={name}>{name}</option>)}
-            </select>
-          ) : (
-            <span className="font-semibold text-slate-700">{todo.assignee}</span>
-          )}
+          <div className="flex items-center gap-2">
+            {onReassign && !reassigning && (
+              <button
+                type="button"
+                onClick={() => setReassigning(true)}
+                className="text-[11px] font-bold text-blue-600 underline"
+              >
+                담당자 재배정
+              </button>
+            )}
+            {reassigning ? (
+              <select
+                autoFocus
+                className="text-sm font-semibold text-slate-700 border border-slate-200 rounded-lg px-2 py-1"
+                value={todo.assignee}
+                onChange={(e) => {
+                  onReassign(todo.id, e.target.value);
+                  setReassigning(false);
+                }}
+                onBlur={() => setReassigning(false)}
+              >
+                {engineerNames?.includes(todo.assignee) ? null : <option value={todo.assignee}>{todo.assignee}</option>}
+                {engineerNames?.map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            ) : (
+              <span className="font-semibold text-slate-700">{todo.assignee}</span>
+            )}
+          </div>
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">현장</span>
@@ -175,6 +197,7 @@ function TodoDetailSheet({ todo, onToggle, onReassign, engineerNames, onClose })
       {onToggle ? (
         <PrimaryButton
           onClick={() => {
+            if (!confirmToggle(todo.done)) return;
             onToggle(todo.id);
             onClose();
           }}

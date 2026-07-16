@@ -275,6 +275,31 @@ function AssigneeSelect({ value, options, onChange }) {
   );
 }
 
+// 견적 지급 시 실제 시공할 기사를 2명 이상 지정할 수 있게 하는 다중 선택 UI입니다.
+function MultiAssigneeSelect({ values, options, onChange }) {
+  const extras = values.filter((v) => !options.includes(v));
+  const allNames = [...options, ...extras];
+  function toggle(name) {
+    onChange(values.includes(name) ? values.filter((v) => v !== name) : [...values, name]);
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {allNames.map((name) => (
+        <button
+          key={name}
+          type="button"
+          onClick={() => toggle(name)}
+          className={`text-xs font-bold px-3 py-1.5 rounded-full border ${
+            values.includes(name) ? "bg-blue-700 text-white border-blue-700" : "bg-white text-slate-500 border-slate-300"
+          }`}
+        >
+          {name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onBack }) {
   const { engineerNames } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
@@ -443,7 +468,7 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
 function QuoteRequestsScreen({ quoteRequests, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onBack }) {
   const { engineerNames } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
-  const [assigneeMap, setAssigneeMap] = useState({});
+  const [assigneesMap, setAssigneesMap] = useState({});
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
@@ -489,43 +514,50 @@ function QuoteRequestsScreen({ quoteRequests, onAdvanceQuote, onAttachQuotePhoto
                     승인 처리
                   </button>
                 )}
-                {q.status === "승인" && (
-                  <>
-                    <div className="mb-2">
-                      <MultiPhotoUpload
-                        photos={(q.supplyPhotoUrls ?? (q.supplyPhotoUrl ? [q.supplyPhotoUrl] : [])).map((url) => ({ url }))}
-                        uploadFolder={`quotes/${q.id}/supply`}
-                        onUploaded={(url) => onAttachQuotePhoto(q.id, url)}
-                        onRemove={(idx) => onRemoveQuoteSupplyPhoto(q.id, idx)}
-                        label="지급할 자재 사진 촬영"
-                        required={false}
-                      />
-                    </div>
-                    <div className="mb-2">
-                      <label className="text-[10px] font-bold text-slate-400 block mb-1">담당 기사 (실제 시공할 기사, 기본값 신청자)</label>
-                      <AssigneeSelect
-                        value={assigneeMap[q.id] ?? q.engineer}
-                        options={engineerNames}
-                        onChange={(name) => setAssigneeMap((m) => ({ ...m, [q.id]: name }))}
-                      />
-                    </div>
-                    <button
-                      onClick={() => q.hasSupplyPhoto && onCompleteQuoteSupply(q.id, assigneeMap[q.id] ?? q.engineer)}
-                      disabled={!q.hasSupplyPhoto}
-                      className={`w-full flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg ${
-                        q.hasSupplyPhoto ? "bg-blue-700 text-white active:bg-blue-800" : "bg-slate-200 text-slate-400"
-                      }`}
-                    >
-                      <PackageCheck size={14} /> 자재 지급 완료 체크
-                    </button>
-                    {!q.hasSupplyPhoto && (
-                      <p className="text-[10px] text-slate-400 text-center mt-1">사진을 등록해야 지급완료 처리를 할 수 있습니다</p>
-                    )}
-                  </>
-                )}
+                {q.status === "승인" && (() => {
+                  const assignees = assigneesMap[q.id] ?? [q.engineer];
+                  const canComplete = q.hasSupplyPhoto && assignees.length > 0;
+                  return (
+                    <>
+                      <div className="mb-2">
+                        <MultiPhotoUpload
+                          photos={(q.supplyPhotoUrls ?? (q.supplyPhotoUrl ? [q.supplyPhotoUrl] : [])).map((url) => ({ url }))}
+                          uploadFolder={`quotes/${q.id}/supply`}
+                          onUploaded={(url) => onAttachQuotePhoto(q.id, url)}
+                          onRemove={(idx) => onRemoveQuoteSupplyPhoto(q.id, idx)}
+                          label="지급할 자재 사진 촬영"
+                          required={false}
+                        />
+                      </div>
+                      <div className="mb-2">
+                        <label className="text-[10px] font-bold text-slate-400 block mb-1">담당 기사 (실제 시공할 기사, 2명 이상 지정 가능 · 기본값 신청자)</label>
+                        <MultiAssigneeSelect
+                          values={assignees}
+                          options={engineerNames}
+                          onChange={(names) => setAssigneesMap((m) => ({ ...m, [q.id]: names }))}
+                        />
+                      </div>
+                      <button
+                        onClick={() => canComplete && onCompleteQuoteSupply(q.id, assignees)}
+                        disabled={!canComplete}
+                        className={`w-full flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg ${
+                          canComplete ? "bg-blue-700 text-white active:bg-blue-800" : "bg-slate-200 text-slate-400"
+                        }`}
+                      >
+                        <PackageCheck size={14} /> 자재 지급 완료 체크
+                      </button>
+                      {!q.hasSupplyPhoto && (
+                        <p className="text-[10px] text-slate-400 text-center mt-1">사진을 등록해야 지급완료 처리를 할 수 있습니다</p>
+                      )}
+                      {q.hasSupplyPhoto && assignees.length === 0 && (
+                        <p className="text-[10px] text-slate-400 text-center mt-1">담당 기사를 1명 이상 선택해주세요</p>
+                      )}
+                    </>
+                  );
+                })()}
                 {q.status === "자재지급완료" && (
                   <p className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
-                    <PackageCheck size={12} /> {q.suppliedDate} 지급완료 · {q.engineer} 기사에게 할 일 자동 생성됨
+                    <PackageCheck size={12} /> {q.suppliedDate} 지급완료 · 담당 기사에게 할 일 자동 생성됨
                   </p>
                 )}
               </div>

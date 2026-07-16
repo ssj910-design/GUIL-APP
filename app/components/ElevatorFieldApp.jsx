@@ -601,19 +601,22 @@ export default function App() {
       .eq("id", quoteId);
   }
 
-  // ★ 자재지급완료 트리거: 이 순간 담당 기사에게 할 일이 자동 생성됩니다
-  // assignee를 넘기면(신청자와 실제 시공 기사가 다른 경우) 그 이름으로 할 일이 생성됩니다.
-  async function handleCompleteQuoteSupply(quoteId, assignee) {
+  // ★ 자재지급완료 트리거: 이 순간 담당 기사(들)에게 할 일이 자동 생성됩니다
+  // assignees(배열)를 넘기면 신청자 외에 실제 시공 기사를 2명 이상 지정할 수 있고,
+  // 각 담당자마다 할 일이 하나씩 생성됩니다 (같은 quoteRequestId를 공유 — 한 명이 비용청구를
+  // 하면 나머지 담당자의 할 일도 함께 자동완료됩니다).
+  async function handleCompleteQuoteSupply(quoteId, assignees) {
     const q = quoteRequests.find((x) => x.id === quoteId);
     if (!q || !q.hasSupplyPhoto) return;
+    const finalAssignees = assignees?.length ? assignees : [q.engineer];
 
     await supabase.from("quote_requests").update({ status: "자재지급완료", supplied_date: TODAY_STR }).eq("id", quoteId);
     setQuoteRequests((prev) =>
       prev.map((x) => (x.id === quoteId && x.hasSupplyPhoto ? { ...x, status: "자재지급완료", suppliedDate: TODAY_STR } : x))
     );
 
-    const newTodo = {
-      id: "todo-quote-" + quoteId,
+    const newTodos = finalAssignees.map((assignee, idx) => ({
+      id: `todo-quote-${quoteId}-${idx}`,
       materialRequestId: null,
       quoteRequestId: quoteId,
       source: "quote",
@@ -621,25 +624,27 @@ export default function App() {
       siteName: q.siteName,
       elevatorNo: q.elevatorNo,
       part: q.constructionType,
-      assignee: assignee || q.engineer,
+      assignee,
       assignedDate: TODAY_STR,
       dueDate: addDays(TODAY_STR, 30),
       done: false,
-    };
-    await supabase.from("todos").insert({
-      id: newTodo.id,
-      quote_request_id: newTodo.quoteRequestId,
-      source: newTodo.source,
-      title: newTodo.title,
-      site_name: newTodo.siteName,
-      elevator_no: newTodo.elevatorNo,
-      part: newTodo.part,
-      assignee: newTodo.assignee,
-      assigned_date: newTodo.assignedDate,
-      due_date: newTodo.dueDate,
-      done: newTodo.done,
-    });
-    setTodos((prev) => [newTodo, ...prev]);
+    }));
+    await supabase.from("todos").insert(
+      newTodos.map((t) => ({
+        id: t.id,
+        quote_request_id: t.quoteRequestId,
+        source: t.source,
+        title: t.title,
+        site_name: t.siteName,
+        elevator_no: t.elevatorNo,
+        part: t.part,
+        assignee: t.assignee,
+        assigned_date: t.assignedDate,
+        due_date: t.dueDate,
+        done: t.done,
+      }))
+    );
+    setTodos((prev) => [...newTodos, ...prev]);
   }
 
   // ★ 관리자가 직원(1명 이상)에게 할 일을 직접 부여 — 담당자마다 할 일을 하나씩 만듭니다
