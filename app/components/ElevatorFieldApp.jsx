@@ -180,7 +180,7 @@ export default function App() {
         supabase.from("quote_requests").select("*").order("created_at", { ascending: false }),
         supabase.from("billings").select("*").order("created_at", { ascending: false }),
         supabase.from("restock_requests").select("*").order("created_at", { ascending: false }),
-        supabase.from("feed_posts").select("*").order("created_at", { ascending: false }),
+        supabase.from("feed_posts").select("*").order("created_at", { ascending: true }), // 카톡식: 오래된 글이 위, 최신이 아래
         supabase.from("profiles").select("id,name,role,phone,email,feed_read_at").order("name"),
         supabase.from("units").select("*").order("seq"),
         supabase.from("kit_stock").select("*"),
@@ -212,7 +212,7 @@ export default function App() {
   useEffect(() => {
     if (!skipLogin && !session) return;
     const t = setInterval(async () => {
-      const { data } = await supabase.from("feed_posts").select("*").order("created_at", { ascending: false });
+      const { data } = await supabase.from("feed_posts").select("*").order("created_at", { ascending: true });
       if (data) setFeed(data.map(mapFeedPost));
     }, 30000);
     return () => clearInterval(t);
@@ -897,7 +897,7 @@ export default function App() {
   const selfDbReadAt = profilesAll.find((p) => p.id === profileIdByName(profilesAll, myName))?.feed_read_at;
   const readMs = Date.parse(feedReadAt ?? selfDbReadAt ?? "") || 0;
   const unreadPosts = feed.filter((p) => p.author !== myName && p.createdAt && new Date(p.createdAt).getTime() > readMs);
-  const mentionCnt = unreadPosts.filter((p) => (p.text ?? "").includes("@" + myName)).length;
+  const mentionCnt = unreadPosts.filter((p) => (p.text ?? "").includes("@" + myName) || (p.text ?? "").includes("@모두")).length;
 
   if (!skipLogin && session === undefined) {
     return (

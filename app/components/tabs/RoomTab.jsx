@@ -1,4 +1,4 @@
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect, useRef } from "react";
 import { Send } from "lucide-react";
 import { AuthContext } from "@/app/components/context";
 
@@ -14,12 +14,18 @@ export function RoomTab({ feed, onSendChat }) {
     setChatInput("");
   }
 
-  // @태그 자동완성 — 입력 끝이 "@이름일부"면 후보 칩을 보여준다
+  // @멘션 피커(팀즈식) — "@"를 치는 순간 @모두 + 전체 팀원 목록이 뜨고, 이어 치면 좁혀진다
   const tagMatch = /@([가-힣a-zA-Z0-9()]*)$/.exec(chatInput);
-  const tagCands = tagMatch
-    ? (profiles ?? []).map((p) => p.name).filter((n) => n !== CURRENT_ENGINEER && n.includes(tagMatch[1])).slice(0, 5)
-    : [];
+  const memberNames = (profiles ?? []).map((p) => p.name).filter((n) => n !== CURRENT_ENGINEER);
+  const tagCands = tagMatch ? ["모두", ...memberNames].filter((n) => n.includes(tagMatch[1])) : [];
   const pickTag = (n) => setChatInput(chatInput.replace(/@[가-힣a-zA-Z0-9()]*$/, "@" + n + " "));
+
+  // 카톡식: 열릴 때·새 글 도착 시 맨 아래(최신)로 스크롤
+  const scrollRef = useRef(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [feed.length]);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -33,7 +39,7 @@ export function RoomTab({ feed, onSendChat }) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-3">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 pb-4 space-y-3">
         {feed.map((p) => {
           const mine = p.author === CURRENT_ENGINEER;
           return (
@@ -54,10 +60,20 @@ export function RoomTab({ feed, onSendChat }) {
         })}
       </div>
       {tagCands.length > 0 && (
-        <div className="shrink-0 bg-white border-t border-slate-100 px-4 py-2 flex gap-2 overflow-x-auto">
+        <div className="shrink-0 bg-white border-t border-slate-200 max-h-44 overflow-y-auto shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
           {tagCands.map((n) => (
-            <button key={n} onClick={() => pickTag(n)} className="text-xs font-bold text-blue-700 bg-blue-50 rounded-full px-3 py-1.5 whitespace-nowrap">
-              @{n}
+            <button
+              key={n}
+              onClick={() => pickTag(n)}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 border-b border-slate-50 active:bg-blue-50 text-left"
+            >
+              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                n === "모두" ? "bg-blue-700 text-white" : "bg-slate-200 text-slate-600"
+              }`}>
+                {n === "모두" ? "@" : n[0]}
+              </span>
+              <span className="text-sm font-bold text-slate-700">{n === "모두" ? "모두" : n}</span>
+              {n === "모두" && <span className="text-[11px] text-slate-400">전체에게 알림</span>}
             </button>
           ))}
         </div>
