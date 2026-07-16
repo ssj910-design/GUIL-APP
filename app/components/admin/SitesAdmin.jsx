@@ -14,7 +14,7 @@ import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetail
 import { Modal, StatusBadge } from "@/app/components/admin/adminShared";
 
 const CONTRACT_TYPES = ["POG(일반계약)", "FM(종합계약)"];
-const CONTACT_ROLES = ["대표", "관리소장", "건물주", "경비실", "입주민 대표", "기타"];
+const CONTACT_ROLES = ["대표", "담당자", "관리소장", "건물주", "경비실", "입주민 대표", "기타"];
 const UNIT_TYPES = ["엘리베이터", "에스컬레이터", "휠체어리프트", "카리프트"];
 const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
 
@@ -42,12 +42,15 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
     : inspections.filter((i) => (i.unitId ? i.unitId === unit.id : i.siteId === site.id));
   const unitBillings = billings.filter((b) => (b.unitId ? b.unitId === unit.id : b.siteName === site.name));
 
+  // 모바일 앱 "승강기정보 - 정보" 탭과 동일한 항목·순서.
   const infoRows = [
-    ["종류", unit.unitType],
-    ["모델", liveInfo?.kindNm || unit.model || "-"],
-    ["형식", liveInfo?.form || "-"],
-    ["설치일", liveInfo?.frstInstallationDe || unit.installDate || "-"],
-    ["승강기고유번호", unit.govNo || "미등록"],
+    ["건물명", site.name],
+    ["호기", unit.unitNo],
+    ["승강기번호", liveInfo?.govElevatorNo || "미등록"],
+    ["승강기종류", liveInfo?.kindNm || "-"],
+    ["승강기형식", liveInfo?.form || "-"],
+    ["승강기모델", unit.model || "-"],
+    ["설치일자", liveInfo?.frstInstallationDe || unit.installDate || "-"],
     ["운행층수", liveInfo ? `지상 ${liveInfo.groundFloorCnt} / 지하 ${liveInfo.undgrndFloorCnt}` : "-"],
     ["운행구간", liveInfo?.shuttleSection || "-"],
     ["적재하중", liveInfo ? `${liveInfo.liveLoad}kg` : "-"],
@@ -56,7 +59,7 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
 
   return (
     <Modal title={`${site.name} · ${unit.unitNo} 상세정보`} onClose={onClose} wide>
-      <div className="flex gap-1 mb-4 border-b border-slate-100">
+      <div className="flex gap-1 mb-4 border-b border-slate-100 shrink-0">
         {["정보", "고장내역", "검사내역", "부품교체내역"].map((t) => (
           <button key={t} onClick={() => setTab(t)} className={`px-3 py-2 text-xs font-bold ${tab === t ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}>
             {t}
@@ -64,86 +67,89 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
         ))}
       </div>
 
-      {tab === "정보" && (
-        <div className="space-y-2 text-sm">
-          {infoRows.map(([label, value]) => (
-            <div key={label} className="flex justify-between border-b border-slate-50 pb-2">
-              <span className="text-slate-400">{label}</span>
-              <span className="font-semibold text-slate-800">{value}</span>
-            </div>
-          ))}
-          {liveInfo && <p className="text-[10px] text-slate-400 pt-2">* 국가승강기정보센터 실시간 데이터</p>}
-        </div>
-      )}
-
-      {tab === "고장내역" && (
-        unitFailures.length === 0 ? <p className="text-xs text-slate-400 text-center py-10">등록된 고장 이력이 없습니다</p> : (
-          <div className="space-y-2">
-            {unitFailures.map((f) => (
-              <div key={f.id} className="border border-slate-200 rounded-lg p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="font-bold text-sm">{f.errorCode}</p>
-                  <StatusBadge tone={f.status === "완료" ? "green" : f.status === "진행중" ? "amber" : "red"}>
-                    {f.escalation ? `${f.status}·${f.escalation}` : f.status}
-                  </StatusBadge>
-                </div>
-                <p className="text-xs text-slate-500">{f.reportedAt} 접수 · {f.assignee ?? "미배정"}</p>
+      {/* 탭마다 팝업 크기가 달라지지 않도록 고정 높이 + 내부 스크롤로 통일 */}
+      <div className="h-[26rem] overflow-y-auto">
+        {tab === "정보" && (
+          <div className="space-y-2 text-sm">
+            {infoRows.map(([label, value]) => (
+              <div key={label} className="flex justify-between border-b border-slate-50 pb-2">
+                <span className="text-slate-400">{label}</span>
+                <span className="font-semibold text-slate-800">{value}</span>
               </div>
             ))}
+            {liveInfo && <p className="text-[10px] text-slate-400 pt-2">* 국가승강기정보센터 실시간 데이터</p>}
           </div>
-        )
-      )}
+        )}
 
-      {tab === "검사내역" && (
-        unitInspections.length === 0 ? <p className="text-xs text-slate-400 text-center py-10">등록된 검사 이력이 없습니다</p> : (
-          <div className="space-y-2">
-            {unitInspections.map((i) => {
-              const isLive = i.id?.startsWith("gov-");
-              const clickable = isLive && (i.result === "conditional" || i.result === "fail");
-              return (
-                <div
-                  key={i.id}
-                  onClick={clickable ? () => setFailTarget(i) : undefined}
-                  className={`border border-slate-200 rounded-lg p-3 ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`}
-                >
+        {tab === "고장내역" && (
+          unitFailures.length === 0 ? <p className="text-xs text-slate-400 text-center py-10">등록된 고장 이력이 없습니다</p> : (
+            <div className="space-y-2">
+              {unitFailures.map((f) => (
+                <div key={f.id} className="border border-slate-200 rounded-lg p-3">
                   <div className="flex items-center justify-between mb-1">
-                    <p className="font-bold text-sm">{i.type}</p>
-                    {i.result ? <Badge result={i.result} /> : <StatusBadge tone="slate">예정</StatusBadge>}
+                    <p className="font-bold text-sm">{f.errorCode}</p>
+                    <StatusBadge tone={f.status === "완료" ? "green" : f.status === "진행중" ? "amber" : "red"}>
+                      {f.escalation ? `${f.status}·${f.escalation}` : f.status}
+                    </StatusBadge>
                   </div>
-                  <p className="text-xs text-slate-500">{i.org} · 기한 {i.dueDate}</p>
-                  {clickable && <p className="text-[10px] text-blue-600 font-semibold mt-1">클릭해서 부적합 상세 항목 보기</p>}
+                  <p className="text-xs text-slate-500">{f.reportedAt} 접수 · {f.assignee ?? "미배정"}</p>
                 </div>
-              );
-            })}
-          </div>
-        )
-      )}
+              ))}
+            </div>
+          )
+        )}
 
-      {tab === "부품교체내역" && (
-        unitBillings.length === 0 ? <p className="text-xs text-slate-400 text-center py-10">등록된 부품교체 내역이 없습니다</p> : (
-          <div className="space-y-2">
-            {unitBillings.map((b) => {
-              const photos = [...(b.beforePhotoUrls ?? []), ...(b.afterPhotoUrls ?? [])];
-              return (
-                <div key={b.id} className="border border-slate-200 rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="font-bold text-sm">{b.part}</p>
-                    <span className="text-sm font-bold">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</span>
-                  </div>
-                  <p className="text-xs text-slate-500">{b.replaceDate ?? "-"} · {b.engineer ?? "-"}</p>
-                  {photos.length > 0 && (
-                    <div className="flex gap-1.5 mt-2 overflow-x-auto">
-                      {photos.map((url, i) => (
-                        <img key={i} src={url} alt="" className="w-14 h-14 rounded object-cover border border-slate-200 shrink-0" />
-                      ))}
+        {tab === "검사내역" && (
+          unitInspections.length === 0 ? <p className="text-xs text-slate-400 text-center py-10">등록된 검사 이력이 없습니다</p> : (
+            <div className="space-y-2">
+              {unitInspections.map((i) => {
+                const isLive = i.id?.startsWith("gov-");
+                const clickable = isLive && (i.result === "conditional" || i.result === "fail");
+                return (
+                  <div
+                    key={i.id}
+                    onClick={clickable ? () => setFailTarget(i) : undefined}
+                    className={`border border-slate-200 rounded-lg p-3 ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="font-bold text-sm">{i.type}</p>
+                      {i.result ? <Badge result={i.result} /> : <StatusBadge tone="slate">예정</StatusBadge>}
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )
-      )}
+                    <p className="text-xs text-slate-500">{i.org} · 기한 {i.dueDate}</p>
+                    {clickable && <p className="text-[10px] text-blue-600 font-semibold mt-1">클릭해서 부적합 상세 항목 보기</p>}
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+
+        {tab === "부품교체내역" && (
+          unitBillings.length === 0 ? <p className="text-xs text-slate-400 text-center py-10">등록된 부품교체 내역이 없습니다</p> : (
+            <div className="space-y-2">
+              {unitBillings.map((b) => {
+                const photos = [...(b.beforePhotoUrls ?? []), ...(b.afterPhotoUrls ?? [])];
+                return (
+                  <div key={b.id} className="border border-slate-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="font-bold text-sm">{b.part}</p>
+                      <span className="text-sm font-bold">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</span>
+                    </div>
+                    <p className="text-xs text-slate-500">{b.replaceDate ?? "-"} · {b.engineer ?? "-"}</p>
+                    {photos.length > 0 && (
+                      <div className="flex gap-1.5 mt-2 overflow-x-auto">
+                        {photos.map((url, i) => (
+                          <img key={i} src={url} alt="" className="w-14 h-14 rounded object-cover border border-slate-200 shrink-0" />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+      </div>
 
       {failTarget && <InspectionFailDetailSheet inspection={failTarget} onClose={() => setFailTarget(null)} />}
     </Modal>
@@ -220,6 +226,8 @@ export default function SitesAdmin({ data, setData }) {
   const [selectedId, setSelectedId] = useState(null);
   const [siteForm, setSiteForm] = useState(null); // 선택 현장 기본정보 편집값
   const [editingInfo, setEditingInfo] = useState(false);
+  const [editingContacts, setEditingContacts] = useState(false);
+  const [editingUnits, setEditingUnits] = useState(false);
   const [newSite, setNewSite] = useState(null);   // 신규 등록 폼 (null=닫힘)
   const [unitDetail, setUnitDetail] = useState(null);
 
@@ -232,9 +240,18 @@ export default function SitesAdmin({ data, setData }) {
 
   const contacts = siteManagers.filter((m) => m.siteId === selectedId);
 
+  // 읽기전용 "승강기 정보" 표에 국가승강기정보센터 실시간 종류·설치일자를 채워준다.
+  const siteUnitQueries = siteUnits
+    .filter((u) => u.govNo)
+    .map((u) => ({ key: u.id, siteId: u.siteId, siteName: site?.name, govElevatorNo: u.govNo }));
+  const liveUnitInfo = useLiveInspections(siteUnitQueries);
+  const liveOf = (unitId) => liveUnitInfo.find((i) => i.id === `gov-${unitId}`);
+
   function select(s) {
     setSelectedId(s.id);
     setEditingInfo(false);
+    setEditingContacts(false);
+    setEditingUnits(false);
     setSiteForm({
       name: s.name, address: s.address ?? "", contractType: s.contractType ?? CONTRACT_TYPES[0],
       notes: s.notes ?? "", assignedEngineer: s.assignedEngineer ?? "",
@@ -551,9 +568,9 @@ export default function SitesAdmin({ data, setData }) {
                         <div><p className="text-xs font-bold text-slate-400 mb-1">계약구분</p><p className="font-semibold text-slate-800">{site.contractType || "-"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">담당 기사</p><p className="font-semibold text-slate-800">{site.assignedEngineer || "미배정"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">계약일자</p><p className="font-semibold text-slate-800">{contractDateReady ? (site.contractDate || "-") : "마이그레이션 대기"}</p></div>
-                        <div><p className="text-xs font-bold text-slate-400 mb-1">공통 전화번호</p><p className="font-semibold text-slate-800">{site.phone || "-"}</p></div>
-                        <div><p className="text-xs font-bold text-slate-400 mb-1">공통 팩스</p><p className="font-semibold text-slate-800">{site.fax || "-"}</p></div>
-                        <div><p className="text-xs font-bold text-slate-400 mb-1">공통 이메일</p><p className="font-semibold text-slate-800">{site.email || "-"}</p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">전화번호</p><p className="font-semibold text-slate-800">{site.phone || "-"}</p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">팩스</p><p className="font-semibold text-slate-800">{site.fax || "-"}</p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">이메일</p><p className="font-semibold text-slate-800">{site.email || "-"}</p></div>
                         <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(전달사항)</p><p className="text-slate-700">{site.notes || "-"}</p></div>
                       </div>
                       <button onClick={() => setEditingInfo(true)} className="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 whitespace-nowrap ml-3">
@@ -589,9 +606,9 @@ export default function SitesAdmin({ data, setData }) {
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-3">
-                      <div><p className="text-xs font-bold text-slate-500 mb-1">공통 전화번호</p><input className={inputCls} placeholder="관리사무소 대표번호" value={siteForm.phone} onChange={(e) => setSiteForm({ ...siteForm, phone: e.target.value })} /></div>
-                      <div><p className="text-xs font-bold text-slate-500 mb-1">공통 팩스</p><input className={inputCls} value={siteForm.fax} onChange={(e) => setSiteForm({ ...siteForm, fax: e.target.value })} /></div>
-                      <div><p className="text-xs font-bold text-slate-500 mb-1">공통 이메일</p><input className={inputCls} value={siteForm.email} onChange={(e) => setSiteForm({ ...siteForm, email: e.target.value })} /></div>
+                      <div><p className="text-xs font-bold text-slate-500 mb-1">전화번호</p><input className={inputCls} placeholder="관리사무소 대표번호" value={siteForm.phone} onChange={(e) => setSiteForm({ ...siteForm, phone: e.target.value })} /></div>
+                      <div><p className="text-xs font-bold text-slate-500 mb-1">팩스</p><input className={inputCls} value={siteForm.fax} onChange={(e) => setSiteForm({ ...siteForm, fax: e.target.value })} /></div>
+                      <div><p className="text-xs font-bold text-slate-500 mb-1">이메일</p><input className={inputCls} value={siteForm.email} onChange={(e) => setSiteForm({ ...siteForm, email: e.target.value })} /></div>
                     </div>
                     <div className="flex items-end gap-3">
                       <div className="flex-1"><p className="text-xs font-bold text-slate-500 mb-1">비고(전달사항)</p><input className={inputCls} value={siteForm.notes} onChange={(e) => setSiteForm({ ...siteForm, notes: e.target.value })} /></div>
@@ -604,14 +621,21 @@ export default function SitesAdmin({ data, setData }) {
 
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                  <h2 className="text-sm font-bold">현장 담당자 — 개인 연락처 <span className="text-slate-400">({contacts.length})</span> <span className="text-[10px] text-slate-400 font-normal">★ = 대표(SMS·안내 수신) · 공통 연락처는 위 기본정보에</span></h2>
-                  <button onClick={addContact} className="flex items-center gap-1 text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-2.5 py-1.5">
-                    <Plus size={13} /> 담당자 추가
-                  </button>
+                  <h2 className="text-sm font-bold">현장 담당자 <span className="text-slate-400">({contacts.length})</span></h2>
+                  {editingContacts ? (
+                    <div className="flex items-center gap-2">
+                      <button onClick={addContact} className="flex items-center gap-1 text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-2.5 py-1.5">
+                        <Plus size={13} /> 담당자 추가
+                      </button>
+                      <button onClick={() => setEditingContacts(false)} className="text-xs font-bold text-slate-500 border border-slate-200 rounded-lg px-2.5 py-1.5">완료</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setEditingContacts(true)} className="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5">수정하기</button>
+                  )}
                 </div>
                 {contacts.length === 0 ? (
                   <p className="text-xs text-slate-400 text-center py-6">등록된 담당자가 없습니다</p>
-                ) : (
+                ) : editingContacts ? (
                   <table className="w-full text-sm table-fixed">
                     <thead>
                       <tr className="text-xs text-slate-400 border-b border-slate-100">
@@ -628,35 +652,96 @@ export default function SitesAdmin({ data, setData }) {
                       ))}
                     </tbody>
                   </table>
+                ) : (
+                  <table className="w-full text-sm table-fixed">
+                    <thead>
+                      <tr className="text-xs text-slate-400 border-b border-slate-100">
+                        <th className="w-8" /><th className="text-left px-2 py-2 font-semibold w-28">역할</th>
+                        <th className="text-left px-2 py-2 font-semibold w-24">이름</th>
+                        <th className="text-left px-2 py-2 font-semibold w-36">전화번호</th>
+                        <th className="text-left px-2 py-2 font-semibold">이메일</th>
+                        <th className="text-left px-2 py-2 font-semibold w-28">팩스</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {contacts.map((c) => (
+                        <tr key={c.id} className="border-b border-slate-50">
+                          <td className="pl-4 py-2 w-8 text-center">{c.isPrimary && <span className="text-amber-500">★</span>}</td>
+                          <td className="px-2 py-2">{c.role}</td>
+                          <td className="px-2 py-2">{c.name || "-"}</td>
+                          <td className="px-2 py-2">{c.phone || "-"}</td>
+                          <td className="px-2 py-2">{c.email || "-"}</td>
+                          <td className="px-2 py-2">{c.fax || "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
               </div>
 
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                  <h2 className="text-sm font-bold">호기 목록 <span className="text-slate-400">({siteUnits.length})</span></h2>
-                  <button onClick={addUnit} className="flex items-center gap-1 text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-2.5 py-1.5">
-                    <Plus size={13} /> 호기 추가
-                  </button>
+                  <h2 className="text-sm font-bold">승강기 정보 <span className="text-slate-400">({siteUnits.length})</span></h2>
+                  {editingUnits ? (
+                    <div className="flex items-center gap-2">
+                      <button onClick={addUnit} className="flex items-center gap-1 text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-2.5 py-1.5">
+                        <Plus size={13} /> 호기 추가
+                      </button>
+                      <button onClick={() => setEditingUnits(false)} className="text-xs font-bold text-slate-500 border border-slate-200 rounded-lg px-2.5 py-1.5">완료</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setEditingUnits(true)} className="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5">수정하기</button>
+                  )}
                 </div>
-                <table className="w-full text-sm table-fixed">
-                  <thead>
-                    <tr className="text-xs text-slate-400 border-b border-slate-100">
-                      <th className="text-left px-4 py-2 font-semibold w-14">호기</th>
-                      <th className="text-left px-2 py-2 font-semibold w-28">종류</th>
-                      <th className="text-left px-2 py-2 font-semibold">모델</th>
-                      <th className="text-left px-2 py-2 font-semibold w-32">설치일</th>
-                      <th className="text-left px-2 py-2 font-semibold w-32">승강기고유번호</th>
-                      <th className="w-40" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {siteUnits.map((u) => (
-                      <UnitRow key={u.id} unit={u} onSave={saveUnit} onToggleActive={toggleUnitActive} onDelete={deleteUnit} onOpenDetail={setUnitDetail} />
-                    ))}
-                  </tbody>
-                </table>
+                {editingUnits ? (
+                  <table className="w-full text-sm table-fixed">
+                    <thead>
+                      <tr className="text-xs text-slate-400 border-b border-slate-100">
+                        <th className="text-left px-4 py-2 font-semibold w-14">호기</th>
+                        <th className="text-left px-2 py-2 font-semibold w-28">종류</th>
+                        <th className="text-left px-2 py-2 font-semibold">모델</th>
+                        <th className="text-left px-2 py-2 font-semibold w-32">설치일</th>
+                        <th className="text-left px-2 py-2 font-semibold w-32">승강기고유번호</th>
+                        <th className="w-40" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {siteUnits.map((u) => (
+                        <UnitRow key={u.id} unit={u} onSave={saveUnit} onToggleActive={toggleUnitActive} onDelete={deleteUnit} onOpenDetail={setUnitDetail} />
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <table className="w-full text-sm table-fixed">
+                    <thead>
+                      <tr className="text-xs text-slate-400 border-b border-slate-100">
+                        <th className="text-left px-4 py-2 font-semibold w-14">호기</th>
+                        <th className="text-left px-2 py-2 font-semibold w-32">승강기고유번호</th>
+                        <th className="text-left px-2 py-2 font-semibold w-28">종류</th>
+                        <th className="text-left px-2 py-2 font-semibold">모델</th>
+                        <th className="text-left px-2 py-2 font-semibold w-32">설치일자</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {siteUnits.map((u) => {
+                        const live = liveOf(u.id);
+                        return (
+                          <tr key={u.id} className={`border-b border-slate-50 ${u.isActive === false ? "opacity-40" : ""}`}>
+                            <td className="px-4 py-2 font-bold whitespace-nowrap">
+                              <button onClick={() => setUnitDetail(u)} className="text-blue-700 hover:underline">{u.unitNo}</button>
+                            </td>
+                            <td className="px-2 py-2">{u.govNo || "미등록"}</td>
+                            <td className="px-2 py-2">{live?.kindNm || u.unitType}</td>
+                            <td className="px-2 py-2">{u.model || "-"}</td>
+                            <td className="px-2 py-2">{live?.frstInstallationDe || u.installDate || "-"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
                 <p className="px-4 py-2.5 text-[10px] text-slate-400 border-t border-slate-50">
-                  * 호기명을 클릭하면 상세정보(승강기정보·고장·검사·부품교체내역)를 볼 수 있습니다. 승강기고유번호를 등록하면 실시간 데이터로 전환됩니다.
+                  * 호기명을 클릭하면 상세정보(승강기정보·고장·검사·부품교체내역)를 볼 수 있습니다. 승강기고유번호를 등록하면 종류·설치일자가 국가승강기정보센터 실시간 데이터로 전환됩니다.
                 </p>
               </div>
             </>
