@@ -93,7 +93,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     if (manualForm.fromKit) {
       manualForm.parts
         .filter((r) => r.name.trim() && r.qty)
-        .forEach((r) => onUseKitPart({ part: r.name.trim(), siteName: site.name }));
+        .forEach((r) => onUseKitPart({ part: r.name.trim(), siteName: site.name, qty: Number(r.qty) }));
     }
     setSubmitted({ siteName: site.name, part: partText, manual: true, fromKit: manualForm.fromKit });
     setManualForm({ siteId: "", unit: "", parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });

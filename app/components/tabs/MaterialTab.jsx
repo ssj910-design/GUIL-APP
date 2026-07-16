@@ -2,7 +2,7 @@ import React, { useState, useContext } from "react";
 import { ChevronRight, X, Plus, Search, PackageCheck, PackageX } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnits, unitIdFor, profileIdByName } from "@/lib/utils";
-import { TODAY_STR, QUOTE_STAGES } from "@/lib/constants";
+import { TODAY_STR, QUOTE_STAGES, KIT_PARTS } from "@/lib/constants";
 import { PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
@@ -141,7 +141,7 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack }) {
 }
 
 
-function RestockHistoryScreen({ restockRequests, onBack }) {
+function RestockHistoryScreen({ restockRequests, kitStock, onBack, onReceiveRestock }) {
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState("전체");
   const [photoViewTarget, setPhotoViewTarget] = useState(null);
@@ -154,7 +154,21 @@ function RestockHistoryScreen({ restockRequests, onBack }) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
-      <DrillHeader title="나의 상비부품 보충 전체보기" onBack={onBack} onHome={onBack} />
+      <DrillHeader title="나의 상비부품 현황" onBack={onBack} onHome={onBack} />
+      <div className="px-5 pt-3 pb-1 shrink-0">
+        <p className="text-xs font-bold text-slate-800 mb-2">등록된 상비부품 현황</p>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          {KIT_PARTS.filter((p) => p !== "기타").map((part) => {
+            const qty = kitStock.find((k) => k.part === part)?.qty ?? 0;
+            return (
+              <div key={part} className="bg-slate-50 rounded-lg border border-slate-200 px-3 py-2">
+                <p className="text-[11px] text-slate-500">{part}</p>
+                <p className="text-sm font-bold text-slate-800">{qty}개</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
       <div className="px-5 pt-3 pb-2 shrink-0">
         <div className="relative mb-2.5">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -204,6 +218,17 @@ function RestockHistoryScreen({ restockRequests, onBack }) {
                   <span className="text-[11px] text-emerald-600 font-semibold">지급완료 사진 확인하기</span>
                   <ChevronRight size={13} className="text-emerald-600" />
                 </button>
+              )}
+              {r.status === "완료" && !r.receivedAt && onReceiveRestock && (
+                <button
+                  onClick={() => onReceiveRestock(r.id)}
+                  className="w-full mt-2 bg-blue-700 text-white rounded-lg px-3 py-2 text-[11px] font-bold active:bg-blue-800"
+                >
+                  수령하기 (재고 {r.quantity ?? 1}개 반영)
+                </button>
+              )}
+              {r.status === "완료" && r.receivedAt && (
+                <p className="text-[10px] text-slate-400 mt-1.5 text-center">수령 완료 · {r.receivedAt.slice(0, 10)}</p>
               )}
             </div>
           ))
@@ -315,7 +340,7 @@ export function PartsRowsInput({ rows, setRows, nameOptions, namePlaceholder = "
 }
 
 
-export function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, setQuoteRequests, restockRequests }) {
+export function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, setQuoteRequests, restockRequests, kitStock = [], onReceiveRestock }) {
   const sites = useContext(SitesContext);
   const { name: CURRENT_ENGINEER, selfId } = useContext(AuthContext);
   const units = useContext(UnitsContext);
@@ -465,7 +490,9 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
     return (
       <RestockHistoryScreen
         restockRequests={restockRequests.filter((r) => r.engineer === CURRENT_ENGINEER)}
+        kitStock={kitStock.filter((k) => k.engineerId === selfId)}
         onBack={() => setShowRestockHistory(false)}
+        onReceiveRestock={onReceiveRestock}
       />
     );
   }
@@ -614,7 +641,7 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
 
           <div className="px-5 pt-4">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="font-bold text-slate-800 text-sm">나의 상비부품 보충 현황</h3>
+              <h3 className="font-bold text-slate-800 text-sm">나의 상비부품 현황</h3>
               <button onClick={() => setShowRestockHistory(true)} className="text-xs font-bold text-blue-600 flex items-center gap-0.5">
                 전체보기 <ChevronRight size={12} />
               </button>
@@ -656,6 +683,14 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
                       >
                         <span className="text-[11px] text-emerald-600 font-semibold">지급완료 사진 확인하기</span>
                         <ChevronRight size={13} className="text-emerald-600" />
+                      </button>
+                    )}
+                    {r.status === "완료" && !r.receivedAt && onReceiveRestock && (
+                      <button
+                        onClick={() => onReceiveRestock(r.id)}
+                        className="w-full mt-2 bg-blue-700 text-white rounded-lg px-3 py-2 text-[11px] font-bold active:bg-blue-800"
+                      >
+                        수령하기 (재고 {r.quantity ?? 1}개 반영)
                       </button>
                     )}
                   </div>

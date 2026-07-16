@@ -26,14 +26,19 @@ alter table public.restock_requests add column if not exists quantity int not nu
 -- 수령 확인 시각 (지급완료 후 기사가 "수령"을 누르는 시점 — 이때 재고 증가)
 alter table public.restock_requests add column if not exists received_at timestamptz;
 
--- 초기 재고 시드 — ⚠️ 전체 목록·대상 기사 확정 후 값 채워서 실행
--- (2026-07-16 전달받은 목록 일부: 배터리(12V7AH) 4EA, 배터리(12V2.9AH) 2EA,
---  배터리(12V1.2AH) 2EA, SMPS(VSF50EE) 1EA, ... ← 전체 목록 대기 중)
--- insert into public.kit_stock (engineer_id, part, qty)
--- select p.id, v.part, v.qty
--- from (values ('배터리(12V7AH)', 4), ('배터리(12V2.9AH)', 2), ('배터리(12V1.2AH)', 2), ('SMPS(VSF50EE)', 1)) as v(part, qty)
--- cross join public.profiles p where p.name = '신석주'  -- ← 대상 기사 확정 필요
--- on conflict (engineer_id, part) do update set qty = excluded.qty;
+-- 초기 재고 시드 — 2026-07-16 확정: 신석주에게만 우선 지급 (테스트용, 나머지 기사는 추후 추가)
+insert into public.kit_stock (engineer_id, part, qty)
+select p.id, v.part, v.qty
+from (values
+  ('배터리(12V7AH)', 4),
+  ('배터리(12V2.9AH)', 2),
+  ('배터리(12V1.2AH)', 2),
+  ('SMPS(VSF50EE)', 1),
+  ('LED등', 5),
+  ('비상정전원장치(LED등포함)', 1)
+) as v(part, qty)
+cross join public.profiles p where p.name = '신석주'
+on conflict (engineer_id, part) do update set qty = excluded.qty;
 
 -- 검증
 select 'kit_stock 준비됨' as status, count(*) as rows from public.kit_stock;

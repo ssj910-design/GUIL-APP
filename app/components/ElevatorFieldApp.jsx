@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit } from "@/lib/mappers";
+import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { simulateSms } from "@/lib/sms";
@@ -82,10 +82,15 @@ export default function App() {
   const [materialRequests, setMaterialRequests] = useState([]);
   const [quoteRequests, setQuoteRequests] = useState([]);
   const [restockRequests, setRestockRequests] = useState([]);
+  const [kitStock, setKitStock] = useState([]);
+  const [kitStockReady, setKitStockReady] = useState(false);
   const [feed, setFeed] = useState([]);
   // 지급 사진을 여러 장 연달아 올릴 때, setState 업데이터 함수가 React 렌더링 타이밍에 따라
   // 아직 반영되지 않은 상태를 기준으로 계산될 수 있어(경쟁 상태) ref에 최신값을 직접 보관합니다.
   const supplyPhotoUrlsRef = useRef({ material: {}, quote: {}, restock: {} });
+  // 상비부품 재고도 같은 이유로(한 번의 청구에서 여러 부품을 동시에 차감할 수 있어) ref에
+  // 최신 수량을 직접 보관합니다. key: `${engineerId}|${part}`
+  const kitStockRef = useRef({});
   const [failureToast, setFailureToast] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -153,6 +158,7 @@ export default function App() {
         feedRes,
         engineersRes,
         unitsRes,
+        kitStockRes,
       ] = await Promise.all([
         supabase.from("sites").select("*"),
         supabase.from("site_managers").select("*"),
@@ -166,6 +172,7 @@ export default function App() {
         supabase.from("feed_posts").select("*").order("created_at", { ascending: false }),
         supabase.from("profiles").select("id,name,role,phone,email").order("name"),
         supabase.from("units").select("*").order("seq"),
+        supabase.from("kit_stock").select("*"),
       ]);
       setSites((sitesRes.data ?? []).map(mapSite));
       setSiteManagers((siteManagersRes.data ?? []).map(mapSiteManager));
@@ -181,6 +188,10 @@ export default function App() {
       setProfilesAll(allProfiles);
       setEngineers(allProfiles.filter((p) => p.role === "engineer"));
       setUnits((unitsRes.data ?? []).map(mapUnit)); // 테이블 없으면(마이그레이션 전) error → 빈 배열
+      const loadedKitStock = (kitStockRes.data ?? []).map(mapKitStock); // kit_stock 테이블 없으면(마이그레이션 전) error → 빈 배열
+      setKitStock(loadedKitStock);
+      loadedKitStock.forEach((k) => { kitStockRef.current[`${k.engineerId}|${k.part}`] = k.qty; });
+      setKitStockReady(!kitStockRes.error);
       setLoading(false);
     }
     loadData();
@@ -565,10 +576,13 @@ export default function App() {
     setTodos((prev) => [newTodo, ...prev]);
   }
 
-  // ★ 기사가 비용청구에서 "상비부품에서 사용함"을 체크하면 보충 요청이 자동 생성됩니다
-  async function handleUseKitPart({ part, siteName }) {
+  // ★ 기사가 비용청구에서 "상비부품에서 사용함"을 체크하고 제출하면 보충 요청이 자동 생성되고,
+  // 사용한 수량만큼 그 기사의 상비부품 재고(kit_stock)가 즉시 차감됩니다 (0 아래로는 내려가지 않음).
+  async function handleUseKitPart({ part, siteName, qty }) {
+    const usedQty = Number(qty) || 1;
+    const engineerId = profileIdByName(profilesAll, profile.name);
     const newRestock = {
-      id: "restock-" + Date.now(),
+      id: "restock-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
       engineer: profile.name,
       part,
       siteName,
@@ -576,6 +590,9 @@ export default function App() {
       status: "대기",
       suppliedDate: null,
       hasSupplyPhoto: false,
+      quantity: usedQty,
+      engineerId,
+      receivedAt: null,
     };
     await supabase.from("restock_requests").insert({
       id: newRestock.id,
@@ -584,9 +601,45 @@ export default function App() {
       site_name: newRestock.siteName,
       requested_date: newRestock.requestedDate,
       status: newRestock.status,
-      ...(v2Ready ? { engineer_id: profileIdByName(profilesAll, newRestock.engineer) } : {}),
+      ...(v2Ready ? { engineer_id: engineerId } : {}),
+      ...(kitStockReady ? { quantity: usedQty } : {}),
     });
     setRestockRequests((prev) => [newRestock, ...prev]);
+
+    if (kitStockReady && engineerId) {
+      const key = `${engineerId}|${part}`;
+      const currentQty = kitStockRef.current[key] ?? 0;
+      const newQty = Math.max(0, currentQty - usedQty);
+      kitStockRef.current[key] = newQty;
+      await supabase.from("kit_stock").upsert({ engineer_id: engineerId, part, qty: newQty }, { onConflict: "engineer_id,part" });
+      setKitStock((prev) => {
+        const existing = prev.find((k) => k.engineerId === engineerId && k.part === part);
+        if (existing) return prev.map((k) => (k === existing ? { ...k, qty: newQty } : k));
+        return [...prev, { id: key, engineerId, part, qty: newQty }];
+      });
+    }
+  }
+
+  // ★ 기사가 지급완료된 보충 요청을 "수령하기" 하면 그만큼 상비부품 재고가 늘어납니다.
+  async function handleReceiveRestock(restockId) {
+    const restock = restockRequests.find((r) => r.id === restockId);
+    if (!restock) return;
+    const receivedAt = new Date().toISOString();
+    await supabase.from("restock_requests").update({ received_at: receivedAt }).eq("id", restockId);
+    setRestockRequests((prev) => prev.map((r) => (r.id === restockId ? { ...r, receivedAt } : r)));
+
+    if (kitStockReady && restock.engineerId) {
+      const key = `${restock.engineerId}|${restock.part}`;
+      const currentQty = kitStockRef.current[key] ?? 0;
+      const newQty = currentQty + (restock.quantity || 1);
+      kitStockRef.current[key] = newQty;
+      await supabase.from("kit_stock").upsert({ engineer_id: restock.engineerId, part: restock.part, qty: newQty }, { onConflict: "engineer_id,part" });
+      setKitStock((prev) => {
+        const existing = prev.find((k) => k.engineerId === restock.engineerId && k.part === restock.part);
+        if (existing) return prev.map((k) => (k === existing ? { ...k, qty: newQty } : k));
+        return [...prev, { id: key, engineerId: restock.engineerId, part: restock.part, qty: newQty }];
+      });
+    }
   }
 
   // ★ 관리자가 보충할 부품 사진을 등록 (지급완료의 선행 조건)
@@ -886,7 +939,7 @@ export default function App() {
           )}
           {tab === "checkup" && <CheckupTab />}
           {tab === "inspection" && <InspectionTab inspections={inspections} setInspections={setInspections} />}
-          {tab === "material" && <MaterialTab requests={materialRequests} setRequests={setMaterialRequests} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} setQuoteRequests={setQuoteRequests} restockRequests={restockRequests} />}
+          {tab === "material" && <MaterialTab requests={materialRequests} setRequests={setMaterialRequests} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} setQuoteRequests={setQuoteRequests} restockRequests={restockRequests} kitStock={kitStock} onReceiveRestock={handleReceiveRestock} />}
           {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} />}
           {tab === "todo" && (
             <TodoTab
