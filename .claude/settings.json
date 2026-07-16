@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git pull --rebase --autostash --quiet && echo '[자동 pull 완료 — 최신 main 기준]' || echo '[자동 pull 실패 — git 상태를 확인하고 수동으로 pull 할 것]'",
+            "timeout": 30,
+            "statusMessage": "최신 코드 당겨오는 중..."
+          }
+        ]
+      }
+    ]
+  }
+}

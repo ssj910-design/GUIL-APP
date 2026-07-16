@@ -44,10 +44,19 @@
 
 `npm run dev` (localhost:3000) · `npm run build` (푸시 전 필수) · `npm run lint`
 
+## 권장 플러그인 — 세션 시작 시 확인할 것
+
+이 저장소 작업에는 **ponytail** 플러그인(불필요한 코드·과잉 설계 방지)을 팀 표준으로 쓴다.
+설치돼 있지 않으면(시스템에 ponytail 지침이 안 보이면) 사용자에게 이렇게 설치를 제안하라:
+"팀 표준 플러그인 ponytail이 없네요. 설치할까요? → `claude plugin marketplace add DietrichGebert/ponytail` 후 `claude plugin install ponytail@ponytail`"
+사용자가 동의하면 직접 실행해서 설치하라.
+
 ## Git 작업 규칙 — Claude가 직접 수행할 것
 
 두 명(+각자의 Claude)이 이 저장소에서 동시에 작업한다. 충돌 방지를 위해 사용자가 시키지 않아도 다음을 지켜라:
 
+0. 세션 시작 시 자동 pull 훅(.claude/settings.json)이 실행된다. "[자동 pull 실패]" 메시지가
+   보이면 git 상태를 확인해 수동으로 해소하라. 훅이 승인되지 않은 환경이면 아래 1번이 대신한다.
 1. **세션에서 처음 코드를 수정하기 전에 `git pull --rebase --autostash`를 먼저 실행**하라.
 2. 작업 단위가 끝날 때마다 **작게 커밋하고 즉시 push**하라. 커밋을 로컬에 쌓아두지 마라.
 3. push가 거부되면 `git pull --rebase` 후 다시 push하라. 충돌이 나면 양쪽 변경의 의도를
