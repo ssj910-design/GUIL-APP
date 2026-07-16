@@ -11,6 +11,7 @@ import {
   mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck,
 } from "@/lib/mappers";
 import Dashboard from "@/app/components/admin/Dashboard";
+import SitesAdmin from "@/app/components/admin/SitesAdmin";
 
 const MENU = [
   { id: "dashboard", label: "대시보드", icon: LayoutDashboard },
@@ -99,6 +100,8 @@ export default function AdminApp() {
           <p className="text-sm text-slate-400 pt-20 text-center">데이터를 불러오는 중...</p>
         ) : menu === "dashboard" ? (
           <Dashboard data={data} />
+        ) : menu === "sites" ? (
+          <SitesAdmin data={data} setData={setData} />
         ) : (
           <div className="pt-20 text-center text-slate-400">
             <p className="font-bold text-slate-500">{MENU.find((m) => m.id === menu)?.label}</p>
