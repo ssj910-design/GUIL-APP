@@ -28,6 +28,8 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const [manualPhotos, setManualPhotos] = useState({ before: [], after: [], confirm: null });
 
   const selected = todos.find((t) => t.id === selectedId);
+  // 견적 연동 건은 이미 견적서에 수리비가 정해져 있어, 직접 입력 대신 "견적서 참조"로 고정합니다.
+  const isQuoteBilling = selected?.source === "quote";
   const manualValid = manualForm.siteId && formatPartRows(manualForm.parts) && manualForm.replaceDate && manualForm.contactPhone.trim();
 
   async function submitMaterial() {
@@ -54,7 +56,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       unitId: selected.unitId ?? null,
       materialRequestId: selected.materialRequestId ?? null,
       part: selected.part,
-      cost: materialCost,
+      cost: isQuoteBilling ? "견적서 참조" : materialCost,
       replaceDate: materialReplaceDate,
       contactPhone: null,
       beforePhotoUrls: materialPhotos.before.map((p) => p.url),
@@ -175,13 +177,17 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                 />
               </Field>
               <Field label="수리비">
-                <input
-                  type="number"
-                  className={inputCls}
-                  placeholder="예: 350000"
-                  value={materialCost}
-                  onChange={(e) => setMaterialCost(e.target.value)}
-                />
+                {isQuoteBilling ? (
+                  <input type="text" className={`${inputCls} bg-slate-100 text-slate-500`} value="견적서 참조" disabled readOnly />
+                ) : (
+                  <input
+                    type="number"
+                    className={inputCls}
+                    placeholder="예: 350000"
+                    value={materialCost}
+                    onChange={(e) => setMaterialCost(e.target.value)}
+                  />
+                )}
               </Field>
               <PrimaryButton onClick={submitMaterial} disabled={!selected}>청구 요청 제출</PrimaryButton>
               {submitted && !submitted.manual && (
@@ -300,7 +306,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
 /* ROOM (우리방) incl. admin dashboard                                  */
 /* ------------------------------------------------------------------ */
 
-export function BillingCard({ b }) {
+export function BillingCard({ b, onPhotoClick }) {
   const photoSlots = [
     ...(b.beforePhotoUrls ?? []).map((url) => ({ label: "교체 전", url })),
     ...(b.afterPhotoUrls ?? []).map((url) => ({ label: "교체 후", url })),
@@ -321,10 +327,15 @@ export function BillingCard({ b }) {
       {photoSlots.length > 0 && (
         <div className="flex gap-2 mt-2">
           {photoSlots.map((s, i) => (
-            <a key={i} href={s.url} target="_blank" rel="noreferrer" className="flex flex-col items-center gap-0.5">
+            <button
+              key={i}
+              type="button"
+              onClick={() => (onPhotoClick ? onPhotoClick(photoSlots.map((p) => p.url), i) : window.open(s.url, "_blank"))}
+              className="flex flex-col items-center gap-0.5"
+            >
               <img src={s.url} alt="" className="w-12 h-12 rounded-lg object-cover border border-slate-200" />
               <span className="text-[9px] text-slate-400">{s.label}</span>
-            </a>
+            </button>
           ))}
         </div>
       )}

@@ -177,7 +177,13 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
               <p className="text-xs text-slate-400 text-center py-10">등록된 부품교체 내역이 없습니다</p>
             ) : (
               <div className="space-y-2">
-                {unitBillings.map((b) => <BillingCard key={b.id} b={b} />)}
+                {unitBillings.map((b) => (
+                  <BillingCard
+                    key={b.id}
+                    b={b}
+                    onPhotoClick={(urls, i) => setPhotoViewer({ urls, index: i, siteName: b.siteName, date: b.replaceDate })}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -204,10 +210,12 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
 export function PhotoViewerSheet({ urls, index, siteName, date, onClose }) {
   const [current, setCurrent] = useState(index);
   const [dragX, setDragX] = useState(0);
+  const [transitioning, setTransitioning] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const startXRef = useRef(null);
   const draggingRef = useRef(false);
   const dragXRef = useRef(0);
+  const containerRef = useRef(null);
   const baseName = sanitizeFilename(`${siteName || "사진"}_${date || ""}`.replace(/_$/, ""));
 
   async function handleDownloadOne() {
@@ -246,16 +254,35 @@ export function PhotoViewerSheet({ urls, index, siteName, date, onClose }) {
   function handleEnd() {
     if (!draggingRef.current) return;
     draggingRef.current = false;
+    startXRef.current = null;
     const threshold = 60;
     const delta = dragXRef.current;
-    if (delta <= -threshold && current < urls.length - 1) {
-      setCurrent((c) => c + 1);
-    } else if (delta >= threshold && current > 0) {
-      setCurrent((c) => c - 1);
-    }
+    const width = containerRef.current?.offsetWidth || 375;
     dragXRef.current = 0;
-    setDragX(0);
-    startXRef.current = null;
+
+    if (delta <= -threshold && current < urls.length - 1) {
+      // 다음 사진: 지금 사진을 왼쪽 밖으로 부드럽게 밀어낸 뒤, 다음 사진으로 바꾸고 제자리로.
+      setTransitioning(true);
+      setDragX(-width);
+      setTimeout(() => {
+        setTransitioning(false);
+        setCurrent((c) => c + 1);
+        setDragX(0);
+      }, 220);
+    } else if (delta >= threshold && current > 0) {
+      setTransitioning(true);
+      setDragX(width);
+      setTimeout(() => {
+        setTransitioning(false);
+        setCurrent((c) => c - 1);
+        setDragX(0);
+      }, 220);
+    } else {
+      // 기준에 못 미치면 부드럽게 제자리로 되돌립니다.
+      setTransitioning(true);
+      setDragX(0);
+      setTimeout(() => setTransitioning(false), 220);
+    }
   }
 
   return (
@@ -267,6 +294,7 @@ export function PhotoViewerSheet({ urls, index, siteName, date, onClose }) {
         </button>
       </div>
       <div
+        ref={containerRef}
         className="flex-1 flex items-center justify-center overflow-hidden select-none"
         onTouchStart={(e) => handleStart(e.touches[0].clientX)}
         onTouchMove={(e) => handleMove(e.touches[0].clientX)}
@@ -281,7 +309,7 @@ export function PhotoViewerSheet({ urls, index, siteName, date, onClose }) {
           alt=""
           draggable={false}
           className="max-w-full max-h-full object-contain"
-          style={{ transform: `translateX(${dragX}px)`, transition: draggingRef.current ? "none" : "transform 0.2s" }}
+          style={{ transform: `translateX(${dragX}px)`, transition: transitioning ? "transform 0.22s ease-out" : "none" }}
         />
       </div>
       {urls.length > 1 && (

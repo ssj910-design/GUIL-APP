@@ -328,6 +328,7 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
   const [rejectReason, setRejectReason] = useState("");
   const [photoViewTarget, setPhotoViewTarget] = useState(null);
   const [photoViewer, setPhotoViewer] = useState(null);
+  const [reqDetailTarget, setReqDetailTarget] = useState(null);
   const [showMaterialHistory, setShowMaterialHistory] = useState(false);
   const [showQuoteHistory, setShowQuoteHistory] = useState(false);
   const [showRestockHistory, setShowRestockHistory] = useState(false);
@@ -538,11 +539,18 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
             <div className="space-y-2">
               {myRequests.map((r) => (
                 <div key={r.id} className={`bg-white rounded-xl border p-3 ${r.status === "반려" ? "border-red-200" : "border-slate-200"}`}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-700">{r.siteName} · {r.part}</p>
-                      <p className="text-[11px] text-slate-400">{r.urgency} · 신청일 {r.requestedDate} · 사진 {r.photoCount ?? 1}장</p>
-                    </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <button type="button" onClick={() => setReqDetailTarget({ type: "material", data: r })} className="flex items-center gap-2 min-w-0 text-left">
+                      {r.photoUrls?.length > 0 ? (
+                        <img src={r.photoUrls[0]} alt="" className="w-11 h-11 rounded-lg object-cover border border-slate-200 shrink-0" />
+                      ) : (
+                        <div className="w-11 h-11 rounded-lg bg-slate-100 border border-slate-200 shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-700 truncate">{r.siteName} · {r.part}</p>
+                        <p className="text-[11px] text-slate-400">{r.urgency} · 신청일 {r.requestedDate} · 사진 {r.photoCount ?? 1}장</p>
+                      </div>
+                    </button>
                     <span
                       className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
                         r.status === "지급완료" ? "bg-emerald-100 text-emerald-700" : r.status === "반려" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
@@ -708,11 +716,18 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
             <div className="space-y-2">
               {myQuotes.map((q) => (
                 <div key={q.id} className="bg-white rounded-xl border border-slate-200 p-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-700">{q.siteName} · {q.constructionType}</p>
-                      <p className="text-[11px] text-slate-400">신청일 {q.requestedDate} · 사진 {q.photoCount}장</p>
-                    </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <button type="button" onClick={() => setReqDetailTarget({ type: "quote", data: q })} className="flex items-center gap-2 min-w-0 text-left">
+                      {q.photoUrls?.length > 0 ? (
+                        <img src={q.photoUrls[0]} alt="" className="w-11 h-11 rounded-lg object-cover border border-slate-200 shrink-0" />
+                      ) : (
+                        <div className="w-11 h-11 rounded-lg bg-slate-100 border border-slate-200 shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-700 truncate">{q.siteName} · {q.constructionType}</p>
+                        <p className="text-[11px] text-slate-400">신청일 {q.requestedDate} · 사진 {q.photoCount}장</p>
+                      </div>
+                    </button>
                     <span
                       className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
                         q.status === "자재지급완료" ? "bg-emerald-100 text-emerald-700" :
@@ -784,6 +799,64 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
         </Sheet>
       )}
 
+      {reqDetailTarget && (
+        <Sheet title={reqDetailTarget.type === "material" ? "자재 신청 상세" : "견적 요청 상세"} onClose={() => setReqDetailTarget(null)}>
+          <div className="space-y-3 mb-4">
+            <div className="bg-slate-100 rounded-xl p-3">
+              <p className="text-[11px] text-slate-500">현장</p>
+              <p className="font-bold text-slate-800">{reqDetailTarget.data.siteName}</p>
+            </div>
+            <div className="bg-slate-100 rounded-xl p-3">
+              <p className="text-[11px] text-slate-500">{reqDetailTarget.type === "material" ? "부품 내역 (부품명, 수량)" : "견적 내역 (부품명, 수량)"}</p>
+              <p className="font-bold text-slate-800 whitespace-pre-wrap">
+                {reqDetailTarget.type === "material" ? reqDetailTarget.data.part : reqDetailTarget.data.constructionType}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              {reqDetailTarget.type === "material" ? (
+                <div className="bg-slate-100 rounded-xl p-3">
+                  <p className="text-[11px] text-slate-500">긴급도</p>
+                  <p className="font-bold text-slate-800">{reqDetailTarget.data.urgency}</p>
+                </div>
+              ) : (
+                <div className="bg-slate-100 rounded-xl p-3">
+                  <p className="text-[11px] text-slate-500">현장 담당자 연락처</p>
+                  <p className="font-bold text-slate-800">{reqDetailTarget.data.contactPhone || "-"}</p>
+                </div>
+              )}
+              <div className="bg-slate-100 rounded-xl p-3">
+                <p className="text-[11px] text-slate-500">신청일</p>
+                <p className="font-bold text-slate-800">{reqDetailTarget.data.requestedDate}</p>
+              </div>
+            </div>
+            {reqDetailTarget.data.note && (
+              <div className="bg-slate-100 rounded-xl p-3">
+                <p className="text-[11px] text-slate-500">기사 의견</p>
+                <p className="text-sm text-slate-700 mt-0.5 whitespace-pre-wrap">{reqDetailTarget.data.note}</p>
+              </div>
+            )}
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-2">
+              현장 사진 ({reqDetailTarget.data.photoUrls?.length ?? reqDetailTarget.data.photoCount ?? 0}장)
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {reqDetailTarget.data.photoUrls?.length > 0
+                ? reqDetailTarget.data.photoUrls.map((url, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setPhotoViewer({ urls: reqDetailTarget.data.photoUrls, index: i, siteName: reqDetailTarget.data.siteName, date: reqDetailTarget.data.requestedDate })}
+                    >
+                      <img src={url} alt="" className="w-full aspect-square rounded-xl object-cover border border-slate-200" />
+                    </button>
+                  ))
+                : <PhotoThumb caption="등록된 사진 없음" />}
+            </div>
+          </div>
+        </Sheet>
+      )}
+
       {photoViewTarget && (
         <Sheet title="지급 자재 사진" onClose={() => setPhotoViewTarget(null)}>
           <div className="bg-slate-100 rounded-xl p-3 mb-4">
@@ -802,8 +875,8 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
         <PhotoViewerSheet
           urls={photoViewer.urls}
           index={photoViewer.index}
-          siteName="자재 지급 사진"
-          date=""
+          siteName={photoViewer.siteName ?? "자재 지급 사진"}
+          date={photoViewer.date ?? ""}
           onClose={() => setPhotoViewer(null)}
         />
       )}
