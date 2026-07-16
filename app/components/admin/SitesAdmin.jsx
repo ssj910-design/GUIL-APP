@@ -201,19 +201,62 @@ export default function SitesAdmin({ data, setData }) {
     setData((prev) => ({ ...prev, sites: prev.sites.map((x) => (x.id === selectedId ? { ...x, isActive: next } : x)) }));
   }
 
+  // 공단 API: 고유번호 1개로 그 건물의 전체 호기 목록을 불러온다 (설계 §6)
+  async function lookupGov() {
+    const no = (newSite.govNo ?? "").trim();
+    if (!no) return;
+    setNewSite((ns) => ({ ...ns, looking: true }));
+    try {
+      const res = await fetch(`/api/elevator-info?elevatorNo=${encodeURIComponent(no)}`);
+      const data = await res.json();
+      const items = (data.items ?? []).map((it) => ({ ...it, checked: true }));
+      if (!items.length) { alert("해당 고유번호로 건물을 찾지 못했습니다"); setNewSite((ns) => ({ ...ns, looking: false })); return; }
+      setNewSite((ns) => ({
+        ...ns,
+        looking: false,
+        found: items,
+        name: ns.name || items[0].buldNm || "",
+        address: ns.address || `${items[0].address1 ?? ""}${items[0].address2 ?? ""}`.trim(),
+      }));
+    } catch {
+      alert("공단 조회에 실패했습니다");
+      setNewSite((ns) => ({ ...ns, looking: false }));
+    }
+  }
+
   async function createSite() {
     if (!newSite.name.trim()) return;
     const id = "site-" + Date.now();
-    const count = Math.max(1, Number(newSite.unitCount) || 1);
+    const picked = (newSite.found ?? []).filter((it) => it.checked);
+    // 이미 다른 현장에 등록된 승강기인지 사전 확인 (gov_no는 전국 유일)
+    const dup = picked.map((it) => ({ it, u: units.find((u) => u.govNo === it.elevatorNo) })).find((x) => x.u);
+    if (dup) {
+      const dupSite = sites.find((x) => x.id === dup.u.siteId);
+      alert(`승강기 ${dup.it.elevatorNo}는 이미 "${dupSite?.name ?? "다른 현장"}"에 등록되어 있습니다.`);
+      return;
+    }
+    const count = picked.length || Math.max(1, Number(newSite.unitCount) || 1);
     const { error } = await supabase.from("sites").insert({
       id, name: newSite.name.trim(), address: newSite.address || null,
       contract_type: newSite.contractType, unit_count: count,
       assigned_engineer: newSite.engineer || null,
+      gov_elevator_nos: picked.length ? picked.map((it) => it.elevatorNo) : null,
     });
     if (error) { alert("등록 실패: " + error.message); return; }
-    const { data: created } = await supabase.from("units")
-      .insert(Array.from({ length: count }, (_, i) => ({ site_id: id, seq: i + 1, unit_no: `${i + 1}호기` })))
-      .select();
+    const unitRows = picked.length
+      ? picked.map((it, i) => ({
+          site_id: id, seq: i + 1, unit_no: `${i + 1}호기`,
+          gov_no: it.elevatorNo,
+          unit_type: (it.elvtrDivNm ?? "엘리베이터").includes("에스컬레이터") ? "에스컬레이터" : "엘리베이터",
+          install_date: it.frstInstallationDe || null,
+        }))
+      : Array.from({ length: count }, (_, i) => ({ site_id: id, seq: i + 1, unit_no: `${i + 1}호기` }));
+    const { data: created, error: unitError } = await supabase.from("units").insert(unitRows).select();
+    if (unitError) {
+      await supabase.from("sites").delete().eq("id", id); // 호기 생성 실패 시 현장도 되돌림
+      alert("호기 생성 실패: " + unitError.message);
+      return;
+    }
     const p = profiles.find((x) => x.name === newSite.engineer);
     if (p) await supabase.from("site_assignments").insert({ site_id: id, tech_id: p.id, is_lead: true });
     const s = { id, name: newSite.name.trim(), address: newSite.address, contractType: newSite.contractType, unitCount: count, assignedEngineer: newSite.engineer || null, govElevatorNos: [] };
@@ -237,14 +280,40 @@ export default function SitesAdmin({ data, setData }) {
 
       {/* 신규 등록 폼 */}
       {newSite && (
-        <div className="bg-white rounded-xl border border-blue-200 p-5 mb-4 grid grid-cols-6 gap-3 items-end">
+        <div className="bg-white rounded-xl border border-blue-200 p-5 mb-4 space-y-4">
+          <div className="flex items-end gap-2">
+            <div className="w-64">
+              <p className="text-xs font-bold text-blue-700 mb-1">승강기고유번호로 자동 등록 (권장)</p>
+              <input className={inputCls} placeholder="예: 0136226 — 건물 내 아무 호기나 1개" value={newSite.govNo ?? ""} onChange={(e) => setNewSite({ ...newSite, govNo: e.target.value })} />
+            </div>
+            <button onClick={lookupGov} disabled={newSite.looking} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2.5 whitespace-nowrap">
+              {newSite.looking ? "조회 중..." : "공단에서 불러오기"}
+            </button>
+            <p className="text-[10px] text-slate-400 pb-1">번호 1개면 그 건물의 전체 호기·주소·설치일을 가져옵니다. 없으면 아래에 수기 입력.</p>
+          </div>
+          {newSite.found && (
+            <div className="border border-blue-100 rounded-xl overflow-hidden">
+              <p className="px-4 py-2 text-xs font-bold bg-blue-50 text-blue-700">공단 조회 결과 — 계약 대상 호기만 체크하세요 ({newSite.found.filter((i) => i.checked).length}/{newSite.found.length})</p>
+              {newSite.found.map((it, idx) => (
+                <label key={it.elevatorNo} className="flex items-center gap-3 px-4 py-2 border-t border-blue-50 text-sm cursor-pointer">
+                  <input type="checkbox" checked={it.checked} onChange={() =>
+                    setNewSite((ns) => ({ ...ns, found: ns.found.map((x, i) => (i === idx ? { ...x, checked: !x.checked } : x)) }))
+                  } />
+                  <span className="font-bold">{it.elevatorNo}</span>
+                  <span className="text-slate-500">{it.installationPlace || "-"} · {it.elvtrKindNm || "-"} · {it.elvtrForm || "-"} · 설치 {it.frstInstallationDe || "-"}</span>
+                  <span className="text-xs text-slate-400 ml-auto">검사 ~{it.applcEnDt || "-"} {it.resultNm ? `(${it.resultNm})` : ""}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          <div className="grid grid-cols-6 gap-3 items-end">
           <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">현장명 *</p><input className={inputCls} value={newSite.name} onChange={(e) => setNewSite({ ...newSite, name: e.target.value })} /></div>
           <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">주소</p><input className={inputCls} value={newSite.address} onChange={(e) => setNewSite({ ...newSite, address: e.target.value })} /></div>
           <div><p className="text-xs font-bold text-slate-500 mb-1">계약구분</p>
             <select className={inputCls} value={newSite.contractType} onChange={(e) => setNewSite({ ...newSite, contractType: e.target.value })}>
               {CONTRACT_TYPES.map((t) => <option key={t}>{t}</option>)}
             </select></div>
-          <div><p className="text-xs font-bold text-slate-500 mb-1">호기 수</p><input className={inputCls} type="number" min="1" value={newSite.unitCount} onChange={(e) => setNewSite({ ...newSite, unitCount: e.target.value })} /></div>
+          <div><p className="text-xs font-bold text-slate-500 mb-1">호기 수 {newSite.found ? "(공단 결과 사용)" : ""}</p><input className={inputCls} type="number" min="1" disabled={!!newSite.found} value={newSite.found ? newSite.found.filter((i) => i.checked).length : newSite.unitCount} onChange={(e) => setNewSite({ ...newSite, unitCount: e.target.value })} /></div>
           <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">담당 기사</p>
             <select className={inputCls} value={newSite.engineer} onChange={(e) => setNewSite({ ...newSite, engineer: e.target.value })}>
               <option value="">미배정</option>
@@ -252,7 +321,10 @@ export default function SitesAdmin({ data, setData }) {
             </select></div>
           <div className="col-span-4 flex gap-2 justify-end">
             <button onClick={() => setNewSite(null)} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5">취소</button>
-            <button onClick={createSite} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5">등록 (호기 자동 생성)</button>
+            <button onClick={createSite} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5">
+              등록 {newSite.found ? `(체크한 ${newSite.found.filter((i) => i.checked).length}개 호기 생성)` : "(호기 자동 생성)"}
+            </button>
+          </div>
           </div>
         </div>
       )}
