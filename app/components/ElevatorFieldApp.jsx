@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, LayoutGrid, Monitor } from "lucide-react";
+import { Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, LayoutGrid, Monitor, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor } from "@/lib/utils";
@@ -97,6 +97,7 @@ export default function App() {
   const kitStockRef = useRef({});
   const [failureToast, setFailureToast] = useState("");
   const [loading, setLoading] = useState(true);
+  const [roomOpen, setRoomOpen] = useState(false); // 우리방 — 탭이 아니라 플로팅 버튼으로 어디서든 연다
 
   // SKIP_LOGIN 상태에서도 ?auth=1 이면 실제 로그인 흐름을 강제한다 (인증/회원가입 사전 점검용).
   const [forceAuth, setForceAuth] = useState(false);
@@ -869,7 +870,7 @@ export default function App() {
 
   const tabTitle = tab === "more" ? "전체 메뉴" : TABS.find((t) => t.id === tab)?.label ?? "";
   const barTabs = [...TABS.filter((t) => BAR_IDS.includes(t.id)), MORE_TAB];
-  const moreTabs = TABS.filter((t) => !BAR_IDS.includes(t.id) && (t.id !== "admin" || profile?.role === "admin"));
+  const moreTabs = TABS.filter((t) => !BAR_IDS.includes(t.id) && t.id !== "room" && (t.id !== "admin" || profile?.role === "admin"));
 
   if (!skipLogin && session === undefined) {
     return (
@@ -941,7 +942,6 @@ export default function App() {
               quoteRequests={quoteRequests}
             />
           )}
-          {tab === "room" && <RoomTab feed={feed} onSendChat={handleSendFeedPost} />}
           {tab === "more" && (
             <div className="flex-1 overflow-y-auto p-4">
               <div className="grid grid-cols-3 gap-3">
@@ -965,6 +965,34 @@ export default function App() {
             </div>
           )}
           {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onUpdateTodoDescription={handleUpdateTodoDescription} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
+
+          {/* 우리방 플로팅 버튼 — 어느 탭에서든 즉시 팀 채팅 */}
+          <button
+            onClick={() => setRoomOpen(true)}
+            aria-label="우리방 열기"
+            className="absolute right-4 bottom-20 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95"
+          >
+            <MessagesSquare size={22} />
+          </button>
+
+          {/* 우리방 바텀시트 */}
+          {roomOpen && (
+            <div className="fixed inset-0 z-30 flex flex-col bg-black/40" onClick={() => setRoomOpen(false)}>
+              <div className="mt-auto" />
+              <div
+                className="bg-slate-50 rounded-t-3xl h-[85%] flex flex-col shadow-2xl overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-white shrink-0">
+                  <h2 className="font-bold text-slate-900">우리방</h2>
+                  <button onClick={() => setRoomOpen(false)} className="p-1 text-slate-400 active:text-slate-700">
+                    <X size={20} />
+                  </button>
+                </div>
+                <RoomTab feed={feed} onSendChat={handleSendFeedPost} />
+              </div>
+            </div>
+          )}
 
           {/* bottom nav — 고정 4개 + 더보기 (더보기 하위 화면에서도 더보기가 활성 표시) */}
           <div className="shrink-0 bg-white border-t border-slate-200 flex" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
