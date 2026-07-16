@@ -1,0 +1,9 @@
+{
+  "asOf": "2025-12-31",
+  "source": "공공데이터포털 · 한국승강기안전공단 승강기 설치 현황 (연 1회 파일데이터)",
+  "totalLive": 865161,
+  "elevatorsLive": 817805,
+  "companies": 987,
+  "guil": { "units": 838, "rank": 196, "seoul": 770, "gyeonggi": 68 },
+  "pct": { "age20": 35.1, "age30": 12.5, "car": 1.4, "hydraulic": 2.4 }
+}

@@ -5,6 +5,7 @@
 import { TODAY_STR } from "@/lib/constants";
 import { addDays } from "@/lib/utils";
 import { locOf, personOf } from "@/app/components/admin/adminShared";
+import national from "@/lib/national-stats.json";
 
 function countBy(arr, keyFn) {
   const m = new Map();
@@ -55,6 +56,7 @@ export default function StatsAdmin({ data }) {
   const { units, sites, failures, billings, todos, profiles } = data;
   const active = units.filter((u) => u.isActive !== false);
   const in60 = (d) => d && d >= TODAY_STR && d <= addDays(TODAY_STR, 60);
+  const ageOf = (u) => (u.installDate ? new Date(TODAY_STR).getFullYear() - Number(u.installDate.slice(0, 4)) : null);
 
   // ---- 자산 통계 ----
   const byKind = countBy(active, (u) => u.kind);
@@ -86,6 +88,15 @@ export default function StatsAdmin({ data }) {
   const totalBilled = billings.reduce((n, b) => n + (Number(b.cost) || 0), 0);
   const billBySite = countBy(billings, (b) => locOf(data, b.unitId, b.siteName, null).split(" · ")[0]);
 
+  // ---- 전국 비교 (공단 파일데이터 집계 — lib/national-stats.json, 연 1회 갱신) ----
+  const pctOf = (cnt) => (active.length ? (cnt / active.length) * 100 : 0);
+  const natRows = [
+    ["20년 이상 노후", active.filter((u) => ageOf(u) >= 20).length, national.pct.age20],
+    ["30년 이상 노후", active.filter((u) => ageOf(u) >= 30).length, national.pct.age30],
+    ["자동차용 비중", active.filter((u) => u.kind === "자동차용").length, national.pct.car],
+    ["유압식 비중", active.filter((u) => (u.form ?? "").startsWith("유압")).length, national.pct.hydraulic],
+  ];
+
   return (
     <div className="max-w-6xl">
       <h1 className="text-xl font-extrabold mb-1">통계</h1>
@@ -93,12 +104,42 @@ export default function StatsAdmin({ data }) {
 
       <div className="grid grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
         <Kpi label="관리 승강기" value={`${active.length}대`} />
-        <Kpi label="20년 이상 노후" value={`${active.filter((u) => u.installDate && new Date(TODAY_STR).getFullYear() - Number(u.installDate.slice(0, 4)) >= 20).length}대`} tone="text-amber-600" />
+        <Kpi label="20년 이상 노후" value={`${active.filter((u) => ageOf(u) >= 20).length}대`} tone="text-amber-600" />
         <Kpi label="검사만료 60일 내" value={`${active.filter((u) => in60(u.inspectionEnd)).length}대`} tone="text-red-600" />
         <Kpi label="보험만료 60일 내" value={`${active.filter((u) => in60(u.insuranceEnd)).length}대`} tone="text-amber-600" />
         <Kpi label="운행중지" value={`${units.filter((u) => u.isActive === false).length}대`} />
         <Kpi label="누적 청구액" value={`${totalBilled.toLocaleString()}원`} />
       </div>
+
+      {/* 전국 비교 */}
+      <section className="bg-white rounded-xl border border-slate-200 p-5 mb-5">
+        <h2 className="text-sm font-bold">
+          전국 비교 <span className="text-slate-400 font-semibold">· 전국 운행중 {national.totalLive.toLocaleString()}대 · 유지관리업체 {national.companies.toLocaleString()}개사</span>
+        </h2>
+        <p className="text-xs text-slate-500 mt-1 mb-3">
+          구일은 관리대수 <b className="text-slate-700">전국 {national.guil.rank}위</b> ({national.guil.units.toLocaleString()}대 — 서울 {national.guil.seoul}·경기 {national.guil.gyeonggi}) · 공단 파일데이터 {national.asOf} 기준
+        </p>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs text-slate-400 border-b border-slate-100">
+              <th className="text-left py-2 font-semibold">지표</th>
+              <th className="text-right py-2 font-semibold">우리</th>
+              <th className="text-right py-2 font-semibold">전국(엘리베이터)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {natRows.map(([label, cnt, natPct]) => (
+              <tr key={label} className="border-b border-slate-50">
+                <td className="py-2">{label}</td>
+                <td className={`text-right py-2 font-bold ${pctOf(cnt) > natPct ? "text-amber-600" : "text-emerald-600"}`}>
+                  {cnt.toLocaleString()}대 ({pctOf(cnt).toFixed(1)}%)
+                </td>
+                <td className="text-right py-2 text-slate-500">{natPct}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         <Bars title="승강기 종류별" rows={byKind} />
