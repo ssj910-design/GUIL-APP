@@ -12,6 +12,12 @@ import {
 } from "@/lib/mappers";
 import Dashboard from "@/app/components/admin/Dashboard";
 import SitesAdmin from "@/app/components/admin/SitesAdmin";
+import FailuresAdmin from "@/app/components/admin/FailuresAdmin";
+import MaterialsAdmin from "@/app/components/admin/MaterialsAdmin";
+import BillingsAdmin from "@/app/components/admin/BillingsAdmin";
+import TodosAdmin from "@/app/components/admin/TodosAdmin";
+import SelfChecksAdmin from "@/app/components/admin/SelfChecksAdmin";
+import EngineersAdmin from "@/app/components/admin/EngineersAdmin";
 
 const MENU = [
   { id: "dashboard", label: "대시보드", icon: LayoutDashboard },
@@ -47,7 +53,7 @@ export default function AdminApp() {
           supabase.from("todos").select("*").order("created_at", { ascending: false }),
           supabase.from("billings").select("*").order("created_at", { ascending: false }),
           supabase.from("self_checks").select("*"),
-          supabase.from("profiles").select("id,name,role,phone,email").order("name"),
+          supabase.from("profiles").select("id,name,role,phone,email,region,auth_user_id").order("name"),
         ]);
       setData({
         sites: (sites.data ?? []).map(mapSite),
@@ -102,6 +108,18 @@ export default function AdminApp() {
           <Dashboard data={data} />
         ) : menu === "sites" ? (
           <SitesAdmin data={data} setData={setData} />
+        ) : menu === "failures" ? (
+          <FailuresAdmin data={data} setData={setData} />
+        ) : menu === "materials" ? (
+          <MaterialsAdmin data={data} />
+        ) : menu === "billings" ? (
+          <BillingsAdmin data={data} />
+        ) : menu === "todos" ? (
+          <TodosAdmin data={data} setData={setData} />
+        ) : menu === "selfChecks" ? (
+          <SelfChecksAdmin data={data} setData={setData} />
+        ) : menu === "engineers" ? (
+          <EngineersAdmin data={data} setData={setData} />
         ) : (
           <div className="pt-20 text-center text-slate-400">
             <p className="font-bold text-slate-500">{MENU.find((m) => m.id === menu)?.label}</p>
