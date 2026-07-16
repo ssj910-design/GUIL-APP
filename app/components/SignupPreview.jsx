@@ -119,6 +119,16 @@ export default function SignupPreview() {
                   이 키는 귀사만 발급받을 수 있어 <b>업체 증명</b>이 됩니다 · 검사정보 실시간 연동에 사용
                 </p>
               </div>
+
+              <details className="bg-slate-50 rounded-xl px-4 py-3 text-xs text-slate-600">
+                <summary className="font-bold cursor-pointer text-slate-700">인증키가 없어요 — 발급 방법 보기 (무료 · 약 5분)</summary>
+                <ol className="mt-2 space-y-1.5 list-decimal list-inside leading-relaxed">
+                  <li><a href="https://www.data.go.kr" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline">공공데이터포털(data.go.kr)</a> 회원가입 후 로그인</li>
+                  <li><a href="https://www.data.go.kr/data/15038198/openapi.do" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline">&quot;한국승강기안전공단 건물별 승강기 정보&quot;</a> 페이지에서 <b>활용신청</b> (자동 승인)</li>
+                  <li>마이페이지 → 개인 API 인증키 복사 → 위 칸에 붙여넣기</li>
+                </ol>
+                <p className="mt-2 text-[10px] text-slate-400">* 같은 키로 검사이력 API도 함께 신청해두면 좋습니다. 발급이 어려우면 아래 &quot;수동으로 등록&quot;을 선택하세요 — 가입 후 언제든 추가할 수 있어요.</p>
+              </details>
               {!form.govVerified ? (
                 <button className={btnCls} disabled={form.govKey.length < 20} onClick={() => set({ govVerified: true, matched: 876 })}>
                   키 검증 + 담당 승강기 조회
@@ -134,9 +144,17 @@ export default function SignupPreview() {
                   <button className={btnCls} onClick={() => setStep(3)}>다음</button>
                 </>
               )}
-              <button className="w-full text-xs font-bold text-slate-400 py-1" onClick={() => setStep(3)}>
-                키가 아직 없어요 — 나중에 등록할게요
-              </button>
+              {!form.govVerified && (
+                <button
+                  className="w-full border border-slate-200 text-slate-600 font-bold py-3 rounded-xl text-sm"
+                  onClick={() => { set({ govVerified: false, matched: null }); setStep(3); }}
+                >
+                  키 없이 수동으로 등록할게요
+                </button>
+              )}
+              <p className="text-[10px] text-slate-400 text-center -mt-1">
+                수동 선택 시: 현장·승강기를 공단 엑셀 업로드나 직접 입력으로 등록합니다 (키는 설정에서 언제든 추가)
+              </p>
             </>
           )}
 
