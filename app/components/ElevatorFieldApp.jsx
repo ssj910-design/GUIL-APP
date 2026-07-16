@@ -94,13 +94,6 @@ export default function App() {
   const [failureToast, setFailureToast] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // 상단 상태바 시각을 실제 현재 시각으로 실시간 표시합니다.
-  const [clockNow, setClockNow] = useState(() => new Date().toTimeString().slice(0, 5));
-  useEffect(() => {
-    const id = setInterval(() => setClockNow(new Date().toTimeString().slice(0, 5)), 1000);
-    return () => clearInterval(id);
-  }, []);
-
   // 로그인 상태를 확인하고, 로그인/로그아웃이 일어날 때마다 알림을 받습니다.
   useEffect(() => {
     if (SKIP_LOGIN) return;
@@ -863,13 +856,8 @@ export default function App() {
 
   if (!SKIP_LOGIN && session === undefined) {
     return (
-      <div className="h-screen w-screen bg-slate-200 flex items-center justify-center overflow-hidden">
-        <div
-          className="bg-slate-50 flex flex-col items-center justify-center gap-2 shadow-2xl border-4 border-slate-900 rounded-[2.5rem]"
-          style={{ width: "375px", height: "min(812px, 100vh - 24px)", maxHeight: "100vh" }}
-        >
-          <p className="text-sm font-bold text-slate-400">로그인 확인 중...</p>
-        </div>
+      <div className="h-dvh w-screen bg-slate-50 flex items-center justify-center">
+        <p className="text-sm font-bold text-slate-400">로그인 확인 중...</p>
       </div>
     );
   }
@@ -880,13 +868,8 @@ export default function App() {
 
   if (loading || !profile) {
     return (
-      <div className="h-screen w-screen bg-slate-200 flex items-center justify-center overflow-hidden">
-        <div
-          className="bg-slate-50 flex flex-col items-center justify-center gap-2 shadow-2xl border-4 border-slate-900 rounded-[2.5rem]"
-          style={{ width: "375px", height: "min(812px, 100vh - 24px)", maxHeight: "100vh" }}
-        >
-          <p className="text-sm font-bold text-slate-400">데이터를 불러오는 중...</p>
-        </div>
+      <div className="h-dvh w-screen bg-slate-50 flex items-center justify-center">
+        <p className="text-sm font-bold text-slate-400">데이터를 불러오는 중...</p>
       </div>
     );
   }
@@ -895,17 +878,7 @@ export default function App() {
     <AuthContext.Provider value={{ name: profile.name, role: profile.role, engineerNames, engineers, profiles: profilesAll, selfId: profileIdByName(profilesAll, profile.name), signOut: handleLogout }}>
     <SitesContext.Provider value={sites}>
     <UnitsContext.Provider value={units}>
-      <div className="h-screen w-screen bg-slate-200 flex items-center justify-center overflow-hidden">
-        <div
-          className="bg-slate-50 flex flex-col overflow-hidden shadow-2xl border-4 border-slate-900 rounded-[2.5rem] relative transform-gpu"
-          style={{ width: "375px", height: "min(812px, 100vh - 24px)", maxHeight: "100vh" }}
-        >
-          {/* status bar */}
-          <div className="bg-blue-950 text-white text-[11px] px-6 pt-2.5 pb-1 flex justify-between shrink-0">
-            <span>{clockNow}</span>
-            <span>구일엘리베이터(주)</span>
-          </div>
-
+      <div className="h-dvh w-screen bg-slate-50 flex flex-col overflow-hidden relative">
           <ScreenHeader
             title={tab === "home" ? "구일엘리베이터(주)" : tabTitle}
             right={
@@ -975,7 +948,6 @@ export default function App() {
               );
             })}
           </div>
-        </div>
       </div>
     </UnitsContext.Provider>
     </SitesContext.Provider>

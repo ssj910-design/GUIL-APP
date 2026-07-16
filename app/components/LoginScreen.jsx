@@ -11,11 +11,8 @@ export function LoginScreen({ onLogin, error, submitting }) {
   const [password, setPassword] = useState("");
 
   return (
-    <div className="h-screen w-screen bg-slate-200 flex items-center justify-center overflow-hidden">
-      <div
-        className="bg-slate-50 flex flex-col shadow-2xl border-4 border-slate-900 rounded-[2.5rem] px-8"
-        style={{ width: "375px", height: "min(812px, 100vh - 24px)", maxHeight: "100vh" }}
-      >
+    <div className="h-dvh w-screen bg-slate-50 flex items-center justify-center">
+      <div className="flex flex-col px-8 w-full max-w-sm h-full">
         <div className="flex-1 flex flex-col justify-center">
           <h1 className="text-xl font-extrabold text-blue-950 mb-1 text-center">구일엘리베이터(주)</h1>
           <p className="text-xs text-slate-400 mb-8 text-center">현장관리 시스템 로그인</p>
