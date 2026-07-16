@@ -5,7 +5,7 @@ import { AuthContext } from "@/app/components/context";
 
 
 export function RoomTab({ feed, onSendChat }) {
-  const { name: CURRENT_ENGINEER, role, signOut } = useContext(AuthContext);
+  const { name: CURRENT_ENGINEER, role, signOut, profiles } = useContext(AuthContext);
   const [chatInput, setChatInput] = useState("");
 
   function sendChat() {
@@ -13,6 +13,13 @@ export function RoomTab({ feed, onSendChat }) {
     onSendChat(chatInput.trim());
     setChatInput("");
   }
+
+  // @태그 자동완성 — 입력 끝이 "@이름일부"면 후보 칩을 보여준다
+  const tagMatch = /@([가-힣a-zA-Z0-9()]*)$/.exec(chatInput);
+  const tagCands = tagMatch
+    ? (profiles ?? []).map((p) => p.name).filter((n) => n !== CURRENT_ENGINEER && n.includes(tagMatch[1])).slice(0, 5)
+    : [];
+  const pickTag = (n) => setChatInput(chatInput.replace(/@[가-힣a-zA-Z0-9()]*$/, "@" + n + " "));
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -34,7 +41,11 @@ export function RoomTab({ feed, onSendChat }) {
               <div className={`max-w-[80%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
                 {!mine && <p className="text-[11px] font-bold text-slate-500 mb-1 px-1">{p.author}</p>}
                 <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${mine ? "bg-blue-700 text-white rounded-br-sm" : "bg-white border border-slate-200 text-slate-700 rounded-bl-sm"}`}>
-                  {p.text}
+                  {(p.text ?? "").split(/(@[가-힣a-zA-Z0-9()]+)/g).map((s, i) =>
+                    s.startsWith("@")
+                      ? <b key={i} className={mine ? "text-amber-300" : "text-blue-700"}>{s}</b>
+                      : s
+                  )}
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1 px-1">{p.time}</p>
               </div>
@@ -42,6 +53,15 @@ export function RoomTab({ feed, onSendChat }) {
           );
         })}
       </div>
+      {tagCands.length > 0 && (
+        <div className="shrink-0 bg-white border-t border-slate-100 px-4 py-2 flex gap-2 overflow-x-auto">
+          {tagCands.map((n) => (
+            <button key={n} onClick={() => pickTag(n)} className="text-xs font-bold text-blue-700 bg-blue-50 rounded-full px-3 py-1.5 whitespace-nowrap">
+              @{n}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="shrink-0 border-t border-slate-100 bg-white px-4 py-3 flex items-center gap-2">
         <input
           className="flex-1 border border-slate-300 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"

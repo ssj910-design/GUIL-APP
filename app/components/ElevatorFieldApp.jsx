@@ -98,6 +98,7 @@ export default function App() {
   const [failureToast, setFailureToast] = useState("");
   const [loading, setLoading] = useState(true);
   const [roomOpen, setRoomOpen] = useState(false); // 우리방 — 탭이 아니라 플로팅 버튼으로 어디서든 연다
+  const [feedReadAt, setFeedReadAt] = useState(null); // 이번 세션에서 우리방을 마지막으로 읽은 시각
 
   // SKIP_LOGIN 상태에서도 ?auth=1 이면 실제 로그인 흐름을 강제한다 (인증/회원가입 사전 점검용).
   const [forceAuth, setForceAuth] = useState(false);
@@ -180,7 +181,7 @@ export default function App() {
         supabase.from("billings").select("*").order("created_at", { ascending: false }),
         supabase.from("restock_requests").select("*").order("created_at", { ascending: false }),
         supabase.from("feed_posts").select("*").order("created_at", { ascending: false }),
-        supabase.from("profiles").select("id,name,role,phone,email").order("name"),
+        supabase.from("profiles").select("id,name,role,phone,email,feed_read_at").order("name"),
         supabase.from("units").select("*").order("seq"),
         supabase.from("kit_stock").select("*"),
       ]);
@@ -206,6 +207,25 @@ export default function App() {
     }
     loadData();
   }, [session, skipLogin]);
+
+  // 우리방 새 글 감지 — 30초 폴링 (작은 팀이라 실시간 구독 대신 단순하게)
+  useEffect(() => {
+    if (!skipLogin && !session) return;
+    const t = setInterval(async () => {
+      const { data } = await supabase.from("feed_posts").select("*").order("created_at", { ascending: false });
+      if (data) setFeed(data.map(mapFeedPost));
+    }, 30000);
+    return () => clearInterval(t);
+  }, [session, skipLogin]);
+
+  // 우리방을 여는 순간(열려 있는 동안 새 글이 와도) 읽음 처리
+  useEffect(() => {
+    if (!roomOpen || !profile) return;
+    const now = new Date().toISOString();
+    setFeedReadAt(now);
+    const pid = profileIdByName(profilesAll, profile.name);
+    if (pid) supabase.from("profiles").update({ feed_read_at: now }).eq("id", pid);
+  }, [roomOpen, feed.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // v2 마이그레이션이 실행된 DB인지 (units 존재 여부로 판단).
   // 마이그레이션 전 DB에 새 컬럼을 보내면 insert 전체가 실패하므로 반드시 이 가드를 통과해야 한다.
@@ -872,6 +892,13 @@ export default function App() {
   const barTabs = [...TABS.filter((t) => BAR_IDS.includes(t.id)), MORE_TAB];
   const moreTabs = TABS.filter((t) => !BAR_IDS.includes(t.id) && t.id !== "room" && (t.id !== "admin" || profile?.role === "admin"));
 
+  // 우리방 안읽음/멘션 — 세션 로컬 읽음 시각이 있으면 그걸, 없으면 DB(profiles.feed_read_at) 기준
+  const myName = profile?.name ?? "";
+  const selfDbReadAt = profilesAll.find((p) => p.id === profileIdByName(profilesAll, myName))?.feed_read_at;
+  const readMs = Date.parse(feedReadAt ?? selfDbReadAt ?? "") || 0;
+  const unreadPosts = feed.filter((p) => p.author !== myName && p.createdAt && new Date(p.createdAt).getTime() > readMs);
+  const mentionCnt = unreadPosts.filter((p) => (p.text ?? "").includes("@" + myName)).length;
+
   if (!skipLogin && session === undefined) {
     return (
       <div className="h-dvh w-screen bg-slate-50 flex items-center justify-center">
@@ -973,6 +1000,16 @@ export default function App() {
             className="absolute right-4 bottom-20 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95"
           >
             <MessagesSquare size={22} />
+            {unreadPosts.length > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">
+                {unreadPosts.length > 99 ? "99+" : unreadPosts.length}
+              </span>
+            )}
+            {mentionCnt > 0 && (
+              <span className="absolute -top-1 -left-1 w-5 h-5 rounded-full bg-amber-400 text-slate-900 text-[11px] font-extrabold flex items-center justify-center border-2 border-white">
+                @
+              </span>
+            )}
           </button>
 
           {/* 우리방 바텀시트 */}
