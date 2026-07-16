@@ -116,7 +116,7 @@ export default function Dashboard({ data }) {
         현장 {sites.length} · 호기 {units.length}대 · 기사 {profiles.filter((p) => p.role === "engineer").length}명 · 기준일 {TODAY_STR}
       </p>
 
-      <div className="grid grid-cols-3 xl:grid-cols-6 gap-3 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-8">
         <Kpi label="미처리 고장" value={openFailures.length} tone={openFailures.length ? "text-red-600" : "text-slate-900"} />
         <Kpi label="출동/진행 중" value={activeFailures.length} tone="text-amber-600" />
         <Kpi label="자재 지급대기" value={pendingMaterials.length} tone={pendingMaterials.length ? "text-blue-700" : "text-slate-900"} />
@@ -165,7 +165,7 @@ export default function Dashboard({ data }) {
         {/* 최근 고장 */}
         <section className="xl:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
           <h2 className="px-5 py-3 text-sm font-bold border-b border-slate-100">최근 고장 접수</h2>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full min-w-[40rem] text-sm">
             <thead>
               <tr className="text-xs text-slate-400 border-b border-slate-100">
                 <th className="text-left px-5 py-2 font-semibold">접수</th>
@@ -196,7 +196,7 @@ export default function Dashboard({ data }) {
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         </section>
 
         {/* 검사 도래 */}

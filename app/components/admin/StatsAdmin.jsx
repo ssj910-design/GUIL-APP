@@ -102,7 +102,7 @@ export default function StatsAdmin({ data }) {
       <h1 className="text-xl font-extrabold mb-1">통계</h1>
       <p className="text-xs text-slate-500 mb-4">자산 통계는 현재 등록 기준 · 고장/부품/기사/비용 통계는 기록이 쌓일수록 정확해집니다</p>
 
-      <div className="grid grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
         <Kpi label="관리 승강기" value={`${active.length}대`} />
         <Kpi label="20년 이상 노후" value={`${active.filter((u) => ageOf(u) >= 20).length}대`} tone="text-amber-600" />
         <Kpi label="검사만료 60일 내" value={`${active.filter((u) => in60(u.inspectionEnd)).length}대`} tone="text-red-600" />
@@ -155,7 +155,7 @@ export default function StatsAdmin({ data }) {
       {/* 기사 실적 */}
       <section className="bg-white rounded-xl border border-slate-200 mt-5 overflow-hidden">
         <h2 className="text-sm font-bold px-5 py-3 border-b border-slate-100">기사 실적</h2>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full min-w-[36rem] text-sm">
           <thead>
             <tr className="text-xs text-slate-400 border-b border-slate-100">
               <th className="text-left pl-5 py-2 font-semibold">기사</th>
@@ -176,7 +176,7 @@ export default function StatsAdmin({ data }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
         <p className="px-5 py-2.5 text-[10px] text-slate-400 border-t border-slate-50">
           * 고장·할일·청구 기록이 쌓일수록 실적이 채워집니다 (실데이터 전환일: 2026-07-16)
         </p>

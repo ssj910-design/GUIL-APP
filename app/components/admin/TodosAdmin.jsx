@@ -285,7 +285,7 @@ export default function TodosAdmin({ data, setData }) {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[52rem] text-sm">
           <thead>
             <tr className="text-xs text-slate-400 border-b border-slate-100">
               <SortableTh label="구분" sortKey="source" sort={sort} setSort={setSort} className="pl-5" />

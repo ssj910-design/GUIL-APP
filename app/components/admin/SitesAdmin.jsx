@@ -475,18 +475,18 @@ export default function SitesAdmin({ data, setData }) {
 
   return (
     <div className="max-w-[100rem]">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
           <h1 className="text-xl font-extrabold">현장관리</h1>
           <p className="text-xs text-slate-500 mt-0.5">호기(승강기 1대) 단위로 모델·설치일·승강기고유번호를 관리합니다</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => setImporting(true)}
-            className="text-sm font-bold text-blue-700 border border-blue-200 bg-white rounded-xl px-4 py-2.5">
+            className="text-sm font-bold text-blue-700 border border-blue-200 bg-white rounded-xl px-4 py-2.5 whitespace-nowrap">
             공단 엑셀 일괄 등록
           </button>
           <button onClick={() => setNewSite({ name: "", address: "", contractType: CONTRACT_TYPES[0], unitCount: 1, engineer: "" })}
-            className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5">
+            className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
             <Plus size={15} /> 새 현장 등록
           </button>
         </div>
@@ -535,7 +535,7 @@ export default function SitesAdmin({ data, setData }) {
               ))}
             </div>
           )}
-          <div className="grid grid-cols-6 gap-3 items-end">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
           <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">현장명 *</p><input className={inputCls} value={newSite.name} onChange={(e) => setNewSite({ ...newSite, name: e.target.value })} /></div>
           <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">주소</p><input className={inputCls} value={newSite.address} onChange={(e) => setNewSite({ ...newSite, address: e.target.value })} /></div>
           <div><p className="text-xs font-bold text-slate-500 mb-1">계약구분</p>
@@ -548,7 +548,7 @@ export default function SitesAdmin({ data, setData }) {
               <option value="">미배정</option>
               {engineers.map((p) => <option key={p.id}>{p.name}</option>)}
             </select></div>
-          <div className="col-span-4 flex gap-2 justify-end">
+          <div className="col-span-2 md:col-span-4 flex gap-2 justify-end">
             <button onClick={() => setNewSite(null)} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5">취소</button>
             <button
               onClick={createSite}
@@ -562,9 +562,9 @@ export default function SitesAdmin({ data, setData }) {
         </div>
       )}
 
-      <div className="grid grid-cols-7 gap-5 items-stretch">
+      <div className="grid grid-cols-1 xl:grid-cols-7 gap-5 items-stretch">
         {/* 현장 목록 */}
-        <div className="col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col h-[40rem]">
+        <div className="xl:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col h-[28rem] xl:h-[40rem]">
           <div className="p-3 border-b border-slate-100 shrink-0 space-y-2">
             <input className={inputCls} placeholder="현장명·주소 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
             <div className="flex items-center justify-between gap-2">
@@ -639,10 +639,10 @@ export default function SitesAdmin({ data, setData }) {
         </div>
 
         {/* 상세 */}
-        <div className="col-span-5 h-[40rem] overflow-y-auto space-y-4 pr-0.5">
+        <div className="xl:col-span-5 xl:h-[40rem] xl:overflow-y-auto space-y-4 pr-0.5">
           {!site ? (
-            <div className="bg-white rounded-xl border border-slate-200 h-full flex items-center justify-center text-sm text-slate-400">
-              왼쪽에서 현장을 선택하세요
+            <div className="bg-white rounded-xl border border-slate-200 h-40 xl:h-full flex items-center justify-center text-sm text-slate-400">
+              목록에서 현장을 선택하세요
             </div>
           ) : (
             <>
@@ -650,13 +650,13 @@ export default function SitesAdmin({ data, setData }) {
                 {!editingInfo ? (
                   <>
                     <div className="flex items-start justify-between">
-                      <div className="grid grid-cols-3 gap-3 flex-1 text-sm">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 flex-1 text-sm">
                         <div><p className="text-xs font-bold text-slate-400 mb-1">현장명</p><p className="font-semibold text-slate-800">{site.name}</p></div>
                         <div className="col-span-2"><p className="text-xs font-bold text-slate-400 mb-1">주소</p><p className="font-semibold text-slate-800">{site.address || "-"}</p></div>
                       </div>
                     </div>
                     <div className="flex items-start justify-between mt-3">
-                      <div className="grid grid-cols-4 gap-3 flex-1 text-sm">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1 text-sm">
                         <div><p className="text-xs font-bold text-slate-400 mb-1">계약구분</p><p className="font-semibold text-slate-800">{site.contractType || "-"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">보수료(VAT별도)</p><p className="font-semibold text-slate-800">{maintenanceCostReady ? (site.maintenanceCost != null ? Number(site.maintenanceCost).toLocaleString() + "원" : "-") : "마이그레이션 대기"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">계약일자</p><p className="font-semibold text-slate-800">{contractDateReady ? (site.contractDate || "-") : "마이그레이션 대기"}</p></div>
@@ -664,7 +664,7 @@ export default function SitesAdmin({ data, setData }) {
                       </div>
                     </div>
                     <div className="flex items-start justify-between mt-3">
-                      <div className="grid grid-cols-3 gap-3 flex-1 text-sm">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 flex-1 text-sm">
                         <div><p className="text-xs font-bold text-slate-400 mb-1">전화번호</p><p className="font-semibold text-slate-800">{site.phone || "-"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">팩스</p><p className="font-semibold text-slate-800">{site.fax || "-"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">이메일</p><p className="font-semibold text-slate-800">{site.email || "-"}</p></div>
@@ -682,11 +682,11 @@ export default function SitesAdmin({ data, setData }) {
                   </>
                 ) : (
                   <>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div><p className="text-xs font-bold text-slate-500 mb-1">현장명</p><input className={inputCls} value={siteForm.name} onChange={(e) => setSiteForm({ ...siteForm, name: e.target.value })} /></div>
                       <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">주소</p><input className={inputCls} value={siteForm.address} onChange={(e) => setSiteForm({ ...siteForm, address: e.target.value })} /></div>
                     </div>
-                    <div className="grid grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <div><p className="text-xs font-bold text-slate-500 mb-1">계약구분</p>
                         <select className={inputCls} value={siteForm.contractType} onChange={(e) => setSiteForm({ ...siteForm, contractType: e.target.value })}>
                           {CONTRACT_TYPES.map((t) => <option key={t}>{t}</option>)}
@@ -706,7 +706,7 @@ export default function SitesAdmin({ data, setData }) {
                           {engineers.map((p) => <option key={p.id}>{p.name}</option>)}
                         </select></div>
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div><p className="text-xs font-bold text-slate-500 mb-1">전화번호</p><input className={inputCls} placeholder="관리사무소 대표번호" value={siteForm.phone} onChange={(e) => setSiteForm({ ...siteForm, phone: e.target.value })} /></div>
                       <div><p className="text-xs font-bold text-slate-500 mb-1">팩스</p><input className={inputCls} value={siteForm.fax} onChange={(e) => setSiteForm({ ...siteForm, fax: e.target.value })} /></div>
                       <div><p className="text-xs font-bold text-slate-500 mb-1">이메일</p><input className={inputCls} value={siteForm.email} onChange={(e) => setSiteForm({ ...siteForm, email: e.target.value })} /></div>
@@ -737,7 +737,7 @@ export default function SitesAdmin({ data, setData }) {
                 {contacts.length === 0 ? (
                   <p className="text-xs text-slate-400 text-center py-6">등록된 담당자가 없습니다</p>
                 ) : editingContacts ? (
-                  <table className="w-full text-sm table-fixed">
+                  <div className="overflow-x-auto"><table className="w-full min-w-[44rem] text-sm table-fixed">
                     <thead>
                       <tr className="text-xs text-slate-400 border-b border-slate-100">
                         <th className="w-8" /><th className="text-left px-2 py-2 font-semibold w-28">역할</th>
@@ -752,9 +752,9 @@ export default function SitesAdmin({ data, setData }) {
                         <ContactRow key={c.id} c={c} onSave={saveContact} onDelete={deleteContact} onSetPrimary={setPrimary} />
                       ))}
                     </tbody>
-                  </table>
+                  </table></div>
                 ) : (
-                  <table className="w-full text-sm table-fixed">
+                  <div className="overflow-x-auto"><table className="w-full min-w-[44rem] text-sm table-fixed">
                     <thead>
                       <tr className="text-xs text-slate-400 border-b border-slate-100">
                         <th className="w-8" /><th className="text-left px-2 py-2 font-semibold w-28">역할</th>
@@ -776,7 +776,7 @@ export default function SitesAdmin({ data, setData }) {
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                  </table></div>
                 )}
               </div>
 
@@ -795,7 +795,7 @@ export default function SitesAdmin({ data, setData }) {
                   )}
                 </div>
                 {editingUnits ? (
-                  <table className="w-full text-sm table-fixed">
+                  <div className="overflow-x-auto"><table className="w-full min-w-[44rem] text-sm table-fixed">
                     <thead>
                       <tr className="text-xs text-slate-400 border-b border-slate-100">
                         <th className="text-left px-4 py-2 font-semibold w-14">호기</th>
@@ -811,9 +811,9 @@ export default function SitesAdmin({ data, setData }) {
                         <UnitRow key={u.id} unit={u} onSave={saveUnit} onToggleActive={toggleUnitActive} onDelete={deleteUnit} onOpenDetail={setUnitDetail} />
                       ))}
                     </tbody>
-                  </table>
+                  </table></div>
                 ) : (
-                  <table className="w-full text-sm table-fixed">
+                  <div className="overflow-x-auto"><table className="w-full min-w-[44rem] text-sm table-fixed">
                     <thead>
                       <tr className="text-xs text-slate-400 border-b border-slate-100">
                         <th className="text-left px-4 py-2 font-semibold w-14">호기</th>
@@ -841,7 +841,7 @@ export default function SitesAdmin({ data, setData }) {
                         );
                       })}
                     </tbody>
-                  </table>
+                  </table></div>
                 )}
                 <p className="px-4 py-2.5 text-[10px] text-slate-400 border-t border-slate-50">
                   * 호기명을 클릭하면 상세정보(승강기정보·고장·검사·부품교체내역)를 볼 수 있습니다. 승강기고유번호를 등록하면 종류·설치일자가 국가승강기정보센터 실시간 데이터로 전환됩니다.

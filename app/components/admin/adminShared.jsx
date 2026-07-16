@@ -33,7 +33,7 @@ export function StatusBadge({ tone = "slate", children }) {
 export function AdminTable({ head, children }) {
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full min-w-[48rem] text-sm">
         <thead>
           <tr className="text-xs text-slate-400 border-b border-slate-100">
             {head.map((h, i) => (
