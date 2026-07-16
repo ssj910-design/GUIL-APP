@@ -3082,17 +3082,18 @@ function RestockHistoryScreen({ restockRequests, onBack }) {
 }
 
 function emptyPartRow() {
-  return { id: Date.now() + Math.random(), name: "", qty: "", unit: "" };
+  return { id: Date.now() + Math.random(), name: "", qty: "" };
 }
 
 function formatPartRows(rows) {
   return rows
-    .filter((r) => r.name.trim() && r.qty && r.unit.trim())
-    .map((r) => `${r.name.trim()} ${r.qty}${r.unit.trim()}`)
+    .filter((r) => r.name.trim() && r.qty)
+    .map((r) => `${r.name.trim()} ${r.qty}개`)
     .join(", ");
 }
 
-function PartsRowsInput({ rows, setRows }) {
+// nameOptions를 넘기면 부품명 칸이 드롭다운으로 바뀝니다 (예: 상비부품 목록에서 선택).
+function PartsRowsInput({ rows, setRows, nameOptions, namePlaceholder = "예: 인버터" }) {
   function updateRow(id, field, value) {
     setRows(rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   }
@@ -3109,34 +3110,38 @@ function PartsRowsInput({ rows, setRows }) {
       <div className="flex gap-1.5 mb-1.5 px-0.5">
         <span className="text-[10px] font-bold text-slate-400" style={{ flex: 2 }}>부품명</span>
         <span className="text-[10px] font-bold text-slate-400" style={{ flex: 1 }}>수량</span>
-        <span className="text-[10px] font-bold text-slate-400" style={{ flex: 1 }}>단위</span>
         <span className="w-5 shrink-0" />
       </div>
       <div className="space-y-2">
         {rows.map((row) => (
           <div key={row.id} className="flex gap-1.5 items-center">
-            <input
-              className={inputCls}
-              style={{ flex: 2 }}
-              placeholder="예: 인버터"
-              value={row.name}
-              onChange={(e) => updateRow(row.id, "name", e.target.value)}
-            />
+            {nameOptions ? (
+              <select
+                className={inputCls}
+                style={{ flex: 2 }}
+                value={row.name}
+                onChange={(e) => updateRow(row.id, "name", e.target.value)}
+              >
+                <option value="">{namePlaceholder}</option>
+                {nameOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            ) : (
+              <input
+                className={inputCls}
+                style={{ flex: 2 }}
+                placeholder={namePlaceholder}
+                value={row.name}
+                onChange={(e) => updateRow(row.id, "name", e.target.value)}
+              />
+            )}
             <input
               type="number"
               min={1}
               className={inputCls}
               style={{ flex: 1 }}
-              placeholder="1"
+              placeholder="수량"
               value={row.qty}
               onChange={(e) => updateRow(row.id, "qty", e.target.value)}
-            />
-            <input
-              className={inputCls}
-              style={{ flex: 1 }}
-              placeholder="개"
-              value={row.unit}
-              onChange={(e) => updateRow(row.id, "unit", e.target.value)}
             />
             <button
               type="button"
@@ -3309,7 +3314,7 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
     <div className="flex-1 overflow-y-auto pb-4">
       <div className="px-5 pt-4 flex gap-2">
         <button onClick={() => setSub("material")} className={`flex-1 py-2.5 rounded-xl text-sm font-bold ${sub === "material" ? "bg-blue-700 text-white" : "bg-white border border-slate-200 text-slate-500"}`}>
-          자재신청
+          자재 신청
         </button>
         <button onClick={() => setSub("quote")} className={`flex-1 py-2.5 rounded-xl text-sm font-bold ${sub === "quote" ? "bg-blue-700 text-white" : "bg-white border border-slate-200 text-slate-500"}`}>
           견적 요청
@@ -3329,7 +3334,7 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
                   {form.siteId && siteUnits(sites.find((s) => s.id === form.siteId)).map((u) => <option key={u} value={u}>{u}</option>)}
                 </select>
               </Field>
-              <Field label="부품 내역 (부품명, 수량, 단위)">
+              <Field label="부품 내역 (부품명, 수량)">
                 <PartsRowsInput rows={form.parts} setRows={(rows) => setForm({ ...form, parts: rows })} />
               </Field>
               <Field label="긴급도">
@@ -3501,7 +3506,7 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
                 {quoteForm.siteId && siteUnits(sites.find((s) => s.id === quoteForm.siteId)).map((u) => <option key={u} value={u}>{u}</option>)}
               </select>
             </Field>
-            <Field label="견적 내역 (부품명, 수량, 단위)">
+            <Field label="견적 내역 (부품명, 수량)">
               <PartsRowsInput rows={quoteForm.parts} setRows={(rows) => setQuoteForm({ ...quoteForm, parts: rows })} />
             </Field>
             <Field label="현장 견적 담당자 전화번호">
@@ -3659,12 +3664,12 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const [materialCost, setMaterialCost] = useState("");
   const [materialReplaceDate, setMaterialReplaceDate] = useState(TODAY_STR);
   const [submitted, setSubmitted] = useState(null);
-  const [manualForm, setManualForm] = useState({ siteId: "", unit: "", part: "", partQty: "1", replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
+  const [manualForm, setManualForm] = useState({ siteId: "", unit: "", parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
   const [materialPhotos, setMaterialPhotos] = useState({ before: [], after: [], confirm: null });
   const [manualPhotos, setManualPhotos] = useState({ before: [], after: [], confirm: null });
 
   const selected = todos.find((t) => t.id === selectedId);
-  const manualValid = manualForm.siteId && manualForm.part.trim() && manualForm.partQty && manualForm.replaceDate && manualForm.contactPhone.trim();
+  const manualValid = manualForm.siteId && formatPartRows(manualForm.parts) && manualForm.replaceDate && manualForm.contactPhone.trim();
 
   async function submitMaterial() {
     if (!selected) return;
@@ -3693,7 +3698,7 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   function submitManual() {
     if (!manualValid) return;
     const site = sites.find((s) => s.id === manualForm.siteId);
-    const partText = `${manualForm.part.trim()} ${manualForm.partQty}개`;
+    const partText = formatPartRows(manualForm.parts);
     onSubmitBilling({
       type: "manual",
       siteName: site.name,
@@ -3707,10 +3712,12 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       contactPhone: manualForm.contactPhone,
     });
     if (manualForm.fromKit) {
-      onUseKitPart({ part: manualForm.part, siteName: site.name });
+      manualForm.parts
+        .filter((r) => r.name.trim() && r.qty)
+        .forEach((r) => onUseKitPart({ part: r.name.trim(), siteName: site.name }));
     }
     setSubmitted({ siteName: site.name, part: partText, manual: true, fromKit: manualForm.fromKit });
-    setManualForm({ siteId: "", unit: "", part: "", partQty: "1", replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
+    setManualForm({ siteId: "", unit: "", parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
     setManualPhotos({ before: [], after: [], confirm: null });
     setTimeout(() => setSubmitted(null), 2600);
   }
@@ -3825,7 +3832,7 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
             </Field>
             <button
               type="button"
-              onClick={() => setManualForm({ ...manualForm, fromKit: !manualForm.fromKit, part: "" })}
+              onClick={() => setManualForm({ ...manualForm, fromKit: !manualForm.fromKit, parts: [emptyPartRow()] })}
               className={`w-full flex items-center gap-2.5 border rounded-xl px-3.5 py-3 mb-4 text-left ${manualForm.fromKit ? "border-blue-400 bg-blue-50" : "border-slate-200 bg-white"}`}
             >
               <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${manualForm.fromKit ? "bg-blue-600 border-blue-600" : "border-slate-300"}`}>
@@ -3836,37 +3843,13 @@ function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                 <p className="text-[11px] text-slate-400 mt-0.5">체크하면 자재 담당자에게 보충 요청이 자동으로 전달됩니다</p>
               </div>
             </button>
-            <Field label="교체내역">
-              <div className="flex gap-1.5">
-                <div style={{ flex: 2 }}>
-                  {manualForm.fromKit ? (
-                    <select
-                      className={inputCls}
-                      value={manualForm.part}
-                      onChange={(e) => setManualForm({ ...manualForm, part: e.target.value })}
-                    >
-                      <option value="">상비부품 목록에서 선택하세요</option>
-                      {KIT_PARTS.map((p) => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                  ) : (
-                    <input
-                      className={inputCls}
-                      placeholder="예: 도어 롤러"
-                      value={manualForm.part}
-                      onChange={(e) => setManualForm({ ...manualForm, part: e.target.value })}
-                    />
-                  )}
-                </div>
-                <input
-                  type="number"
-                  min={1}
-                  className={inputCls}
-                  style={{ flex: 1 }}
-                  placeholder="수량"
-                  value={manualForm.partQty}
-                  onChange={(e) => setManualForm({ ...manualForm, partQty: e.target.value })}
-                />
-              </div>
+            <Field label="교체내역 (부품명, 수량)">
+              <PartsRowsInput
+                rows={manualForm.parts}
+                setRows={(rows) => setManualForm({ ...manualForm, parts: rows })}
+                nameOptions={manualForm.fromKit ? KIT_PARTS : undefined}
+                namePlaceholder={manualForm.fromKit ? "상비부품 목록에서 선택하세요" : "예: 도어 롤러"}
+              />
             </Field>
             <Field label="교체일자">
               <input
