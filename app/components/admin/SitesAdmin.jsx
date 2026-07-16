@@ -209,7 +209,7 @@ export default function SitesAdmin({ data, setData }) {
     try {
       const res = await fetch(`/api/elevator-info?elevatorNo=${encodeURIComponent(no)}`);
       const data = await res.json();
-      const items = (data.items ?? []).map((it) => ({ ...it, checked: true }));
+      const items = (data.items ?? []).map((it) => ({ ...it, checked: false })); // 기본 미선택 — 계약 호기만 명시적으로 체크
       if (!items.length) { alert("해당 고유번호로 건물을 찾지 못했습니다"); setNewSite((ns) => ({ ...ns, looking: false })); return; }
       setNewSite((ns) => ({
         ...ns,
@@ -293,7 +293,20 @@ export default function SitesAdmin({ data, setData }) {
           </div>
           {newSite.found && (
             <div className="border border-blue-100 rounded-xl overflow-hidden">
-              <p className="px-4 py-2 text-xs font-bold bg-blue-50 text-blue-700">공단 조회 결과 — 계약 대상 호기만 체크하세요 ({newSite.found.filter((i) => i.checked).length}/{newSite.found.length})</p>
+              <div className="flex items-center justify-between px-4 py-2 bg-blue-50">
+                <p className="text-xs font-bold text-blue-700">
+                  이 건물의 승강기 {newSite.found.length}대 — <span className="text-red-600">유지보수 계약 대상만 체크</span>하세요. 체크한 호기만 등록됩니다 ({newSite.found.filter((i) => i.checked).length}개 선택)
+                </p>
+                <button
+                  onClick={() => setNewSite((ns) => {
+                    const all = ns.found.every((x) => x.checked);
+                    return { ...ns, found: ns.found.map((x) => ({ ...x, checked: !all })) };
+                  })}
+                  className="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-2 py-1 bg-white whitespace-nowrap"
+                >
+                  {newSite.found.every((x) => x.checked) ? "전체 해제" : "전체 선택"}
+                </button>
+              </div>
               {newSite.found.map((it, idx) => (
                 <label key={it.elevatorNo} className="flex items-center gap-3 px-4 py-2 border-t border-blue-50 text-sm cursor-pointer">
                   <input type="checkbox" checked={it.checked} onChange={() =>
@@ -321,7 +334,11 @@ export default function SitesAdmin({ data, setData }) {
             </select></div>
           <div className="col-span-4 flex gap-2 justify-end">
             <button onClick={() => setNewSite(null)} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5">취소</button>
-            <button onClick={createSite} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5">
+            <button
+              onClick={createSite}
+              disabled={newSite.found && !newSite.found.some((i) => i.checked)}
+              className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2.5"
+            >
               등록 {newSite.found ? `(체크한 ${newSite.found.filter((i) => i.checked).length}개 호기 생성)` : "(호기 자동 생성)"}
             </button>
           </div>
