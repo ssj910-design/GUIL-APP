@@ -518,7 +518,9 @@ export default function App() {
   }
 
   // ★ 자재 지급 완료 트리거: 이 순간에만 할 일이 자동 생성됩니다 (D-30 시작)
-  async function handleSupplyComplete(requestId) {
+  // assignee를 넘기면(신청자와 실제 교체 기사가 다른 경우) 그 이름으로 할 일이 생성되고,
+  // 생략하면 지금처럼 신청 기사 본인 앞으로 생성됩니다.
+  async function handleSupplyComplete(requestId, assignee) {
     const req = materialRequests.find((r) => r.id === requestId);
     if (!req || !req.hasSupplyPhoto) return;
 
@@ -538,7 +540,7 @@ export default function App() {
       siteName: req.siteName,
       elevatorNo: req.elevatorNo,
       part: req.part,
-      assignee: req.engineer,
+      assignee: assignee || req.engineer,
       assignedDate: TODAY_STR,
       dueDate: addDays(TODAY_STR, 30),
       done: false,
@@ -557,7 +559,7 @@ export default function App() {
       done: newTodo.done,
       ...(v2Ready ? {
         unit_id: req.unitId ?? unitIdFor(units, req.siteId, req.elevatorNo),
-        assignee_id: profileIdByName(profilesAll, req.engineer),
+        assignee_id: profileIdByName(profilesAll, newTodo.assignee),
       } : {}),
     });
     setTodos((prev) => [newTodo, ...prev]);
@@ -666,18 +668,22 @@ export default function App() {
       .eq("id", quoteId);
   }
 
-  // ★ 자재지급완료 트리거: 이 순간 담당 기사에게 할 일이 자동 생성됩니다
-  async function handleCompleteQuoteSupply(quoteId) {
+  // ★ 자재지급완료 트리거: 이 순간 담당 기사(들)에게 할 일이 자동 생성됩니다
+  // assignees(배열)를 넘기면 신청자 외에 실제 시공 기사를 2명 이상 지정할 수 있고,
+  // 각 담당자마다 할 일이 하나씩 생성됩니다 (같은 quoteRequestId를 공유 — 한 명이 비용청구를
+  // 하면 나머지 담당자의 할 일도 함께 자동완료됩니다).
+  async function handleCompleteQuoteSupply(quoteId, assignees) {
     const q = quoteRequests.find((x) => x.id === quoteId);
     if (!q || !q.hasSupplyPhoto) return;
+    const finalAssignees = assignees?.length ? assignees : [q.engineer];
 
     await supabase.from("quote_requests").update({ status: "자재지급완료", supplied_date: TODAY_STR }).eq("id", quoteId);
     setQuoteRequests((prev) =>
       prev.map((x) => (x.id === quoteId && x.hasSupplyPhoto ? { ...x, status: "자재지급완료", suppliedDate: TODAY_STR } : x))
     );
 
-    const newTodo = {
-      id: "todo-quote-" + quoteId,
+    const newTodos = finalAssignees.map((assignee, idx) => ({
+      id: `todo-quote-${quoteId}-${idx}`,
       materialRequestId: null,
       quoteRequestId: quoteId,
       source: "quote",
@@ -685,29 +691,31 @@ export default function App() {
       siteName: q.siteName,
       elevatorNo: q.elevatorNo,
       part: q.constructionType,
-      assignee: q.engineer,
+      assignee,
       assignedDate: TODAY_STR,
       dueDate: addDays(TODAY_STR, 30),
       done: false,
-    };
-    await supabase.from("todos").insert({
-      id: newTodo.id,
-      quote_request_id: newTodo.quoteRequestId,
-      source: newTodo.source,
-      title: newTodo.title,
-      site_name: newTodo.siteName,
-      elevator_no: newTodo.elevatorNo,
-      part: newTodo.part,
-      assignee: newTodo.assignee,
-      assigned_date: newTodo.assignedDate,
-      due_date: newTodo.dueDate,
-      done: newTodo.done,
-      ...(v2Ready ? {
-        unit_id: q.unitId ?? unitIdFor(units, q.siteId, q.elevatorNo),
-        assignee_id: profileIdByName(profilesAll, q.engineer),
-      } : {}),
-    });
-    setTodos((prev) => [newTodo, ...prev]);
+    }));
+    await supabase.from("todos").insert(
+      newTodos.map((t) => ({
+        id: t.id,
+        quote_request_id: t.quoteRequestId,
+        source: t.source,
+        title: t.title,
+        site_name: t.siteName,
+        elevator_no: t.elevatorNo,
+        part: t.part,
+        assignee: t.assignee,
+        assigned_date: t.assignedDate,
+        due_date: t.dueDate,
+        done: t.done,
+        ...(v2Ready ? {
+          unit_id: q.unitId ?? unitIdFor(units, q.siteId, q.elevatorNo),
+          assignee_id: profileIdByName(profilesAll, t.assignee),
+        } : {}),
+      }))
+    );
+    setTodos((prev) => [...newTodos, ...prev]);
   }
 
   // ★ 관리자가 직원(1명 이상)에게 할 일을 직접 부여 — 담당자마다 할 일을 하나씩 만듭니다
@@ -750,6 +758,13 @@ export default function App() {
     if (!current) return;
     await supabase.from("todos").update({ done: !current.done }).eq("id", todoId);
     setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, done: !t.done } : t)));
+  }
+
+  // ★ 할 일 담당자 재지정 — 신청자와 실제 교체 기사가 지급 시점엔 다르게 정해졌거나
+  // 나중에 배차가 바뀐 경우의 안전망입니다. 관리자 화면과 기사 본인 화면 양쪽에서 호출됩니다.
+  async function handleReassignTodo(todoId, newAssignee) {
+    await supabase.from("todos").update({ assignee: newAssignee }).eq("id", todoId);
+    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, assignee: newAssignee } : t)));
   }
 
   // ★ 기사 반려: 잘못된 자재가 지급된 경우. 연결된 할 일은 취소되고 담당자에게 재지급 알림이 전달됩니다.
@@ -879,9 +894,9 @@ export default function App() {
           {tab === "inspection" && <InspectionTab inspections={inspections} setInspections={setInspections} />}
           {tab === "material" && <MaterialTab requests={materialRequests} setRequests={setMaterialRequests} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} setQuoteRequests={setQuoteRequests} restockRequests={restockRequests} />}
           {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} />}
-          {tab === "todo" && <TodoTab todos={todos} setTodos={setTodos} />}
+          {tab === "todo" && <TodoTab todos={todos} setTodos={setTodos} onReassignTodo={handleReassignTodo} />}
           {tab === "room" && <RoomTab feed={feed} onSendChat={handleSendFeedPost} />}
-          {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
+          {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
 
           {/* bottom nav */}
           <div

@@ -32,8 +32,21 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
 
   async function submitMaterial() {
     if (!selected) return;
-    await supabase.from("todos").update({ done: true }).eq("id", selected.id);
-    setTodos((prev) => prev.map((t) => (t.id === selected.id ? { ...t, done: true } : t)));
+    // 견적 지급 시 담당자를 2명 이상 지정한 경우, 같은 quoteRequestId(또는 materialRequestId)를
+    // 공유하는 할 일이 여러 개 생성돼 있습니다. 그중 한 명이 비용청구를 하면 나머지 담당자의
+    // 할 일도 함께 자동완료되도록, 이 건과 같은 요청을 공유하는 미완료 할 일을 모두 찾아 완료 처리합니다.
+    const idsToComplete = (selected.quoteRequestId || selected.materialRequestId)
+      ? todos
+          .filter(
+            (t) =>
+              !t.done &&
+              ((selected.quoteRequestId && t.quoteRequestId === selected.quoteRequestId) ||
+                (selected.materialRequestId && t.materialRequestId === selected.materialRequestId))
+          )
+          .map((t) => t.id)
+      : [selected.id];
+    await supabase.from("todos").update({ done: true }).in("id", idsToComplete);
+    setTodos((prev) => prev.map((t) => (idsToComplete.includes(t.id) ? { ...t, done: true } : t)));
     onSubmitBilling({
       type: "material",
       siteName: selected.siteName,
