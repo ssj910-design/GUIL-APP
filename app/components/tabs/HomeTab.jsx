@@ -63,10 +63,11 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
   const combinedInspections = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId))];
 
+  // 도래현장: 검사유효기한 기준 과거 60일(연체) ~ 미래 60일 (관리자 대시보드와 동일 기준)
   const dueSoon = combinedInspections
     .filter((i) => (i.id?.startsWith("gov-") ? i.result === "pass" : !i.result))
     .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) }))
-    .filter((i) => i.daysLeft >= 0 && i.daysLeft <= 60)
+    .filter((i) => i.daysLeft >= -60 && i.daysLeft <= 60)
     .sort((a, b) => a.daysLeft - b.daysLeft);
 
   const flagged = combinedInspections

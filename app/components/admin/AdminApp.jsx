@@ -113,7 +113,7 @@ export default function AdminApp() {
         ) : menu === "failures" ? (
           <FailuresAdmin data={data} setData={setData} />
         ) : menu === "inspections" ? (
-          <InspectionsAdmin data={data} />
+          <InspectionsAdmin data={data} setData={setData} />
         ) : menu === "materials" ? (
           <MaterialsAdmin data={data} />
         ) : menu === "billings" ? (

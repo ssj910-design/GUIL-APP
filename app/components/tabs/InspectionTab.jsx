@@ -28,9 +28,9 @@ export function InspectionTab({ inspections, setInspections }) {
       if (!i.id?.startsWith("gov-")) return !i.result;
       // 조건부합격/불합격은 도래현장이 아닌 조건부/불합격 탭에서만 보여줍니다.
       if (i.result !== "pass") return false;
-      // 실시간 데이터는 항상 판정결과가 있으므로, 유효기간 만료가 임박했는지로 "도래"를 판단합니다.
+      // 유효기한 기준 과거 60일(연체) ~ 미래 60일을 도래현장으로 봅니다 (관리자 대시보드와 동일 기준).
       const daysLeft = Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000);
-      return daysLeft >= 0 && daysLeft <= 60;
+      return daysLeft >= -60 && daysLeft <= 60;
     })
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
   const flagged = combined

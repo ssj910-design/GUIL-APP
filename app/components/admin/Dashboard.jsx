@@ -27,8 +27,8 @@ function Kpi({ label, value, tone = "text-slate-900" }) {
   );
 }
 
-// 고장상세내역 — 대시보드 집중관리현장 -> 고장내역 -> 이 고장 클릭 시.
-function FailureDetailContent({ f, units, sites }) {
+// 고장상세내역 — 대시보드 집중관리현장 -> 고장내역 -> 이 고장 클릭 시. (FailuresAdmin에서도 재사용)
+export function FailureDetailContent({ f, units, sites }) {
   const loc = unitLabel(units, sites, f.unitId, f.siteName, f.elevatorNo);
   const rows = [
     { label: "현장 · 호기", value: `${loc.site} · ${loc.unit}` },

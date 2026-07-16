@@ -3,6 +3,7 @@
 // 청구내역 — 청구 건 조회 + 합계. 각 건 클릭 시 상세보기(사진 포함)에서
 // 내용(관리자 메모) 추가, 담당자 변경, 기한(교체일자) 수정이 가능하다.
 import { useState } from "react";
+import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls } from "@/app/components/admin/adminShared";
 
@@ -99,8 +100,17 @@ function BillingDetailModal({ b, data, onClose, onSave }) {
 
 export default function BillingsAdmin({ data, setData }) {
   const { billings } = data;
-  const total = billings.reduce((sum, b) => sum + (Number(b.cost) || 0), 0);
+  const [search, setSearch] = useState("");
   const [detail, setDetail] = useState(null);
+
+  const q = search.trim();
+  const rows = billings.filter((b) =>
+    !q ||
+    locOf(data, b.unitId, b.siteName, b.elevatorNo).includes(q) ||
+    (b.part ?? "").includes(q) ||
+    personOf(data, b.engineerId, b.engineer).includes(q)
+  );
+  const total = rows.reduce((sum, b) => sum + (Number(b.cost) || 0), 0);
 
   async function saveBilling(b, patch) {
     const { error } = await supabase.from("billings").update(patch).eq("id", b.id);
@@ -120,11 +130,15 @@ export default function BillingsAdmin({ data, setData }) {
       <div className="flex items-end justify-between mb-4">
         <h1 className="text-xl font-extrabold">청구내역</h1>
         <p className="text-sm text-slate-500">
-          총 {billings.length}건 · <span className="font-extrabold text-slate-900">{total.toLocaleString()}원</span>
+          {q && `검색결과 ${rows.length}건 / `}총 {billings.length}건 · <span className="font-extrabold text-slate-900">{total.toLocaleString()}원</span>
         </p>
       </div>
+      <div className="relative mb-3 max-w-72">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input className={`${inputCls} pl-8`} placeholder="현장·부품·기사명 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
       <AdminTable head={["제출", "현장 · 호기", "교체내역", "교체일", "금액", "기사", "근거", "사진"]}>
-        {billings.map((b) => (
+        {rows.map((b) => (
           <tr key={b.id} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setDetail(b)}>
             <td className="pl-5 pr-3 py-2.5 text-slate-500 whitespace-nowrap">{b.submittedAt}</td>
             <td className="px-3 py-2.5 font-semibold whitespace-nowrap">{locOf(data, b.unitId, b.siteName, b.elevatorNo)}</td>

@@ -14,23 +14,89 @@ import {
 
 const SOURCE_LABEL = { material: "자재", quote: "견적", manual: "수동" };
 
-function TodoDetailModal({ t, data, onClose }) {
+function TodoDetailModal({ t, data, onClose, onSave }) {
+  const { sites, units, profiles } = data;
+  const engineers = profiles.filter((p) => p.role === "engineer");
+  const currentUnit = units.find((u) => u.id === t.unitId);
+  const initialSiteId = currentUnit?.siteId ?? sites.find((s) => s.name === t.siteName)?.id ?? "";
+  const [form, setForm] = useState({
+    title: t.title ?? "",
+    description: t.description ?? "",
+    siteId: initialSiteId,
+    unitId: t.unitId ?? "",
+    assigneeId: t.assigneeId ?? "",
+    assignedDate: t.assignedDate ?? "",
+    dueDate: t.dueDate ?? "",
+    done: t.done,
+  });
+  const [saving, setSaving] = useState(false);
+  const siteUnits = units.filter((u) => u.siteId === form.siteId);
+
+  async function save() {
+    if (!form.title.trim()) return;
+    setSaving(true);
+    await onSave(t, form);
+    setSaving(false);
+    onClose();
+  }
+
   return (
     <Modal title="할 일 상세내역" onClose={onClose}>
-      <div className="space-y-2.5 text-sm mb-4">
-        <div className="flex justify-between border-b border-slate-50 pb-2"><span className="text-slate-400">구분</span><span className="font-semibold">{SOURCE_LABEL[t.source] ?? t.source}</span></div>
-        <div className="flex justify-between border-b border-slate-50 pb-2"><span className="text-slate-400">할일</span><span className="font-semibold text-right">{t.title}</span></div>
-        <div className="flex justify-between border-b border-slate-50 pb-2"><span className="text-slate-400">현장 · 호기</span><span className="font-semibold">{locOf(data, t.unitId, t.siteName, t.elevatorNo)}</span></div>
-        <div className="flex justify-between border-b border-slate-50 pb-2"><span className="text-slate-400">담당자</span><span className="font-semibold">{personOf(data, t.assigneeId, t.assignee)}</span></div>
-        <div className="flex justify-between border-b border-slate-50 pb-2"><span className="text-slate-400">배정일</span><span className="font-semibold">{t.assignedDate}</span></div>
-        <div className="flex justify-between border-b border-slate-50 pb-2"><span className="text-slate-400">기한</span><span className="font-semibold">{t.dueDate ?? "-"}</span></div>
-        <div className="flex justify-between border-b border-slate-50 pb-2"><span className="text-slate-400">상태</span>{t.done ? <StatusBadge tone="green">완료</StatusBadge> : <StatusBadge tone="amber">진행</StatusBadge>}</div>
-        {t.description && (
+      <div className="space-y-3 mb-4">
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">구분</p>
+          <p className="text-sm font-semibold text-slate-700">{SOURCE_LABEL[t.source] ?? t.source}</p>
+        </div>
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">할일 제목</p>
+          <input className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <p className="text-slate-400 mb-1">내용</p>
-            <p className="text-slate-700 whitespace-pre-wrap bg-slate-50 rounded-lg p-3">{t.description}</p>
+            <p className="text-xs font-bold text-slate-500 mb-1">현장</p>
+            <select className={inputCls} value={form.siteId} onChange={(e) => setForm({ ...form, siteId: e.target.value, unitId: "" })}>
+              <option value="">현장 없음</option>
+              {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
           </div>
-        )}
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">호기</p>
+            <select className={inputCls} value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })} disabled={!form.siteId}>
+              <option value="">전체(현장 공통)</option>
+              {siteUnits.map((u) => <option key={u.id} value={u.id}>{u.unitNo}</option>)}
+            </select>
+          </div>
+        </div>
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">내용</p>
+          <textarea className={inputCls} rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">담당자</p>
+            <select className={inputCls} value={form.assigneeId} onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}>
+              <option value="">미배정</option>
+              {engineers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">상태</p>
+            <select className={inputCls} value={form.done ? "done" : "open"} onChange={(e) => setForm({ ...form, done: e.target.value === "done" })}>
+              <option value="open">진행</option>
+              <option value="done">완료</option>
+            </select>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">배정일</p>
+            <input className={inputCls} type="date" value={form.assignedDate} onChange={(e) => setForm({ ...form, assignedDate: e.target.value })} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">기한</p>
+            <input className={inputCls} type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
+          </div>
+        </div>
       </div>
       <div>
         <p className="text-xs font-bold text-slate-500 mb-2">지급된 자재 사진 ({t.photoUrls?.length ?? 0}장)</p>
@@ -43,6 +109,11 @@ function TodoDetailModal({ t, data, onClose }) {
         ) : (
           <p className="text-xs text-slate-400">등록된 사진이 없습니다</p>
         )}
+      </div>
+      <div className="flex justify-end mt-4">
+        <button disabled={saving || !form.title.trim()} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
+          저장
+        </button>
       </div>
     </Modal>
   );
@@ -136,6 +207,30 @@ export default function TodosAdmin({ data, setData }) {
   };
   const sortedRows = sortRows(rows, sort, getVal);
 
+  async function saveTodoDetail(t, form) {
+    const unit = units.find((u) => u.id === form.unitId);
+    const site = sites.find((s) => s.id === form.siteId);
+    const engineer = profiles.find((p) => p.id === form.assigneeId);
+    const patch = {
+      title: form.title.trim(), description: form.description || null,
+      site_name: site?.name ?? null, elevator_no: unit?.unitNo ?? null, unit_id: form.unitId || null,
+      assignee: engineer?.name ?? null, assignee_id: form.assigneeId || null,
+      assigned_date: form.assignedDate || null, due_date: form.dueDate || null, done: form.done,
+    };
+    const { error } = await supabase.from("todos").update(patch).eq("id", t.id);
+    if (error) { alert("저장 실패: " + error.message); return; }
+    setData((prev) => ({
+      ...prev,
+      todos: prev.todos.map((x) => (x.id === t.id ? {
+        ...x,
+        title: patch.title, description: patch.description ?? "",
+        siteName: patch.site_name, elevatorNo: patch.elevator_no, unitId: patch.unit_id,
+        assignee: patch.assignee, assigneeId: patch.assignee_id,
+        assignedDate: patch.assigned_date, dueDate: patch.due_date, done: patch.done,
+      } : x)),
+    }));
+  }
+
   async function toggle(t) {
     await supabase.from("todos").update({ done: !t.done }).eq("id", t.id);
     setData((prev) => ({ ...prev, todos: prev.todos.map((x) => (x.id === t.id ? { ...x, done: !x.done } : x)) }));
@@ -225,7 +320,7 @@ export default function TodosAdmin({ data, setData }) {
       </div>
       <p className="text-[10px] text-slate-400 mt-2">* 자재·견적 할일의 정상 완료 경로는 기사 비용청구입니다. 완료 처리 버튼은 관리자 예외 처리용.</p>
 
-      {detail && <TodoDetailModal t={detail} data={data} onClose={() => setDetail(null)} />}
+      {detail && <TodoDetailModal t={detail} data={data} onClose={() => setDetail(null)} onSave={saveTodoDetail} />}
       {assigning && <AssignTodoModal data={data} onClose={() => setAssigning(false)} onCreate={createTodo} />}
     </div>
   );
