@@ -1,0 +1,802 @@
+import React, { useState, useContext } from "react";
+import { ChevronRight, X, Plus, Search, PackageCheck, PackageX } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
+import { siteUnits } from "@/lib/utils";
+import { TODAY_STR, QUOTE_STAGES } from "@/lib/constants";
+import { PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
+import { SitesContext, AuthContext } from "@/app/components/context";
+import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
+import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
+
+
+function MaterialHistoryScreen({ requests, isBilled, onBack }) {
+  const [query, setQuery] = useState("");
+  const [stage, setStage] = useState("전체");
+  const stages = ["전체", "승인대기", "지급완료", "반려", "비용청구완료"];
+
+  const withStage = requests.map((r) => ({ ...r, displayStage: isBilled(r.id) ? "비용청구완료" : r.status }));
+  const filtered = withStage
+    .filter((r) => stage === "전체" || r.displayStage === stage)
+    .filter((r) => r.siteName.includes(query.trim()) || r.part.includes(query.trim()))
+    .sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate));
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden bg-white">
+      <DrillHeader title="나의 자재 신청 전체보기" onBack={onBack} onHome={onBack} />
+      <div className="px-5 pt-3 pb-2 shrink-0">
+        <div className="relative mb-2.5">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            className={`${inputCls} pl-8`}
+            placeholder="현장명 또는 부품명으로 검색"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        <div className="flex gap-2 overflow-x-auto">
+          {stages.map((s) => (
+            <button
+              key={s}
+              onClick={() => setStage(s)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold shrink-0 ${stage === s ? "bg-blue-700 text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-2.5">
+        {filtered.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-10">해당 조건의 신청 내역이 없습니다</p>
+        ) : (
+          filtered.map((r) => (
+            <div key={r.id} className={`bg-white rounded-xl border p-3 ${r.status === "반려" ? "border-red-200" : "border-slate-200"}`}>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-slate-700">{r.siteName} · {r.part}</p>
+                <span
+                  className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
+                    r.displayStage === "비용청구완료" ? "bg-slate-100 text-slate-500" :
+                    r.displayStage === "지급완료" ? "bg-emerald-100 text-emerald-700" :
+                    r.displayStage === "반려" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                  }`}
+                >
+                  {r.displayStage === "비용청구완료" ? "비용청구 완료" : r.displayStage}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">{r.urgency} · 신청일 {r.requestedDate}{r.suppliedDate ? ` · 지급일 ${r.suppliedDate}` : ""}</p>
+              {r.status === "반려" && r.rejectReason && (
+                <p className="text-[11px] text-red-600 mt-1.5">반려 사유: {r.rejectReason}</p>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack }) {
+  const [query, setQuery] = useState("");
+  const [stage, setStage] = useState("전체");
+  const stages = ["전체", "요청접수", "견적발행", "승인", "자재지급완료", "비용청구완료"];
+
+  const withStage = quoteRequests.map((q) => ({ ...q, displayStage: isQuoteBilled(q.id) ? "비용청구완료" : q.status }));
+  const filtered = withStage
+    .filter((q) => stage === "전체" || q.displayStage === stage)
+    .filter((q) => q.siteName.includes(query.trim()) || q.constructionType.includes(query.trim()))
+    .sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate));
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden bg-white">
+      <DrillHeader title="나의 견적 요청 전체보기" onBack={onBack} onHome={onBack} />
+      <div className="px-5 pt-3 pb-2 shrink-0">
+        <div className="relative mb-2.5">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            className={`${inputCls} pl-8`}
+            placeholder="현장명 또는 부품명으로 검색"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        <div className="flex gap-2 overflow-x-auto">
+          {stages.map((s) => (
+            <button
+              key={s}
+              onClick={() => setStage(s)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold shrink-0 ${stage === s ? "bg-blue-700 text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-2.5">
+        {filtered.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-10">해당 조건의 견적 요청 내역이 없습니다</p>
+        ) : (
+          filtered.map((q) => (
+            <div key={q.id} className="bg-white rounded-xl border border-slate-200 p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-slate-700">{q.siteName} · {q.constructionType}</p>
+                <span
+                  className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
+                    q.displayStage === "비용청구완료" ? "bg-slate-100 text-slate-500" :
+                    q.displayStage === "자재지급완료" ? "bg-emerald-100 text-emerald-700" :
+                    q.displayStage === "승인" ? "bg-indigo-100 text-indigo-700" :
+                    q.displayStage === "견적발행" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+                  }`}
+                >
+                  {q.displayStage === "비용청구완료" ? "비용청구 완료" : q.displayStage}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">신청일 {q.requestedDate}{q.suppliedDate ? ` · 지급일 ${q.suppliedDate}` : ""}</p>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+function RestockHistoryScreen({ restockRequests, onBack }) {
+  const [query, setQuery] = useState("");
+  const [stage, setStage] = useState("전체");
+  const [photoViewTarget, setPhotoViewTarget] = useState(null);
+  const stages = ["전체", "대기", "완료"];
+
+  const filtered = restockRequests
+    .filter((r) => stage === "전체" || r.status === stage)
+    .filter((r) => r.part.includes(query.trim()) || r.siteName.includes(query.trim()))
+    .sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate));
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden bg-white">
+      <DrillHeader title="나의 상비부품 보충 전체보기" onBack={onBack} onHome={onBack} />
+      <div className="px-5 pt-3 pb-2 shrink-0">
+        <div className="relative mb-2.5">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            className={`${inputCls} pl-8`}
+            placeholder="부품명 또는 현장명으로 검색"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        <div className="flex gap-2 overflow-x-auto">
+          {stages.map((s) => (
+            <button
+              key={s}
+              onClick={() => setStage(s)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold shrink-0 ${stage === s ? "bg-blue-700 text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-2.5">
+        {filtered.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-10">해당 조건의 보충 내역이 없습니다</p>
+        ) : (
+          filtered.map((r) => (
+            <div key={r.id} className="bg-white rounded-xl border border-slate-200 p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-slate-700">{r.part}</p>
+                <span
+                  className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
+                    r.status === "완료" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                  }`}
+                >
+                  {r.status}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {r.siteName}에서 사용 · 요청일 {r.requestedDate}{r.suppliedDate ? ` · 보충일 ${r.suppliedDate}` : ""}
+              </p>
+              {r.status === "완료" && (
+                <button
+                  onClick={() => setPhotoViewTarget({ title: r.part, subtitle: `${r.suppliedDate} 보충 · 자재 담당자 등록`, url: r.supplyPhotoUrl })}
+                  className="w-full mt-2 flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 active:bg-emerald-100"
+                >
+                  <span className="text-[11px] text-emerald-600 font-semibold">지급완료 사진 확인하기</span>
+                  <ChevronRight size={13} className="text-emerald-600" />
+                </button>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      {photoViewTarget && (
+        <Sheet title="지급 자재 사진" onClose={() => setPhotoViewTarget(null)}>
+          <div className="bg-slate-100 rounded-xl p-3 mb-4">
+            <p className="text-sm font-bold text-slate-800">{photoViewTarget.title}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">{photoViewTarget.subtitle}</p>
+          </div>
+          {photoViewTarget.url ? (
+            <img src={photoViewTarget.url} alt="" className="w-full rounded-xl object-cover mb-3" />
+          ) : (
+            <PhotoThumb caption="자재 담당자가 등록한 지급 자재 사진" />
+          )}
+        </Sheet>
+      )}
+    </div>
+  );
+}
+
+
+export function emptyPartRow() {
+  return { id: Date.now() + Math.random(), name: "", qty: "" };
+}
+
+
+export function formatPartRows(rows) {
+  return rows
+    .filter((r) => r.name.trim() && r.qty)
+    .map((r) => `${r.name.trim()} ${r.qty}개`)
+    .join(", ");
+}
+
+
+// nameOptions를 넘기면 부품명 칸이 드롭다운으로 바뀝니다 (예: 상비부품 목록에서 선택).
+export function PartsRowsInput({ rows, setRows, nameOptions, namePlaceholder = "예: 인버터" }) {
+  function updateRow(id, field, value) {
+    setRows(rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
+  }
+  function addRow() {
+    setRows([...rows, emptyPartRow()]);
+  }
+  function removeRow(id) {
+    if (rows.length === 1) return;
+    setRows(rows.filter((r) => r.id !== id));
+  }
+
+  return (
+    <div>
+      <div className="flex gap-1.5 mb-1.5 px-0.5">
+        <span className="text-[10px] font-bold text-slate-400" style={{ flex: 2 }}>부품명</span>
+        <span className="text-[10px] font-bold text-slate-400" style={{ flex: 1 }}>수량</span>
+        <span className="w-5 shrink-0" />
+      </div>
+      <div className="space-y-2">
+        {rows.map((row) => (
+          <div key={row.id} className="flex gap-1.5 items-center">
+            {nameOptions ? (
+              <select
+                className={inputCls}
+                style={{ flex: 2 }}
+                value={row.name}
+                onChange={(e) => updateRow(row.id, "name", e.target.value)}
+              >
+                <option value="">{namePlaceholder}</option>
+                {nameOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            ) : (
+              <input
+                className={inputCls}
+                style={{ flex: 2 }}
+                placeholder={namePlaceholder}
+                value={row.name}
+                onChange={(e) => updateRow(row.id, "name", e.target.value)}
+              />
+            )}
+            <input
+              type="number"
+              min={1}
+              className={inputCls}
+              style={{ flex: 1 }}
+              placeholder="수량"
+              value={row.qty}
+              onChange={(e) => updateRow(row.id, "qty", e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={() => removeRow(row.id)}
+              className="w-5 h-5 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center shrink-0 disabled:opacity-0"
+              disabled={rows.length === 1}
+            >
+              <X size={12} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={addRow}
+        className="w-full mt-2 border-2 border-dashed border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-500 flex items-center justify-center gap-1 active:bg-slate-50"
+      >
+        <Plus size={13} /> 추가하기
+      </button>
+    </div>
+  );
+}
+
+
+export function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, setQuoteRequests, restockRequests }) {
+  const sites = useContext(SitesContext);
+  const { name: CURRENT_ENGINEER } = useContext(AuthContext);
+  const [uploadSession] = useState(() => Date.now());
+  const [sub, setSub] = useState("material");
+  const [form, setForm] = useState({ siteId: "", unit: "", parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
+  const [quoteForm, setQuoteForm] = useState({ siteId: "", unit: "", parts: [emptyPartRow()], contactPhone: "", photos: [], note: "" });
+  const [rejectTarget, setRejectTarget] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [photoViewTarget, setPhotoViewTarget] = useState(null);
+  const [photoViewer, setPhotoViewer] = useState(null);
+  const [showMaterialHistory, setShowMaterialHistory] = useState(false);
+  const [showQuoteHistory, setShowQuoteHistory] = useState(false);
+  const [showRestockHistory, setShowRestockHistory] = useState(false);
+
+  const formPartText = formatPartRows(form.parts);
+
+  async function addRequest() {
+    if (!form.siteId || !formPartText || form.photos.length === 0) return;
+    const site = sites.find((s) => s.id === form.siteId);
+    const newRequest = {
+      id: "m" + Date.now(),
+      siteId: form.siteId,
+      siteName: site.name,
+      elevatorNo: form.unit || null,
+      part: formPartText,
+      urgency: form.urgency,
+      note: form.note,
+      photoCount: form.photos.length,
+      photoUrls: form.photos.map((p) => p.url),
+      engineer: CURRENT_ENGINEER,
+      requestedDate: TODAY_STR,
+      status: "승인대기",
+      suppliedDate: null,
+      rejectReason: null,
+    };
+    await supabase.from("material_requests").insert({
+      id: newRequest.id,
+      site_id: newRequest.siteId,
+      site_name: newRequest.siteName,
+      elevator_no: newRequest.elevatorNo,
+      part: newRequest.part,
+      urgency: newRequest.urgency,
+      note: newRequest.note,
+      photo_count: newRequest.photoCount,
+      photo_urls: newRequest.photoUrls,
+      engineer: newRequest.engineer,
+      requested_date: newRequest.requestedDate,
+      status: newRequest.status,
+    });
+    setRequests((prev) => [newRequest, ...prev]);
+    setForm({ siteId: "", unit: "", parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
+  }
+
+  function submitReject() {
+    if (!rejectTarget || !rejectReason.trim()) return;
+    onReject(rejectTarget.id, rejectReason.trim());
+    setRejectTarget(null);
+    setRejectReason("");
+  }
+
+  // 이미 비용청구까지 끝난 건은 반려 불가 (연결된 할일이 완료 상태인 경우)
+  function isBilled(requestId) {
+    const t = todos.find((x) => x.materialRequestId === requestId);
+    return t?.done === true;
+  }
+
+  function isQuoteBilled(quoteId) {
+    const t = todos.find((x) => x.quoteRequestId === quoteId);
+    return t?.done === true;
+  }
+
+  const myRequests = requests.filter((r) => r.engineer === CURRENT_ENGINEER && !isBilled(r.id));
+  const myQuotes = quoteRequests.filter((q) => q.engineer === CURRENT_ENGINEER && !isQuoteBilled(q.id));
+  const quoteFormText = formatPartRows(quoteForm.parts);
+  const quoteValid = quoteForm.siteId && quoteFormText && quoteForm.contactPhone && quoteForm.photos.length > 0;
+
+  async function submitQuote() {
+    if (!quoteValid) return;
+    const site = sites.find((s) => s.id === quoteForm.siteId);
+    const newQuote = {
+      id: "q" + Date.now(),
+      siteId: quoteForm.siteId,
+      siteName: site.name,
+      elevatorNo: quoteForm.unit || null,
+      constructionType: quoteFormText,
+      contactPhone: quoteForm.contactPhone,
+      note: quoteForm.note,
+      photoCount: quoteForm.photos.length,
+      photoUrls: quoteForm.photos.map((p) => p.url),
+      engineer: CURRENT_ENGINEER,
+      requestedDate: TODAY_STR,
+      status: "요청접수",
+      quoteIssuedDate: null,
+      approvedDate: null,
+      suppliedDate: null,
+      hasSupplyPhoto: false,
+    };
+    await supabase.from("quote_requests").insert({
+      id: newQuote.id,
+      site_id: newQuote.siteId,
+      site_name: newQuote.siteName,
+      elevator_no: newQuote.elevatorNo,
+      construction_type: newQuote.constructionType,
+      contact_phone: newQuote.contactPhone,
+      note: newQuote.note,
+      photo_count: newQuote.photoCount,
+      photo_urls: newQuote.photoUrls,
+      engineer: newQuote.engineer,
+      requested_date: newQuote.requestedDate,
+      status: newQuote.status,
+    });
+    setQuoteRequests((prev) => [newQuote, ...prev]);
+    setQuoteForm({ siteId: "", unit: "", parts: [emptyPartRow()], contactPhone: "", photos: [], note: "" });
+  }
+
+  if (showMaterialHistory) {
+    return (
+      <MaterialHistoryScreen
+        requests={requests.filter((r) => r.engineer === CURRENT_ENGINEER)}
+        isBilled={isBilled}
+        onBack={() => setShowMaterialHistory(false)}
+      />
+    );
+  }
+
+  if (showQuoteHistory) {
+    return (
+      <QuoteHistoryScreen
+        quoteRequests={quoteRequests.filter((q) => q.engineer === CURRENT_ENGINEER)}
+        isQuoteBilled={isQuoteBilled}
+        onBack={() => setShowQuoteHistory(false)}
+      />
+    );
+  }
+
+  if (showRestockHistory) {
+    return (
+      <RestockHistoryScreen
+        restockRequests={restockRequests.filter((r) => r.engineer === CURRENT_ENGINEER)}
+        onBack={() => setShowRestockHistory(false)}
+      />
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto pb-4">
+      <div className="px-5 pt-4 flex gap-2">
+        <button onClick={() => setSub("material")} className={`flex-1 py-2.5 rounded-xl text-sm font-bold ${sub === "material" ? "bg-blue-700 text-white" : "bg-white border border-slate-200 text-slate-500"}`}>
+          자재 신청
+        </button>
+        <button onClick={() => setSub("quote")} className={`flex-1 py-2.5 rounded-xl text-sm font-bold ${sub === "quote" ? "bg-blue-700 text-white" : "bg-white border border-slate-200 text-slate-500"}`}>
+          견적 요청
+        </button>
+      </div>
+
+      {sub === "material" ? (
+        <>
+          <div className="px-5 pt-4">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 overflow-visible">
+              <Field label="현장 선택">
+                <SiteSearchSelect value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unit: "" })} />
+              </Field>
+              <Field label="호기 선택">
+                <select className={inputCls} value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} disabled={!form.siteId}>
+                  <option value="">호기를 선택해주세요</option>
+                  {form.siteId && siteUnits(sites.find((s) => s.id === form.siteId)).map((u) => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </Field>
+              <Field label="부품 내역 (부품명, 수량)">
+                <PartsRowsInput rows={form.parts} setRows={(rows) => setForm({ ...form, parts: rows })} />
+              </Field>
+              <Field label="긴급도">
+                <div className="flex gap-2">
+                  {["일반", "긴급"].map((u) => (
+                    <button key={u} onClick={() => setForm({ ...form, urgency: u })} className={`flex-1 py-2 rounded-lg text-xs font-bold border ${form.urgency === u ? "bg-blue-700 text-white border-blue-700" : "bg-white border-slate-300 text-slate-500"}`}>
+                      {u}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+              <Field label="부품 규격 사진">
+                <MultiPhotoUpload
+                  photos={form.photos}
+                  uploadFolder={`materials/${uploadSession}`}
+                  onUploaded={(url) => setForm((f) => ({ ...f, photos: [...f.photos, { url }] }))}
+                  onRemove={(idx) => setForm((f) => ({ ...f, photos: f.photos.filter((_, i) => i !== idx) }))}
+                  label="교체할 부품 규격/모델명이 보이도록 촬영"
+                />
+              </Field>
+              <Field label="기사 의견 (교체 사유 및 특이사항)">
+                <textarea
+                  className={inputCls}
+                  rows={3}
+                  placeholder="예: 도어 롤러 마모로 소음 발생, 조속 교체 필요"
+                  value={form.note}
+                  onChange={(e) => setForm({ ...form, note: e.target.value })}
+                />
+              </Field>
+              <PrimaryButton onClick={addRequest} disabled={!form.siteId || !formPartText || form.photos.length === 0}>신청하기</PrimaryButton>
+              <p className="text-[11px] text-slate-400 text-center mt-2">신청 후 자재 담당자의 지급 완료 처리 시 할 일이 자동 생성됩니다</p>
+            </div>
+          </div>
+          <div className="px-5 pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-bold text-slate-800 text-sm">나의 신청 현황</h3>
+              <button onClick={() => setShowMaterialHistory(true)} className="text-xs font-bold text-blue-600 flex items-center gap-0.5">
+                전체보기 <ChevronRight size={12} />
+              </button>
+            </div>
+            <div className="space-y-2">
+              {myRequests.map((r) => (
+                <div key={r.id} className={`bg-white rounded-xl border p-3 ${r.status === "반려" ? "border-red-200" : "border-slate-200"}`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700">{r.siteName} · {r.part}</p>
+                      <p className="text-[11px] text-slate-400">{r.urgency} · 신청일 {r.requestedDate} · 사진 {r.photoCount ?? 1}장</p>
+                    </div>
+                    <span
+                      className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
+                        r.status === "지급완료" ? "bg-emerald-100 text-emerald-700" : r.status === "반려" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                      }`}
+                    >
+                      {r.status}
+                    </span>
+                  </div>
+                  {r.note && <p className="text-[11px] text-slate-500 mt-1.5">기사 의견: {r.note}</p>}
+
+                  {r.status === "지급완료" && (
+                    <>
+                      {r.hasSupplyPhoto && (
+                        <div className="mt-2">
+                          {r.supplyPhotoUrls?.length > 0 ? (
+                            <div className="flex gap-2">
+                              {r.supplyPhotoUrls.map((url, i) => (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  onClick={() => setPhotoViewer({ urls: r.supplyPhotoUrls, index: i })}
+                                  className="shrink-0"
+                                >
+                                  <img src={url} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <PhotoThumb caption="자재 담당자가 등록한 사진" />
+                          )}
+                        </div>
+                      )}
+                      <p className="text-[11px] text-emerald-600 font-semibold mt-1.5 flex items-center gap-1">
+                        <PackageCheck size={12} /> {r.suppliedDate} 지급완료 · 할 일이 자동 생성되었습니다
+                      </p>
+                      {isBilled(r.id) ? (
+                        <p className="text-[11px] text-slate-400 mt-1.5">비용청구 완료 · 반려 불가</p>
+                      ) : (
+                        <button
+                          onClick={() => { setRejectTarget(r); setRejectReason(""); }}
+                          className="w-full mt-2 flex items-center justify-center gap-1.5 border border-red-300 text-red-600 text-xs font-bold py-2 rounded-lg active:bg-red-50"
+                        >
+                          <PackageX size={13} /> 자재가 잘못 나왔어요 · 반려하기
+                        </button>
+                      )}
+                    </>
+                  )}
+
+                  {r.status === "반려" && (
+                    <div className="mt-1.5 bg-red-50 border border-red-100 rounded-lg px-2.5 py-2">
+                      <p className="text-[11px] text-red-600 font-semibold">반려 사유: {r.rejectReason}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">자재 담당자가 재확인 후 다시 지급할 예정입니다</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {myRequests.length === 0 && (
+                <p className="text-xs text-slate-400 text-center py-4">신청 내역이 없습니다</p>
+              )}
+            </div>
+          </div>
+
+          <div className="px-5 pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-bold text-slate-800 text-sm">나의 상비부품 보충 현황</h3>
+              <button onClick={() => setShowRestockHistory(true)} className="text-xs font-bold text-blue-600 flex items-center gap-0.5">
+                전체보기 <ChevronRight size={12} />
+              </button>
+            </div>
+            <div className="space-y-2">
+              {(() => {
+                const mine = restockRequests.filter((r) => r.engineer === CURRENT_ENGINEER);
+                const pending = mine.filter((r) => r.status === "대기");
+                const recentDone = mine
+                  .filter((r) => r.status === "완료")
+                  .sort((a, b) => new Date(b.suppliedDate) - new Date(a.suppliedDate))
+                  .slice(0, 3);
+                const preview = [...pending, ...recentDone];
+                if (preview.length === 0) {
+                  return <p className="text-xs text-slate-400 text-center py-4">보충 요청 내역이 없습니다</p>;
+                }
+                return preview.map((r) => (
+                  <div key={r.id} className="bg-white rounded-xl border border-slate-200 p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-slate-700">{r.part}</p>
+                      <span
+                        className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
+                          r.status === "완료" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {r.status}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      {r.siteName}에서 사용 · 요청일 {r.requestedDate}{r.suppliedDate ? ` · 보충일 ${r.suppliedDate}` : ""}
+                    </p>
+                    {r.status === "완료" && (
+                      <button
+                        onClick={() => setPhotoViewTarget({ title: r.part, subtitle: `${r.suppliedDate} 보충 · 자재 담당자 등록`, url: r.supplyPhotoUrl })}
+                        className="w-full mt-2 flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 active:bg-emerald-100"
+                      >
+                        <span className="text-[11px] text-emerald-600 font-semibold">지급완료 사진 확인하기</span>
+                        <ChevronRight size={13} className="text-emerald-600" />
+                      </button>
+                    )}
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="px-5 pt-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 overflow-visible">
+            <Field label="현장 선택">
+              <SiteSearchSelect value={quoteForm.siteId} onChange={(id) => setQuoteForm({ ...quoteForm, siteId: id, unit: "" })} />
+            </Field>
+            <Field label="호기 선택">
+              <select className={inputCls} value={quoteForm.unit} onChange={(e) => setQuoteForm({ ...quoteForm, unit: e.target.value })} disabled={!quoteForm.siteId}>
+                <option value="">호기를 선택해주세요</option>
+                {quoteForm.siteId && siteUnits(sites.find((s) => s.id === quoteForm.siteId)).map((u) => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </Field>
+            <Field label="견적 내역 (부품명, 수량)">
+              <PartsRowsInput rows={quoteForm.parts} setRows={(rows) => setQuoteForm({ ...quoteForm, parts: rows })} />
+            </Field>
+            <Field label="현장 견적 담당자 전화번호">
+              <input
+                className={inputCls}
+                placeholder="예: 010-1234-5678"
+                value={quoteForm.contactPhone}
+                onChange={(e) => setQuoteForm({ ...quoteForm, contactPhone: e.target.value })}
+              />
+            </Field>
+            <Field label="현장 상태 사진">
+              <MultiPhotoUpload
+                photos={quoteForm.photos}
+                uploadFolder={`quotes/${uploadSession}`}
+                onUploaded={(url) => setQuoteForm((f) => ({ ...f, photos: [...f.photos, { url }] }))}
+                onRemove={(idx) => setQuoteForm((f) => ({ ...f, photos: f.photos.filter((_, i) => i !== idx) }))}
+                label="견적이 필요한 현장 상태 촬영"
+              />
+            </Field>
+            <Field label="기사 의견 (견적 사유 및 특이사항)">
+              <textarea
+                className={inputCls}
+                rows={3}
+                placeholder="현장 상태 및 견적 필요 사유를 적어주세요"
+                value={quoteForm.note}
+                onChange={(e) => setQuoteForm({ ...quoteForm, note: e.target.value })}
+              />
+            </Field>
+            <PrimaryButton onClick={submitQuote} disabled={!quoteValid}>견적 요청하기</PrimaryButton>
+          </div>
+
+          <div className="pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-bold text-slate-800 text-sm">나의 견적 요청 현황</h3>
+              <button onClick={() => setShowQuoteHistory(true)} className="text-xs font-bold text-blue-600 flex items-center gap-0.5">
+                전체보기 <ChevronRight size={12} />
+              </button>
+            </div>
+            <div className="space-y-2">
+              {myQuotes.map((q) => (
+                <div key={q.id} className="bg-white rounded-xl border border-slate-200 p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700">{q.siteName} · {q.constructionType}</p>
+                      <p className="text-[11px] text-slate-400">신청일 {q.requestedDate} · 사진 {q.photoCount}장</p>
+                    </div>
+                    <span
+                      className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
+                        q.status === "자재지급완료" ? "bg-emerald-100 text-emerald-700" :
+                        q.status === "승인" ? "bg-indigo-100 text-indigo-700" :
+                        q.status === "견적발행" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+                      }`}
+                    >
+                      {q.status}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 mt-2.5">
+                    {QUOTE_STAGES.map((s, idx) => (
+                      <React.Fragment key={s}>
+                        {idx > 0 && <div className={`h-0.5 flex-1 ${QUOTE_STAGES.indexOf(q.status) >= idx ? "bg-blue-600" : "bg-slate-200"}`} />}
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${QUOTE_STAGES.indexOf(q.status) >= idx ? "bg-blue-600" : "bg-slate-200"}`} />
+                      </React.Fragment>
+                    ))}
+                  </div>
+                  <div className="flex items-start mt-1">
+                    {QUOTE_STAGES.map((s) => {
+                      const dateMap = { 요청접수: q.requestedDate, 견적발행: q.quoteIssuedDate, 승인: q.approvedDate, 자재지급완료: q.suppliedDate };
+                      const d = dateMap[s];
+                      return (
+                        <div key={s} className="flex-1 flex flex-col items-center gap-0.5 px-0.5 min-w-0">
+                          <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap leading-none">{s}</span>
+                          <span className="text-[9px] text-slate-300 whitespace-nowrap leading-none">{d ? d.slice(5).replace("-", "/") : "-"}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {q.status === "자재지급완료" && (
+                    <button
+                      onClick={() => setPhotoViewTarget({ title: `${q.siteName} · ${q.constructionType}`, subtitle: `${q.suppliedDate} 지급 · 자재 담당자 등록`, url: q.supplyPhotoUrl })}
+                      className="w-full mt-2.5 flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 active:bg-emerald-100"
+                    >
+                      <span className="text-[11px] text-emerald-600 font-semibold">지급 자재 사진 확인하기</span>
+                      <ChevronRight size={13} className="text-emerald-600" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {myQuotes.length === 0 && (
+                <p className="text-xs text-slate-400 text-center py-4">견적 요청 내역이 없습니다</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rejectTarget && (
+        <Sheet title="자재 반려하기" onClose={() => setRejectTarget(null)}>
+          <div className="bg-slate-100 rounded-xl p-3 mb-4">
+            <p className="text-sm font-bold text-slate-800">{rejectTarget.siteName} · {rejectTarget.part}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">{rejectTarget.suppliedDate} 지급</p>
+          </div>
+          <Field label="반려 사유">
+            <textarea
+              className={inputCls}
+              rows={3}
+              placeholder="예: 인버터 규격이 달라요 / 수량이 부족해요 등"
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+            />
+          </Field>
+          <p className="text-[11px] text-slate-400 mb-4">반려하면 이 건에 연결된 할 일이 취소되고, 자재 담당자에게 재지급 요청이 전달됩니다.</p>
+          <PrimaryButton disabled={!rejectReason.trim()} onClick={submitReject} tone="red">
+            반려 제출
+          </PrimaryButton>
+        </Sheet>
+      )}
+
+      {photoViewTarget && (
+        <Sheet title="지급 자재 사진" onClose={() => setPhotoViewTarget(null)}>
+          <div className="bg-slate-100 rounded-xl p-3 mb-4">
+            <p className="text-sm font-bold text-slate-800">{photoViewTarget.title}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">{photoViewTarget.subtitle}</p>
+          </div>
+          {photoViewTarget.url ? (
+            <img src={photoViewTarget.url} alt="" className="w-full rounded-xl object-cover mb-3" />
+          ) : (
+            <PhotoThumb caption="자재 담당자가 등록한 지급 자재 사진" />
+          )}
+        </Sheet>
+      )}
+
+      {photoViewer && (
+        <PhotoViewerSheet
+          urls={photoViewer.urls}
+          index={photoViewer.index}
+          siteName="자재 지급 사진"
+          date=""
+          onClose={() => setPhotoViewer(null)}
+        />
+      )}
+    </div>
+  );
+}
