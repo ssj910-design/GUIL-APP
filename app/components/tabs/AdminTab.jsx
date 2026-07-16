@@ -266,8 +266,19 @@ function EngineerManageScreen({ engineers, onUpdateEngineerContact, onBack }) {
 }
 
 
+function AssigneeSelect({ value, options, onChange }) {
+  return (
+    <select className={inputCls} value={value} onChange={(e) => onChange(e.target.value)}>
+      {options.includes(value) ? null : <option value={value}>{value}</option>}
+      {options.map((name) => <option key={name} value={name}>{name}</option>)}
+    </select>
+  );
+}
+
 function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onBack }) {
+  const { engineerNames } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
+  const [assigneeMap, setAssigneeMap] = useState({});
   const pending = materialRequests.filter((r) => r.status === "승인대기");
   const supplied = materialRequests.filter((r) => r.status === "지급완료");
   const rejected = materialRequests.filter((r) => r.status === "반려");
@@ -332,8 +343,17 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
                   />
                 </div>
 
+                <div className="mt-2.5">
+                  <label className="text-[10px] font-bold text-slate-400 block mb-1">담당 기사 (실제 교체할 기사, 기본값 신청자)</label>
+                  <AssigneeSelect
+                    value={assigneeMap[r.id] ?? r.engineer}
+                    options={engineerNames}
+                    onChange={(name) => setAssigneeMap((m) => ({ ...m, [r.id]: name }))}
+                  />
+                </div>
+
                 <button
-                  onClick={() => r.hasSupplyPhoto && onSupplyComplete(r.id)}
+                  onClick={() => r.hasSupplyPhoto && onSupplyComplete(r.id, assigneeMap[r.id] ?? r.engineer)}
                   disabled={!r.hasSupplyPhoto}
                   className={`w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg ${
                     r.hasSupplyPhoto ? "bg-blue-700 text-white active:bg-blue-800" : "bg-slate-200 text-slate-400"
@@ -421,7 +441,9 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
 
 
 function QuoteRequestsScreen({ quoteRequests, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onBack }) {
+  const { engineerNames } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
+  const [assigneeMap, setAssigneeMap] = useState({});
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
@@ -479,8 +501,16 @@ function QuoteRequestsScreen({ quoteRequests, onAdvanceQuote, onAttachQuotePhoto
                         required={false}
                       />
                     </div>
+                    <div className="mb-2">
+                      <label className="text-[10px] font-bold text-slate-400 block mb-1">담당 기사 (실제 시공할 기사, 기본값 신청자)</label>
+                      <AssigneeSelect
+                        value={assigneeMap[q.id] ?? q.engineer}
+                        options={engineerNames}
+                        onChange={(name) => setAssigneeMap((m) => ({ ...m, [q.id]: name }))}
+                      />
+                    </div>
                     <button
-                      onClick={() => q.hasSupplyPhoto && onCompleteQuoteSupply(q.id)}
+                      onClick={() => q.hasSupplyPhoto && onCompleteQuoteSupply(q.id, assigneeMap[q.id] ?? q.engineer)}
                       disabled={!q.hasSupplyPhoto}
                       className={`w-full flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg ${
                         q.hasSupplyPhoto ? "bg-blue-700 text-white active:bg-blue-800" : "bg-slate-200 text-slate-400"
@@ -643,7 +673,7 @@ function RestockScreen({ restockRequests, onAttachRestockPhoto, onRemoveRestockS
 }
 
 
-export function AdminTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onAdminToggleTodo, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onAddSite, onUpdateSite, onDeleteSite, siteManagers, onAddSiteManager, onUpdateSiteManager, onDeleteSiteManager, onUpdateEngineerContact }) {
+export function AdminTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onAdminToggleTodo, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onAddSite, onUpdateSite, onDeleteSite, siteManagers, onAddSiteManager, onUpdateSiteManager, onDeleteSiteManager, onUpdateEngineerContact }) {
   const sites = useContext(SitesContext);
   const { engineerNames, engineers } = useContext(AuthContext);
   const [billingViewOpen, setBillingViewOpen] = useState(false);
@@ -662,6 +692,7 @@ export function AdminTab({ inspections, materialRequests, billings, quoteRequest
         todos={todos}
         onToggle={onAdminToggleTodo}
         onAssignTodo={onAssignTodo}
+        onReassignTodo={onReassignTodo}
         engineerNames={engineerNames}
         onBack={() => setTodoViewOpen(false)}
       />

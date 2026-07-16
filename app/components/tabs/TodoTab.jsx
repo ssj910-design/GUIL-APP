@@ -12,8 +12,8 @@ import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets
 /* TODO (할일관리)                                                       */
 /* ------------------------------------------------------------------ */
 
-export function TodoTab({ todos, setTodos }) {
-  const { name: CURRENT_ENGINEER } = useContext(AuthContext);
+export function TodoTab({ todos, setTodos, onReassignTodo }) {
+  const { name: CURRENT_ENGINEER, engineerNames } = useContext(AuthContext);
   const mine = todos.filter((t) => t.assignee === CURRENT_ENGINEER);
   const [detailTarget, setDetailTarget] = useState(null);
 
@@ -77,6 +77,8 @@ export function TodoTab({ todos, setTodos }) {
         <TodoDetailSheet
           todo={mine.find((t) => t.id === detailTarget.id) ?? detailTarget}
           onToggle={detailTarget.source === "manual" && !detailTarget.done ? completeManualTodo : null}
+          onReassign={onReassignTodo}
+          engineerNames={engineerNames}
           onClose={() => setDetailTarget(null)}
         />
       )}
@@ -108,7 +110,7 @@ function TodoRow({ t, onToggle, onOpenDetail }) {
 }
 
 
-function TodoDetailSheet({ todo, onToggle, onClose }) {
+function TodoDetailSheet({ todo, onToggle, onReassign, engineerNames, onClose }) {
   const sourceLabel = todo.source === "manual" ? "관리자 부여" : todo.source === "quote" ? "견적 연동" : "자재 연동";
   return (
     <Sheet title="할 일 상세" onClose={onClose}>
@@ -118,7 +120,18 @@ function TodoDetailSheet({ todo, onToggle, onClose }) {
       <div className="space-y-2.5 mb-4">
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">담당자</span>
-          <span className="font-semibold text-slate-700">{todo.assignee}</span>
+          {onReassign ? (
+            <select
+              className="text-sm font-semibold text-slate-700 border border-slate-200 rounded-lg px-2 py-1"
+              value={todo.assignee}
+              onChange={(e) => onReassign(todo.id, e.target.value)}
+            >
+              {engineerNames?.includes(todo.assignee) ? null : <option value={todo.assignee}>{todo.assignee}</option>}
+              {engineerNames?.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+          ) : (
+            <span className="font-semibold text-slate-700">{todo.assignee}</span>
+          )}
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">현장</span>
@@ -260,7 +273,7 @@ function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
 }
 
 
-export function TodoManageScreen({ todos, onToggle, onAssignTodo, engineerNames, onBack }) {
+export function TodoManageScreen({ todos, onToggle, onAssignTodo, onReassignTodo, engineerNames, onBack }) {
   const [query, setQuery] = useState("");
   const [source, setSource] = useState("전체");
   const [assignOpen, setAssignOpen] = useState(false);
@@ -344,6 +357,8 @@ export function TodoManageScreen({ todos, onToggle, onAssignTodo, engineerNames,
         <TodoDetailSheet
           todo={todos.find((t) => t.id === detailTarget.id) ?? detailTarget}
           onToggle={onToggle}
+          onReassign={onReassignTodo}
+          engineerNames={engineerNames}
           onClose={() => setDetailTarget(null)}
         />
       )}
