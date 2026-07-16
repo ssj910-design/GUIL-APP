@@ -474,7 +474,7 @@ export default function SitesAdmin({ data, setData }) {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-[100rem]">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-extrabold">현장관리</h1>
@@ -562,7 +562,7 @@ export default function SitesAdmin({ data, setData }) {
         </div>
       )}
 
-      <div className="grid grid-cols-5 gap-5 items-stretch">
+      <div className="grid grid-cols-7 gap-5 items-stretch">
         {/* 현장 목록 */}
         <div className="col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col h-[40rem]">
           <div className="p-3 border-b border-slate-100 shrink-0 space-y-2">
@@ -639,7 +639,7 @@ export default function SitesAdmin({ data, setData }) {
         </div>
 
         {/* 상세 */}
-        <div className="col-span-3 h-[40rem] overflow-y-auto space-y-4 pr-0.5">
+        <div className="col-span-5 h-[40rem] overflow-y-auto space-y-4 pr-0.5">
           {!site ? (
             <div className="bg-white rounded-xl border border-slate-200 h-full flex items-center justify-center text-sm text-slate-400">
               왼쪽에서 현장을 선택하세요
@@ -832,11 +832,11 @@ export default function SitesAdmin({ data, setData }) {
                             <td className="px-4 py-2 font-bold whitespace-nowrap">
                               <button onClick={() => setUnitDetail(u)} className="text-blue-700 hover:underline">{u.unitNo}</button>
                             </td>
-                            <td className="px-2 py-2">{u.govNo || "미등록"}</td>
-                            <td className="px-2 py-2">{live?.kindNm || u.unitType}</td>
-                            <td className="px-2 py-2">{u.model || "-"}</td>
-                            <td className="px-2 py-2">{live ? `지상 ${live.groundFloorCnt} / 지하 ${live.undgrndFloorCnt}` : "-"}</td>
-                            <td className="px-2 py-2">{live?.frstInstallationDe || u.installDate || "-"}</td>
+                            <td className="px-2 py-2 whitespace-nowrap">{u.govNo || "미등록"}</td>
+                            <td className="px-2 py-2 truncate" title={live?.kindNm || u.kind || u.unitType}>{live?.kindNm || u.kind || u.unitType}</td>
+                            <td className="px-2 py-2 truncate" title={u.model ?? ""}>{u.model || "-"}</td>
+                            <td className="px-2 py-2 truncate">{live?.groundFloorCnt ? `지상 ${live.groundFloorCnt} / 지하 ${live.undgrndFloorCnt ?? 0}` : u.floors || "-"}</td>
+                            <td className="px-2 py-2 whitespace-nowrap">{live?.frstInstallationDe || u.installDate || "-"}</td>
                           </tr>
                         );
                       })}
