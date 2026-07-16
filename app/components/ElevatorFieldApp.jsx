@@ -94,19 +94,26 @@ export default function App() {
   const [failureToast, setFailureToast] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // SKIP_LOGIN 상태에서도 ?auth=1 이면 실제 로그인 흐름을 강제한다 (인증/회원가입 사전 점검용).
+  const [forceAuth, setForceAuth] = useState(false);
+  useEffect(() => {
+    setForceAuth(new URLSearchParams(window.location.search).has("auth"));
+  }, []);
+  const skipLogin = SKIP_LOGIN && !forceAuth;
+
   // 로그인 상태를 확인하고, 로그인/로그아웃이 일어날 때마다 알림을 받습니다.
   useEffect(() => {
-    if (SKIP_LOGIN) return;
+    if (skipLogin) return;
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
     });
     return () => listener.subscription.unsubscribe();
-  }, []);
+  }, [skipLogin]);
 
   // 로그인이 되면 profiles 테이블에서 이 계정의 이름/역할을 가져옵니다.
   useEffect(() => {
-    if (SKIP_LOGIN) {
+    if (skipLogin) {
       setProfile(getDevProfileOverride() ?? DEV_FAKE_PROFILE);
       return;
     }
@@ -115,11 +122,11 @@ export default function App() {
       return;
     }
     async function loadProfile() {
-      const { data } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
+      const { data } = await supabase.from("profiles").select("*").eq("auth_user_id", session.user.id).single();
       setProfile(data ? { name: data.name, role: data.role } : null);
     }
     loadProfile();
-  }, [session]);
+  }, [session, skipLogin]);
 
   async function handleLogin(email, password) {
     setAuthSubmitting(true);
@@ -136,7 +143,7 @@ export default function App() {
   // 로그인이 완료된 뒤에만 Supabase에서 실제 데이터를 불러옵니다.
   // (예전에는 INITIAL_FAILURES 같은 가짜 배열로 시작했지만, 이제는 DB가 기준입니다)
   useEffect(() => {
-    if (!SKIP_LOGIN && !session) return;
+    if (!skipLogin && !session) return;
     async function loadData() {
       const [
         sitesRes,
@@ -188,7 +195,7 @@ export default function App() {
       setLoading(false);
     }
     loadData();
-  }, [session]);
+  }, [session, skipLogin]);
 
   // v2 마이그레이션이 실행된 DB인지 (units 존재 여부로 판단).
   // 마이그레이션 전 DB에 새 컬럼을 보내면 insert 전체가 실패하므로 반드시 이 가드를 통과해야 한다.
@@ -854,7 +861,7 @@ export default function App() {
   const tabTitle = TABS.find((t) => t.id === tab)?.label ?? "";
   const visibleTabs = TABS.filter((t) => t.id !== "admin" || profile?.role === "admin");
 
-  if (!SKIP_LOGIN && session === undefined) {
+  if (!skipLogin && session === undefined) {
     return (
       <div className="h-dvh w-screen bg-slate-50 flex items-center justify-center">
         <p className="text-sm font-bold text-slate-400">로그인 확인 중...</p>
@@ -862,7 +869,7 @@ export default function App() {
     );
   }
 
-  if (!SKIP_LOGIN && !session) {
+  if (!skipLogin && !session) {
     return <LoginScreen onLogin={handleLogin} error={authError} submitting={authSubmitting} />;
   }
 
