@@ -9,9 +9,97 @@ import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets
 import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
 
 
+// 자재 신청/견적 요청/상비부품 보충 각각의 상세보기(신청 사진 포함)에 공용으로 쓰는 시트.
+// target = { type: "material" | "quote" | "restock", data }
+function RequestDetailSheet({ target, onClose, onPhotoClick }) {
+  if (!target) return null;
+  const { type, data } = target;
+  const title = type === "material" ? "자재 신청 상세" : type === "quote" ? "견적 요청 상세" : "상비부품 보충 상세";
+  const photos = type === "restock"
+    ? (data.supplyPhotoUrls?.length ? data.supplyPhotoUrls : data.supplyPhotoUrl ? [data.supplyPhotoUrl] : [])
+    : (data.photoUrls ?? []);
+  const photoLabel = type === "restock" ? "보충 지급 사진" : "현장 사진";
+
+  return (
+    <Sheet title={title} onClose={onClose}>
+      <div className="space-y-3 mb-4">
+        <div className="bg-slate-100 rounded-xl p-3">
+          <p className="text-[11px] text-slate-500">현장</p>
+          <p className="font-bold text-slate-800">{data.siteName}</p>
+        </div>
+        <div className="bg-slate-100 rounded-xl p-3">
+          <p className="text-[11px] text-slate-500">
+            {type === "material" ? "부품 내역 (부품명, 수량)" : type === "quote" ? "견적 내역 (부품명, 수량)" : "부품명"}
+          </p>
+          <p className="font-bold text-slate-800 whitespace-pre-wrap">
+            {type === "quote" ? data.constructionType : data.part}
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2.5">
+          {type === "material" && (
+            <div className="bg-slate-100 rounded-xl p-3">
+              <p className="text-[11px] text-slate-500">긴급도</p>
+              <p className="font-bold text-slate-800">{data.urgency}</p>
+            </div>
+          )}
+          {type === "quote" && (
+            <div className="bg-slate-100 rounded-xl p-3">
+              <p className="text-[11px] text-slate-500">현장 담당자 연락처</p>
+              <p className="font-bold text-slate-800">{data.contactPhone || "-"}</p>
+            </div>
+          )}
+          {type === "restock" && (
+            <div className="bg-slate-100 rounded-xl p-3">
+              <p className="text-[11px] text-slate-500">수량</p>
+              <p className="font-bold text-slate-800">{data.quantity ?? 1}개</p>
+            </div>
+          )}
+          <div className="bg-slate-100 rounded-xl p-3">
+            <p className="text-[11px] text-slate-500">신청일</p>
+            <p className="font-bold text-slate-800">{data.requestedDate}</p>
+          </div>
+        </div>
+        {type === "restock" && (
+          <div className="bg-slate-100 rounded-xl p-3">
+            <p className="text-[11px] text-slate-500">상태</p>
+            <p className="font-bold text-slate-800">
+              {data.status}
+              {data.suppliedDate ? ` · 보충일 ${data.suppliedDate}` : ""}
+              {data.receivedAt ? ` · 수령완료 ${data.receivedAt.slice(0, 10)}` : ""}
+            </p>
+          </div>
+        )}
+        {data.note && (
+          <div className="bg-slate-100 rounded-xl p-3">
+            <p className="text-[11px] text-slate-500">기사 의견</p>
+            <p className="text-sm text-slate-700 mt-0.5 whitespace-pre-wrap">{data.note}</p>
+          </div>
+        )}
+      </div>
+      <div>
+        <p className="text-xs font-bold text-slate-500 mb-2">
+          {photoLabel} ({photos.length}장)
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          {photos.length > 0
+            ? photos.map((url, i) => (
+                <button key={i} type="button" onClick={() => onPhotoClick(photos, i)}>
+                  <img src={url} alt="" className="w-full aspect-square rounded-xl object-cover border border-slate-200" />
+                </button>
+              ))
+            : <PhotoThumb caption="등록된 사진 없음" />}
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
+
 function MaterialHistoryScreen({ requests, isBilled, onBack }) {
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState("전체");
+  const [detailTarget, setDetailTarget] = useState(null);
+  const [photoViewer, setPhotoViewer] = useState(null);
   const stages = ["전체", "승인대기", "지급완료", "반려", "비용청구완료"];
 
   const withStage = requests.map((r) => ({ ...r, displayStage: isBilled(r.id) ? "비용청구완료" : r.status }));
@@ -50,7 +138,12 @@ function MaterialHistoryScreen({ requests, isBilled, onBack }) {
           <p className="text-xs text-slate-400 text-center py-10">해당 조건의 신청 내역이 없습니다</p>
         ) : (
           filtered.map((r) => (
-            <div key={r.id} className={`bg-white rounded-xl border p-3 ${r.status === "반려" ? "border-red-200" : "border-slate-200"}`}>
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setDetailTarget({ type: "material", data: r })}
+              className={`w-full text-left bg-white rounded-xl border p-3 ${r.status === "반려" ? "border-red-200" : "border-slate-200"}`}
+            >
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-slate-700">{r.siteName} · {r.part}</p>
                 <span
@@ -67,10 +160,25 @@ function MaterialHistoryScreen({ requests, isBilled, onBack }) {
               {r.status === "반려" && r.rejectReason && (
                 <p className="text-[11px] text-red-600 mt-1.5">반려 사유: {r.rejectReason}</p>
               )}
-            </div>
+            </button>
           ))
         )}
       </div>
+
+      <RequestDetailSheet
+        target={detailTarget}
+        onClose={() => setDetailTarget(null)}
+        onPhotoClick={(urls, i) => setPhotoViewer({ urls, index: i, siteName: detailTarget?.data.siteName, date: detailTarget?.data.requestedDate })}
+      />
+      {photoViewer && (
+        <PhotoViewerSheet
+          urls={photoViewer.urls}
+          index={photoViewer.index}
+          siteName={photoViewer.siteName ?? "현장 사진"}
+          date={photoViewer.date ?? ""}
+          onClose={() => setPhotoViewer(null)}
+        />
+      )}
     </div>
   );
 }
@@ -79,6 +187,8 @@ function MaterialHistoryScreen({ requests, isBilled, onBack }) {
 function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack }) {
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState("전체");
+  const [detailTarget, setDetailTarget] = useState(null);
+  const [photoViewer, setPhotoViewer] = useState(null);
   const stages = ["전체", "요청접수", "견적발행", "승인", "자재지급완료", "비용청구완료"];
 
   const withStage = quoteRequests.map((q) => ({ ...q, displayStage: isQuoteBilled(q.id) ? "비용청구완료" : q.status }));
@@ -117,7 +227,12 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack }) {
           <p className="text-xs text-slate-400 text-center py-10">해당 조건의 견적 요청 내역이 없습니다</p>
         ) : (
           filtered.map((q) => (
-            <div key={q.id} className="bg-white rounded-xl border border-slate-200 p-3">
+            <button
+              key={q.id}
+              type="button"
+              onClick={() => setDetailTarget({ type: "quote", data: q })}
+              className="w-full text-left bg-white rounded-xl border border-slate-200 p-3"
+            >
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-slate-700">{q.siteName} · {q.constructionType}</p>
                 <span
@@ -132,10 +247,25 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack }) {
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1">신청일 {q.requestedDate}{q.suppliedDate ? ` · 지급일 ${q.suppliedDate}` : ""}</p>
-            </div>
+            </button>
           ))
         )}
       </div>
+
+      <RequestDetailSheet
+        target={detailTarget}
+        onClose={() => setDetailTarget(null)}
+        onPhotoClick={(urls, i) => setPhotoViewer({ urls, index: i, siteName: detailTarget ? `${detailTarget.data.siteName} · ${detailTarget.data.constructionType}` : "", date: detailTarget?.data.requestedDate })}
+      />
+      {photoViewer && (
+        <PhotoViewerSheet
+          urls={photoViewer.urls}
+          index={photoViewer.index}
+          siteName={photoViewer.siteName ?? "현장 사진"}
+          date={photoViewer.date ?? ""}
+          onClose={() => setPhotoViewer(null)}
+        />
+      )}
     </div>
   );
 }
@@ -145,6 +275,8 @@ function RestockHistoryScreen({ restockRequests, kitStock, onBack, onReceiveRest
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState("전체");
   const [photoViewTarget, setPhotoViewTarget] = useState(null);
+  const [detailTarget, setDetailTarget] = useState(null);
+  const [photoViewer, setPhotoViewer] = useState(null);
   const stages = ["전체", "대기", "완료"];
 
   const filtered = restockRequests
@@ -196,7 +328,12 @@ function RestockHistoryScreen({ restockRequests, kitStock, onBack, onReceiveRest
           <p className="text-xs text-slate-400 text-center py-10">해당 조건의 보충 내역이 없습니다</p>
         ) : (
           filtered.map((r) => (
-            <div key={r.id} className="bg-white rounded-xl border border-slate-200 p-3">
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setDetailTarget({ type: "restock", data: r })}
+              className="w-full text-left bg-white rounded-xl border border-slate-200 p-3"
+            >
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-slate-700">{r.part}</p>
                 <span
@@ -211,26 +348,34 @@ function RestockHistoryScreen({ restockRequests, kitStock, onBack, onReceiveRest
                 {r.siteName}에서 사용 · 요청일 {r.requestedDate}{r.suppliedDate ? ` · 보충일 ${r.suppliedDate}` : ""}
               </p>
               {r.status === "완료" && (
-                <button
-                  onClick={() => setPhotoViewTarget({ title: r.part, subtitle: `${r.suppliedDate} 보충 · 자재 담당자 등록`, url: r.supplyPhotoUrl })}
+                <span
+                  role="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPhotoViewTarget({ title: r.part, subtitle: `${r.suppliedDate} 보충 · 자재 담당자 등록`, url: r.supplyPhotoUrl });
+                  }}
                   className="w-full mt-2 flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 active:bg-emerald-100"
                 >
                   <span className="text-[11px] text-emerald-600 font-semibold">지급완료 사진 확인하기</span>
                   <ChevronRight size={13} className="text-emerald-600" />
-                </button>
+                </span>
               )}
               {r.status === "완료" && !r.receivedAt && onReceiveRestock && (
-                <button
-                  onClick={() => onReceiveRestock(r.id)}
-                  className="w-full mt-2 bg-blue-700 text-white rounded-lg px-3 py-2 text-[11px] font-bold active:bg-blue-800"
+                <span
+                  role="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onReceiveRestock(r.id);
+                  }}
+                  className="w-full mt-2 block text-center bg-blue-700 text-white rounded-lg px-3 py-2 text-[11px] font-bold active:bg-blue-800"
                 >
                   수령하기 (재고 {r.quantity ?? 1}개 반영)
-                </button>
+                </span>
               )}
               {r.status === "완료" && r.receivedAt && (
                 <p className="text-[10px] text-slate-400 mt-1.5 text-center">수령 완료 · {r.receivedAt.slice(0, 10)}</p>
               )}
-            </div>
+            </button>
           ))
         )}
       </div>
@@ -247,6 +392,21 @@ function RestockHistoryScreen({ restockRequests, kitStock, onBack, onReceiveRest
             <PhotoThumb caption="자재 담당자가 등록한 지급 자재 사진" />
           )}
         </Sheet>
+      )}
+
+      <RequestDetailSheet
+        target={detailTarget}
+        onClose={() => setDetailTarget(null)}
+        onPhotoClick={(urls, i) => setPhotoViewer({ urls, index: i, siteName: detailTarget?.data.part, date: detailTarget?.data.suppliedDate ?? detailTarget?.data.requestedDate })}
+      />
+      {photoViewer && (
+        <PhotoViewerSheet
+          urls={photoViewer.urls}
+          index={photoViewer.index}
+          siteName={photoViewer.siteName ?? "보충 지급 사진"}
+          date={photoViewer.date ?? ""}
+          onClose={() => setPhotoViewer(null)}
+        />
       )}
     </div>
   );
@@ -839,63 +999,11 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
         </Sheet>
       )}
 
-      {reqDetailTarget && (
-        <Sheet title={reqDetailTarget.type === "material" ? "자재 신청 상세" : "견적 요청 상세"} onClose={() => setReqDetailTarget(null)}>
-          <div className="space-y-3 mb-4">
-            <div className="bg-slate-100 rounded-xl p-3">
-              <p className="text-[11px] text-slate-500">현장</p>
-              <p className="font-bold text-slate-800">{reqDetailTarget.data.siteName}</p>
-            </div>
-            <div className="bg-slate-100 rounded-xl p-3">
-              <p className="text-[11px] text-slate-500">{reqDetailTarget.type === "material" ? "부품 내역 (부품명, 수량)" : "견적 내역 (부품명, 수량)"}</p>
-              <p className="font-bold text-slate-800 whitespace-pre-wrap">
-                {reqDetailTarget.type === "material" ? reqDetailTarget.data.part : reqDetailTarget.data.constructionType}
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-2.5">
-              {reqDetailTarget.type === "material" ? (
-                <div className="bg-slate-100 rounded-xl p-3">
-                  <p className="text-[11px] text-slate-500">긴급도</p>
-                  <p className="font-bold text-slate-800">{reqDetailTarget.data.urgency}</p>
-                </div>
-              ) : (
-                <div className="bg-slate-100 rounded-xl p-3">
-                  <p className="text-[11px] text-slate-500">현장 담당자 연락처</p>
-                  <p className="font-bold text-slate-800">{reqDetailTarget.data.contactPhone || "-"}</p>
-                </div>
-              )}
-              <div className="bg-slate-100 rounded-xl p-3">
-                <p className="text-[11px] text-slate-500">신청일</p>
-                <p className="font-bold text-slate-800">{reqDetailTarget.data.requestedDate}</p>
-              </div>
-            </div>
-            {reqDetailTarget.data.note && (
-              <div className="bg-slate-100 rounded-xl p-3">
-                <p className="text-[11px] text-slate-500">기사 의견</p>
-                <p className="text-sm text-slate-700 mt-0.5 whitespace-pre-wrap">{reqDetailTarget.data.note}</p>
-              </div>
-            )}
-          </div>
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-2">
-              현장 사진 ({reqDetailTarget.data.photoUrls?.length ?? reqDetailTarget.data.photoCount ?? 0}장)
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              {reqDetailTarget.data.photoUrls?.length > 0
-                ? reqDetailTarget.data.photoUrls.map((url, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setPhotoViewer({ urls: reqDetailTarget.data.photoUrls, index: i, siteName: reqDetailTarget.data.siteName, date: reqDetailTarget.data.requestedDate })}
-                    >
-                      <img src={url} alt="" className="w-full aspect-square rounded-xl object-cover border border-slate-200" />
-                    </button>
-                  ))
-                : <PhotoThumb caption="등록된 사진 없음" />}
-            </div>
-          </div>
-        </Sheet>
-      )}
+      <RequestDetailSheet
+        target={reqDetailTarget}
+        onClose={() => setReqDetailTarget(null)}
+        onPhotoClick={(urls, i) => setPhotoViewer({ urls, index: i, siteName: reqDetailTarget?.data.siteName, date: reqDetailTarget?.data.requestedDate })}
+      />
 
       {photoViewer && (
         <PhotoViewerSheet
