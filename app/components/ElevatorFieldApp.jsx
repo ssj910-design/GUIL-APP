@@ -3657,9 +3657,10 @@ function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, se
 
 function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const sites = useContext(SitesContext);
+  const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [uploadSession] = useState(() => Date.now());
   const [mode, setMode] = useState("material"); // material | manual
-  const openTodos = todos.filter((t) => !t.done);
+  const openTodos = todos.filter((t) => !t.done && t.assignee === CURRENT_ENGINEER);
   const [selectedId, setSelectedId] = useState(openTodos[0]?.id ?? "");
   const [materialCost, setMaterialCost] = useState("");
   const [materialReplaceDate, setMaterialReplaceDate] = useState(TODAY_STR);
