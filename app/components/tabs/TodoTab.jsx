@@ -116,7 +116,6 @@ function TodoRow({ t, onToggle, onOpenDetail }) {
 
 
 function TodoDetailSheet({ todo, onToggle, onReassign, engineerNames, onClose }) {
-  const [reassigning, setReassigning] = useState(false);
   const sourceLabel = todo.source === "manual" ? "관리자 부여" : todo.source === "quote" ? "견적 연동" : "자재 연동";
   return (
     <Sheet title="할 일 상세" onClose={onClose}>
@@ -126,34 +125,18 @@ function TodoDetailSheet({ todo, onToggle, onReassign, engineerNames, onClose })
       <div className="space-y-2.5 mb-4">
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">담당자</span>
-          <div className="flex items-center gap-2">
-            {onReassign && !reassigning && (
-              <button
-                type="button"
-                onClick={() => setReassigning(true)}
-                className="text-[11px] font-bold text-blue-600 underline"
-              >
-                담당자 재배정
-              </button>
-            )}
-            {reassigning ? (
-              <select
-                autoFocus
-                className="text-sm font-semibold text-slate-700 border border-slate-200 rounded-lg px-2 py-1"
-                value={todo.assignee}
-                onChange={(e) => {
-                  onReassign(todo.id, e.target.value);
-                  setReassigning(false);
-                }}
-                onBlur={() => setReassigning(false)}
-              >
-                {engineerNames?.includes(todo.assignee) ? null : <option value={todo.assignee}>{todo.assignee}</option>}
-                {engineerNames?.map((name) => <option key={name} value={name}>{name}</option>)}
-              </select>
-            ) : (
-              <span className="font-semibold text-slate-700">{todo.assignee}</span>
-            )}
-          </div>
+          {onReassign ? (
+            <select
+              className="text-sm font-semibold text-slate-700 border border-slate-200 rounded-lg px-2 py-1"
+              value={todo.assignee}
+              onChange={(e) => onReassign(todo.id, e.target.value)}
+            >
+              {engineerNames?.includes(todo.assignee) ? null : <option value={todo.assignee}>{todo.assignee}</option>}
+              {engineerNames?.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+          ) : (
+            <span className="font-semibold text-slate-700">{todo.assignee}</span>
+          )}
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">현장</span>
