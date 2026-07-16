@@ -5,14 +5,11 @@ import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft } from "lucide-re
 /* Small shared bits                                                   */
 /* ------------------------------------------------------------------ */
 
-export function ScreenHeader({ title, subtitle, right }) {
+export function ScreenHeader({ title, right }) {
   return (
-    <div className="px-5 pt-5 pb-4 bg-blue-950 text-white shrink-0">
+    <div className="px-5 pt-3 pb-2.5 bg-blue-950 text-white shrink-0">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-bold tracking-tight">{title}</h1>
-          {subtitle && <p className="text-xs text-blue-200 mt-0.5">{subtitle}</p>}
-        </div>
+        <h1 className="text-lg font-bold tracking-tight">{title}</h1>
         {right}
       </div>
     </div>

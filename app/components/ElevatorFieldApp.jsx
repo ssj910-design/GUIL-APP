@@ -806,17 +806,6 @@ export default function App() {
   }
 
   const tabTitle = TABS.find((t) => t.id === tab)?.label ?? "";
-  const subtitleMap = {
-    sites: "담당 현장 마스터 정보 조회",
-    failure: "고장 접수 및 처리 현황",
-    checkup: "정기점검 자율 스케줄링",
-    inspection: "안전공단 검사 일정 · 결과 등록",
-    material: "자재 신청 · 견적 요청",
-    billing: "부품 교체 및 수리비 청구",
-    todo: "자재 지급일 기준 D-30 관리",
-    room: "사내 피드",
-    admin: "현장·기사·자재 전체 관리",
-  };
   const visibleTabs = TABS.filter((t) => t.id !== "admin" || profile?.role === "admin");
 
   if (!SKIP_LOGIN && session === undefined) {
@@ -866,7 +855,6 @@ export default function App() {
 
           <ScreenHeader
             title={tab === "home" ? "구일엘리베이터(주)" : tabTitle}
-            subtitle={tab === "home" ? `${profile.name}님 반갑습니다` : subtitleMap[tab]}
             right={
               <button className="relative p-1.5 bg-blue-900 rounded-full">
                 <Bell size={16} />
