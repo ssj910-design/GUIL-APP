@@ -68,6 +68,7 @@ function toPlan(rows, existingGovNos) {
       seq,
       govNo,
       unitType: (r[C.kind] ?? "").includes("에스컬레이터") ? "에스컬레이터" : "엘리베이터",
+      kind: (r[C.kind] ?? "").trim() || null,
       model: (r[C.model] ?? "").trim() || null,
       installDate: toDate((r[C.installed] ?? "").trim()),
       isActive: (r[C.status] ?? "운행중") === "운행중",

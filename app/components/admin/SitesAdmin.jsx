@@ -47,15 +47,18 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
   const infoRows = [
     ["건물명", site.name],
     ["호기", unit.unitNo],
-    ["승강기번호", liveInfo?.govElevatorNo || "미등록"],
-    ["승강기종류", liveInfo?.kindNm || "-"],
-    ["승강기형식", liveInfo?.form || "-"],
+    ["승강기번호", liveInfo?.govElevatorNo || unit.govNo || "미등록"],
+    ["승강기종류", liveInfo?.kindNm || unit.kind || "-"],
+    ["승강기형식", liveInfo?.form || unit.form || "-"],
     ["승강기모델", unit.model || "-"],
+    ["제조업체", unit.manufacturer || "-"],
     ["설치일자", liveInfo?.frstInstallationDe || unit.installDate || "-"],
-    ["운행층수", liveInfo ? `지상 ${liveInfo.groundFloorCnt} / 지하 ${liveInfo.undgrndFloorCnt}` : "-"],
-    ["운행구간", liveInfo?.shuttleSection || "-"],
-    ["적재하중", liveInfo ? `${liveInfo.liveLoad}kg` : "-"],
-    ["정원", liveInfo ? `${liveInfo.ratedCap}인승` : "-"],
+    ["운행층수", liveInfo?.groundFloorCnt ? `지상 ${liveInfo.groundFloorCnt} / 지하 ${liveInfo.undgrndFloorCnt ?? 0}` : unit.floors || "-"],
+    ["운행구간", liveInfo?.shuttleSection || unit.runSection || "-"],
+    ["적재하중", liveInfo?.liveLoad ? `${liveInfo.liveLoad}kg` : unit.loadKg ? `${unit.loadKg}kg` : "-"],
+    ["정원", liveInfo?.ratedCap ? `${liveInfo.ratedCap}인승` : unit.capacityPersons ? `${unit.capacityPersons}인승` : "-"],
+    ["정격속도", unit.ratedSpeed ? `${unit.ratedSpeed}m/s` : "-"],
+    ["보험", unit.insurer ? `${unit.insurer} (~${unit.insuranceEnd ?? "?"})` : "-"],
   ];
 
   return (

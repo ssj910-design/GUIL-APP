@@ -56,14 +56,16 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
               <TimelineRow icon={Flag} label="건물명" value={site.name} />
               <TimelineRow icon={Flag} label="호기" value={unit} />
               <TimelineRow icon={Flag} label="승강기번호" value={liveInfo?.govElevatorNo || "미등록"} valueColor={liveInfo ? "text-blue-600" : "text-slate-700"} />
-              <TimelineRow icon={Flag} label="승강기종류" value={liveInfo?.kindNm || "-"} />
-              <TimelineRow icon={Flag} label="승강기형식" value={liveInfo?.form || "-"} />
+              <TimelineRow icon={Flag} label="승강기종류" value={liveInfo?.kindNm || realUnit?.kind || "-"} />
+              <TimelineRow icon={Flag} label="승강기형식" value={liveInfo?.form || realUnit?.form || "-"} />
               <TimelineRow icon={Flag} label="승강기모델" value={realUnit?.model || site.elevatorModel || "-"} />
+              <TimelineRow icon={Flag} label="제조업체" value={realUnit?.manufacturer || "-"} />
               <TimelineRow icon={Flag} label="설치일자" value={liveInfo?.frstInstallationDe || realUnit?.installDate || "-"} />
-              <TimelineRow icon={Flag} label="운행층수" value={liveInfo ? `지상 ${liveInfo.groundFloorCnt} / 지하 ${liveInfo.undgrndFloorCnt}` : "-"} />
-              <TimelineRow icon={Flag} label="운행구간" value={liveInfo?.shuttleSection || "-"} />
-              <TimelineRow icon={Flag} label="적재하중" value={liveInfo ? `${liveInfo.liveLoad}kg` : "-"} />
-              <TimelineRow icon={Flag} label="정원" value={liveInfo ? `${liveInfo.ratedCap}인승` : "-"} valueColor="text-blue-600" last />
+              <TimelineRow icon={Flag} label="운행층수" value={liveInfo?.groundFloorCnt ? `지상 ${liveInfo.groundFloorCnt} / 지하 ${liveInfo.undgrndFloorCnt ?? 0}` : realUnit?.floors || "-"} />
+              <TimelineRow icon={Flag} label="운행구간" value={liveInfo?.shuttleSection || realUnit?.runSection || "-"} />
+              <TimelineRow icon={Flag} label="적재하중" value={liveInfo?.liveLoad ? `${liveInfo.liveLoad}kg` : realUnit?.loadKg ? `${realUnit.loadKg}kg` : "-"} />
+              <TimelineRow icon={Flag} label="정원" value={liveInfo?.ratedCap ? `${liveInfo.ratedCap}인승` : realUnit?.capacityPersons ? `${realUnit.capacityPersons}인승` : "-"} />
+              <TimelineRow icon={Flag} label="보험" value={realUnit?.insurer ? `${realUnit.insurer} (~${realUnit.insuranceEnd ?? "?"})` : "-"} valueColor="text-blue-600" last />
             </div>
             {liveInfo && <p className="px-5 pt-2 text-[10px] text-slate-400">* 국가승강기정보센터 실시간 데이터</p>}
           </div>
