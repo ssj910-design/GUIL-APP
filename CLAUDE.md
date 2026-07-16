@@ -52,6 +52,18 @@
 "팀 표준 플러그인 ponytail이 없네요. 설치할까요? → `claude plugin marketplace add DietrichGebert/ponytail` 후 `claude plugin install ponytail@ponytail`"
 사용자가 동의하면 직접 실행해서 설치하라.
 
+## 관리자 콘솔(/admin) 작업 규칙
+
+- 구조: `app/admin/page.js` → `app/components/admin/AdminApp.jsx`(셸: 사이드바 + 전 테이블 데이터
+  로딩 + setData) → 화면별 파일. **새 화면은 admin/ 폴더에 파일을 추가**하고 AdminApp의 MENU와
+  분기에 연결하라. 셸의 데이터 로딩 방식(한 번에 로드, props로 전달)을 바꾸지 마라.
+- 호기·담당자 표기는 `adminShared.jsx`의 `locOf`/`personOf`를 재사용하라 (v2 FK 우선, 옛 라벨 fallback).
+- **관리자 콘솔은 v2 네이티브다**: 새 코드는 unit_id·*_id FK를 사용하고, 옛 컬럼(site_name,
+  elevator_no, 이름 텍스트)을 새로 참조하지 마라. 단, 편집 기능이 옛 컬럼과 겹치면
+  SitesAdmin의 syncLegacy 패턴처럼 옛 컬럼도 함께 갱신하라 (007 전까지).
+- 새 기능에 테이블/컬럼이 필요하면 직접 ALTER 하지 말고 supabase/migrations/에 파일 초안을
+  만들고 팀 상의 후 실행하라 (예: 008_kit_stock_DRAFT.sql).
+
 ## Git 작업 규칙 — Claude가 직접 수행할 것
 
 두 명(+각자의 Claude)이 이 저장소에서 동시에 작업한다. 충돌 방지를 위해 사용자가 시키지 않아도 다음을 지켜라:
