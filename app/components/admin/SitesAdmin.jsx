@@ -63,16 +63,16 @@ function ContactRow({ c, onSave, onDelete, onSetPrimary }) {
       <td className="pl-4 py-2 w-8 text-center">
         <button title="대표 담당자로 지정" onClick={() => onSetPrimary(c)} className={c.isPrimary ? "text-amber-500" : "text-slate-200 hover:text-slate-400"}>★</button>
       </td>
-      <td className="px-2 py-2 w-32">
+      <td className="px-2 py-2">
         <select className={inputCls} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
           {CONTACT_ROLES.map((r) => <option key={r}>{r}</option>)}
           {!CONTACT_ROLES.includes(form.role) && <option>{form.role}</option>}
         </select>
       </td>
-      <td className="px-2 py-2 w-28"><input className={inputCls} placeholder="이름" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></td>
-      <td className="px-2 py-2 w-36"><input className={inputCls} placeholder="전화번호" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></td>
+      <td className="px-2 py-2"><input className={inputCls} placeholder="이름" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></td>
+      <td className="px-2 py-2"><input className={inputCls} placeholder="전화번호" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></td>
       <td className="px-2 py-2"><input className={inputCls} placeholder="이메일" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></td>
-      <td className="px-2 py-2 w-32"><input className={inputCls} placeholder="팩스" value={form.fax} onChange={(e) => setForm({ ...form, fax: e.target.value })} /></td>
+      <td className="px-2 py-2"><input className={inputCls} placeholder="팩스" value={form.fax} onChange={(e) => setForm({ ...form, fax: e.target.value })} /></td>
       <td className="px-2 py-2 whitespace-nowrap text-right pr-3">
         <button disabled={!dirty} onClick={() => onSave(c, form)} className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-3 py-1.5 mr-1">저장</button>
         <button onClick={() => onDelete(c)} className="text-xs font-bold text-red-400 border border-red-100 rounded-lg px-2 py-1.5">삭제</button>
@@ -97,7 +97,11 @@ export default function SitesAdmin({ data, setData }) {
 
   function select(s) {
     setSelectedId(s.id);
-    setSiteForm({ name: s.name, address: s.address ?? "", contractType: s.contractType ?? CONTRACT_TYPES[0], notes: s.notes ?? "", managerId: s.managerId ?? "" });
+    setSiteForm({
+      name: s.name, address: s.address ?? "", contractType: s.contractType ?? CONTRACT_TYPES[0],
+      notes: s.notes ?? "", managerId: s.managerId ?? "",
+      phone: s.phone ?? "", fax: s.fax ?? "", email: s.email ?? "",
+    });
   }
 
   // ---- 저장 핸들러들 (units 우선 + sites 옛 컬럼 동기화) ----
@@ -146,6 +150,7 @@ export default function SitesAdmin({ data, setData }) {
     await supabase.from("sites").update({
       name: siteForm.name, address: siteForm.address, contract_type: siteForm.contractType, notes: siteForm.notes || null,
       manager_id: siteForm.managerId || null,
+      phone: siteForm.phone || null, fax: siteForm.fax || null, email: siteForm.email || null,
     }).eq("id", selectedId);
     setData((prev) => ({
       ...prev,
@@ -291,10 +296,12 @@ export default function SitesAdmin({ data, setData }) {
             </div>
           ) : (
             <>
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <div className="grid grid-cols-6 gap-3 items-end">
-                  <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">현장명</p><input className={inputCls} value={siteForm.name} onChange={(e) => setSiteForm({ ...siteForm, name: e.target.value })} /></div>
+              <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+                <div className="grid grid-cols-3 gap-3">
+                  <div><p className="text-xs font-bold text-slate-500 mb-1">현장명</p><input className={inputCls} value={siteForm.name} onChange={(e) => setSiteForm({ ...siteForm, name: e.target.value })} /></div>
                   <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">주소</p><input className={inputCls} value={siteForm.address} onChange={(e) => setSiteForm({ ...siteForm, address: e.target.value })} /></div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
                   <div><p className="text-xs font-bold text-slate-500 mb-1">계약구분</p>
                     <select className={inputCls} value={siteForm.contractType} onChange={(e) => setSiteForm({ ...siteForm, contractType: e.target.value })}>
                       {CONTRACT_TYPES.map((t) => <option key={t}>{t}</option>)}
@@ -305,24 +312,29 @@ export default function SitesAdmin({ data, setData }) {
                       <option value="">미배정</option>
                       {engineers.map((p) => <option key={p.id}>{p.name}</option>)}
                     </select></div>
-                  <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">사무실 담당자</p>
+                  <div><p className="text-xs font-bold text-slate-500 mb-1">사무실 담당자</p>
                     <select className={inputCls} value={siteForm.managerId} onChange={(e) => setSiteForm({ ...siteForm, managerId: e.target.value })}>
                       <option value="">미지정</option>
                       {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select></div>
-                  <div className="col-span-3"><p className="text-xs font-bold text-slate-500 mb-1">비고(전달사항)</p><input className={inputCls} value={siteForm.notes} onChange={(e) => setSiteForm({ ...siteForm, notes: e.target.value })} /></div>
-                  <div className="flex gap-2">
-                    <button onClick={saveSiteInfo} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">저장</button>
-                    <button onClick={toggleSiteActive} className="text-sm font-bold text-slate-400 border border-slate-200 rounded-xl px-3 py-2.5 whitespace-nowrap">
-                      {site.isActive === false ? "계약 복구" : "계약종료"}
-                    </button>
-                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div><p className="text-xs font-bold text-slate-500 mb-1">공통 전화번호</p><input className={inputCls} placeholder="관리사무소 대표번호" value={siteForm.phone} onChange={(e) => setSiteForm({ ...siteForm, phone: e.target.value })} /></div>
+                  <div><p className="text-xs font-bold text-slate-500 mb-1">공통 팩스</p><input className={inputCls} value={siteForm.fax} onChange={(e) => setSiteForm({ ...siteForm, fax: e.target.value })} /></div>
+                  <div><p className="text-xs font-bold text-slate-500 mb-1">공통 이메일</p><input className={inputCls} value={siteForm.email} onChange={(e) => setSiteForm({ ...siteForm, email: e.target.value })} /></div>
+                </div>
+                <div className="flex items-end gap-3">
+                  <div className="flex-1"><p className="text-xs font-bold text-slate-500 mb-1">비고(전달사항)</p><input className={inputCls} value={siteForm.notes} onChange={(e) => setSiteForm({ ...siteForm, notes: e.target.value })} /></div>
+                  <button onClick={saveSiteInfo} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">저장</button>
+                  <button onClick={toggleSiteActive} className="text-sm font-bold text-slate-400 border border-slate-200 rounded-xl px-3 py-2.5 whitespace-nowrap">
+                    {site.isActive === false ? "계약 복구" : "계약종료"}
+                  </button>
                 </div>
               </div>
 
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                  <h2 className="text-sm font-bold">현장 담당자 <span className="text-slate-400">({contacts.length})</span> <span className="text-[10px] text-slate-400 font-normal">★ = 대표(SMS·안내 수신)</span></h2>
+                  <h2 className="text-sm font-bold">현장 담당자 — 개인 연락처 <span className="text-slate-400">({contacts.length})</span> <span className="text-[10px] text-slate-400 font-normal">★ = 대표(SMS·안내 수신) · 공통 연락처는 위 기본정보에</span></h2>
                   <button onClick={addContact} className="flex items-center gap-1 text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-2.5 py-1.5">
                     <Plus size={13} /> 담당자 추가
                   </button>
@@ -330,14 +342,14 @@ export default function SitesAdmin({ data, setData }) {
                 {contacts.length === 0 ? (
                   <p className="text-xs text-slate-400 text-center py-6">등록된 담당자가 없습니다</p>
                 ) : (
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm table-fixed">
                     <thead>
                       <tr className="text-xs text-slate-400 border-b border-slate-100">
-                        <th className="w-8" /><th className="text-left px-2 py-2 font-semibold">역할</th>
-                        <th className="text-left px-2 py-2 font-semibold">이름</th>
-                        <th className="text-left px-2 py-2 font-semibold">전화번호</th>
+                        <th className="w-8" /><th className="text-left px-2 py-2 font-semibold w-28">역할</th>
+                        <th className="text-left px-2 py-2 font-semibold w-24">이름</th>
+                        <th className="text-left px-2 py-2 font-semibold w-36">전화번호</th>
                         <th className="text-left px-2 py-2 font-semibold">이메일</th>
-                        <th className="text-left px-2 py-2 font-semibold">팩스</th><th className="w-28" />
+                        <th className="text-left px-2 py-2 font-semibold w-28">팩스</th><th className="w-28" />
                       </tr>
                     </thead>
                     <tbody>
@@ -356,14 +368,14 @@ export default function SitesAdmin({ data, setData }) {
                     <Plus size={13} /> 호기 추가
                   </button>
                 </div>
-                <table className="w-full text-sm">
+                <table className="w-full text-sm table-fixed">
                   <thead>
                     <tr className="text-xs text-slate-400 border-b border-slate-100">
-                      <th className="text-left px-4 py-2 font-semibold w-16">호기</th>
-                      <th className="text-left px-2 py-2 font-semibold w-32">종류</th>
+                      <th className="text-left px-4 py-2 font-semibold w-14">호기</th>
+                      <th className="text-left px-2 py-2 font-semibold w-28">종류</th>
                       <th className="text-left px-2 py-2 font-semibold">모델</th>
-                      <th className="text-left px-2 py-2 font-semibold w-36">설치일</th>
-                      <th className="text-left px-2 py-2 font-semibold w-36">승강기고유번호</th>
+                      <th className="text-left px-2 py-2 font-semibold w-32">설치일</th>
+                      <th className="text-left px-2 py-2 font-semibold w-32">승강기고유번호</th>
                       <th className="w-32" />
                     </tr>
                   </thead>

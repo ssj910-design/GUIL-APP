@@ -65,7 +65,7 @@ alter table public.sites drop column if exists assigned_engineer;
 alter table public.sites drop column if exists failures_30d;
 alter table public.sites drop column if exists site_code;
 alter table public.sites drop column if exists region;
-alter table public.sites drop column if exists phone;
+-- phone은 삭제하지 않는다 — 현장 공통 연락처로 승격됨 (009 참고: phone·fax·email)
 alter table public.sites drop column if exists manager;
 alter table public.sites drop column if exists manager_phone;
 alter table public.sites drop column if exists overdue_long;
