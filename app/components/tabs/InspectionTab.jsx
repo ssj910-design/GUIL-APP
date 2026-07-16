@@ -1,9 +1,9 @@
 import { useState, useContext } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { RESULT_LABEL, TODAY_STR } from "@/lib/constants";
-import { useLiveInspections, siteToUnitQueries } from "@/app/hooks/useLiveInspections";
+import { unitsToInspections } from "@/lib/utils";
 import { Badge, DDay, PhotoUpload, FilterBar, PrimaryButton, Sheet, Field, inputCls } from "@/app/components/ui";
-import { SitesContext } from "@/app/components/context";
+import { SitesContext, UnitsContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 
 
@@ -18,8 +18,9 @@ export function InspectionTab({ inspections, setInspections }) {
   const [form, setForm] = useState({});
   const [inspectionFailTarget, setInspectionFailTarget] = useState(null);
 
-  // 승강기고유번호가 등록된 현장은 국가승강기정보센터에서 실시간으로, 나머지는 기존 수기입력 기록을 보여줍니다.
-  const liveInspections = useLiveInspections(sites.flatMap(siteToUnitQueries));
+  // 검사유효기간은 units의 DB 캐시를 쓴다 (전 호기 실시간 API 호출 금지 — 트래픽 한도).
+  const allUnits = useContext(UnitsContext);
+  const liveInspections = unitsToInspections(allUnits, sites);
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
   const combined = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId))];
 

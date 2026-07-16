@@ -5,8 +5,7 @@
 import { useState } from "react";
 import { AlertOctagon } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays } from "@/lib/utils";
-import { useLiveInspections, siteToUnitQueries } from "@/app/hooks/useLiveInspections";
+import { addDays, unitsToInspections } from "@/lib/utils";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { Modal, StatusBadge } from "@/app/components/admin/adminShared";
@@ -84,8 +83,8 @@ export default function Dashboard({ data }) {
   const monthChecks = selfChecks.filter((c) => c.ym === ym);
   const doneChecks = monthChecks.filter((c) => c.status === "완료");
 
-  // 승강기고유번호가 등록된 현장은 국가승강기정보센터 실시간으로, 나머지는 수기입력 기록을 씁니다.
-  const liveInspections = useLiveInspections(sites.flatMap(siteToUnitQueries));
+  // 검사유효기간은 units의 DB 캐시를 쓴다 (전 호기 실시간 API 호출 금지 — 트래픽 한도).
+  const liveInspections = unitsToInspections(units, sites);
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
   const combinedInspections = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId))];
 

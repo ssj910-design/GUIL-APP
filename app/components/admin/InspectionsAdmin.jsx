@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
-import { useLiveInspections, siteToUnitQueries } from "@/app/hooks/useLiveInspections";
+import { unitsToInspections } from "@/lib/utils";
 import { Badge, DDay, inputCls as mobileInputCls } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { StatusBadge, AdminTable, FilterPills, inputCls } from "@/app/components/admin/adminShared";
@@ -63,7 +63,8 @@ export default function InspectionsAdmin({ data, setData }) {
   const [search, setSearch] = useState("");
   const [failTarget, setFailTarget] = useState(null);
 
-  const liveInspections = useLiveInspections(sites.flatMap(siteToUnitQueries));
+  // 검사유효기간은 units의 DB 캐시를 쓴다 (전 호기 실시간 API 호출 금지 — 트래픽 한도).
+  const liveInspections = unitsToInspections(units, sites);
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
   const combined = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId))];
 

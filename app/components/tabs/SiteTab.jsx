@@ -545,7 +545,7 @@ export function SiteTab({ inspections, failures, billings, siteManagers, onUpdat
             <input type="checkbox" checked={onlyMine} onChange={(e) => setOnlyMine(e.target.checked)} />
             내 현장만 보기
           </label>
-          <p className="text-[11px] text-slate-400">총 720개 현장 중 {list.length}건 표시 (샘플 데이터)</p>
+          <p className="text-[11px] text-slate-400">총 {allSites.length}개 현장 중 {list.length}건 표시</p>
         </div>
       </div>
 
