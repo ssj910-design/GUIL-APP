@@ -326,7 +326,6 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
   const [quoteForm, setQuoteForm] = useState({ siteId: "", unit: "", parts: [emptyPartRow()], contactPhone: "", photos: [], note: "" });
   const [rejectTarget, setRejectTarget] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
-  const [photoViewTarget, setPhotoViewTarget] = useState(null);
   const [photoViewer, setPhotoViewer] = useState(null);
   const [reqDetailTarget, setReqDetailTarget] = useState(null);
   const [showMaterialHistory, setShowMaterialHistory] = useState(false);
@@ -649,7 +648,10 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
                     </p>
                     {r.status === "완료" && (
                       <button
-                        onClick={() => setPhotoViewTarget({ title: r.part, subtitle: `${r.suppliedDate} 보충 · 자재 담당자 등록`, url: r.supplyPhotoUrl })}
+                        onClick={() => {
+                          const urls = r.supplyPhotoUrls?.length ? r.supplyPhotoUrls : r.supplyPhotoUrl ? [r.supplyPhotoUrl] : [];
+                          if (urls.length) setPhotoViewer({ urls, index: 0, siteName: r.part, date: r.suppliedDate });
+                        }}
                         className="w-full mt-2 flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 active:bg-emerald-100"
                       >
                         <span className="text-[11px] text-emerald-600 font-semibold">지급완료 사진 확인하기</span>
@@ -760,7 +762,10 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
                   </div>
                   {q.status === "자재지급완료" && (
                     <button
-                      onClick={() => setPhotoViewTarget({ title: `${q.siteName} · ${q.constructionType}`, subtitle: `${q.suppliedDate} 지급 · 자재 담당자 등록`, url: q.supplyPhotoUrl })}
+                      onClick={() => {
+                        const urls = q.supplyPhotoUrls?.length ? q.supplyPhotoUrls : q.supplyPhotoUrl ? [q.supplyPhotoUrl] : [];
+                        if (urls.length) setPhotoViewer({ urls, index: 0, siteName: `${q.siteName} · ${q.constructionType}`, date: q.suppliedDate });
+                      }}
                       className="w-full mt-2.5 flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 active:bg-emerald-100"
                     >
                       <span className="text-[11px] text-emerald-600 font-semibold">지급 자재 사진 확인하기</span>
@@ -854,20 +859,6 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
                 : <PhotoThumb caption="등록된 사진 없음" />}
             </div>
           </div>
-        </Sheet>
-      )}
-
-      {photoViewTarget && (
-        <Sheet title="지급 자재 사진" onClose={() => setPhotoViewTarget(null)}>
-          <div className="bg-slate-100 rounded-xl p-3 mb-4">
-            <p className="text-sm font-bold text-slate-800">{photoViewTarget.title}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">{photoViewTarget.subtitle}</p>
-          </div>
-          {photoViewTarget.url ? (
-            <img src={photoViewTarget.url} alt="" className="w-full rounded-xl object-cover mb-3" />
-          ) : (
-            <PhotoThumb caption="자재 담당자가 등록한 지급 자재 사진" />
-          )}
         </Sheet>
       )}
 
