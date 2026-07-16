@@ -263,7 +263,7 @@ feed_posts (우리방)
    - source='material'/'quote' → 수동 완료 불가 (완료 버튼 없음).
      비용청구 생성이 유일한 완료 경로 = 자동완료.
    - source='manual' (관리자 부여 할일) → 담당자가 직접 완료 체크 가능.
-4. 호기 이력: 자재신청의 unit_id를 타고 "이 호기의 부품교체내역+원가"가 자동 완성.
+5. 호기 이력: 자재신청의 unit_id를 타고 "이 호기의 부품교체내역+원가"가 자동 완성.
    (견적요청→할일도 동일 패턴)
 
 ---
@@ -336,3 +336,36 @@ Phase 2+: 공단 자체점검결과 API와 월별 대조 → "앱 완료 but 공
 - **연결 테이블(N:M)**: 여러↔여러 관계를 잇는 얇은 테이블 (예: site_assignments).
 - **RLS**: DB가 직접 "누가 어느 줄을 볼 수 있나"를 강제하는 Supabase 보안 장치.
 - **soft delete**: 지우지 않고 is_active=false로 숨기기.
+
+---
+
+## 11. v2.1 보완 — 마이그레이션 준비 중 확정된 결정 (2026-07-15)
+
+실DB 조사(GUIL-APP `supabase/MIGRATION.md` 참고) 결과를 반영한 수정. 위 3장 스키마와 다른 부분은 이 장이 우선한다.
+
+1. **profiles ↔ auth 분리**: profiles.id는 자체 uuid PK로 전환, 로그인 계정 연결은
+   별도 `auth_user_id`(→auth.users, null 허용) 컬럼. 이유: 계정 없는 기사(김기사 등)도
+   프로필 행이 있어야 기록의 이름 컬럼을 FK로 바꿀 수 있음. 가입 트리거는 "같은 이름의
+   미연결 프로필이 있으면 연결, 없으면 생성"으로 갱신. **Phase 2 로그인 활성화 시
+   앱은 auth_user_id로 프로필을 조회해야 함(주의).**
+2. **사진 마이그레이션 불필요**: 실DB에 photo_urls(배열)·supply_photo_url(s)·
+   before/after/confirm_photo_url이 이미 존재하고 실제 Storage 업로드 동작 중
+   (전임자 2026-07-15 구현). 3장의 `photos text[]` 신설 대신 기존 컬럼명 유지.
+   Phase 2의 "사진 업로드" 항목은 사실상 완료됨 → 버킷 접근 정책만 남음.
+3. **컬럼 개명 안 함**: arrival_time→arrived_at, error_code→symptom/symptom_detail 등
+   이름 변경은 하지 않는다. 매퍼(lib/mappers.js)가 이름 차이를 흡수 — 실DB에는 이미
+   fault_symptom·fault_error_code가 별도 존재하므로 그대로 활용.
+4. **uuid PK는 신설 테이블만** (units, site_assignments, self_checks). 기존 테이블의
+   text PK는 유지 — 전환 비용 대비 이득 없음.
+5. **todos.unit_id 추가 (null 허용)**: 관리자가 직접 부여하는 manual 할일도 현장을
+   연결할 수 있게. 원천(자재/견적) 있는 할일은 원천에서 상속.
+6. **units.seq(순번) 컬럼**: 호기 라벨 변환·정렬 기준. 실DB 라벨이 '1-N'과 'N호기'
+   두 형식 혼재 → 둘 다 seq로 변환.
+7. **'관리자' 이름 병합**: 기록의 '관리자'는 개발용 가짜 프로필 이름 → '관리자(신석주)'
+   프로필로 매핑.
+8. **동명 현장 주의**: '동일빌딩'이 2곳(양재/은평) — site_name 기반 자동매칭은
+   이름이 유일한 현장만 수행, 나머지는 수동 지정.
+9. **site_managers → site_contacts 개명은 마지막(007)에**: 병행 기간에는 배포된
+   기존 앱이 site_managers를 읽으므로 컬럼(role, is_primary, profile_id)만 먼저 추가.
+
+마이그레이션 SQL: GUIL-APP 리포 `supabase/migrations/001~007` (실행 가이드: `supabase/MIGRATION.md`)

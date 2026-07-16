@@ -1,1 +1,51 @@
 @AGENTS.md
+
+# 구일엘리베이터(주) 현장관리 앱
+
+승강기 유지보수 기사·관리자용 모바일 웹앱(PWA). Next.js 16(App Router) + React 19 + Tailwind v4 + Supabase(백엔드 서버 없음).
+로그인은 꺼져 있음(`SKIP_LOGIN = true`) — `localhost:3000/?as=admin` 또는 `?as=engineer&name=이름`으로 역할 전환.
+
+## ⚠️ 절대 규칙
+
+- Supabase는 **실운영 DB**다 (RLS 꺼짐). 삭제·수정 테스트 금지, 스키마 변경은 supabase/MIGRATION.md 절차로만.
+- `main` 푸시 = Vercel 자동 배포 (https://guil-app-pi.vercel.app). 푸시 전 `npm run build` 필수.
+- 파일을 통째로 읽지 말 것 — 아래 지도에서 필요한 파일만. 앱 로직은 21개 파일로 분리돼 있다 (2026-07-16).
+
+## 프로젝트 지도 — 작업별로 여기만 읽으면 된다
+
+| 수정하려는 것 | 파일 (app/components/ 기준) |
+|---|---|
+| 홈 (처리현황·집중관리·실시간검사) | tabs/HomeTab.jsx |
+| 현장관리·현장/승강기 상세 | tabs/SiteTab.jsx |
+| 고장접수 (접수·배정·출동·처리·현황) | tabs/FailureTab.jsx |
+| 정기점검 | tabs/CheckupTab.jsx |
+| 검사관리 | tabs/InspectionTab.jsx |
+| 자재신청·견적·상비부품 | tabs/MaterialTab.jsx |
+| 비용청구 | tabs/BillingTab.jsx |
+| 할일관리 | tabs/TodoTab.jsx |
+| 관리자 모드 하위 화면 전부 | tabs/AdminTab.jsx |
+| 우리방(피드) | tabs/RoomTab.jsx |
+| 공용 UI (Sheet·버튼·카드·타임라인) | ui.jsx |
+| 현장검색·사진업로드 폼 위젯 | formWidgets.jsx |
+| 로그인 화면 | LoginScreen.jsx |
+| 최상위 state·CRUD 핸들러·탭 라우팅 | ElevatorFieldApp.jsx (App, 839줄) |
+| DB컬럼↔화면필드 변환 | lib/mappers.js — **컬럼 추가 시 여기부터** |
+| 사진 업로드/다운로드/zip | lib/photos.js |
+| 상수(오늘날짜·고장구분·부품목록) | lib/constants.js |
+| 국가승강기정보센터 연동 | app/api/*/route.js(서버 프록시) + app/hooks/useLiveInspections.js |
+
+## 데이터 흐름 (3줄 요약)
+
+1. App(ElevatorFieldApp.jsx)이 모든 최상위 state와 Supabase CRUD 핸들러(handleXxx)를 소유 → 각 탭에 props로 전달.
+2. 현장 목록과 로그인 정보만 Context 사용 (components/context.js — SitesContext, AuthContext).
+3. DB는 snake_case, 화면은 camelCase — 변환은 전부 lib/mappers.js에 모여 있다.
+
+## 명령어
+
+`npm run dev` (localhost:3000) · `npm run build` (푸시 전 필수) · `npm run lint`
+
+## 더 깊은 문서 (필요할 때만)
+
+- HANDOVER.md — 프로젝트 전체 상세 (⚠️ DB 스키마 부분은 구버전 — 실DB가 진실)
+- docs/DESIGN-v2.md — v2 재설계 설계서 (11장 보완이 최신 결정)
+- supabase/MIGRATION.md — v2 DB 전환 절차·진행 상태
