@@ -448,8 +448,9 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
 
 export function SiteTab({ inspections, failures, billings, siteManagers, onUpdateSiteNotes, focusSiteId, focusUnit, onFocusSiteHandled }) {
   const allSites = useContext(SitesContext);
-  const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
-  const sites = role === "admin" ? allSites : allSites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER);
+  const { name: CURRENT_ENGINEER } = useContext(AuthContext);
+  // 현장관리는 기사·관리자 모두 전체 현장을 볼 수 있다 — "내 현장만 보기"로 좁혀볼 수 있다.
+  const sites = allSites;
   const [query, setQuery] = useState("");
   const [onlyMine, setOnlyMine] = useState(false);
   const [view, setView] = useState("list"); // list | site | elevator
