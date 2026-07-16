@@ -1,16 +1,20 @@
 "use client";
 
-// 현장·호기 관리 — 관리자 콘솔의 핵심 화면.
+// 현장관리 — 관리자 콘솔의 핵심 화면.
 // v2 기본: 호기(units)를 직접 편집한다. 단 007(옛 컬럼 정리) 전까지는
 // 모바일 앱이 아직 참조하는 sites의 옛 컬럼(unit_count, gov_elevator_nos,
 // elevator_model)도 함께 동기화한다(듀얼라이트).
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapUnit } from "@/lib/mappers";
+import { useLiveInspections } from "@/app/hooks/useLiveInspections";
+import { Badge } from "@/app/components/ui";
+import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
+import { Modal, StatusBadge } from "@/app/components/admin/adminShared";
 
 const CONTRACT_TYPES = ["POG(일반계약)", "FM(종합계약)"];
-const CONTACT_ROLES = ["관리소장", "건물주", "경비실", "입주민 대표", "기타"];
+const CONTACT_ROLES = ["대표", "관리소장", "건물주", "경비실", "입주민 대표", "기타"];
 const UNIT_TYPES = ["엘리베이터", "에스컬레이터", "휠체어리프트", "카리프트"];
 const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
 
@@ -22,14 +26,140 @@ function legacySiteFields(siteUnits) {
   return { unit_count: act.length, gov_elevator_nos: govArr, elevator_model: act[0]?.model || null };
 }
 
-function UnitRow({ unit, onSave, onToggleActive }) {
+// 호기 상세정보 — 승강기정보(국가승강기정보센터 연동)/고장내역/검사내역/부품교체내역
+function UnitDetailModal({ unit, site, failures, inspections, billings, onClose }) {
+  const [tab, setTab] = useState("정보");
+  const [failTarget, setFailTarget] = useState(null);
+  const liveInspections = useLiveInspections(
+    unit.govNo ? [{ key: unit.id, siteId: site.id, siteName: site.name, govElevatorNo: unit.govNo }] : []
+  );
+  const liveInfo = liveInspections[0];
+  const unitFailures = failures
+    .filter((f) => (f.unitId ? f.unitId === unit.id : f.siteId === site.id))
+    .sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt));
+  const unitInspections = liveInspections.length > 0
+    ? liveInspections
+    : inspections.filter((i) => (i.unitId ? i.unitId === unit.id : i.siteId === site.id));
+  const unitBillings = billings.filter((b) => (b.unitId ? b.unitId === unit.id : b.siteName === site.name));
+
+  const infoRows = [
+    ["종류", unit.unitType],
+    ["모델", liveInfo?.kindNm || unit.model || "-"],
+    ["형식", liveInfo?.form || "-"],
+    ["설치일", liveInfo?.frstInstallationDe || unit.installDate || "-"],
+    ["승강기고유번호", unit.govNo || "미등록"],
+    ["운행층수", liveInfo ? `지상 ${liveInfo.groundFloorCnt} / 지하 ${liveInfo.undgrndFloorCnt}` : "-"],
+    ["운행구간", liveInfo?.shuttleSection || "-"],
+    ["적재하중", liveInfo ? `${liveInfo.liveLoad}kg` : "-"],
+    ["정원", liveInfo ? `${liveInfo.ratedCap}인승` : "-"],
+  ];
+
+  return (
+    <Modal title={`${site.name} · ${unit.unitNo} 상세정보`} onClose={onClose} wide>
+      <div className="flex gap-1 mb-4 border-b border-slate-100">
+        {["정보", "고장내역", "검사내역", "부품교체내역"].map((t) => (
+          <button key={t} onClick={() => setTab(t)} className={`px-3 py-2 text-xs font-bold ${tab === t ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}>
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {tab === "정보" && (
+        <div className="space-y-2 text-sm">
+          {infoRows.map(([label, value]) => (
+            <div key={label} className="flex justify-between border-b border-slate-50 pb-2">
+              <span className="text-slate-400">{label}</span>
+              <span className="font-semibold text-slate-800">{value}</span>
+            </div>
+          ))}
+          {liveInfo && <p className="text-[10px] text-slate-400 pt-2">* 국가승강기정보센터 실시간 데이터</p>}
+        </div>
+      )}
+
+      {tab === "고장내역" && (
+        unitFailures.length === 0 ? <p className="text-xs text-slate-400 text-center py-10">등록된 고장 이력이 없습니다</p> : (
+          <div className="space-y-2">
+            {unitFailures.map((f) => (
+              <div key={f.id} className="border border-slate-200 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="font-bold text-sm">{f.errorCode}</p>
+                  <StatusBadge tone={f.status === "완료" ? "green" : f.status === "진행중" ? "amber" : "red"}>
+                    {f.escalation ? `${f.status}·${f.escalation}` : f.status}
+                  </StatusBadge>
+                </div>
+                <p className="text-xs text-slate-500">{f.reportedAt} 접수 · {f.assignee ?? "미배정"}</p>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+
+      {tab === "검사내역" && (
+        unitInspections.length === 0 ? <p className="text-xs text-slate-400 text-center py-10">등록된 검사 이력이 없습니다</p> : (
+          <div className="space-y-2">
+            {unitInspections.map((i) => {
+              const isLive = i.id?.startsWith("gov-");
+              const clickable = isLive && (i.result === "conditional" || i.result === "fail");
+              return (
+                <div
+                  key={i.id}
+                  onClick={clickable ? () => setFailTarget(i) : undefined}
+                  className={`border border-slate-200 rounded-lg p-3 ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="font-bold text-sm">{i.type}</p>
+                    {i.result ? <Badge result={i.result} /> : <StatusBadge tone="slate">예정</StatusBadge>}
+                  </div>
+                  <p className="text-xs text-slate-500">{i.org} · 기한 {i.dueDate}</p>
+                  {clickable && <p className="text-[10px] text-blue-600 font-semibold mt-1">클릭해서 부적합 상세 항목 보기</p>}
+                </div>
+              );
+            })}
+          </div>
+        )
+      )}
+
+      {tab === "부품교체내역" && (
+        unitBillings.length === 0 ? <p className="text-xs text-slate-400 text-center py-10">등록된 부품교체 내역이 없습니다</p> : (
+          <div className="space-y-2">
+            {unitBillings.map((b) => {
+              const photos = [...(b.beforePhotoUrls ?? []), ...(b.afterPhotoUrls ?? [])];
+              return (
+                <div key={b.id} className="border border-slate-200 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="font-bold text-sm">{b.part}</p>
+                    <span className="text-sm font-bold">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</span>
+                  </div>
+                  <p className="text-xs text-slate-500">{b.replaceDate ?? "-"} · {b.engineer ?? "-"}</p>
+                  {photos.length > 0 && (
+                    <div className="flex gap-1.5 mt-2 overflow-x-auto">
+                      {photos.map((url, i) => (
+                        <img key={i} src={url} alt="" className="w-14 h-14 rounded object-cover border border-slate-200 shrink-0" />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )
+      )}
+
+      {failTarget && <InspectionFailDetailSheet inspection={failTarget} onClose={() => setFailTarget(null)} />}
+    </Modal>
+  );
+}
+
+function UnitRow({ unit, onSave, onToggleActive, onDelete, onOpenDetail }) {
   const [form, setForm] = useState({ unitType: unit.unitType, model: unit.model ?? "", installDate: unit.installDate ?? "", govNo: unit.govNo ?? "" });
   const [saving, setSaving] = useState(false);
   const dirty = form.unitType !== unit.unitType || form.model !== (unit.model ?? "") || form.installDate !== (unit.installDate ?? "") || form.govNo !== (unit.govNo ?? "");
 
   return (
     <tr className={`border-b border-slate-50 ${unit.isActive === false ? "opacity-40" : ""}`}>
-      <td className="px-4 py-2 font-bold whitespace-nowrap">{unit.unitNo}</td>
+      <td className="px-4 py-2 font-bold whitespace-nowrap">
+        <button onClick={() => onOpenDetail(unit)} className="text-blue-700 hover:underline">{unit.unitNo}</button>
+      </td>
       <td className="px-2 py-2">
         <select className={inputCls} value={form.unitType} onChange={(e) => setForm({ ...form, unitType: e.target.value })}>
           {UNIT_TYPES.map((t) => <option key={t}>{t}</option>)}
@@ -46,8 +176,11 @@ function UnitRow({ unit, onSave, onToggleActive }) {
         >
           저장
         </button>
-        <button onClick={() => onToggleActive(unit)} className="text-xs font-bold text-slate-400 border border-slate-200 rounded-lg px-2 py-1.5">
+        <button onClick={() => onToggleActive(unit)} className="text-xs font-bold text-slate-400 border border-slate-200 rounded-lg px-2 py-1.5 mr-1">
           {unit.isActive === false ? "복구" : "비활성"}
+        </button>
+        <button onClick={() => onDelete(unit)} className="text-xs font-bold text-red-500 border border-red-100 rounded-lg px-2 py-1.5">
+          <Trash2 size={13} />
         </button>
       </td>
     </tr>
@@ -82,25 +215,31 @@ function ContactRow({ c, onSave, onDelete, onSetPrimary }) {
 }
 
 export default function SitesAdmin({ data, setData }) {
-  const { sites, units, profiles, failures, siteManagers } = data;
+  const { sites, units, profiles, failures, inspections, billings, siteManagers } = data;
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState(null);
   const [siteForm, setSiteForm] = useState(null); // 선택 현장 기본정보 편집값
+  const [editingInfo, setEditingInfo] = useState(false);
   const [newSite, setNewSite] = useState(null);   // 신규 등록 폼 (null=닫힘)
+  const [unitDetail, setUnitDetail] = useState(null);
 
   const site = sites.find((s) => s.id === selectedId);
   const siteUnits = units.filter((u) => u.siteId === selectedId).sort((a, b) => a.seq - b.seq);
   const filtered = sites.filter((s) => !search || s.name.includes(search) || (s.address ?? "").includes(search));
   const engineers = profiles.filter((p) => p.role === "engineer");
+  // contract_date 컬럼은 마이그레이션 011 실행 전엔 존재하지 않는다 — undefined면 아직 미실행으로 간주.
+  const contractDateReady = sites.some((s) => s.contractDate !== undefined);
 
   const contacts = siteManagers.filter((m) => m.siteId === selectedId);
 
   function select(s) {
     setSelectedId(s.id);
+    setEditingInfo(false);
     setSiteForm({
       name: s.name, address: s.address ?? "", contractType: s.contractType ?? CONTRACT_TYPES[0],
-      notes: s.notes ?? "", managerId: s.managerId ?? "",
+      notes: s.notes ?? "", assignedEngineer: s.assignedEngineer ?? "",
       phone: s.phone ?? "", fax: s.fax ?? "", email: s.email ?? "",
+      contractDate: s.contractDate ?? "",
     });
   }
 
@@ -134,6 +273,15 @@ export default function SitesAdmin({ data, setData }) {
     await syncLegacy(unit.siteId, nextUnits);
   }
 
+  async function deleteUnit(unit) {
+    if (!confirm(`"${unit.unitNo}"를 완전히 삭제할까요? 연결된 고장·검사·청구 이력은 남아있지만 호기 정보와의 연결은 사라집니다.`)) return;
+    const { error } = await supabase.from("units").delete().eq("id", unit.id);
+    if (error) { alert("삭제 실패: " + error.message); return; }
+    const nextUnits = units.filter((u) => u.id !== unit.id);
+    setData((prev) => ({ ...prev, units: nextUnits }));
+    await syncLegacy(unit.siteId, nextUnits);
+  }
+
   async function addUnit() {
     const seq = siteUnits.length ? Math.max(...siteUnits.map((u) => u.seq)) + 1 : 1;
     const { data: created, error } = await supabase
@@ -147,15 +295,23 @@ export default function SitesAdmin({ data, setData }) {
   }
 
   async function saveSiteInfo() {
+    if (siteForm.assignedEngineer !== (site.assignedEngineer ?? "")) {
+      await changeLead(siteForm.assignedEngineer);
+    }
     await supabase.from("sites").update({
       name: siteForm.name, address: siteForm.address, contract_type: siteForm.contractType, notes: siteForm.notes || null,
-      manager_id: siteForm.managerId || null,
       phone: siteForm.phone || null, fax: siteForm.fax || null, email: siteForm.email || null,
+      ...(contractDateReady ? { contract_date: siteForm.contractDate || null } : {}),
     }).eq("id", selectedId);
     setData((prev) => ({
       ...prev,
-      sites: prev.sites.map((s) => (s.id === selectedId ? { ...s, ...siteForm } : s)),
+      sites: prev.sites.map((s) => (s.id === selectedId ? { ...s, ...siteForm, assignedEngineer: siteForm.assignedEngineer } : s)),
     }));
+    setEditingInfo(false);
+  }
+
+  function cancelEditInfo() {
+    select(site);
   }
 
   async function changeLead(engineerName) {
@@ -269,7 +425,7 @@ export default function SitesAdmin({ data, setData }) {
     <div className="max-w-6xl">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-extrabold">현장·호기 관리</h1>
+          <h1 className="text-xl font-extrabold">현장관리</h1>
           <p className="text-xs text-slate-500 mt-0.5">호기(승강기 1대) 단위로 모델·설치일·승강기고유번호를 관리합니다</p>
         </div>
         <button onClick={() => setNewSite({ name: "", address: "", contractType: CONTRACT_TYPES[0], unitCount: 1, engineer: "" })}
@@ -346,13 +502,13 @@ export default function SitesAdmin({ data, setData }) {
         </div>
       )}
 
-      <div className="grid grid-cols-5 gap-5 items-start">
+      <div className="grid grid-cols-5 gap-5 items-stretch">
         {/* 현장 목록 */}
-        <div className="col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="p-3 border-b border-slate-100">
+        <div className="col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col h-[40rem]">
+          <div className="p-3 border-b border-slate-100 shrink-0">
             <input className={inputCls} placeholder="현장명·주소 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <ul className="max-h-[32rem] overflow-y-auto">
+          <ul className="flex-1 overflow-y-auto">
             {filtered.map((s) => {
               const cnt = units.filter((u) => u.siteId === s.id && u.isActive !== false).length;
               const open = failures.filter((f) => f.siteId === s.id && f.status !== "완료").length;
@@ -378,47 +534,72 @@ export default function SitesAdmin({ data, setData }) {
         </div>
 
         {/* 상세 */}
-        <div className="col-span-3 space-y-4">
+        <div className="col-span-3 h-[40rem] overflow-y-auto space-y-4 pr-0.5">
           {!site ? (
-            <div className="bg-white rounded-xl border border-slate-200 py-24 text-center text-sm text-slate-400">
+            <div className="bg-white rounded-xl border border-slate-200 h-full flex items-center justify-center text-sm text-slate-400">
               왼쪽에서 현장을 선택하세요
             </div>
           ) : (
             <>
               <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-                <div className="grid grid-cols-3 gap-3">
-                  <div><p className="text-xs font-bold text-slate-500 mb-1">현장명</p><input className={inputCls} value={siteForm.name} onChange={(e) => setSiteForm({ ...siteForm, name: e.target.value })} /></div>
-                  <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">주소</p><input className={inputCls} value={siteForm.address} onChange={(e) => setSiteForm({ ...siteForm, address: e.target.value })} /></div>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div><p className="text-xs font-bold text-slate-500 mb-1">계약구분</p>
-                    <select className={inputCls} value={siteForm.contractType} onChange={(e) => setSiteForm({ ...siteForm, contractType: e.target.value })}>
-                      {CONTRACT_TYPES.map((t) => <option key={t}>{t}</option>)}
-                      {!CONTRACT_TYPES.includes(siteForm.contractType) && <option>{siteForm.contractType}</option>}
-                    </select></div>
-                  <div><p className="text-xs font-bold text-slate-500 mb-1">담당 기사</p>
-                    <select className={inputCls} value={site.assignedEngineer ?? ""} onChange={(e) => changeLead(e.target.value)}>
-                      <option value="">미배정</option>
-                      {engineers.map((p) => <option key={p.id}>{p.name}</option>)}
-                    </select></div>
-                  <div><p className="text-xs font-bold text-slate-500 mb-1">사무실 담당자</p>
-                    <select className={inputCls} value={siteForm.managerId} onChange={(e) => setSiteForm({ ...siteForm, managerId: e.target.value })}>
-                      <option value="">미지정</option>
-                      {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select></div>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div><p className="text-xs font-bold text-slate-500 mb-1">공통 전화번호</p><input className={inputCls} placeholder="관리사무소 대표번호" value={siteForm.phone} onChange={(e) => setSiteForm({ ...siteForm, phone: e.target.value })} /></div>
-                  <div><p className="text-xs font-bold text-slate-500 mb-1">공통 팩스</p><input className={inputCls} value={siteForm.fax} onChange={(e) => setSiteForm({ ...siteForm, fax: e.target.value })} /></div>
-                  <div><p className="text-xs font-bold text-slate-500 mb-1">공통 이메일</p><input className={inputCls} value={siteForm.email} onChange={(e) => setSiteForm({ ...siteForm, email: e.target.value })} /></div>
-                </div>
-                <div className="flex items-end gap-3">
-                  <div className="flex-1"><p className="text-xs font-bold text-slate-500 mb-1">비고(전달사항)</p><input className={inputCls} value={siteForm.notes} onChange={(e) => setSiteForm({ ...siteForm, notes: e.target.value })} /></div>
-                  <button onClick={saveSiteInfo} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">저장</button>
-                  <button onClick={toggleSiteActive} className="text-sm font-bold text-slate-400 border border-slate-200 rounded-xl px-3 py-2.5 whitespace-nowrap">
-                    {site.isActive === false ? "계약 복구" : "계약종료"}
-                  </button>
-                </div>
+                {!editingInfo ? (
+                  <>
+                    <div className="flex items-start justify-between">
+                      <div className="grid grid-cols-3 gap-3 flex-1 text-sm">
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">현장명</p><p className="font-semibold text-slate-800">{site.name}</p></div>
+                        <div className="col-span-2"><p className="text-xs font-bold text-slate-400 mb-1">주소</p><p className="font-semibold text-slate-800">{site.address || "-"}</p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">계약구분</p><p className="font-semibold text-slate-800">{site.contractType || "-"}</p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">담당 기사</p><p className="font-semibold text-slate-800">{site.assignedEngineer || "미배정"}</p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">계약일자</p><p className="font-semibold text-slate-800">{contractDateReady ? (site.contractDate || "-") : "마이그레이션 대기"}</p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">공통 전화번호</p><p className="font-semibold text-slate-800">{site.phone || "-"}</p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">공통 팩스</p><p className="font-semibold text-slate-800">{site.fax || "-"}</p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">공통 이메일</p><p className="font-semibold text-slate-800">{site.email || "-"}</p></div>
+                        <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(전달사항)</p><p className="text-slate-700">{site.notes || "-"}</p></div>
+                      </div>
+                      <button onClick={() => setEditingInfo(true)} className="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 whitespace-nowrap ml-3">
+                        수정하기
+                      </button>
+                    </div>
+                    <div className="flex justify-end">
+                      <button onClick={toggleSiteActive} className="text-sm font-bold text-slate-400 border border-slate-200 rounded-xl px-3 py-2 whitespace-nowrap">
+                        {site.isActive === false ? "계약 복구" : "계약종료"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div><p className="text-xs font-bold text-slate-500 mb-1">현장명</p><input className={inputCls} value={siteForm.name} onChange={(e) => setSiteForm({ ...siteForm, name: e.target.value })} /></div>
+                      <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">주소</p><input className={inputCls} value={siteForm.address} onChange={(e) => setSiteForm({ ...siteForm, address: e.target.value })} /></div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div><p className="text-xs font-bold text-slate-500 mb-1">계약구분</p>
+                        <select className={inputCls} value={siteForm.contractType} onChange={(e) => setSiteForm({ ...siteForm, contractType: e.target.value })}>
+                          {CONTRACT_TYPES.map((t) => <option key={t}>{t}</option>)}
+                          {!CONTRACT_TYPES.includes(siteForm.contractType) && <option>{siteForm.contractType}</option>}
+                        </select></div>
+                      <div><p className="text-xs font-bold text-slate-500 mb-1">담당 기사</p>
+                        <select className={inputCls} value={siteForm.assignedEngineer} onChange={(e) => setSiteForm({ ...siteForm, assignedEngineer: e.target.value })}>
+                          <option value="">미배정</option>
+                          {engineers.map((p) => <option key={p.id}>{p.name}</option>)}
+                        </select></div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-500 mb-1">계약일자{!contractDateReady && " (마이그레이션 대기)"}</p>
+                        <input className={inputCls} type="date" disabled={!contractDateReady} value={siteForm.contractDate} onChange={(e) => setSiteForm({ ...siteForm, contractDate: e.target.value })} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div><p className="text-xs font-bold text-slate-500 mb-1">공통 전화번호</p><input className={inputCls} placeholder="관리사무소 대표번호" value={siteForm.phone} onChange={(e) => setSiteForm({ ...siteForm, phone: e.target.value })} /></div>
+                      <div><p className="text-xs font-bold text-slate-500 mb-1">공통 팩스</p><input className={inputCls} value={siteForm.fax} onChange={(e) => setSiteForm({ ...siteForm, fax: e.target.value })} /></div>
+                      <div><p className="text-xs font-bold text-slate-500 mb-1">공통 이메일</p><input className={inputCls} value={siteForm.email} onChange={(e) => setSiteForm({ ...siteForm, email: e.target.value })} /></div>
+                    </div>
+                    <div className="flex items-end gap-3">
+                      <div className="flex-1"><p className="text-xs font-bold text-slate-500 mb-1">비고(전달사항)</p><input className={inputCls} value={siteForm.notes} onChange={(e) => setSiteForm({ ...siteForm, notes: e.target.value })} /></div>
+                      <button onClick={cancelEditInfo} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5 whitespace-nowrap">취소</button>
+                      <button onClick={saveSiteInfo} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">저장</button>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -465,23 +646,34 @@ export default function SitesAdmin({ data, setData }) {
                       <th className="text-left px-2 py-2 font-semibold">모델</th>
                       <th className="text-left px-2 py-2 font-semibold w-32">설치일</th>
                       <th className="text-left px-2 py-2 font-semibold w-32">승강기고유번호</th>
-                      <th className="w-32" />
+                      <th className="w-40" />
                     </tr>
                   </thead>
                   <tbody>
                     {siteUnits.map((u) => (
-                      <UnitRow key={u.id} unit={u} onSave={saveUnit} onToggleActive={toggleUnitActive} />
+                      <UnitRow key={u.id} unit={u} onSave={saveUnit} onToggleActive={toggleUnitActive} onDelete={deleteUnit} onOpenDetail={setUnitDetail} />
                     ))}
                   </tbody>
                 </table>
                 <p className="px-4 py-2.5 text-[10px] text-slate-400 border-t border-slate-50">
-                  * 승강기고유번호를 등록하면 모바일 앱 검사관리가 국가승강기정보센터 실시간 데이터로 전환됩니다.
+                  * 호기명을 클릭하면 상세정보(승강기정보·고장·검사·부품교체내역)를 볼 수 있습니다. 승강기고유번호를 등록하면 실시간 데이터로 전환됩니다.
                 </p>
               </div>
             </>
           )}
         </div>
       </div>
+
+      {unitDetail && (
+        <UnitDetailModal
+          unit={unitDetail}
+          site={sites.find((s) => s.id === unitDetail.siteId)}
+          failures={failures}
+          inspections={inspections}
+          billings={billings}
+          onClose={() => setUnitDetail(null)}
+        />
+      )}
     </div>
   );
 }

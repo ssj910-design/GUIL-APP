@@ -1,6 +1,7 @@
 "use client";
 
 // 관리자 콘솔 공용 헬퍼 — 표기(호기·담당자)는 v2 FK 우선, 옛 라벨 fallback.
+import { X, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 
 export const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
 
@@ -59,4 +60,54 @@ export function FilterPills({ options, value, onChange }) {
       ))}
     </div>
   );
+}
+
+// PC용 중앙 모달 (관리자 콘솔 최초의 상세보기 팝업 패턴 — 모바일 Sheet와 별개).
+export function Modal({ title, onClose, children, wide }) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-6" onClick={onClose}>
+      <div
+        className={`bg-white rounded-2xl shadow-2xl max-h-[85vh] flex flex-col ${wide ? "w-full max-w-3xl" : "w-full max-w-lg"}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+          <h2 className="font-bold text-slate-900">{title}</h2>
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-700"><X size={18} /></button>
+        </div>
+        <div className="overflow-y-auto px-5 py-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// 정렬 가능한 표 헤더 셀. sort = { key, dir } / setSort(next)
+export function SortableTh({ label, sortKey, sort, setSort, className = "" }) {
+  const active = sort?.key === sortKey;
+  return (
+    <th
+      className={`px-3 py-2.5 font-semibold text-left cursor-pointer select-none ${className}`}
+      onClick={() => setSort({ key: sortKey, dir: active && sort.dir === "asc" ? "desc" : "asc" })}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active ? (sort.dir === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : <ChevronsUpDown size={12} className="text-slate-300" />}
+      </span>
+    </th>
+  );
+}
+
+// 정렬 유틸 — sort={key,dir}, getVal(row, key) => 비교값
+export function sortRows(rows, sort, getVal) {
+  if (!sort) return rows;
+  const sorted = [...rows].sort((a, b) => {
+    const va = getVal(a, sort.key);
+    const vb = getVal(b, sort.key);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (va < vb) return -1;
+    if (va > vb) return 1;
+    return 0;
+  });
+  return sort.dir === "desc" ? sorted.reverse() : sorted;
 }

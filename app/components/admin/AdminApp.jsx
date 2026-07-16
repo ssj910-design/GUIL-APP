@@ -4,7 +4,7 @@
 // v2 스키마(units, *_id FK)를 기본으로 사용한다. 데이터는 이 셸이 한 번에 로드해
 // 각 섹션에 props로 내린다 (모바일 App 셸과 같은 관례).
 import { useState, useEffect } from "react";
-import { Building2, AlertTriangle, Package, Receipt, ListTodo, CalendarCheck, Users, LayoutDashboard } from "lucide-react";
+import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, CalendarCheck, Users, LayoutDashboard } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import {
   mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest,
@@ -13,6 +13,7 @@ import {
 import Dashboard from "@/app/components/admin/Dashboard";
 import SitesAdmin from "@/app/components/admin/SitesAdmin";
 import FailuresAdmin from "@/app/components/admin/FailuresAdmin";
+import InspectionsAdmin from "@/app/components/admin/InspectionsAdmin";
 import MaterialsAdmin from "@/app/components/admin/MaterialsAdmin";
 import BillingsAdmin from "@/app/components/admin/BillingsAdmin";
 import TodosAdmin from "@/app/components/admin/TodosAdmin";
@@ -21,13 +22,14 @@ import EngineersAdmin from "@/app/components/admin/EngineersAdmin";
 
 const MENU = [
   { id: "dashboard", label: "대시보드", icon: LayoutDashboard },
-  { id: "sites", label: "현장·호기", icon: Building2 },
+  { id: "sites", label: "현장관리", icon: Building2 },
   { id: "failures", label: "고장 관제", icon: AlertTriangle },
-  { id: "materials", label: "자재·견적", icon: Package },
-  { id: "billings", label: "비용청구", icon: Receipt },
-  { id: "todos", label: "할일", icon: ListTodo },
+  { id: "inspections", label: "검사관리", icon: ShieldCheck },
+  { id: "materials", label: "자재·견적 신청내역", icon: Package },
+  { id: "billings", label: "청구내역", icon: Receipt },
+  { id: "todos", label: "할 일 관리", icon: ListTodo },
   { id: "selfChecks", label: "자체점검", icon: CalendarCheck },
-  { id: "engineers", label: "기사", icon: Users },
+  { id: "engineers", label: "인사관리", icon: Users },
 ];
 
 export default function AdminApp() {
@@ -110,10 +112,12 @@ export default function AdminApp() {
           <SitesAdmin data={data} setData={setData} />
         ) : menu === "failures" ? (
           <FailuresAdmin data={data} setData={setData} />
+        ) : menu === "inspections" ? (
+          <InspectionsAdmin data={data} />
         ) : menu === "materials" ? (
           <MaterialsAdmin data={data} />
         ) : menu === "billings" ? (
-          <BillingsAdmin data={data} />
+          <BillingsAdmin data={data} setData={setData} />
         ) : menu === "todos" ? (
           <TodosAdmin data={data} setData={setData} />
         ) : menu === "selfChecks" ? (

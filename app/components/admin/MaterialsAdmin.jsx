@@ -11,23 +11,26 @@ const QUOTE_TONE = { 요청접수: "blue", 견적발행: "amber", 승인: "amber
 
 export default function MaterialsAdmin({ data }) {
   const { materialRequests, quoteRequests } = data;
-  const [tab, setTab] = useState("material");
+  const [tab, setTab] = useState("all");
 
   return (
     <div className="max-w-6xl">
-      <h1 className="text-xl font-extrabold mb-4">자재·견적</h1>
+      <h1 className="text-xl font-extrabold mb-4">자재·견적 신청내역</h1>
       <div className="mb-3">
         <FilterPills
           value={tab}
           onChange={setTab}
           options={[
+            { value: "all", label: "전체", count: materialRequests.length + quoteRequests.length },
             { value: "material", label: "자재신청", count: materialRequests.length },
             { value: "quote", label: "견적요청", count: quoteRequests.length },
           ]}
         />
       </div>
 
-      {tab === "material" ? (
+      {(tab === "material" || tab === "all") && (
+        <>
+        {tab === "all" && <h2 className="text-xs font-bold text-slate-400 mb-2">자재신청</h2>}
         <AdminTable head={["신청일", "현장 · 호기", "자재", "긴급도", "신청 기사", "지급사진", "상태"]}>
           {materialRequests.map((m) => (
             <tr key={m.id} className="border-b border-slate-50">
@@ -46,7 +49,12 @@ export default function MaterialsAdmin({ data }) {
             </tr>
           ))}
         </AdminTable>
-      ) : (
+        </>
+      )}
+
+      {(tab === "quote" || tab === "all") && (
+        <>
+        {tab === "all" && <h2 className="text-xs font-bold text-slate-400 mb-2 mt-6">견적요청</h2>}
         <AdminTable head={["신청일", "현장 · 호기", "공사 내용", "신청 기사", "발행/승인/지급", "상태"]}>
           {quoteRequests.map((q) => (
             <tr key={q.id} className="border-b border-slate-50">
@@ -61,6 +69,7 @@ export default function MaterialsAdmin({ data }) {
             </tr>
           ))}
         </AdminTable>
+        </>
       )}
       <p className="text-[10px] text-slate-400 mt-2">* 지급완료·반려 처리는 지급 사진 등록이 필요해 모바일 관리자 모드에서 진행합니다.</p>
     </div>

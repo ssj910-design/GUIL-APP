@@ -54,7 +54,7 @@ export default function EngineersAdmin({ data, setData }) {
 
   return (
     <div className="max-w-6xl">
-      <h1 className="text-xl font-extrabold mb-1">기사 관리</h1>
+      <h1 className="text-xl font-extrabold mb-1">인사관리</h1>
       <p className="text-xs text-slate-500 mb-4">
         계정 연결 = 로그인 계정(Supabase Auth)과 연결된 프로필. Phase 2 로그인 활성화 때 계정 없는 기사는 가입만 하면 자동 연결됩니다.
       </p>
