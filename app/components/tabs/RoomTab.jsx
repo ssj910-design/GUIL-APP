@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect, useRef } from "react";
-import { Send, Plus, X } from "lucide-react";
+import { Send, Plus, X, Download } from "lucide-react";
 import { AuthContext } from "@/app/components/context";
-import { uploadPhoto } from "@/lib/photos";
+import { uploadPhoto, downloadPhoto } from "@/lib/photos";
 
 const isVideo = (url) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(url);
 
@@ -10,6 +10,8 @@ export function RoomTab({ feed, onSendChat, onToggleLike }) {
   const [chatInput, setChatInput] = useState("");
   const [replyTo, setReplyTo] = useState(null); // 답장 대상 글
   const [uploading, setUploading] = useState(false);
+  const [actionsFor, setActionsFor] = useState(null); // 말풍선을 탭한 글에만 답장·좋아요 버튼 노출
+  const [viewerUrl, setViewerUrl] = useState(null); // 이미지 확대보기
   const fileRef = useRef(null);
 
   function sendChat() {
@@ -73,7 +75,10 @@ export function RoomTab({ feed, onSendChat, onToggleLike }) {
             <div key={p.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
               <div className={`max-w-[80%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
                 {!mine && <p className="text-[11px] font-bold text-slate-500 mb-1 px-1">{p.author}</p>}
-                <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${mine ? "bg-blue-700 text-white rounded-br-sm" : "bg-white border border-slate-200 text-slate-700 rounded-bl-sm"}`}>
+                <div
+                  onClick={() => setActionsFor(actionsFor === p.id ? null : p.id)}
+                  className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${mine ? "bg-blue-700 text-white rounded-br-sm" : "bg-white border border-slate-200 text-slate-700 rounded-bl-sm"}`}
+                >
                   {orig && (
                     <div className={`text-[11px] rounded-lg px-2 py-1 mb-1.5 ${mine ? "bg-blue-800/70 text-blue-100" : "bg-slate-100 text-slate-500"}`}>
                       <b>{orig.author}</b> · {(orig.text || "사진").slice(0, 30)}{(orig.text ?? "").length > 30 ? "…" : ""}
@@ -86,19 +91,28 @@ export function RoomTab({ feed, onSendChat, onToggleLike }) {
                   )}
                   {(p.photoUrls ?? []).map((u) =>
                     isVideo(u)
-                      ? <video key={u} src={u} controls playsInline className="rounded-lg max-w-full mt-1.5" />
-                      : <img key={u} src={u} alt="첨부 사진" className="rounded-lg max-w-full mt-1.5" />
+                      ? <video key={u} src={u} controls playsInline className="rounded-lg max-w-full mt-1.5" onClick={(e) => e.stopPropagation()} />
+                      : <img key={u} src={u} alt="첨부 사진" className="rounded-lg max-w-full mt-1.5"
+                          onClick={(e) => { e.stopPropagation(); setViewerUrl(u); }} />
                   )}
                 </div>
+                {/* 기본은 시간(+좋아요 수)만 — 말풍선을 탭하면 답장·좋아요 버튼이 나온다 */}
                 <div className={`flex items-center gap-2.5 mt-1 px-1 ${mine ? "flex-row-reverse" : ""}`}>
                   <p className="text-[10px] text-slate-400">{p.time}</p>
-                  <button onClick={() => setReplyTo(p)} className="text-[10px] font-bold text-slate-400 active:text-blue-600">답장</button>
-                  <button
-                    onClick={() => onToggleLike?.(p.id)}
-                    className={`text-[10px] font-bold ${liked ? "text-blue-600" : "text-slate-400"}`}
-                  >
-                    👍{likes.length > 0 ? ` ${likes.length}` : ""}
-                  </button>
+                  {likes.length > 0 && actionsFor !== p.id && (
+                    <span className={`text-[10px] font-bold ${liked ? "text-blue-600" : "text-slate-400"}`}>👍 {likes.length}</span>
+                  )}
+                  {actionsFor === p.id && (
+                    <>
+                      <button onClick={() => { setReplyTo(p); setActionsFor(null); }} className="text-[10px] font-bold text-blue-600">답장</button>
+                      <button
+                        onClick={() => onToggleLike?.(p.id)}
+                        className={`text-[10px] font-bold ${liked ? "text-blue-600" : "text-slate-500"}`}
+                      >
+                        👍{likes.length > 0 ? ` ${likes.length}` : " 좋아요"}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -131,6 +145,27 @@ export function RoomTab({ feed, onSendChat, onToggleLike }) {
           <span className="text-slate-400 shrink-0">답장:</span>
           <span className="font-bold text-slate-600 truncate flex-1">{replyTo.author} · {replyTo.text || "사진"}</span>
           <button onClick={() => setReplyTo(null)} className="p-1 text-slate-400"><X size={14} /></button>
+        </div>
+      )}
+
+      {/* 이미지 확대보기 — 저장/닫기 */}
+      {viewerUrl && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col" onClick={() => setViewerUrl(null)}>
+          <div className="flex justify-end gap-2 p-4 shrink-0">
+            <button
+              onClick={(e) => { e.stopPropagation(); downloadPhoto(viewerUrl, "우리방-사진"); }}
+              className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center"
+              aria-label="사진 저장"
+            >
+              <Download size={18} />
+            </button>
+            <button className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="닫기">
+              <X size={18} />
+            </button>
+          </div>
+          <div className="flex-1 flex items-center justify-center p-2 overflow-hidden">
+            <img src={viewerUrl} alt="확대 사진" className="max-w-full max-h-full object-contain" onClick={(e) => e.stopPropagation()} />
+          </div>
         </div>
       )}
 
