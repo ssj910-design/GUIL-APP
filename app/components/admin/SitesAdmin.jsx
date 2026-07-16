@@ -235,7 +235,14 @@ export default function SitesAdmin({ data, setData }) {
 
   const site = sites.find((s) => s.id === selectedId);
   const siteUnits = units.filter((u) => u.siteId === selectedId).sort((a, b) => a.seq - b.seq);
-  const filtered = sites.filter((s) => !search || s.name.includes(search) || (s.address ?? "").includes(search));
+  const [onlyUnassigned, setOnlyUnassigned] = useState(false);
+  const [assignMode, setAssignMode] = useState(false);
+  const [checkedIds, setCheckedIds] = useState(new Set());
+  const [bulkEngineer, setBulkEngineer] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const filtered = sites
+    .filter((s) => !search || s.name.includes(search) || (s.address ?? "").includes(search))
+    .filter((s) => !onlyUnassigned || !s.assignedEngineer);
   const engineers = profiles.filter((p) => p.role === "engineer");
   // contract_date/maintenance_cost 컬럼은 각 마이그레이션 실행 전엔 존재하지 않는다 — undefined면 아직 미실행으로 간주.
   const contractDateReady = sites.some((s) => s.contractDate !== undefined);
@@ -261,6 +268,27 @@ export default function SitesAdmin({ data, setData }) {
       phone: s.phone ?? "", fax: s.fax ?? "", email: s.email ?? "",
       contractDate: s.contractDate ?? "", maintenanceCost: s.maintenanceCost ?? "",
     });
+  }
+
+  // 체크한 현장들에 담당 기사 일괄 배정 (site_assignments + 옛 컬럼 듀얼라이트)
+  async function bulkAssign() {
+    const ids = [...checkedIds];
+    const p = profiles.find((x) => x.name === bulkEngineer);
+    if (!ids.length || !p) return;
+    setBulkBusy(true);
+    for (let i = 0; i < ids.length; i += 100) {
+      const chunk = ids.slice(i, i + 100);
+      await supabase.from("site_assignments").delete().in("site_id", chunk);
+      await supabase.from("site_assignments").insert(chunk.map((siteId) => ({ site_id: siteId, tech_id: p.id, is_lead: true })));
+      await supabase.from("sites").update({ assigned_engineer: bulkEngineer }).in("id", chunk);
+    }
+    setData((prev) => ({
+      ...prev,
+      sites: prev.sites.map((x) => (checkedIds.has(x.id) ? { ...x, assignedEngineer: bulkEngineer } : x)),
+    }));
+    setBulkBusy(false);
+    setCheckedIds(new Set());
+    setAssignMode(false);
   }
 
   // ---- 저장 핸들러들 (units 우선 + sites 옛 컬럼 동기화) ----
@@ -534,22 +562,67 @@ export default function SitesAdmin({ data, setData }) {
       <div className="grid grid-cols-5 gap-5 items-stretch">
         {/* 현장 목록 */}
         <div className="col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col h-[40rem]">
-          <div className="p-3 border-b border-slate-100 shrink-0">
+          <div className="p-3 border-b border-slate-100 shrink-0 space-y-2">
             <input className={inputCls} placeholder="현장명·주소 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <div className="flex items-center justify-between gap-2">
+              <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 cursor-pointer">
+                <input type="checkbox" checked={onlyUnassigned} onChange={(e) => setOnlyUnassigned(e.target.checked)} />
+                미배정만 ({sites.filter((x) => !x.assignedEngineer).length})
+              </label>
+              <button
+                onClick={() => { setAssignMode(!assignMode); setCheckedIds(new Set()); }}
+                className={`text-[11px] font-bold rounded-lg px-2.5 py-1.5 border ${assignMode ? "bg-blue-700 text-white border-blue-700" : "text-blue-700 border-blue-200"}`}
+              >
+                {assignMode ? "배정 모드 끄기" : "기사 일괄 배정"}
+              </button>
+            </div>
+            {assignMode && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setCheckedIds(checkedIds.size === filtered.length ? new Set() : new Set(filtered.map((x) => x.id)))}
+                  className="text-[11px] font-bold text-slate-500 border border-slate-200 rounded-lg px-2 py-1.5 whitespace-nowrap"
+                >
+                  {checkedIds.size === filtered.length && filtered.length > 0 ? "전체 해제" : `목록 전체 (${filtered.length})`}
+                </button>
+                <select className={`${inputCls} flex-1`} value={bulkEngineer} onChange={(e) => setBulkEngineer(e.target.value)}>
+                  <option value="">기사 선택</option>
+                  {engineers.map((p) => <option key={p.id}>{p.name}</option>)}
+                </select>
+                <button
+                  onClick={bulkAssign}
+                  disabled={bulkBusy || !checkedIds.size || !bulkEngineer}
+                  className="text-[11px] font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-lg px-2.5 py-1.5 whitespace-nowrap"
+                >
+                  {bulkBusy ? "배정 중..." : `${checkedIds.size}개 배정`}
+                </button>
+              </div>
+            )}
           </div>
           <ul className="flex-1 overflow-y-auto">
             {filtered.map((s) => {
               const cnt = units.filter((u) => u.siteId === s.id && u.isActive !== false).length;
               const open = failures.filter((f) => f.siteId === s.id && f.status !== "완료").length;
               return (
-                <li key={s.id}>
+                <li key={s.id} className="flex items-stretch">
+                  {assignMode && (
+                    <label className="flex items-center px-2 border-b border-slate-50 cursor-pointer">
+                      <input type="checkbox" checked={checkedIds.has(s.id)} onChange={() => {
+                        const next = new Set(checkedIds);
+                        next.has(s.id) ? next.delete(s.id) : next.add(s.id);
+                        setCheckedIds(next);
+                      }} />
+                    </label>
+                  )}
                   <button onClick={() => select(s)}
-                    className={`w-full text-left px-4 py-3 border-b border-slate-50 ${selectedId === s.id ? "bg-blue-50" : "hover:bg-slate-50"}`}>
+                    className={`flex-1 text-left px-4 py-3 border-b border-slate-50 ${selectedId === s.id ? "bg-blue-50" : "hover:bg-slate-50"}`}>
                     <div className="flex items-center justify-between">
                       <p className={`font-bold text-sm ${s.isActive === false ? "text-slate-300 line-through" : ""}`}>
                         {s.name} <span className="text-slate-400 font-semibold">· {cnt}대</span>
                       </p>
                       <span className="flex gap-1">
+                        {s.assignedEngineer
+                          ? <span className="text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">{s.assignedEngineer}</span>
+                          : <span className="text-[10px] font-bold text-amber-600 bg-amber-50 rounded-full px-2 py-0.5">미배정</span>}
                         {s.isActive === false && <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">계약종료</span>}
                         {open > 0 && <span className="text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-2 py-0.5">고장 {open}</span>}
                       </span>
