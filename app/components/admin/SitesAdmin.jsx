@@ -572,7 +572,7 @@ export default function SitesAdmin({ data, setData }) {
                     <div className="flex items-start justify-between mt-3">
                       <div className="grid grid-cols-4 gap-3 flex-1 text-sm">
                         <div><p className="text-xs font-bold text-slate-400 mb-1">계약구분</p><p className="font-semibold text-slate-800">{site.contractType || "-"}</p></div>
-                        <div><p className="text-xs font-bold text-slate-400 mb-1">유지관리 비용</p><p className="font-semibold text-slate-800">{maintenanceCostReady ? (site.maintenanceCost != null ? Number(site.maintenanceCost).toLocaleString() + "원" : "-") : "마이그레이션 대기"}</p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">보수료(VAT별도)</p><p className="font-semibold text-slate-800">{maintenanceCostReady ? (site.maintenanceCost != null ? Number(site.maintenanceCost).toLocaleString() + "원" : "-") : "마이그레이션 대기"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">계약일자</p><p className="font-semibold text-slate-800">{contractDateReady ? (site.contractDate || "-") : "마이그레이션 대기"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">담당 기사</p><p className="font-semibold text-slate-800">{site.assignedEngineer || "미배정"}</p></div>
                       </div>
@@ -607,7 +607,7 @@ export default function SitesAdmin({ data, setData }) {
                           {!CONTRACT_TYPES.includes(siteForm.contractType) && <option>{siteForm.contractType}</option>}
                         </select></div>
                       <div>
-                        <p className="text-xs font-bold text-slate-500 mb-1">유지관리 비용{!maintenanceCostReady && " (마이그레이션 대기)"}</p>
+                        <p className="text-xs font-bold text-slate-500 mb-1">보수료(VAT별도){!maintenanceCostReady && " (마이그레이션 대기)"}</p>
                         <input className={inputCls} type="number" placeholder="원" disabled={!maintenanceCostReady} value={siteForm.maintenanceCost} onChange={(e) => setSiteForm({ ...siteForm, maintenanceCost: e.target.value })} />
                       </div>
                       <div>
