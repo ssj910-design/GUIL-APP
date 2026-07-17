@@ -232,7 +232,6 @@ export default function SitesAdmin({ data, setData }) {
   const [editingInfo, setEditingInfo] = useState(false);
   const [editingContacts, setEditingContacts] = useState(false);
   const [editingUnits, setEditingUnits] = useState(false);
-  const [newSite, setNewSite] = useState(null);   // 신규 등록 폼 (null=닫힘)
   const [importing, setImporting] = useState(false); // 공단 엑셀 일괄 등록
   const [unitDetail, setUnitDetail] = useState(null);
 
@@ -409,70 +408,6 @@ export default function SitesAdmin({ data, setData }) {
     setData((prev) => ({ ...prev, sites: prev.sites.map((x) => (x.id === selectedId ? { ...x, isActive: next } : x)) }));
   }
 
-  // 공단 API: 고유번호 1개로 그 건물의 전체 호기 목록을 불러온다 (설계 §6)
-  async function lookupGov() {
-    const no = (newSite.govNo ?? "").trim();
-    if (!no) return;
-    setNewSite((ns) => ({ ...ns, looking: true }));
-    try {
-      const res = await fetch(`/api/elevator-info?elevatorNo=${encodeURIComponent(no)}`);
-      const data = await res.json();
-      const items = (data.items ?? []).map((it) => ({ ...it, checked: false })); // 기본 미선택 — 계약 호기만 명시적으로 체크
-      if (!items.length) { alert("해당 고유번호로 건물을 찾지 못했습니다"); setNewSite((ns) => ({ ...ns, looking: false })); return; }
-      setNewSite((ns) => ({
-        ...ns,
-        looking: false,
-        found: items,
-        name: ns.name || items[0].buldNm || "",
-        address: ns.address || `${items[0].address1 ?? ""}${items[0].address2 ?? ""}`.trim(),
-      }));
-    } catch {
-      alert("공단 조회에 실패했습니다");
-      setNewSite((ns) => ({ ...ns, looking: false }));
-    }
-  }
-
-  async function createSite() {
-    if (!newSite.name.trim()) return;
-    const id = "site-" + Date.now();
-    const picked = (newSite.found ?? []).filter((it) => it.checked);
-    // 이미 다른 현장에 등록된 승강기인지 사전 확인 (gov_no는 전국 유일)
-    const dup = picked.map((it) => ({ it, u: units.find((u) => u.govNo === it.elevatorNo) })).find((x) => x.u);
-    if (dup) {
-      const dupSite = sites.find((x) => x.id === dup.u.siteId);
-      alert(`승강기 ${dup.it.elevatorNo}는 이미 "${dupSite?.name ?? "다른 현장"}"에 등록되어 있습니다.`);
-      return;
-    }
-    const count = picked.length || Math.max(1, Number(newSite.unitCount) || 1);
-    const { error } = await supabase.from("sites").insert({
-      id, name: newSite.name.trim(), address: newSite.address || null,
-      contract_type: newSite.contractType, unit_count: count,
-      assigned_engineer: newSite.engineer || null,
-      gov_elevator_nos: picked.length ? picked.map((it) => it.elevatorNo) : null,
-    });
-    if (error) { alert("등록 실패: " + error.message); return; }
-    const unitRows = picked.length
-      ? picked.map((it, i) => ({
-          site_id: id, seq: i + 1, unit_no: `${i + 1}호기`,
-          gov_no: it.elevatorNo,
-          unit_type: (it.elvtrDivNm ?? "엘리베이터").includes("에스컬레이터") ? "에스컬레이터" : "엘리베이터",
-          install_date: it.frstInstallationDe || null,
-        }))
-      : Array.from({ length: count }, (_, i) => ({ site_id: id, seq: i + 1, unit_no: `${i + 1}호기` }));
-    const { data: created, error: unitError } = await supabase.from("units").insert(unitRows).select();
-    if (unitError) {
-      await supabase.from("sites").delete().eq("id", id); // 호기 생성 실패 시 현장도 되돌림
-      alert("호기 생성 실패: " + unitError.message);
-      return;
-    }
-    const p = profiles.find((x) => x.name === newSite.engineer);
-    if (p) await supabase.from("site_assignments").insert({ site_id: id, tech_id: p.id, is_lead: true });
-    const s = { id, name: newSite.name.trim(), address: newSite.address, contractType: newSite.contractType, unitCount: count, assignedEngineer: newSite.engineer || null, govElevatorNos: [] };
-    setData((prev) => ({ ...prev, sites: [...prev.sites, s], units: [...prev.units, ...(created ?? []).map(mapUnit)] }));
-    setNewSite(null);
-    select(s);
-  }
-
   return (
     <div className="max-w-[100rem]">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -480,87 +415,14 @@ export default function SitesAdmin({ data, setData }) {
           <h1 className="text-xl font-extrabold">현장관리</h1>
           <p className="text-xs text-slate-500 mt-0.5">호기(승강기 1대) 단위로 모델·설치일·승강기고유번호를 관리합니다</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setImporting(true)}
-            className="text-sm font-bold text-blue-700 border border-blue-200 bg-white rounded-xl px-4 py-2.5 whitespace-nowrap">
-            공단 엑셀 일괄 등록
-          </button>
-          <button onClick={() => setNewSite({ name: "", address: "", contractType: CONTRACT_TYPES[0], unitCount: 1, engineer: "" })}
-            className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
-            <Plus size={15} /> 새 현장 등록
-          </button>
-        </div>
+        {/* 현장 등록은 공단 엑셀 업로드로만 — API 단건 등록은 팀 결정으로 제거 (2026-07-17) */}
+        <button onClick={() => setImporting(true)}
+          className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
+          <Plus size={15} /> 공단 엑셀로 현장 등록
+        </button>
       </div>
 
       {importing && <ImportSites data={data} setData={setData} onClose={() => setImporting(false)} />}
-
-      {/* 신규 등록 폼 */}
-      {newSite && (
-        <div className="bg-white rounded-xl border border-blue-200 p-5 mb-4 space-y-4">
-          <div className="flex items-end gap-2">
-            <div className="w-64">
-              <p className="text-xs font-bold text-blue-700 mb-1">승강기고유번호로 자동 등록 (권장)</p>
-              <input className={inputCls} placeholder="예: 0136226 — 건물 내 아무 호기나 1개" value={newSite.govNo ?? ""} onChange={(e) => setNewSite({ ...newSite, govNo: e.target.value })} />
-            </div>
-            <button onClick={lookupGov} disabled={newSite.looking} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2.5 whitespace-nowrap">
-              {newSite.looking ? "조회 중..." : "공단에서 불러오기"}
-            </button>
-            <p className="text-[10px] text-slate-400 pb-1">번호 1개면 그 건물의 전체 호기·주소·설치일을 가져옵니다. 없으면 아래에 수기 입력.</p>
-          </div>
-          {newSite.found && (
-            <div className="border border-blue-100 rounded-xl overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-2 bg-blue-50">
-                <p className="text-xs font-bold text-blue-700">
-                  이 건물의 승강기 {newSite.found.length}대 — <span className="text-red-600">유지보수 계약 대상만 체크</span>하세요. 체크한 호기만 등록됩니다 ({newSite.found.filter((i) => i.checked).length}개 선택)
-                </p>
-                <button
-                  onClick={() => setNewSite((ns) => {
-                    const all = ns.found.every((x) => x.checked);
-                    return { ...ns, found: ns.found.map((x) => ({ ...x, checked: !all })) };
-                  })}
-                  className="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-2 py-1 bg-white whitespace-nowrap"
-                >
-                  {newSite.found.every((x) => x.checked) ? "전체 해제" : "전체 선택"}
-                </button>
-              </div>
-              {newSite.found.map((it, idx) => (
-                <label key={it.elevatorNo} className="flex items-center gap-3 px-4 py-2 border-t border-blue-50 text-sm cursor-pointer">
-                  <input type="checkbox" checked={it.checked} onChange={() =>
-                    setNewSite((ns) => ({ ...ns, found: ns.found.map((x, i) => (i === idx ? { ...x, checked: !x.checked } : x)) }))
-                  } />
-                  <span className="font-bold">{it.elevatorNo}</span>
-                  <span className="text-slate-500">{it.installationPlace || "-"} · {it.elvtrKindNm || "-"} · {it.elvtrForm || "-"} · 설치 {it.frstInstallationDe || "-"}</span>
-                  <span className="text-xs text-slate-400 ml-auto">검사 ~{it.applcEnDt || "-"} {it.resultNm ? `(${it.resultNm})` : ""}</span>
-                </label>
-              ))}
-            </div>
-          )}
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
-          <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">현장명 *</p><input className={inputCls} value={newSite.name} onChange={(e) => setNewSite({ ...newSite, name: e.target.value })} /></div>
-          <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">주소</p><input className={inputCls} value={newSite.address} onChange={(e) => setNewSite({ ...newSite, address: e.target.value })} /></div>
-          <div><p className="text-xs font-bold text-slate-500 mb-1">계약구분</p>
-            <select className={inputCls} value={newSite.contractType} onChange={(e) => setNewSite({ ...newSite, contractType: e.target.value })}>
-              {CONTRACT_TYPES.map((t) => <option key={t}>{t}</option>)}
-            </select></div>
-          <div><p className="text-xs font-bold text-slate-500 mb-1">호기 수 {newSite.found ? "(공단 결과 사용)" : ""}</p><input className={inputCls} type="number" min="1" disabled={!!newSite.found} value={newSite.found ? newSite.found.filter((i) => i.checked).length : newSite.unitCount} onChange={(e) => setNewSite({ ...newSite, unitCount: e.target.value })} /></div>
-          <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">담당 기사</p>
-            <select className={inputCls} value={newSite.engineer} onChange={(e) => setNewSite({ ...newSite, engineer: e.target.value })}>
-              <option value="">미배정</option>
-              {engineers.map((p) => <option key={p.id}>{p.name}</option>)}
-            </select></div>
-          <div className="col-span-2 md:col-span-4 flex gap-2 justify-end">
-            <button onClick={() => setNewSite(null)} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5">취소</button>
-            <button
-              onClick={createSite}
-              disabled={newSite.found && !newSite.found.some((i) => i.checked)}
-              className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2.5"
-            >
-              등록 {newSite.found ? `(체크한 ${newSite.found.filter((i) => i.checked).length}개 호기 생성)` : "(호기 자동 생성)"}
-            </button>
-          </div>
-          </div>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-7 gap-5 items-stretch">
         {/* 현장 목록 */}
