@@ -1,4 +1,5 @@
 import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft } from "lucide-react";
+import { TODAY_STR } from "@/lib/constants";
 
 
 /* ------------------------------------------------------------------ */
@@ -34,7 +35,7 @@ export function Badge({ result }) {
 
 
 export function DDay({ dueDate }) {
-  const today = new Date("2026-07-10");
+  const today = new Date(TODAY_STR);
   const due = new Date(dueDate);
   const diff = Math.ceil((due - today) / 86400000);
   let cls = "bg-slate-100 text-slate-600";

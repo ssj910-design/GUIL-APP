@@ -100,7 +100,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
         )}
         {visible.map((t) => {
           const isManual = t.source === "manual";
-          const overdue = !t.done && new Date(t.dueDate) < new Date("2026-07-10");
+          const overdue = !t.done && new Date(t.dueDate) < new Date(TODAY_STR);
           const requester = getRequesterName(t, materialRequests, quoteRequests);
           return (
             <div key={t.id} className="bg-white rounded-xl border border-slate-200 p-3.5">

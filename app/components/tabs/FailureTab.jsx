@@ -2,7 +2,7 @@ import { useState, useContext } from "react";
 import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName } from "@/lib/utils";
-import { FAULT_TYPES } from "@/lib/constants";
+import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
 import { useLiveInspections } from "@/app/hooks/useLiveInspections";
 import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -22,7 +22,7 @@ function FailureRegisterForm({ setFailures, goToUnassigned, onNotifyRoom }) {
     siteId: "", unit: "", faultType: "", faultDetail: "", notFault: false, assignee: "", reporterPhone: "", sendSms: false,
   });
   const site = sites.find((s) => s.id === form.siteId);
-  const nowLabel = "2026-07-10 " + new Date().toTimeString().slice(0, 5);
+  const nowLabel = TODAY_STR + " " + new Date().toTimeString().slice(0, 5);
   const canSubmit = !!site && !!form.faultType && form.reporterPhone.trim().length > 0;
 
   async function submit() {
@@ -34,7 +34,7 @@ function FailureRegisterForm({ setFailures, goToUnassigned, onNotifyRoom }) {
       elevatorNo: form.unit || site.elevatorNo,
       errorCode: form.faultType + (form.faultDetail ? ` (${form.faultDetail})` : ""),
       status: "미처리",
-      reportedAt: "07/10 " + new Date().toTimeString().slice(0, 5),
+      reportedAt: TODAY_STR.slice(5).replace("-", "/") + " " + new Date().toTimeString().slice(0, 5),
       assignee: form.assignee || null,
       notFault: form.notFault,
       reporterPhone: form.reporterPhone.trim(),

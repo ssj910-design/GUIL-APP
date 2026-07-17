@@ -8,6 +8,8 @@ import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapUnit } from "@/lib/mappers";
+import { TODAY_STR } from "@/lib/constants";
+import { addDays } from "@/lib/utils";
 import { useLiveInspections } from "@/app/hooks/useLiveInspections";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -242,9 +244,21 @@ export default function SitesAdmin({ data, setData }) {
   const [checkedIds, setCheckedIds] = useState(new Set());
   const [bulkEngineer, setBulkEngineer] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
+  // 계약 만료 판정: 종료일 30일 내(임박) / 지남(만료). 종료일 미입력 현장은 대상 아님.
+  const in30 = (d) => d && d >= TODAY_STR && d <= addDays(TODAY_STR, 30);
+  const isExpired = (d) => d && d < TODAY_STR;
+  const dday = (d) => Math.ceil((new Date(d) - new Date(TODAY_STR)) / 86400000);
+  const expiringSites = sites.filter((s) => s.isActive !== false && (in30(s.contractEnd) || isExpired(s.contractEnd)));
+  const endedSites = sites.filter((s) => s.isActive === false);
+  const [contractFilter, setContractFilter] = useState("all"); // all | expiring | ended
+
   const filtered = sites
     .filter((s) => !search || s.name.includes(search) || (s.address ?? "").includes(search))
-    .filter((s) => !onlyUnassigned || !s.assignedEngineer);
+    .filter((s) => !onlyUnassigned || !s.assignedEngineer)
+    .filter((s) =>
+      contractFilter === "ended" ? s.isActive === false :
+      contractFilter === "expiring" ? s.isActive !== false && (in30(s.contractEnd) || isExpired(s.contractEnd)) :
+      true);
   const engineers = profiles.filter((p) => p.role === "engineer");
   // contract_date/maintenance_cost 컬럼은 각 마이그레이션 실행 전엔 존재하지 않는다 — undefined면 아직 미실행으로 간주.
   const contractDateReady = sites.some((s) => s.contractDate !== undefined);
@@ -259,17 +273,34 @@ export default function SitesAdmin({ data, setData }) {
   const liveUnitInfo = useLiveInspections(siteUnitQueries);
   const liveOf = (unitId) => liveUnitInfo.find((i) => i.id === `gov-${unitId}`);
 
+  const [renew, setRenew] = useState(null); // 재계약 폼 {start, end} (null=닫힘)
+
   function select(s) {
     setSelectedId(s.id);
     setEditingInfo(false);
     setEditingContacts(false);
     setEditingUnits(false);
+    setRenew(null);
     setSiteForm({
       name: s.name, address: s.address ?? "", contractType: s.contractType ?? CONTRACT_TYPES[0],
       notes: s.notes ?? "", assignedEngineer: s.assignedEngineer ?? "",
       phone: s.phone ?? "", fax: s.fax ?? "", email: s.email ?? "",
-      contractDate: s.contractDate ?? "", maintenanceCost: s.maintenanceCost ?? "",
+      contractDate: s.contractDate ?? "", contractEnd: s.contractEnd ?? "", maintenanceCost: s.maintenanceCost ?? "",
     });
+  }
+
+  // 재계약 확정 — 새 기간 저장 + 계약종료 상태였다면 복구
+  async function renewContract() {
+    const { error } = await supabase.from("sites")
+      .update({ contract_date: renew.start || null, contract_end: renew.end || null, is_active: true })
+      .eq("id", selectedId);
+    if (error) { alert("재계약 저장 실패: " + error.message); return; }
+    setData((prev) => ({
+      ...prev,
+      sites: prev.sites.map((s) => (s.id === selectedId ? { ...s, contractDate: renew.start, contractEnd: renew.end, isActive: true } : s)),
+    }));
+    setRenew(null);
+    setSiteForm((f) => ({ ...f, contractDate: renew.start, contractEnd: renew.end }));
   }
 
   // 체크한 현장들에 담당 기사 일괄 배정 (site_assignments + 옛 컬럼 듀얼라이트)
@@ -352,6 +383,7 @@ export default function SitesAdmin({ data, setData }) {
       name: siteForm.name, address: siteForm.address, contract_type: siteForm.contractType, notes: siteForm.notes || null,
       phone: siteForm.phone || null, fax: siteForm.fax || null, email: siteForm.email || null,
       ...(contractDateReady ? { contract_date: siteForm.contractDate || null } : {}),
+      contract_end: siteForm.contractEnd || null,
       ...(maintenanceCostReady ? { maintenance_cost: siteForm.maintenanceCost === "" ? null : Number(siteForm.maintenanceCost) } : {}),
     }).eq("id", selectedId);
     setData((prev) => ({
@@ -424,11 +456,35 @@ export default function SitesAdmin({ data, setData }) {
 
       {importing && <ImportSites data={data} setData={setData} onClose={() => setImporting(false)} />}
 
+      {/* 계약 만료 알림 배너 */}
+      {expiringSites.length > 0 && contractFilter !== "expiring" && (
+        <div className="flex flex-wrap items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
+          <p className="text-sm font-bold text-amber-700 flex-1">
+            ⚠️ 계약 만료 30일 내(만료 포함) 현장 {expiringSites.length}곳 — 재계약 협의가 필요합니다
+          </p>
+          <button onClick={() => setContractFilter("expiring")} className="text-xs font-bold text-white bg-amber-600 rounded-lg px-3 py-1.5 whitespace-nowrap">
+            모아보기
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 xl:grid-cols-7 gap-5 items-stretch">
         {/* 현장 목록 */}
         <div className="xl:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col h-[28rem] xl:h-[40rem]">
           <div className="p-3 border-b border-slate-100 shrink-0 space-y-2">
             <input className={inputCls} placeholder="현장명·주소 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+            {/* 계약 상태 필터 — 종료 계약 모아보기 */}
+            <div className="flex gap-1.5">
+              {[["all", `전체 (${sites.length})`], ["expiring", `만료임박 (${expiringSites.length})`], ["ended", `종료 계약 (${endedSites.length})`]].map(([v, label]) => (
+                <button
+                  key={v}
+                  onClick={() => setContractFilter(v)}
+                  className={`text-[11px] font-bold rounded-lg px-2.5 py-1.5 border ${contractFilter === v ? "bg-blue-700 text-white border-blue-700" : "text-slate-500 border-slate-200"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <div className="flex items-center justify-between gap-2">
               <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 cursor-pointer">
                 <input type="checkbox" checked={onlyUnassigned} onChange={(e) => setOnlyUnassigned(e.target.checked)} />
@@ -518,10 +574,17 @@ export default function SitesAdmin({ data, setData }) {
                       </div>
                     </div>
                     <div className="flex items-start justify-between mt-3">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1 text-sm">
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 flex-1 text-sm">
                         <div><p className="text-xs font-bold text-slate-400 mb-1">계약구분</p><p className="font-semibold text-slate-800">{site.contractType || "-"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">보수료(VAT별도)</p><p className="font-semibold text-slate-800">{maintenanceCostReady ? (site.maintenanceCost != null ? Number(site.maintenanceCost).toLocaleString() + "원" : "-") : "마이그레이션 대기"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">계약일자</p><p className="font-semibold text-slate-800">{contractDateReady ? (site.contractDate || "-") : "마이그레이션 대기"}</p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">계약종료일</p>
+                          <p className="font-semibold text-slate-800">
+                            {site.contractEnd || "-"}
+                            {isExpired(site.contractEnd) && <span className="ml-1.5 text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-1.5 py-0.5">만료</span>}
+                            {in30(site.contractEnd) && <span className="ml-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 rounded-full px-1.5 py-0.5">D-{dday(site.contractEnd)}</span>}
+                          </p>
+                        </div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">담당 기사</p><p className="font-semibold text-slate-800">{site.assignedEngineer || "미배정"}</p></div>
                       </div>
                     </div>
@@ -536,6 +599,39 @@ export default function SitesAdmin({ data, setData }) {
                         수정하기
                       </button>
                     </div>
+                    {/* 재계약 안내 — 계약종료 상태이거나 종료일이 임박/지난 현장에만 표시 */}
+                    {(site.isActive === false || isExpired(site.contractEnd) || in30(site.contractEnd)) && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                        <p className="text-sm font-bold text-amber-700">
+                          {site.isActive === false
+                            ? "계약이 종료된 현장입니다"
+                            : isExpired(site.contractEnd)
+                            ? `계약이 만료되었습니다 (${site.contractEnd})`
+                            : `계약 만료까지 D-${dday(site.contractEnd)} (${site.contractEnd})`}
+                          {" — "}재계약 여부를 협의하세요
+                        </p>
+                        {!renew ? (
+                          <button
+                            onClick={() => {
+                              const start = site.contractEnd && site.contractEnd >= TODAY_STR ? addDays(site.contractEnd, 1) : TODAY_STR;
+                              setRenew({ start, end: addDays(start, 365) });
+                            }}
+                            className="mt-2 text-xs font-bold text-white bg-amber-600 rounded-lg px-3 py-2"
+                          >
+                            재계약 진행
+                          </button>
+                        ) : (
+                          <div className="flex flex-wrap items-end gap-2 mt-2">
+                            <div><p className="text-[10px] font-bold text-amber-700 mb-1">새 계약일자</p>
+                              <input className={inputCls} type="date" value={renew.start} onChange={(e) => setRenew({ ...renew, start: e.target.value })} /></div>
+                            <div><p className="text-[10px] font-bold text-amber-700 mb-1">새 계약종료일</p>
+                              <input className={inputCls} type="date" value={renew.end} onChange={(e) => setRenew({ ...renew, end: e.target.value })} /></div>
+                            <button onClick={renewContract} className="text-xs font-bold text-white bg-amber-600 rounded-lg px-3 py-2">재계약 확정</button>
+                            <button onClick={() => setRenew(null)} className="text-xs font-bold text-slate-500 border border-slate-200 rounded-lg px-3 py-2 bg-white">취소</button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <div className="flex justify-end">
                       <button onClick={toggleSiteActive} className="text-sm font-bold text-slate-400 border border-slate-200 rounded-xl px-3 py-2 whitespace-nowrap">
                         {site.isActive === false ? "계약 복구" : "계약종료"}
@@ -548,7 +644,7 @@ export default function SitesAdmin({ data, setData }) {
                       <div><p className="text-xs font-bold text-slate-500 mb-1">현장명</p><input className={inputCls} value={siteForm.name} onChange={(e) => setSiteForm({ ...siteForm, name: e.target.value })} /></div>
                       <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">주소</p><input className={inputCls} value={siteForm.address} onChange={(e) => setSiteForm({ ...siteForm, address: e.target.value })} /></div>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                       <div><p className="text-xs font-bold text-slate-500 mb-1">계약구분</p>
                         <select className={inputCls} value={siteForm.contractType} onChange={(e) => setSiteForm({ ...siteForm, contractType: e.target.value })}>
                           {CONTRACT_TYPES.map((t) => <option key={t}>{t}</option>)}
@@ -561,6 +657,10 @@ export default function SitesAdmin({ data, setData }) {
                       <div>
                         <p className="text-xs font-bold text-slate-500 mb-1">계약일자{!contractDateReady && " (마이그레이션 대기)"}</p>
                         <input className={inputCls} type="date" disabled={!contractDateReady} value={siteForm.contractDate} onChange={(e) => setSiteForm({ ...siteForm, contractDate: e.target.value })} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-500 mb-1">계약종료일</p>
+                        <input className={inputCls} type="date" value={siteForm.contractEnd} onChange={(e) => setSiteForm({ ...siteForm, contractEnd: e.target.value })} />
                       </div>
                       <div><p className="text-xs font-bold text-slate-500 mb-1">담당 기사</p>
                         <select className={inputCls} value={siteForm.assignedEngineer} onChange={(e) => setSiteForm({ ...siteForm, assignedEngineer: e.target.value })}>

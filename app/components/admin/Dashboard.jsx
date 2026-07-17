@@ -116,6 +116,19 @@ export default function Dashboard({ data }) {
         현장 {sites.length} · 호기 {units.length}대 · 기사 {profiles.filter((p) => p.role === "engineer").length}명 · 기준일 {TODAY_STR}
       </p>
 
+      {/* 계약 만료 임박 알림 — 종료일 30일 내(만료 포함) */}
+      {(() => {
+        const expiring = sites.filter((s) => s.isActive !== false && s.contractEnd && s.contractEnd <= addDays(TODAY_STR, 30));
+        return expiring.length > 0 ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-6">
+            <p className="text-sm font-bold text-amber-700">
+              ⚠️ 계약 만료 임박·만료 현장 {expiring.length}곳 — 현장관리에서 재계약을 진행하세요
+              <span className="font-semibold text-amber-600"> ({expiring.slice(0, 3).map((s) => s.name).join(", ")}{expiring.length > 3 ? ` 외 ${expiring.length - 3}곳` : ""})</span>
+            </p>
+          </div>
+        ) : null;
+      })()}
+
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-8">
         <Kpi label="미처리 고장" value={openFailures.length} tone={openFailures.length ? "text-red-600" : "text-slate-900"} />
         <Kpi label="출동/진행 중" value={activeFailures.length} tone="text-amber-600" />
