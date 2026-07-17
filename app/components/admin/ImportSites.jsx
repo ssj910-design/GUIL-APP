@@ -37,6 +37,8 @@ async function parseXlsx(file) {
 }
 
 // 파일 행들 → { 건물키: { name, address, units: [...] } }
+// ⚠️ 안전관리자·담당자 이름 열은 의도적으로 불러오지 않는다 — 공단 데이터가 대부분
+// 부정확(가라)해서 빈 상태로 두고 진짜 연락처만 수기 등록하기로 함 (2026-07-17 팀 결정)
 function toPlan(rows, existingGovNos) {
   const header = rows[0].map((h) => (h ?? "").trim());
   const col = (name) => header.findIndex((h) => h.replace(/\s/g, "") === name.replace(/\s/g, ""));
