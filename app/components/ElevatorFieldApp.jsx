@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, LayoutGrid, Monitor, X } from "lucide-react";
+import { Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor } from "@/lib/utils";
@@ -34,10 +34,6 @@ const TABS = [
   { id: "room", label: "우리방", icon: MessagesSquare },
   { id: "admin", label: "관리자 모드", icon: Settings },
 ];
-
-// 하단 바에는 매일 쓰는 4개만 고정하고 나머지는 "더보기" 메뉴로 취합한다.
-const BAR_IDS = ["home", "sites", "failure", "checkup"];
-const MORE_TAB = { id: "more", label: "더보기", icon: LayoutGrid };
 
 
 /* ------------------------------------------------------------------ */
@@ -218,14 +214,14 @@ export default function App() {
     return () => clearInterval(t);
   }, [session, skipLogin]);
 
-  // 우리방을 여는 순간(열려 있는 동안 새 글이 와도) 읽음 처리
+  // 우리방을 보는 순간(플로팅 시트든 탭이든, 보는 동안 새 글이 와도) 읽음 처리
   useEffect(() => {
-    if (!roomOpen || !profile) return;
+    if ((!roomOpen && tab !== "room") || !profile) return;
     const now = new Date().toISOString();
     setFeedReadAt(now);
     const pid = profileIdByName(profilesAll, profile.name);
     if (pid) supabase.from("profiles").update({ feed_read_at: now }).eq("id", pid);
-  }, [roomOpen, feed.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [roomOpen, tab, feed.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // v2 마이그레이션이 실행된 DB인지 (units 존재 여부로 판단).
   // 마이그레이션 전 DB에 새 컬럼을 보내면 insert 전체가 실패하므로 반드시 이 가드를 통과해야 한다.
@@ -907,9 +903,8 @@ export default function App() {
     );
   }
 
-  const tabTitle = tab === "more" ? "전체 메뉴" : TABS.find((t) => t.id === tab)?.label ?? "";
-  const barTabs = [...TABS.filter((t) => BAR_IDS.includes(t.id)), MORE_TAB];
-  const moreTabs = TABS.filter((t) => !BAR_IDS.includes(t.id) && t.id !== "room" && (t.id !== "admin" || profile?.role === "admin"));
+  const tabTitle = TABS.find((t) => t.id === tab)?.label ?? "";
+  const visibleTabs = TABS.filter((t) => t.id !== "admin" || profile?.role === "admin");
 
   // 우리방 안읽음/멘션 — 세션 로컬 읽음 시각이 있으면 그걸, 없으면 DB(profiles.feed_read_at) 기준
   const myName = profile?.name ?? "";
@@ -989,31 +984,11 @@ export default function App() {
               quoteRequests={quoteRequests}
             />
           )}
-          {tab === "more" && (
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="grid grid-cols-3 gap-3">
-                {moreTabs.map(({ id, label, icon: Icon }) => (
-                  <button
-                    key={id}
-                    onClick={() => setTab(id)}
-                    className="bg-white border border-slate-200 rounded-xl py-5 flex flex-col items-center gap-2"
-                  >
-                    <Icon size={22} className="text-blue-700" />
-                    <span className="text-xs font-bold text-slate-700">{label}</span>
-                  </button>
-                ))}
-                {profile.role === "admin" && (
-                  <a href="/admin" className="bg-blue-950 rounded-xl py-5 flex flex-col items-center gap-2">
-                    <Monitor size={22} className="text-white" />
-                    <span className="text-xs font-bold text-white">관리자 콘솔</span>
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
+          {tab === "room" && <RoomTab feed={feed} onSendChat={handleSendFeedPost} onToggleLike={handleToggleLike} />}
           {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onUpdateTodoDescription={handleUpdateTodoDescription} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
 
-          {/* 우리방 플로팅 버튼 — 어느 탭에서든 즉시 팀 채팅 */}
+          {/* 우리방 플로팅 버튼 — 어느 탭에서든 즉시 팀 채팅 (우리방 탭에서는 숨김) */}
+          {tab !== "room" && (
           <button
             onClick={() => setRoomOpen(true)}
             aria-label="우리방 열기"
@@ -1031,6 +1006,7 @@ export default function App() {
               </span>
             )}
           </button>
+          )}
 
           {/* 우리방 바텀시트 */}
           {roomOpen && (
@@ -1051,19 +1027,23 @@ export default function App() {
             </div>
           )}
 
-          {/* bottom nav — 고정 4개 + 더보기 (더보기 하위 화면에서도 더보기가 활성 표시) */}
-          <div className="shrink-0 bg-white border-t border-slate-200 flex" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-            {barTabs.map((t) => {
+          {/* bottom nav — 기존 형태(전체 탭 가로 스크롤), 팀 합의로 원복 (2026-07-17) */}
+          <div
+            className="shrink-0 bg-slate-50 border-t-2 border-slate-300 flex overflow-x-auto"
+            style={{ boxShadow: "0 -4px 6px -1px rgba(0,0,0,0.1)" }}
+          >
+            {visibleTabs.map((t) => {
               const Icon = t.icon;
-              const active = t.id === "more" ? !BAR_IDS.includes(tab) : tab === t.id;
+              const active = tab === t.id;
               return (
                 <button
                   key={t.id}
                   onClick={() => setTab(t.id)}
-                  className="flex-1 flex flex-col items-center justify-center gap-1 pt-2.5 pb-2"
+                  className={`flex flex-col items-center justify-center gap-1 py-3 px-2 shrink-0 border-r border-slate-200 last:border-r-0 ${active ? "bg-blue-900" : "bg-transparent"}`}
+                  style={{ minWidth: "68px" }}
                 >
-                  <Icon size={20} className={active ? "text-blue-700" : "text-slate-400"} strokeWidth={active ? 2.5 : 2} />
-                  <span className={`text-[10px] leading-tight font-bold ${active ? "text-blue-700" : "text-slate-400"}`}>{t.label}</span>
+                  <Icon size={19} className={active ? "text-white" : "text-slate-400"} strokeWidth={active ? 2.75 : 2} />
+                  <span className={`text-[10px] leading-tight text-center font-bold ${active ? "text-white" : "text-slate-500"}`}>{t.label}</span>
                 </button>
               );
             })}
