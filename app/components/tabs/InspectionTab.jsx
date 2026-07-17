@@ -1,6 +1,6 @@
 import { useState, useContext } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { RESULT_LABEL, TODAY_STR } from "@/lib/constants";
+import { TODAY_STR } from "@/lib/constants";
 import { unitsToInspections } from "@/lib/utils";
 import { Badge, DDay, PhotoUpload, FilterBar, PrimaryButton, Sheet, Field, inputCls } from "@/app/components/ui";
 import { SitesContext, UnitsContext } from "@/app/components/context";
@@ -24,16 +24,12 @@ export function InspectionTab({ inspections, setInspections }) {
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
   const combined = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId))];
 
-  const dueSoon = combined
-    .filter((i) => {
-      if (!i.id?.startsWith("gov-")) return !i.result;
-      // 조건부합격/불합격은 도래현장이 아닌 조건부/불합격 탭에서만 보여줍니다.
-      if (i.result !== "pass") return false;
-      // 유효기한 기준 과거 60일(연체) ~ 미래 60일을 도래현장으로 봅니다 (관리자 대시보드와 동일 기준).
-      const daysLeft = Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000);
-      return daysLeft >= -60 && daysLeft <= 60;
-    })
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  // 도래현장: 관리자가 수기입력한 검사일자(inspections.due_date) 기준, 검사일이 30일 이내로 남은 현장만 (국가승강기정보센터 API 연동 현장은 제외)
+  const dueSoon = inspections
+    .filter((i) => i.dueDate && !i.result)
+    .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) }))
+    .filter((i) => i.daysLeft >= 0 && i.daysLeft <= 30)
+    .sort((a, b) => a.daysLeft - b.daysLeft);
   const flagged = combined
     .filter((i) => i.result === "conditional" || i.result === "fail")
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
@@ -109,40 +105,28 @@ export function InspectionTab({ inspections, setInspections }) {
           dueSoon.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-10">도래한 검사 현장이 없습니다</p>
           ) : (
-            dueSoon.map((insp) => {
-              const isLive = insp.id?.startsWith("gov-");
-              return (
-                <div key={insp.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
-                    <DDay dueDate={insp.dueDate} />
-                  </div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs text-slate-500">{insp.type}</span>
-                    <span className="text-slate-300 text-xs">·</span>
-                    <span className="text-xs text-slate-500">{insp.org}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    {isLive ? (
-                      <>
-                        <span className="text-[11px] text-emerald-600 font-semibold">국가승강기정보센터 실시간 조회 · {RESULT_LABEL[insp.result]}</span>
-                        <span className="text-[11px] text-slate-400">유효기간 ~{insp.dueDate}</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-[11px] text-slate-400">검사 결과 미등록</span>
-                        <button
-                          onClick={() => startRegister(insp)}
-                          className="text-xs font-bold text-white bg-blue-700 px-3 py-1.5 rounded-lg active:bg-blue-800"
-                        >
-                          결과 등록
-                        </button>
-                      </>
-                    )}
-                  </div>
+            dueSoon.map((insp) => (
+              <div key={insp.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
+                  <DDay dueDate={insp.dueDate} />
                 </div>
-              );
-            })
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs text-slate-500">{insp.type}</span>
+                  <span className="text-slate-300 text-xs">·</span>
+                  <span className="text-xs text-slate-500">{insp.org}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-slate-400">검사 결과 미등록</span>
+                  <button
+                    onClick={() => startRegister(insp)}
+                    className="text-xs font-bold text-white bg-blue-700 px-3 py-1.5 rounded-lg active:bg-blue-800"
+                  >
+                    결과 등록
+                  </button>
+                </div>
+              </div>
+            ))
           )
         ) : flagged.length === 0 ? (
           <p className="text-xs text-slate-400 text-center py-10">조건부·불합격 현장이 없습니다</p>

@@ -88,9 +88,9 @@ export default function Dashboard({ data }) {
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
   const combinedInspections = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId))];
 
-  const dueInspections = combinedInspections
-    .filter((i) => (i.id?.startsWith("gov-") ? i.result === "pass" : !i.result))
-    .filter((i) => i.dueDate >= TODAY_STR && i.dueDate <= addDays(TODAY_STR, 60))
+  // 금일검사현장: 국가승강기정보센터 API 연동 현장은 제외하고, 관리자가 수기입력한 검사일자(inspections.due_date) 기준으로만 판단한다.
+  const todayInspections = inspections
+    .filter((i) => i.dueDate === TODAY_STR)
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
   const flaggedInspections = combinedInspections
@@ -212,14 +212,14 @@ export default function Dashboard({ data }) {
           </table></div>
         </section>
 
-        {/* 검사 도래 */}
+        {/* 금일검사현장 */}
         <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <h2 className="px-5 py-3 text-sm font-bold border-b border-slate-100">검사 도래 (60일 이내)</h2>
-          {dueInspections.length === 0 ? (
-            <p className="text-xs text-slate-400 text-center py-10">도래 예정 검사가 없습니다</p>
+          <h2 className="px-5 py-3 text-sm font-bold border-b border-slate-100">금일검사현장</h2>
+          {todayInspections.length === 0 ? (
+            <p className="text-xs text-slate-400 text-center py-10">오늘 예정된 검사가 없습니다</p>
           ) : (
             <ul>
-              {dueInspections.map((i) => (
+              {todayInspections.map((i) => (
                 <li key={i.id} className="flex items-center justify-between px-5 py-2.5 border-b border-slate-50 text-sm">
                   <div>
                     <p className="font-semibold">{i.siteName} · {i.elevatorNo}</p>
