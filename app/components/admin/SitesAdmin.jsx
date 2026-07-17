@@ -581,8 +581,12 @@ export default function SitesAdmin({ data, setData }) {
                         <div><p className="text-xs font-bold text-slate-400 mb-1">계약종료일</p>
                           <p className="font-semibold text-slate-800">
                             {site.contractEnd || "-"}
-                            {isExpired(site.contractEnd) && <span className="ml-1.5 text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-1.5 py-0.5">만료</span>}
-                            {in30(site.contractEnd) && <span className="ml-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 rounded-full px-1.5 py-0.5">D-{dday(site.contractEnd)}</span>}
+                            {/* D-day 상시 표시 — 통보 기한 관리를 위해 멀어도 보여준다 (묵시적 갱신 대비) */}
+                            {site.contractEnd && (
+                              isExpired(site.contractEnd)
+                                ? <span className="ml-1.5 text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-1.5 py-0.5">D+{Math.abs(dday(site.contractEnd))} 만료</span>
+                                : <span className={`ml-1.5 text-[10px] font-bold rounded-full px-1.5 py-0.5 ${in30(site.contractEnd) ? "text-amber-600 bg-amber-50" : "text-blue-600 bg-blue-50"}`}>D-{dday(site.contractEnd)}</span>
+                            )}
                           </p>
                         </div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">담당 기사</p><p className="font-semibold text-slate-800">{site.assignedEngineer || "미배정"}</p></div>
@@ -609,6 +613,9 @@ export default function SitesAdmin({ data, setData }) {
                             ? `계약이 만료되었습니다 (${site.contractEnd})`
                             : `계약 만료까지 D-${dday(site.contractEnd)} (${site.contractEnd})`}
                           {" — "}재계약 여부를 협의하세요
+                        </p>
+                        <p className="text-[11px] text-amber-600 mt-0.5">
+                          별도 통보 없이 지나가면 관행상 묵시적 갱신될 수 있어요 — 조건 변경·해지는 만료 전에 통보해야 합니다
                         </p>
                         {!renew ? (
                           <button

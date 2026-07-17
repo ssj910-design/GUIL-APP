@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { TODAY_STR } from "@/lib/constants";
 import { PhotoUpload, FilterBar, PrimaryButton, Sheet, Field, inputCls } from "@/app/components/ui";
 
 
@@ -119,7 +120,7 @@ export function CheckupTab() {
 
       {openForm && (
         <Sheet title={`${openForm} 점검 등록`} onClose={() => setOpenForm(false)}>
-          <Field label="점검 예정일"><input type="date" className={inputCls} defaultValue="2026-07-14" /></Field>
+          <Field label="점검 예정일"><input type="date" className={inputCls} defaultValue={TODAY_STR} /></Field>
           <Field label="점검 사진"><PhotoUpload label="표준 화질 점검 사진 등록" /></Field>
           <Field label="특이사항"><textarea className={inputCls} rows={3} placeholder="예: 로프 장력 미세 저하, 다음 점검 시 재확인 필요" /></Field>
           <PrimaryButton onClick={() => setOpenForm(false)}>일정 저장</PrimaryButton>

@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Plus, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
+import { addDays } from "@/lib/utils";
 import {
   locOf, personOf, StatusBadge, AdminTable, FilterPills,
   Modal, SortableTh, sortRows, inputCls,
@@ -122,7 +123,7 @@ function TodoDetailModal({ t, data, onClose, onSave }) {
 function AssignTodoModal({ data, onClose, onCreate }) {
   const { sites, units, profiles } = data;
   const engineers = profiles.filter((p) => p.role === "engineer");
-  const [form, setForm] = useState({ siteId: "", unitId: "", title: "", description: "", assigneeId: "", dueDate: "" });
+  const [form, setForm] = useState({ siteId: "", unitId: "", title: "", description: "", assigneeId: "", dueDate: addDays(TODAY_STR, 7) });
   const siteUnits = units.filter((u) => u.siteId === form.siteId);
   const valid = form.siteId && form.title.trim() && form.assigneeId;
 
