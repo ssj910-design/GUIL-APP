@@ -54,7 +54,9 @@ function Kpi({ label, value, tone = "text-slate-900" }) {
 
 export default function StatsAdmin({ data }) {
   const { units, sites, failures, billings, todos, profiles } = data;
-  const active = units.filter((u) => u.isActive !== false);
+  // 계약종료(soft delete)된 현장의 호기는 관리 대수에서 제외
+  const deadSites = new Set(sites.filter((s) => s.isActive === false).map((s) => s.id));
+  const active = units.filter((u) => u.isActive !== false && !deadSites.has(u.siteId));
   const in60 = (d) => d && d >= TODAY_STR && d <= addDays(TODAY_STR, 60);
   const ageOf = (u) => (u.installDate ? new Date(TODAY_STR).getFullYear() - Number(u.installDate.slice(0, 4)) : null);
 
