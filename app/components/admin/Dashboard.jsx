@@ -272,10 +272,8 @@ export default function Dashboard({ data }) {
                     </div>
                     <span className="text-[11px] text-slate-400 shrink-0 ml-2 text-right">
                       <span className="block">보완기한 {i.dueDate || "미정"}</span>
-                      {i.scheduleDate && (
-                        <span className="block text-blue-600 font-semibold">
-                          검사일정 {i.scheduleDate}{i.scheduleTime ? ` ${i.scheduleTime}` : ""}
-                        </span>
+                      {i.scheduleTime && (
+                        <span className="block text-blue-600 font-semibold">검사일정 {i.scheduleTime}</span>
                       )}
                     </span>
                   </div>
