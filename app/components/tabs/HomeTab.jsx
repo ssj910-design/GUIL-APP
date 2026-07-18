@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { ShieldCheck, AlertOctagon } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection } from "@/lib/utils";
 import { Badge, DDay, DrillHeader, SmsToast } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -61,7 +61,6 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
 
   // 검사유효기간은 units의 DB 캐시를 쓴다 (전 호기 실시간 API 호출 금지 — 트래픽 한도).
   const allUnits = useContext(UnitsContext);
-  const unitById = new Map(allUnits.map((u) => [u.id, u]));
   const mySiteIds = new Set(mySites.map((s) => s.id));
   const liveInspections = unitsToInspections(allUnits, mySites).filter((i) => mySiteIds.has(i.siteId));
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
@@ -189,7 +188,7 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
             ) : (
               <div className="space-y-1.5">
                 {dueSoon.map((i) => {
-                  const priorUnit = i.unitId ? unitById.get(i.unitId) : null;
+                  const priorUnit = findUnitForInspection(i, allUnits);
                   const priorConditional = priorUnit?.inspectionResult === "조건부합격";
                   return (
                     <div key={i.id} className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2 gap-2">

@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection } from "@/lib/utils";
 import { Badge, DDay, PhotoUpload, FilterBar, PrimaryButton, Sheet, Field, inputCls } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -25,7 +25,6 @@ export function InspectionTab({ inspections, setInspections }) {
   // 검사유효기간은 units의 DB 캐시를 쓴다 (전 호기 실시간 API 호출 금지 — 트래픽 한도).
   // 조건부/불합격 현장은 담당현장만(관리자는 전체) — 도래현장 탭은 기존대로 전체 유지.
   const allUnits = useContext(UnitsContext);
-  const unitById = new Map(allUnits.map((u) => [u.id, u]));
   const liveInspections = unitsToInspections(allUnits, mySites).filter((i) => mySiteIds.has(i.siteId));
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
   const combined = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId) && mySiteIds.has(i.siteId))];
@@ -118,7 +117,7 @@ export function InspectionTab({ inspections, setInspections }) {
             <p className="text-xs text-slate-400 text-center py-10">도래한 검사 현장이 없습니다</p>
           ) : (
             dueSoon.map((insp) => {
-              const priorUnit = insp.unitId ? unitById.get(insp.unitId) : null;
+              const priorUnit = findUnitForInspection(insp, allUnits);
               const priorConditional = priorUnit?.inspectionResult === "조건부합격";
               return (
               <div key={insp.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
