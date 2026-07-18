@@ -193,7 +193,7 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
             ) : (
               <div className="space-y-2">
                 {flagged.map((i) => {
-                  const isLive = i.id?.startsWith("gov-");
+                  const isLive = i.id?.startsWith("unit-");
                   return (
                     <div
                       key={i.id}

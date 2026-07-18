@@ -136,7 +136,7 @@ export function InspectionTab({ inspections, setInspections }) {
           <p className="text-xs text-slate-400 text-center py-10">조건부·불합격 현장이 없습니다</p>
         ) : (
           flagged.map((insp) => {
-            const isLive = insp.id?.startsWith("gov-");
+            const isLive = insp.id?.startsWith("unit-");
             return (
               <div
                 key={insp.id}
