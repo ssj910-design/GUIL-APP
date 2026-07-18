@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Badge, Sheet } from "@/app/components/ui";
 import { govDateToDashed, formatShortDate } from "@/lib/utils";
-import { mapGovResultToCode } from "@/app/hooks/useLiveInspections";
 
 
 function isValidDateStr(s) {
@@ -132,7 +131,10 @@ export function PriorConditionalBadge({ govElevatorNo, siteName, elevatorNo, onO
     };
   }, [govElevatorNo]);
 
-  if (mapGovResultToCode(record?.dispWords) !== "conditional") return null;
+  // "조건후합격"은 조건부합격 판정을 조치한 뒤 최종 승인된 회차에 붙는 표시(공단 dispWords 실데이터로 확인,
+  // 석산빌딩 사례) — 조건부합격과 함께 "이전에 지적사항이 있었던 이력"으로 취급한다.
+  const priorFlagged = record?.dispWords === "조건부합격" || record?.dispWords === "조건후합격";
+  if (!priorFlagged) return null;
 
   return (
     <button
@@ -146,7 +148,7 @@ export function PriorConditionalBadge({ govElevatorNo, siteName, elevatorNo, onO
       })}
       className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-300 active:bg-amber-200"
     >
-      직전 조건부합격
+      직전 {record.dispWords}
     </button>
   );
 }
