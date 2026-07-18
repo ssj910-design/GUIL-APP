@@ -52,6 +52,7 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const elevatorNo = searchParams.get("elevatorNo");
   const anchorDate = searchParams.get("anchorDate");
+  const latestOnly = searchParams.get("latestOnly");
   if (!elevatorNo) {
     return Response.json({ error: "elevatorNo가 필요합니다" }, { status: 400 });
   }
@@ -64,6 +65,12 @@ export async function GET(request) {
     return Response.json({ error: "검사이력 조회에 실패했습니다" }, { status: 502 });
   }
   const records = parseItems(safeXml).sort((a, b) => (inspectDateMs(b) ?? 0) - (inspectDateMs(a) ?? 0));
+
+  // 가장 최근 회차의 판정결과(dispWords)만 필요한 가벼운 조회 — 부적합 상세(getInspectFailList)는 호출하지 않는다.
+  // 검사도래현장 목록에서 "직전 검사가 조건부합격이었는지"만 확인할 때 씀(회차마다 부적합 상세까지 받는 전체이력 조회는 비쌈).
+  if (latestOnly) {
+    return Response.json({ record: records[0] ?? null });
+  }
 
   // anchorDate 없이 호출하면 검사이력 화면용으로 전체 회차를 최신순으로 반환한다.
   // 회차별 조회를 병렬로 몰아서 보내면 순간적으로 레이트리밋에 걸릴 수 있어(현재&미래 사례) 순차로 처리한다.

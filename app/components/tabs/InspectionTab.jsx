@@ -4,7 +4,7 @@ import { TODAY_STR } from "@/lib/constants";
 import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection } from "@/lib/utils";
 import { Badge, DDay, PhotoUpload, FilterBar, PrimaryButton, Sheet, Field, inputCls } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
-import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
+import { InspectionFailDetailSheet, PriorConditionalBadge } from "@/app/components/InspectionFailDetailSheet";
 
 
 /* ------------------------------------------------------------------ */
@@ -118,27 +118,17 @@ export function InspectionTab({ inspections, setInspections }) {
           ) : (
             dueSoon.map((insp) => {
               const priorUnit = findUnitForInspection(insp, allUnits);
-              const priorConditional = priorUnit?.inspectionResult === "조건부합격";
               return (
               <div key={insp.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
                   <div className="shrink-0 flex items-center gap-1.5">
-                    {priorConditional && (
-                      <button
-                        onClick={() => setInspectionFailTarget({
-                          id: `unit-${priorUnit.id}`,
-                          siteName: insp.siteName,
-                          elevatorNo: insp.elevatorNo,
-                          result: "conditional",
-                          govElevatorNo: priorUnit.govNo,
-                          startDate: priorUnit.inspectionStart,
-                        })}
-                        className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-300 active:bg-amber-200"
-                      >
-                        직전 조건부합격
-                      </button>
-                    )}
+                    <PriorConditionalBadge
+                      govElevatorNo={priorUnit?.govNo}
+                      siteName={insp.siteName}
+                      elevatorNo={insp.elevatorNo}
+                      onOpen={setInspectionFailTarget}
+                    />
                     <span className="text-xs font-bold text-blue-700 whitespace-nowrap">
                       {insp.dueDate ? formatMonthDay(insp.dueDate) : "-"}{insp.dueTime ? ` ${insp.dueTime}` : ""}
                     </span>

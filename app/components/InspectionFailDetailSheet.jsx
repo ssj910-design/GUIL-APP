@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Badge, Sheet } from "@/app/components/ui";
 import { govDateToDashed, formatShortDate } from "@/lib/utils";
+import { mapGovResultToCode } from "@/app/hooks/useLiveInspections";
 
 
 function isValidDateStr(s) {
@@ -108,5 +109,44 @@ export function InspectionFailDetailSheet({ inspection, preloaded, onClose }) {
         </div>
       )}
     </Sheet>
+  );
+}
+
+
+// 검사도래현장(dueSoon) 목록에서 직전 검사(가장 최근 과거 회차)가 조건부합격이었으면 작은 배지로 표시하고,
+// 클릭 시 그 회차의 부적합 상세를 연다. units 캐시(inspection_result)는 "현재" 판정만 담고 있어
+// (조건부합격을 조치해서 합격으로 갱신되면 이력이 사라짐) 여기선 검사이력 API에서 가장 최근 회차의
+// 판정결과(dispWords)를 직접 확인한다 — 부적합 상세(getInspectFailList)까지는 받지 않는 가벼운 조회.
+export function PriorConditionalBadge({ govElevatorNo, siteName, elevatorNo, onOpen }) {
+  const [record, setRecord] = useState(null);
+
+  useEffect(() => {
+    if (!govElevatorNo) return;
+    let cancelled = false;
+    fetch(`/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(govElevatorNo)}&latestOnly=1`)
+      .then((res) => res.json())
+      .then((data) => { if (!cancelled) setRecord(data.record ?? null); })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [govElevatorNo]);
+
+  if (mapGovResultToCode(record?.dispWords) !== "conditional") return null;
+
+  return (
+    <button
+      onClick={() => onOpen({
+        id: `unit-hist-${govElevatorNo}`,
+        siteName,
+        elevatorNo,
+        result: "conditional",
+        govElevatorNo,
+        startDate: govDateToDashed(record.inspctDe),
+      })}
+      className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-300 active:bg-amber-200"
+    >
+      직전 조건부합격
+    </button>
   );
 }
