@@ -256,9 +256,11 @@ export default function Dashboard({ data }) {
                     <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
                     <Badge result={i.result} />
                   </div>
-                  <p className="text-[11px] text-slate-500 mb-1">{i.type} · {i.org}</p>
-                  <div className="flex items-center justify-between">
-                    <p className="text-[11px] text-red-600">{i.notes}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-slate-500">{i.type} · {i.org}</p>
+                      {i.notes && <p className="text-[11px] text-red-600 mt-0.5">{i.notes}</p>}
+                    </div>
                     <span className="text-[11px] text-slate-400 shrink-0 ml-2">보완기한 {i.dueDate || "미정"}</span>
                   </div>
                   {isLive && <p className="text-[10px] text-blue-600 font-semibold mt-1">클릭해서 부적합 상세 항목 보기</p>}

@@ -143,24 +143,24 @@ export function InspectionTab({ inspections, setInspections }) {
               <div
                 key={insp.id}
                 onClick={isLive ? () => setInspectionFailTarget(insp) : undefined}
-                className={`bg-white rounded-xl border border-red-100 p-3.5 touch-manipulation ${isLive ? "active:bg-slate-50 cursor-pointer" : ""}`}
+                className={`bg-white rounded-xl border border-red-100 p-3 touch-manipulation ${isLive ? "active:bg-slate-50 cursor-pointer" : ""}`}
               >
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center justify-between mb-1">
                   <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
                   <Badge result={insp.result} />
                 </div>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs text-slate-500">{insp.type}</span>
-                  <span className="text-slate-300 text-xs">·</span>
-                  <span className="text-xs text-slate-500">{insp.org}</span>
-                </div>
-                {insp.notes && <p className="text-[11px] text-red-600 leading-relaxed mb-1.5">지적사항: {insp.notes}</p>}
-                <div className="flex flex-col gap-0.5 mb-2.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-slate-400">보완기한</span>
-                    <DDay dueDate={insp.dueDate} />
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="min-w-0">
+                    <p className="text-xs text-slate-500">{insp.type} · {insp.org}</p>
+                    {insp.notes && <p className="text-[11px] text-red-600 leading-relaxed mt-0.5">지적사항: {insp.notes}</p>}
                   </div>
-                  {insp.dueDate && <span className="text-[10px] text-slate-400">{insp.dueDate}</span>}
+                  <span className="shrink-0 flex flex-col items-end gap-0.5">
+                    <span className="flex items-center gap-1">
+                      <span className="text-[10px] text-slate-400">보완기한</span>
+                      <DDay dueDate={insp.dueDate} />
+                    </span>
+                    {insp.dueDate && <span className="text-[10px] text-slate-400">{insp.dueDate}</span>}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   {insp.result === "fail" && <span className="text-[11px] text-red-500 font-semibold">재검사 필요</span>}
