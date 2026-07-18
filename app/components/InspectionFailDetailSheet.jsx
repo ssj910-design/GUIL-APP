@@ -3,7 +3,12 @@ import { Badge, Sheet } from "@/app/components/ui";
 import { govDateToDashed, formatShortDate } from "@/lib/utils";
 
 
+function isValidDateStr(s) {
+  return Boolean(s) && !Number.isNaN(new Date(s).getTime());
+}
+
 // inspection: 조건부/불합격 목록에서 클릭한 건(govElevatorNo·startDate 기준으로 가장 가까운 회차를 서버에서 찾음).
+// startDate가 없으면(조건부합격은 API에 검사일자 자체가 안 채워진 경우가 있음) 전체 이력을 받아 최신 회차를 쓴다.
 // preloaded: 이미 회차가 정해진 경우({ record, items, reason }, 검사이력 목록에서 특정 회차를 클릭했을 때) — 있으면 재조회하지 않는다.
 export function InspectionFailDetailSheet({ inspection, preloaded, onClose }) {
   const [retryCount, setRetryCount] = useState(0);
@@ -15,7 +20,8 @@ export function InspectionFailDetailSheet({ inspection, preloaded, onClose }) {
 
   // preloaded인 경우, 회차 고유 날짜(record.inspctDe)를 anchorDate로 넘겨 같은 회차를 다시 조회한다.
   const retryAnchorDate = preloaded ? govDateToDashed(preloaded.record?.inspctDe) : inspection?.startDate;
-  const canRetry = Boolean(inspection?.govElevatorNo && retryAnchorDate);
+  const hasValidAnchor = isValidDateStr(retryAnchorDate);
+  const canRetry = Boolean(inspection?.govElevatorNo);
 
   useEffect(() => {
     if (preloaded && retryCount === 0) return;
@@ -23,11 +29,25 @@ export function InspectionFailDetailSheet({ inspection, preloaded, onClose }) {
     async function load() {
       setState((s) => ({ ...s, loading: true }));
       try {
-        const res = await fetch(
-          `/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(inspection.govElevatorNo)}&anchorDate=${encodeURIComponent(retryAnchorDate)}`
-        );
+        const url = hasValidAnchor
+          ? `/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(inspection.govElevatorNo)}&anchorDate=${encodeURIComponent(retryAnchorDate)}`
+          : `/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(inspection.govElevatorNo)}`;
+        const res = await fetch(url);
         const data = await res.json();
-        if (!cancelled) setState({ loading: false, items: data.items ?? [], error: data.error ?? null, reason: data.reason ?? null, record: data.record ?? null });
+        if (cancelled) return;
+        if (hasValidAnchor) {
+          setState({ loading: false, items: data.items ?? [], error: data.error ?? null, reason: data.reason ?? null, record: data.record ?? null });
+        } else {
+          // anchorDate 없이 부르면 전체 이력을 최신순으로 받는다 — 첫 번째(최신) 회차를 쓴다.
+          const latest = (data.history ?? [])[0];
+          setState({
+            loading: false,
+            items: latest?.items ?? [],
+            error: data.error ?? null,
+            reason: latest ? latest.reason : "no_record",
+            record: latest?.record ?? null,
+          });
+        }
       } catch {
         if (!cancelled) setState({ loading: false, items: [], error: "조회에 실패했습니다", reason: null, record: null });
       }
@@ -36,7 +56,7 @@ export function InspectionFailDetailSheet({ inspection, preloaded, onClose }) {
     return () => {
       cancelled = true;
     };
-  }, [preloaded, retryCount, inspection?.govElevatorNo, retryAnchorDate]);
+  }, [preloaded, retryCount, inspection?.govElevatorNo, hasValidAnchor, retryAnchorDate]);
 
   const inspectedOn = state.record ? govDateToDashed(state.record.inspctDe) : null;
 
