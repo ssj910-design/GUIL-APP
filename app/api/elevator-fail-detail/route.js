@@ -14,21 +14,14 @@ function parseItems(xml) {
   });
 }
 
-// 레코드의 필드명을 모른 채로(응답 스펙 미확인) 날짜로 보이는 값을 전부 찾아 anchorTime과의
-// 최소 시간차를 구한다. appr_sdt/appr_edt 같은 요청 파라미터로 서버에 필터링을 맡기면
-// "승인일자"처럼 실제 검사일과 다른 날짜 기준으로 걸러져 엉뚱한 이력이 뽑힐 수 있어(대흥빌딩 사례),
-// 필터 없이 전체를 받아 클라이언트(서버 라우트)에서 직접 검사일과 제일 가까운 레코드를 고른다.
-function closestDateDiffMs(record, anchorTime) {
-  let best = Infinity;
-  for (const value of Object.values(record)) {
-    const m = /^(\d{4})-?(\d{2})-?(\d{2})/.exec(value ?? "");
-    if (!m) continue;
-    const t = new Date(`${m[1]}-${m[2]}-${m[3]}`).getTime();
-    if (Number.isNaN(t)) continue;
-    const diff = Math.abs(t - anchorTime);
-    if (diff < best) best = diff;
-  }
-  return best;
+// 실데이터로 확인된 실제 검사일자 필드는 inspctDe다(청담포레·대흥빌딩 응답에서 검증됨).
+// 그 외 필드(예: applcEnDt=이전 회차의 유효기간 종료일)는 다음 검사일 직전 날짜라 우연히 anchor와
+// 가까워 보일 수 있어(대흥빌딩에서 실제로 엉뚱한 회차가 뽑힌 원인), 날짜 비교는 inspctDe로만 한다.
+function inspectDateDiffMs(record, anchorTime) {
+  const m = /^(\d{4})-?(\d{2})-?(\d{2})/.exec(record.inspctDe ?? "");
+  if (!m) return Infinity;
+  const t = new Date(`${m[1]}-${m[2]}-${m[3]}`).getTime();
+  return Number.isNaN(t) ? Infinity : Math.abs(t - anchorTime);
 }
 
 const ONE_DAY_MS = 86400000;
@@ -54,14 +47,12 @@ export async function GET(request) {
     return Response.json({ error: "검사이력 조회에 실패했습니다" }, { status: 502 });
   }
 
-  // 이 승강기의 전체 검사이력 중 실제 검사일(anchorDate)과 가장 가까운 회차를 고른다.
-  // failCd 유무로 먼저 거르면 다른 회차의 부적합 이력이 섞여 나올 수 있으므로(대흥빌딩 사례),
-  // 날짜 근접도를 우선 기준으로 삼는다.
+  // 이 승강기의 전체 검사이력 중 inspctDe가 실제 검사일(anchorDate)과 가장 가까운 회차를 고른다.
   const records = parseItems(safeXml);
   let record = null;
   let bestDiff = Infinity;
   for (const r of records) {
-    const diff = closestDateDiffMs(r, anchorTime);
+    const diff = inspectDateDiffMs(r, anchorTime);
     if (diff < bestDiff) { bestDiff = diff; record = r; }
   }
   if (!record || bestDiff > MAX_MATCH_DAYS * ONE_DAY_MS) {
