@@ -21,6 +21,10 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
   const [date, setDate] = useState(i.dueDate ?? "");
   const [saving, setSaving] = useState(false);
   const dirty = date !== (i.dueDate ?? "");
+  const isFlagged = i.result === "conditional" || i.result === "fail";
+  // 조건부/불합격의 보완기한은 관리자 수기입력(다음 검사 예정일)이 아니라
+  // 국가승강기정보센터 검사 유효기간(유효기간종료일)을 기준으로 본다.
+  const ddayDate = isFlagged ? (i.apiDueDate || i.dueDate) : i.dueDate;
 
   return (
     <tr className={`border-b border-slate-50 ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`} onClick={clickable ? () => onOpenFail(i) : undefined}>
@@ -29,10 +33,14 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
       <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{i.org}</td>
       <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
         <input type="date" className={mobileInputCls} value={date} onChange={(e) => setDate(e.target.value)} />
-        {i.apiDueDate && <p className="text-[9px] text-emerald-600 mt-0.5">API 유효기간 참고 ~{i.apiDueDate}</p>}
+        {i.apiDueDate && (
+          <p className="text-[9px] text-emerald-600 mt-0.5">
+            {isFlagged ? "보완기한(검사 유효기간) " : "API 유효기간 참고 "}~{i.apiDueDate}
+          </p>
+        )}
       </td>
       <td className="px-3 py-2.5">
-        {i.dueDate ? <DDay dueDate={i.dueDate} /> : <span className="text-[10px] text-slate-400">미입력</span>}
+        {ddayDate ? <DDay dueDate={ddayDate} /> : <span className="text-[10px] text-slate-400">미입력</span>}
       </td>
       <td className="px-3 py-2.5">
         {i.result ? <Badge result={i.result} /> : <StatusBadge tone="slate">예정</StatusBadge>}
