@@ -25,6 +25,7 @@ export function InspectionTab({ inspections, setInspections }) {
   // 검사유효기간은 units의 DB 캐시를 쓴다 (전 호기 실시간 API 호출 금지 — 트래픽 한도).
   // 조건부/불합격 현장은 담당현장만(관리자는 전체) — 도래현장 탭은 기존대로 전체 유지.
   const allUnits = useContext(UnitsContext);
+  const unitById = new Map(allUnits.map((u) => [u.id, u]));
   const liveInspections = unitsToInspections(allUnits, mySites).filter((i) => mySiteIds.has(i.siteId));
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
   const combined = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId) && mySiteIds.has(i.siteId))];
@@ -116,13 +117,33 @@ export function InspectionTab({ inspections, setInspections }) {
           dueSoon.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-10">도래한 검사 현장이 없습니다</p>
           ) : (
-            dueSoon.map((insp) => (
+            dueSoon.map((insp) => {
+              const priorUnit = insp.unitId ? unitById.get(insp.unitId) : null;
+              const priorConditional = priorUnit?.inspectionResult === "조건부합격";
+              return (
               <div key={insp.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
-                  <span className="shrink-0 text-xs font-bold text-blue-700 whitespace-nowrap">
-                    {insp.dueDate ? formatMonthDay(insp.dueDate) : "-"}{insp.dueTime ? ` ${insp.dueTime}` : ""}
-                  </span>
+                  <div className="shrink-0 flex items-center gap-1.5">
+                    {priorConditional && (
+                      <button
+                        onClick={() => setInspectionFailTarget({
+                          id: `unit-${priorUnit.id}`,
+                          siteName: insp.siteName,
+                          elevatorNo: insp.elevatorNo,
+                          result: "conditional",
+                          govElevatorNo: priorUnit.govNo,
+                          startDate: priorUnit.inspectionStart,
+                        })}
+                        className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-300 active:bg-amber-200"
+                      >
+                        직전 조건부합격
+                      </button>
+                    )}
+                    <span className="text-xs font-bold text-blue-700 whitespace-nowrap">
+                      {insp.dueDate ? formatMonthDay(insp.dueDate) : "-"}{insp.dueTime ? ` ${insp.dueTime}` : ""}
+                    </span>
+                  </div>
                 </div>
                 <div className="mb-2">
                   <p className="text-[11px] text-slate-400">{stripCityPrefix(siteById.get(insp.siteId)?.address)}</p>
@@ -138,7 +159,8 @@ export function InspectionTab({ inspections, setInspections }) {
                   </button>
                 </div>
               </div>
-            ))
+              );
+            })
           )
         ) : flagged.length === 0 ? (
           <p className="text-xs text-slate-400 text-center py-10">조건부·불합격 현장이 없습니다</p>

@@ -61,6 +61,7 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
 
   // 검사유효기간은 units의 DB 캐시를 쓴다 (전 호기 실시간 API 호출 금지 — 트래픽 한도).
   const allUnits = useContext(UnitsContext);
+  const unitById = new Map(allUnits.map((u) => [u.id, u]));
   const mySiteIds = new Set(mySites.map((s) => s.id));
   const liveInspections = unitsToInspections(allUnits, mySites).filter((i) => mySiteIds.has(i.siteId));
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
@@ -187,18 +188,39 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
               <p className="text-xs text-slate-400 py-1.5">30일 이내 검사 도래 현장이 없습니다.</p>
             ) : (
               <div className="space-y-1.5">
-                {dueSoon.map((i) => (
-                  <div key={i.id} className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2 gap-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
-                      <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
-                      <p className="text-[11px] text-slate-500">{i.type}</p>
+                {dueSoon.map((i) => {
+                  const priorUnit = i.unitId ? unitById.get(i.unitId) : null;
+                  const priorConditional = priorUnit?.inspectionResult === "조건부합격";
+                  return (
+                    <div key={i.id} className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2 gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
+                        <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
+                        <p className="text-[11px] text-slate-500">{i.type}</p>
+                      </div>
+                      <div className="shrink-0 flex items-center gap-1.5">
+                        {priorConditional && (
+                          <button
+                            onClick={() => setInspectionFailTarget({
+                              id: `unit-${priorUnit.id}`,
+                              siteName: i.siteName,
+                              elevatorNo: i.elevatorNo,
+                              result: "conditional",
+                              govElevatorNo: priorUnit.govNo,
+                              startDate: priorUnit.inspectionStart,
+                            })}
+                            className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-300 active:bg-amber-200"
+                          >
+                            직전 조건부합격
+                          </button>
+                        )}
+                        <span className="text-xs font-bold text-blue-700 whitespace-nowrap">
+                          {i.dueDate ? formatMonthDay(i.dueDate) : "-"}{i.dueTime ? ` ${i.dueTime}` : ""}
+                        </span>
+                      </div>
                     </div>
-                    <span className="shrink-0 text-xs font-bold text-blue-700 whitespace-nowrap">
-                      {i.dueDate ? formatMonthDay(i.dueDate) : "-"}{i.dueTime ? ` ${i.dueTime}` : ""}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
