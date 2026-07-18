@@ -14,25 +14,23 @@ function DueSoonRow({ i, address, govElevatorNo, onOpenFail }) {
   const { latest, detailRecord } = usePriorFlaggedInspection(govElevatorNo);
   const clickable = Boolean(latest);
   return (
-    <div className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2 gap-2">
+    <div
+      onClick={clickable ? () => onOpenFail({
+        id: `unit-hist-${govElevatorNo}`,
+        siteName: i.siteName,
+        elevatorNo: i.elevatorNo,
+        result: "conditional",
+        govElevatorNo,
+        startDate: govDateToDashed(detailRecord.inspctDe),
+      }) : undefined}
+      className={`flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2 gap-2 touch-manipulation ${clickable ? "cursor-pointer active:bg-blue-100" : ""}`}
+    >
       <div className="min-w-0">
-        <p
-          className={`text-sm font-bold text-slate-800 ${clickable ? "underline decoration-dotted underline-offset-2 cursor-pointer" : ""}`}
-          onClick={clickable ? () => onOpenFail({
-            id: `unit-hist-${govElevatorNo}`,
-            siteName: i.siteName,
-            elevatorNo: i.elevatorNo,
-            result: "conditional",
-            govElevatorNo,
-            startDate: govDateToDashed(detailRecord.inspctDe),
-          }) : undefined}
-        >
-          {i.siteName} · {i.elevatorNo}
-        </p>
+        <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
         <p className="text-[11px] text-slate-400 truncate">{address}</p>
         <p className="text-[11px] text-slate-500">{i.type}</p>
       </div>
-      <div className="shrink-0 flex items-center gap-1.5">
+      <div className="shrink-0 flex flex-col items-end gap-0.5">
         {latest && (
           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-300">
             직전 {latest.dispWords}

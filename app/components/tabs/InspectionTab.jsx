@@ -17,22 +17,24 @@ function DueSoonCard({ insp, address, govElevatorNo, onOpenFail, onRegister }) {
   const { latest, detailRecord } = usePriorFlaggedInspection(govElevatorNo);
   const clickable = Boolean(latest);
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-3.5">
-      <div className="flex items-center justify-between mb-1.5">
-        <p
-          className={`font-bold text-slate-800 text-sm ${clickable ? "underline decoration-dotted underline-offset-2 cursor-pointer" : ""}`}
-          onClick={clickable ? () => onOpenFail({
-            id: `unit-hist-${govElevatorNo}`,
-            siteName: insp.siteName,
-            elevatorNo: insp.elevatorNo,
-            result: "conditional",
-            govElevatorNo,
-            startDate: govDateToDashed(detailRecord.inspctDe),
-          }) : undefined}
-        >
-          {insp.siteName} · {insp.elevatorNo}
-        </p>
-        <div className="shrink-0 flex items-center gap-1.5">
+    <div
+      onClick={clickable ? () => onOpenFail({
+        id: `unit-hist-${govElevatorNo}`,
+        siteName: insp.siteName,
+        elevatorNo: insp.elevatorNo,
+        result: "conditional",
+        govElevatorNo,
+        startDate: govDateToDashed(detailRecord.inspctDe),
+      }) : undefined}
+      className={`bg-white rounded-xl border border-slate-200 p-3.5 touch-manipulation ${clickable ? "cursor-pointer active:bg-slate-50" : ""}`}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="min-w-0">
+          <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
+          <p className="text-[11px] text-slate-400 truncate">{address}</p>
+          <p className="text-xs text-slate-500">{insp.type}</p>
+        </div>
+        <div className="shrink-0 flex flex-col items-end gap-0.5">
           {latest && (
             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-300">
               직전 {latest.dispWords}
@@ -43,14 +45,10 @@ function DueSoonCard({ insp, address, govElevatorNo, onOpenFail, onRegister }) {
           </span>
         </div>
       </div>
-      <div className="mb-2">
-        <p className="text-[11px] text-slate-400">{address}</p>
-        <p className="text-xs text-slate-500">{insp.type}</p>
-      </div>
       <div className="flex items-center justify-between">
         <span className="text-[11px] text-slate-400">검사 결과 미등록</span>
         <button
-          onClick={() => onRegister(insp)}
+          onClick={(e) => { e.stopPropagation(); onRegister(insp); }}
           className="text-xs font-bold text-white bg-blue-700 px-3 py-1.5 rounded-lg active:bg-blue-800"
         >
           결과 등록
