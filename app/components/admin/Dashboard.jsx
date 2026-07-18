@@ -263,10 +263,11 @@ export default function Dashboard({ data }) {
                   onClick={isLive ? () => setFailTarget(i) : undefined}
                   className={`bg-red-50 border border-red-100 rounded-lg px-3.5 py-2.5 ${isLive ? "cursor-pointer hover:bg-red-100" : ""}`}
                 >
-                  <div className="flex items-center justify-between mb-1 gap-2">
+                  <div className="flex items-start justify-between mb-1 gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
                       <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
+                      <p className="text-xs font-bold text-blue-700">보완기한 {i.dueDate || "미정"}</p>
                     </div>
                     <div className="shrink-0 flex items-center gap-1.5">
                       <span className="text-[11px] text-slate-500">{i.type}</span>
@@ -277,13 +278,9 @@ export default function Dashboard({ data }) {
                     <div className="min-w-0">
                       {i.notes && <p className="text-[11px] text-red-600 mt-0.5">{i.notes}</p>}
                     </div>
-                    <span className="shrink-0 ml-2 text-right">
-                      <span className="block text-[10px] text-slate-400">보완기한</span>
-                      <span className="block text-xs font-bold text-slate-700">{i.dueDate || "미정"}</span>
-                      {i.scheduleTime && (
-                        <span className="block text-[11px] text-blue-600 font-semibold mt-0.5">검사일정 {i.scheduleTime}</span>
-                      )}
-                    </span>
+                    {i.scheduleTime && (
+                      <span className="shrink-0 ml-2 text-[11px] text-blue-600 font-semibold text-right">검사일정 {i.scheduleTime}</span>
+                    )}
                   </div>
                 </div>
               );
