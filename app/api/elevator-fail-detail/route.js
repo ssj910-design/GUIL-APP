@@ -24,7 +24,7 @@ function inspectDateMs(record) {
   return Number.isNaN(t) ? null : t;
 }
 
-async function fetchFailItems(failCd) {
+async function fetchFailItemsOnce(failCd) {
   const failUrl = `${FAIL_URL}?serviceKey=${process.env.ELEVATOR_API_SERVICE_KEY}&pageNo=1&numOfRows=50&fail_cd=${encodeURIComponent(failCd)}`;
   const failRes = await fetch(failUrl);
   const failXml = await failRes.text();
@@ -35,6 +35,14 @@ async function fetchFailItems(failCd) {
   const items = parseItems(failXml);
   // failCd는 있는데 상세 항목이 0건인 경우도 있다 — 국가승강기정보센터 쪽 데이터 공백으로 보이며 코드로는 더 확인할 수 없다.
   return { items, reason: items.length === 0 ? "no_items_for_fail_code" : null };
+}
+
+// 검사이력 화면은 회차마다 이 함수를 호출한다 — 한꺼번에 몰아서 부르면 순간적으로 레이트리밋에
+// 걸려 일부만 실패할 수 있어(현재&미래 사례), 실패 시 한 번 더 시도한다.
+async function fetchFailItems(failCd) {
+  const first = await fetchFailItemsOnce(failCd);
+  if (first.reason !== "fetch_failed") return first;
+  return fetchFailItemsOnce(failCd);
 }
 
 const ONE_DAY_MS = 86400000;
@@ -58,14 +66,17 @@ export async function GET(request) {
   const records = parseItems(safeXml).sort((a, b) => (inspectDateMs(b) ?? 0) - (inspectDateMs(a) ?? 0));
 
   // anchorDate 없이 호출하면 검사이력 화면용으로 전체 회차를 최신순으로 반환한다.
+  // 회차별 조회를 병렬로 몰아서 보내면 순간적으로 레이트리밋에 걸릴 수 있어(현재&미래 사례) 순차로 처리한다.
   if (!anchorDate) {
-    const history = await Promise.all(
-      records.map(async (record) => {
-        if (!record.failCd) return { record, items: [], reason: "no_fail_code" };
-        const { items, reason } = await fetchFailItems(record.failCd);
-        return { record, items, reason };
-      })
-    );
+    const history = [];
+    for (const record of records) {
+      if (!record.failCd) {
+        history.push({ record, items: [], reason: "no_fail_code" });
+        continue;
+      }
+      const { items, reason } = await fetchFailItems(record.failCd);
+      history.push({ record, items, reason });
+    }
     return Response.json({ history });
   }
 

@@ -145,7 +145,7 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
                     const runStart = govDateToDashed(h.record.applcBeDt);
                     const runEnd = govDateToDashed(h.record.applcEnDt);
                     const openTarget = () => setInspectionFailTarget({
-                      inspection: { siteName: site.name, elevatorNo: unit, result: resultCode },
+                      inspection: { siteName: site.name, elevatorNo: unit, result: resultCode, govElevatorNo: unitGovNo },
                       preloaded: h,
                     });
                     return (

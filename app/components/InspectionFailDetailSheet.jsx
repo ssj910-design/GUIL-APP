@@ -6,19 +6,25 @@ import { govDateToDashed, formatShortDate } from "@/lib/utils";
 // inspection: 조건부/불합격 목록에서 클릭한 건(govElevatorNo·startDate 기준으로 가장 가까운 회차를 서버에서 찾음).
 // preloaded: 이미 회차가 정해진 경우({ record, items, reason }, 검사이력 목록에서 특정 회차를 클릭했을 때) — 있으면 재조회하지 않는다.
 export function InspectionFailDetailSheet({ inspection, preloaded, onClose }) {
+  const [retryCount, setRetryCount] = useState(0);
   const [state, setState] = useState(
     preloaded
       ? { loading: false, items: preloaded.items ?? [], error: null, reason: preloaded.reason ?? null, record: preloaded.record ?? null }
       : { loading: true, items: [], error: null, reason: null, record: null }
   );
 
+  // preloaded인 경우, 회차 고유 날짜(record.inspctDe)를 anchorDate로 넘겨 같은 회차를 다시 조회한다.
+  const retryAnchorDate = preloaded ? govDateToDashed(preloaded.record?.inspctDe) : inspection?.startDate;
+  const canRetry = Boolean(inspection?.govElevatorNo && retryAnchorDate);
+
   useEffect(() => {
-    if (preloaded) return;
+    if (preloaded && retryCount === 0) return;
     let cancelled = false;
     async function load() {
+      setState((s) => ({ ...s, loading: true }));
       try {
         const res = await fetch(
-          `/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(inspection.govElevatorNo)}&anchorDate=${encodeURIComponent(inspection.startDate)}`
+          `/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(inspection.govElevatorNo)}&anchorDate=${encodeURIComponent(retryAnchorDate)}`
         );
         const data = await res.json();
         if (!cancelled) setState({ loading: false, items: data.items ?? [], error: data.error ?? null, reason: data.reason ?? null, record: data.record ?? null });
@@ -30,7 +36,7 @@ export function InspectionFailDetailSheet({ inspection, preloaded, onClose }) {
     return () => {
       cancelled = true;
     };
-  }, [preloaded, inspection?.govElevatorNo, inspection?.startDate]);
+  }, [preloaded, retryCount, inspection?.govElevatorNo, retryAnchorDate]);
 
   const inspectedOn = state.record ? govDateToDashed(state.record.inspctDe) : null;
 
@@ -48,15 +54,27 @@ export function InspectionFailDetailSheet({ inspection, preloaded, onClose }) {
       ) : state.error ? (
         <p className="text-xs text-red-500 text-center py-8">{state.error}</p>
       ) : state.items.length === 0 ? (
-        <p className="text-xs text-slate-400 text-center py-8">
-          {state.reason === "no_record"
-            ? "국가승강기정보센터에 이 승강기의 검사이력이 아직 등록되지 않았습니다"
-            : state.reason === "no_fail_code"
-            ? "검사이력은 확인됐지만 부적합 상세코드가 등록되어 있지 않습니다"
-            : state.reason === "no_items_for_fail_code"
-            ? `부적합코드(${state.record?.failCd ?? "-"})는 등록돼 있지만 상세 항목이 조회되지 않습니다. 국가승강기정보센터 데이터 공백으로 보입니다.`
-            : "부적합 상세 항목을 찾을 수 없습니다"}
-        </p>
+        <div className="text-center py-8">
+          <p className="text-xs text-slate-400">
+            {state.reason === "no_record"
+              ? "국가승강기정보센터에 이 승강기의 검사이력이 아직 등록되지 않았습니다"
+              : state.reason === "no_fail_code"
+              ? "검사이력은 확인됐지만 부적합 상세코드가 등록되어 있지 않습니다"
+              : state.reason === "no_items_for_fail_code"
+              ? `부적합코드(${state.record?.failCd ?? "-"})는 등록돼 있지만 상세 항목이 조회되지 않습니다. 국가승강기정보센터 데이터 공백으로 보입니다.`
+              : state.reason === "fetch_failed"
+              ? "국가승강기정보센터 응답이 일시적으로 불안정해 조회하지 못했습니다"
+              : "부적합 상세 항목을 찾을 수 없습니다"}
+          </p>
+          {state.reason === "fetch_failed" && canRetry && (
+            <button
+              onClick={() => setRetryCount((c) => c + 1)}
+              className="mt-3 text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg"
+            >
+              다시 시도
+            </button>
+          )}
+        </div>
       ) : (
         <div className="space-y-3">
           {state.items.map((item, idx) => (
