@@ -21,10 +21,13 @@ function parseItems(xml) {
   });
 }
 
-// "20260716" → "2026-07-16"
-function toDashedDate(yyyymmdd) {
-  if (!yyyymmdd || yyyymmdd.length !== 8) return null;
-  return `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`;
+// getBuldElvtrList는 날짜를 이미 "2026-07-16" 형식(대시 포함)으로 준다 — 실데이터로 확인됨.
+// 혹시 "20260716"(8자리, 대시 없음) 형식으로 오는 경우까지 방어적으로 같이 처리한다.
+function normalizeDate(value) {
+  if (!value) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  if (/^\d{8}$/.test(value)) return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
+  return null;
 }
 
 async function fetchBuildingItems(anyGovNo) {
@@ -81,8 +84,8 @@ export async function GET(request) {
             const { error: updateError } = await supabase
               .from("units")
               .update({
-                inspection_start: toDashedDate(item.applcBeDt),
-                inspection_end: toDashedDate(item.applcEnDt),
+                inspection_start: normalizeDate(item.applcBeDt),
+                inspection_end: normalizeDate(item.applcEnDt),
                 inspection_result: item.resultNm || null,
               })
               .eq("id", u.id);
