@@ -1,15 +1,64 @@
 import { useState, useContext } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed } from "@/lib/utils";
 import { Badge, DDay, PhotoUpload, FilterBar, PrimaryButton, Sheet, Field, inputCls } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
-import { InspectionFailDetailSheet, PriorConditionalBadge } from "@/app/components/InspectionFailDetailSheet";
+import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
+import { usePriorFlaggedInspection } from "@/app/hooks/useLiveInspections";
 
 
 /* ------------------------------------------------------------------ */
 /* INSPECTION (검사관리) - centerpiece                                  */
 /* ------------------------------------------------------------------ */
+
+// 검사도래현장 카드 한 장: 직전 검사가 조건부합격/조건후합격이면 현장명을 눌러 당시 부적합내역을 볼 수 있다.
+function DueSoonCard({ insp, address, govElevatorNo, onOpenFail, onRegister }) {
+  const { latest, detailRecord } = usePriorFlaggedInspection(govElevatorNo);
+  const clickable = Boolean(latest);
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-3.5">
+      <div className="flex items-center justify-between mb-1.5">
+        <p
+          className={`font-bold text-slate-800 text-sm ${clickable ? "underline decoration-dotted underline-offset-2 cursor-pointer" : ""}`}
+          onClick={clickable ? () => onOpenFail({
+            id: `unit-hist-${govElevatorNo}`,
+            siteName: insp.siteName,
+            elevatorNo: insp.elevatorNo,
+            result: "conditional",
+            govElevatorNo,
+            startDate: govDateToDashed(detailRecord.inspctDe),
+          }) : undefined}
+        >
+          {insp.siteName} · {insp.elevatorNo}
+        </p>
+        <div className="shrink-0 flex items-center gap-1.5">
+          {latest && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-300">
+              직전 {latest.dispWords}
+            </span>
+          )}
+          <span className="text-xs font-bold text-blue-700 whitespace-nowrap">
+            {insp.dueDate ? formatMonthDay(insp.dueDate) : "-"}{insp.dueTime ? ` ${insp.dueTime}` : ""}
+          </span>
+        </div>
+      </div>
+      <div className="mb-2">
+        <p className="text-[11px] text-slate-400">{address}</p>
+        <p className="text-xs text-slate-500">{insp.type}</p>
+      </div>
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-slate-400">검사 결과 미등록</span>
+        <button
+          onClick={() => onRegister(insp)}
+          className="text-xs font-bold text-white bg-blue-700 px-3 py-1.5 rounded-lg active:bg-blue-800"
+        >
+          결과 등록
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function InspectionTab({ inspections, setInspections }) {
   const sites = useContext(SitesContext);
@@ -119,35 +168,14 @@ export function InspectionTab({ inspections, setInspections }) {
             dueSoon.map((insp) => {
               const priorUnit = findUnitForInspection(insp, allUnits);
               return (
-              <div key={insp.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
-                <div className="flex items-center justify-between mb-1.5">
-                  <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
-                  <div className="shrink-0 flex items-center gap-1.5">
-                    <PriorConditionalBadge
-                      govElevatorNo={priorUnit?.govNo}
-                      siteName={insp.siteName}
-                      elevatorNo={insp.elevatorNo}
-                      onOpen={setInspectionFailTarget}
-                    />
-                    <span className="text-xs font-bold text-blue-700 whitespace-nowrap">
-                      {insp.dueDate ? formatMonthDay(insp.dueDate) : "-"}{insp.dueTime ? ` ${insp.dueTime}` : ""}
-                    </span>
-                  </div>
-                </div>
-                <div className="mb-2">
-                  <p className="text-[11px] text-slate-400">{stripCityPrefix(siteById.get(insp.siteId)?.address)}</p>
-                  <p className="text-xs text-slate-500">{insp.type}</p>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-slate-400">검사 결과 미등록</span>
-                  <button
-                    onClick={() => startRegister(insp)}
-                    className="text-xs font-bold text-white bg-blue-700 px-3 py-1.5 rounded-lg active:bg-blue-800"
-                  >
-                    결과 등록
-                  </button>
-                </div>
-              </div>
+                <DueSoonCard
+                  key={insp.id}
+                  insp={insp}
+                  address={stripCityPrefix(siteById.get(insp.siteId)?.address)}
+                  govElevatorNo={priorUnit?.govNo}
+                  onOpenFail={setInspectionFailTarget}
+                  onRegister={startRegister}
+                />
               );
             })
           )

@@ -1,11 +1,50 @@
 import { useState, useContext } from "react";
 import { ShieldCheck, AlertOctagon } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed } from "@/lib/utils";
 import { Badge, DDay, DrillHeader, SmsToast } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
-import { InspectionFailDetailSheet, PriorConditionalBadge } from "@/app/components/InspectionFailDetailSheet";
+import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
+import { usePriorFlaggedInspection } from "@/app/hooks/useLiveInspections";
 import { FailureDetailSheet, DispatchEtaModal, ArrivalTimeModal, ArrivalResultModal, FailureMiniCard } from "@/app/components/tabs/FailureTab";
+
+
+// 검사도래현장 한 줄: 직전 검사가 조건부합격/조건후합격이면 현장명을 눌러 당시 부적합내역을 볼 수 있다.
+function DueSoonRow({ i, address, govElevatorNo, onOpenFail }) {
+  const { latest, detailRecord } = usePriorFlaggedInspection(govElevatorNo);
+  const clickable = Boolean(latest);
+  return (
+    <div className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2 gap-2">
+      <div className="min-w-0">
+        <p
+          className={`text-sm font-bold text-slate-800 ${clickable ? "underline decoration-dotted underline-offset-2 cursor-pointer" : ""}`}
+          onClick={clickable ? () => onOpenFail({
+            id: `unit-hist-${govElevatorNo}`,
+            siteName: i.siteName,
+            elevatorNo: i.elevatorNo,
+            result: "conditional",
+            govElevatorNo,
+            startDate: govDateToDashed(detailRecord.inspctDe),
+          }) : undefined}
+        >
+          {i.siteName} · {i.elevatorNo}
+        </p>
+        <p className="text-[11px] text-slate-400 truncate">{address}</p>
+        <p className="text-[11px] text-slate-500">{i.type}</p>
+      </div>
+      <div className="shrink-0 flex items-center gap-1.5">
+        {latest && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-300">
+            직전 {latest.dispWords}
+          </span>
+        )}
+        <span className="text-xs font-bold text-blue-700 whitespace-nowrap">
+          {i.dueDate ? formatMonthDay(i.dueDate) : "-"}{i.dueTime ? ` ${i.dueTime}` : ""}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 
 function FailureHistoryDetailScreen({ site, failures, onBack }) {
@@ -190,24 +229,13 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
                 {dueSoon.map((i) => {
                   const priorUnit = findUnitForInspection(i, allUnits);
                   return (
-                    <div key={i.id} className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2 gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
-                        <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
-                        <p className="text-[11px] text-slate-500">{i.type}</p>
-                      </div>
-                      <div className="shrink-0 flex items-center gap-1.5">
-                        <PriorConditionalBadge
-                          govElevatorNo={priorUnit?.govNo}
-                          siteName={i.siteName}
-                          elevatorNo={i.elevatorNo}
-                          onOpen={setInspectionFailTarget}
-                        />
-                        <span className="text-xs font-bold text-blue-700 whitespace-nowrap">
-                          {i.dueDate ? formatMonthDay(i.dueDate) : "-"}{i.dueTime ? ` ${i.dueTime}` : ""}
-                        </span>
-                      </div>
-                    </div>
+                    <DueSoonRow
+                      key={i.id}
+                      i={i}
+                      address={stripCityPrefix(siteById.get(i.siteId)?.address)}
+                      govElevatorNo={priorUnit?.govNo}
+                      onOpenFail={setInspectionFailTarget}
+                    />
                   );
                 })}
               </div>

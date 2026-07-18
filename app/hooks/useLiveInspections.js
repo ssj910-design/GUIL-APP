@@ -108,3 +108,35 @@ export function useInspectionHistory(govElevatorNo) {
 
   return state;
 }
+
+
+const PRIOR_FLAGGED_WORDS = ["조건부합격", "조건후합격"];
+
+// 검사도래현장 목록에서 "직전 검사가 조건부합격/조건후합격이었는지" 가볍게 확인한다
+// (부적합 상세는 안 받는 latestOnly 조회 — 회차마다 부적합 상세까지 받는 전체이력 조회보다 훨씬 쌈).
+// "조건후합격" 회차 자체는 부적합코드(failCd)가 없어(석산빌딩 실데이터로 확인), 그 앞의
+// 조건부합격/불합격 회차를 detailRecord로 같이 돌려준다 — 부적합내역 조회는 이 회차 기준으로 해야 한다.
+export function usePriorFlaggedInspection(govElevatorNo) {
+  const [records, setRecords] = useState([]);
+
+  useEffect(() => {
+    if (!govElevatorNo) return;
+    let cancelled = false;
+    fetch(`/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(govElevatorNo)}&latestOnly=1`)
+      .then((res) => res.json())
+      .then((data) => { if (!cancelled) setRecords(data.records ?? []); })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [govElevatorNo]);
+
+  const latest = records[0];
+  if (!latest || !PRIOR_FLAGGED_WORDS.includes(latest.dispWords)) {
+    return { latest: null, detailRecord: null };
+  }
+  const detailRecord = latest.dispWords === "조건후합격"
+    ? (records.slice(1).find((r) => r.dispWords === "조건부합격" || r.dispWords === "불합격") ?? latest)
+    : latest;
+  return { latest, detailRecord };
+}
