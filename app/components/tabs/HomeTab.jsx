@@ -208,7 +208,7 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
                       </div>
                       <p className="text-[11px] text-slate-500 mb-1.5">{i.type} · {i.org}</p>
                       <div className="flex items-center justify-between">
-                        <p className="text-[11px] text-red-600 leading-relaxed">{i.notes || "지적사항 확인 필요"}</p>
+                        <p className="text-[11px] text-red-600 leading-relaxed">{i.notes}</p>
                         <span className="shrink-0 ml-2 flex flex-col items-end gap-0.5">
                           <span className="flex items-center gap-1">
                             <span className="text-[10px] text-slate-400">보완기한</span>

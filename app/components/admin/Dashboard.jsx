@@ -258,7 +258,7 @@ export default function Dashboard({ data }) {
                   </div>
                   <p className="text-[11px] text-slate-500 mb-1">{i.type} · {i.org}</p>
                   <div className="flex items-center justify-between">
-                    <p className="text-[11px] text-red-600">{i.notes || "지적사항 확인 필요"}</p>
+                    <p className="text-[11px] text-red-600">{i.notes}</p>
                     <span className="text-[11px] text-slate-400 shrink-0 ml-2">보완기한 {i.dueDate || "미정"}</span>
                   </div>
                   {isLive && <p className="text-[10px] text-blue-600 font-semibold mt-1">클릭해서 부적합 상세 항목 보기</p>}
