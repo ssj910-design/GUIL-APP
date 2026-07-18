@@ -93,8 +93,10 @@ export default function Dashboard({ data }) {
     .filter((i) => i.dueDate === TODAY_STR)
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
+  // 보완기한이 60일 이상 남은 건 아직 급하지 않으니 목록에서 뺀다 (기한 미정은 계속 노출).
   const flaggedInspections = combinedInspections
     .filter((i) => i.result === "conditional" || i.result === "fail")
+    .filter((i) => !i.dueDate || Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) < 60)
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
   // 집중 관리현장: 최근 30일 고장 3회 이상, 또는 지원요청/운행정지 등 미해결 에스컬레이션이 있는 현장

@@ -34,8 +34,10 @@ export function InspectionTab({ inspections, setInspections }) {
     .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) }))
     .filter((i) => i.daysLeft >= 0 && i.daysLeft <= 30)
     .sort((a, b) => a.daysLeft - b.daysLeft);
+  // 보완기한이 60일 이상 남은 건 아직 급하지 않으니 목록에서 뺀다 (기한 미정은 계속 노출).
   const flagged = combined
     .filter((i) => i.result === "conditional" || i.result === "fail")
+    .filter((i) => !i.dueDate || Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) < 60)
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
   function startRegister(insp) {
