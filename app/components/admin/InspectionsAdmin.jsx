@@ -19,8 +19,9 @@ function daysLeftOf(dueDate, today) {
 // 검사예정일(수기입력)을 인라인으로 수정할 수 있는 행. 실시간 연동 현장이어도 수기입력 기한은 항상 편집 가능하다.
 function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
   const [date, setDate] = useState(i.dueDate ?? "");
+  const [time, setTime] = useState(i.dueTime ?? "");
   const [saving, setSaving] = useState(false);
-  const dirty = date !== (i.dueDate ?? "");
+  const dirty = date !== (i.dueDate ?? "") || time !== (i.dueTime ?? "");
   const isFlagged = i.result === "conditional" || i.result === "fail";
   // 조건부/불합격의 보완기한은 관리자 수기입력(다음 검사 예정일)이 아니라
   // 국가승강기정보센터 검사 유효기간(유효기간종료일)을 기준으로 본다.
@@ -32,7 +33,10 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{i.type}</td>
       <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{i.org}</td>
       <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-        <input type="date" className={mobileInputCls} value={date} onChange={(e) => setDate(e.target.value)} />
+        <div className="flex gap-1">
+          <input type="date" className={mobileInputCls} value={date} onChange={(e) => setDate(e.target.value)} />
+          <input type="time" className={mobileInputCls} value={time} onChange={(e) => setTime(e.target.value)} />
+        </div>
         {i.apiDueDate && (
           <p className="text-[9px] text-emerald-600 mt-0.5">
             {isFlagged ? "보완기한(검사 유효기간) " : "API 유효기간 참고 "}~{i.apiDueDate}
@@ -52,7 +56,7 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
       <td className="px-3 py-2.5 text-right pr-4" onClick={(e) => e.stopPropagation()}>
         <button
           disabled={!dirty || saving}
-          onClick={async () => { setSaving(true); await onSaveDueDate(i, date); setSaving(false); }}
+          onClick={async () => { setSaving(true); await onSaveDueDate(i, date, time); setSaving(false); }}
           className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-3 py-1.5"
         >
           저장
@@ -84,6 +88,7 @@ export default function InspectionsAdmin({ data, setData }) {
         manualId: manual?.id ?? null,
         apiDueDate: li.dueDate,
         dueDate: manual?.dueDate ?? "",
+        dueTime: manual?.dueTime ?? "",
         notes: manual?.notes ?? "",
       };
     }),
@@ -107,13 +112,16 @@ export default function InspectionsAdmin({ data, setData }) {
     .sort((a, b) => (a.dueDate ? a.daysLeft : Infinity) - (b.dueDate ? b.daysLeft : Infinity));
 
   // manualId가 있으면 기존 수기입력 행을 갱신하고, 없으면(실시간 연동 현장에 수기입력 기한이 처음 등록되는 경우) 새로 만든다.
-  async function saveDueDate(i, newDate) {
+  async function saveDueDate(i, newDate, newTime) {
     if (i.manualId) {
-      const { error } = await supabase.from("inspections").update({ due_date: newDate || null }).eq("id", i.manualId);
+      const { error } = await supabase
+        .from("inspections")
+        .update({ due_date: newDate || null, due_time: newTime || null })
+        .eq("id", i.manualId);
       if (error) { alert("저장 실패: " + error.message); return; }
       setData((prev) => ({
         ...prev,
-        inspections: prev.inspections.map((x) => (x.id === i.manualId ? { ...x, dueDate: newDate } : x)),
+        inspections: prev.inspections.map((x) => (x.id === i.manualId ? { ...x, dueDate: newDate, dueTime: newTime } : x)),
       }));
       return;
     }
@@ -127,6 +135,7 @@ export default function InspectionsAdmin({ data, setData }) {
         type: i.type,
         org: i.org,
         due_date: newDate || null,
+        due_time: newTime || null,
       })
       .select()
       .single();

@@ -93,10 +93,19 @@ export default function Dashboard({ data }) {
     .filter((i) => i.dueDate === TODAY_STR)
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
+  // 조건부/불합격 카드의 "검사일정"은 관리자가 InspectionsAdmin에서 수기입력한 방문 예정 일시(inspections.due_date/due_time)다
+  // — 보완기한(API 검사 유효기간)과는 별개 정보로 함께 보여준다.
+  const manualByUnitId = new Map(inspections.filter((i) => i.unitId).map((i) => [i.unitId, i]));
+  const manualBySiteId = new Map(inspections.filter((i) => !i.unitId).map((i) => [i.siteId, i]));
+
   // 보완기한이 61일 이상 남은 건 아직 급하지 않으니 목록에서 뺀다(60일은 노출) — 기한 미정은 계속 노출.
   const flaggedInspections = combinedInspections
     .filter((i) => i.result === "conditional" || i.result === "fail")
     .filter((i) => !i.dueDate || Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) <= 60)
+    .map((i) => {
+      const manual = manualByUnitId.get(i.unitId) ?? manualBySiteId.get(i.siteId) ?? null;
+      return { ...i, scheduleDate: manual?.dueDate ?? null, scheduleTime: manual?.dueTime ?? null };
+    })
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
   // 집중 관리현장: 최근 30일 고장 3회 이상, 또는 지원요청/운행정지 등 미해결 에스컬레이션이 있는 현장
@@ -261,7 +270,14 @@ export default function Dashboard({ data }) {
                       <p className="text-[11px] text-slate-500">{i.type} · {i.org}</p>
                       {i.notes && <p className="text-[11px] text-red-600 mt-0.5">{i.notes}</p>}
                     </div>
-                    <span className="text-[11px] text-slate-400 shrink-0 ml-2">보완기한 {i.dueDate || "미정"}</span>
+                    <span className="text-[11px] text-slate-400 shrink-0 ml-2 text-right">
+                      <span className="block">보완기한 {i.dueDate || "미정"}</span>
+                      {i.scheduleDate && (
+                        <span className="block text-blue-600 font-semibold">
+                          검사일정 {i.scheduleDate}{i.scheduleTime ? ` ${i.scheduleTime}` : ""}
+                        </span>
+                      )}
+                    </span>
                   </div>
                   {isLive && <p className="text-[10px] text-blue-600 font-semibold mt-1">클릭해서 부적합 상세 항목 보기</p>}
                 </div>
