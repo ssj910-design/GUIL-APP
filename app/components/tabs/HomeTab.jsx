@@ -200,7 +200,6 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
                     <div
                       key={i.id}
                       onClick={isLive ? () => setInspectionFailTarget(i) : undefined}
-                      onTouchEnd={isLive ? (e) => { e.preventDefault(); setInspectionFailTarget(i); } : undefined}
                       className={`bg-red-50 border border-red-100 rounded-lg px-3 py-2.5 touch-manipulation ${isLive ? "active:bg-red-100 cursor-pointer" : ""}`}
                     >
                       <div className="flex items-center justify-between mb-1">

@@ -143,7 +143,6 @@ export function InspectionTab({ inspections, setInspections }) {
               <div
                 key={insp.id}
                 onClick={isLive ? () => setInspectionFailTarget(insp) : undefined}
-                onTouchEnd={isLive ? (e) => { e.preventDefault(); setInspectionFailTarget(insp); } : undefined}
                 className={`bg-white rounded-xl border border-red-100 p-3.5 touch-manipulation ${isLive ? "active:bg-slate-50 cursor-pointer" : ""}`}
               >
                 <div className="flex items-center justify-between mb-1.5">

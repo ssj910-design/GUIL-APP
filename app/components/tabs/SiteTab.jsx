@@ -152,7 +152,6 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
                       <div
                         key={hi}
                         onClick={clickable ? openTarget : undefined}
-                        onTouchEnd={clickable ? (e) => { e.preventDefault(); openTarget(); } : undefined}
                         className={`bg-white rounded-xl border border-slate-100 shadow-sm p-4 ${clickable ? "touch-manipulation cursor-pointer active:opacity-70" : ""}`}
                       >
                         <HistoryCard
