@@ -209,6 +209,7 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="text-[11px] text-slate-500">{i.type} · {i.org}</p>
+                          {isLive && <p className="text-[10px] text-blue-600 font-semibold mt-0.5">터치해서 부적합 상세 항목 보기</p>}
                           {i.notes && <p className="text-[11px] text-red-600 leading-relaxed mt-0.5">{i.notes}</p>}
                         </div>
                         <span className="shrink-0 flex flex-col items-end gap-0.5">
@@ -219,7 +220,6 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
                           {i.dueDate && <span className="text-[10px] text-slate-400">{i.dueDate}</span>}
                         </span>
                       </div>
-                      {isLive && <p className="text-[10px] text-blue-600 font-semibold mt-1">터치해서 부적합 상세 항목 보기</p>}
                     </div>
                   );
                 })}

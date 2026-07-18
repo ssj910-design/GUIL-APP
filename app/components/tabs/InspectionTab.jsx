@@ -152,6 +152,7 @@ export function InspectionTab({ inspections, setInspections }) {
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="min-w-0">
                     <p className="text-xs text-slate-500">{insp.type} · {insp.org}</p>
+                    {isLive && <p className="text-[10px] text-blue-600 font-semibold mt-0.5">터치해서 부적합 상세 항목 보기</p>}
                     {insp.notes && <p className="text-[11px] text-red-600 leading-relaxed mt-0.5">지적사항: {insp.notes}</p>}
                   </div>
                   <span className="shrink-0 flex flex-col items-end gap-0.5">
@@ -162,19 +163,19 @@ export function InspectionTab({ inspections, setInspections }) {
                     {insp.dueDate && <span className="text-[10px] text-slate-400">{insp.dueDate}</span>}
                   </span>
                 </div>
-                <div className="flex items-center justify-between">
-                  {insp.result === "fail" && <span className="text-[11px] text-red-500 font-semibold">재검사 필요</span>}
-                  {isLive ? (
-                    <span className="ml-auto text-[11px] text-blue-600 font-semibold">터치해서 부적합 상세 항목 보기</span>
-                  ) : (
-                    <button
-                      onClick={() => startRegister(insp)}
-                      className="ml-auto text-xs font-bold text-white bg-blue-700 px-3 py-1.5 rounded-lg active:bg-blue-800"
-                    >
-                      재검사 결과 등록
-                    </button>
-                  )}
-                </div>
+                {(insp.result === "fail" || !isLive) && (
+                  <div className="flex items-center justify-between">
+                    {insp.result === "fail" && <span className="text-[11px] text-red-500 font-semibold">재검사 필요</span>}
+                    {!isLive && (
+                      <button
+                        onClick={() => startRegister(insp)}
+                        className="ml-auto text-xs font-bold text-white bg-blue-700 px-3 py-1.5 rounded-lg active:bg-blue-800"
+                      >
+                        재검사 결과 등록
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })
