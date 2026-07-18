@@ -3,7 +3,7 @@ import { Badge, Sheet } from "@/app/components/ui";
 
 
 export function InspectionFailDetailSheet({ inspection, onClose }) {
-  const [state, setState] = useState({ loading: true, items: [], error: null });
+  const [state, setState] = useState({ loading: true, items: [], error: null, reason: null });
 
   useEffect(() => {
     let cancelled = false;
@@ -13,9 +13,9 @@ export function InspectionFailDetailSheet({ inspection, onClose }) {
           `/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(inspection.govElevatorNo)}&anchorDate=${encodeURIComponent(inspection.startDate)}`
         );
         const data = await res.json();
-        if (!cancelled) setState({ loading: false, items: data.items ?? [], error: data.error ?? null });
+        if (!cancelled) setState({ loading: false, items: data.items ?? [], error: data.error ?? null, reason: data.reason ?? null });
       } catch {
-        if (!cancelled) setState({ loading: false, items: [], error: "조회에 실패했습니다" });
+        if (!cancelled) setState({ loading: false, items: [], error: "조회에 실패했습니다", reason: null });
       }
     }
     load();
@@ -35,7 +35,13 @@ export function InspectionFailDetailSheet({ inspection, onClose }) {
       ) : state.error ? (
         <p className="text-xs text-red-500 text-center py-8">{state.error}</p>
       ) : state.items.length === 0 ? (
-        <p className="text-xs text-slate-400 text-center py-8">부적합 상세 항목을 찾을 수 없습니다</p>
+        <p className="text-xs text-slate-400 text-center py-8">
+          {state.reason === "no_record"
+            ? "국가승강기정보센터에 검사이력이 아직 등록되지 않았습니다 (검사일 ±15일 범위로 조회)"
+            : state.reason === "no_fail_code"
+            ? "검사이력은 확인됐지만 부적합 상세코드가 등록되어 있지 않습니다"
+            : "부적합 상세 항목을 찾을 수 없습니다"}
+        </p>
       ) : (
         <div className="space-y-3">
           {state.items.map((item, idx) => (

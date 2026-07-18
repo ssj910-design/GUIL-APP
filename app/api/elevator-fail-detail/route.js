@@ -26,22 +26,29 @@ export async function GET(request) {
     return Response.json({ error: "elevatorNo와 anchorDate가 필요합니다" }, { status: 400 });
   }
 
+  // 승강기고유번호 최종검사판정결과(조건부합격·불합격)와 검사이력 API의 등록 시점이 며칠씩 어긋나는
+  // 현장이 있어(예: 대흥빌딩) ±5일로는 이력을 못 찾는 경우가 있었다. ±15일로 넓혀서 재현율을 높인다.
   const anchor = new Date(anchorDate);
   const sdt = new Date(anchor);
-  sdt.setDate(sdt.getDate() - 5);
+  sdt.setDate(sdt.getDate() - 15);
   const edt = new Date(anchor);
-  edt.setDate(edt.getDate() + 5);
+  edt.setDate(edt.getDate() + 15);
 
-  const safeUrl = `${SAFE_URL}?serviceKey=${process.env.ELEVATOR_API_SERVICE_KEY}&pageNo=1&numOfRows=5&appr_sdt=${toYyyymmdd(sdt)}&appr_edt=${toYyyymmdd(edt)}&elevator_no=${encodeURIComponent(elevatorNo)}`;
+  const safeUrl = `${SAFE_URL}?serviceKey=${process.env.ELEVATOR_API_SERVICE_KEY}&pageNo=1&numOfRows=10&appr_sdt=${toYyyymmdd(sdt)}&appr_edt=${toYyyymmdd(edt)}&elevator_no=${encodeURIComponent(elevatorNo)}`;
   const safeRes = await fetch(safeUrl);
   const safeXml = await safeRes.text();
   const safeResultCode = /<resultCode>([^<]*)<\/resultCode>/.exec(safeXml)?.[1];
   if (safeResultCode !== "00") {
     return Response.json({ error: "검사이력 조회에 실패했습니다" }, { status: 502 });
   }
-  const record = parseItems(safeXml)[0];
-  if (!record || !record.failCd) {
-    return Response.json({ items: [], record: record ?? null });
+  // 범위 안에 검사이력이 여러 건 잡히면 부적합내역조회코드(failCd)가 있는 레코드를 우선한다.
+  const records = parseItems(safeXml);
+  const record = records.find((r) => r.failCd) ?? records[0] ?? null;
+  if (!record) {
+    return Response.json({ items: [], record: null, reason: "no_record" });
+  }
+  if (!record.failCd) {
+    return Response.json({ items: [], record, reason: "no_fail_code" });
   }
 
   const failUrl = `${FAIL_URL}?serviceKey=${process.env.ELEVATOR_API_SERVICE_KEY}&pageNo=1&numOfRows=50&fail_cd=${encodeURIComponent(record.failCd)}`;
