@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { unitsToInspections } from "@/lib/utils";
 import { Badge, DDay, PhotoUpload, FilterBar, PrimaryButton, Sheet, Field, inputCls } from "@/app/components/ui";
-import { SitesContext, UnitsContext } from "@/app/components/context";
+import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 
 
@@ -13,16 +13,20 @@ import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetail
 
 export function InspectionTab({ inspections, setInspections }) {
   const sites = useContext(SitesContext);
+  const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
+  const mySites = role === "admin" ? sites : sites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER);
+  const mySiteIds = new Set(mySites.map((s) => s.id));
   const [subTab, setSubTab] = useState("검사도래현장");
   const [openRegister, setOpenRegister] = useState(null); // inspection object or null
   const [form, setForm] = useState({});
   const [inspectionFailTarget, setInspectionFailTarget] = useState(null);
 
   // 검사유효기간은 units의 DB 캐시를 쓴다 (전 호기 실시간 API 호출 금지 — 트래픽 한도).
+  // 조건부/불합격 현장은 담당현장만(관리자는 전체) — 도래현장 탭은 기존대로 전체 유지.
   const allUnits = useContext(UnitsContext);
-  const liveInspections = unitsToInspections(allUnits, sites);
+  const liveInspections = unitsToInspections(allUnits, mySites).filter((i) => mySiteIds.has(i.siteId));
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
-  const combined = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId))];
+  const combined = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId) && mySiteIds.has(i.siteId))];
 
   // 도래현장: 관리자가 수기입력한 검사일자(inspections.due_date) 기준, 검사일이 30일 이내로 남은 현장만 (국가승강기정보센터 API 연동 현장은 제외)
   const dueSoon = inspections
