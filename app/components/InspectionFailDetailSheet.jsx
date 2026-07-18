@@ -9,7 +9,9 @@ export function InspectionFailDetailSheet({ inspection, onClose }) {
     let cancelled = false;
     async function load() {
       try {
-        const res = await fetch(`/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(inspection.govElevatorNo)}`);
+        const res = await fetch(
+          `/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(inspection.govElevatorNo)}&anchorDate=${encodeURIComponent(inspection.startDate)}`
+        );
         const data = await res.json();
         if (!cancelled) setState({ loading: false, items: data.items ?? [], error: data.error ?? null, reason: data.reason ?? null, record: data.record ?? null });
       } catch {
@@ -20,7 +22,7 @@ export function InspectionFailDetailSheet({ inspection, onClose }) {
     return () => {
       cancelled = true;
     };
-  }, [inspection.govElevatorNo]);
+  }, [inspection.govElevatorNo, inspection.startDate]);
 
   return (
     <Sheet title="조건부·불합격 상세" onClose={onClose}>
@@ -28,6 +30,11 @@ export function InspectionFailDetailSheet({ inspection, onClose }) {
         <p className="font-bold text-slate-800">{inspection.siteName} · {inspection.elevatorNo}</p>
         <Badge result={inspection.result} />
       </div>
+      {!state.loading && state.record && (
+        <p className="text-[9px] text-slate-300 mb-2 break-all">
+          매칭된 검사이력(확인용): {JSON.stringify(state.record)}
+        </p>
+      )}
       {state.loading ? (
         <p className="text-xs text-slate-400 text-center py-8">국가승강기정보센터에서 부적합 항목을 조회하는 중...</p>
       ) : state.error ? (
