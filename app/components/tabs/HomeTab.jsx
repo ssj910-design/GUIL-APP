@@ -188,7 +188,10 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
                       <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
                       <p className="text-[11px] text-slate-500">{i.type} · {i.org}</p>
                     </div>
-                    <DDay dueDate={i.dueDate} />
+                    <span className="flex flex-col items-end gap-0.5 shrink-0">
+                      <DDay dueDate={i.dueDate} />
+                      <span className="text-[10px] text-slate-400">{i.dueDate}{i.dueTime ? ` ${i.dueTime}` : ""}</span>
+                    </span>
                   </div>
                 ))}
               </div>

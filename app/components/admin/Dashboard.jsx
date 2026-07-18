@@ -236,7 +236,7 @@ export default function Dashboard({ data }) {
                     <p className="font-semibold">{i.siteName} · {i.elevatorNo}</p>
                     <p className="text-xs text-slate-400">{i.type} · {i.org}</p>
                   </div>
-                  <span className="text-xs font-bold text-blue-700 whitespace-nowrap">{i.dueDate}</span>
+                  <span className="text-xs font-bold text-blue-700 whitespace-nowrap">{i.dueTime || i.dueDate}</span>
                 </li>
               ))}
             </ul>
