@@ -155,9 +155,12 @@ export function InspectionTab({ inspections, setInspections }) {
                   <span className="text-xs text-slate-500">{insp.org}</span>
                 </div>
                 {insp.notes && <p className="text-[11px] text-red-600 leading-relaxed mb-1.5">지적사항: {insp.notes}</p>}
-                <div className="flex items-center gap-1.5 mb-2.5">
-                  <span className="text-[10px] text-slate-400">보완기한</span>
-                  <DDay dueDate={insp.dueDate} />
+                <div className="flex flex-col gap-0.5 mb-2.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-slate-400">보완기한</span>
+                    <DDay dueDate={insp.dueDate} />
+                  </div>
+                  {insp.dueDate && <span className="text-[10px] text-slate-400">{insp.dueDate}</span>}
                 </div>
                 <div className="flex items-center justify-between">
                   {insp.result === "fail" && <span className="text-[11px] text-red-500 font-semibold">재검사 필요</span>}
