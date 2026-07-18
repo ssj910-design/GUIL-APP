@@ -267,21 +267,25 @@ export default function Dashboard({ data }) {
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
                       <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
-                      <p className="text-xs font-bold text-blue-700">보완기한 {i.dueDate || "미정"}</p>
                     </div>
-                    <div className="shrink-0 flex items-center gap-1.5">
-                      <span className="text-[11px] text-slate-500">{i.type}</span>
-                      <Badge result={i.result} />
+                    <div className="shrink-0 flex flex-col items-end gap-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-slate-500">{i.type}</span>
+                        <Badge result={i.result} />
+                      </div>
+                      <span className="text-xs font-bold text-blue-700">보완기한 {i.dueDate || "미정"}</span>
                     </div>
                   </div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      {i.notes && <p className="text-[11px] text-red-600 mt-0.5">{i.notes}</p>}
+                  {(i.notes || i.scheduleTime) && (
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        {i.notes && <p className="text-[11px] text-red-600 mt-0.5">{i.notes}</p>}
+                      </div>
+                      {i.scheduleTime && (
+                        <span className="shrink-0 ml-2 text-[11px] text-blue-600 font-semibold text-right">검사일정 {i.scheduleTime}</span>
+                      )}
                     </div>
-                    {i.scheduleTime && (
-                      <span className="shrink-0 ml-2 text-[11px] text-blue-600 font-semibold text-right">검사일정 {i.scheduleTime}</span>
-                    )}
-                  </div>
+                  )}
                 </div>
               );
             })}

@@ -151,22 +151,21 @@ export function InspectionTab({ inspections, setInspections }) {
                   <div className="min-w-0">
                     <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
                     <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(insp.siteId)?.address)}</p>
-                    {insp.dueDate && <p className="text-xs font-bold text-blue-700">{formatMonthDay(insp.dueDate)}</p>}
                   </div>
-                  <div className="shrink-0 flex items-center gap-1.5">
-                    <span className="text-xs text-slate-500">{insp.type}</span>
-                    <Badge result={insp.result} />
+                  <div className="shrink-0 flex flex-col items-end gap-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-slate-500">{insp.type}</span>
+                      <Badge result={insp.result} />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {insp.dueDate && <span className="text-xs font-bold text-blue-700">{formatMonthDay(insp.dueDate)}</span>}
+                      <DDay dueDate={insp.dueDate} />
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="min-w-0">
-                    {insp.notes && <p className="text-[11px] text-red-600 leading-relaxed mt-0.5">지적사항: {insp.notes}</p>}
-                  </div>
-                  <span className="shrink-0 flex items-center gap-1">
-                    <span className="text-[10px] text-slate-400">보완기한</span>
-                    <DDay dueDate={insp.dueDate} />
-                  </span>
-                </div>
+                {insp.notes && (
+                  <p className="text-[11px] text-red-600 leading-relaxed mb-2">지적사항: {insp.notes}</p>
+                )}
                 {(insp.result === "fail" || !isLive) && (
                   <div className="flex items-center justify-between">
                     {insp.result === "fail" && <span className="text-[11px] text-red-500 font-semibold">재검사 필요</span>}

@@ -219,29 +219,30 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
                         <div className="min-w-0">
                           <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
                           <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
-                          {i.dueDate && <p className="text-xs font-bold text-blue-700">{formatMonthDay(i.dueDate)}</p>}
                         </div>
-                        <div className="shrink-0 flex items-center gap-1.5">
-                          <span className="text-[11px] text-slate-500">{i.type}</span>
-                          <Badge result={i.result} />
+                        <div className="shrink-0 flex flex-col items-end gap-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] text-slate-500">{i.type}</span>
+                            <Badge result={i.result} />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {i.dueDate && <span className="text-xs font-bold text-blue-700">{formatMonthDay(i.dueDate)}</span>}
+                            <DDay dueDate={i.dueDate} />
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          {i.notes && <p className="text-[11px] text-red-600 leading-relaxed mt-0.5">{i.notes}</p>}
-                        </div>
-                        <span className="shrink-0 flex flex-col items-end gap-0.5">
-                          <span className="flex items-center gap-1">
-                            <span className="text-[10px] text-slate-400">보완기한</span>
-                            <DDay dueDate={i.dueDate} />
-                          </span>
+                      {(i.notes || i.scheduleDate) && (
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            {i.notes && <p className="text-[11px] text-red-600 leading-relaxed mt-0.5">{i.notes}</p>}
+                          </div>
                           {i.scheduleDate && (
-                            <span className="text-[10px] text-blue-600 font-semibold">
+                            <span className="shrink-0 text-[10px] text-blue-600 font-semibold">
                               검사일정 {formatMonthDay(i.scheduleDate)}{i.scheduleTime ? ` ${i.scheduleTime}` : ""}
                             </span>
                           )}
-                        </span>
-                      </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
