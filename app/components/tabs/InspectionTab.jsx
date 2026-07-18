@@ -115,9 +115,8 @@ export function InspectionTab({ inspections, setInspections }) {
               <div key={insp.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
-                  <span className="flex flex-col items-end gap-0.5 shrink-0">
-                    <DDay dueDate={insp.dueDate} />
-                    <span className="text-[10px] text-slate-400">{insp.dueDate}{insp.dueTime ? ` ${insp.dueTime}` : ""}</span>
+                  <span className="shrink-0 text-xs font-bold text-blue-700 whitespace-nowrap">
+                    {insp.dueDate ? insp.dueDate.slice(5) : "-"}{insp.dueTime ? ` ${insp.dueTime}` : ""}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 mb-2">
