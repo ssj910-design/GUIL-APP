@@ -9,9 +9,7 @@ export function InspectionFailDetailSheet({ inspection, onClose }) {
     let cancelled = false;
     async function load() {
       try {
-        const res = await fetch(
-          `/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(inspection.govElevatorNo)}&anchorDate=${encodeURIComponent(inspection.startDate)}`
-        );
+        const res = await fetch(`/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(inspection.govElevatorNo)}`);
         const data = await res.json();
         if (!cancelled) setState({ loading: false, items: data.items ?? [], error: data.error ?? null, reason: data.reason ?? null, record: data.record ?? null });
       } catch {
@@ -22,7 +20,7 @@ export function InspectionFailDetailSheet({ inspection, onClose }) {
     return () => {
       cancelled = true;
     };
-  }, [inspection.govElevatorNo, inspection.startDate]);
+  }, [inspection.govElevatorNo]);
 
   return (
     <Sheet title="조건부·불합격 상세" onClose={onClose}>
@@ -37,7 +35,7 @@ export function InspectionFailDetailSheet({ inspection, onClose }) {
       ) : state.items.length === 0 ? (
         <p className="text-xs text-slate-400 text-center py-8">
           {state.reason === "no_record"
-            ? "국가승강기정보센터에 검사이력이 아직 등록되지 않았습니다 (검사일 ±15일 범위로 조회)"
+            ? "국가승강기정보센터에 이 승강기의 검사이력이 아직 등록되지 않았습니다"
             : state.reason === "no_fail_code"
             ? "검사이력은 확인됐지만 부적합 상세코드가 등록되어 있지 않습니다"
             : state.reason === "no_items_for_fail_code"

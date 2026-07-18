@@ -14,27 +14,17 @@ function parseItems(xml) {
   });
 }
 
-function toYyyymmdd(date) {
-  return date.toISOString().slice(0, 10).replaceAll("-", "");
-}
-
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const elevatorNo = searchParams.get("elevatorNo");
-  const anchorDate = searchParams.get("anchorDate");
-  if (!elevatorNo || !anchorDate) {
-    return Response.json({ error: "elevatorNo와 anchorDate가 필요합니다" }, { status: 400 });
+  if (!elevatorNo) {
+    return Response.json({ error: "elevatorNo가 필요합니다" }, { status: 400 });
   }
 
-  // 승강기고유번호 최종검사판정결과(조건부합격·불합격)와 검사이력 API의 등록 시점이 며칠씩 어긋나는
-  // 현장이 있어(예: 대흥빌딩) ±5일로는 이력을 못 찾는 경우가 있었다. ±15일로 넓혀서 재현율을 높인다.
-  const anchor = new Date(anchorDate);
-  const sdt = new Date(anchor);
-  sdt.setDate(sdt.getDate() - 15);
-  const edt = new Date(anchor);
-  edt.setDate(edt.getDate() + 15);
-
-  const safeUrl = `${SAFE_URL}?serviceKey=${process.env.ELEVATOR_API_SERVICE_KEY}&pageNo=1&numOfRows=10&appr_sdt=${toYyyymmdd(sdt)}&appr_edt=${toYyyymmdd(edt)}&elevator_no=${encodeURIComponent(elevatorNo)}`;
+  // appr_sdt/appr_edt는 검사일이 아니라 "승인일자" 필터라, 실제 검사일 기준 앞뒤로 좁히면
+  // 승인 처리 지연이 있는 현장(예: 대흥빌딩)의 이력을 놓친다. 날짜로 좁히지 않고 승강기고유번호로만
+  // 조회한 뒤, 이력들 중 부적합내역조회코드(failCd)가 있는 건을 찾는다.
+  const safeUrl = `${SAFE_URL}?serviceKey=${process.env.ELEVATOR_API_SERVICE_KEY}&pageNo=1&numOfRows=50&elevator_no=${encodeURIComponent(elevatorNo)}`;
   const safeRes = await fetch(safeUrl);
   const safeXml = await safeRes.text();
   const safeResultCode = /<resultCode>([^<]*)<\/resultCode>/.exec(safeXml)?.[1];
