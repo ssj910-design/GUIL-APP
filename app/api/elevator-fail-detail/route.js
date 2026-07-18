@@ -66,10 +66,12 @@ export async function GET(request) {
   }
   const records = parseItems(safeXml).sort((a, b) => (inspectDateMs(b) ?? 0) - (inspectDateMs(a) ?? 0));
 
-  // 가장 최근 회차의 판정결과(dispWords)만 필요한 가벼운 조회 — 부적합 상세(getInspectFailList)는 호출하지 않는다.
-  // 검사도래현장 목록에서 "직전 검사가 조건부합격이었는지"만 확인할 때 씀(회차마다 부적합 상세까지 받는 전체이력 조회는 비쌈).
+  // 최근 회차 몇 개의 판정결과(dispWords)만 필요한 가벼운 조회 — 부적합 상세(getInspectFailList)는 호출하지 않는다.
+  // 검사도래현장 목록에서 "직전 검사가 조건부합격/조건후합격이었는지"만 확인할 때 씀
+  // (회차마다 부적합 상세까지 받는 전체이력 조회는 비쌈). 조건후합격은 그 앞 회차(조건부합격)의 부적합내역을
+  // 찾아 보여줘야 해서 최근 회차 여러 개를 함께 내려준다.
   if (latestOnly) {
-    return Response.json({ record: records[0] ?? null });
+    return Response.json({ records: records.slice(0, 10) });
   }
 
   // anchorDate 없이 호출하면 검사이력 화면용으로 전체 회차를 최신순으로 반환한다.
