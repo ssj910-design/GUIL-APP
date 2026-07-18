@@ -215,14 +215,14 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
                       onClick={isLive ? () => setInspectionFailTarget(i) : undefined}
                       className={`bg-red-50 border border-red-100 rounded-lg px-3 py-2 touch-manipulation ${isLive ? "active:bg-red-100 cursor-pointer" : ""}`}
                     >
-                      <div className="flex items-start justify-between mb-1 gap-2">
+                      <div className="flex items-center justify-between mb-1 gap-2">
                         <div className="min-w-0">
                           <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
                           <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
                         </div>
-                        <div className="shrink-0 flex flex-col items-end gap-0.5">
-                          <Badge result={i.result} />
+                        <div className="shrink-0 flex items-center gap-1.5">
                           <span className="text-[11px] text-slate-500">{i.type}</span>
+                          <Badge result={i.result} />
                         </div>
                       </div>
                       <div className="flex items-start justify-between gap-2">
