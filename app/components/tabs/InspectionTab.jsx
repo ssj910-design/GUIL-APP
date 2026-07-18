@@ -145,27 +145,29 @@ export function InspectionTab({ inspections, setInspections }) {
               <div
                 key={insp.id}
                 onClick={isLive ? () => setInspectionFailTarget(insp) : undefined}
-                className={`bg-white rounded-xl border border-red-100 p-3 touch-manipulation ${isLive ? "active:bg-slate-50 cursor-pointer" : ""}`}
+                className={`bg-white rounded-xl border border-red-100 p-2.5 touch-manipulation ${isLive ? "active:bg-slate-50 cursor-pointer" : ""}`}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-bold text-slate-800 text-sm truncate min-w-0">{insp.siteName} · {insp.elevatorNo}</p>
-                  <div className="shrink-0 flex items-center gap-1.5">
-                    <span className="text-xs text-slate-500">{insp.type}</span>
-                    <Badge result={insp.result} />
+                <div className="space-y-0.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-bold text-slate-800 text-sm truncate min-w-0">{insp.siteName} · {insp.elevatorNo}</p>
+                    <div className="shrink-0 flex items-center gap-1.5">
+                      <span className="text-xs text-slate-500">{insp.type}</span>
+                      <Badge result={insp.result} />
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <p className="text-[11px] text-slate-400 truncate min-w-0">{stripCityPrefix(siteById.get(insp.siteId)?.address)}</p>
-                  <div className="shrink-0 flex items-center gap-1">
-                    {insp.dueDate && <span className="text-xs font-bold text-blue-700">{formatMonthDay(insp.dueDate)}</span>}
-                    <DDay dueDate={insp.dueDate} />
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] text-slate-400 truncate min-w-0">{stripCityPrefix(siteById.get(insp.siteId)?.address)}</p>
+                    <div className="shrink-0 flex items-center gap-1">
+                      {insp.dueDate && <span className="text-xs font-bold text-blue-700">{formatMonthDay(insp.dueDate)}</span>}
+                      <DDay dueDate={insp.dueDate} />
+                    </div>
                   </div>
+                  {insp.notes && (
+                    <p className="text-[11px] text-red-600 leading-relaxed">지적사항: {insp.notes}</p>
+                  )}
                 </div>
-                {insp.notes && (
-                  <p className="text-[11px] text-red-600 leading-relaxed mb-2">지적사항: {insp.notes}</p>
-                )}
                 {(insp.result === "fail" || !isLive) && (
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mt-1.5">
                     {insp.result === "fail" && <span className="text-[11px] text-red-500 font-semibold">재검사 필요</span>}
                     {!isLive && (
                       <button

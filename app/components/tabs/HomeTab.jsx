@@ -206,14 +206,14 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
             {flagged.length === 0 ? (
               <p className="text-xs text-slate-400 py-1.5">조건부·불합격 현장이 없습니다.</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {flagged.map((i) => {
                   const isLive = i.id?.startsWith("unit-");
                   return (
                     <div
                       key={i.id}
                       onClick={isLive ? () => setInspectionFailTarget(i) : undefined}
-                      className={`bg-red-50 border border-red-100 rounded-lg px-3 py-2 touch-manipulation ${isLive ? "active:bg-red-100 cursor-pointer" : ""}`}
+                      className={`bg-red-50 border border-red-100 rounded-lg px-2.5 py-1.5 space-y-0.5 touch-manipulation ${isLive ? "active:bg-red-100 cursor-pointer" : ""}`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-bold text-slate-800 truncate min-w-0">{i.siteName} · {i.elevatorNo}</p>
@@ -222,7 +222,7 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
                           <Badge result={i.result} />
                         </div>
                       </div>
-                      <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="flex items-center justify-between gap-2">
                         <p className="text-[11px] text-slate-400 truncate min-w-0">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
                         <div className="shrink-0 flex items-center gap-1">
                           {i.dueDate && <span className="text-xs font-bold text-blue-700">{formatMonthDay(i.dueDate)}</span>}
@@ -232,7 +232,7 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
                       {(i.notes || i.scheduleDate) && (
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            {i.notes && <p className="text-[11px] text-red-600 leading-relaxed mt-0.5">{i.notes}</p>}
+                            {i.notes && <p className="text-[11px] text-red-600 leading-relaxed">{i.notes}</p>}
                           </div>
                           {i.scheduleDate && (
                             <span className="shrink-0 text-[10px] text-blue-600 font-semibold">
