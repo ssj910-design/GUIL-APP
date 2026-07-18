@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { ShieldCheck, AlertOctagon } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay } from "@/lib/utils";
 import { Badge, DDay, DrillHeader, SmsToast } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -189,7 +189,7 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
                       <p className="text-[11px] text-slate-500">{i.type} · {i.org}</p>
                     </div>
                     <span className="shrink-0 text-xs font-bold text-blue-700 whitespace-nowrap">
-                      {i.dueDate ? i.dueDate.slice(5) : "-"}{i.dueTime ? ` ${i.dueTime}` : ""}
+                      {i.dueDate ? formatMonthDay(i.dueDate) : "-"}{i.dueTime ? ` ${i.dueTime}` : ""}
                     </span>
                   </div>
                 ))}

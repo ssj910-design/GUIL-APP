@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay } from "@/lib/utils";
 import { Badge, DDay, PhotoUpload, FilterBar, PrimaryButton, Sheet, Field, inputCls } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -116,7 +116,7 @@ export function InspectionTab({ inspections, setInspections }) {
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
                   <span className="shrink-0 text-xs font-bold text-blue-700 whitespace-nowrap">
-                    {insp.dueDate ? insp.dueDate.slice(5) : "-"}{insp.dueTime ? ` ${insp.dueTime}` : ""}
+                    {insp.dueDate ? formatMonthDay(insp.dueDate) : "-"}{insp.dueTime ? ` ${insp.dueTime}` : ""}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 mb-2">
