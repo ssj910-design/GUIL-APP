@@ -35,6 +35,7 @@ export function Badge({ result }) {
 
 
 export function DDay({ dueDate }) {
+  if (!dueDate) return <span className="text-xs font-extrabold px-2 py-1 rounded-md bg-slate-100 text-slate-400">기한 미정</span>;
   const today = new Date(TODAY_STR);
   const due = new Date(dueDate);
   const diff = Math.ceil((due - today) / 86400000);
