@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { ShieldCheck, AlertOctagon } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections, formatMonthDay, stripCityPrefix } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite } from "@/lib/utils";
 import { Badge, DDay, DrillHeader, SmsToast } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -67,11 +67,13 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
   const combinedInspections = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId) && mySiteIds.has(i.siteId))];
 
   // 도래현장: 관리자가 수기입력한 검사일자(inspections.due_date) 기준으로 검사일이 30일 이내로 남은 담당현장만 (국가승강기정보센터 API 연동 현장은 제외)
-  const dueSoon = inspections
-    .filter((i) => mySiteIds.has(i.siteId) && i.dueDate && !i.result)
-    .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) }))
-    .filter((i) => i.daysLeft >= 0 && i.daysLeft <= 30)
-    .sort((a, b) => a.daysLeft - b.daysLeft);
+  const dueSoon = groupBySite(
+    inspections
+      .filter((i) => mySiteIds.has(i.siteId) && i.dueDate && !i.result)
+      .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) }))
+      .filter((i) => i.daysLeft >= 0 && i.daysLeft <= 30)
+      .sort((a, b) => a.daysLeft - b.daysLeft)
+  );
 
   // 조건부/불합격 카드의 "검사일정"은 관리자가 InspectionsAdmin에서 수기입력한 방문 예정 일시(inspections.due_date/due_time)다
   // — 보완기한(API 검사 유효기간)과는 별개 정보로 함께 보여준다.
@@ -79,14 +81,16 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
   const manualBySiteId = new Map(inspections.filter((i) => !i.unitId).map((i) => [i.siteId, i]));
 
   // 보완기한이 61일 이상 남은 건 아직 급하지 않으니 목록에서 뺀다(60일은 노출) — 기한 미정은 계속 노출.
-  const flagged = combinedInspections
-    .filter((i) => i.result === "conditional" || i.result === "fail")
-    .filter((i) => !i.dueDate || Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) <= 60)
-    .map((i) => {
-      const manual = manualByUnitId.get(i.unitId) ?? manualBySiteId.get(i.siteId) ?? null;
-      return { ...i, scheduleDate: manual?.dueDate ?? null, scheduleTime: manual?.dueTime ?? null };
-    })
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  const flagged = groupBySite(
+    combinedInspections
+      .filter((i) => i.result === "conditional" || i.result === "fail")
+      .filter((i) => !i.dueDate || Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) <= 60)
+      .map((i) => {
+        const manual = manualByUnitId.get(i.unitId) ?? manualBySiteId.get(i.siteId) ?? null;
+        return { ...i, scheduleDate: manual?.dueDate ?? null, scheduleTime: manual?.dueTime ?? null };
+      })
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+  );
 
   // 배정자를 지정해 접수한 건은 그 배정자에게만, 미배정(미정) 건은 전원에게 노출됩니다.
   const activeMine = failures.filter((f) => f.status !== "완료" && (f.assignee === CURRENT_ENGINEER || !f.assignee));

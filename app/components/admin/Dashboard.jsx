@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { AlertOctagon } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, unitsToInspections, stripCityPrefix } from "@/lib/utils";
+import { addDays, unitsToInspections, stripCityPrefix, groupBySite } from "@/lib/utils";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { Modal, StatusBadge } from "@/app/components/admin/adminShared";
@@ -90,9 +90,11 @@ export default function Dashboard({ data }) {
   const combinedInspections = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId))];
 
   // 금일검사현장: 국가승강기정보센터 API 연동 현장은 제외하고, 관리자가 수기입력한 검사일자(inspections.due_date) 기준으로만 판단한다.
-  const todayInspections = inspections
-    .filter((i) => i.dueDate === TODAY_STR)
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  const todayInspections = groupBySite(
+    inspections
+      .filter((i) => i.dueDate === TODAY_STR)
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+  );
 
   // 조건부/불합격 카드의 "검사일정"은 관리자가 InspectionsAdmin에서 수기입력한 방문 예정 일시(inspections.due_date/due_time)다
   // — 보완기한(API 검사 유효기간)과는 별개 정보로 함께 보여준다.
@@ -100,14 +102,16 @@ export default function Dashboard({ data }) {
   const manualBySiteId = new Map(inspections.filter((i) => !i.unitId).map((i) => [i.siteId, i]));
 
   // 보완기한이 61일 이상 남은 건 아직 급하지 않으니 목록에서 뺀다(60일은 노출) — 기한 미정은 계속 노출.
-  const flaggedInspections = combinedInspections
-    .filter((i) => i.result === "conditional" || i.result === "fail")
-    .filter((i) => !i.dueDate || Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) <= 60)
-    .map((i) => {
-      const manual = manualByUnitId.get(i.unitId) ?? manualBySiteId.get(i.siteId) ?? null;
-      return { ...i, scheduleDate: manual?.dueDate ?? null, scheduleTime: manual?.dueTime ?? null };
-    })
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  const flaggedInspections = groupBySite(
+    combinedInspections
+      .filter((i) => i.result === "conditional" || i.result === "fail")
+      .filter((i) => !i.dueDate || Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) <= 60)
+      .map((i) => {
+        const manual = manualByUnitId.get(i.unitId) ?? manualBySiteId.get(i.siteId) ?? null;
+        return { ...i, scheduleDate: manual?.dueDate ?? null, scheduleTime: manual?.dueTime ?? null };
+      })
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+  );
 
   // 집중 관리현장: 최근 30일 고장 3회 이상, 또는 지원요청/운행정지 등 미해결 에스컬레이션이 있는 현장
   // (모바일 홈탭과 동일 기준). 지원요청/운행정지는 각각 독립적으로 판단해 배지를 함께 표시합니다.

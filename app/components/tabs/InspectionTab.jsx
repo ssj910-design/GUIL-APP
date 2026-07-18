@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections, formatMonthDay, stripCityPrefix } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite } from "@/lib/utils";
 import { Badge, DDay, PhotoUpload, FilterBar, PrimaryButton, Sheet, Field, inputCls } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -30,16 +30,20 @@ export function InspectionTab({ inspections, setInspections }) {
   const combined = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId) && mySiteIds.has(i.siteId))];
 
   // 도래현장: 관리자가 수기입력한 검사일자(inspections.due_date) 기준, 검사일이 30일 이내로 남은 현장만 (국가승강기정보센터 API 연동 현장은 제외)
-  const dueSoon = inspections
-    .filter((i) => i.dueDate && !i.result)
-    .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) }))
-    .filter((i) => i.daysLeft >= 0 && i.daysLeft <= 30)
-    .sort((a, b) => a.daysLeft - b.daysLeft);
+  const dueSoon = groupBySite(
+    inspections
+      .filter((i) => i.dueDate && !i.result)
+      .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) }))
+      .filter((i) => i.daysLeft >= 0 && i.daysLeft <= 30)
+      .sort((a, b) => a.daysLeft - b.daysLeft)
+  );
   // 보완기한이 61일 이상 남은 건 아직 급하지 않으니 목록에서 뺀다(60일은 노출) — 기한 미정은 계속 노출.
-  const flagged = combined
-    .filter((i) => i.result === "conditional" || i.result === "fail")
-    .filter((i) => !i.dueDate || Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) <= 60)
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  const flagged = groupBySite(
+    combined
+      .filter((i) => i.result === "conditional" || i.result === "fail")
+      .filter((i) => !i.dueDate || Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) <= 60)
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+  );
 
   function startRegister(insp) {
     setForm({
