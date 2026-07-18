@@ -277,14 +277,14 @@ export default function Dashboard({ data }) {
                     <div className="min-w-0">
                       {i.notes && <p className="text-[11px] text-red-600 mt-0.5">{i.notes}</p>}
                     </div>
-                    <span className="text-[11px] text-slate-400 shrink-0 ml-2 text-right">
-                      <span className="block">보완기한 {i.dueDate || "미정"}</span>
+                    <span className="shrink-0 ml-2 text-right">
+                      <span className="block text-[10px] text-slate-400">보완기한</span>
+                      <span className="block text-xs font-bold text-slate-700">{i.dueDate || "미정"}</span>
                       {i.scheduleTime && (
-                        <span className="block text-blue-600 font-semibold">검사일정 {i.scheduleTime}</span>
+                        <span className="block text-[11px] text-blue-600 font-semibold mt-0.5">검사일정 {i.scheduleTime}</span>
                       )}
                     </span>
                   </div>
-                  {isLive && <p className="text-[10px] text-blue-600 font-semibold mt-1">클릭해서 부적합 상세 항목 보기</p>}
                 </div>
               );
             })}

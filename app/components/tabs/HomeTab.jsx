@@ -227,7 +227,6 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
                       </div>
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          {isLive && <p className="text-[10px] text-blue-600 font-semibold mt-0.5">터치해서 부적합 상세 항목 보기</p>}
                           {i.notes && <p className="text-[11px] text-red-600 leading-relaxed mt-0.5">{i.notes}</p>}
                         </div>
                         <span className="shrink-0 flex flex-col items-end gap-0.5">
@@ -235,10 +234,10 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
                             <span className="text-[10px] text-slate-400">보완기한</span>
                             <DDay dueDate={i.dueDate} />
                           </span>
-                          {i.dueDate && <span className="text-[10px] text-slate-400">{i.dueDate}</span>}
+                          {i.dueDate && <span className="text-xs font-bold text-slate-700">{formatMonthDay(i.dueDate)}</span>}
                           {i.scheduleDate && (
                             <span className="text-[10px] text-blue-600 font-semibold">
-                              검사일정 {i.scheduleDate}{i.scheduleTime ? ` ${i.scheduleTime}` : ""}
+                              검사일정 {formatMonthDay(i.scheduleDate)}{i.scheduleTime ? ` ${i.scheduleTime}` : ""}
                             </span>
                           )}
                         </span>
