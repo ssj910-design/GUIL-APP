@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { AlertOctagon } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, unitsToInspections } from "@/lib/utils";
+import { addDays, unitsToInspections, stripCityPrefix } from "@/lib/utils";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { Modal, StatusBadge } from "@/app/components/admin/adminShared";
@@ -70,6 +70,7 @@ export function FailureDetailContent({ f, units, sites }) {
 
 export default function Dashboard({ data }) {
   const { sites, units, failures, inspections, materialRequests, quoteRequests, todos, billings, selfChecks, profiles } = data;
+  const siteById = new Map(sites.map((s) => [s.id, s]));
   const [historySite, setHistorySite] = useState(null);
   const [failureDetail, setFailureDetail] = useState(null);
   const [failTarget, setFailTarget] = useState(null);
@@ -231,12 +232,13 @@ export default function Dashboard({ data }) {
           ) : (
             <ul>
               {todayInspections.map((i) => (
-                <li key={i.id} className="flex items-center justify-between px-5 py-2.5 border-b border-slate-50 text-sm">
-                  <div>
+                <li key={i.id} className="flex items-center justify-between px-5 py-2.5 border-b border-slate-50 text-sm gap-2">
+                  <div className="min-w-0">
                     <p className="font-semibold">{i.siteName} · {i.elevatorNo}</p>
-                    <p className="text-xs text-slate-400">{i.type} · {i.org}</p>
+                    <p className="text-xs text-slate-400">{i.type}</p>
+                    <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
                   </div>
-                  <span className="text-xs font-bold text-blue-700 whitespace-nowrap">{i.dueTime || i.dueDate}</span>
+                  <span className="text-xs font-bold text-blue-700 whitespace-nowrap shrink-0">{i.dueTime || i.dueDate}</span>
                 </li>
               ))}
             </ul>
@@ -267,7 +269,8 @@ export default function Dashboard({ data }) {
                   </div>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-[11px] text-slate-500">{i.type} · {i.org}</p>
+                      <p className="text-[11px] text-slate-500">{i.type}</p>
+                      <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
                       {i.notes && <p className="text-[11px] text-red-600 mt-0.5">{i.notes}</p>}
                     </div>
                     <span className="text-[11px] text-slate-400 shrink-0 ml-2 text-right">

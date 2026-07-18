@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { ShieldCheck, AlertOctagon } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections, formatMonthDay } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay, stripCityPrefix } from "@/lib/utils";
 import { Badge, DDay, DrillHeader, SmsToast } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -43,6 +43,7 @@ function FailureHistoryDetailScreen({ site, failures, onBack }) {
 
 export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast }) {
   const sites = useContext(SitesContext);
+  const siteById = new Map(sites.map((s) => [s.id, s]));
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const mySites = role === "admin" ? sites : sites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER);
   // 지원요청/운행정지는 각각 독립적으로 판단해 배지를 함께 표시합니다 (관리자 대시보드와 동일 기준).
@@ -183,10 +184,11 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
             ) : (
               <div className="space-y-1.5">
                 {dueSoon.map((i) => (
-                  <div key={i.id} className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2">
-                    <div>
+                  <div key={i.id} className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2 gap-2">
+                    <div className="min-w-0">
                       <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
-                      <p className="text-[11px] text-slate-500">{i.type} · {i.org}</p>
+                      <p className="text-[11px] text-slate-500">{i.type}</p>
+                      <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
                     </div>
                     <span className="shrink-0 text-xs font-bold text-blue-700 whitespace-nowrap">
                       {i.dueDate ? formatMonthDay(i.dueDate) : "-"}{i.dueTime ? ` ${i.dueTime}` : ""}
@@ -219,7 +221,8 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
                       </div>
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="text-[11px] text-slate-500">{i.type} · {i.org}</p>
+                          <p className="text-[11px] text-slate-500">{i.type}</p>
+                          <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
                           {isLive && <p className="text-[10px] text-blue-600 font-semibold mt-0.5">터치해서 부적합 상세 항목 보기</p>}
                           {i.notes && <p className="text-[11px] text-red-600 leading-relaxed mt-0.5">{i.notes}</p>}
                         </div>

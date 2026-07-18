@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections, formatMonthDay } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay, stripCityPrefix } from "@/lib/utils";
 import { Badge, DDay, PhotoUpload, FilterBar, PrimaryButton, Sheet, Field, inputCls } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -13,6 +13,7 @@ import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetail
 
 export function InspectionTab({ inspections, setInspections }) {
   const sites = useContext(SitesContext);
+  const siteById = new Map(sites.map((s) => [s.id, s]));
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const mySites = role === "admin" ? sites : sites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER);
   const mySiteIds = new Set(mySites.map((s) => s.id));
@@ -119,10 +120,9 @@ export function InspectionTab({ inspections, setInspections }) {
                     {insp.dueDate ? formatMonthDay(insp.dueDate) : "-"}{insp.dueTime ? ` ${insp.dueTime}` : ""}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs text-slate-500">{insp.type}</span>
-                  <span className="text-slate-300 text-xs">·</span>
-                  <span className="text-xs text-slate-500">{insp.org}</span>
+                <div className="mb-2">
+                  <p className="text-xs text-slate-500">{insp.type}</p>
+                  <p className="text-[11px] text-slate-400">{stripCityPrefix(siteById.get(insp.siteId)?.address)}</p>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] text-slate-400">검사 결과 미등록</span>
@@ -153,7 +153,8 @@ export function InspectionTab({ inspections, setInspections }) {
                 </div>
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="min-w-0">
-                    <p className="text-xs text-slate-500">{insp.type} · {insp.org}</p>
+                    <p className="text-xs text-slate-500">{insp.type}</p>
+                    <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(insp.siteId)?.address)}</p>
                     {isLive && <p className="text-[10px] text-blue-600 font-semibold mt-0.5">터치해서 부적합 상세 항목 보기</p>}
                     {insp.notes && <p className="text-[11px] text-red-600 leading-relaxed mt-0.5">지적사항: {insp.notes}</p>}
                   </div>
