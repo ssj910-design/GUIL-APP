@@ -147,20 +147,18 @@ export function InspectionTab({ inspections, setInspections }) {
                 onClick={isLive ? () => setInspectionFailTarget(insp) : undefined}
                 className={`bg-white rounded-xl border border-red-100 p-3 touch-manipulation ${isLive ? "active:bg-slate-50 cursor-pointer" : ""}`}
               >
-                <div className="flex items-start justify-between mb-1 gap-2">
-                  <div className="min-w-0">
-                    <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
-                    <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(insp.siteId)?.address)}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-bold text-slate-800 text-sm truncate min-w-0">{insp.siteName} · {insp.elevatorNo}</p>
+                  <div className="shrink-0 flex items-center gap-1.5">
+                    <span className="text-xs text-slate-500">{insp.type}</span>
+                    <Badge result={insp.result} />
                   </div>
-                  <div className="shrink-0 flex flex-col items-end gap-0.5">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-slate-500">{insp.type}</span>
-                      <Badge result={insp.result} />
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {insp.dueDate && <span className="text-xs font-bold text-blue-700">{formatMonthDay(insp.dueDate)}</span>}
-                      <DDay dueDate={insp.dueDate} />
-                    </div>
+                </div>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <p className="text-[11px] text-slate-400 truncate min-w-0">{stripCityPrefix(siteById.get(insp.siteId)?.address)}</p>
+                  <div className="shrink-0 flex items-center gap-1">
+                    {insp.dueDate && <span className="text-xs font-bold text-blue-700">{formatMonthDay(insp.dueDate)}</span>}
+                    <DDay dueDate={insp.dueDate} />
                   </div>
                 </div>
                 {insp.notes && (

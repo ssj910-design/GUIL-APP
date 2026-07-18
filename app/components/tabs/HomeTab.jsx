@@ -215,20 +215,18 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
                       onClick={isLive ? () => setInspectionFailTarget(i) : undefined}
                       className={`bg-red-50 border border-red-100 rounded-lg px-3 py-2 touch-manipulation ${isLive ? "active:bg-red-100 cursor-pointer" : ""}`}
                     >
-                      <div className="flex items-start justify-between mb-1 gap-2">
-                        <div className="min-w-0">
-                          <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
-                          <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-bold text-slate-800 truncate min-w-0">{i.siteName} · {i.elevatorNo}</p>
+                        <div className="shrink-0 flex items-center gap-1.5">
+                          <span className="text-[11px] text-slate-500">{i.type}</span>
+                          <Badge result={i.result} />
                         </div>
-                        <div className="shrink-0 flex flex-col items-end gap-0.5">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[11px] text-slate-500">{i.type}</span>
-                            <Badge result={i.result} />
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {i.dueDate && <span className="text-xs font-bold text-blue-700">{formatMonthDay(i.dueDate)}</span>}
-                            <DDay dueDate={i.dueDate} />
-                          </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <p className="text-[11px] text-slate-400 truncate min-w-0">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
+                        <div className="shrink-0 flex items-center gap-1">
+                          {i.dueDate && <span className="text-xs font-bold text-blue-700">{formatMonthDay(i.dueDate)}</span>}
+                          <DDay dueDate={i.dueDate} />
                         </div>
                       </div>
                       {(i.notes || i.scheduleDate) && (
