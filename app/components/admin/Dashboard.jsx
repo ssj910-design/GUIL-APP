@@ -235,8 +235,8 @@ export default function Dashboard({ data }) {
                 <li key={i.id} className="flex items-center justify-between px-5 py-2.5 border-b border-slate-50 text-sm gap-2">
                   <div className="min-w-0">
                     <p className="font-semibold">{i.siteName} · {i.elevatorNo}</p>
-                    <p className="text-xs text-slate-400">{i.type}</p>
                     <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
+                    <p className="text-xs text-slate-400">{i.type}</p>
                   </div>
                   <span className="text-xs font-bold text-blue-700 whitespace-nowrap shrink-0">{i.dueTime || i.dueDate}</span>
                 </li>
@@ -263,14 +263,18 @@ export default function Dashboard({ data }) {
                   onClick={isLive ? () => setFailTarget(i) : undefined}
                   className={`bg-red-50 border border-red-100 rounded-lg px-3.5 py-2.5 ${isLive ? "cursor-pointer hover:bg-red-100" : ""}`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
-                    <Badge result={i.result} />
+                  <div className="flex items-start justify-between mb-1 gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
+                      <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
+                    </div>
+                    <div className="shrink-0 flex flex-col items-end gap-0.5">
+                      <Badge result={i.result} />
+                      <span className="text-[11px] text-slate-500">{i.type}</span>
+                    </div>
                   </div>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-[11px] text-slate-500">{i.type}</p>
-                      <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
                       {i.notes && <p className="text-[11px] text-red-600 mt-0.5">{i.notes}</p>}
                     </div>
                     <span className="text-[11px] text-slate-400 shrink-0 ml-2 text-right">
