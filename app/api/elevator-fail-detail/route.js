@@ -59,5 +59,7 @@ export async function GET(request) {
     return Response.json({ error: "부적합 항목 조회에 실패했습니다" }, { status: 502 });
   }
 
-  return Response.json({ items: parseItems(failXml), record });
+  const items = parseItems(failXml);
+  // failCd는 있는데 상세 항목이 0건인 경우도 있다 — 국가승강기정보센터 쪽 데이터 공백으로 보이며 코드로는 더 확인할 수 없다.
+  return Response.json({ items, record, reason: items.length === 0 ? "no_items_for_fail_code" : null });
 }

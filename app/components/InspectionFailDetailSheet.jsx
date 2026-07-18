@@ -3,7 +3,7 @@ import { Badge, Sheet } from "@/app/components/ui";
 
 
 export function InspectionFailDetailSheet({ inspection, onClose }) {
-  const [state, setState] = useState({ loading: true, items: [], error: null, reason: null });
+  const [state, setState] = useState({ loading: true, items: [], error: null, reason: null, record: null });
 
   useEffect(() => {
     let cancelled = false;
@@ -13,9 +13,9 @@ export function InspectionFailDetailSheet({ inspection, onClose }) {
           `/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(inspection.govElevatorNo)}&anchorDate=${encodeURIComponent(inspection.startDate)}`
         );
         const data = await res.json();
-        if (!cancelled) setState({ loading: false, items: data.items ?? [], error: data.error ?? null, reason: data.reason ?? null });
+        if (!cancelled) setState({ loading: false, items: data.items ?? [], error: data.error ?? null, reason: data.reason ?? null, record: data.record ?? null });
       } catch {
-        if (!cancelled) setState({ loading: false, items: [], error: "조회에 실패했습니다", reason: null });
+        if (!cancelled) setState({ loading: false, items: [], error: "조회에 실패했습니다", reason: null, record: null });
       }
     }
     load();
@@ -40,6 +40,8 @@ export function InspectionFailDetailSheet({ inspection, onClose }) {
             ? "국가승강기정보센터에 검사이력이 아직 등록되지 않았습니다 (검사일 ±15일 범위로 조회)"
             : state.reason === "no_fail_code"
             ? "검사이력은 확인됐지만 부적합 상세코드가 등록되어 있지 않습니다"
+            : state.reason === "no_items_for_fail_code"
+            ? `부적합코드(${state.record?.failCd ?? "-"})는 등록돼 있지만 상세 항목이 조회되지 않습니다. 국가승강기정보센터 데이터 공백으로 보입니다.`
             : "부적합 상세 항목을 찾을 수 없습니다"}
         </p>
       ) : (
