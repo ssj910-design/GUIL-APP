@@ -1,6 +1,7 @@
 // 국가승강기정보센터 승강기안전검사이력 조회 서비스를 서버에서 대신 호출합니다.
 // 1) getInspectsafeList로 해당 승강기의 전체 검사이력을 가져오고
-// 2) 회차별로 부적합내역조회코드(failCd)가 있으면 getInspectFailList로 실제 부적합 항목을 가져옵니다.
+// 2) anchorDate가 있으면 그 날짜와 가장 가까운 회차 하나만, 없으면 전체 회차를 반환합니다.
+//    회차마다 부적합내역조회코드(failCd)가 있으면 getInspectFailList로 실제 부적합 항목을 붙입니다.
 const SAFE_URL = "https://apis.data.go.kr/B553664/ElevatorInspectsafeService/getInspectsafeList";
 const FAIL_URL = "https://apis.data.go.kr/B553664/ElevatorInspectsafeService/getInspectFailList";
 
@@ -15,6 +16,7 @@ function parseItems(xml) {
 }
 
 // 실데이터로 확인된 실제 검사일자 필드는 inspctDe다(청담포레·대흥빌딩 응답에서 검증됨).
+// 다른 날짜 필드(예: applcEnDt=이전 회차의 유효기간 종료일)는 다음 검사일 직전이라 헷갈리기 쉬워 쓰지 않는다.
 function inspectDateMs(record) {
   const m = /^(\d{4})-?(\d{2})-?(\d{2})/.exec(record.inspctDe ?? "");
   if (!m) return null;
@@ -22,9 +24,26 @@ function inspectDateMs(record) {
   return Number.isNaN(t) ? null : t;
 }
 
+async function fetchFailItems(failCd) {
+  const failUrl = `${FAIL_URL}?serviceKey=${process.env.ELEVATOR_API_SERVICE_KEY}&pageNo=1&numOfRows=50&fail_cd=${encodeURIComponent(failCd)}`;
+  const failRes = await fetch(failUrl);
+  const failXml = await failRes.text();
+  const failResultCode = /<resultCode>([^<]*)<\/resultCode>/.exec(failXml)?.[1];
+  if (failResultCode !== "00") {
+    return { items: [], reason: "fetch_failed" };
+  }
+  const items = parseItems(failXml);
+  // failCd는 있는데 상세 항목이 0건인 경우도 있다 — 국가승강기정보센터 쪽 데이터 공백으로 보이며 코드로는 더 확인할 수 없다.
+  return { items, reason: items.length === 0 ? "no_items_for_fail_code" : null };
+}
+
+const ONE_DAY_MS = 86400000;
+const MAX_MATCH_DAYS = 45; // 이 범위 밖이면 다른 회차 검사이력으로 보고 매칭하지 않는다.
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const elevatorNo = searchParams.get("elevatorNo");
+  const anchorDate = searchParams.get("anchorDate");
   if (!elevatorNo) {
     return Response.json({ error: "elevatorNo가 필요합니다" }, { status: 400 });
   }
@@ -36,26 +55,39 @@ export async function GET(request) {
   if (safeResultCode !== "00") {
     return Response.json({ error: "검사이력 조회에 실패했습니다" }, { status: 502 });
   }
-
   const records = parseItems(safeXml).sort((a, b) => (inspectDateMs(b) ?? 0) - (inspectDateMs(a) ?? 0));
 
-  const history = await Promise.all(
-    records.map(async (record) => {
-      if (!record.failCd) {
-        return { record, items: [], reason: "no_fail_code" };
-      }
-      const failUrl = `${FAIL_URL}?serviceKey=${process.env.ELEVATOR_API_SERVICE_KEY}&pageNo=1&numOfRows=50&fail_cd=${encodeURIComponent(record.failCd)}`;
-      const failRes = await fetch(failUrl);
-      const failXml = await failRes.text();
-      const failResultCode = /<resultCode>([^<]*)<\/resultCode>/.exec(failXml)?.[1];
-      if (failResultCode !== "00") {
-        return { record, items: [], reason: "fetch_failed" };
-      }
-      const items = parseItems(failXml);
-      // failCd는 있는데 상세 항목이 0건인 경우도 있다 — 국가승강기정보센터 쪽 데이터 공백으로 보이며 코드로는 더 확인할 수 없다.
-      return { record, items, reason: items.length === 0 ? "no_items_for_fail_code" : null };
-    })
-  );
+  // anchorDate 없이 호출하면 검사이력 화면용으로 전체 회차를 최신순으로 반환한다.
+  if (!anchorDate) {
+    const history = await Promise.all(
+      records.map(async (record) => {
+        if (!record.failCd) return { record, items: [], reason: "no_fail_code" };
+        const { items, reason } = await fetchFailItems(record.failCd);
+        return { record, items, reason };
+      })
+    );
+    return Response.json({ history });
+  }
 
-  return Response.json({ history });
+  // anchorDate가 있으면(조건부/불합격 목록에서 특정 건을 클릭한 경우) 그 날짜와 가장 가까운 회차 하나만 찾는다.
+  const anchorTime = new Date(anchorDate).getTime();
+  if (Number.isNaN(anchorTime)) {
+    return Response.json({ error: "anchorDate가 올바르지 않습니다" }, { status: 400 });
+  }
+  let record = null;
+  let bestDiff = Infinity;
+  for (const r of records) {
+    const t = inspectDateMs(r);
+    if (t === null) continue;
+    const diff = Math.abs(t - anchorTime);
+    if (diff < bestDiff) { bestDiff = diff; record = r; }
+  }
+  if (!record || bestDiff > MAX_MATCH_DAYS * ONE_DAY_MS) {
+    return Response.json({ items: [], record: null, reason: "no_record" });
+  }
+  if (!record.failCd) {
+    return Response.json({ items: [], record, reason: "no_fail_code" });
+  }
+  const { items, reason } = await fetchFailItems(record.failCd);
+  return Response.json({ items, record, reason });
 }

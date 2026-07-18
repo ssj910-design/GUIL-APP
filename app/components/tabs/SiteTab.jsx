@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
 import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Flame, Download } from "lucide-react";
-import { siteUnits, addDays, labelToSeq } from "@/lib/utils";
+import { siteUnits, addDays, labelToSeq, govDateToDashed, formatShortDate } from "@/lib/utils";
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
-import { useLiveInspections } from "@/app/hooks/useLiveInspections";
+import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
 import { Badge, TimelineRow, HistoryCard, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -24,10 +24,10 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
   const liveInspections = useLiveInspections(
     unitGovNo ? [{ key: `${site.id}-${unitIndex}`, siteId: site.id, siteName: site.name, govElevatorNo: unitGovNo }] : []
   );
-  const unitInspections = liveInspections.length > 0
-    ? liveInspections
-    : [...inspections.filter((i) => i.siteId === site.id)].sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate));
   const liveInfo = liveInspections[0];
+  // 검사이력 탭: 최신 상태 1건이 아니라 과거 전체 검사결과(합격·조건부합격·불합격)를 나열한다.
+  const { history: inspectionHistory, loading: historyLoading } = useInspectionHistory(unitGovNo);
+  const manualInspections = [...inspections.filter((i) => i.siteId === site.id)].sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate));
   // 호기가 지정된 청구건은 그 호기에서만, 호기 미지정(기존) 청구건은 현장 전체에서 계속 보여줍니다.
   const unitBillings = billings.filter((b) => b.siteName === site.name && (!b.elevatorNo || b.elevatorNo === unit));
   const [inspectionFailTarget, setInspectionFailTarget] = useState(null);
@@ -131,23 +131,60 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
         {subTab === "검사" && (
           <div className="bg-slate-50 pt-4 pb-2">
             <p className="px-5 pb-3 text-xs font-bold text-slate-400">검사이력</p>
-            {unitInspections.length === 0 ? (
+            {unitGovNo ? (
+              historyLoading ? (
+                <p className="text-xs text-slate-400 text-center py-10">국가승강기정보센터에서 검사이력을 조회하는 중...</p>
+              ) : inspectionHistory.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-10">등록된 검사 이력이 없습니다</p>
+              ) : (
+                <div className="px-5 space-y-4">
+                  {inspectionHistory.map((h, hi) => {
+                    const resultCode = mapGovResultToCode(h.record.dispWords);
+                    const clickable = resultCode === "conditional" || resultCode === "fail";
+                    const inspDate = govDateToDashed(h.record.inspctDe);
+                    const runStart = govDateToDashed(h.record.applcBeDt);
+                    const runEnd = govDateToDashed(h.record.applcEnDt);
+                    const openTarget = () => setInspectionFailTarget({
+                      inspection: { siteName: site.name, elevatorNo: unit, result: resultCode },
+                      preloaded: h,
+                    });
+                    return (
+                      <div
+                        key={hi}
+                        onClick={clickable ? openTarget : undefined}
+                        onTouchEnd={clickable ? (e) => { e.preventDefault(); openTarget(); } : undefined}
+                        className={`bg-white rounded-xl border border-slate-100 shadow-sm p-4 ${clickable ? "touch-manipulation cursor-pointer active:opacity-70" : ""}`}
+                      >
+                        <HistoryCard
+                          noPadding
+                          barColor={resultCode === "fail" ? "#ef4444" : resultCode === "conditional" ? "#f59e0b" : "#10b981"}
+                          title={h.record.inspctKindNm ? `${h.record.inspctKindNm}검사` : "정기검사"}
+                          rows={[
+                            { label: "결과", value: RESULT_LABEL[resultCode] ?? h.record.dispWords ?? "-" },
+                            { label: "검사기관", value: h.record.inspctInsttNm ?? "-" },
+                          ]}
+                          timeCols={[
+                            { label: "검사일", value: inspDate ?? "-", color: "text-red-500" },
+                            { label: "유효시작일", value: runStart ?? "-", color: "text-amber-500" },
+                            { label: "유효종료일", value: runEnd ?? "-", color: "text-emerald-600" },
+                          ]}
+                        />
+                        {clickable && <p className="mt-2 text-[10px] text-blue-600 font-semibold">터치해서 부적합 상세 항목 보기</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : manualInspections.length === 0 ? (
               <p className="text-xs text-slate-400 text-center py-10">등록된 검사 이력이 없습니다</p>
             ) : (
               <div className="px-5 space-y-4">
-                {unitInspections.map((insp) => {
+                {manualInspections.map((insp) => {
                   const runEnd = insp.dueDate;
                   const runStart = insp.startDate || addDays(runEnd, -365);
                   const inspDate = insp.startDate || addDays(runStart, -5);
-                  const isLive = insp.id?.startsWith("gov-");
-                  const clickable = isLive && (insp.result === "conditional" || insp.result === "fail");
                   return (
-                    <div
-                      key={insp.id}
-                      onClick={clickable ? () => setInspectionFailTarget(insp) : undefined}
-                      onTouchEnd={clickable ? (e) => { e.preventDefault(); setInspectionFailTarget(insp); } : undefined}
-                      className={`bg-white rounded-xl border border-slate-100 shadow-sm p-4 ${clickable ? "touch-manipulation cursor-pointer active:opacity-70" : ""}`}
-                    >
+                    <div key={insp.id} className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
                       <HistoryCard
                         noPadding
                         barColor={insp.result === "fail" ? "#ef4444" : insp.result === "conditional" ? "#f59e0b" : "#10b981"}
@@ -163,7 +200,6 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
                           { label: "운행종료일", value: runEnd, color: "text-emerald-600" },
                         ]}
                       />
-                      {clickable && <p className="mt-2 text-[10px] text-blue-600 font-semibold">터치해서 부적합 상세 항목 보기</p>}
                     </div>
                   );
                 })}
@@ -192,7 +228,11 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
         )}
       </div>
       {inspectionFailTarget && (
-        <InspectionFailDetailSheet inspection={inspectionFailTarget} onClose={() => setInspectionFailTarget(null)} />
+        <InspectionFailDetailSheet
+          inspection={inspectionFailTarget.inspection}
+          preloaded={inspectionFailTarget.preloaded}
+          onClose={() => setInspectionFailTarget(null)}
+        />
       )}
       {photoViewer && (
         <PhotoViewerSheet
