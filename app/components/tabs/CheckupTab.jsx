@@ -535,9 +535,9 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
                           type="button"
                           title={o.label}
                           onClick={() => setItemResult(item.code, o.v)}
-                          className={`w-7 h-7 shrink-0 rounded-full text-[11px] font-bold border ${current === o.v ? "bg-blue-700 text-white border-blue-700" : "bg-slate-50 text-slate-400 border-slate-200"}`}
+                          className={`${o.v === "D" || o.v === "E" ? "px-2 h-7" : "w-7 h-7"} shrink-0 rounded-full text-[11px] font-bold border ${current === o.v ? "bg-blue-700 text-white border-blue-700" : "bg-slate-50 text-slate-400 border-slate-200"}`}
                         >
-                          {o.v}
+                          {o.v === "D" || o.v === "E" ? o.label : o.v}
                         </button>
                       ))}
                     </div>
