@@ -505,9 +505,14 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
             </Field>
           </div>
           {submitResult && (
-            <p className={`text-xs font-bold mt-2 ${submitResult.resultCode === "000" ? "text-emerald-600" : "text-red-600"}`}>
-              {submitResult.error ? submitResult.error : `${submitResult.resultCode} ${submitResult.resultMsg}`}
-            </p>
+            <div className="mt-2">
+              <p className={`text-xs font-bold ${submitResult.resultCode === "000" ? "text-emerald-600" : "text-red-600"}`}>
+                {submitResult.error ? submitResult.error : `${submitResult.resultCode} ${submitResult.resultMsg}`}
+              </p>
+              {submitResult.raw && (
+                <p className="text-[10px] text-slate-400 mt-1 break-all">HTTP {submitResult.httpStatus} · {submitResult.raw}</p>
+              )}
+            </div>
           )}
           <PrimaryButton disabled={submitting} onClick={submitToGov}>
             {submitting ? "제출 중..." : "공단에 제출"}
