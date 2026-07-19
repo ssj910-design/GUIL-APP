@@ -197,6 +197,13 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     if (!u?.govNo) { alert("이 호기에 승강기고유번호가 등록돼 있지 않습니다"); return; }
     const assignee = profilesAll.find((p) => p.id === c.assigneeId);
     if (!assignee?.minwon_id) { alert("담당 기사의 민원24 점검자 ID가 등록돼 있지 않습니다 — 인사관리에서 먼저 등록해주세요"); return; }
+    if (!assignee?.phone) { alert("담당 기사의 연락처가 등록돼 있지 않습니다 — 인사관리에서 먼저 등록해주세요"); return; }
+    // CNFIRM/CNFIRM_TELNO(관리주체명·전화번호)는 공단 스펙상 필수(구분=1) — 비워서 보내면
+    // 999(기타 오류)로 튕겨나온다. 이 현장에 담당자가 등록 안 돼 자동으로 못 채웠으면 직접 입력해야 한다.
+    if (!submitForm.cnfirm.trim() || !submitForm.cnfirmTel.trim()) {
+      alert("관리주체명/전화번호는 필수입니다 — 이 현장에 등록된 담당자가 없으면 직접 입력해주세요");
+      return;
+    }
 
     setSubmitting(true);
     // 스펙 예제(요청 예제 d)에도 RESULT_LIST에 2건만 들어있다 — 항목 202개를 전부 채우면
