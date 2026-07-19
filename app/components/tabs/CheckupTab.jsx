@@ -194,10 +194,6 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     if (!u?.govNo) { alert("이 호기에 승강기고유번호가 등록돼 있지 않습니다"); return; }
     if (!selfProfile?.minwon_id) { alert("본인의 민원24 점검자 ID가 등록돼 있지 않습니다 — 인사관리에서 먼저 등록해주세요"); return; }
     if (!selfProfile?.phone) { alert("본인의 연락처가 등록돼 있지 않습니다 — 인사관리에서 먼저 등록해주세요"); return; }
-    if (!checkupCnfirm.trim() || !checkupCnfirmTel.trim()) {
-      alert("관리주체명/전화번호는 필수입니다 — 이 현장에 등록된 담당자가 없으면 직접 입력해주세요");
-      return;
-    }
 
     setSavingCheckup(true);
     setCheckupResult(null);
@@ -486,13 +482,6 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
-          </Field>
-
-          <Field label="관리주체명">
-            <input className={inputCls} value={checkupCnfirm} onChange={(e) => setCheckupCnfirm(e.target.value)} />
-          </Field>
-          <Field label="관리주체 전화번호">
-            <input className={inputCls} value={checkupCnfirmTel} onChange={(e) => setCheckupCnfirmTel(e.target.value)} />
           </Field>
 
           <Field label="점검 사진 (사내 기록용 — 공단 제출과 무관)">
