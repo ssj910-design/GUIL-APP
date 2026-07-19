@@ -3,7 +3,7 @@ import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { siteUnitList } from "@/lib/utils";
-import { mapSelfCheck, mapSelfCheckItem } from "@/lib/mappers";
+import { mapSelfCheck, mapSelfCheckItem, mapSelfCheckItemState } from "@/lib/mappers";
 import { PrimaryButton, Sheet, Field, inputCls } from "@/app/components/ui";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -12,7 +12,11 @@ import SELF_CHECK_ITEM_CODES from "@/lib/data/selfCheckItemCodes.json";
 /* ------------------------------------------------------------------ */
 /* CHECKUP (정기점검) — self_checks(자체점검 출석부) 실데이터 연동             */
 /* 일정 등록 = 이번 달 출석부 행의 planned_date, 자체점검 등록 = 완료 처리 +      */
-/* 점검항목 예외 기록(self_check_items, 기본 양호(A) · 예외만 저장),          */
+/* 점검항목 예외 기록(self_check_items, 기본 양호(A) · 예외만 저장).           */
+/* 점검항목엔 1/3/6개월 주기가 있고(실제 리포트 5개월치로 실증), 주기가          */
+/* 이번 달이 아니면 D(제외)로 자동 채워 제출한다 — self_check_item_states가      */
+/* 호기별로 "마지막 실제 점검월"을 들고 있어야 계산되는데 처음엔 이력이 없어서    */
+/* 최초 1회는 기사가 "이번 달 대상인지" 직접 확인해줘야 한다.                  */
 /* 공단 제출 = 승강기민원24 RegistInspectionService로 실제 제출               */
 /* ------------------------------------------------------------------ */
 
@@ -42,8 +46,11 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   const [checkupDate, setCheckupDate] = useState(TODAY_STR);
   const [checkupNotes, setCheckupNotes] = useState("");
   const [checkupPhotos, setCheckupPhotos] = useState([]); // [{ url }]
-  const [itemExceptions, setItemExceptions] = useState({}); // { [itemCd]: { result, remark } }
+  const [itemExceptions, setItemExceptions] = useState({}); // { [itemCd]: { result, remark } } — 이번 달 대상 항목 중 기본값(A)과 다른 것만
   const [itemQuery, setItemQuery] = useState("");
+  const [itemStates, setItemStates] = useState({}); // { [itemCd]: { applicable, lastDoneYm } } — 호기별 점검주기 상태
+  const [pendingResolutions, setPendingResolutions] = useState({}); // { [itemCd]: "done" | "notdue" | "na" } — 최초 확인
+  const [pendingQuery, setPendingQuery] = useState("");
   const [savingCheckup, setSavingCheckup] = useState(false);
 
   const [submitTarget, setSubmitTarget] = useState(null); // 공단 제출 대상 self_check 행
@@ -75,10 +82,6 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     return s ? `${s.name} · ${u.unitNo}` : "-";
   }
 
-  const filteredItemCodes = SELF_CHECK_ITEM_CODES.filter(
-    (it) => !itemQuery.trim() || it.name.includes(itemQuery.trim()) || it.no.includes(itemQuery.trim())
-  );
-
   function setItemResult(code, result, remark) {
     setItemExceptions((prev) => {
       if (result === "A") {
@@ -89,6 +92,40 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
       return { ...prev, [code]: { result, remark: remark ?? prev[code]?.remark ?? "" } };
     });
   }
+
+  function resolvePending(code, choice) {
+    setPendingResolutions((prev) => ({ ...prev, [code]: choice }));
+  }
+
+  // 점검주기(1/3/6개월) 기반 이번 달 대상 판정. 리포트 실데이터로 확인된 구조:
+  // 1개월 주기는 매달 대상, 3·6개월 주기는 "마지막 실제 점검월"로부터 그 개월 수가
+  // 지나야 대상(그 전엔 D/제외) — 근데 그 기준월은 승강기마다 달라서(전사 공통 캘린더 아님)
+  // 처음엔 알 수가 없다. 그래서 아직 한 번도 기록이 없는(lastDoneYm null) 항목은
+  // "최초 확인 필요"로 따로 빼서 기사가 한 번 확정해주면, 그다음부턴 자동 계산된다.
+  function monthsBetween(fromYm, toYm) {
+    const [fy, fm] = fromYm.split("-").map(Number);
+    const [ty, tm] = toYm.split("-").map(Number);
+    return (ty - fy) * 12 + (tm - fm);
+  }
+  const dueItemCodes = SELF_CHECK_ITEM_CODES.filter((item) => {
+    const st = itemStates[item.code];
+    if (st?.applicable === false) return false;
+    if (item.cycle === 1) return true;
+    if (!st?.lastDoneYm) return false;
+    return monthsBetween(st.lastDoneYm, ym) >= item.cycle;
+  });
+  const pendingItemCodes = SELF_CHECK_ITEM_CODES.filter((item) => {
+    const st = itemStates[item.code];
+    if (st?.applicable === false) return false;
+    if (item.cycle === 1) return false;
+    return !st?.lastDoneYm;
+  });
+  const filteredItemCodes = dueItemCodes.filter(
+    (it) => !itemQuery.trim() || it.name.includes(itemQuery.trim()) || it.no.includes(itemQuery.trim())
+  );
+  const filteredPendingCodes = pendingItemCodes.filter(
+    (it) => !pendingQuery.trim() || it.name.includes(pendingQuery.trim()) || it.no.includes(pendingQuery.trim())
+  );
 
   // 달력: 오늘이 속한 달을 기준으로 그린다.
   const today = new Date(`${TODAY_STR}T00:00:00`);
@@ -122,6 +159,14 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     setCheckupPhotos([]);
     setItemExceptions({});
     setItemQuery("");
+    setPendingResolutions({});
+    setPendingQuery("");
+
+    const { data: stateRows } = await supabase.from("self_check_item_states").select("*").eq("unit_id", unitId);
+    const stateMap = {};
+    (stateRows ?? []).map(mapSelfCheckItemState).forEach((st) => { stateMap[st.itemCd] = { applicable: st.applicable, lastDoneYm: st.lastDoneYm }; });
+    setItemStates(stateMap);
+
     const existing = selfChecks.find((c) => c.unitId === unitId && c.ym === ym);
     if (!existing) return;
     if (existing.doneDate) setCheckupDate(existing.doneDate);
@@ -170,6 +215,22 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
       if (itemsError) alert("점검항목 저장 실패: " + itemsError.message);
     }
 
+    // 이번 달 대상이었던 항목(1개월 주기 전부 + 이번 달이 돌아온 3·6개월 주기 항목)은
+    // "마지막 실제 점검월"을 이번 달로 갱신 — 다음 달부터 주기 계산이 이어지게 한다.
+    const stateUpserts = dueItemCodes.map((item) => ({
+      unit_id: checkupUnitId, item_cd: item.code, applicable: true, last_done_ym: ym,
+    }));
+    // 최초 확인한 항목(3·6개월 주기, 이력 없던 것)도 결과에 맞게 상태를 남긴다.
+    for (const [code, choice] of Object.entries(pendingResolutions)) {
+      if (choice === "done") stateUpserts.push({ unit_id: checkupUnitId, item_cd: code, applicable: true, last_done_ym: ym });
+      else if (choice === "na") stateUpserts.push({ unit_id: checkupUnitId, item_cd: code, applicable: false, last_done_ym: null });
+      // "notdue"는 아직 기준월을 모른다는 뜻이라 상태를 남기지 않는다 — 다음 달에 다시 확인 요청.
+    }
+    if (stateUpserts.length > 0) {
+      const { error: stateError } = await supabase.from("self_check_item_states").upsert(stateUpserts, { onConflict: "unit_id,item_cd" });
+      if (stateError) alert("점검주기 상태 저장 실패: " + stateError.message);
+    }
+
     setSelfChecks((prev) => [...prev.filter((c) => !(c.unitId === checkupUnitId && c.ym === ym)), mapped]);
     setSavingCheckup(false);
     setCheckupTarget(null);
@@ -177,6 +238,8 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     setCheckupPhotos([]);
     setCheckupNotes("");
     setItemExceptions({});
+    setItemStates({});
+    setPendingResolutions({});
   }
 
   function openSubmit(c) {
@@ -206,15 +269,24 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     }
 
     setSubmitting(true);
-    // 스펙 예제(요청 예제 d)에도 RESULT_LIST에 2건만 들어있다 — 항목 202개를 전부 채우면
-    // contents가 5,000바이트 제한을 넘겨 공단 서버에서 999(기타 오류)로 튕겨나온다.
-    // 예외(B/C/D/E) 항목만 보낸다.
+    // 실제 리포트(report.xls 등, 5개월치)로 확인한 구조: 184개 항목 전부를 매달 채워 보내야 하고,
+    // 1개월 주기는 항상 A(예외만 self_check_items에 저장), 3·6개월 주기는 self_check_item_states의
+    // "마지막 실제 점검월"로부터 그 개월수가 지났으면 A, 아니면 D(제외), 이 호기에 해당 없으면 E.
     const { data: items } = await supabase.from("self_check_items").select("*").eq("self_check_id", c.id);
-    const resultList = (items ?? []).map((it) => ({
-      SEL_CHK_ITEM_CD: it.item_cd,
-      SEL_CHK_RESULT: it.result,
-      REMARK: it.remark ?? "",
-    }));
+    const exceptionMap = new Map((items ?? []).map((it) => [it.item_cd, it]));
+    const { data: stateRows } = await supabase.from("self_check_item_states").select("*").eq("unit_id", c.unitId);
+    const stateMap = new Map((stateRows ?? []).map((s) => [s.item_cd, s]));
+
+    const resultList = SELF_CHECK_ITEM_CODES.map((item) => {
+      const exc = exceptionMap.get(item.code);
+      if (exc) return { SEL_CHK_ITEM_CD: item.code, SEL_CHK_RESULT: exc.result, REMARK: exc.remark ?? "" };
+      const st = stateMap.get(item.code);
+      if (st?.applicable === false) return { SEL_CHK_ITEM_CD: item.code, SEL_CHK_RESULT: "E", REMARK: "" };
+      if (item.cycle === 1) return { SEL_CHK_ITEM_CD: item.code, SEL_CHK_RESULT: "A", REMARK: "" };
+      if (!st?.last_done_ym) return { SEL_CHK_ITEM_CD: item.code, SEL_CHK_RESULT: "D", REMARK: "" };
+      const elapsed = monthsBetween(st.last_done_ym, c.ym);
+      return { SEL_CHK_ITEM_CD: item.code, SEL_CHK_RESULT: elapsed >= item.cycle ? "A" : "D", REMARK: "" };
+    });
 
     const ymCompact = c.ym.replace("-", "");
     const dateCompact = (c.doneDate ?? TODAY_STR).replace(/-/g, "");
@@ -450,7 +522,52 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
               onRemove={(idx) => setCheckupPhotos((p) => p.filter((_, i) => i !== idx))}
             />
           </Field>
-          <Field label={`점검항목 (기본 양호 · 예외 ${Object.keys(itemExceptions).length}건)`}>
+          {pendingItemCodes.length > 0 && (
+            <Field label={`처음 확인 필요 (${pendingItemCodes.length}건) — 3·6개월 주기 항목은 이력이 없어 이번 달 대상인지 몰라요`}>
+              <input
+                value={pendingQuery}
+                onChange={(e) => setPendingQuery(e.target.value)}
+                placeholder="항목명·번호로 검색"
+                className={inputCls}
+              />
+              <div className="mt-2 max-h-56 overflow-y-auto border border-amber-200 rounded-lg divide-y divide-amber-100">
+                {filteredPendingCodes.map((item) => {
+                  const choice = pendingResolutions[item.code];
+                  return (
+                    <div key={item.code} className="px-2.5 py-1.5">
+                      <p className="text-[11px] text-slate-600 mb-1">{item.no} {item.name} <span className="text-slate-400">({item.cycle}개월 주기)</span></p>
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => resolvePending(item.code, "done")}
+                          className={`text-[10px] font-bold px-2 py-1 rounded border ${choice === "done" ? "border-emerald-400 bg-emerald-100 text-emerald-800" : "border-emerald-300 bg-emerald-50 text-emerald-700"}`}
+                        >
+                          이번달 점검함(양호)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => resolvePending(item.code, "notdue")}
+                          className={`text-[10px] font-bold px-2 py-1 rounded border ${choice === "notdue" ? "border-slate-400 bg-slate-200 text-slate-700" : "border-slate-300 text-slate-500"}`}
+                        >
+                          이번달 아님
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => resolvePending(item.code, "na")}
+                          className={`text-[10px] font-bold px-2 py-1 rounded border ${choice === "na" ? "border-red-400 bg-red-100 text-red-800" : "border-red-300 bg-red-50 text-red-600"}`}
+                        >
+                          해당없음
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {filteredPendingCodes.length === 0 && <p className="text-xs text-slate-400 text-center py-4">검색 결과가 없습니다</p>}
+              </div>
+              <p className="text-[10px] text-amber-600 mt-1">한 번 확인하면 다음 달부터는 자동으로 계산돼 여기 다시 안 뜹니다.</p>
+            </Field>
+          )}
+          <Field label={`이번 달 점검항목 (기본 양호 · 예외 ${Object.keys(itemExceptions).length}건)`}>
             <input
               value={itemQuery}
               onChange={(e) => setItemQuery(e.target.value)}
