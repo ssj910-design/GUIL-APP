@@ -971,7 +971,7 @@ export default function App() {
             />
           )}
           {tab === "checkup" && <CheckupTab />}
-          {tab === "inspection" && <InspectionTab inspections={inspections} setInspections={setInspections} />}
+          {tab === "inspection" && <InspectionTab inspections={inspections} />}
           {tab === "material" && <MaterialTab requests={materialRequests} setRequests={setMaterialRequests} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} setQuoteRequests={setQuoteRequests} restockRequests={restockRequests} kitStock={kitStock} onReceiveRestock={handleReceiveRestock} />}
           {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} />}
           {tab === "todo" && (
