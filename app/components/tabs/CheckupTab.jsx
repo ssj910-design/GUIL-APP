@@ -141,13 +141,13 @@ export function CheckupTab() {
                   <button
                     key={d}
                     onClick={() => setDayPopup(iso)}
-                    className="min-h-[84px] border-b border-r border-slate-50 p-1.5 text-left align-top active:bg-slate-50"
+                    className="min-h-[84px] border-b border-r border-slate-50 p-1.5 flex flex-col items-start text-left active:bg-slate-50"
                   >
-                    <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${isToday ? "bg-blue-500 text-white" : numColorCls}`}>
+                    <span className={`shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${isToday ? "bg-blue-500 text-white" : numColorCls}`}>
                       {d}
                     </span>
                     {daySchedules.length > 0 && (
-                      <div className="mt-1 space-y-0.5">
+                      <div className="mt-1 space-y-0.5 w-full">
                         {daySchedules.slice(0, 2).map((s) => (
                           <p key={s.id} className="text-[10px] text-blue-700 font-semibold truncate">{s.siteName}</p>
                         ))}
