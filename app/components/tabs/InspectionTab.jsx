@@ -25,9 +25,9 @@ function DueSoonCard({ insp, address, govElevatorNo, onOpenFail }) {
         govElevatorNo,
         startDate: govDateToDashed(detailRecord.inspctDe),
       }) : undefined}
-      className={`bg-white rounded-xl border border-slate-200 p-3.5 touch-manipulation ${clickable ? "cursor-pointer active:bg-slate-50" : ""}`}
+      className={`bg-white rounded-xl border border-slate-200 px-3 py-2 touch-manipulation ${clickable ? "cursor-pointer active:bg-slate-50" : ""}`}
     >
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
           <p className="text-[11px] text-slate-400 truncate">{address}</p>
@@ -150,11 +150,6 @@ export function InspectionTab({ inspections }) {
                     <p className="text-[11px] text-red-600 leading-relaxed">지적사항: {insp.notes}</p>
                   )}
                 </div>
-                {insp.result === "fail" && (
-                  <div className="mt-1.5">
-                    <span className="text-[11px] text-red-500 font-semibold">재검사 필요</span>
-                  </div>
-                )}
               </div>
             );
           })
