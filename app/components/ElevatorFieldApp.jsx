@@ -179,7 +179,7 @@ export default function App() {
         supabase.from("billings").select("*").order("created_at", { ascending: false }),
         supabase.from("restock_requests").select("*").order("created_at", { ascending: false }),
         supabase.from("feed_posts").select("*").order("created_at", { ascending: true }), // 카톡식: 오래된 글이 위, 최신이 아래
-        supabase.from("profiles").select("id,name,role,phone,email,feed_read_at").order("name"),
+        supabase.from("profiles").select("id,name,role,phone,email,feed_read_at,minwon_id").order("name"),
         supabase.from("units").select("*").order("seq"),
         supabase.from("kit_stock").select("*"),
         supabase.from("self_checks").select("*"),
@@ -974,7 +974,7 @@ export default function App() {
               onNotifyRoom={handleSendFeedPost}
             />
           )}
-          {tab === "checkup" && <CheckupTab selfChecks={selfChecks} setSelfChecks={setSelfChecks} />}
+          {tab === "checkup" && <CheckupTab selfChecks={selfChecks} setSelfChecks={setSelfChecks} siteManagers={siteManagers} profilesAll={profilesAll} />}
           {tab === "inspection" && <InspectionTab inspections={inspections} />}
           {tab === "material" && <MaterialTab requests={materialRequests} setRequests={setMaterialRequests} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} setQuoteRequests={setQuoteRequests} restockRequests={restockRequests} kitStock={kitStock} onReceiveRestock={handleReceiveRestock} />}
           {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} />}
