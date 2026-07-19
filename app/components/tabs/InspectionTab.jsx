@@ -94,15 +94,15 @@ export function InspectionTab({ inspections }) {
         ))}
       </div>
 
-      <div className="px-5 py-4 shrink-0">
-        <p className="text-sm font-bold text-blue-700 mb-1.5">진행상황</p>
+      <div className="px-5 pt-4 pb-2 shrink-0 flex items-center justify-between">
+        <p className="text-sm font-bold text-blue-700">진행상황</p>
         <div className="flex items-center gap-3 text-xs text-slate-500">
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-sky-400 inline-block" /> 도래 {dueSoon.length}</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> 조건부/불합격 {flagged.length}</span>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2.5">
+      <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-2.5">
         {subTab === "검사도래현장" ? (
           dueSoon.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-10">도래한 검사 현장이 없습니다</p>
