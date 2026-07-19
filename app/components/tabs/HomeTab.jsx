@@ -33,7 +33,7 @@ function DueSoonRow({ i, address, govElevatorNo, onOpenFail }) {
       <div className="shrink-0 flex flex-col items-end gap-0.5">
         {latest && (
           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-300">
-            직전 {latest.dispWords}
+            직전검사 {latest.dispWords}
           </span>
         )}
         <span className="text-xs font-bold text-blue-700 whitespace-nowrap">
