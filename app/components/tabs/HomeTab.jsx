@@ -294,7 +294,7 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
           <p className="px-4 pb-3 text-[9.5px] text-slate-300">
             {liveInspections.length > 0
               ? "* 승강기고유번호가 등록된 현장은 국가승강기정보센터 실시간 데이터, 나머지는 수기입력 데이터입니다"
-              : "* 프로토타입 시연용 시뮬레이션 데이터입니다 (현장관리에서 승강기고유번호를 등록하면 실시간 데이터로 전환됩니다)"}
+              : "* 프로토타입 시연용 시뮬레이션 데이터입니다 (현장정보에서 승강기고유번호를 등록하면 실시간 데이터로 전환됩니다)"}
           </p>
         </div>
       </div>

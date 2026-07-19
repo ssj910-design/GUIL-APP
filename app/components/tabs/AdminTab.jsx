@@ -151,7 +151,7 @@ function SiteManagementScreen({ sites, engineerNames, onAddSite, onUpdateSite, o
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
-      <DrillHeader title="현장관리" onBack={onBack} onHome={onBack} />
+      <DrillHeader title="현장정보" onBack={onBack} onHome={onBack} />
       <div className="flex-1 overflow-y-auto px-5 py-4">
         <PrimaryButton onClick={() => setEditingSite("new")} className="mb-4">
           + 새 현장 등록
@@ -807,7 +807,7 @@ export function AdminTab({ inspections, materialRequests, billings, quoteRequest
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto px-5 pt-4 pb-4">
         <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
-          <AdminMenuRow icon={Building2} label="현장관리" badge={sites.length} onClick={() => setAdminScreen("sites")} />
+          <AdminMenuRow icon={Building2} label="현장정보" badge={sites.length} onClick={() => setAdminScreen("sites")} />
           <AdminMenuRow icon={Users} label="기사관리" badge={engineers.length} onClick={() => setAdminScreen("engineers")} />
           <AdminMenuRow icon={PackageCheck} label="자재 지급 대기" badge={pendingCount} onClick={() => setAdminScreen("materials")} />
           <AdminMenuRow icon={Package} label="상비부품 보충" badge={restockRequests.filter((r) => r.status === "대기").length} onClick={() => setAdminScreen("restock")} />

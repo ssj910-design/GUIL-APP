@@ -23,7 +23,7 @@ import StatsAdmin from "@/app/components/admin/StatsAdmin";
 
 const MENU = [
   { id: "dashboard", label: "대시보드", icon: LayoutDashboard },
-  { id: "sites", label: "현장관리", icon: Building2 },
+  { id: "sites", label: "현장정보", icon: Building2 },
   { id: "failures", label: "고장 관제", icon: AlertTriangle },
   { id: "inspections", label: "검사관리", icon: ShieldCheck },
   { id: "materials", label: "자재·견적 신청내역", icon: Package },

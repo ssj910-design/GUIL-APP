@@ -444,7 +444,7 @@ export default function SitesAdmin({ data, setData }) {
     <div className="max-w-[100rem]">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
-          <h1 className="text-xl font-extrabold">현장관리</h1>
+          <h1 className="text-xl font-extrabold">현장정보</h1>
           <p className="text-xs text-slate-500 mt-0.5">호기(승강기 1대) 단위로 모델·설치일·승강기고유번호를 관리합니다</p>
         </div>
         {/* 현장 등록은 공단 엑셀 업로드로만 — API 단건 등록은 팀 결정으로 제거 (2026-07-17) */}

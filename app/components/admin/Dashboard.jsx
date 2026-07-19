@@ -138,7 +138,7 @@ export default function Dashboard({ data }) {
         return expiring.length > 0 ? (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-6">
             <p className="text-sm font-bold text-amber-700">
-              ⚠️ 계약 만료 임박·만료 현장 {expiring.length}곳 — 현장관리에서 재계약을 진행하세요
+              ⚠️ 계약 만료 임박·만료 현장 {expiring.length}곳 — 현장정보에서 재계약을 진행하세요
               <span className="font-semibold text-amber-600"> ({expiring.slice(0, 3).map((s) => s.name).join(", ")}{expiring.length > 3 ? ` 외 ${expiring.length - 3}곳` : ""})</span>
             </p>
           </div>
