@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock } from "@/lib/mappers";
+import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { simulateSms } from "@/lib/sms";
@@ -84,6 +84,7 @@ export default function App() {
   const [restockRequests, setRestockRequests] = useState([]);
   const [kitStock, setKitStock] = useState([]);
   const [kitStockReady, setKitStockReady] = useState(false);
+  const [selfChecks, setSelfChecks] = useState([]); // 자체점검 출석부(월별, 호기당 1건)
   const [feed, setFeed] = useState([]);
   // 지급 사진을 여러 장 연달아 올릴 때, setState 업데이터 함수가 React 렌더링 타이밍에 따라
   // 아직 반영되지 않은 상태를 기준으로 계산될 수 있어(경쟁 상태) ref에 최신값을 직접 보관합니다.
@@ -166,6 +167,7 @@ export default function App() {
         engineersRes,
         unitsRes,
         kitStockRes,
+        selfChecksRes,
       ] = await Promise.all([
         supabase.from("sites").select("*"),
         supabase.from("site_managers").select("*"),
@@ -180,6 +182,7 @@ export default function App() {
         supabase.from("profiles").select("id,name,role,phone,email,feed_read_at").order("name"),
         supabase.from("units").select("*").order("seq"),
         supabase.from("kit_stock").select("*"),
+        supabase.from("self_checks").select("*"),
       ]);
       setSites((sitesRes.data ?? []).map(mapSite));
       setSiteManagers((siteManagersRes.data ?? []).map(mapSiteManager));
@@ -199,6 +202,7 @@ export default function App() {
       setKitStock(loadedKitStock);
       loadedKitStock.forEach((k) => { kitStockRef.current[`${k.engineerId}|${k.part}`] = k.qty; });
       setKitStockReady(!kitStockRes.error);
+      setSelfChecks((selfChecksRes.data ?? []).map(mapSelfCheck));
       setLoading(false);
     }
     loadData();
@@ -970,7 +974,7 @@ export default function App() {
               onNotifyRoom={handleSendFeedPost}
             />
           )}
-          {tab === "checkup" && <CheckupTab />}
+          {tab === "checkup" && <CheckupTab selfChecks={selfChecks} setSelfChecks={setSelfChecks} />}
           {tab === "inspection" && <InspectionTab inspections={inspections} />}
           {tab === "material" && <MaterialTab requests={materialRequests} setRequests={setMaterialRequests} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} setQuoteRequests={setQuoteRequests} restockRequests={restockRequests} kitStock={kitStock} onReceiveRestock={handleReceiveRestock} />}
           {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} />}
