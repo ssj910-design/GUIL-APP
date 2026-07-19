@@ -220,6 +220,10 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     const dateCompact = (c.doneDate ?? TODAY_STR).replace(/-/g, "");
     const companyUniqueNo = c.govCompanyUniqueNo || `GUIL_${c.id.slice(0, 8)}`;
 
+    // 샘플 데이터(010123456784)가 숫자만 있는 형식이라 대시가 섞여 있으면 "필수입력 오류"로
+    // 튕겨나온다(빈 값과 동일하게 취급되는 듯) — 숫자만 남기고 보낸다.
+    const digitsOnly = (v) => (v ?? "").replace(/[^0-9]/g, "");
+
     const contents = {
       COMPANY_UNIQUE_NO: companyUniqueNo,
       ELEVATOR_NO: u.govNo,
@@ -227,10 +231,10 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
       SELCHK_USID: assignee.minwon_id,
       SEL_CHK_ST_DT: `${dateCompact}${submitForm.startTime.replace(":", "")}`,
       SEL_CHK_END_DT: `${dateCompact}${submitForm.endTime.replace(":", "")}`,
-      SELCHK_USID_TELNO: assignee.phone ?? "",
+      SELCHK_USID_TELNO: digitsOnly(assignee.phone),
       SUB_SELCHK_USID: submitForm.subUsid || assignee.minwon_id,
       CNFIRM: submitForm.cnfirm,
-      CNFIRM_TELNO: submitForm.cnfirmTel,
+      CNFIRM_TELNO: digitsOnly(submitForm.cnfirmTel),
       SELCHK_REASON_CD: "GD0001",
       PATICULS: c.notes || "",
       RESULT_LIST: resultList,
