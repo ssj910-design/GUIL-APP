@@ -25,13 +25,12 @@ function DueSoonCard({ insp, address, govElevatorNo, onOpenFail }) {
         govElevatorNo,
         startDate: govDateToDashed(detailRecord.inspctDe),
       }) : undefined}
-      className={`bg-white rounded-xl border border-slate-200 px-3 py-2 touch-manipulation ${clickable ? "cursor-pointer active:bg-slate-50" : ""}`}
+      className={`bg-white rounded-xl border border-slate-200 px-2.5 py-1.5 touch-manipulation ${clickable ? "cursor-pointer active:bg-slate-50" : ""}`}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
           <p className="text-[11px] text-slate-400 truncate">{address}</p>
-          <p className="text-xs text-slate-500">{insp.type}</p>
         </div>
         <div className="shrink-0 flex flex-col items-end gap-0.5">
           {latest && (
@@ -39,8 +38,11 @@ function DueSoonCard({ insp, address, govElevatorNo, onOpenFail }) {
               직전검사 {latest.dispWords}
             </span>
           )}
-          <span className="text-xs font-bold text-blue-700 whitespace-nowrap">
-            {insp.dueDate ? formatMonthDay(insp.dueDate) : "-"}{insp.dueTime ? ` ${insp.dueTime}` : ""}
+          <span className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500">{insp.type}</span>
+            <span className="text-xs font-bold text-blue-700 whitespace-nowrap">
+              {insp.dueDate ? formatMonthDay(insp.dueDate) : "-"}{insp.dueTime ? ` ${insp.dueTime}` : ""}
+            </span>
           </span>
         </div>
       </div>

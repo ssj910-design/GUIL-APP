@@ -240,9 +240,11 @@ export default function Dashboard({ data }) {
                   <div className="min-w-0">
                     <p className="font-semibold">{i.siteName} · {i.elevatorNo}</p>
                     <p className="text-[11px] text-slate-400 truncate">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
-                    <p className="text-xs text-slate-400">{i.type}</p>
                   </div>
-                  <span className="text-xs font-bold text-blue-700 whitespace-nowrap shrink-0">{i.dueTime || i.dueDate}</span>
+                  <span className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-xs text-slate-400">{i.type}</span>
+                    <span className="text-xs font-bold text-blue-700 whitespace-nowrap">{i.dueTime || i.dueDate}</span>
+                  </span>
                 </li>
               ))}
             </ul>

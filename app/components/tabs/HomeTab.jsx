@@ -23,12 +23,11 @@ function DueSoonRow({ i, address, govElevatorNo, onOpenFail }) {
         govElevatorNo,
         startDate: govDateToDashed(detailRecord.inspctDe),
       }) : undefined}
-      className={`flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2 gap-2 touch-manipulation ${clickable ? "cursor-pointer active:bg-blue-100" : ""}`}
+      className={`flex items-center justify-between bg-blue-50 rounded-lg px-2.5 py-1.5 gap-2 touch-manipulation ${clickable ? "cursor-pointer active:bg-blue-100" : ""}`}
     >
       <div className="min-w-0">
         <p className="text-sm font-bold text-slate-800">{i.siteName} · {i.elevatorNo}</p>
         <p className="text-[11px] text-slate-400 truncate">{address}</p>
-        <p className="text-[11px] text-slate-500">{i.type}</p>
       </div>
       <div className="shrink-0 flex flex-col items-end gap-0.5">
         {latest && (
@@ -36,8 +35,11 @@ function DueSoonRow({ i, address, govElevatorNo, onOpenFail }) {
             직전검사 {latest.dispWords}
           </span>
         )}
-        <span className="text-xs font-bold text-blue-700 whitespace-nowrap">
-          {i.dueDate ? formatMonthDay(i.dueDate) : "-"}{i.dueTime ? ` ${i.dueTime}` : ""}
+        <span className="flex items-center gap-1.5">
+          <span className="text-[11px] text-slate-500">{i.type}</span>
+          <span className="text-xs font-bold text-blue-700 whitespace-nowrap">
+            {i.dueDate ? formatMonthDay(i.dueDate) : "-"}{i.dueTime ? ` ${i.dueTime}` : ""}
+          </span>
         </span>
       </div>
     </div>
