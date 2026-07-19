@@ -199,12 +199,15 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     if (!assignee?.minwon_id) { alert("담당 기사의 민원24 점검자 ID가 등록돼 있지 않습니다 — 인사관리에서 먼저 등록해주세요"); return; }
 
     setSubmitting(true);
+    // 스펙 예제(요청 예제 d)에도 RESULT_LIST에 2건만 들어있다 — 항목 202개를 전부 채우면
+    // contents가 5,000바이트 제한을 넘겨 공단 서버에서 999(기타 오류)로 튕겨나온다.
+    // 예외(B/C/D/E) 항목만 보낸다.
     const { data: items } = await supabase.from("self_check_items").select("*").eq("self_check_id", c.id);
-    const exceptions = new Map((items ?? []).map((it) => [it.item_cd, it]));
-    const resultList = SELF_CHECK_ITEM_CODES.map((item) => {
-      const exc = exceptions.get(item.code);
-      return { SEL_CHK_ITEM_CD: item.code, SEL_CHK_RESULT: exc?.result ?? "A", REMARK: exc?.remark ?? "" };
-    });
+    const resultList = (items ?? []).map((it) => ({
+      SEL_CHK_ITEM_CD: it.item_cd,
+      SEL_CHK_RESULT: it.result,
+      REMARK: it.remark ?? "",
+    }));
 
     const ymCompact = c.ym.replace("-", "");
     const dateCompact = (c.doneDate ?? TODAY_STR).replace(/-/g, "");
