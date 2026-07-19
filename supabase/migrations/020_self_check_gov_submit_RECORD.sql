@@ -1,5 +1,5 @@
 -- ============================================================
--- 020. [초안] 자체점검 승강기민원24 제출용 컬럼·테이블 추가
+-- 020. [기록] 자체점검 승강기민원24 제출용 컬럼·테이블 추가
 --
 -- 배경: 정기점검(자체점검) 결과를 국가승강기정보센터(승강기민원24)의
 -- RegistInspectionService에 실제로 제출하려면, 지금 self_checks에는
@@ -13,7 +13,7 @@
 --      COMPANY_UNIQUE_NO — 삭제 요청 시 이 값으로 대상을 찾음)을
 --      self_checks에 남겨야 한다.
 --
--- Supabase 대시보드 SQL Editor에서 실행 후 파일명을 _RECORD.sql로 변경할 것.
+-- Supabase 대시보드 SQL Editor에서 실행 완료 (2026-07-19).
 -- ============================================================
 
 alter table public.self_checks add column if not exists gov_company_unique_no text;
