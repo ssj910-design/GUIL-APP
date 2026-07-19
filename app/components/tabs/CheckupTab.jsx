@@ -51,6 +51,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   const { name: CURRENT_ENGINEER, selfId } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("계획");
   const [showAll, setShowAll] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
   const [query, setQuery] = useState("");
 
   const [scheduleTarget, setScheduleTarget] = useState(null); // 일정 등록 대상 현장
@@ -85,9 +86,20 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   const scopedSites = sites.filter((s) => showAll || s.assignedEngineer === CURRENT_ENGINEER);
   const visibleUnitIds = new Set(units.filter((u) => scopedSites.some((s) => s.id === u.siteId)).map((u) => u.id));
   const q = query.trim();
-  const planSites = scopedSites.filter((s) => !q || s.name.includes(q) || (s.address ?? "").includes(q));
-
   const checksThisMonth = selfChecks.filter((c) => c.ym === ym && visibleUnitIds.has(c.unitId));
+
+  // 월 1회 점검이라 이번 달에 이미 등록 완료한 현장은 계획 목록에서 기본적으로 숨긴다
+  // (다음 달이 되면 ym이 바뀌어 자동으로 다시 나타남). 월 2회 이상 도는 현장도 있어서
+  // "점검완료현장 보기" 체크로 다시 볼 수 있게 해둔다.
+  function isSiteDoneThisMonth(s) {
+    const siteUnits = siteUnitList(s, units).filter((u) => u.id);
+    if (siteUnits.length === 0) return false;
+    return siteUnits.every((u) => checksThisMonth.some((c) => c.unitId === u.id && c.status === "완료"));
+  }
+  const planSites = scopedSites
+    .filter((s) => !q || s.name.includes(q) || (s.address ?? "").includes(q))
+    .filter((s) => showCompleted || !isSiteDoneThisMonth(s));
+
   const plannedChecks = checksThisMonth.filter((c) => c.status === "예정");
   const doneChecks = checksThisMonth
     .filter((c) => c.status === "완료")
@@ -315,10 +327,16 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
                 className="w-full border border-slate-300 rounded-xl pl-9 pr-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 mb-3">
-              <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
-              모든 현장보기
-            </label>
+            <div className="flex items-center gap-3 mb-3">
+              <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+                <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
+                모든 현장보기
+              </label>
+              <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+                <input type="checkbox" checked={showCompleted} onChange={(e) => setShowCompleted(e.target.checked)} />
+                점검완료현장 보기
+              </label>
+            </div>
             <div className="space-y-2.5">
               {planSites.map((s) => {
                 const hasUnits = siteUnitList(s, units).filter((u) => u.id).length > 0;
