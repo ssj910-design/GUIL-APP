@@ -23,10 +23,13 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
   const [picking, setPicking] = useState(null); // 관리자: 담당자 지정할 칸
   const [swapFrom, setSwapFrom] = useState(null); // 기사: 교환 요청 출발 칸
   const [busy, setBusy] = useState(false);
+  const [genMode, setGenMode] = useState(null); // 근무제 선택 시트 (주5일 | 주4일)
 
   // 이름 조회용은 전원, 담당자 선택은 당직 대상자 우선 정렬
   const roster = engineers.slice().sort((a, b) => (a.duty_order ?? 999) - (b.duty_order ?? 999));
   const dutyRoster = roster.filter((e) => e.duty_enabled !== false && e.duty_order != null);
+  // 근무제별 대상자 — 인사관리에서 지정한 duty_modes로 거른다
+  const rosterOf = (mode) => dutyRoster.filter((e) => (e.duty_modes ?? []).includes(mode));
   const nameOf = (pid) => roster.find((e) => e.id === pid)?.name ?? "";
   const orderOf = (pid) => roster.find((e) => e.id === pid)?.duty_order ?? null;
 
@@ -120,11 +123,10 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
             <p className="text-xs text-slate-400">{y}년 {m + 1}월 근무표가 없습니다</p>
             {role === "admin" && (
               <button
-                onClick={async () => { setBusy(true); await onGenerate(monthKey); setBusy(false); }}
-                disabled={busy}
-                className="mt-3 bg-blue-700 text-white text-sm font-bold px-5 py-2.5 rounded-xl active:bg-blue-800 disabled:opacity-50"
+                onClick={() => setGenMode("주5일")}
+                className="mt-3 bg-blue-700 text-white text-sm font-bold px-5 py-2.5 rounded-xl active:bg-blue-800"
               >
-                {busy ? "배정 중…" : "순번대로 자동 배정"}
+                근무표 생성
               </button>
             )}
           </div>
@@ -179,17 +181,64 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
         </p>
         {role === "admin" && inMonth.length > 0 && (
           <button
-            onClick={async () => {
-              if (!confirm(`${y}년 ${m + 1}월을 순번대로 다시 배정할까요? 비어 있는 칸만 채웁니다.`)) return;
-              setBusy(true); await onGenerate(monthKey); setBusy(false);
-            }}
-            disabled={busy}
-            className="w-full mt-2 bg-white border border-slate-200 text-slate-600 text-xs font-bold py-2.5 rounded-xl disabled:opacity-50"
+            onClick={() => setGenMode("주5일")}
+            className="w-full mt-2 bg-white border border-slate-200 text-slate-600 text-xs font-bold py-2.5 rounded-xl"
           >
-            {busy ? "배정 중…" : "빈 칸 순번대로 채우기"}
+            빈 칸 채우기 (근무제 선택)
           </button>
         )}
       </div>
+
+      {genMode && (
+        <div className="fixed inset-0 z-[60] bg-black/40 flex items-end" onClick={() => setGenMode(null)}>
+          <div className="bg-white w-full rounded-t-2xl p-5 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm font-extrabold text-slate-800">{y}년 {m + 1}월 근무표 생성</p>
+            <p className="text-[11px] text-slate-400 mt-1 mb-3">이미 배정된 칸은 그대로 두고 빈 칸만 채웁니다.</p>
+
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {["주5일", "주4일"].map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setGenMode(mode)}
+                  className={`py-3 rounded-xl text-sm font-bold border ${
+                    genMode === mode ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200 bg-white"
+                  }`}
+                >
+                  {mode} 근무제
+                  <span className="block text-[10px] font-semibold opacity-70">{rosterOf(mode).length}명</span>
+                </button>
+              ))}
+            </div>
+
+            {genMode === "주4일" && (
+              <p className="text-[11px] text-indigo-500 font-semibold bg-indigo-50 rounded-lg px-3 py-2 mb-3">
+                금요일마다 정상근무 칸이 함께 만들어집니다 (담당자는 달력에서 직접 지정).
+              </p>
+            )}
+
+            <div className="border border-slate-100 rounded-lg p-3 mb-4">
+              <p className="text-[11px] font-bold text-slate-500 mb-1.5">배정 순서</p>
+              {rosterOf(genMode).length === 0 ? (
+                <p className="text-[11px] text-red-500">
+                  {genMode} 대상자가 없습니다. 관리자 콘솔 → 인사관리에서 순번과 근무제를 지정하세요.
+                </p>
+              ) : (
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  {rosterOf(genMode).map((e) => `${e.name}(${e.duty_order})`).join(" → ")}
+                </p>
+              )}
+            </div>
+
+            <button
+              onClick={async () => { setBusy(true); await onGenerate(monthKey, genMode); setBusy(false); setGenMode(null); }}
+              disabled={busy || rosterOf(genMode).length === 0}
+              className="w-full bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800 disabled:bg-slate-200"
+            >
+              {busy ? "배정 중…" : `${genMode} 기준으로 배정`}
+            </button>
+          </div>
+        </div>
+      )}
 
       {picking && (
         <div className="fixed inset-0 z-[60] bg-black/40 flex items-end" onClick={() => setPicking(null)}>

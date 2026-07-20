@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { StatusBadge, AdminTable, inputCls } from "@/app/components/admin/adminShared";
 import ImportEngineers from "@/app/components/admin/ImportEngineers";
 
-function EngineerRow({ p, stats, onSave, onToggleDuty, onDelete }) {
+function EngineerRow({ p, stats, onSave, onToggleDuty, onToggleMode, onDelete }) {
   const [form, setForm] = useState({ phone: p.phone ?? "", region: p.region ?? "", minwonId: p.minwon_id ?? "", dutyOrder: p.duty_order ?? "" });
   const dirty = form.phone !== (p.phone ?? "") || form.region !== (p.region ?? "") || form.minwonId !== (p.minwon_id ?? "") || String(form.dutyOrder) !== String(p.duty_order ?? "");
   return (
@@ -15,13 +15,22 @@ function EngineerRow({ p, stats, onSave, onToggleDuty, onDelete }) {
       <td className="px-3 py-2.5 w-36"><input className={inputCls} placeholder="연락처" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></td>
       <td className="px-3 py-2.5 w-28"><input className={inputCls} placeholder="담당지역" value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} /></td>
       <td className="px-3 py-2.5 w-32"><input className={inputCls} placeholder="민원24 점검자 ID" value={form.minwonId} onChange={(e) => setForm({ ...form, minwonId: e.target.value })} /></td>
-      <td className="px-3 py-2.5 w-32 whitespace-nowrap">
+      <td className="px-3 py-2.5 whitespace-nowrap">
         <div className="flex items-center gap-1.5">
           <input type="checkbox" checked={p.duty_enabled !== false} onChange={(e) => onToggleDuty(p, e.target.checked)}
-            className="w-4 h-4 accent-blue-700" title="당직·숙직 대상" />
-          <input className={`${inputCls} w-14`} inputMode="numeric" placeholder="순번"
+            className="w-4 h-4 accent-blue-700" title="당직 대상 (끄면 순번은 유지한 채 배정에서만 제외)" />
+          <input className={`${inputCls} w-12`} inputMode="numeric" placeholder="순번"
             disabled={p.duty_enabled === false} value={form.dutyOrder}
             onChange={(e) => setForm({ ...form, dutyOrder: e.target.value.replace(/[^0-9]/g, "") })} />
+          {["주5일", "주4일"].map((mode) => (
+            <label key={mode} className={`text-[10px] font-bold rounded px-1.5 py-1 cursor-pointer border ${
+              (p.duty_modes ?? []).includes(mode) ? "bg-blue-50 text-blue-700 border-blue-200" : "text-slate-300 border-slate-100"
+            }`}>
+              <input type="checkbox" className="hidden" checked={(p.duty_modes ?? []).includes(mode)}
+                onChange={(e) => onToggleMode(p, mode, e.target.checked)} />
+              {mode.replace("주", "").replace("일", "")}일
+            </label>
+          ))}
         </div>
       </td>
       <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">{p.member_type ?? "-"}</td>
@@ -94,6 +103,15 @@ export default function EngineersAdmin({ data, setData }) {
     setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, is_active: false, duty_enabled: false } : x)) }));
   }
 
+  // 근무제(주5일·주4일)별 당직 대상 지정 — 같은 사람이 한쪽 편성에만 들어가는 경우가 있다
+  async function toggleMode(p, mode, on) {
+    const modes = new Set(p.duty_modes ?? []);
+    on ? modes.add(mode) : modes.delete(mode);
+    const next = [...modes];
+    await supabase.from("profiles").update({ duty_modes: next }).eq("id", p.id);
+    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, duty_modes: next } : x)) }));
+  }
+
   async function toggleDuty(p, on) {
     await supabase.from("profiles").update({ duty_enabled: on }).eq("id", p.id);
     setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, duty_enabled: on } : x)) }));
@@ -137,9 +155,9 @@ export default function EngineersAdmin({ data, setData }) {
         <p className="text-[11px] text-slate-400 ml-auto max-w-xs text-right">순번 = 당직·숙직 근무표 자동 배정 순서. 당직을 서는 사람만 채우세요.</p>
       </div>
       {importing && <ImportEngineers data={data} setData={setData} onClose={() => setImporting(false)} />}
-      <AdminTable minWidth="82rem" head={["이름", "휴대폰", "담당지역", "아이디(민원24)", "당직 / 순번", "회원구분", "연락처", "가입상태", "가입일/승인일", "교육수료번호", "현장/고장/할일", "로그인", ""]}>
+      <AdminTable minWidth="90rem" head={["이름", "휴대폰", "담당지역", "아이디(민원24)", "당직 / 순번 / 근무제", "회원구분", "연락처", "가입상태", "가입일/승인일", "교육수료번호", "현장/고장/할일", "로그인", ""]}>
         {engineers.map((p) => (
-          <EngineerRow key={p.id} p={p} stats={statsOf(p)} onSave={save} onToggleDuty={toggleDuty} onDelete={remove} />
+          <EngineerRow key={p.id} p={p} stats={statsOf(p)} onSave={save} onToggleDuty={toggleDuty} onToggleMode={toggleMode} onDelete={remove} />
         ))}
       </AdminTable>
     </div>
