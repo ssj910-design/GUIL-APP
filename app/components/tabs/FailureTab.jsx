@@ -21,6 +21,7 @@ function FailureRegisterForm({ setFailures, goToUnassigned, onNotifyRoom }) {
   const [form, setForm] = useState({
     siteId: "", unit: "", faultType: "", faultDetail: "", notFault: false, assignee: "", reporterPhone: "", sendSms: false,
   });
+  const [step, setStep] = useState(0); // 스텝형 접수 (0~3)
   const site = sites.find((s) => s.id === form.siteId);
   const nowLabel = TODAY_STR + " " + new Date().toTimeString().slice(0, 5);
   const canSubmit = !!site && !!form.faultType && form.reporterPhone.trim().length > 0;
@@ -62,106 +63,174 @@ function FailureRegisterForm({ setFailures, goToUnassigned, onNotifyRoom }) {
       onNotifyRoom?.(`🚨 @모두 갇힘사고 접수 — ${newFailure.siteName} · ${newFailure.elevatorNo || "호기 미상"}${form.faultDetail ? ` (${form.faultDetail})` : ""}`);
     }
     setForm({ siteId: "", unit: "", faultType: "", faultDetail: "", notFault: false, assignee: "", reporterPhone: "", sendSms: false });
+    setStep(0);
     goToUnassigned();
   }
 
+  // 스텝형 접수 — 입력 6개를 4단계로 나누고, 자동 정보 7줄은 카드/요약으로 이동 (원복: git tag before-failure-steps)
+  const STEP_TITLES = ["현장 선택", "고장 내용", "신고자 정보", "확인 · 접수"];
+  const canNext =
+    step === 0 ? !!site :
+    step === 1 ? !!form.faultType :
+    step === 2 ? form.reporterPhone.trim().length > 0 : true;
+
+  const infoRows = site ? [
+    ["주소", site.address], ["현장 전화", site.phone], ["계약구분", site.contractType],
+    ["담당자", site.manager], ["담당 기사", site.assignedEngineer || "미배정"], ["접수일시", nowLabel],
+  ] : [];
+
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50 pb-24">
-      <p className="px-5 pt-4 pb-2 flex items-center justify-between text-xs font-bold text-slate-400">
-        정보 <span className="text-blue-600">필수입력</span>
-      </p>
-      <div className="bg-white overflow-visible">
-        <TimelineInput icon={Flag} label="현장명" required>
-          <SiteSearchSelect value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unit: "" })} placeholder="현장명 검색" />
-        </TimelineInput>
-        <TimelineInput icon={ClipboardCheck} label="접수일시">
-          <span className={tlInputCls}>{nowLabel}</span>
-        </TimelineInput>
-        <TimelineInput icon={PhoneCall} label="현장 전화번호">
-          <span className={tlInputCls}>{site?.phone ?? "현장을 선택해주세요"}</span>
-        </TimelineInput>
-        <TimelineInput icon={Home} label="주소">
-          <span className={`${tlInputCls} truncate`}>{site?.address ?? "현장을 선택해주세요"}</span>
-        </TimelineInput>
-        <TimelineInput icon={Flame} label="계약구분">
-          <span className={tlInputCls}>{site?.contractType ?? "현장을 선택해주세요"}</span>
-        </TimelineInput>
-        <TimelineInput icon={User} label="담당자">
-          <span className={tlInputCls}>{site ? site.manager : "현장을 선택해주세요"}</span>
-        </TimelineInput>
-        <TimelineInput icon={User} label="담당 기사">
-          <span className={tlInputCls}>{site ? site.assignedEngineer || "미배정" : "현장을 선택해주세요"}</span>
-        </TimelineInput>
-        <TimelineInput icon={Settings} label="호기" last>
-          <select className={tlInputCls} value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} disabled={!site}>
-            <option value="">호기를 선택해주세요</option>
-            {site && siteUnits(site).map((u) => <option key={u} value={u}>{u}</option>)}
-          </select>
-        </TimelineInput>
+    <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
+      {/* 진행 표시 */}
+      <div className="shrink-0 px-5 pt-4 pb-3 bg-white border-b border-slate-100">
+        <div className="flex items-center gap-1.5">
+          {STEP_TITLES.map((t, i) => (
+            <div key={t} className={`flex-1 h-1 rounded-full ${i <= step ? "bg-blue-600" : "bg-slate-200"}`} />
+          ))}
+        </div>
+        <p className="text-sm font-extrabold text-slate-800 mt-2.5">{step + 1}. {STEP_TITLES[step]}</p>
       </div>
 
-      <p className="px-5 pt-5 pb-2 text-xs font-bold text-slate-400">신고자 정보</p>
-      <div className="bg-white">
-        <TimelineInput icon={PhoneCall} label="신고자 전화번호" required last>
-          <input
-            className={tlInputCls}
-            placeholder="필수 입력"
-            value={form.reporterPhone}
-            onChange={(e) => setForm({ ...form, reporterPhone: e.target.value })}
-          />
-        </TimelineInput>
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        {step === 0 && (
+          <>
+            <div>
+              <p className="text-xs font-bold text-slate-500 mb-1.5">현장명 *</p>
+              <SiteSearchSelect value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unit: "" })} placeholder="현장명 검색" />
+            </div>
+            {site && (
+              <>
+                <div>
+                  <p className="text-xs font-bold text-slate-500 mb-1.5">호기</p>
+                  <select className={inputCls} value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })}>
+                    <option value="">호기를 선택해주세요</option>
+                    {siteUnits(site).map((u) => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+                <div className="bg-white rounded-xl border border-slate-200 p-4 text-sm space-y-1.5">
+                  {infoRows.map(([k, v]) => (
+                    <div key={k} className="flex justify-between gap-3">
+                      <span className="text-slate-400 shrink-0">{k}</span>
+                      <span className="font-semibold text-slate-700 text-right truncate">{v || "-"}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {step === 1 && (
+          <>
+            <div>
+              <p className="text-xs font-bold text-slate-500 mb-1.5">고장구분 *</p>
+              <div className="grid grid-cols-2 gap-2">
+                {FAULT_TYPES.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setForm({ ...form, faultType: t })}
+                    className={`py-3.5 rounded-xl text-sm font-bold border ${
+                      form.faultType === t
+                        ? t === "갇힘사고" ? "bg-red-600 text-white border-red-600" : "bg-blue-700 text-white border-blue-700"
+                        : t === "갇힘사고" ? "text-red-600 border-red-200 bg-white" : "text-slate-600 border-slate-200 bg-white"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+              {form.faultType === "갇힘사고" && (
+                <p className="text-[11px] text-red-600 font-bold mt-2">🚨 긴급 — 접수 즉시 전 직원에게 알림이 갑니다</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-500 mb-1.5">고장상세내역</p>
+              <input className={inputCls} placeholder="예: 3층에서 문이 안 닫힘" value={form.faultDetail} onChange={(e) => setForm({ ...form, faultDetail: e.target.value })} />
+            </div>
+            <div className="flex items-center justify-between bg-white rounded-xl border border-slate-200 px-4 py-3">
+              <span className="text-sm font-bold text-slate-600">고장아님(다발아님)으로 접수</span>
+              <button onClick={() => setForm({ ...form, notFault: !form.notFault })}>
+                <div className={`w-9 h-5 rounded-full flex items-center px-0.5 ${form.notFault ? "bg-blue-600 justify-end" : "bg-slate-300 justify-start"}`}>
+                  <div className="w-4 h-4 rounded-full bg-white" />
+                </div>
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            <div>
+              <p className="text-xs font-bold text-slate-500 mb-1.5">신고자 전화번호 *</p>
+              <input className={inputCls} inputMode="tel" placeholder="010-0000-0000" value={form.reporterPhone} onChange={(e) => setForm({ ...form, reporterPhone: e.target.value })} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-500 mb-1.5">배정 기사 (선택)</p>
+              <select className={inputCls} value={form.assignee} onChange={(e) => setForm({ ...form, assignee: e.target.value })}>
+                <option value="">나중에 배정</option>
+                {engineerNames.map((e) => <option key={e} value={e}>{e}</option>)}
+              </select>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-slate-600">고객안심 출동문자 발송</span>
+                <button onClick={() => setForm({ ...form, sendSms: !form.sendSms })}>
+                  <div className={`w-9 h-5 rounded-full flex items-center px-0.5 ${form.sendSms ? "bg-blue-600 justify-end" : "bg-slate-300 justify-start"}`}>
+                    <div className="w-4 h-4 rounded-full bg-white" />
+                  </div>
+                </button>
+              </div>
+              {form.sendSms && (
+                <p className="pt-2 text-[11px] text-blue-600 leading-relaxed">
+                  접수완료시 신고자 전화번호로 고장처리 상태와 기사님의 실시간 위치가 전송됩니다
+                </p>
+              )}
+            </div>
+          </>
+        )}
+
+        {step === 3 && (
+          <>
+            <div className="bg-white rounded-xl border border-slate-200 p-4 text-sm space-y-2">
+              {[
+                ["현장", site?.name],
+                ["호기", form.unit || "미지정"],
+                ["고장구분", form.faultType],
+                ["상세내역", form.faultDetail || "-"],
+                ...(form.notFault ? [["구분", "고장아님(다발아님)"]] : []),
+                ["신고자 전화", form.reporterPhone],
+                ["배정 기사", form.assignee || "나중에 배정"],
+                ["출동문자", form.sendSms ? "발송" : "미발송"],
+                ["접수일시", nowLabel],
+              ].map(([k, v]) => (
+                <div key={k} className="flex justify-between gap-3">
+                  <span className="text-slate-400 shrink-0">{k}</span>
+                  <span className={`font-semibold text-right ${k === "고장구분" && v === "갇힘사고" ? "text-red-600" : "text-slate-800"}`}>{v}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-400 text-center">잘못된 항목이 있으면 "이전"으로 돌아가 수정하세요</p>
+          </>
+        )}
       </div>
 
-      <p className="px-5 pt-5 pb-2 text-xs font-bold text-slate-400">입력란</p>
-      <div className="bg-white">
-        <TimelineInput icon={PackageX} label="고장구분" required>
-          <select className={tlInputCls} value={form.faultType} onChange={(e) => setForm({ ...form, faultType: e.target.value })}>
-            <option value="">고장구분을 선택해주세요</option>
-            {FAULT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </TimelineInput>
-        <TimelineInput icon={PackageX} label="고장상세내역">
-          <input
-            className={tlInputCls}
-            placeholder="입력하세요"
-            value={form.faultDetail}
-            onChange={(e) => setForm({ ...form, faultDetail: e.target.value })}
-          />
-        </TimelineInput>
-        <TimelineInput icon={PackageX} label="고장아님(다발아님)">
-          <button
-            onClick={() => setForm({ ...form, notFault: !form.notFault })}
-            className={`text-sm font-bold ${form.notFault ? "text-slate-400" : "text-blue-600"}`}
-          >
-            {form.notFault ? "고장아님" : "고장"}
+      {/* 하단 고정 이전/다음 */}
+      <div className="shrink-0 bg-white border-t border-slate-100 px-5 py-3 flex gap-2">
+        {step > 0 && (
+          <button onClick={() => setStep(step - 1)} className="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200">
+            이전
           </button>
-        </TimelineInput>
-        <TimelineInput icon={User} label="배정자" last>
-          <select className={tlInputCls} value={form.assignee} onChange={(e) => setForm({ ...form, assignee: e.target.value })}>
-            <option value="">배정자를 선택해주세요</option>
-            {engineerNames.map((e) => <option key={e} value={e}>{e}</option>)}
-          </select>
-        </TimelineInput>
-      </div>
-
-      <div className="px-5 pt-5 pb-2 flex items-center justify-between">
-        <span className="text-sm font-bold text-slate-600">고객안심 출동문자 발송</span>
-        <button onClick={() => setForm({ ...form, sendSms: !form.sendSms })}>
-          <div className={`w-9 h-5 rounded-full flex items-center px-0.5 ${form.sendSms ? "bg-blue-600 justify-end" : "bg-slate-300 justify-start"}`}>
-            <div className="w-4 h-4 rounded-full bg-white" />
-          </div>
-        </button>
-      </div>
-      {form.sendSms && (
-        <p className="px-5 pt-1 text-[11px] text-blue-600 leading-relaxed">
-          접수완료시 신고자 전화번호로 고장처리 상태와 기사님의 실시간 위치가 전송됩니다
-        </p>
-      )}
-
-      <div className="px-5 pt-6">
-        <PrimaryButton onClick={submit} disabled={!canSubmit}>접수완료</PrimaryButton>
-        {!form.reporterPhone.trim() && form.siteId && (
-          <p className="text-[11px] text-red-500 text-center mt-2">신고자 전화번호는 필수 입력 항목입니다</p>
+        )}
+        {step < 3 ? (
+          <button
+            onClick={() => setStep(step + 1)}
+            disabled={!canNext}
+            className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300"
+          >
+            다음
+          </button>
+        ) : (
+          <div className="flex-1"><PrimaryButton onClick={submit} disabled={!canSubmit}>접수완료</PrimaryButton></div>
         )}
       </div>
     </div>

@@ -1027,7 +1027,7 @@ export default function App() {
           <button
             onClick={() => setRoomOpen(true)}
             aria-label="우리방 열기"
-            className="absolute right-4 bottom-20 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95"
+            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95 ${tab === "failure" ? "bottom-36" : "bottom-20"}`}
           >
             <MessagesSquare size={22} />
             {unreadPosts.length > 0 && (
