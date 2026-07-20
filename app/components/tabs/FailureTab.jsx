@@ -19,7 +19,7 @@ function FailureRegisterForm({ setFailures, goToUnassigned }) {
   const { engineerNames, profiles: allProfiles, selfId } = useContext(AuthContext);
   const v2Ready = units.length > 0;
   const [form, setForm] = useState({
-    siteId: "", unit: "", faultType: "", faultDetail: "", notFault: false, assignee: "", reporterPhone: "", sendSms: false,
+    siteId: "", units: [], faultType: "", faultDetail: "", notFault: false, assignee: "", reporterPhone: "", sendSms: false,
   });
   const [step, setStep] = useState(0); // 스텝형 접수 (0~3)
   const site = sites.find((s) => s.id === form.siteId);
@@ -28,37 +28,40 @@ function FailureRegisterForm({ setFailures, goToUnassigned }) {
 
   async function submit() {
     if (!canSubmit) return;
-    const newFailure = {
-      id: "f" + Date.now(),
+    // 선택한 호기마다 접수 1건씩 생성 (처리·배정이 호기 단위라 데이터도 호기별로 쪼갠다)
+    const targets = form.units.length ? form.units : [site.elevatorNo];
+    const stamp = Date.now();
+    const newFailures = targets.map((u, i) => ({
+      id: "f" + (stamp + i),
       siteId: site.id,
       siteName: site.name,
-      elevatorNo: form.unit || site.elevatorNo,
+      elevatorNo: u,
       errorCode: form.faultType + (form.faultDetail ? ` (${form.faultDetail})` : ""),
       status: "미처리",
       reportedAt: TODAY_STR.slice(5).replace("-", "/") + " " + new Date().toTimeString().slice(0, 5),
       assignee: form.assignee || null,
       notFault: form.notFault,
       reporterPhone: form.reporterPhone.trim(),
-    };
-    await supabase.from("failures").insert({
-      id: newFailure.id,
-      site_id: newFailure.siteId,
-      site_name: newFailure.siteName,
-      elevator_no: newFailure.elevatorNo,
-      error_code: newFailure.errorCode,
-      status: newFailure.status,
-      reported_at: newFailure.reportedAt,
-      assignee: newFailure.assignee,
-      not_fault: newFailure.notFault,
-      reporter_phone: newFailure.reporterPhone,
+    }));
+    await supabase.from("failures").insert(newFailures.map((f) => ({
+      id: f.id,
+      site_id: f.siteId,
+      site_name: f.siteName,
+      elevator_no: f.elevatorNo,
+      error_code: f.errorCode,
+      status: f.status,
+      reported_at: f.reportedAt,
+      assignee: f.assignee,
+      not_fault: f.notFault,
+      reporter_phone: f.reporterPhone,
       ...(v2Ready ? {
-        unit_id: unitIdFor(units, newFailure.siteId, newFailure.elevatorNo),
-        assignee_id: profileIdByName(allProfiles, newFailure.assignee),
+        unit_id: unitIdFor(units, f.siteId, f.elevatorNo),
+        assignee_id: profileIdByName(allProfiles, f.assignee),
         created_by: selfId,
       } : {}),
-    });
-    setFailures((prev) => [newFailure, ...prev]);
-    setForm({ siteId: "", unit: "", faultType: "", faultDetail: "", notFault: false, assignee: "", reporterPhone: "", sendSms: false });
+    })));
+    setFailures((prev) => [...newFailures, ...prev]);
+    setForm({ siteId: "", units: [], faultType: "", faultDetail: "", notFault: false, assignee: "", reporterPhone: "", sendSms: false });
     setStep(0);
     goToUnassigned();
   }
@@ -98,7 +101,7 @@ function FailureRegisterForm({ setFailures, goToUnassigned }) {
                   // 호기가 1대뿐인 현장은 자동 선택 (여러 대는 오접수 방지를 위해 명시적 선택)
                   const s = sites.find((x) => x.id === id);
                   const us = s ? siteUnits(s) : [];
-                  setForm({ ...form, siteId: id, unit: us.length === 1 ? us[0] : "" });
+                  setForm({ ...form, siteId: id, units: us.length === 1 ? [us[0]] : [] });
                 }}
                 placeholder="현장명 검색"
               />
@@ -107,15 +110,18 @@ function FailureRegisterForm({ setFailures, goToUnassigned }) {
               <>
                 <div>
                   <p className="text-xs font-bold text-slate-500 mb-1.5">
-                    호기{siteUnits(site).length === 1 && <span className="text-blue-600 font-semibold"> — 1대 현장, 자동 선택됨</span>}
+                    호기{siteUnits(site).length === 1 ? <span className="text-blue-600 font-semibold"> — 1대 현장, 자동 선택됨</span> : <span className="text-slate-400 font-semibold"> (여러 대 고장이면 모두 선택)</span>}
                   </p>
                   <div className="grid grid-cols-3 gap-2">
                     {siteUnits(site).map((u) => (
                       <button
                         key={u}
-                        onClick={() => setForm({ ...form, unit: u })}
+                        onClick={() => setForm({
+                          ...form,
+                          units: form.units.includes(u) ? form.units.filter((x) => x !== u) : [...form.units, u],
+                        })}
                         className={`py-3 rounded-xl text-sm font-bold border ${
-                          form.unit === u ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200 bg-white"
+                          form.units.includes(u) ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200 bg-white"
                         }`}
                       >
                         {u}
@@ -205,7 +211,7 @@ function FailureRegisterForm({ setFailures, goToUnassigned }) {
             <div className="bg-white rounded-xl border border-slate-200 p-4 text-sm space-y-2">
               {[
                 ["현장", site?.name],
-                ["호기", form.unit || "미지정"],
+                ["호기", form.units.length ? form.units.join(", ") : "미지정"],
                 ["고장구분", form.faultType],
                 ["상세내역", form.faultDetail || "-"],
                 ...(form.notFault ? [["구분", "고장아님(다발아님)"]] : []),
