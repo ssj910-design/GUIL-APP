@@ -9,6 +9,7 @@ import { DutyRoster } from "@/app/components/DutyRoster";
 import { mapDutySchedule, mapDutySwap } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
 import { inputCls } from "@/app/components/admin/adminShared";
+import { ChevronRight } from "lucide-react";
 
 export default function DutyAdmin({ data, setData }) {
   const engineers = data.profiles.filter((p) => p.role === "engineer" && p.is_active !== false);
@@ -95,15 +96,20 @@ export default function DutyAdmin({ data, setData }) {
     <AuthContext.Provider value={{ name: "관리자", role: "admin", selfId: null, engineers, engineerNames: engineers.map((e) => e.name), profiles: data.profiles }}>
       <div className="max-w-3xl">
         {/* 배정 순번 — 순번을 넣으면 당직 대상, 비우면 제외. 근무제별로 대상을 나눈다. */}
-        <details className="bg-white border border-slate-200 rounded-xl p-4 mb-4">
-          <summary className="text-xs font-extrabold text-slate-700 cursor-pointer flex items-center justify-between gap-2">
+        {/* 거의 안 바뀌는 설정이라 접어둔다. summary에 flex를 주면 브라우저 기본 삼각형이
+            사라져 눌러지는 줄 모르므로 화살표를 직접 그린다. */}
+        <details className="group bg-white border border-slate-200 rounded-xl mb-4 overflow-hidden">
+          <summary className="text-xs font-extrabold text-slate-700 cursor-pointer flex items-center gap-2 p-4 hover:bg-slate-50 list-none">
+            <ChevronRight size={14} className="text-slate-400 transition-transform group-open:rotate-90 shrink-0" />
             <span>당직 순번 · 근무제</span>
-            <span className="text-[11px] font-bold text-slate-400">
+            <span className="ml-auto text-[11px] font-bold text-slate-400">
               주5일 <span className="text-blue-700">{count5}명</span> · 주4일 <span className="text-blue-700">{count4}명</span>
               {noOrder > 0 && <span className="text-slate-300"> · 미지정 {noOrder}명</span>}
-              <span className="ml-1.5 text-slate-300">펼쳐서 수정</span>
             </span>
+            <span className="text-[11px] font-bold text-blue-700 shrink-0 group-open:hidden">수정</span>
+            <span className="text-[11px] font-bold text-slate-400 shrink-0 hidden group-open:inline">접기</span>
           </summary>
+          <div className="px-4 pb-4">
           <p className="text-[11px] text-slate-400 mt-2 mb-3">
             순번이 있는 사람만 자동 배정 대상입니다. 근무제(5일·4일)를 눌러 편성별 대상을 나눌 수 있습니다.
           </p>
@@ -129,6 +135,7 @@ export default function DutyAdmin({ data, setData }) {
                 ))}
               </div>
             ))}
+          </div>
           </div>
         </details>
 
