@@ -335,7 +335,8 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned }) {
 }
 
 
-export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onOpenResult }) {
+export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onOpenResult, onAssignOpen }) {
+  const { role } = useContext(AuthContext);
   const sites = useContext(SitesContext);
   const site = sites.find((s) => s.id === failure.siteId);
   const stage = failureStage(failure);
@@ -406,14 +407,24 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
           </div>
         )}
       </div>
-      {stage === "pending" && onDispatch && (
+      {/* 관리자는 직접 출동하지 않는다 — 미배정 건은 기사 배정으로 */}
+      {stage === "pending" && role === "admin" && !failure.assignee ? (
+        onAssignOpen && (
+          <button
+            onClick={() => { onAssignOpen(failure); onClose(); }}
+            className="w-full bg-slate-800 text-white text-sm font-bold py-3 rounded-xl active:bg-slate-900"
+          >
+            기사 배정
+          </button>
+        )
+      ) : stage === "pending" && onDispatch && role !== "admin" ? (
         <button
           onClick={() => { onDispatch(failure); onClose(); }}
           className="w-full bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800"
         >
           {failure.assignee ? "출동 응답" : "내가 출동하기"}
         </button>
-      )}
+      ) : null}
       {stage === "dispatched" && onArrive && (
         <button
           onClick={() => { onArrive(failure); onClose(); }}
@@ -819,6 +830,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
           onDispatch={setDispatchTarget}
           onArrive={setArriveTarget}
           onOpenResult={setResultTarget}
+          onAssignOpen={setAssignTarget}
         />
       )}
       {assignTarget && (
@@ -859,7 +871,8 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
 }
 
 
-function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse }) {
+function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign }) {
+  const [assignTarget, setAssignTarget] = useState(null);
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [showDone, setShowDone] = useState(false);
   const [detailTarget, setDetailTarget] = useState(null);
@@ -926,7 +939,11 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
           onDispatch={setDispatchTarget}
           onArrive={setArriveTarget}
           onOpenResult={setResultTarget}
+          onAssignOpen={setAssignTarget}
         />
+      )}
+      {assignTarget && (
+        <AssignEngineerSheet failure={assignTarget} failures={failures} onAssign={onAssign} onClose={() => setAssignTarget(null)} />
       )}
       {dispatchTarget && (
         <DispatchEtaModal
@@ -1064,7 +1081,7 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
         <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} />
       )}
       {subTab === "처리등록" && (
-        <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} />
+        <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} />
       )}
       {subTab === "처리현황" && <FailureStatusOverview failures={failures} onReassign={onReassign} />}
       <SmsToast message={toast} />

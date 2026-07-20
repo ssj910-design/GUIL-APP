@@ -342,6 +342,7 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
           onDispatch={setDispatchTarget}
           onArrive={setArriveTarget}
           onOpenResult={setResultTarget}
+          onAssignOpen={setAssignTarget}
         />
       )}
       {assignTarget && (
