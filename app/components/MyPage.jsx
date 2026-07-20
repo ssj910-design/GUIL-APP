@@ -41,7 +41,8 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
     });
   }, []);
 
-  useEffect(() => { isSubscribed().then(setSubscribed); }, []);
+  // 브라우저 구독이 있으면 서버 기록도 함께 맞춘다 (아래 isSubscribed 주석 참고)
+  useEffect(() => { if (selfId) isSubscribed(selfId).then(setSubscribed); }, [selfId]);
 
   async function togglePush() {
     setPushBusy(true);

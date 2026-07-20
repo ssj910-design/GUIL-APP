@@ -13,7 +13,7 @@ import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets
 /* FAILURE (고장접수)                                                   */
 /* ------------------------------------------------------------------ */
 
-function FailureRegisterForm({ failures, setFailures, goToUnassigned }) {
+function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported }) {
   const sites = useContext(SitesContext);
   const units = useContext(UnitsContext);
   const { engineerNames, profiles: allProfiles, selfId, name: myName, role } = useContext(AuthContext);
@@ -66,6 +66,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned }) {
       } : {}),
     })));
     setFailures((prev) => [...newFailures, ...prev]);
+    onReported?.(newFailures);
     setForm({ siteId: "", units: [], faultType: "", faultDetail: "", details: {}, notFault: false, assignee: defaultAssignee(), reporterPhone: "", sendSms: false });
     setStep(0);
     goToUnassigned();
@@ -1119,7 +1120,7 @@ function FailureStatusOverview({ failures, onReassign }) {
 }
 
 
-export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [] }) {
+export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [], onReported }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
   // 홈 "모두 보기" 등 외부에서 특정 서브탭으로 진입 (SiteTab focusSiteId와 같은 패턴)
@@ -1147,7 +1148,7 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
           </button>
         ))}
       </div>
-      {subTab === "접수등록" && <FailureRegisterForm failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />}
+      {subTab === "접수등록" && <FailureRegisterForm onReported={onReported} failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />}
       {subTab === "미배정" && (
         <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} />
       )}

@@ -179,6 +179,9 @@ export default function App() {
     setAuthSubmitting(false);
   }
 
+  const adminIds = () => profilesAll.filter((p) => p.role === "admin" && p.is_active !== false).map((p) => p.id);
+  const engineerIds = () => profilesAll.filter((p) => p.role === "engineer" && p.is_active !== false).map((p) => p.id);
+
   // 알림 발송 — 실패해도 앱 동작을 막지 않는다(알림은 부가 기능이라 조용히 넘어간다).
   function sendPush(key, profileIds, { title, body, url } = {}) {
     if (!profileIds?.length) return;
@@ -628,6 +631,29 @@ export default function App() {
   }
 
   // ★ 출동 거부 — 배정 해제(미배정 환원) + 우리방에 관리자 멘션 알림 (동시 2건 배정 등 못 가는 상황용)
+  // 고장 접수 직후 — 관리자에게는 항상, 미배정이면 기사 전원에게(선착순으로 잡으라고)
+  function handleFailureReported(created) {
+    const first = created[0];
+    if (!first) return;
+    const where = `${first.siteName} · ${created.map((f) => f.elevatorNo).filter(Boolean).join(", ") || "호기 미상"}`;
+    const what = parseErrorCode(first.errorCode).faultType;
+    const more = created.length > 1 ? ` 외 ${created.length - 1}건` : "";
+
+    sendPush("failure_reported", adminIds(), {
+      title: `고장 접수 — ${what}`,
+      body: `${where}${more}`,
+    });
+    if (created.some((f) => f.escalation)) {
+      sendPush("failure_escalated", adminIds(), { title: "중대 고장 접수", body: `${where} — ${what}` });
+    }
+    if (!first.assignee) {
+      sendPush("failure_unassigned", engineerIds(), {
+        title: "미배정 고장 — 먼저 잡는 사람이 담당",
+        body: `${where} — ${what}`,
+      });
+    }
+  }
+
   async function handleRefuseFailure(failure) {
     const reason = window.prompt("출동을 거부하고 미배정으로 돌립니다.\n사유를 입력하세요 (선택)");
     if (reason === null) return; // 취소
@@ -643,6 +669,10 @@ export default function App() {
     setFailures((prev) => prev.map((x) => (x.id === failure.id
       ? { ...x, assignee: null, dispatchedAt: null, etaMinutes: null, arrivalTime: null, status: "미처리" }
       : x)));
+    sendPush("failure_refused", adminIds(), {
+      title: "출동 거부됨 — 재배정 필요",
+      body: `${profile.name}님이 ${failure.siteName} · ${failure.elevatorNo || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` (${reason.trim()})` : ""}`,
+    });
     const admins = profilesAll.filter((p) => p.role === "admin").map((p) => "@" + p.name).join(" ");
     handleSendFeedPost(
       `⚠️ ${profile.name}님이 ${failure.siteName} · ${failure.elevatorNo || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` — 사유: ${reason.trim()}` : ""}. 재배정이 필요합니다 ${admins}`.trim()
@@ -1443,6 +1473,7 @@ export default function App() {
           {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} siteManagers={siteManagers} onUpdateSiteNotes={handleUpdateSiteNotes} focusSiteId={focusSiteId} focusUnit={focusUnit} onFocusSiteHandled={() => { setFocusSiteId(null); setFocusUnit(null); }} />}
           {tab === "failure" && (
             <FailureTab
+              onReported={handleFailureReported}
               attendances={attendances}
               todayLeaves={todayLeaves}
               failures={failures}
