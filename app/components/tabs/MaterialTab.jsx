@@ -496,7 +496,7 @@ export function formatPartRows(rows) {
 
 
 // nameOptions를 넘기면 부품명 칸이 드롭다운으로 바뀝니다 (예: 상비부품 목록에서 선택).
-export function PartsRowsInput({ rows, setRows, nameOptions, namePlaceholder = "예: 인버터" }) {
+export function PartsRowsInput({ rows, setRows, nameOptions, namePlaceholder = "예: 인버터", nameLabel = "부품명" }) {
   function updateRow(id, field, value) {
     setRows(rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   }
@@ -511,7 +511,7 @@ export function PartsRowsInput({ rows, setRows, nameOptions, namePlaceholder = "
   return (
     <div>
       <div className="flex gap-1.5 mb-1.5 px-0.5">
-        <span className="text-[10px] font-bold text-slate-400" style={{ flex: 2 }}>부품명</span>
+        <span className="text-[10px] font-bold text-slate-400" style={{ flex: 2 }}>{nameLabel}</span>
         <span className="text-[10px] font-bold text-slate-400" style={{ flex: 1 }}>수량</span>
         <span className="w-5 shrink-0" />
       </div>
