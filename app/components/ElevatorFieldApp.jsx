@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck } from "@/lib/mappers";
+import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { simulateSms } from "@/lib/sms";
@@ -91,6 +91,7 @@ export default function App() {
   const [sites, setSites] = useState([]);
   const [units, setUnits] = useState([]); // v2: 호기 목록 (마이그레이션 전 DB에서는 빈 배열)
   const [profilesAll, setProfilesAll] = useState([]); // v2: 전 직원 프로필 (이름→id 매핑용)
+  const [attendances, setAttendances] = useState([]); // 오늘 출퇴근 기록
   const [siteManagers, setSiteManagers] = useState([]);
   const [failures, setFailures] = useState([]);
   const [inspections, setInspections] = useState([]);
@@ -171,6 +172,22 @@ export default function App() {
     setAuthSubmitting(false);
   }
 
+  // 출퇴근 체크 — 하루 1행(profile_id + work_date). 출근은 insert, 퇴근/당직은 같은 행 update.
+  async function handleAttendance(kind) {
+    const pid = profileIdByName(profilesAll, profile.name);
+    if (!pid) return;
+    const now = new Date().toISOString();
+    const patch = kind === "in"
+      ? { checked_in_at: now, status: null }
+      : { checked_out_at: now, status: kind === "duty" ? "당직" : "퇴근" };
+    const { data } = await supabase
+      .from("attendances")
+      .upsert({ profile_id: pid, work_date: TODAY_STR, ...patch }, { onConflict: "profile_id,work_date" })
+      .select();
+    const row = data?.[0];
+    if (row) setAttendances((prev) => [...prev.filter((a) => a.id !== row.id), mapAttendance(row)]);
+  }
+
   function handleLogout() {
     supabase.auth.signOut();
   }
@@ -195,6 +212,7 @@ export default function App() {
         unitsRes,
         kitStockRes,
         selfChecksRes,
+        attendanceRes,
       ] = await Promise.all([
         supabase.from("sites").select("*"),
         supabase.from("site_managers").select("*"),
@@ -210,6 +228,7 @@ export default function App() {
         supabase.from("units").select("*").order("seq"),
         supabase.from("kit_stock").select("*"),
         supabase.from("self_checks").select("*"),
+        supabase.from("attendances").select("*").eq("work_date", TODAY_STR),
       ]);
       setSites((sitesRes.data ?? []).map(mapSite));
       setSiteManagers((siteManagersRes.data ?? []).map(mapSiteManager));
@@ -230,6 +249,7 @@ export default function App() {
       loadedKitStock.forEach((k) => { kitStockRef.current[`${k.engineerId}|${k.part}`] = k.qty; });
       setKitStockReady(!kitStockRes.error);
       setSelfChecks((selfChecksRes.data ?? []).map(mapSelfCheck));
+      setAttendances((attendanceRes.data ?? []).map(mapAttendance)); // 오늘치만 (출퇴근 체크)
       setLoading(false);
     }
     loadData();
@@ -1209,6 +1229,8 @@ export default function App() {
 
           {tab === "home" && (
             <HomeTab
+              attendances={attendances}
+              onAttendance={handleAttendance}
               inspections={inspections}
               failures={failures}
               onDispatch={handleDispatchFailure}

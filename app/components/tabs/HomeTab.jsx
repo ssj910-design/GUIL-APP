@@ -1,4 +1,4 @@
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect } from "react";
 import { ShieldCheck, AlertOctagon } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
 import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed } from "@/lib/utils";
@@ -80,7 +80,88 @@ function FailureHistoryDetailScreen({ site, failures, onBack }) {
 }
 
 
-export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onShowAllFailures, toast }) {
+// 출퇴근 체크 — 기사는 출근/퇴근·당직 버튼, 관리자는 오늘 출근 인원 요약.
+// 17:30이 지나도록 퇴근 처리가 없으면 모달로 한 번 물어본다 (캡처용 강제: ?off=1).
+function AttendanceBar({ attendances, onAttendance }) {
+  const { role, selfId, engineers } = useContext(AuthContext);
+  const [now, setNow] = useState(() => new Date());
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(t);
+  }, []);
+
+  if (role === "admin") {
+    const inCount = attendances.filter((a) => a.checkedInAt).length;
+    const done = attendances.filter((a) => a.checkedOutAt);
+    return (
+      <div className="px-5 pt-4">
+        <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center justify-between">
+          <p className="text-xs font-bold text-slate-500">오늘 출근</p>
+          <p className="text-sm font-bold text-slate-800">
+            {inCount} / {engineers.length}명
+            {done.length > 0 && (
+              <span className="ml-1.5 text-[11px] font-semibold text-slate-400">
+                퇴근 {done.filter((a) => a.status === "퇴근").length} · 당직 {done.filter((a) => a.status === "당직").length}
+              </span>
+            )}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const mine = attendances.find((a) => a.profileId === selfId);
+  const hhmm = (iso) => new Date(iso).toTimeString().slice(0, 5);
+  const forced = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("off");
+  const afterOff = forced || now.getHours() * 60 + now.getMinutes() >= 17 * 60 + 30;
+  const showOffModal = !!mine?.checkedInAt && !mine.checkedOutAt && afterOff && !dismissed;
+
+  return (
+    <>
+      <div className="px-5 pt-4">
+        {!mine?.checkedInAt ? (
+          <button
+            onClick={() => onAttendance("in")}
+            className="w-full bg-blue-700 text-white text-sm font-bold py-3.5 rounded-xl active:bg-blue-800"
+          >
+            출근 체크
+          </button>
+        ) : (
+          <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center justify-between gap-2">
+            <p className="text-xs font-bold text-slate-500">
+              출근 <span className="text-slate-800">{hhmm(mine.checkedInAt)}</span>
+              {mine.checkedOutAt && (
+                <span className="ml-2">{mine.status} <span className="text-slate-800">{hhmm(mine.checkedOutAt)}</span></span>
+              )}
+            </p>
+            {!mine.checkedOutAt && (
+              <div className="flex gap-1.5 shrink-0">
+                <button onClick={() => onAttendance("duty")} className="text-[11px] font-bold text-amber-700 bg-amber-50 rounded-lg px-2.5 py-1.5">당직</button>
+                <button onClick={() => onAttendance("out")} className="text-[11px] font-bold text-slate-600 bg-slate-100 rounded-lg px-2.5 py-1.5">퇴근</button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      {showOffModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-8">
+          <div className="bg-white rounded-2xl w-full max-w-xs p-5 text-center">
+            <p className="text-base font-extrabold text-slate-800">퇴근 시간입니다</p>
+            <p className="text-xs text-slate-500 mt-1.5">17:30 — 오늘 근무를 마감해 주세요</p>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => { onAttendance("duty"); setDismissed(true); }} className="flex-1 bg-amber-500 text-white text-sm font-bold py-3 rounded-xl active:bg-amber-600">당직</button>
+              <button onClick={() => { onAttendance("out"); setDismissed(true); }} className="flex-1 bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800">퇴근</button>
+            </div>
+            <button onClick={() => setDismissed(true)} className="text-[11px] text-slate-400 font-semibold mt-3">나중에</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+export function HomeTab({ attendances = [], onAttendance, inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onShowAllFailures, toast }) {
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
@@ -152,6 +233,8 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
 
   return (
     <div className="flex-1 overflow-y-auto pb-4 relative">
+      {onAttendance && <AttendanceBar attendances={attendances} onAttendance={onAttendance} />}
+
       {/* 고장 처리 현황 */}
       <div className="px-5 pt-4">
         <div className="flex items-center justify-between mb-2">
