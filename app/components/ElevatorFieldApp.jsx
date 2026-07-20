@@ -98,6 +98,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [roomOpen, setRoomOpen] = useState(false); // 우리방 — 탭이 아니라 플로팅 버튼으로 어디서든 연다
   const [feedReadAt, setFeedReadAt] = useState(null); // 이번 세션에서 우리방을 마지막으로 읽은 시각
+  const [notifOpen, setNotifOpen] = useState(false); // 우측상단 알림(종) 드롭다운
 
   // SKIP_LOGIN 상태에서도 ?auth=1 이면 실제 로그인 흐름을 강제한다 (인증/회원가입 사전 점검용).
   const [forceAuth, setForceAuth] = useState(false);
@@ -969,10 +970,48 @@ export default function App() {
           <ScreenHeader
             title={tab === "home" ? "구일엘리베이터(주)" : tabTitle}
             right={
-              <button className="relative p-1.5 bg-blue-900 rounded-full">
-                <Bell size={16} />
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full" />
-              </button>
+              <div className="relative">
+                <button onClick={() => setNotifOpen((v) => !v)} className="relative p-1.5 bg-blue-900 rounded-full" aria-label="알림">
+                  <Bell size={16} />
+                  {unreadPosts.length > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center border border-blue-950">
+                      {unreadPosts.length > 99 ? "99+" : unreadPosts.length}
+                    </span>
+                  )}
+                </button>
+                {notifOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setNotifOpen(false)} />
+                    <div className="absolute right-0 top-10 z-40 w-72 max-h-96 overflow-y-auto bg-white rounded-2xl shadow-2xl border border-slate-200">
+                      <div className="px-4 py-3 border-b border-slate-100">
+                        <p className="text-sm font-bold text-slate-800">알림</p>
+                      </div>
+                      {unreadPosts.length === 0 ? (
+                        <p className="text-xs text-slate-400 text-center py-8">새 알림이 없습니다</p>
+                      ) : (
+                        [...unreadPosts].reverse().map((p) => (
+                          <button
+                            key={p.id}
+                            onClick={() => { setNotifOpen(false); setRoomOpen(true); }}
+                            className="w-full text-left px-4 py-2.5 border-b border-slate-50 last:border-0 active:bg-slate-50"
+                          >
+                            <p className="text-xs font-bold text-slate-700">
+                              {(p.text ?? "").includes("@" + myName) || (p.text ?? "").includes("@모두") ? (
+                                <span className="text-amber-600">@멘션 · </span>
+                              ) : null}
+                              {p.author}
+                            </p>
+                            <p className="text-xs text-slate-500 truncate mt-0.5">
+                              {p.text || ((p.photoUrls ?? []).length > 0 ? "사진을 게시했습니다" : "")}
+                            </p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">{(p.createdAt ?? "").slice(0, 10)} {p.time}</p>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             }
           />
 
