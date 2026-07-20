@@ -13,7 +13,7 @@ import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets
 /* FAILURE (고장접수)                                                   */
 /* ------------------------------------------------------------------ */
 
-function FailureRegisterForm({ setFailures, goToUnassigned, onNotifyRoom }) {
+function FailureRegisterForm({ setFailures, goToUnassigned }) {
   const sites = useContext(SitesContext);
   const units = useContext(UnitsContext);
   const { engineerNames, profiles: allProfiles, selfId } = useContext(AuthContext);
@@ -58,10 +58,6 @@ function FailureRegisterForm({ setFailures, goToUnassigned, onNotifyRoom }) {
       } : {}),
     });
     setFailures((prev) => [newFailure, ...prev]);
-    // 갇힘사고(사람 갇힘)는 우리방에도 즉시 알린다 — @모두 멘션으로 전원 배지
-    if (form.faultType === "갇힘사고") {
-      onNotifyRoom?.(`🚨 @모두 갇힘사고 접수 — ${newFailure.siteName} · ${newFailure.elevatorNo || "호기 미상"}${form.faultDetail ? ` (${form.faultDetail})` : ""}`);
-    }
     setForm({ siteId: "", unit: "", faultType: "", faultDetail: "", notFault: false, assignee: "", reporterPhone: "", sendSms: false });
     setStep(0);
     goToUnassigned();
@@ -130,18 +126,13 @@ function FailureRegisterForm({ setFailures, goToUnassigned, onNotifyRoom }) {
                     key={t}
                     onClick={() => setForm({ ...form, faultType: t })}
                     className={`py-3.5 rounded-xl text-sm font-bold border ${
-                      form.faultType === t
-                        ? t === "갇힘사고" ? "bg-red-600 text-white border-red-600" : "bg-blue-700 text-white border-blue-700"
-                        : t === "갇힘사고" ? "text-red-600 border-red-200 bg-white" : "text-slate-600 border-slate-200 bg-white"
+                      form.faultType === t ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200 bg-white"
                     }`}
                   >
                     {t}
                   </button>
                 ))}
               </div>
-              {form.faultType === "갇힘사고" && (
-                <p className="text-[11px] text-red-600 font-bold mt-2">🚨 긴급 — 접수 즉시 전 직원에게 알림이 갑니다</p>
-              )}
             </div>
             <div>
               <p className="text-xs font-bold text-slate-500 mb-1.5">고장상세내역</p>
@@ -205,7 +196,7 @@ function FailureRegisterForm({ setFailures, goToUnassigned, onNotifyRoom }) {
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between gap-3">
                   <span className="text-slate-400 shrink-0">{k}</span>
-                  <span className={`font-semibold text-right ${k === "고장구분" && v === "갇힘사고" ? "text-red-600" : "text-slate-800"}`}>{v}</span>
+                  <span className="font-semibold text-right text-slate-800">{v}</span>
                 </div>
               ))}
             </div>
@@ -810,7 +801,7 @@ function FailureStatusOverview({ failures }) {
 }
 
 
-export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, toast, onNotifyRoom }) {
+export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, toast }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
   const subTabs = ["접수등록", "미배정", "처리등록", "처리현황"];
@@ -834,7 +825,7 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
           </button>
         ))}
       </div>
-      {subTab === "접수등록" && <FailureRegisterForm setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} onNotifyRoom={onNotifyRoom} />}
+      {subTab === "접수등록" && <FailureRegisterForm setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />}
       {subTab === "미배정" && (
         <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} />
       )}

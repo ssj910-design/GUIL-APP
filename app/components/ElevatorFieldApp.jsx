@@ -995,7 +995,6 @@ export default function App() {
               onArrive={handleArriveFailure}
               onResult={handleFailureResult}
               toast={failureToast}
-              onNotifyRoom={handleSendFeedPost}
             />
           )}
           {tab === "checkup" && <CheckupTab selfChecks={selfChecks} setSelfChecks={setSelfChecks} siteManagers={siteManagers} profilesAll={profilesAll} />}
