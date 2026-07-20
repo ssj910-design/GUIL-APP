@@ -714,10 +714,18 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
 export function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult, onRefuse, onAssignOpen }) {
   const stage = failureStage(f);
   const { name: me, role } = useContext(AuthContext);
+  // 상태별 컬러 — 미배정(빨강) / 배정·응답대기(노랑) / 출동중(파랑) / 작업중(초록)
+  const state = stage === "arrived" ? { label: "작업중", bar: "border-l-emerald-500", chip: "bg-emerald-50 text-emerald-600" }
+    : stage === "dispatched" ? { label: "출동중", bar: "border-l-blue-500", chip: "bg-blue-50 text-blue-600" }
+    : f.assignee ? { label: `${f.assignee} 응답대기`, bar: "border-l-amber-400", chip: "bg-amber-50 text-amber-600" }
+    : { label: "미배정", bar: "border-l-red-500", chip: "bg-red-50 text-red-600" };
   return (
-    <div className="w-full flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+    <div className={`w-full flex items-center justify-between gap-2 rounded-xl border border-slate-200 border-l-4 ${state.bar} bg-white px-3 py-2.5`}>
       <button type="button" onClick={() => onOpenDetail(f)} className="min-w-0 flex-1 text-left">
-        <p className="font-bold text-slate-800 text-sm truncate">{f.siteName} · {f.elevatorNo}</p>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <p className="font-bold text-slate-800 text-sm truncate">{f.siteName} · {f.elevatorNo}</p>
+          <span className={`shrink-0 text-[10px] font-bold rounded-full px-1.5 py-0.5 ${state.chip}`}>{state.label}</span>
+        </div>
         <p className="text-[11px] text-slate-400 truncate">{f.errorCode}</p>
       </button>
       {stage === "pending" && (

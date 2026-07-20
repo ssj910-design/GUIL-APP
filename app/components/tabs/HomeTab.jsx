@@ -134,6 +134,11 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
 
   // 배정자를 지정해 접수한 건은 그 배정자에게만, 미배정(미정) 건은 전원에게 노출됩니다.
   const activeMine = failures.filter((f) => f.status !== "완료" && (f.assignee === CURRENT_ENGINEER || !f.assignee));
+  // 진행 중(작업중·출동중)을 위로, 그다음 응답대기·미배정 — 접수 순서는 유지
+  const stageRank = (f) => (f.status === "진행중" ? 0 : f.assignee ? 1 : 2);
+  const sortedActive = [...activeMine].sort((a, b) => stageRank(a) - stageRank(b));
+  const [showAllFailures, setShowAllFailures] = useState(false);
+  const shownFailures = showAllFailures ? sortedActive : sortedActive.slice(0, 5);
 
   if (historySite) {
     return <FailureHistoryDetailScreen site={historySite} failures={failures} onBack={() => setHistorySite(null)} />;
@@ -186,7 +191,7 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
               <p className="text-xs text-slate-400 text-center">진행 중인 고장이 없습니다</p>
             </div>
           ) : (
-            activeMine.map((f) => (
+            shownFailures.map((f) => (
               <FailureMiniCard
                 key={f.id}
                 f={f}
@@ -198,6 +203,14 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
                 onAssignOpen={setAssignTarget}
               />
             ))
+          )}
+          {sortedActive.length > 5 && (
+            <button
+              onClick={() => setShowAllFailures(!showAllFailures)}
+              className="w-full text-center text-xs font-bold text-blue-700 bg-white border border-slate-200 rounded-xl py-2.5"
+            >
+              {showAllFailures ? "접기" : `전체 ${sortedActive.length}건 보기`}
+            </button>
           )}
         </div>
       </div>
