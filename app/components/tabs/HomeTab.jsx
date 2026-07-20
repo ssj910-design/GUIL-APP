@@ -82,7 +82,7 @@ function FailureHistoryDetailScreen({ site, failures, onBack }) {
 
 // 출퇴근 체크 — 기사는 출근/퇴근·당직 버튼, 관리자는 오늘 출근 인원 요약.
 // 17:30이 지나도록 퇴근 처리가 없으면 모달로 한 번 물어본다 (캡처용 강제: ?off=1).
-function AttendanceBar({ attendances, onAttendance }) {
+function AttendanceBar({ attendances, onAttendance, onOpenRoster, swapCount = 0 }) {
   const { role, selfId, engineers } = useContext(AuthContext);
   const [now, setNow] = useState(() => new Date());
   const [dismissed, setDismissed] = useState(false);
@@ -90,6 +90,21 @@ function AttendanceBar({ attendances, onAttendance }) {
     const t = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(t);
   }, []);
+
+  const rosterBtn = onOpenRoster ? (
+    <button
+      onClick={onOpenRoster}
+      className="w-full mt-2 bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex items-center justify-between active:bg-slate-50"
+    >
+      <span className="text-xs font-bold text-slate-600">당직 · 숙직 근무표</span>
+      <span className="flex items-center gap-1.5">
+        {swapCount > 0 && (
+          <span className="text-[10px] font-extrabold text-white bg-red-500 rounded-full px-1.5 py-0.5">교환요청 {swapCount}</span>
+        )}
+        <span className="text-[11px] font-bold text-blue-700">보기 →</span>
+      </span>
+    </button>
+  ) : null;
 
   if (role === "admin") {
     const inCount = attendances.filter((a) => a.checkedInAt).length;
@@ -107,6 +122,7 @@ function AttendanceBar({ attendances, onAttendance }) {
             )}
           </p>
         </div>
+        {rosterBtn}
       </div>
     );
   }
@@ -143,6 +159,7 @@ function AttendanceBar({ attendances, onAttendance }) {
             )}
           </div>
         )}
+        {rosterBtn}
       </div>
       {showOffModal && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-8">
@@ -161,7 +178,7 @@ function AttendanceBar({ attendances, onAttendance }) {
   );
 }
 
-export function HomeTab({ attendances = [], onAttendance, inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onShowAllFailures, toast }) {
+export function HomeTab({ attendances = [], onAttendance, onOpenRoster, swapCount, inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onShowAllFailures, toast }) {
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
@@ -233,7 +250,7 @@ export function HomeTab({ attendances = [], onAttendance, inspections, failures,
 
   return (
     <div className="flex-1 overflow-y-auto pb-4 relative">
-      {onAttendance && <AttendanceBar attendances={attendances} onAttendance={onAttendance} />}
+      {onAttendance && <AttendanceBar attendances={attendances} onAttendance={onAttendance} onOpenRoster={onOpenRoster} swapCount={swapCount} />}
 
       {/* 고장 처리 현황 */}
       <div className="px-5 pt-4">

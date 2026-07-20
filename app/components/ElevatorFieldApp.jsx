@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import { Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance } from "@/lib/mappers";
+import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
+import { DutyRoster } from "@/app/components/DutyRoster";
 import { simulateSms } from "@/lib/sms";
 import { ScreenHeader } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -92,6 +93,9 @@ export default function App() {
   const [units, setUnits] = useState([]); // v2: 호기 목록 (마이그레이션 전 DB에서는 빈 배열)
   const [profilesAll, setProfilesAll] = useState([]); // v2: 전 직원 프로필 (이름→id 매핑용)
   const [attendances, setAttendances] = useState([]); // 오늘 출퇴근 기록
+  const [dutySchedules, setDutySchedules] = useState([]); // 당직·숙직 근무표 (이번 달 이후)
+  const [dutySwaps, setDutySwaps] = useState([]);
+  const [rosterOpen, setRosterOpen] = useState(false);
   const [siteManagers, setSiteManagers] = useState([]);
   const [failures, setFailures] = useState([]);
   const [inspections, setInspections] = useState([]);
@@ -188,6 +192,74 @@ export default function App() {
     if (row) setAttendances((prev) => [...prev.filter((a) => a.id !== row.id), mapAttendance(row)]);
   }
 
+  // ---------- 당직·숙직 근무표 ----------
+  // 자동 배정: 기사 순번(profiles.duty_order)을 하루 2칸(숙직→당직)씩 끊어 순환한다.
+  // 직전 배정이 있으면 그 순번 다음부터 이어받아 달이 바뀌어도 순환이 끊기지 않는다.
+  async function handleGenerateDuty(ym) {
+    const roster = engineers.slice().sort((a, b) => (a.duty_order ?? 999) - (b.duty_order ?? 999));
+    if (!roster.length) return;
+    const [y, m] = ym.split("-").map(Number);
+    const days = new Date(y, m, 0).getDate();
+    const first = `${ym}-01`;
+
+    // 이 달 직전에 배정된 마지막 칸의 순번 위치를 찾아 이어붙인다.
+    const { data: prevRows } = await supabase
+      .from("duty_schedules").select("*").lt("duty_date", first)
+      .order("duty_date", { ascending: false }).order("kind").limit(1);
+    const prevPid = prevRows?.[0]?.profile_id;
+    let cursor = prevPid ? roster.findIndex((e) => e.id === prevPid) : -1;
+    const next = () => { cursor = (cursor + 1) % roster.length; return roster[cursor].id; };
+
+    const existing = new Set(dutySchedules.filter((d) => d.dutyDate.startsWith(ym) && d.profileId).map((d) => `${d.dutyDate}|${d.kind}`));
+    const rows = [];
+    for (let d = 1; d <= days; d++) {
+      const iso = `${ym}-${String(d).padStart(2, "0")}`;
+      for (const kind of ["숙직", "당직"]) {
+        const pid = next(); // 빈 칸만 채우더라도 순번은 계속 돌려 배열을 유지한다
+        if (existing.has(`${iso}|${kind}`)) continue;
+        rows.push({ duty_date: iso, kind, profile_id: pid });
+      }
+    }
+    if (!rows.length) return;
+    const { data } = await supabase.from("duty_schedules").upsert(rows, { onConflict: "duty_date,kind" }).select();
+    const mapped = (data ?? []).map(mapDutySchedule);
+    setDutySchedules((prev) => [...prev.filter((p) => !mapped.some((n) => n.id === p.id)), ...mapped].sort((a, b) => a.dutyDate.localeCompare(b.dutyDate)));
+  }
+
+  async function handleSetDutyPerson(iso, kind, profileId) {
+    const { data } = await supabase
+      .from("duty_schedules").upsert({ duty_date: iso, kind, profile_id: profileId }, { onConflict: "duty_date,kind" }).select();
+    const row = data?.[0];
+    if (row) setDutySchedules((prev) => [...prev.filter((p) => p.id !== row.id), mapDutySchedule(row)].sort((a, b) => a.dutyDate.localeCompare(b.dutyDate)));
+  }
+
+  async function handleRequestDutySwap(from, to) {
+    const { data } = await supabase.from("duty_swaps").insert({
+      from_schedule_id: from.id, to_schedule_id: to.id,
+      requester_id: from.profileId, target_id: to.profileId,
+    }).select();
+    if (data?.[0]) setDutySwaps((prev) => [...prev, mapDutySwap(data[0])]);
+    const reqName = profile.name;
+    await handleSendFeedPost(`@${engineers.find((e) => e.id === to.profileId)?.name ?? ""} ${reqName}님이 근무 교환을 요청했습니다 — ${from.dutyDate.slice(5)} ${from.kind} ↔ ${to.dutyDate.slice(5)} ${to.kind} (근무표에서 수락/거절)`);
+  }
+
+  // 수락 = 두 칸의 담당자를 맞바꾼다. 같은 달이든 다음 달이든 동일 로직(이월도 이걸로 처리).
+  async function handleRespondDutySwap(swap, decision) {
+    await supabase.from("duty_swaps").update({ status: decision, responded_at: new Date().toISOString() }).eq("id", swap.id);
+    setDutySwaps((prev) => prev.filter((w) => w.id !== swap.id));
+    if (decision !== "수락") return;
+    await Promise.all([
+      supabase.from("duty_schedules").update({ profile_id: swap.targetId }).eq("id", swap.fromScheduleId),
+      supabase.from("duty_schedules").update({ profile_id: swap.requesterId }).eq("id", swap.toScheduleId),
+    ]);
+    setDutySchedules((prev) => prev.map((d) =>
+      d.id === swap.fromScheduleId ? { ...d, profileId: swap.targetId }
+        : d.id === swap.toScheduleId ? { ...d, profileId: swap.requesterId } : d
+    ));
+    const other = engineers.find((e) => e.id === swap.requesterId)?.name ?? "";
+    await handleSendFeedPost(`@${other} ${profile.name}님이 근무 교환을 수락했습니다 — 근무표가 변경되었습니다`);
+  }
+
   function handleLogout() {
     supabase.auth.signOut();
   }
@@ -213,6 +285,8 @@ export default function App() {
         kitStockRes,
         selfChecksRes,
         attendanceRes,
+        dutyRes,
+        dutySwapRes,
       ] = await Promise.all([
         supabase.from("sites").select("*"),
         supabase.from("site_managers").select("*"),
@@ -229,6 +303,8 @@ export default function App() {
         supabase.from("kit_stock").select("*"),
         supabase.from("self_checks").select("*"),
         supabase.from("attendances").select("*").eq("work_date", TODAY_STR),
+        supabase.from("duty_schedules").select("*").gte("duty_date", TODAY_STR.slice(0, 8) + "01").order("duty_date"),
+        supabase.from("duty_swaps").select("*").eq("status", "대기"),
       ]);
       setSites((sitesRes.data ?? []).map(mapSite));
       setSiteManagers((siteManagersRes.data ?? []).map(mapSiteManager));
@@ -250,6 +326,8 @@ export default function App() {
       setKitStockReady(!kitStockRes.error);
       setSelfChecks((selfChecksRes.data ?? []).map(mapSelfCheck));
       setAttendances((attendanceRes.data ?? []).map(mapAttendance)); // 오늘치만 (출퇴근 체크)
+      setDutySchedules((dutyRes.data ?? []).map(mapDutySchedule));
+      setDutySwaps((dutySwapRes.data ?? []).map(mapDutySwap));
       setLoading(false);
     }
     loadData();
@@ -1227,10 +1305,24 @@ export default function App() {
             }
           />
 
+          {rosterOpen && (
+            <DutyRoster
+              schedules={dutySchedules}
+              swaps={dutySwaps}
+              onGenerate={handleGenerateDuty}
+              onSetPerson={handleSetDutyPerson}
+              onRequestSwap={handleRequestDutySwap}
+              onRespondSwap={handleRespondDutySwap}
+              onClose={() => setRosterOpen(false)}
+            />
+          )}
+
           {tab === "home" && (
             <HomeTab
               attendances={attendances}
               onAttendance={handleAttendance}
+              onOpenRoster={() => setRosterOpen(true)}
+              swapCount={dutySwaps.filter((w) => w.status === "대기" && w.targetId === profileIdByName(profilesAll, profile.name)).length}
               inspections={inspections}
               failures={failures}
               onDispatch={handleDispatchFailure}
