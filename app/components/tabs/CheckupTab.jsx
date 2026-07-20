@@ -22,11 +22,12 @@ import SELF_CHECK_ITEM_CODES from "@/lib/data/selfCheckItemCodes.json";
 /* ------------------------------------------------------------------ */
 
 const WEEK_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+// 이번 달 점검항목 목록은 이미 isDueThisMonth로 걸러져 있어(점검주기가 3/6/9/12월 등으로
+// 고정) 여기 뜨는 항목은 전부 이번 달 대상 — 그러니 "제외(D)"를 사람이 수동 선택할 일이 없다.
 const RESULT_OPTIONS = [
   { v: "A", label: "양호" },
   { v: "B", label: "주의관찰" },
   { v: "C", label: "긴급수리" },
-  { v: "D", label: "제외" },
   { v: "E", label: "없음" },
 ];
 
