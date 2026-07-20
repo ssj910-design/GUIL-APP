@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { StatusBadge, AdminTable, inputCls } from "@/app/components/admin/adminShared";
+import ImportEngineers from "@/app/components/admin/ImportEngineers";
 
 function EngineerRow({ p, stats, onSave }) {
   const [form, setForm] = useState({ phone: p.phone ?? "", email: p.email ?? "", region: p.region ?? "", minwonId: p.minwon_id ?? "", dutyOrder: p.duty_order ?? "" });
@@ -19,9 +20,18 @@ function EngineerRow({ p, stats, onSave }) {
         <input className={inputCls} inputMode="numeric" placeholder="순번" value={form.dutyOrder}
           onChange={(e) => setForm({ ...form, dutyOrder: e.target.value.replace(/[^0-9]/g, "") })} />
       </td>
-      <td className="px-3 py-2.5 text-center">{stats.sites}</td>
-      <td className="px-3 py-2.5 text-center">{stats.activeFailures}</td>
-      <td className="px-3 py-2.5 text-center">{stats.openTodos}</td>
+      <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">{p.member_type ?? "-"}</td>
+      <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">{p.tel ?? "-"}</td>
+      <td className="px-3 py-2.5 text-center">
+        {p.join_status ? <StatusBadge tone={p.join_status === "승인" ? "green" : "slate"}>{p.join_status}</StatusBadge> : "-"}
+      </td>
+      <td className="px-3 py-2.5 whitespace-nowrap text-slate-400 text-[11px]">
+        {p.joined_at ?? "-"}<br />{p.approved_at ?? "-"}
+      </td>
+      <td className="px-3 py-2.5 whitespace-nowrap text-slate-500 text-[11px]">{p.edu_cert_no ?? "-"}</td>
+      <td className="px-3 py-2.5 text-center whitespace-nowrap text-slate-500">
+        {stats.sites} / {stats.activeFailures} / {stats.openTodos}
+      </td>
       <td className="px-3 py-2.5">
         {p.auth_user_id ? <StatusBadge tone="green">계정 연결됨</StatusBadge> : <StatusBadge tone="slate">계정 없음</StatusBadge>}
       </td>
@@ -43,6 +53,7 @@ export default function EngineersAdmin({ data, setData }) {
   const [newName, setNewName] = useState("");
   const [newOrder, setNewOrder] = useState("");
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   async function addEngineer() {
     const name = newName.trim();
@@ -97,9 +108,14 @@ export default function EngineersAdmin({ data, setData }) {
           className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-4 py-2">
           {adding ? "등록 중…" : "기사 추가"}
         </button>
-        <p className="text-[11px] text-slate-400 ml-auto">순번 = 당직·숙직 근무표 자동 배정 순서 (근무표의 이름 옆 괄호 숫자)</p>
+        <button onClick={() => setImporting(true)}
+          className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+          공단 회원목록 엑셀로 등록
+        </button>
+        <p className="text-[11px] text-slate-400 ml-auto max-w-xs text-right">순번 = 당직·숙직 근무표 자동 배정 순서. 당직을 서는 사람만 채우세요.</p>
       </div>
-      <AdminTable head={["이름", "연락처", "이메일", "담당지역", "민원24 ID", "순번", "담당 현장", "진행 고장", "미완료 할일", "로그인", ""]}>
+      {importing && <ImportEngineers data={data} setData={setData} onClose={() => setImporting(false)} />}
+      <AdminTable head={["이름", "휴대폰", "이메일", "담당지역", "아이디(민원24)", "순번", "회원구분", "연락처", "가입상태", "가입일/승인일", "교육수료번호", "현장/고장/할일", "로그인", ""]}>
         {engineers.map((p) => (
           <EngineerRow key={p.id} p={p} stats={statsOf(p)} onSave={save} />
         ))}

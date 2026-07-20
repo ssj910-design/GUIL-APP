@@ -14,7 +14,7 @@ const colIdx = (ref) => [...ref].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 6
 const toDate = (v) => (/^\d{8}$/.test(v) ? `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6)}` : null);
 
 // 셀 참조(r="C5") 기준으로 읽는다 — 빈 셀이 XML에서 생략돼도 열이 밀리지 않도록.
-async function parseXlsx(file) {
+export async function parseXlsx(file) {
   const zip = await JSZip.loadAsync(file);
   const sharedXml = await zip.file("xl/sharedStrings.xml")?.async("string") ?? "";
   const shared = [...sharedXml.matchAll(/<si>(.*?)<\/si>/gs)].map((m) =>
