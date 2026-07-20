@@ -227,12 +227,13 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                 <p className="text-[11px] text-slate-400 mt-0.5">체크하면 자재 담당자에게 보충 요청이 자동으로 전달됩니다</p>
               </div>
             </button>
-            <Field label="교체내역 (부품명, 수량)">
+            <Field label="교체내역 (부품명, 위치, 수량)">
               <PartsRowsInput
                 rows={manualForm.parts}
                 setRows={(rows) => setManualForm({ ...manualForm, parts: rows })}
                 nameOptions={manualForm.fromKit ? KIT_PARTS : undefined}
                 namePlaceholder={manualForm.fromKit ? "상비부품 목록에서 선택하세요" : "예: 도어 롤러"}
+                showLocation
               />
             </Field>
             <Field label="교체일자">

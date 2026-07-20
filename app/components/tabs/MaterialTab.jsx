@@ -483,20 +483,23 @@ function RestockHistoryScreen({ restockRequests, kitStock, onBack, onReceiveRest
 
 
 export function emptyPartRow() {
-  return { id: Date.now() + Math.random(), name: "", qty: "" };
+  return { id: Date.now() + Math.random(), name: "", qty: "", location: "" };
 }
 
 
+// location(위치·층)은 부품교체내역처럼 "어디에" 교체했는지가 중요한 곳에서만 채워지고,
+// 그 외(자재신청/견적요청)에선 항상 빈 문자열이라 기존 "부품명 수량개" 표기 그대로 나간다.
 export function formatPartRows(rows) {
   return rows
     .filter((r) => r.name.trim() && r.qty)
-    .map((r) => `${r.name.trim()} ${r.qty}개`)
+    .map((r) => `${r.name.trim()}${r.location?.trim() ? ` ${r.location.trim()}` : ""} ${r.qty}개`)
     .join(", ");
 }
 
 
 // nameOptions를 넘기면 부품명 칸이 드롭다운으로 바뀝니다 (예: 상비부품 목록에서 선택).
-export function PartsRowsInput({ rows, setRows, nameOptions, namePlaceholder = "예: 인버터" }) {
+// showLocation을 넘기면 부품명·수량 사이에 위치(층) 입력칸이 추가됩니다 (부품교체내역용).
+export function PartsRowsInput({ rows, setRows, nameOptions, namePlaceholder = "예: 인버터", showLocation = false }) {
   function updateRow(id, field, value) {
     setRows(rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   }
@@ -512,6 +515,7 @@ export function PartsRowsInput({ rows, setRows, nameOptions, namePlaceholder = "
     <div>
       <div className="flex gap-1.5 mb-1.5 px-0.5">
         <span className="text-[10px] font-bold text-slate-400" style={{ flex: 2 }}>부품명</span>
+        {showLocation && <span className="text-[10px] font-bold text-slate-400" style={{ flex: 1 }}>위치(층)</span>}
         <span className="text-[10px] font-bold text-slate-400" style={{ flex: 1 }}>수량</span>
         <span className="w-5 shrink-0" />
       </div>
@@ -535,6 +539,15 @@ export function PartsRowsInput({ rows, setRows, nameOptions, namePlaceholder = "
                 placeholder={namePlaceholder}
                 value={row.name}
                 onChange={(e) => updateRow(row.id, "name", e.target.value)}
+              />
+            )}
+            {showLocation && (
+              <input
+                className={inputCls}
+                style={{ flex: 1 }}
+                placeholder="예: 1층"
+                value={row.location ?? ""}
+                onChange={(e) => updateRow(row.id, "location", e.target.value)}
               />
             )}
             <input
