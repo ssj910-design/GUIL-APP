@@ -13,13 +13,13 @@ import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets
 /* FAILURE (고장접수)                                                   */
 /* ------------------------------------------------------------------ */
 
-function FailureRegisterForm({ setFailures, goToUnassigned }) {
+function FailureRegisterForm({ failures, setFailures, goToUnassigned }) {
   const sites = useContext(SitesContext);
   const units = useContext(UnitsContext);
   const { engineerNames, profiles: allProfiles, selfId } = useContext(AuthContext);
   const v2Ready = units.length > 0;
   const [form, setForm] = useState({
-    siteId: "", units: [], faultType: "", faultDetail: "", notFault: false, assignee: "", reporterPhone: "", sendSms: false,
+    siteId: "", units: [], faultType: "", faultDetail: "", details: {}, notFault: false, assignee: "", reporterPhone: "", sendSms: false,
   });
   const [step, setStep] = useState(0); // 스텝형 접수 (0~3)
   const site = sites.find((s) => s.id === form.siteId);
@@ -31,12 +31,14 @@ function FailureRegisterForm({ setFailures, goToUnassigned }) {
     // 선택한 호기마다 접수 1건씩 생성 (처리·배정이 호기 단위라 데이터도 호기별로 쪼갠다)
     const targets = form.units.length ? form.units : [site.elevatorNo];
     const stamp = Date.now();
+    // 여러 호기 선택 시 상세증상은 호기별 입력(details), 단일이면 공통 입력(faultDetail)
+    const detailOf = (u) => (targets.length > 1 ? (form.details[u] ?? "").trim() : form.faultDetail);
     const newFailures = targets.map((u, i) => ({
       id: "f" + (stamp + i),
       siteId: site.id,
       siteName: site.name,
       elevatorNo: u,
-      errorCode: form.faultType + (form.faultDetail ? ` (${form.faultDetail})` : ""),
+      errorCode: form.faultType + (detailOf(u) ? ` (${detailOf(u)})` : ""),
       status: "미처리",
       reportedAt: TODAY_STR.slice(5).replace("-", "/") + " " + new Date().toTimeString().slice(0, 5),
       assignee: form.assignee || null,
@@ -61,12 +63,19 @@ function FailureRegisterForm({ setFailures, goToUnassigned }) {
       } : {}),
     })));
     setFailures((prev) => [...newFailures, ...prev]);
-    setForm({ siteId: "", units: [], faultType: "", faultDetail: "", notFault: false, assignee: "", reporterPhone: "", sendSms: false });
+    setForm({ siteId: "", units: [], faultType: "", faultDetail: "", details: {}, notFault: false, assignee: "", reporterPhone: "", sendSms: false });
     setStep(0);
     goToUnassigned();
   }
 
   // 스텝형 접수 — 입력 6개를 4단계로 나누고, 자동 정보 7줄은 카드/요약으로 이동 (원복: git tag before-failure-steps)
+  // 기사 현재 상태 — 진행중 건이 있으면 출동중(도착 전)/처리중(도착 후)
+  const engineerStatus = (name) => {
+    const act = failures.filter((f) => f.assignee === name && f.status === "진행중");
+    if (!act.length) return null;
+    return act.some((f) => !f.arrivalTime) ? "출동중" : "처리중";
+  };
+
   const STEP_TITLES = ["현장 선택", "고장 내용", "신고자 정보", "확인 · 접수"];
   const canNext =
     step === 0 ? !!site :
@@ -160,10 +169,29 @@ function FailureRegisterForm({ setFailures, goToUnassigned }) {
                 ))}
               </div>
             </div>
-            <div>
-              <p className="text-xs font-bold text-slate-500 mb-1.5">고장상세내역</p>
-              <input className={inputCls} placeholder="예: 3층에서 문이 안 닫힘" value={form.faultDetail} onChange={(e) => setForm({ ...form, faultDetail: e.target.value })} />
-            </div>
+            {form.units.length > 1 ? (
+              <div>
+                <p className="text-xs font-bold text-slate-500 mb-1.5">호기별 상세증상</p>
+                <div className="space-y-2">
+                  {form.units.map((u) => (
+                    <div key={u} className="flex items-center gap-2">
+                      <span className="w-12 shrink-0 text-sm font-bold text-slate-600 text-center">{u}</span>
+                      <input
+                        className={inputCls}
+                        placeholder="이 호기의 증상"
+                        value={form.details[u] ?? ""}
+                        onChange={(e) => setForm({ ...form, details: { ...form.details, [u]: e.target.value } })}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p className="text-xs font-bold text-slate-500 mb-1.5">고장상세내역</p>
+                <input className={inputCls} placeholder="예: 3층에서 문이 안 닫힘" value={form.faultDetail} onChange={(e) => setForm({ ...form, faultDetail: e.target.value })} />
+              </div>
+            )}
             <div className="flex items-center justify-between bg-white rounded-xl border border-slate-200 px-4 py-3">
               <span className="text-sm font-bold text-slate-600">고장아님(다발아님)으로 접수</span>
               <button onClick={() => setForm({ ...form, notFault: !form.notFault })}>
@@ -191,10 +219,38 @@ function FailureRegisterForm({ setFailures, goToUnassigned }) {
             </div>
             <div>
               <p className="text-xs font-bold text-slate-500 mb-1.5">배정 기사 (선택)</p>
-              <select className={inputCls} value={form.assignee} onChange={(e) => setForm({ ...form, assignee: e.target.value })}>
-                <option value="">나중에 배정</option>
-                {engineerNames.map((e) => <option key={e} value={e}>{e}</option>)}
-              </select>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setForm({ ...form, assignee: "" })}
+                  className={`py-3 rounded-xl text-sm font-bold border ${
+                    form.assignee === "" ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200 bg-white"
+                  }`}
+                >
+                  나중에 배정
+                </button>
+                {engineerNames.map((name) => {
+                  const st = engineerStatus(name);
+                  const sel = form.assignee === name;
+                  return (
+                    <button
+                      key={name}
+                      onClick={() => setForm({ ...form, assignee: name })}
+                      className={`py-2.5 rounded-xl text-sm font-bold border ${
+                        sel ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200 bg-white"
+                      }`}
+                    >
+                      {name}
+                      {st && (
+                        <span className={`block text-[10px] font-bold mt-0.5 ${
+                          sel ? "text-amber-200" : st === "출동중" ? "text-amber-600" : "text-emerald-600"
+                        }`}>
+                          {st}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
               <div className="flex items-center justify-between">
@@ -221,7 +277,9 @@ function FailureRegisterForm({ setFailures, goToUnassigned }) {
                 ["현장", site?.name],
                 ["호기", form.units.length ? form.units.join(", ") : "미지정"],
                 ["고장구분", form.faultType],
-                ["상세내역", form.faultDetail || "-"],
+                ["상세내역", form.units.length > 1
+                  ? form.units.map((u) => `${u}: ${form.details[u] || "-"}`).join(" / ")
+                  : form.faultDetail || "-"],
                 ...(form.notFault ? [["구분", "고장아님(다발아님)"]] : []),
                 ["신고자 전화", form.reporterPhone],
                 ["배정 기사", form.assignee || "나중에 배정"],
@@ -859,7 +917,7 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
           </button>
         ))}
       </div>
-      {subTab === "접수등록" && <FailureRegisterForm setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />}
+      {subTab === "접수등록" && <FailureRegisterForm failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />}
       {subTab === "미배정" && (
         <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} />
       )}
