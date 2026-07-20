@@ -19,7 +19,11 @@ function RequestDetailSheet({ target, onClose, onPhotoClick, todos }) {
   const photos = type === "restock"
     ? (data.supplyPhotoUrls?.length ? data.supplyPhotoUrls : data.supplyPhotoUrl ? [data.supplyPhotoUrl] : [])
     : (data.photoUrls ?? []);
-  const photoLabel = type === "restock" ? "보충 지급 사진" : "현장 사진";
+  const photoLabel = type === "restock" ? "보충 지급 사진" : type === "quote" ? "견적신청사진" : "자재신청사진";
+  // 자재/견적은 신청 사진과 지급 사진이 따로 있어 둘 다 보여준다 (상비부품은 지급 사진이 이미 photos).
+  const supplyPhotos = type !== "restock"
+    ? (data.supplyPhotoUrls?.length ? data.supplyPhotoUrls : data.supplyPhotoUrl ? [data.supplyPhotoUrl] : [])
+    : [];
 
   return (
     <Sheet title={title} onClose={onClose}>
@@ -90,7 +94,7 @@ function RequestDetailSheet({ target, onClose, onPhotoClick, todos }) {
           </div>
         )}
       </div>
-      <div>
+      <div className={type !== "restock" ? "mb-4" : ""}>
         <p className="text-xs font-bold text-slate-500 mb-2">
           {photoLabel} ({photos.length}장)
         </p>
@@ -104,6 +108,22 @@ function RequestDetailSheet({ target, onClose, onPhotoClick, todos }) {
             : <PhotoThumb caption="등록된 사진 없음" />}
         </div>
       </div>
+      {type !== "restock" && (
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-2">
+            자재지급사진 ({supplyPhotos.length}장)
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {supplyPhotos.length > 0
+              ? supplyPhotos.map((url, i) => (
+                  <button key={i} type="button" onClick={() => onPhotoClick(supplyPhotos, i)}>
+                    <img src={url} alt="" className="w-full aspect-square rounded-xl object-cover border border-slate-200" />
+                  </button>
+                ))
+              : <PhotoThumb caption="등록된 사진 없음" />}
+          </div>
+        </div>
+      )}
     </Sheet>
   );
 }
