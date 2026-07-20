@@ -12,9 +12,9 @@ import { Modal, StatusBadge } from "@/app/components/admin/adminShared";
 
 function unitLabel(units, sites, unitId, fallbackSiteName, fallbackLabel) {
   const u = units.find((x) => x.id === unitId);
-  if (!u) return { site: fallbackSiteName ?? "-", unit: fallbackLabel ?? "-" };
+  if (!u) return { site: fallbackSiteName ?? "-", unit: fallbackLabel ?? "-", siteObj: sites.find((x) => x.name === fallbackSiteName) };
   const s = sites.find((x) => x.id === u.siteId);
-  return { site: s?.name ?? fallbackSiteName ?? "-", unit: u.unitNo };
+  return { site: s?.name ?? fallbackSiteName ?? "-", unit: u.unitNo, siteObj: s };
 }
 
 // 배정/출동/도착 상태를 한 줄 배지로 — 실시간 고장 현황에서 재사용.
@@ -221,6 +221,7 @@ export default function Dashboard({ data }) {
                   <th className="text-left px-2 py-2 font-semibold">현장 · 호기</th>
                   <th className="text-left px-2 py-2 font-semibold">증상</th>
                   <th className="text-left px-2 py-2 font-semibold">담당 기사</th>
+                  <th className="text-left px-2 py-2 font-semibold">배정 기사</th>
                   <th className="text-left px-2 py-2 font-semibold">도착 상태</th>
                   <th className="text-right px-5 py-2 font-semibold">상태</th>
                 </tr>
@@ -235,6 +236,7 @@ export default function Dashboard({ data }) {
                       <td className="px-5 py-2.5 text-slate-500 whitespace-nowrap">{f.reportedAt}</td>
                       <td className="px-2 py-2.5 font-semibold whitespace-nowrap">{loc.site} · {loc.unit}</td>
                       <td className="px-2 py-2.5 text-slate-600">{f.errorCode}</td>
+                      <td className="px-2 py-2.5 whitespace-nowrap">{loc.siteObj?.assignedEngineer || "미배정"}</td>
                       <td className="px-2 py-2.5 whitespace-nowrap">{engineerName(f.assigneeId, f.assignee)}</td>
                       <td className="px-2 py-2.5 whitespace-nowrap">
                         <span className={`text-xs font-bold px-2 py-1 rounded-full ${arr.cls}`}>{arr.label}</span>
@@ -273,6 +275,9 @@ export default function Dashboard({ data }) {
                     <div className="min-w-0">
                       <p className="font-semibold truncate">{loc.site} · {loc.unit}</p>
                       <p className="text-[11px] text-slate-400 truncate">{f.reportedAt} · {f.errorCode}</p>
+                      <p className="text-[11px] text-slate-400 truncate">
+                        담당 {loc.siteObj?.assignedEngineer || "미배정"} · 배정 {engineerName(f.assigneeId, f.assignee)}
+                      </p>
                     </div>
                     <span className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${stateCls}`}>
                       {f.escalation ? `${f.status}·${f.escalation}` : f.status}
