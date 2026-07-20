@@ -1,6 +1,10 @@
 "use client";
 
-// 연차관리 — 사람별 부여 일수(profiles.annual_leave_days)에서 사용 내역(leaves)을 빼 잔여를 계산한다.
+// 연차관리 — 입사일 기준 자동 계산(lib/leave.js)에서 사용 내역(leaves)을 빼 잔여를 낸다.
+// 부여 일수 직접 입력은 뺐다: 특별휴가·포상휴가·무급휴가처럼 성격이 다른 것을
+// 연차 총량에 섞어 넣으면 무엇이 왜 늘었는지 알 수 없어진다.
+// 그런 건 나중에 휴가 신청 쪽에서 유급/무급·종류로 나눠 다루는 게 맞다.
+// (profiles.annual_leave_days 컬럼은 남아 있으나 현재 미사용)
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { AdminTable, inputCls, StatusBadge, DateField } from "@/app/components/admin/adminShared";
@@ -48,11 +52,6 @@ export default function LeavesAdmin({ data, setData }) {
     setLeaves((prev) => prev.filter((x) => x.id !== l.id));
   }
 
-  async function saveGrant(p, value) {
-    const days = value === "" ? null : Number(value);
-    await supabase.from("profiles").update({ annual_leave_days: days }).eq("id", p.id);
-    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, annual_leave_days: days } : x)) }));
-  }
 
   return (
     <div>
@@ -99,7 +98,7 @@ export default function LeavesAdmin({ data, setData }) {
       {/* 사람별 잔여 */}
       <h2 className="text-sm font-extrabold text-slate-700 mb-1">{year}년 연차 현황</h2>
       <p className="text-[11px] text-slate-400 mb-2 leading-relaxed">
-        연차 일수는 입사일에서 자동으로 계산됩니다. 다르게 줘야 할 사람만 그 칸에 숫자를 직접 적으면 됩니다.
+        연차 일수는 입사일에서 자동 계산됩니다 (1년 미만 개근 개월당 1일·최대 11일 / 1년 이상 15일 / 3년부터 2년마다 +1일·상한 25일).
       </p>
       <div className="mb-6">
         <AdminTable head={["이름", "입사일 · 근속", "연차", "사용", "잔여", ""]} minWidth="44rem">
@@ -108,8 +107,7 @@ export default function LeavesAdmin({ data, setData }) {
             // 해당 연도 말일 기준 — 그 해에 발생하는 연차를 보여준다
             const asOf = `${year}-12-31`;
             const auto = annualLeaveDays(p.hire_date, asOf);
-            const manual = p.annual_leave_days;      // 직접 적은 값이 있으면 그게 최종
-            const grant = manual ?? auto;
+            const grant = auto;                       // 입사일 기준 자동값만 쓴다
             const left = grant == null ? null : grant - used;
             return (
               <tr key={p.id} className="border-b border-slate-50">
@@ -119,23 +117,8 @@ export default function LeavesAdmin({ data, setData }) {
                     ? <>{p.hire_date} · <b className="text-slate-600">{Math.max(0, yearsOfService(p.hire_date, asOf))}년차</b></>
                     : <span className="text-red-400">입사일 미입력</span>}
                 </td>
-                {/* 자동값은 회색 힌트(placeholder)로 깔아두고, 직접 적으면 그 값이 최종이 된다 */}
-                <td className="px-3 py-2.5 w-40">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-16">
-                      <input className={`${inputCls} text-center ${manual != null ? "font-bold" : ""}`}
-                        inputMode="decimal" placeholder={auto != null ? String(auto) : "—"}
-                        defaultValue={manual ?? ""} key={String(manual)}
-                        onBlur={(e) => { if (e.target.value !== String(manual ?? "")) saveGrant(p, e.target.value.replace(/[^0-9.]/g, "")); }} />
-                    </div>
-                    <span className="text-[11px] text-slate-400 shrink-0">일</span>
-                    {manual != null && (
-                      <button onClick={() => saveGrant(p, "")} title={`자동값 ${auto ?? "-"}일로 되돌리기`}
-                        className="text-[10px] font-bold text-amber-600 bg-amber-50 rounded px-1.5 py-1 shrink-0">
-                        직접입력 ↺
-                      </button>
-                    )}
-                  </div>
+                <td className="px-3 py-2.5 whitespace-nowrap font-bold text-slate-700">
+                  {grant == null ? <span className="text-slate-300 font-normal">-</span> : `${grant}일`}
                 </td>
                 <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">{used}일</td>
                 <td className="px-3 py-2.5">
