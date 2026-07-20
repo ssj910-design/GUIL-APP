@@ -5,7 +5,7 @@ import { AuthContext } from "@/app/components/context";
 import { TODAY_STR } from "@/lib/constants";
 import { annualLeaveDays, yearsOfService } from "@/lib/leave";
 
-const KIND_TONE = { 숙직: "bg-slate-100 text-slate-700", 당직: "bg-emerald-50 text-emerald-700", 정상근무: "bg-indigo-50 text-indigo-500" };
+const KIND_TONE = { 당직: "bg-emerald-50 text-emerald-700", 숙직: "bg-blue-50 text-blue-700", 정상근무: "bg-violet-50 text-violet-500" };
 
 /** 마이페이지 — 내 근무·내 연차·내 출퇴근을 한 곳에서. 조회 중심이고 수정은 연락처만. */
 export function MyPage({ attendances, dutySchedules, onClose }) {

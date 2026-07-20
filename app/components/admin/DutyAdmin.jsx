@@ -86,14 +86,25 @@ export default function DutyAdmin({ data, setData }) {
   }
 
   const sorted = engineers.slice().sort((a, b) => (a.duty_order ?? 999) - (b.duty_order ?? 999));
+  const inMode = (mode) => sorted.filter((e) => e.duty_order != null && (e.duty_modes ?? []).includes(mode)).length;
+  const count5 = inMode("주5일");
+  const count4 = inMode("주4일");
+  const noOrder = sorted.filter((e) => e.duty_order == null).length;
 
   return (
     <AuthContext.Provider value={{ name: "관리자", role: "admin", selfId: null, engineers, engineerNames: engineers.map((e) => e.name), profiles: data.profiles }}>
       <div className="max-w-3xl">
         {/* 배정 순번 — 순번을 넣으면 당직 대상, 비우면 제외. 근무제별로 대상을 나눈다. */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4 mb-4">
-          <p className="text-xs font-extrabold text-slate-700 mb-1">당직 순번 · 근무제</p>
-          <p className="text-[11px] text-slate-400 mb-3">
+        <details className="bg-white border border-slate-200 rounded-xl p-4 mb-4">
+          <summary className="text-xs font-extrabold text-slate-700 cursor-pointer flex items-center justify-between gap-2">
+            <span>당직 순번 · 근무제</span>
+            <span className="text-[11px] font-bold text-slate-400">
+              주5일 <span className="text-blue-700">{count5}명</span> · 주4일 <span className="text-blue-700">{count4}명</span>
+              {noOrder > 0 && <span className="text-slate-300"> · 미지정 {noOrder}명</span>}
+              <span className="ml-1.5 text-slate-300">펼쳐서 수정</span>
+            </span>
+          </summary>
+          <p className="text-[11px] text-slate-400 mt-2 mb-3">
             순번이 있는 사람만 자동 배정 대상입니다. 근무제(5일·4일)를 눌러 편성별 대상을 나눌 수 있습니다.
           </p>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
@@ -119,7 +130,7 @@ export default function DutyAdmin({ data, setData }) {
               </div>
             ))}
           </div>
-        </div>
+        </details>
 
         <DutyRoster
           embedded

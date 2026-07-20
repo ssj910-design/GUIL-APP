@@ -3,9 +3,11 @@ import { ChevronLeft, ChevronRight, X, ArrowLeftRight } from "lucide-react";
 import { AuthContext } from "@/app/components/context";
 import { TODAY_STR } from "@/lib/constants";
 
-// 실제 근무표와 같은 순서(숙직 → 당직 → 정상근무).
+// 칸에 그리는 순서 — 당직 → 숙직 → 정상근무.
 // 정상근무는 주4일제 표에서 금요일에만 쓰이는 자리라 값이 있을 때(또는 관리자)만 칸을 보여준다.
-const KINDS = ["숙직", "당직", "정상근무"];
+const KINDS = ["당직", "숙직", "정상근무"];
+const KIND_TEXT = { 당직: "text-emerald-700", 숙직: "text-blue-700", 정상근무: "text-violet-500" };
+const KIND_DOT = { 당직: "bg-emerald-500", 숙직: "bg-blue-500", 정상근무: "bg-violet-400" };
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
 const ymOf = (y, m) => `${y}-${String(m + 1).padStart(2, "0")}`;
@@ -174,6 +176,18 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
           </div>
         )}
 
+        {/* 범례 — 무슨 색이 무슨 근무인지 */}
+        {inMonth.length > 0 && (
+          <div className="flex items-center gap-3 flex-wrap mb-2 px-1">
+            {KINDS.map((k) => (
+              <span key={k} className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
+                <span className={`w-2 h-2 rounded-full ${KIND_DOT[k]}`} />
+                {k === "당직" ? "초록 — 당직" : k === "숙직" ? "파랑 — 숙직" : "보라 — 정상근무"}
+              </span>
+            ))}
+          </div>
+        )}
+
         {inMonth.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 py-8 px-5 text-center">
             <p className="text-xs text-slate-400">{y}년 {m + 1}월 근무표가 없습니다</p>
@@ -215,9 +229,7 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
                           className={`w-full text-left text-[9.5px] leading-tight rounded px-0.5 py-[1px] truncate ${
                             isFrom ? "bg-amber-400 text-white font-extrabold"
                               : mine ? "bg-blue-100 text-blue-800 font-extrabold"
-                              : kind === "숙직" ? "text-slate-700 font-semibold"
-                              : kind === "당직" ? "text-emerald-700 font-semibold"
-                              : "text-indigo-400 font-semibold"
+                              : `${KIND_TEXT[kind]} font-semibold`
                           }`}
                         >
                           {cell?.profileId ? `${nameOf(cell.profileId)}${orderOf(cell.profileId) ? `(${orderOf(cell.profileId)})` : ""}` : "-"}
@@ -232,8 +244,8 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
         )}
 
         <p className="text-[10px] text-slate-400 mt-2.5 px-1 leading-relaxed">
-          숙직(회색) · 당직(초록) · 정상근무(보라, 주4일제 금요일용). 이름 옆 숫자는 기사 순번입니다.
-          {role === "admin" ? " 칸을 누르면 담당자를 바꿀 수 있습니다." : " 내 근무(파란색)를 누른 뒤 바꿀 상대 근무를 누르면 교환을 요청합니다."}
+          이름 옆 숫자는 기사 순번입니다.
+          {role === "admin" ? " 칸을 누르면 담당자를 바꿀 수 있습니다." : " 내 근무를 누른 뒤 바꿀 상대 근무를 누르면 교환을 요청합니다."}
         </p>
         {role === "admin" && inMonth.length > 0 && (
           <button

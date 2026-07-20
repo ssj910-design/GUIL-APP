@@ -10,9 +10,9 @@ import { TODAY_STR } from "@/lib/constants";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const KIND_TONE = {
-  숙직: "bg-slate-100 text-slate-700",
   당직: "bg-emerald-50 text-emerald-700",
-  정상근무: "bg-indigo-50 text-indigo-500",
+  숙직: "bg-blue-50 text-blue-700",
+  정상근무: "bg-violet-50 text-violet-500",
 };
 const LEAVE_TONE = "bg-amber-50 text-amber-700";
 
@@ -44,7 +44,7 @@ export default function WorkCalendar({ data }) {
   function itemsOf(iso) {
     const out = [];
     if (show.근무) {
-      for (const kind of ["숙직", "당직", "정상근무"]) {
+      for (const kind of ["당직", "숙직", "정상근무"]) {
         const d = duties.find((x) => x.duty_date === iso && x.kind === kind);
         if (d?.profile_id) out.push({ key: `${kind}-${d.id}`, tone: KIND_TONE[kind], label: `${kind.slice(0, 2)} ${nameOf(d.profile_id)}` });
       }
@@ -106,10 +106,10 @@ export default function WorkCalendar({ data }) {
       </div>
 
       <div className="flex items-center gap-3 mt-2.5 text-[11px] text-slate-400 flex-wrap">
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-slate-200 inline-block" /> 숙직</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-200 inline-block" /> 당직</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-indigo-200 inline-block" /> 정상근무</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-amber-200 inline-block" /> 휴가</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-400 inline-block" /> 초록 — 당직</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-blue-400 inline-block" /> 파랑 — 숙직</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-violet-400 inline-block" /> 보라 — 정상근무</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-amber-400 inline-block" /> 노랑 — 휴가</span>
         <span className="ml-auto">이 달 휴가 {monthLeaveDays}일</span>
       </div>
     </div>
