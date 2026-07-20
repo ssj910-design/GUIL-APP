@@ -7,6 +7,7 @@ import { useLiveInspections } from "@/app/hooks/useLiveInspections";
 import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
+import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
 
 
 /* ------------------------------------------------------------------ */
@@ -349,7 +350,9 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
     unitGovNo ? [{ key: `${failure.siteId}-${unitIndex}`, siteId: failure.siteId, siteName: failure.siteName, govElevatorNo: unitGovNo }] : []
   );
   const liveInfo = liveInspections[0];
+  const [photoViewer, setPhotoViewer] = useState(null);
   return (
+    <>
     <Sheet title="고장신고 상세" onClose={onClose}>
       <div className="bg-slate-100 rounded-xl p-3 mb-3 text-center">
         <p className="font-bold text-slate-800">{failure.siteName} · {unitLabel}</p>
@@ -433,6 +436,18 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
           </div>
         )}
       </div>
+      {failure.photoUrls?.length > 0 && (
+        <div className="mb-4">
+          <p className="text-xs font-bold text-slate-500 mb-2">처리 사진 ({failure.photoUrls.length}장)</p>
+          <div className="grid grid-cols-3 gap-2">
+            {failure.photoUrls.map((url, i) => (
+              <button key={i} type="button" onClick={() => setPhotoViewer({ urls: failure.photoUrls, index: i })}>
+                <img src={url} alt="" className="w-full aspect-square rounded-xl object-cover border border-slate-200" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {/* 관리자는 직접 출동하지 않는다 — 미배정 건은 기사 배정으로 */}
       {stage === "pending" && role === "admin" && !failure.assignee ? (
         onAssignOpen && (
@@ -468,6 +483,16 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
         </button>
       )}
     </Sheet>
+    {photoViewer && (
+      <PhotoViewerSheet
+        urls={photoViewer.urls}
+        index={photoViewer.index}
+        siteName={failure.siteName}
+        date={failure.reportedAt ?? ""}
+        onClose={() => setPhotoViewer(null)}
+      />
+    )}
+    </>
   );
 }
 
