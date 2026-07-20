@@ -115,6 +115,8 @@ export default function App() {
   const [roomOpen, setRoomOpen] = useState(false); // 우리방 — 탭이 아니라 플로팅 버튼으로 어디서든 연다
   const [feedReadAt, setFeedReadAt] = useState(null); // 이번 세션에서 우리방을 마지막으로 읽은 시각
   const [notifOpen, setNotifOpen] = useState(false); // 우측상단 알림(종) 드롭다운
+  const [openFailureId, setOpenFailureId] = useState(null); // 알림에서 특정 고장 건을 눌러 상세로 바로 이동
+  const [openTodoId, setOpenTodoId] = useState(null); // 알림에서 특정 할일을 눌러 상세로 바로 이동
 
   // SKIP_LOGIN 상태에서도 ?auth=1 이면 실제 로그인 흐름을 강제한다 (인증/회원가입 사전 점검용).
   const [forceAuth, setForceAuth] = useState(false);
@@ -1089,7 +1091,7 @@ export default function App() {
                               {notifFailures.map((f) => (
                                 <NotifRow
                                   key={f.id}
-                                  onClick={() => { setNotifOpen(false); setTab("failure"); }}
+                                  onClick={() => { setNotifOpen(false); setTab("failure"); setOpenFailureId(f.id); }}
                                   onDismiss={() => handleDismissNotif("fail:" + f.id)}
                                   title={`${f.siteName} · ${f.elevatorNo}`}
                                   subtitle={`${f.errorCode} · ${f.assignee ? "출동 대기" : "미배정"}`}
@@ -1103,7 +1105,7 @@ export default function App() {
                               {notifTodos.map((t) => (
                                 <NotifRow
                                   key={t.id}
-                                  onClick={() => { setNotifOpen(false); setTab("todo"); }}
+                                  onClick={() => { setNotifOpen(false); setTab("todo"); setOpenTodoId(t.id); }}
                                   onDismiss={() => handleDismissNotif("todo:" + t.id)}
                                   title={t.title}
                                   subtitle={
@@ -1203,6 +1205,8 @@ export default function App() {
               onAssign={handleAssignFailure}
               onReassign={handleReassignFailure}
               toast={failureToast}
+              openFailureId={openFailureId}
+              onOpenFailureHandled={() => setOpenFailureId(null)}
             />
           )}
           {tab === "checkup" && <CheckupTab selfChecks={selfChecks} setSelfChecks={setSelfChecks} siteManagers={siteManagers} profilesAll={profilesAll} />}
@@ -1217,6 +1221,8 @@ export default function App() {
               onUpdateTodoDescription={handleUpdateTodoDescription}
               materialRequests={materialRequests}
               quoteRequests={quoteRequests}
+              openTodoId={openTodoId}
+              onOpenTodoHandled={() => setOpenTodoId(null)}
             />
           )}
           {tab === "room" && <RoomTab

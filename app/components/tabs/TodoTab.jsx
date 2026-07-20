@@ -1,4 +1,4 @@
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect } from "react";
 import { ListTodo, Check, CheckCircle2, Search, Lock, Image as ImageIcon, Download } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { addDays, formatShortDate } from "@/lib/utils";
@@ -60,11 +60,20 @@ function TodoCheckbox({ done, locked, onClick }) {
   return <button type="button" onClick={onClick} className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />;
 }
 
-export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescription, materialRequests, quoteRequests }) {
+export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescription, materialRequests, quoteRequests, openTodoId, onOpenTodoHandled }) {
   const { name: CURRENT_ENGINEER, engineerNames, role } = useContext(AuthContext);
   const [showDone, setShowDone] = useState(false);
   const [detailTarget, setDetailTarget] = useState(null);
   const mine = todos.filter((t) => t.assignee === CURRENT_ENGINEER);
+
+  // 알림(종)에서 들어온 특정 할일 상세를 자동으로 연다.
+  useEffect(() => {
+    if (!openTodoId) return;
+    const t = mine.find((x) => x.id === openTodoId);
+    if (!t) return;
+    setDetailTarget(t);
+    onOpenTodoHandled?.();
+  }, [openTodoId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function completeManualTodo(id) {
     await supabase.from("todos").update({ done: true }).eq("id", id);
