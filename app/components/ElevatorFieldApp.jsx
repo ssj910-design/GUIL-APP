@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap } from "@/lib/mappers";
-import { addDays, profileIdByName, unitIdFor } from "@/lib/utils";
+import { addDays, profileIdByName, unitIdFor, parseErrorCode } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { DutyRoster, DutySwapNotice } from "@/app/components/DutyRoster";
 import { MyPage } from "@/app/components/MyPage";
@@ -179,6 +179,16 @@ export default function App() {
     setAuthSubmitting(false);
   }
 
+  // 알림 발송 — 실패해도 앱 동작을 막지 않는다(알림은 부가 기능이라 조용히 넘어간다).
+  function sendPush(key, profileIds, { title, body, url } = {}) {
+    if (!profileIds?.length) return;
+    fetch("/api/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, profileIds, title, body, url }),
+    }).catch(() => {});
+  }
+
   // 출퇴근 체크 — 하루 1행(profile_id + work_date). 출근은 insert, 퇴근/당직은 같은 행 update.
   // 출근 시에만 현위치를 1회 받는다 — GPS 상시 추적은 배터리 때문에 못 쓴다.
   // 권한 거부·시간초과여도 출근 체크는 그대로 진행한다(좌표만 비워둔다).
@@ -264,6 +274,10 @@ export default function App() {
       requester_id: from.profileId, target_id: to.profileId,
     }).select();
     if (data?.[0]) setDutySwaps((prev) => [...prev, mapDutySwap(data[0])]);
+    sendPush("duty_swap_request", [to.profileId], {
+      title: "근무 교환 요청",
+      body: `${profile.name}님이 ${from.dutyDate.slice(5)} ${from.kind} ↔ ${to.dutyDate.slice(5)} ${to.kind} 교환을 요청했습니다`,
+    });
   }
 
   // 수락 = 두 칸의 담당자를 맞바꾼다. 같은 달이든 다음 달이든 동일 로직(이월도 이걸로 처리).
@@ -272,7 +286,13 @@ export default function App() {
       .update({ status: decision, responded_at: new Date().toISOString(), target_seen: true })
       .eq("id", swap.id);
     setDutySwaps((prev) => prev.map((w) => (w.id === swap.id ? { ...w, status: decision, targetSeen: true } : w)));
-    if (decision !== "수락") return;
+    if (decision !== "수락") {
+      sendPush("duty_swap_result", [swap.requesterId], {
+        title: "교환이 거절됐습니다",
+        body: `${profile.name}님이 근무 교환 요청을 거절했습니다`,
+      });
+      return;
+    }
     await Promise.all([
       supabase.from("duty_schedules").update({ profile_id: swap.targetId }).eq("id", swap.fromScheduleId),
       supabase.from("duty_schedules").update({ profile_id: swap.requesterId }).eq("id", swap.toScheduleId),
@@ -281,6 +301,10 @@ export default function App() {
       d.id === swap.fromScheduleId ? { ...d, profileId: swap.targetId }
         : d.id === swap.toScheduleId ? { ...d, profileId: swap.requesterId } : d
     ));
+    sendPush("duty_swap_result", [swap.requesterId], {
+      title: "교환이 성사됐습니다",
+      body: `${profile.name}님이 근무 교환을 수락했습니다`,
+    });
   }
 
   // 교환 알림 팝업을 확인하면 다시 뜨지 않도록 표시한다 (우리방에는 아무것도 올리지 않는다)
@@ -569,12 +593,17 @@ export default function App() {
 
   // ★ 관리자가 미배정 고장에 기사 배정 — 출동 시작은 기사가 "출동 응답"으로
   async function handleAssignFailure(failure, engineerName) {
+    const assignedId = profileIdByName(profilesAll, engineerName);
     const { data: ok } = await supabase.from("failures")
       .update({ assignee: engineerName, ...(v2Ready ? { assignee_id: profileIdByName(profilesAll, engineerName) } : {}) })
       .eq("id", failure.id).eq("status", "미처리").is("assignee", null)
       .select();
     if (!ok?.length) { alert("이미 배정되었거나 진행 중인 건입니다."); return; }
     setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, assignee: engineerName } : x)));
+    sendPush("failure_assigned", [assignedId], {
+      title: "고장이 배정되었습니다",
+      body: `${failure.siteName} · ${failure.elevatorNo || "호기 미상"} — ${parseErrorCode(failure.errorCode).faultType}`,
+    });
     notifyFailure(`${engineerName}에게 배정 완료`);
   }
 

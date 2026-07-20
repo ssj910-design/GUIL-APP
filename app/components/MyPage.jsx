@@ -1,10 +1,11 @@
 import { useState, useEffect, useContext } from "react";
-import { X, LogOut, CalendarDays, Clock, Plane, Plus, Bell } from "lucide-react";
+import { X, LogOut, CalendarDays, Plane, Plus, Bell, BellRing } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { AuthContext } from "@/app/components/context";
 import { TODAY_STR } from "@/lib/constants";
 import { annualLeaveDays, yearsOfService } from "@/lib/leave";
 import { forRole, GROUPS, LEVELS, isEnabled, levelOf } from "@/lib/notifications";
+import { pushSupported, pushPermission, enablePush, disablePush, isSubscribed } from "@/lib/push";
 
 const KIND_TONE = { 당직: "bg-emerald-50 text-emerald-700", 숙직: "bg-blue-50 text-blue-700", 정상근무: "bg-violet-50 text-violet-500" };
 
@@ -13,14 +14,14 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
   const { name, role, selfId, profiles = [], signOut } = useContext(AuthContext);
   const me = profiles.find((p) => p.id === selfId) ?? {};
   const [leaves, setLeaves] = useState([]);
-  const [phone, setPhone] = useState(me.phone ?? "");
-  const [saved, setSaved] = useState(false);
   const [applying, setApplying] = useState(false);
   const [form, setForm] = useState({ kind: "연차", start: TODAY_STR, end: TODAY_STR, note: "" });
   const [busy, setBusy] = useState(false);
   const [orgSettings, setOrgSettings] = useState({});
   const [prefs, setPrefs] = useState(me.notify_prefs ?? {});
   const [notifOpen, setNotifOpen] = useState(false);
+  const [subscribed, setSubscribed] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
 
   const year = TODAY_STR.slice(0, 4);
   useEffect(() => {
@@ -40,6 +41,21 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
     });
   }, []);
 
+  useEffect(() => { isSubscribed().then(setSubscribed); }, []);
+
+  async function togglePush() {
+    setPushBusy(true);
+    if (subscribed) {
+      await disablePush();
+      setSubscribed(false);
+    } else {
+      const r = await enablePush(selfId);
+      if (!r.ok) alert(r.reason);
+      setSubscribed(r.ok);
+    }
+    setPushBusy(false);
+  }
+
   async function toggleNotify(item, next) {
     const nextPrefs = { ...prefs, [item.key]: next };
     setPrefs(nextPrefs);
@@ -48,8 +64,6 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
 
   const myNotifs = forRole(role).filter((n) => orgSettings[n.key]?.enabled !== false);
 
-  const today = attendances.find((a) => a.profileId === selfId);
-  const hhmm = (iso) => (iso ? new Date(iso).toTimeString().slice(0, 5) : null);
 
   // 오늘 이후 내 당직 (가까운 순 5건)
   const myDuties = dutySchedules
@@ -90,11 +104,6 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
     setLeaves((prev) => prev.filter((x) => x.id !== l.id));
   }
 
-  async function savePhone() {
-    await supabase.from("profiles").update({ phone: phone || null }).eq("id", selfId);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
-  }
 
   const Card = ({ icon, title, children, extra }) => (
     <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -129,33 +138,7 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
               </p>
             </div>
           </div>
-          <div className="flex items-end gap-2 mt-3">
-            <div className="flex-1">
-              <p className="text-[11px] font-bold text-slate-500 mb-1">연락처</p>
-              <input
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800"
-                inputMode="numeric" value={phone} placeholder="010-0000-0000"
-                onChange={(e) => setPhone(e.target.value)}
-              />
-            </div>
-            <button onClick={savePhone} disabled={phone === (me.phone ?? "")}
-              className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-4 py-2.5">
-              {saved ? "저장됨" : "저장"}
-            </button>
-          </div>
         </div>
-
-        {/* 오늘 근태 */}
-        <Card icon={<Clock size={13} />} title="오늘 근태">
-          {!today?.checkedInAt ? (
-            <p className="text-xs text-slate-400">아직 출근 체크를 하지 않았습니다</p>
-          ) : (
-            <p className="text-sm font-bold text-slate-700">
-              출근 {hhmm(today.checkedInAt)}
-              {today.checkedOutAt && <span className="text-slate-400 font-semibold"> · {today.status} {hhmm(today.checkedOutAt)}</span>}
-            </p>
-          )}
-        </Card>
 
         {/* 다가오는 내 당직 */}
         <Card icon={<CalendarDays size={13} />} title="다가오는 내 근무">
@@ -282,6 +265,31 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
             </button>
           }
         >
+          {/* 기기 단위 푸시 스위치 — 이걸 켜야 앱이 꺼져 있어도 알림이 온다 */}
+          <button
+            onClick={togglePush}
+            disabled={pushBusy || !pushSupported()}
+            className={`w-full flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 mb-2 border ${
+              subscribed ? "bg-blue-50 border-blue-200" : "bg-slate-50 border-slate-200"
+            }`}
+          >
+            <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+              <BellRing size={13} className={subscribed ? "text-blue-600" : "text-slate-400"} />
+              이 기기에서 알림 받기
+            </span>
+            <span className={`text-[11px] font-extrabold ${subscribed ? "text-blue-700" : "text-slate-400"}`}>
+              {pushBusy ? "처리 중…"
+                : !pushSupported() ? "미지원"
+                : pushPermission() === "denied" ? "차단됨"
+                : subscribed ? "켜짐" : "꺼짐"}
+            </span>
+          </button>
+          {pushPermission() === "denied" && (
+            <p className="text-[10px] text-red-500 mb-2 leading-relaxed">
+              브라우저에서 알림이 차단돼 있습니다. 주소창 왼쪽 자물쇠 → 알림 → 허용으로 바꿔주세요.
+            </p>
+          )}
+
           {!notifOpen ? (
             <p className="text-xs text-slate-400">받고 싶지 않은 알림은 꺼둘 수 있습니다</p>
           ) : (
@@ -313,7 +321,7 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
                 </div>
               ))}
               <p className="text-[10px] text-slate-400 leading-relaxed pt-1 border-t border-slate-100">
-                아직 실제 푸시 알림은 나가지 않습니다(준비 중). 지금은 앱 안에서만 표시됩니다.
+                「이 기기에서 알림 받기」를 켜야 앱을 닫아도 알림이 옵니다. 기기마다 따로 켜야 합니다.
               </p>
             </div>
           )}
