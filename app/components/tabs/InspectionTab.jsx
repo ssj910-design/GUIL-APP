@@ -31,7 +31,7 @@ function DueSoonCard({ insp, address, govElevatorNo, onOpenFail, site }) {
         <div className="min-w-0">
           <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
           <p className="text-[11px] text-slate-400 truncate">{address}</p>
-          {site && <div className="mt-1.5"><TmapButton site={site} label /></div>}
+          {site && <div className="mt-1.5"><TmapButton site={site} /></div>}
         </div>
         <div className="shrink-0 flex flex-col items-end gap-0.5">
           {latest && (

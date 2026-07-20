@@ -1,4 +1,4 @@
-import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, Navigation } from "lucide-react";
+import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, Route } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
 
 
@@ -11,7 +11,7 @@ import { TODAY_STR } from "@/lib/constants";
  * 좌표가 없으면 아무것도 그리지 않는다(주소만으로는 앱이 엉뚱한 곳을 잡는 경우가 있어서).
  * 앱이 없는 기기를 대비해 길게 누르지 않아도 되도록, 스킴 호출이 실패하면 티맵 설치 안내로 넘어간다.
  */
-export function TmapButton({ site, label = false, className = "" }) {
+export function TmapButton({ site, label = true, className = "" }) {
   if (!site || site.lat == null || site.lng == null) return null;
   const go = (e) => {
     e.stopPropagation();
@@ -30,7 +30,7 @@ export function TmapButton({ site, label = false, className = "" }) {
       aria-label="티맵 길안내"
       className={`shrink-0 flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-2 py-1.5 active:bg-blue-100 ${className}`}
     >
-      <Navigation size={12} />
+      <Route size={12} />
       {label && "길안내"}
     </button>
   );

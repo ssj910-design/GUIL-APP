@@ -699,7 +699,7 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
       </button>
       {stage !== "done" && (
         <div className="px-3.5 -mt-1 pb-1">
-          <TmapButton site={siteOf(f)} label />
+          <TmapButton site={siteOf(f)} />
         </div>
       )}
       <div className="px-3.5 pb-3.5">
