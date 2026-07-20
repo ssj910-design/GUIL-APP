@@ -659,11 +659,11 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
 
   return (
     <div className="flex-1 overflow-y-auto pb-4">
-      <div className="px-5 pt-4 flex gap-2">
-        <button onClick={() => setSub("material")} className={`flex-1 py-2.5 rounded-xl text-sm font-bold ${sub === "material" ? "bg-blue-700 text-white" : "bg-white border border-slate-200 text-slate-500"}`}>
+      <div className="flex border-b border-slate-100 shrink-0">
+        <button onClick={() => setSub("material")} className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${sub === "material" ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}>
           자재 신청
         </button>
-        <button onClick={() => setSub("quote")} className={`flex-1 py-2.5 rounded-xl text-sm font-bold ${sub === "quote" ? "bg-blue-700 text-white" : "bg-white border border-slate-200 text-slate-500"}`}>
+        <button onClick={() => setSub("quote")} className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${sub === "quote" ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}>
           견적 요청
         </button>
       </div>

@@ -103,16 +103,16 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
 
   return (
     <div className="flex-1 overflow-y-auto pb-4">
-      <div className="px-5 pt-4 flex gap-2">
+      <div className="flex border-b border-slate-100 shrink-0">
         <button
           onClick={() => setMode("material")}
-          className={`flex-1 py-2.5 rounded-xl text-sm font-bold ${mode === "material" ? "bg-blue-700 text-white" : "bg-white border border-slate-200 text-slate-500"}`}
+          className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${mode === "material" ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}
         >
           자재 지급건
         </button>
         <button
           onClick={() => setMode("manual")}
-          className={`flex-1 py-2.5 rounded-xl text-sm font-bold ${mode === "manual" ? "bg-blue-700 text-white" : "bg-white border border-slate-200 text-slate-500"}`}
+          className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${mode === "manual" ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}
         >
           직접 입력
         </button>
