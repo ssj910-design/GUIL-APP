@@ -808,14 +808,14 @@ export default function App() {
   // 생략하면 지금처럼 신청 기사 본인 앞으로 생성됩니다.
   async function handleSupplyComplete(requestId, assignee, billingPart, billingAmount) {
     const req = materialRequests.find((r) => r.id === requestId);
-    if (!req || !req.hasSupplyPhoto) return;
+    if (!req) return;
 
     await supabase
       .from("material_requests")
       .update({ status: "지급완료", supplied_date: TODAY_STR })
       .eq("id", requestId);
     setMaterialRequests((prev) =>
-      prev.map((r) => (r.id === requestId && r.hasSupplyPhoto ? { ...r, status: "지급완료", suppliedDate: TODAY_STR } : r))
+      prev.map((r) => (r.id === requestId ? { ...r, status: "지급완료", suppliedDate: TODAY_STR } : r))
     );
 
     const newTodo = {
@@ -948,10 +948,10 @@ export default function App() {
   // ★ 보충 지급완료 처리
   async function handleCompleteRestock(restockId) {
     const r = restockRequests.find((x) => x.id === restockId);
-    if (!r || !r.hasSupplyPhoto) return;
+    if (!r) return;
     await supabase.from("restock_requests").update({ status: "완료", supplied_date: TODAY_STR }).eq("id", restockId);
     setRestockRequests((prev) =>
-      prev.map((x) => (x.id === restockId && x.hasSupplyPhoto ? { ...x, status: "완료", suppliedDate: TODAY_STR } : x))
+      prev.map((x) => (x.id === restockId ? { ...x, status: "완료", suppliedDate: TODAY_STR } : x))
     );
   }
 
@@ -1005,12 +1005,12 @@ export default function App() {
   // 하면 나머지 담당자의 할 일도 함께 자동완료됩니다).
   async function handleCompleteQuoteSupply(quoteId, assignees) {
     const q = quoteRequests.find((x) => x.id === quoteId);
-    if (!q || !q.hasSupplyPhoto) return;
+    if (!q) return;
     const finalAssignees = assignees?.length ? assignees : [q.engineer];
 
     await supabase.from("quote_requests").update({ status: "자재지급완료", supplied_date: TODAY_STR }).eq("id", quoteId);
     setQuoteRequests((prev) =>
-      prev.map((x) => (x.id === quoteId && x.hasSupplyPhoto ? { ...x, status: "자재지급완료", suppliedDate: TODAY_STR } : x))
+      prev.map((x) => (x.id === quoteId ? { ...x, status: "자재지급완료", suppliedDate: TODAY_STR } : x))
     );
 
     const newTodos = finalAssignees.map((assignee, idx) => ({
