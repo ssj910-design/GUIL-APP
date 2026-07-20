@@ -89,10 +89,10 @@ export default function Dashboard({ data }) {
   const liveFailures = failures
     .filter((f) => f.status !== "완료")
     .sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0));
-  // 최근 고장처리 현황(1주일): 완료 여부와 무관하게 최근 7일간 접수된 건 전체.
+  // 최근 고장처리 현황(1주일): 처리완료된 건 중 최근 7일간 접수된 것만 — 미완료 건은 실시간 고장 현황에서 이미 보임.
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const recentWeekFailures = failures
-    .filter((f) => f.createdAt && new Date(f.createdAt) >= weekAgo)
+    .filter((f) => f.status === "완료" && f.createdAt && new Date(f.createdAt) >= weekAgo)
     .sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0));
   const pendingMaterials = materialRequests.filter((m) => m.status === "승인대기");
   const activeQuotes = quoteRequests.filter((q) => q.status !== "자재지급완료");
