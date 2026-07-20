@@ -3,7 +3,9 @@ import { ChevronLeft, ChevronRight, X, ArrowLeftRight } from "lucide-react";
 import { AuthContext } from "@/app/components/context";
 import { TODAY_STR } from "@/lib/constants";
 
-const KINDS = ["숙직", "당직"]; // 실제 근무표와 같은 순서(숙직 위, 당직 아래)
+// 실제 근무표와 같은 순서(숙직 → 당직 → 정상근무).
+// 정상근무는 주4일제 표에서 금요일에만 쓰이는 자리라 값이 있을 때(또는 관리자)만 칸을 보여준다.
+const KINDS = ["숙직", "당직", "정상근무"];
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
 const ymOf = (y, m) => `${y}-${String(m + 1).padStart(2, "0")}`;
@@ -134,16 +136,18 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
               ))}
             </div>
             <div className="grid grid-cols-7">
-              {Array.from({ length: startDow }, (_, i) => <div key={`pad${i}`} className="border-b border-r border-slate-100 min-h-[64px]" />)}
+              {Array.from({ length: startDow }, (_, i) => <div key={`pad${i}`} className="border-b border-r border-slate-100 min-h-[76px]" />)}
               {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
                 const iso = isoOf(y, m, d);
                 const dow = (startDow + d - 1) % 7;
                 const isToday = iso === TODAY_STR;
                 return (
-                  <div key={d} className={`border-b border-r border-slate-100 min-h-[64px] p-1 ${isToday ? "bg-blue-50" : ""}`}>
+                  <div key={d} className={`border-b border-r border-slate-100 min-h-[76px] p-1 ${isToday ? "bg-blue-50" : ""}`}>
                     <p className={`text-[10px] font-bold text-right pr-0.5 ${dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-slate-400"}`}>{d}</p>
                     {KINDS.map((kind) => {
                       const cell = cellOf(iso, kind);
+                      // 정상근무는 배치가 없으면 기사 화면에서 숨긴다 (주5일제 표에선 늘 비어 있음)
+                      if (kind === "정상근무" && !cell?.profileId && role !== "admin") return null;
                       const mine = cell?.profileId === selfId;
                       const isFrom = swapFrom?.id === cell?.id;
                       return (
@@ -153,7 +157,9 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
                           className={`w-full text-left text-[9.5px] leading-tight rounded px-0.5 py-[1px] truncate ${
                             isFrom ? "bg-amber-400 text-white font-extrabold"
                               : mine ? "bg-blue-100 text-blue-800 font-extrabold"
-                              : kind === "숙직" ? "text-slate-700 font-semibold" : "text-emerald-700 font-semibold"
+                              : kind === "숙직" ? "text-slate-700 font-semibold"
+                              : kind === "당직" ? "text-emerald-700 font-semibold"
+                              : "text-indigo-400 font-semibold"
                           }`}
                         >
                           {cell?.profileId ? `${nameOf(cell.profileId)}${orderOf(cell.profileId) ? `(${orderOf(cell.profileId)})` : ""}` : "-"}
@@ -168,7 +174,7 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
         )}
 
         <p className="text-[10px] text-slate-400 mt-2.5 px-1 leading-relaxed">
-          위 = 숙직(회색), 아래 = 당직(초록). 이름 옆 숫자는 기사 순번입니다.
+          숙직(회색) · 당직(초록) · 정상근무(보라, 주4일제 금요일용). 이름 옆 숫자는 기사 순번입니다.
           {role === "admin" ? " 칸을 누르면 담당자를 바꿀 수 있습니다." : " 내 근무(파란색)를 누른 뒤 바꿀 상대 근무를 누르면 교환을 요청합니다."}
         </p>
         {role === "admin" && inMonth.length > 0 && (
@@ -192,7 +198,7 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
               {picking.iso.slice(5).replace("-", "/")} {picking.kind} 담당자
             </p>
             <div className="grid grid-cols-3 gap-2">
-              {(dutyRoster.length ? dutyRoster : roster).map((e) => (
+              {(picking.kind === "정상근무" || !dutyRoster.length ? roster : dutyRoster).map((e) => (
                 <button
                   key={e.id}
                   onClick={async () => { await onSetPerson(picking.iso, picking.kind, e.id); setPicking(null); }}
