@@ -1106,7 +1106,11 @@ export default function App() {
                                   onClick={() => { setNotifOpen(false); setTab("todo"); }}
                                   onDismiss={() => handleDismissNotif("todo:" + t.id)}
                                   title={t.title}
-                                  subtitle={`${t.siteName ?? ""}${t.dueDate ? ` · ~${t.dueDate}` : ""}`}
+                                  subtitle={
+                                    t.source === "material" || t.source === "quote"
+                                      ? "자재지급완료되어 할일이 자동등록되었습니다"
+                                      : `${t.siteName ?? ""}${t.dueDate ? ` · ~${t.dueDate}` : ""}`
+                                  }
                                 />
                               ))}
                             </div>
