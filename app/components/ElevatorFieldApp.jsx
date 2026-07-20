@@ -86,6 +86,8 @@ export default function App() {
   const [kitStockReady, setKitStockReady] = useState(false);
   const [selfChecks, setSelfChecks] = useState([]); // 자체점검 출석부(월별, 호기당 1건)
   const [feed, setFeed] = useState([]);
+  // is_notice 컬럼은 마이그레이션 022 실행 전엔 존재하지 않는다 — undefined면 아직 미실행으로 간주.
+  const feedNoticeReady = feed.some((p) => p.isNotice !== undefined);
   // 지급 사진을 여러 장 연달아 올릴 때, setState 업데이터 함수가 React 렌더링 타이밍에 따라
   // 아직 반영되지 않은 상태를 기준으로 계산될 수 있어(경쟁 상태) ref에 최신값을 직접 보관합니다.
   const supplyPhotoUrlsRef = useRef({ material: {}, quote: {}, restock: {} });
@@ -551,6 +553,26 @@ export default function App() {
     await supabase.from("feed_posts").update({ reactions }).eq("id", postId);
   }
 
+  // ★ 우리방 글 수정 (본인 글만 — RoomTab에서 작성자 확인 후 호출)
+  async function handleUpdateFeedPost(postId, text) {
+    setFeed((prev) => prev.map((p) => (p.id === postId ? { ...p, text } : p)));
+    await supabase.from("feed_posts").update({ body: text }).eq("id", postId);
+  }
+
+  // ★ 우리방 글 삭제 — 그 글의 댓글도 함께 삭제
+  async function handleDeleteFeedPost(postId) {
+    setFeed((prev) => prev.filter((p) => p.id !== postId && p.replyToId !== postId));
+    await supabase.from("feed_posts").delete().eq("reply_to_id", postId);
+    await supabase.from("feed_posts").delete().eq("id", postId);
+  }
+
+  // ★ 우리방 공지 등록/해제 — is_notice 컬럼 없으면(마이그레이션 전) 조용히 건너뜀
+  async function handleSetFeedNotice(postId, isNotice) {
+    if (!feedNoticeReady) return;
+    setFeed((prev) => prev.map((p) => (p.id === postId ? { ...p, isNotice } : p)));
+    await supabase.from("feed_posts").update({ is_notice: isNotice }).eq("id", postId);
+  }
+
   // ★ 자재 담당자가 지급할 자재 사진을 한 장 추가하는 순간 (지급완료 체크의 선행 조건)
   // 여러 장을 연달아 올릴 때 setState 업데이터만으로는 React 렌더링 타이밍에 따라 아직 반영되지
   // 않은 상태를 기준으로 계산될 수 있어(경쟁 상태), ref에 최신 배열을 직접 동기적으로 보관합니다.
@@ -988,7 +1010,14 @@ export default function App() {
               quoteRequests={quoteRequests}
             />
           )}
-          {tab === "room" && <RoomTab feed={feed} onSendChat={handleSendFeedPost} onToggleLike={handleToggleLike} />}
+          {tab === "room" && <RoomTab
+                  feed={feed}
+                  onSendChat={handleSendFeedPost}
+                  onToggleLike={handleToggleLike}
+                  onUpdatePost={handleUpdateFeedPost}
+                  onDeletePost={handleDeleteFeedPost}
+                  onSetNotice={feedNoticeReady ? handleSetFeedNotice : null}
+                />}
           {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onUpdateTodoDescription={handleUpdateTodoDescription} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
 
           {/* 우리방 플로팅 버튼 — 어느 탭에서든 즉시 팀 채팅 (우리방 탭에서는 숨김) */}
@@ -1026,7 +1055,14 @@ export default function App() {
                     <X size={20} />
                   </button>
                 </div>
-                <RoomTab feed={feed} onSendChat={handleSendFeedPost} onToggleLike={handleToggleLike} />
+                <RoomTab
+                  feed={feed}
+                  onSendChat={handleSendFeedPost}
+                  onToggleLike={handleToggleLike}
+                  onUpdatePost={handleUpdateFeedPost}
+                  onDeletePost={handleDeleteFeedPost}
+                  onSetNotice={feedNoticeReady ? handleSetFeedNotice : null}
+                />
               </div>
             </div>
           )}
