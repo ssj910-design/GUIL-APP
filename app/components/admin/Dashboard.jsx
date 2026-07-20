@@ -206,11 +206,10 @@ export default function Dashboard({ data }) {
         {liveFailures.length === 0 ? (
           <p className="text-xs text-slate-400 text-center py-10">현재 처리 중인 고장이 없습니다</p>
         ) : (
-          <div className="overflow-x-auto"><table className="w-full min-w-[50rem] text-sm">
+          <div className="overflow-x-auto"><table className="w-full min-w-[44rem] text-sm">
             <thead>
               <tr className="text-xs text-slate-400 border-b border-slate-100">
-                <th className="text-left px-5 py-2 font-semibold">접수</th>
-                <th className="text-left px-2 py-2 font-semibold">현장 · 호기</th>
+                <th className="text-left px-5 py-2 font-semibold">접수 · 현장 · 호기</th>
                 <th className="text-left px-2 py-2 font-semibold">증상</th>
                 <th className="text-left px-2 py-2 font-semibold">담당 기사</th>
                 <th className="text-left px-2 py-2 font-semibold">배정 기사</th>
@@ -225,8 +224,10 @@ export default function Dashboard({ data }) {
                 const stateCls = f.status === "진행중" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600";
                 return (
                   <tr key={f.id} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setFailureDetail(f)}>
-                    <td className="px-5 py-2.5 text-slate-500 whitespace-nowrap">{f.reportedAt}</td>
-                    <td className="px-2 py-2.5 font-semibold whitespace-nowrap">{loc.site} · {loc.unit}</td>
+                    <td className="px-5 py-2.5 whitespace-nowrap">
+                      <p className="font-semibold text-slate-700">{loc.site} · {loc.unit}</p>
+                      <p className="text-[11px] text-slate-400">{f.reportedAt}</p>
+                    </td>
                     <td className="px-2 py-2.5 text-slate-600">{f.errorCode}</td>
                     <td className="px-2 py-2.5 whitespace-nowrap">{loc.siteObj?.assignedEngineer || "미배정"}</td>
                     <td className="px-2 py-2.5 whitespace-nowrap">{engineerName(f.assigneeId, f.assignee)}</td>
