@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
 import { useLiveInspections } from "@/app/hooks/useLiveInspections";
-import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast } from "@/app/components/ui";
+import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, TmapButton } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 
@@ -368,9 +368,10 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
           <span className="text-slate-400">층수[지상/지하]</span>
           <span className="font-semibold text-slate-700">{liveInfo ? `${liveInfo.groundFloorCnt} / ${liveInfo.undgrndFloorCnt}` : "-"}</span>
         </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-400">주소</span>
-          <span className="font-semibold text-slate-700 text-right">{site?.address ?? "-"}</span>
+        <div className="flex items-center justify-between gap-2 text-sm">
+          <span className="text-slate-400 shrink-0">주소</span>
+          <span className="font-semibold text-slate-700 text-right min-w-0">{site?.address ?? "-"}</span>
+          <TmapButton site={site} />
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">신고자 전화번호</span>
@@ -681,6 +682,7 @@ function FailureResponseCard({ f, onOpenDetail }) {
 
 
 function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult, onRefuse, onAssignOpen }) {
+  const siteOf = useSiteOf();
   const { name: me, role } = useContext(AuthContext);
   const stage = failureStage(f);
   const unitLabel = f.elevatorNo && !f.elevatorNo.includes("호기") ? `${f.elevatorNo}호기` : f.elevatorNo;
@@ -755,7 +757,14 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
 }
 
 
+// 카드에서 현장 좌표를 찾기 위한 헬퍼 (길안내 버튼용)
+function useSiteOf() {
+  const sites = useContext(SitesContext);
+  return (f) => sites.find((x) => x.id === f.siteId);
+}
+
 export function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult, onRefuse, onAssignOpen }) {
+  const siteOf = useSiteOf();
   const stage = failureStage(f);
   const { name: me, role } = useContext(AuthContext);
   // 상태별 컬러 — 미배정(빨강) / 배정·응답대기(노랑) / 출동중(파랑) / 작업중(초록)
@@ -772,6 +781,8 @@ export function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenR
         </div>
         <p className="text-[11px] text-slate-400 truncate">{f.errorCode}</p>
       </button>
+      {stage !== "done" && <TmapButton site={siteOf(f)} />}
+      {stage !== "done" && <TmapButton site={siteOf(f)} />}
       {stage === "pending" && (
         <span className="shrink-0 flex gap-1.5">
           {role === "admin" && !f.assignee && onAssignOpen ? (

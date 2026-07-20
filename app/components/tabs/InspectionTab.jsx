@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { TODAY_STR } from "@/lib/constants";
 import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed } from "@/lib/utils";
-import { Badge, DDay } from "@/app/components/ui";
+import { Badge, DDay , TmapButton } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { usePriorFlaggedInspection } from "@/app/hooks/useLiveInspections";
@@ -12,7 +12,7 @@ import { usePriorFlaggedInspection } from "@/app/hooks/useLiveInspections";
 /* ------------------------------------------------------------------ */
 
 // 검사도래현장 카드 한 장: 직전 검사가 조건부합격/조건후합격이면 현장명을 눌러 당시 부적합내역을 볼 수 있다.
-function DueSoonCard({ insp, address, govElevatorNo, onOpenFail }) {
+function DueSoonCard({ insp, address, govElevatorNo, onOpenFail, site }) {
   const { latest, detailRecord } = usePriorFlaggedInspection(govElevatorNo);
   const clickable = Boolean(latest);
   return (
@@ -31,6 +31,7 @@ function DueSoonCard({ insp, address, govElevatorNo, onOpenFail }) {
         <div className="min-w-0">
           <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
           <p className="text-[11px] text-slate-400 truncate">{address}</p>
+          {site && <div className="mt-1.5"><TmapButton site={site} label /></div>}
         </div>
         <div className="shrink-0 flex flex-col items-end gap-0.5">
           {latest && (
@@ -116,6 +117,7 @@ export function InspectionTab({ inspections }) {
                   key={insp.id}
                   insp={insp}
                   address={stripCityPrefix(siteById.get(insp.siteId)?.address)}
+                  site={siteById.get(insp.siteId)}
                   govElevatorNo={priorUnit?.govNo}
                   onOpenFail={setInspectionFailTarget}
                 />
