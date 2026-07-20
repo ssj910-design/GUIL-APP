@@ -374,8 +374,10 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
         </div>
         <div className="flex items-center justify-between gap-2 text-sm">
           <span className="text-slate-400 shrink-0">주소</span>
-          <span className="font-semibold text-slate-700 text-right min-w-0">{site?.address ?? "-"}</span>
-          <MapLinkButtons site={site} />
+          <span className="flex items-center gap-1.5 min-w-0">
+            <MapLinkButtons site={site} />
+            <span className="font-semibold text-slate-700 text-right truncate">{site?.address ?? "-"}</span>
+          </span>
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">신고자 전화번호</span>
@@ -761,20 +763,18 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
   const unitLabel = f.elevatorNo && !f.elevatorNo.includes("호기") ? `${f.elevatorNo}호기` : f.elevatorNo;
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      <button type="button" onClick={() => onOpenDetail(f)} className="w-full text-left p-3.5">
-        <div className="flex items-center justify-between mb-1">
-          <p className="font-bold text-slate-800 text-[15px]">{f.siteName} · {unitLabel}</p>
-          {f.escalation && (
-            <span className="text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{f.escalation}</span>
-          )}
-        </div>
-        <p className="text-sm text-slate-500">{f.reportedAt}</p>
-      </button>
-      {stage !== "done" && (
-        <div className="px-3.5 -mt-1 pb-1">
-          <MapLinkButtons site={siteOf(f)} />
-        </div>
-      )}
+      <div className="w-full flex items-center gap-2 p-3.5">
+        <button type="button" onClick={() => onOpenDetail(f)} className="flex-1 min-w-0 text-left">
+          <div className="flex items-center gap-1.5 mb-1">
+            <p className="font-bold text-slate-800 text-[15px] truncate">{f.siteName} · {unitLabel}</p>
+            {f.escalation && (
+              <span className="shrink-0 text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{f.escalation}</span>
+            )}
+          </div>
+          <p className="text-sm text-slate-500">{f.reportedAt}</p>
+        </button>
+        {stage !== "done" && <MapLinkButtons site={siteOf(f)} size={30} />}
+      </div>
       <div className="px-3.5 pb-3.5">
         {stage === "pending" && (
           <div className="flex gap-2">

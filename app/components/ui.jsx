@@ -14,7 +14,7 @@ import { TODAY_STR } from "@/lib/constants";
  * 예전엔 window.location.href로 스킴을 직접 호출해서, 지도 앱에 갔다 뒤로가기로
  * 돌아오면 브라우저 히스토리가 꼬여 화면이 먹통이 되는 문제가 있었다.
  */
-export function MapLinkButtons({ site, className = "" }) {
+export function MapLinkButtons({ site, className = "", size = 24 }) {
   if (!site || site.lat == null || site.lng == null) return null;
   const name = encodeURIComponent(site.name ?? "현장");
   const openKakao = (e) => {
@@ -25,13 +25,14 @@ export function MapLinkButtons({ site, className = "" }) {
     e.stopPropagation();
     window.open(`tmap://route?goalname=${name}&goalx=${site.lng}&goaly=${site.lat}`, "_blank");
   };
+  const boxStyle = { width: size, height: size };
   return (
     <span className={`shrink-0 flex items-center gap-1 ${className}`}>
-      <button type="button" onClick={openTmap} aria-label="티맵으로 길찾기" className="w-6 h-6 active:opacity-70">
+      <button type="button" onClick={openTmap} aria-label="티맵으로 길찾기" style={boxStyle} className="active:opacity-70">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/icons/tmap.png" alt="" className="w-full h-full rounded-[7px]" />
       </button>
-      <button type="button" onClick={openKakao} aria-label="카카오맵으로 길찾기" className="w-6 h-6 active:opacity-70">
+      <button type="button" onClick={openKakao} aria-label="카카오맵으로 길찾기" style={boxStyle} className="active:opacity-70">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/icons/kakaomap.png" alt="" className="w-full h-full rounded-[7px]" />
       </button>
