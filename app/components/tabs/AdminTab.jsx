@@ -688,17 +688,11 @@ function RestockScreen({ restockRequests, onAttachRestockPhoto, onRemoveRestockS
                 </div>
 
                 <button
-                  onClick={() => r.hasSupplyPhoto && onCompleteRestock(r.id)}
-                  disabled={!r.hasSupplyPhoto}
-                  className={`w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg ${
-                    r.hasSupplyPhoto ? "bg-blue-700 text-white active:bg-blue-800" : "bg-slate-200 text-slate-400"
-                  }`}
+                  onClick={() => onCompleteRestock(r.id)}
+                  className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg bg-blue-700 text-white active:bg-blue-800"
                 >
                   <PackageCheck size={14} /> 보충 지급 완료 체크
                 </button>
-                {!r.hasSupplyPhoto && (
-                  <p className="text-[10px] text-slate-400 text-center mt-1">사진을 등록해야 지급완료 처리를 할 수 있습니다</p>
-                )}
               </div>
             ))}
             {pending.length === 0 && <p className="text-xs text-slate-400 text-center py-3">보충 대기 중인 상비부품이 없습니다</p>}
