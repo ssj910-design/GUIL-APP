@@ -578,6 +578,11 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
               <p className={`text-xs font-bold ${checkupResult.resultCode === "000" ? "text-emerald-600" : "text-red-600"}`}>
                 {checkupResult.error ? checkupResult.error : `${checkupResult.resultCode} ${checkupResult.resultMsg}`}
               </p>
+              {checkupResult.resultCode === "999" && (
+                <p className="text-[10px] text-slate-400 mt-1">
+                  이 승강기고유번호가 공단(민원24) 쪽에 우리 회사 유지관리 계약으로 아직 연결(이관)되지 않았을 가능성이 높습니다 — 다른 승강기는 정상 제출되는데 특정 승강기만 이 오류가 반복되면 공단에 해당 고유번호의 계약 연결 상태를 문의해주세요.
+                </p>
+              )}
               {checkupResult.raw && (
                 <p className="text-[10px] text-slate-400 mt-1 break-all">HTTP {checkupResult.httpStatus} · {checkupResult.raw}</p>
               )}
