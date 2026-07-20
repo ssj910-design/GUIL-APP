@@ -206,6 +206,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     if (!u?.govNo) { alert("이 호기에 승강기고유번호가 등록돼 있지 않습니다"); return; }
     if (!selfProfile?.minwon_id) { alert("본인의 민원24 점검자 ID가 등록돼 있지 않습니다 — 인사관리에서 먼저 등록해주세요"); return; }
     if (!selfProfile?.phone) { alert("본인의 연락처가 등록돼 있지 않습니다 — 인사관리에서 먼저 등록해주세요"); return; }
+    if (!checkupSubProfileId) { alert("부점검자를 선택해주세요 — 공단 규정상 자체점검자 2명 이상 등록이 필요합니다 (본인과 동일한 ID로는 제출할 수 없습니다)"); return; }
     if (!checkupCnfirm.trim() || !checkupCnfirmTel.trim()) {
       alert("관리주체명/전화번호가 필요합니다 — 현장정보에서 이 현장의 담당자를 먼저 등록해주세요");
       return;
@@ -266,7 +267,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
       SEL_CHK_END_DT: `${dateCompact}${checkupEndTime.replace(":", "")}`,
       SELCHK_USID_TELNO: digitsOnly(selfProfile.phone),
       SUB_SELCHK_DIV: "1",
-      SUB_SELCHK_USID: subProfile?.minwon_id || selfProfile.minwon_id,
+      SUB_SELCHK_USID: subProfile.minwon_id,
       SUB_SELCHK_USNM: "",
       SUB_SELCHK_BIRTH_DT: "",
       CNFIRM: checkupCnfirm,
@@ -505,7 +506,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
           </Field>
           <Field label="부점검자 (민원24 ID 등록된 인원 중 선택 — 자체점검자 2명 이상 입력 필수)">
             <select className={inputCls} value={checkupSubProfileId} onChange={(e) => setCheckupSubProfileId(e.target.value)}>
-              <option value="">선택 안 함 (본인 ID로 제출)</option>
+              <option value="">부점검자를 선택하세요</option>
               {profilesAll.filter((p) => p.id !== selfId && p.minwon_id).map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
