@@ -697,6 +697,11 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
         </div>
         <p className="text-sm text-slate-500">{f.reportedAt}</p>
       </button>
+      {stage !== "done" && (
+        <div className="px-3.5 -mt-1 pb-1">
+          <TmapButton site={siteOf(f)} label />
+        </div>
+      )}
       <div className="px-3.5 pb-3.5">
         {stage === "pending" && (
           <div className="flex gap-2">
@@ -781,7 +786,6 @@ export function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenR
         </div>
         <p className="text-[11px] text-slate-400 truncate">{f.errorCode}</p>
       </button>
-      {stage !== "done" && <TmapButton site={siteOf(f)} />}
       {stage !== "done" && <TmapButton site={siteOf(f)} />}
       {stage === "pending" && (
         <span className="shrink-0 flex gap-1.5">
