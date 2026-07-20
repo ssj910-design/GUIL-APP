@@ -132,8 +132,11 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
       .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
   );
 
-  // 배정자를 지정해 접수한 건은 그 배정자에게만, 미배정(미정) 건은 전원에게 노출됩니다.
-  const activeMine = failures.filter((f) => f.status !== "완료" && (f.assignee === CURRENT_ENGINEER || !f.assignee));
+  // 관리자는 남의 배정 건까지 전부 봐야 한다(누구 응답을 기다리는지 알아야 재배정 가능).
+  // 기사는 본인 배정 건 + 미배정(전원 노출) 건만.
+  const activeMine = failures.filter(
+    (f) => f.status !== "완료" && (role === "admin" || f.assignee === CURRENT_ENGINEER || !f.assignee)
+  );
   // 진행 중(작업중·출동중)을 위로, 그다음 응답대기·미배정 — 접수 순서는 유지
   const stageRank = (f) => (f.status === "진행중" ? 0 : f.assignee ? 1 : 2);
   // 관리자 홈은 액션이 필요한 것만(미배정·응답대기) — 출동중·작업중은 "모두 보기"로
@@ -152,7 +155,14 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
       {/* 고장 처리 현황 */}
       <div className="px-5 pt-4">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="font-bold text-slate-800 text-sm">{role === "admin" ? "배정 대기 고장" : "고장 처리 현황"}</h3>
+          <h3 className="font-bold text-slate-800 text-sm">
+            고장 처리 현황
+            {role === "admin" && (
+              <span className="ml-1.5 font-medium text-[11px] text-slate-500">
+                미배정 {listSource.filter((f) => !f.assignee).length} · 응답대기 {listSource.filter((f) => f.assignee).length}
+              </span>
+            )}
+          </h3>
           {role === "admin" && onShowAllFailures && (
             <button onClick={onShowAllFailures} className="text-[11px] font-bold text-blue-700">
               모두 보기 (출동·작업·완료 포함) →
@@ -160,7 +170,7 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
           )}
         </div>
         <div className="space-y-2.5">
-          {activeMine.length === 0 ? (
+          {listSource.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-200 py-5">
               <p className="text-xs text-slate-400 text-center">{role === "admin" ? "배정 대기 중인 고장이 없습니다" : "진행 중인 고장이 없습니다"}</p>
             </div>
