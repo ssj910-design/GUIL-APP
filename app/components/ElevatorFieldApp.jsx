@@ -59,6 +59,22 @@ function getDevProfileOverride() {
 }
 
 
+// 알림 드롭다운의 고장/할일/자재지급 항목 한 줄 — 클릭하면 해당 탭으로, ×를 누르면 지운다(dismiss).
+function NotifRow({ onClick, onDismiss, title, subtitle }) {
+  return (
+    <div className="flex items-center border-b border-slate-50 active:bg-slate-50">
+      <button onClick={onClick} className="flex-1 min-w-0 text-left px-4 py-2">
+        <p className="text-xs font-bold text-slate-700 truncate">{title}</p>
+        <p className="text-xs text-slate-500 truncate mt-0.5">{subtitle}</p>
+      </button>
+      <button onClick={onDismiss} className="p-2 pr-3 text-slate-300 active:text-slate-500 shrink-0" aria-label="알림 지우기">
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
+
 export default function App() {
   // undefined = 아직 로그인 여부 확인 중, null = 로그인 안 됨, 객체 = 로그인 됨
   const [session, setSession] = useState(undefined);
@@ -182,7 +198,7 @@ export default function App() {
         supabase.from("billings").select("*").order("created_at", { ascending: false }),
         supabase.from("restock_requests").select("*").order("created_at", { ascending: false }),
         supabase.from("feed_posts").select("*").order("created_at", { ascending: true }), // 카톡식: 오래된 글이 위, 최신이 아래
-        supabase.from("profiles").select("id,name,role,phone,email,feed_read_at,minwon_id").order("name"),
+        supabase.from("profiles").select("*").order("name"),
         supabase.from("units").select("*").order("seq"),
         supabase.from("kit_stock").select("*"),
         supabase.from("self_checks").select("*"),
@@ -998,13 +1014,24 @@ export default function App() {
   const mentionCnt = unreadPosts.filter((p) => (p.text ?? "").includes("@" + myName) || (p.text ?? "").includes("@모두")).length;
 
   // 알림(종) — 고장/할일/자재지급: "안읽음" 개념이 없어 각 탭이 이미 쓰는 "지금 나에게 처리 필요한 건" 기준을 그대로 재사용한다.
-  const notifFailures = failures.filter((f) => f.status !== "완료" && (f.assignee === myName || !f.assignee));
-  const notifTodos = todos.filter((t) => t.assignee === myName && !t.done);
-  const isMaterialBilled = (id) => todos.some((t) => t.materialRequestId === id && t.done === true);
-  const isQuoteBilled = (id) => todos.some((t) => t.quoteRequestId === id && t.done === true);
-  const notifMaterials = materialRequests.filter((r) => r.engineer === myName && r.status === "지급완료" && !isMaterialBilled(r.id));
-  const notifQuotes = quoteRequests.filter((q) => q.engineer === myName && q.status === "자재지급완료" && !isQuoteBilled(q.id));
-  const notifRestock = restockRequests.filter((r) => r.engineer === myName && r.status === "완료" && !r.receivedAt);
+  // 사용자가 개별로 "지우기"한 항목은 dismissed_notif_ids(profiles)에 저장해 다시 뜨지 않게 한다.
+  const selfProfileRow = profilesAll.find((p) => p.id === profileIdByName(profilesAll, myName));
+  const dismissedNotifReady = profilesAll.some((p) => p.dismissed_notif_ids !== undefined);
+  const dismissedIds = new Set(selfProfileRow?.dismissed_notif_ids ?? []);
+  async function handleDismissNotif(key) {
+    if (!dismissedNotifReady || !selfProfileRow) return;
+    const next = [...new Set([...(selfProfileRow.dismissed_notif_ids ?? []), key])];
+    setProfilesAll((prev) => prev.map((p) => (p.id === selfProfileRow.id ? { ...p, dismissed_notif_ids: next } : p)));
+    await supabase.from("profiles").update({ dismissed_notif_ids: next }).eq("id", selfProfileRow.id);
+  }
+
+  // 자재/견적 지급완료는 지급 즉시 관련 할일이 자동 생성된다 — 그 할일이 존재하는 동안은
+  // "할일" 알림 하나로만 보여주고 "자재지급" 알림은 중복으로 띄우지 않는다(할일이 처리되면 자동 삭제되므로 재노출 불필요).
+  const notifFailures = failures.filter((f) => f.status !== "완료" && (f.assignee === myName || !f.assignee) && !dismissedIds.has("fail:" + f.id));
+  const notifTodos = todos.filter((t) => t.assignee === myName && !t.done && !dismissedIds.has("todo:" + t.id));
+  const notifMaterials = materialRequests.filter((r) => r.engineer === myName && r.status === "지급완료" && !todos.some((t) => t.materialRequestId === r.id) && !dismissedIds.has("mat:" + r.id));
+  const notifQuotes = quoteRequests.filter((q) => q.engineer === myName && q.status === "자재지급완료" && !todos.some((t) => t.quoteRequestId === q.id) && !dismissedIds.has("quote:" + q.id));
+  const notifRestock = restockRequests.filter((r) => r.engineer === myName && r.status === "완료" && !r.receivedAt && !dismissedIds.has("restock:" + r.id));
   const notifSupplyCnt = notifMaterials.length + notifQuotes.length + notifRestock.length;
   const totalNotifCnt = unreadPosts.length + notifFailures.length + notifTodos.length + notifSupplyCnt;
 
@@ -1060,14 +1087,13 @@ export default function App() {
                             <div>
                               <p className="px-4 pt-2.5 pb-1 text-[10px] font-bold text-slate-400">고장</p>
                               {notifFailures.map((f) => (
-                                <button
+                                <NotifRow
                                   key={f.id}
                                   onClick={() => { setNotifOpen(false); setTab("failure"); }}
-                                  className="w-full text-left px-4 py-2 border-b border-slate-50 active:bg-slate-50"
-                                >
-                                  <p className="text-xs font-bold text-slate-700">{f.siteName} · {f.elevatorNo}</p>
-                                  <p className="text-xs text-slate-500 truncate mt-0.5">{f.errorCode} · {f.assignee ? "출동 대기" : "미배정"}</p>
-                                </button>
+                                  onDismiss={() => handleDismissNotif("fail:" + f.id)}
+                                  title={`${f.siteName} · ${f.elevatorNo}`}
+                                  subtitle={`${f.errorCode} · ${f.assignee ? "출동 대기" : "미배정"}`}
+                                />
                               ))}
                             </div>
                           )}
@@ -1075,14 +1101,13 @@ export default function App() {
                             <div>
                               <p className="px-4 pt-2.5 pb-1 text-[10px] font-bold text-slate-400">할일</p>
                               {notifTodos.map((t) => (
-                                <button
+                                <NotifRow
                                   key={t.id}
                                   onClick={() => { setNotifOpen(false); setTab("todo"); }}
-                                  className="w-full text-left px-4 py-2 border-b border-slate-50 active:bg-slate-50"
-                                >
-                                  <p className="text-xs font-bold text-slate-700">{t.title}</p>
-                                  <p className="text-xs text-slate-500 truncate mt-0.5">{t.siteName ?? ""}{t.dueDate ? ` · ~${t.dueDate}` : ""}</p>
-                                </button>
+                                  onDismiss={() => handleDismissNotif("todo:" + t.id)}
+                                  title={t.title}
+                                  subtitle={`${t.siteName ?? ""}${t.dueDate ? ` · ~${t.dueDate}` : ""}`}
+                                />
                               ))}
                             </div>
                           )}
@@ -1090,22 +1115,31 @@ export default function App() {
                             <div>
                               <p className="px-4 pt-2.5 pb-1 text-[10px] font-bold text-slate-400">자재지급</p>
                               {notifMaterials.map((r) => (
-                                <button key={r.id} onClick={() => { setNotifOpen(false); setTab("material"); }} className="w-full text-left px-4 py-2 border-b border-slate-50 active:bg-slate-50">
-                                  <p className="text-xs font-bold text-slate-700">{r.part}</p>
-                                  <p className="text-xs text-slate-500 truncate mt-0.5">{r.siteName ?? ""} · 지급완료</p>
-                                </button>
+                                <NotifRow
+                                  key={r.id}
+                                  onClick={() => { setNotifOpen(false); setTab("material"); }}
+                                  onDismiss={() => handleDismissNotif("mat:" + r.id)}
+                                  title={r.part}
+                                  subtitle={`${r.siteName ?? ""} · 지급완료`}
+                                />
                               ))}
                               {notifQuotes.map((q) => (
-                                <button key={q.id} onClick={() => { setNotifOpen(false); setTab("material"); }} className="w-full text-left px-4 py-2 border-b border-slate-50 active:bg-slate-50">
-                                  <p className="text-xs font-bold text-slate-700">{q.constructionType}</p>
-                                  <p className="text-xs text-slate-500 truncate mt-0.5">{q.siteName ?? ""} · 자재지급완료</p>
-                                </button>
+                                <NotifRow
+                                  key={q.id}
+                                  onClick={() => { setNotifOpen(false); setTab("material"); }}
+                                  onDismiss={() => handleDismissNotif("quote:" + q.id)}
+                                  title={q.constructionType}
+                                  subtitle={`${q.siteName ?? ""} · 자재지급완료`}
+                                />
                               ))}
                               {notifRestock.map((r) => (
-                                <button key={r.id} onClick={() => { setNotifOpen(false); setTab("material"); }} className="w-full text-left px-4 py-2 border-b border-slate-50 active:bg-slate-50">
-                                  <p className="text-xs font-bold text-slate-700">{r.part} 상비부품</p>
-                                  <p className="text-xs text-slate-500 truncate mt-0.5">{r.suppliedDate} 지급완료 · 수령확인 필요</p>
-                                </button>
+                                <NotifRow
+                                  key={r.id}
+                                  onClick={() => { setNotifOpen(false); setTab("material"); }}
+                                  onDismiss={() => handleDismissNotif("restock:" + r.id)}
+                                  title={`${r.part} 상비부품`}
+                                  subtitle={`${r.suppliedDate} 지급완료 · 수령확인 필요`}
+                                />
                               ))}
                             </div>
                           )}
