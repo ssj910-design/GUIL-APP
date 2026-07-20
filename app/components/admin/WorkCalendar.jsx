@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
+import holidays from "@/lib/holidays.json";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const KIND_TONE = {
@@ -15,6 +16,7 @@ const KIND_TONE = {
   정상근무: "bg-violet-50 text-violet-500",
 };
 const LEAVE_TONE = "bg-amber-50 text-amber-700";
+const HOLIDAY = holidays.days; // 공휴일은 일요일과 같은 빨간 날로 취급한다
 
 const ymOf = (y, m) => `${y}-${String(m + 1).padStart(2, "0")}`;
 
@@ -58,6 +60,7 @@ export default function WorkCalendar({ data }) {
   }
 
   const monthLeaveDays = leaves.reduce((n, l) => n + Number(l.days), 0);
+  const monthHolidays = Object.keys(HOLIDAY).filter((d) => d.startsWith(ym)).length;
 
   return (
     <div className="max-w-5xl">
@@ -91,9 +94,15 @@ export default function WorkCalendar({ data }) {
             const iso = `${ym}-${String(d).padStart(2, "0")}`;
             const dow = (startDow + d - 1) % 7;
             const items = itemsOf(iso);
+            const holiday = HOLIDAY[iso];
             return (
-              <div key={d} className={`border-b border-r border-slate-100 min-h-[104px] p-1.5 ${iso === TODAY_STR ? "bg-blue-50" : ""}`}>
-                <p className={`text-[11px] font-bold mb-1 ${dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-slate-400"}`}>{d}</p>
+              <div key={d} className={`border-b border-r border-slate-100 min-h-[104px] p-1.5 ${
+                iso === TODAY_STR ? "bg-blue-50" : holiday ? "bg-red-50/40" : ""
+              }`}>
+                <div className="flex items-baseline gap-1 mb-1">
+                  <p className={`text-[11px] font-bold ${holiday || dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-slate-400"}`}>{d}</p>
+                  {holiday && <p className="text-[9.5px] font-bold text-red-400 truncate">{holiday}</p>}
+                </div>
                 <div className="space-y-0.5">
                   {items.map((it) => (
                     <p key={it.key} className={`text-[10px] font-semibold rounded px-1 py-0.5 truncate ${it.tone}`}>{it.label}</p>
@@ -110,7 +119,7 @@ export default function WorkCalendar({ data }) {
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-blue-400 inline-block" /> 파랑 — 숙직</span>
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-violet-400 inline-block" /> 보라 — 정상근무</span>
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-amber-400 inline-block" /> 노랑 — 휴가</span>
-        <span className="ml-auto">이 달 휴가 {monthLeaveDays}일</span>
+        <span className="ml-auto">공휴일 {monthHolidays}일 · 휴가 {monthLeaveDays}일</span>
       </div>
     </div>
   );

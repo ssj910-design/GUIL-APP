@@ -2,12 +2,14 @@ import { useState, useContext } from "react";
 import { ChevronLeft, ChevronRight, X, ArrowLeftRight } from "lucide-react";
 import { AuthContext } from "@/app/components/context";
 import { TODAY_STR } from "@/lib/constants";
+import holidays from "@/lib/holidays.json";
 
 // 칸에 그리는 순서 — 당직 → 숙직 → 정상근무.
 // 정상근무는 주4일제 표에서 금요일에만 쓰이는 자리라 값이 있을 때(또는 관리자)만 칸을 보여준다.
 const KINDS = ["당직", "숙직", "정상근무"];
 const KIND_TEXT = { 당직: "text-emerald-700", 숙직: "text-blue-700", 정상근무: "text-violet-500" };
 const KIND_DOT = { 당직: "bg-emerald-500", 숙직: "bg-blue-500", 정상근무: "bg-violet-400" };
+const HOLIDAY = holidays.days;
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
 const ymOf = (y, m) => `${y}-${String(m + 1).padStart(2, "0")}`;
@@ -213,9 +215,15 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
                 const iso = isoOf(y, m, d);
                 const dow = (startDow + d - 1) % 7;
                 const isToday = iso === TODAY_STR;
+                const isHoliday = !!HOLIDAY[iso];
                 return (
-                  <div key={d} className={`border-b border-r border-slate-100 min-h-[76px] p-1 ${isToday ? "bg-blue-50" : ""}`}>
-                    <p className={`text-[10px] font-bold text-right pr-0.5 ${dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-slate-400"}`}>{d}</p>
+                  <div key={d} className={`border-b border-r border-slate-100 min-h-[76px] p-1 ${isToday ? "bg-blue-50" : isHoliday ? "bg-red-50/40" : ""}`}>
+                    <p className={`text-[10px] font-bold text-right pr-0.5 truncate ${
+                      HOLIDAY[iso] || dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-slate-400"
+                    }`} title={HOLIDAY[iso] ?? ""}>
+                      {HOLIDAY[iso] && <span className="float-left text-[8.5px] text-red-400 font-bold max-w-[70%] truncate">{HOLIDAY[iso]}</span>}
+                      {d}
+                    </p>
                     {KINDS.map((kind) => {
                       const cell = cellOf(iso, kind);
                       // 정상근무는 배치가 없으면 기사 화면에서 숨긴다 (주5일제 표에선 늘 비어 있음)
