@@ -14,13 +14,15 @@ function EngineerRow({ p, stats, onSave, onDelete }) {
   const dirty = form.phone !== (p.phone ?? "") || form.minwonId !== (p.minwon_id ?? "") || String(form.dutyOrder) !== String(p.duty_order ?? "") || form.hireDate !== (p.hire_date ?? "");
   return (
     <tr className="border-b border-slate-50">
-      <td className="pl-5 pr-3 py-2.5 font-bold whitespace-nowrap">{p.name}</td>
+      <td className="pl-5 pr-3 py-2.5 whitespace-nowrap">
+        <p className="font-bold">{p.name}</p>
+        <p className="text-[10px] text-slate-400 font-semibold">{p.member_type ?? "구분 없음"}</p>
+      </td>
       <td className="px-3 py-2.5 w-36"><input className={inputCls} placeholder="연락처" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></td>
       <td className="px-3 py-2.5 w-36">
         <DateField value={form.hireDate} onChange={(v) => setForm({ ...form, hireDate: v })} />
       </td>
       <td className="px-3 py-2.5 w-32"><input className={inputCls} placeholder="민원24 점검자 ID" value={form.minwonId} onChange={(e) => setForm({ ...form, minwonId: e.target.value })} /></td>
-      <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">{p.member_type ?? "-"}</td>
       <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">{p.tel ?? "-"}</td>
       <td className="px-3 py-2.5 text-center">
         {p.join_status ? <StatusBadge tone={p.join_status === "승인" ? "green" : "slate"}>{p.join_status}</StatusBadge> : "-"}
@@ -231,7 +233,7 @@ export default function EngineersAdmin({ data, setData }) {
         ))}
       </div>
       <div className="hidden lg:block">
-      <AdminTable minWidth="82rem" head={["이름", "휴대폰", "입사일", "아이디(민원24)", "회원구분", "연락처", "가입상태", "가입일/승인일", "교육수료번호", "현장/고장/할일", "로그인", ""]}>
+      <AdminTable minWidth="74rem" head={["이름", "휴대폰", "입사일", "아이디(민원24)", "연락처", "가입상태", "가입일/승인일", "교육수료번호", "현장/고장/할일", "로그인", ""]}>
         {engineers.map((p) => (
           <EngineerRow key={p.id} p={p} stats={statsOf(p)} onSave={save} onDelete={remove} />
         ))}

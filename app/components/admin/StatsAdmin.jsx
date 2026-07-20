@@ -8,6 +8,7 @@ import { addDays } from "@/lib/utils";
 import { locOf, personOf } from "@/app/components/admin/adminShared";
 import national from "@/lib/national-stats.json";
 import AssetAnalysis from "@/app/components/admin/AssetAnalysis";
+import ContractDashboard from "@/app/components/admin/ContractDashboard";
 
 function countBy(arr, keyFn) {
   const m = new Map();
@@ -106,7 +107,7 @@ export default function StatsAdmin({ data }) {
     <div className="max-w-6xl">
       <h1 className="text-xl font-extrabold mb-3">통계</h1>
       <div className="flex gap-1 mb-4 border-b border-slate-200">
-        {["현황", "자산 분석"].map((t) => (
+        {["현황", "자산 분석", "계약 만료"].map((t) => (
           <button key={t} onClick={() => setSub(t)}
             className={`text-sm font-bold px-4 py-2.5 -mb-px border-b-2 ${
               sub === t ? "text-blue-700 border-blue-700" : "text-slate-400 border-transparent"
@@ -116,6 +117,7 @@ export default function StatsAdmin({ data }) {
         ))}
       </div>
       {sub === "자산 분석" && <AssetAnalysis data={data} />}
+      {sub === "계약 만료" && <ContractDashboard data={data} />}
       {sub !== "현황" ? null : (<>
       <p className="text-xs text-slate-500 mb-4">자산 통계는 현재 등록 기준 · 고장/부품/기사/비용 통계는 기록이 쌓일수록 정확해집니다</p>
 
