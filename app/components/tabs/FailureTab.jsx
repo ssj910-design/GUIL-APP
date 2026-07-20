@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName } from "@/lib/utils";
+import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
 import { useLiveInspections } from "@/app/hooks/useLiveInspections";
 import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast } from "@/app/components/ui";
@@ -179,7 +179,15 @@ function FailureRegisterForm({ setFailures, goToUnassigned }) {
           <>
             <div>
               <p className="text-xs font-bold text-slate-500 mb-1.5">신고자 전화번호 *</p>
-              <input className={inputCls} inputMode="tel" placeholder="010-0000-0000" value={form.reporterPhone} onChange={(e) => setForm({ ...form, reporterPhone: e.target.value })} />
+              <input
+                className={inputCls}
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel"
+                placeholder="숫자만 입력 — 하이픈 자동"
+                value={form.reporterPhone}
+                onChange={(e) => setForm({ ...form, reporterPhone: formatPhone(e.target.value) })}
+              />
             </div>
             <div>
               <p className="text-xs font-bold text-slate-500 mb-1.5">배정 기사 (선택)</p>
