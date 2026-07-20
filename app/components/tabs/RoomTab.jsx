@@ -99,7 +99,7 @@ function PostHeader({ p, canManage, canNotice, menuOpen, onToggleMenu, onCloseMe
 }
 
 export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDeletePost, onSetNotice }) {
-  const { name: CURRENT_ENGINEER, role, signOut, profiles } = useContext(AuthContext);
+  const { name: CURRENT_ENGINEER, role, profiles } = useContext(AuthContext);
   const [composing, setComposing] = useState(false);
   const [postInput, setPostInput] = useState("");
   const [postIsNotice, setPostIsNotice] = useState(false);
@@ -305,15 +305,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-slate-100">
-      <div className="px-5 pt-4 pb-2 flex items-center justify-between shrink-0 bg-white border-b border-slate-100">
-        <p className="text-sm font-bold text-slate-800">사내 피드</p>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-slate-400">{CURRENT_ENGINEER}{role === "admin" ? " · 관리자" : ""}</span>
-          <button onClick={signOut} className="text-[11px] font-bold text-slate-400 active:text-slate-600">로그아웃</button>
-        </div>
-      </div>
-
-      <div className="px-4 pt-3 shrink-0">
+      <div className="px-4 pt-4 shrink-0">
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
