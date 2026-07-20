@@ -16,7 +16,61 @@ const isoOf = (y, m, d) => `${ymOf(y, m)}-${String(d).padStart(2, "0")}`;
  * - 관리자: 자동 순번 배정 → 칸을 눌러 담당자 교체
  * - 기사: 내 근무 칸을 눌러 교환 요청 → 상대 칸 선택(다음 달도 가능 = 이월) → 상대가 수락하면 확정
  */
-export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onRequestSwap, onRespondSwap, onClose }) {
+
+/**
+ * 근무 교환 알림 팝업 — 당사자 둘에게만 뜬다.
+ * 교환 내용은 우리방(피드)에 올리지 않는다: 전 직원이 볼 필요가 없는 개인 일정이라서.
+ */
+export function DutySwapNotice({ swaps, schedules, onSeen }) {
+  const { selfId, engineers } = useContext(AuthContext);
+  const schedById = new Map(schedules.map((s) => [s.id, s]));
+  const labelOf = (id) => {
+    const s = schedById.get(id);
+    return s ? `${s.dutyDate.slice(5).replace("-", "/")} ${s.kind}` : "?";
+  };
+  const nameOf = (pid) => engineers.find((e) => e.id === pid)?.name ?? "";
+
+  // 1) 나에게 온 새 요청  2) 내가 보낸 요청의 응답
+  const asTarget = swaps.find((w) => w.status === "대기" && w.targetId === selfId && !w.targetSeen);
+  const asRequester = swaps.find((w) => w.status !== "대기" && w.requesterId === selfId && !w.requesterSeen);
+  const notice = asTarget ?? asRequester;
+  if (!notice) return null;
+  const isTarget = notice === asTarget;
+  const accepted = notice.status === "수락";
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center px-8">
+      <div className="bg-white rounded-2xl w-full max-w-xs p-5 text-center">
+        <p className="text-base font-extrabold text-slate-800">
+          {isTarget ? "근무 교환 요청" : accepted ? "교환이 성사됐습니다" : "교환이 거절됐습니다"}
+        </p>
+        <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+          {isTarget ? (
+            <>
+              <b>{nameOf(notice.requesterId)}</b>님이 근무 교환을 요청했습니다.
+              <br />
+              {labelOf(notice.fromScheduleId)} ↔ 내 {labelOf(notice.toScheduleId)}
+            </>
+          ) : (
+            <>
+              <b>{nameOf(notice.targetId)}</b>님이 요청을 {accepted ? "수락" : "거절"}했습니다.
+              <br />
+              {labelOf(notice.fromScheduleId)} ↔ {labelOf(notice.toScheduleId)}
+            </>
+          )}
+        </p>
+        <button
+          onClick={() => onSeen(notice, isTarget ? "target" : "requester")}
+          className="w-full mt-4 bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800"
+        >
+          {isTarget ? "근무표에서 확인" : "확인"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onRequestSwap, onRespondSwap, onClose, embedded = false }) {
   const { role, selfId, engineers } = useContext(AuthContext);
   const today = new Date(`${TODAY_STR}T00:00:00`);
   const [cursor, setCursor] = useState({ y: today.getFullYear(), m: today.getMonth() });
@@ -70,13 +124,15 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-50 flex flex-col">
-      <div className="shrink-0 bg-blue-900 text-white px-4 py-3 flex items-center justify-between">
-        <p className="text-sm font-extrabold">당직·숙직 근무표</p>
-        <button onClick={onClose} className="p-1" aria-label="닫기"><X size={18} /></button>
-      </div>
+    <div className={embedded ? "flex flex-col" : "fixed inset-0 z-50 bg-slate-50 flex flex-col"}>
+      {!embedded && (
+        <div className="shrink-0 bg-blue-900 text-white px-4 py-3 flex items-center justify-between">
+          <p className="text-sm font-extrabold">당직·숙직 근무표</p>
+          <button onClick={onClose} className="p-1" aria-label="닫기"><X size={18} /></button>
+        </div>
+      )}
 
-      <div className="shrink-0 bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between">
+      <div className="shrink-0 bg-white border border-slate-200 rounded-t-xl px-4 py-2.5 flex items-center justify-between">
         <button onClick={() => setCursor(m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 })} className="p-1.5 text-slate-500" aria-label="이전 달">
           <ChevronLeft size={18} />
         </button>
@@ -97,7 +153,7 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-3 py-3">
+      <div className={embedded ? "px-0 py-3" : "flex-1 overflow-y-auto px-3 py-3"}>
         {incoming.length > 0 && (
           <div className="mb-3 bg-white rounded-xl border border-blue-200 p-3">
             <p className="text-xs font-extrabold text-blue-800 mb-2">받은 교환 요청 {incoming.length}건</p>

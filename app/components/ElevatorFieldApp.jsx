@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
-import { DutyRoster } from "@/app/components/DutyRoster";
+import { DutyRoster, DutySwapNotice } from "@/app/components/DutyRoster";
 import { simulateSms } from "@/lib/sms";
 import { ScreenHeader } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -247,14 +247,14 @@ export default function App() {
       requester_id: from.profileId, target_id: to.profileId,
     }).select();
     if (data?.[0]) setDutySwaps((prev) => [...prev, mapDutySwap(data[0])]);
-    const reqName = profile.name;
-    await handleSendFeedPost(`@${engineers.find((e) => e.id === to.profileId)?.name ?? ""} ${reqName}님이 근무 교환을 요청했습니다 — ${from.dutyDate.slice(5)} ${from.kind} ↔ ${to.dutyDate.slice(5)} ${to.kind} (근무표에서 수락/거절)`);
   }
 
   // 수락 = 두 칸의 담당자를 맞바꾼다. 같은 달이든 다음 달이든 동일 로직(이월도 이걸로 처리).
   async function handleRespondDutySwap(swap, decision) {
-    await supabase.from("duty_swaps").update({ status: decision, responded_at: new Date().toISOString() }).eq("id", swap.id);
-    setDutySwaps((prev) => prev.filter((w) => w.id !== swap.id));
+    await supabase.from("duty_swaps")
+      .update({ status: decision, responded_at: new Date().toISOString(), target_seen: true })
+      .eq("id", swap.id);
+    setDutySwaps((prev) => prev.map((w) => (w.id === swap.id ? { ...w, status: decision, targetSeen: true } : w)));
     if (decision !== "수락") return;
     await Promise.all([
       supabase.from("duty_schedules").update({ profile_id: swap.targetId }).eq("id", swap.fromScheduleId),
@@ -264,8 +264,14 @@ export default function App() {
       d.id === swap.fromScheduleId ? { ...d, profileId: swap.targetId }
         : d.id === swap.toScheduleId ? { ...d, profileId: swap.requesterId } : d
     ));
-    const other = engineers.find((e) => e.id === swap.requesterId)?.name ?? "";
-    await handleSendFeedPost(`@${other} ${profile.name}님이 근무 교환을 수락했습니다 — 근무표가 변경되었습니다`);
+  }
+
+  // 교환 알림 팝업을 확인하면 다시 뜨지 않도록 표시한다 (우리방에는 아무것도 올리지 않는다)
+  async function handleSeenDutySwap(swap, as) {
+    const patch = as === "requester" ? { requester_seen: true } : { target_seen: true };
+    await supabase.from("duty_swaps").update(patch).eq("id", swap.id);
+    setDutySwaps((prev) => prev.map((w) => (w.id === swap.id
+      ? { ...w, ...(as === "requester" ? { requesterSeen: true } : { targetSeen: true }) } : w)));
   }
 
   function handleLogout() {
@@ -312,7 +318,7 @@ export default function App() {
         supabase.from("self_checks").select("*"),
         supabase.from("attendances").select("*").eq("work_date", TODAY_STR),
         supabase.from("duty_schedules").select("*").gte("duty_date", TODAY_STR.slice(0, 8) + "01").order("duty_date"),
-        supabase.from("duty_swaps").select("*").eq("status", "대기"),
+        supabase.from("duty_swaps").select("*"),
       ]);
       setSites((sitesRes.data ?? []).map(mapSite));
       setSiteManagers((siteManagersRes.data ?? []).map(mapSiteManager));
@@ -1311,6 +1317,12 @@ export default function App() {
                 )}
               </div>
             }
+          />
+
+          <DutySwapNotice
+            swaps={dutySwaps}
+            schedules={dutySchedules}
+            onSeen={(w, as) => { handleSeenDutySwap(w, as); if (as === "target") setRosterOpen(true); }}
           />
 
           {rosterOpen && (

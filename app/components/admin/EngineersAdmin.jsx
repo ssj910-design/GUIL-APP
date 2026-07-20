@@ -5,6 +5,8 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { StatusBadge, AdminTable, inputCls } from "@/app/components/admin/adminShared";
 import ImportEngineers from "@/app/components/admin/ImportEngineers";
+import DutyAdmin from "@/app/components/admin/DutyAdmin";
+import LeavesAdmin from "@/app/components/admin/LeavesAdmin";
 
 function EngineerRow({ p, stats, onSave, onToggleMode, onDelete }) {
   const [form, setForm] = useState({ phone: p.phone ?? "", minwonId: p.minwon_id ?? "", dutyOrder: p.duty_order ?? "" });
@@ -68,6 +70,7 @@ export default function EngineersAdmin({ data, setData }) {
   const [newOrder, setNewOrder] = useState("");
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [sub, setSub] = useState("직원"); // 직원 | 당직 근무표 | 연차관리
 
   async function addEngineer() {
     const name = newName.trim();
@@ -122,7 +125,20 @@ export default function EngineersAdmin({ data, setData }) {
 
   return (
     <div>
-      <h1 className="text-xl font-extrabold mb-1">인사관리</h1>
+      <h1 className="text-xl font-extrabold mb-3">인사관리</h1>
+      <div className="flex gap-1 mb-4 border-b border-slate-200">
+        {["직원", "당직 근무표", "연차관리"].map((s) => (
+          <button key={s} onClick={() => setSub(s)}
+            className={`text-sm font-bold px-4 py-2.5 -mb-px border-b-2 ${
+              sub === s ? "text-blue-700 border-blue-700" : "text-slate-400 border-transparent"
+            }`}>
+            {s}
+          </button>
+        ))}
+      </div>
+      {sub === "당직 근무표" && <DutyAdmin data={data} />}
+      {sub === "연차관리" && <LeavesAdmin data={data} setData={setData} />}
+      {sub !== "직원" ? null : (<>
       <p className="text-xs text-slate-500 mb-4">
         계정 연결 = 로그인 계정과 연결된 프로필 (Phase 2에서 가입 시 자동 연결). 민원24 ID = 공단에 등록된 점검자 ID — 자체점검 자동 보고(SELCHK_USID)에 사용됩니다.
       </p>
@@ -152,6 +168,7 @@ export default function EngineersAdmin({ data, setData }) {
           <EngineerRow key={p.id} p={p} stats={statsOf(p)} onSave={save} onToggleMode={toggleMode} onDelete={remove} />
         ))}
       </AdminTable>
+      </>)}
     </div>
   );
 }
