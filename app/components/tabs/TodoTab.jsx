@@ -245,7 +245,10 @@ export function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhoto
             <select
               className="text-sm font-semibold text-slate-700 border border-slate-200 rounded-lg px-2 py-1"
               value={todo.assignee}
-              onChange={(e) => onReassign(todo.id, e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (next !== todo.assignee && confirm(`담당자를 ${next}(으)로 변경하시겠습니까?`)) onReassign(todo.id, next);
+              }}
             >
               {engineerNames?.includes(todo.assignee) ? null : <option value={todo.assignee}>{todo.assignee}</option>}
               {engineerNames?.map((name) => <option key={name} value={name}>{name}</option>)}
