@@ -17,14 +17,6 @@ function unitLabel(units, sites, unitId, fallbackSiteName, fallbackLabel) {
   return { site: s?.name ?? fallbackSiteName ?? "-", unit: u.unitNo, siteObj: s };
 }
 
-// 배정/출동/도착 상태를 한 줄 배지로 — 실시간 고장 현황에서 재사용.
-function arrivalStatus(f) {
-  if (!f.assignee) return { label: "미배정", cls: "bg-slate-100 text-slate-500" };
-  if (f.arrivalTime) return { label: `도착완료 ${f.arrivalTime}`, cls: "bg-emerald-50 text-emerald-700" };
-  if (f.dispatchedAt) return { label: `출동중${f.etaMinutes ? ` · ETA ${f.etaMinutes}분` : ""}`, cls: "bg-amber-50 text-amber-700" };
-  return { label: "미출동", cls: "bg-slate-100 text-slate-500" };
-}
-
 function Kpi({ label, value, tone = "text-slate-900" }) {
   return (
     <div className="bg-white rounded-xl border border-slate-200 px-5 py-4">
@@ -42,7 +34,8 @@ export function FailureDetailContent({ f, units, sites }) {
     { label: "접수번호", value: f.errorCode },
     { label: "접수일시", value: f.reportedAt },
     { label: "신고자 연락처", value: f.reporterPhone || "-" },
-    { label: "담당 기사", value: f.assignee || "미배정" },
+    { label: "담당 기사", value: loc.siteObj?.assignedEngineer || "미배정" },
+    { label: "배정 기사", value: f.assignee || "미배정" },
     { label: "상태", value: f.escalation ? `${f.status} (${f.escalation})` : f.status },
   ];
   if (f.faultSymptom) rows.push({ label: "증상", value: f.faultSymptom });
@@ -207,88 +200,85 @@ export default function Dashboard({ data }) {
         )}
       </section>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* 실시간 고장 현황 */}
-        <section className="xl:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <h2 className="px-5 py-3 text-sm font-bold border-b border-slate-100">실시간 고장 현황 · 미처리 {liveFailures.length}건</h2>
-          {liveFailures.length === 0 ? (
-            <p className="text-xs text-slate-400 text-center py-10">현재 처리 중인 고장이 없습니다</p>
-          ) : (
-            <div className="overflow-x-auto"><table className="w-full min-w-[46rem] text-sm">
-              <thead>
-                <tr className="text-xs text-slate-400 border-b border-slate-100">
-                  <th className="text-left px-5 py-2 font-semibold">접수</th>
-                  <th className="text-left px-2 py-2 font-semibold">현장 · 호기</th>
-                  <th className="text-left px-2 py-2 font-semibold">증상</th>
-                  <th className="text-left px-2 py-2 font-semibold">담당 기사</th>
-                  <th className="text-left px-2 py-2 font-semibold">배정 기사</th>
-                  <th className="text-left px-2 py-2 font-semibold">도착 상태</th>
-                  <th className="text-right px-5 py-2 font-semibold">상태</th>
-                </tr>
-              </thead>
-              <tbody>
-                {liveFailures.map((f) => {
-                  const loc = unitLabel(units, sites, f.unitId, f.siteName, f.elevatorNo);
-                  const stateCls = f.status === "진행중" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600";
-                  const arr = arrivalStatus(f);
-                  return (
-                    <tr key={f.id} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setFailureDetail(f)}>
-                      <td className="px-5 py-2.5 text-slate-500 whitespace-nowrap">{f.reportedAt}</td>
-                      <td className="px-2 py-2.5 font-semibold whitespace-nowrap">{loc.site} · {loc.unit}</td>
-                      <td className="px-2 py-2.5 text-slate-600">{f.errorCode}</td>
-                      <td className="px-2 py-2.5 whitespace-nowrap">{loc.siteObj?.assignedEngineer || "미배정"}</td>
-                      <td className="px-2 py-2.5 whitespace-nowrap">{engineerName(f.assigneeId, f.assignee)}</td>
-                      <td className="px-2 py-2.5 whitespace-nowrap">
-                        <span className={`text-xs font-bold px-2 py-1 rounded-full ${arr.cls}`}>{arr.label}</span>
-                      </td>
-                      <td className="px-5 py-2.5 text-right">
-                        <span className={`text-xs font-bold px-2 py-1 rounded-full ${stateCls}`}>
-                          {f.escalation ? `${f.status}·${f.escalation}` : f.status}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table></div>
-          )}
-        </section>
-
-        {/* 최근 고장처리 현황(1주일) — 금일검사현장이 있던 자리 */}
-        <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <h2 className="px-5 py-3 text-sm font-bold border-b border-slate-100">최근 고장처리 현황 (1주일)</h2>
-          {recentWeekFailures.length === 0 ? (
-            <p className="text-xs text-slate-400 text-center py-10">최근 1주일간 접수된 고장이 없습니다</p>
-          ) : (
-            <ul className="max-h-[26rem] overflow-y-auto">
-              {recentWeekFailures.map((f) => {
+      {/* 실시간 고장 현황 — 최근 고장처리 현황이 빠지면서 전체 너비로 확장 */}
+      <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <h2 className="px-5 py-3 text-sm font-bold border-b border-slate-100">실시간 고장 현황 · 미처리 {liveFailures.length}건</h2>
+        {liveFailures.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-10">현재 처리 중인 고장이 없습니다</p>
+        ) : (
+          <div className="overflow-x-auto"><table className="w-full min-w-[50rem] text-sm">
+            <thead>
+              <tr className="text-xs text-slate-400 border-b border-slate-100">
+                <th className="text-left px-5 py-2 font-semibold">접수</th>
+                <th className="text-left px-2 py-2 font-semibold">현장 · 호기</th>
+                <th className="text-left px-2 py-2 font-semibold">증상</th>
+                <th className="text-left px-2 py-2 font-semibold">담당 기사</th>
+                <th className="text-left px-2 py-2 font-semibold">배정 기사</th>
+                <th className="text-left px-2 py-2 font-semibold">출동</th>
+                <th className="text-left px-2 py-2 font-semibold">도착</th>
+                <th className="text-right px-5 py-2 font-semibold">상태</th>
+              </tr>
+            </thead>
+            <tbody>
+              {liveFailures.map((f) => {
                 const loc = unitLabel(units, sites, f.unitId, f.siteName, f.elevatorNo);
-                const stateCls =
-                  f.status === "완료" ? "bg-emerald-50 text-emerald-700" :
-                  f.status === "진행중" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600";
+                const stateCls = f.status === "진행중" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600";
                 return (
-                  <li
-                    key={f.id}
-                    onClick={() => setFailureDetail(f)}
-                    className="flex items-center justify-between px-5 py-2.5 border-b border-slate-50 text-sm gap-2 cursor-pointer hover:bg-slate-50"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-semibold truncate">{loc.site} · {loc.unit}</p>
-                      <p className="text-[11px] text-slate-400 truncate">{f.reportedAt} · {f.errorCode}</p>
-                      <p className="text-[11px] text-slate-400 truncate">
-                        담당 {loc.siteObj?.assignedEngineer || "미배정"} · 배정 {engineerName(f.assigneeId, f.assignee)}
-                      </p>
-                    </div>
-                    <span className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${stateCls}`}>
-                      {f.escalation ? `${f.status}·${f.escalation}` : f.status}
-                    </span>
-                  </li>
+                  <tr key={f.id} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setFailureDetail(f)}>
+                    <td className="px-5 py-2.5 text-slate-500 whitespace-nowrap">{f.reportedAt}</td>
+                    <td className="px-2 py-2.5 font-semibold whitespace-nowrap">{loc.site} · {loc.unit}</td>
+                    <td className="px-2 py-2.5 text-slate-600">{f.errorCode}</td>
+                    <td className="px-2 py-2.5 whitespace-nowrap">{loc.siteObj?.assignedEngineer || "미배정"}</td>
+                    <td className="px-2 py-2.5 whitespace-nowrap">{engineerName(f.assigneeId, f.assignee)}</td>
+                    <td className="px-2 py-2.5 whitespace-nowrap text-slate-500">{f.dispatchedAt || "-"}</td>
+                    <td className="px-2 py-2.5 whitespace-nowrap text-slate-500">{f.arrivalTime || "-"}</td>
+                    <td className="px-5 py-2.5 text-right">
+                      <span className={`text-xs font-bold px-2 py-1 rounded-full ${stateCls}`}>
+                        {f.escalation ? `${f.status}·${f.escalation}` : f.status}
+                      </span>
+                    </td>
+                  </tr>
                 );
               })}
-            </ul>
-          )}
-        </section>
-      </div>
+            </tbody>
+          </table></div>
+        )}
+      </section>
+
+      {/* 최근 고장처리 현황(1주일) — 금일검사현장 위로 이동 */}
+      <section className="bg-white rounded-xl border border-slate-200 overflow-hidden mt-6">
+        <h2 className="px-5 py-3 text-sm font-bold border-b border-slate-100">최근 고장처리 현황 (1주일)</h2>
+        {recentWeekFailures.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-10">최근 1주일간 접수된 고장이 없습니다</p>
+        ) : (
+          <ul className="grid grid-cols-1 md:grid-cols-2">
+            {recentWeekFailures.map((f) => {
+              const loc = unitLabel(units, sites, f.unitId, f.siteName, f.elevatorNo);
+              const stateCls =
+                f.status === "완료" ? "bg-emerald-50 text-emerald-700" :
+                f.status === "진행중" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600";
+              return (
+                <li
+                  key={f.id}
+                  onClick={() => setFailureDetail(f)}
+                  className="flex items-center justify-between px-5 py-2.5 border-b border-slate-50 text-sm gap-2 cursor-pointer hover:bg-slate-50"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold truncate">{loc.site} · {loc.unit}</p>
+                    <p className="text-[11px] text-slate-400 truncate">{f.reportedAt} · {f.errorCode}</p>
+                    <p className="text-[11px] text-slate-400 truncate">
+                      담당 {loc.siteObj?.assignedEngineer || "미배정"} · 배정 {engineerName(f.assigneeId, f.assignee)}
+                    </p>
+                  </div>
+                  <span className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${stateCls}`}>
+                    {f.escalation ? `${f.status}·${f.escalation}` : f.status}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       {/* 금일검사현장 — 조건부/불합격 현장 위로 이동 */}
       <section className="bg-white rounded-xl border border-slate-200 overflow-hidden mt-6">
