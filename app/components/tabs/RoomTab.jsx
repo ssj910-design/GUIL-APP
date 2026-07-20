@@ -289,7 +289,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
         {viewerUrl && (
           <div className="fixed inset-0 z-50 bg-black/90 flex flex-col" onClick={() => setViewerUrl(null)}>
             <div className="flex justify-end gap-2 p-4 shrink-0">
-              <button onClick={(e) => { e.stopPropagation(); downloadPhoto(viewerUrl, "우리방-사진"); }} className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="사진 저장">
+              <button onClick={(e) => { e.stopPropagation(); downloadPhoto(viewerUrl, "게시판-사진"); }} className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="사진 저장">
                 <Download size={18} />
               </button>
               <button className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="닫기"><X size={18} /></button>
@@ -427,7 +427,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
         <div className="fixed inset-0 z-50 bg-black/90 flex flex-col" onClick={() => setViewerUrl(null)}>
           <div className="flex justify-end gap-2 p-4 shrink-0">
             <button
-              onClick={(e) => { e.stopPropagation(); downloadPhoto(viewerUrl, "우리방-사진"); }}
+              onClick={(e) => { e.stopPropagation(); downloadPhoto(viewerUrl, "게시판-사진"); }}
               className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center"
               aria-label="사진 저장"
             >

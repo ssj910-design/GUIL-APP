@@ -31,7 +31,7 @@ const TABS = [
   { id: "material", label: "자재·견적", icon: Package },
   { id: "billing", label: "비용청구", icon: Receipt },
   { id: "todo", label: "할일관리", icon: ListTodo },
-  { id: "room", label: "우리방", icon: MessagesSquare },
+  { id: "room", label: "게시판", icon: MessagesSquare },
   { id: "admin", label: "관리자 모드", icon: Settings },
 ];
 
@@ -1025,7 +1025,7 @@ export default function App() {
           {tab !== "room" && (
           <button
             onClick={() => setRoomOpen(true)}
-            aria-label="우리방 열기"
+            aria-label="게시판 열기"
             className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95 ${tab === "failure" ? "bottom-36" : "bottom-20"}`}
           >
             <MessagesSquare size={22} />
@@ -1051,7 +1051,7 @@ export default function App() {
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-white shrink-0">
-                  <h2 className="font-bold text-slate-900">우리방</h2>
+                  <h2 className="font-bold text-slate-900">게시판</h2>
                   <button onClick={() => setRoomOpen(false)} className="p-1 text-slate-400 active:text-slate-700">
                     <X size={20} />
                   </button>
