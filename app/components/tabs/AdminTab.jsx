@@ -406,17 +406,11 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
                 </div>
 
                 <button
-                  onClick={() => r.hasSupplyPhoto && onSupplyComplete(r.id, assigneeMap[r.id] ?? r.engineer, billingPartMap[r.id] || null, billingAmountMap[r.id] || null)}
-                  disabled={!r.hasSupplyPhoto}
-                  className={`w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg ${
-                    r.hasSupplyPhoto ? "bg-blue-700 text-white active:bg-blue-800" : "bg-slate-200 text-slate-400"
-                  }`}
+                  onClick={() => onSupplyComplete(r.id, assigneeMap[r.id] ?? r.engineer, billingPartMap[r.id] || null, billingAmountMap[r.id] || null)}
+                  className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg bg-blue-700 text-white active:bg-blue-800"
                 >
                   <PackageCheck size={14} /> 자재 지급 완료 체크
                 </button>
-                {!r.hasSupplyPhoto && (
-                  <p className="text-[10px] text-slate-400 text-center mt-1">사진을 등록해야 지급완료 처리를 할 수 있습니다</p>
-                )}
               </div>
             ))}
             {pending.length === 0 && <p className="text-xs text-slate-400 text-center py-3">지급 대기 중인 자재 신청이 없습니다</p>}
@@ -544,7 +538,7 @@ function QuoteRequestsScreen({ quoteRequests, onAdvanceQuote, onAttachQuotePhoto
                 )}
                 {q.status === "승인" && (() => {
                   const assignees = assigneesMap[q.id] ?? [q.engineer];
-                  const canComplete = q.hasSupplyPhoto && assignees.length > 0;
+                  const canComplete = assignees.length > 0;
                   return (
                     <>
                       <div className="mb-2">
@@ -574,10 +568,7 @@ function QuoteRequestsScreen({ quoteRequests, onAdvanceQuote, onAttachQuotePhoto
                       >
                         <PackageCheck size={14} /> 자재 지급 완료 체크
                       </button>
-                      {!q.hasSupplyPhoto && (
-                        <p className="text-[10px] text-slate-400 text-center mt-1">사진을 등록해야 지급완료 처리를 할 수 있습니다</p>
-                      )}
-                      {q.hasSupplyPhoto && assignees.length === 0 && (
+                      {assignees.length === 0 && (
                         <p className="text-[10px] text-slate-400 text-center mt-1">담당 기사를 1명 이상 선택해주세요</p>
                       )}
                     </>
