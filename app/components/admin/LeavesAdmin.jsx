@@ -29,7 +29,19 @@ export default function LeavesAdmin({ data, setData }) {
       .then(({ data: rows }) => setLeaves(rows ?? []));
   }, [year]);
 
-  const usedBy = (id) => leaves.filter((l) => l.profile_id === id).reduce((n, l) => n + Number(l.days), 0);
+  // 잔여는 '승인'된 것만 뺀다 — 신청 중인 건을 미리 빼면 반려됐을 때 숫자가 틀어진다
+  const st = (l) => l.status ?? "승인";
+  const usedBy = (id) => leaves.filter((l) => l.profile_id === id && st(l) === "승인").reduce((n, l) => n + Number(l.days), 0);
+  const pending = leaves.filter((l) => st(l) === "신청").sort((a, b) => a.start_date.localeCompare(b.start_date));
+
+  async function decide(l, decision) {
+    const reason = decision === "반려" ? prompt(`${nameOf(l.profile_id)}님의 ${l.start_date} ${l.kind} 신청을 반려합니다.\n사유 (선택):`) : null;
+    if (decision === "반려" && reason === null) return;
+    const patch = { status: decision, decided_at: new Date().toISOString(), reject_reason: reason?.trim() || null };
+    const { error } = await supabase.from("leaves").update(patch).eq("id", l.id);
+    if (error) { alert("처리 실패: " + error.message); return; }
+    setLeaves((prev) => prev.map((x) => (x.id === l.id ? { ...x, ...patch } : x)));
+  }
   const nameOf = (id) => staff.find((p) => p.id === id)?.name ?? "(퇴사)";
   const autoDays = form.kind === "반차" ? 0.5 : Math.max(1, daysBetween(form.start, form.end));
 
@@ -38,7 +50,7 @@ export default function LeavesAdmin({ data, setData }) {
     setBusy(true);
     const { data: rows, error } = await supabase.from("leaves").insert({
       profile_id: form.profileId, start_date: form.start, end_date: form.end,
-      kind: form.kind, days: autoDays, note: form.note || null,
+      kind: form.kind, days: autoDays, note: form.note || null, status: "승인",
     }).select();
     setBusy(false);
     if (error) { alert("등록 실패: " + error.message); return; }
@@ -95,6 +107,31 @@ export default function LeavesAdmin({ data, setData }) {
         </button>
       </div>
 
+      {/* 승인 대기 — 기사가 마이페이지에서 신청한 건 */}
+      {pending.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
+          <p className="text-xs font-extrabold text-amber-800 mb-2.5">승인 대기 {pending.length}건</p>
+          <div className="space-y-2">
+            {pending.map((l) => (
+              <div key={l.id} className="flex items-center justify-between gap-2 bg-white rounded-lg px-3 py-2.5">
+                <p className="text-xs text-slate-600 min-w-0">
+                  <b className="text-slate-800">{nameOf(l.profile_id)}</b> · {l.kind} {l.days}일
+                  <br />
+                  <span className="text-[11px] text-slate-400">
+                    {l.start_date}{l.end_date !== l.start_date && ` ~ ${l.end_date}`}
+                    {l.note && ` · ${l.note}`}
+                  </span>
+                </p>
+                <div className="flex gap-1.5 shrink-0">
+                  <button onClick={() => decide(l, "승인")} className="text-xs font-bold text-white bg-blue-700 rounded-lg px-3 py-1.5">승인</button>
+                  <button onClick={() => decide(l, "반려")} className="text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5">반려</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 사람별 잔여 */}
       <h2 className="text-sm font-extrabold text-slate-700 mb-1">{year}년 연차 현황</h2>
       <p className="text-[11px] text-slate-400 mb-2 leading-relaxed">
@@ -134,9 +171,9 @@ export default function LeavesAdmin({ data, setData }) {
 
       {/* 사용 내역 */}
       <h2 className="text-sm font-extrabold text-slate-700 mb-2">사용 내역 {leaves.length}건</h2>
-      <AdminTable head={["이름", "구분", "기간", "일수", "비고", ""]}>
+      <AdminTable head={["이름", "구분", "기간", "일수", "상태", "비고", ""]}>
         {leaves.length === 0 ? (
-          <tr><td colSpan={6} className="px-5 py-8 text-center text-xs text-slate-400">{year}년 사용 내역이 없습니다</td></tr>
+          <tr><td colSpan={7} className="px-5 py-8 text-center text-xs text-slate-400">{year}년 사용 내역이 없습니다</td></tr>
         ) : leaves.map((l) => (
           <tr key={l.id} className="border-b border-slate-50">
             <td className="pl-5 pr-3 py-2.5 font-bold whitespace-nowrap">{nameOf(l.profile_id)}</td>
@@ -145,7 +182,10 @@ export default function LeavesAdmin({ data, setData }) {
               {l.start_date}{l.end_date !== l.start_date && ` ~ ${l.end_date}`}
             </td>
             <td className="px-3 py-2.5">{l.days}일</td>
-            <td className="px-3 py-2.5 text-slate-500">{l.note ?? "-"}</td>
+            <td className="px-3 py-2.5">
+              <StatusBadge tone={st(l) === "승인" ? "green" : st(l) === "신청" ? "amber" : "slate"}>{st(l)}</StatusBadge>
+            </td>
+            <td className="px-3 py-2.5 text-slate-500">{l.note ?? l.reject_reason ?? "-"}</td>
             <td className="px-3 py-2.5 text-right pr-4">
               <button onClick={() => remove(l)} className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">삭제</button>
             </td>

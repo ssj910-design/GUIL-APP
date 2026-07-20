@@ -451,7 +451,7 @@ const ETA_OPTIONS = Array.from({ length: 12 }, (_, i) => (i + 1) * 10);
 
 
 // 관리자용 기사 배정 시트 — 기사별 현재 상태(출동중/처리중) 배지와 함께 선택
-export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allowUnassign, attendances = [] }) {
+export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allowUnassign, attendances = [], todayLeaves = [] }) {
   const { engineerNames, engineers = [] } = useContext(AuthContext);
   const sites = useContext(SitesContext);
   const statusOf = (name) => {
@@ -468,6 +468,14 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allo
     const a = attendances.find((x) => x.profileId === pid && x.lat != null);
     return a ? { lat: a.lat, lng: a.lng } : null;
   };
+  // 오늘 휴가 중인 사람은 아예 못 고르게 한다 — 회사에 없는 사람에게 배정되면 아무도 안 간다.
+  // 반대로 '출동중'은 막지 않는다: 같은 건물·인근 현장을 연달아 처리하는 경우가 실제로 있어
+  // 관리자가 판단할 여지를 남기고, 대신 확인을 한 번 받는다.
+  const leaveOf = (name) => {
+    const pid = engineers.find((e) => e.name === name)?.id;
+    return todayLeaves.find((l) => l.profile_id === pid) ?? null;
+  };
+
   const rows = engineerNames
     .map((name) => ({ name, km: distanceKm(hereOf(name), site?.lat != null ? { lat: site.lat, lng: site.lng } : null) }))
     .sort((a, b) => {
@@ -497,21 +505,36 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allo
         )}
         {rows.map(({ name, km }, i) => {
           const st = statusOf(name);
+          const leave = leaveOf(name);
+          const pick = () => {
+            if (st && !confirm(`${name}님은 지금 ${st}입니다.\n그래도 이 건을 배정할까요?`)) return;
+            onAssign(failure, name);
+            onClose();
+          };
           return (
             <button
               key={name}
-              onClick={() => { onAssign(failure, name); onClose(); }}
-              className={`py-3 rounded-xl text-sm font-bold border bg-white active:bg-blue-50 ${
-                i === 0 && km != null && !st ? "text-blue-700 border-blue-300" : "text-slate-700 border-slate-200"
+              onClick={pick}
+              disabled={!!leave}
+              className={`py-3 rounded-xl text-sm font-bold border bg-white ${
+                leave ? "text-slate-300 border-slate-100 bg-slate-50"
+                  : i === 0 && km != null && !st ? "text-blue-700 border-blue-300 active:bg-blue-50"
+                  : "text-slate-700 border-slate-200 active:bg-blue-50"
               }`}
             >
               {name}
-              {i === 0 && km != null && !st && <span className="ml-1 text-[9px] font-extrabold text-blue-500">최단</span>}
+              {!leave && i === 0 && km != null && !st && <span className="ml-1 text-[9px] font-extrabold text-blue-500">최단</span>}
               <span className="block text-[10px] font-bold mt-0.5">
-                {km != null
-                  ? <span className="text-slate-400">{km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`}</span>
-                  : <span className="text-slate-300">위치 없음</span>}
-                {st && <span className={`ml-1 ${st === "출동중" ? "text-amber-600" : "text-emerald-600"}`}>{st}</span>}
+                {leave ? (
+                  <span className="text-red-400">{leave.kind} 중</span>
+                ) : (
+                  <>
+                    {km != null
+                      ? <span className="text-slate-400">{km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`}</span>
+                      : <span className="text-slate-300">위치 없음</span>}
+                    {st && <span className={`ml-1 ${st === "출동중" ? "text-amber-600" : "text-emerald-600"}`}>{st}</span>}
+                  </>
+                )}
               </span>
             </button>
           );
@@ -851,7 +874,7 @@ export function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenR
 }
 
 
-function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances }) {
+function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves }) {
   const [assignTarget, setAssignTarget] = useState(null);
   const list = failures.filter((f) => !f.assignee && f.status === "미처리");
   const [detailTarget, setDetailTarget] = useState(null);
@@ -882,7 +905,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
         />
       )}
       {assignTarget && (
-        <AssignEngineerSheet failure={assignTarget} failures={failures} onAssign={onAssign} attendances={attendances} onClose={() => setAssignTarget(null)} />
+        <AssignEngineerSheet failure={assignTarget} failures={failures} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} onClose={() => setAssignTarget(null)} />
       )}
       {dispatchTarget && (
         <DispatchEtaModal
@@ -919,7 +942,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
 }
 
 
-function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances }) {
+function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves }) {
   const [assignTarget, setAssignTarget] = useState(null);
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [showDone, setShowDone] = useState(false);
@@ -991,7 +1014,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
         />
       )}
       {assignTarget && (
-        <AssignEngineerSheet failure={assignTarget} failures={failures} onAssign={onAssign} attendances={attendances} onClose={() => setAssignTarget(null)} />
+        <AssignEngineerSheet failure={assignTarget} failures={failures} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} onClose={() => setAssignTarget(null)} />
       )}
       {dispatchTarget && (
         <DispatchEtaModal
@@ -1089,14 +1112,14 @@ function FailureStatusOverview({ failures, onReassign }) {
 
       {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} />}
       {reassignTarget && (
-        <AssignEngineerSheet failure={reassignTarget} failures={failures} onAssign={onReassign} attendances={attendances} onClose={() => setReassignTarget(null)} allowUnassign />
+        <AssignEngineerSheet failure={reassignTarget} failures={failures} onAssign={onReassign} attendances={attendances} todayLeaves={todayLeaves} onClose={() => setReassignTarget(null)} allowUnassign />
       )}
     </div>
   );
 }
 
 
-export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [] }) {
+export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [] }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
   // 홈 "모두 보기" 등 외부에서 특정 서브탭으로 진입 (SiteTab focusSiteId와 같은 패턴)
@@ -1126,10 +1149,10 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
       </div>
       {subTab === "접수등록" && <FailureRegisterForm failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />}
       {subTab === "미배정" && (
-        <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} />
+        <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} />
       )}
       {subTab === "처리등록" && (
-        <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} />
+        <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} />
       )}
       {subTab === "처리현황" && <FailureStatusOverview failures={failures} onReassign={onReassign} />}
       <SmsToast message={toast} />

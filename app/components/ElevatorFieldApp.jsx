@@ -96,6 +96,7 @@ export default function App() {
   const [attendances, setAttendances] = useState([]); // 오늘 출퇴근 기록
   const [dutySchedules, setDutySchedules] = useState([]); // 당직·숙직 근무표 (이번 달 이후)
   const [dutySwaps, setDutySwaps] = useState([]);
+  const [todayLeaves, setTodayLeaves] = useState([]); // 오늘 휴가 중인 사람 (배정 차단용)
   const [rosterOpen, setRosterOpen] = useState(false);
   const [myPageOpen, setMyPageOpen] = useState(false);
   const [siteManagers, setSiteManagers] = useState([]);
@@ -317,6 +318,7 @@ export default function App() {
         attendanceRes,
         dutyRes,
         dutySwapRes,
+        leaveRes,
       ] = await Promise.all([
         supabase.from("sites").select("*"),
         supabase.from("site_managers").select("*"),
@@ -335,6 +337,7 @@ export default function App() {
         supabase.from("attendances").select("*").eq("work_date", TODAY_STR),
         supabase.from("duty_schedules").select("*").gte("duty_date", TODAY_STR.slice(0, 8) + "01").order("duty_date"),
         supabase.from("duty_swaps").select("*"),
+        supabase.from("leaves").select("*").lte("start_date", TODAY_STR).gte("end_date", TODAY_STR),
       ]);
       setSites((sitesRes.data ?? []).map(mapSite));
       setSiteManagers((siteManagersRes.data ?? []).map(mapSiteManager));
@@ -358,6 +361,7 @@ export default function App() {
       setAttendances((attendanceRes.data ?? []).map(mapAttendance)); // 오늘치만 (출퇴근 체크)
       setDutySchedules((dutyRes.data ?? []).map(mapDutySchedule));
       setDutySwaps((dutySwapRes.data ?? []).map(mapDutySwap));
+      setTodayLeaves((leaveRes.data ?? []).filter((l) => (l.status ?? "승인") === "승인"));
       setLoading(false);
     }
     loadData();
@@ -1385,6 +1389,7 @@ export default function App() {
           {tab === "home" && (
             <HomeTab
               attendances={attendances}
+              todayLeaves={todayLeaves}
               onAttendance={handleAttendance}
               onOpenRoster={() => setRosterOpen(true)}
               swapCount={dutySwaps.filter((w) => w.status === "대기" && w.targetId === profileIdByName(profilesAll, profile.name)).length}
@@ -1403,6 +1408,7 @@ export default function App() {
           {tab === "failure" && (
             <FailureTab
               attendances={attendances}
+              todayLeaves={todayLeaves}
               failures={failures}
               setFailures={setFailures}
               onDispatch={handleDispatchFailure}

@@ -1,5 +1,6 @@
 import { useState, useContext } from "react";
 import { ChevronLeft, ChevronRight, X, ArrowLeftRight } from "lucide-react";
+import { DutySwapSheet } from "@/app/components/DutySwapSheet";
 import { AuthContext } from "@/app/components/context";
 import { TODAY_STR } from "@/lib/constants";
 import { useHolidays } from "@/app/hooks/useHolidays";
@@ -83,6 +84,8 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
   const [busy, setBusy] = useState(false);
   const [genMode, setGenMode] = useState(null); // 근무제 선택 시트 (주5일 | 주4일)
   const { days: HOLIDAY } = useHolidays();
+  const [swapOpen, setSwapOpen] = useState(false);
+  const [onlyMine, setOnlyMine] = useState(false); // 기사: 내 근무만 보기
 
   // 이름 조회용은 전원, 담당자 선택은 당직 대상자 우선 정렬
   const roster = engineers.slice().sort((a, b) => (a.duty_order ?? 999) - (b.duty_order ?? 999));
@@ -146,6 +149,25 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
           <ChevronRight size={18} />
         </button>
       </div>
+
+      {role !== "admin" && !embedded && (
+        <div className="shrink-0 bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-2">
+          <button
+            onClick={() => setOnlyMine((v) => !v)}
+            className={`text-[11px] font-bold rounded-lg px-3 py-1.5 border ${
+              onlyMine ? "bg-blue-50 text-blue-700 border-blue-200" : "text-slate-500 border-slate-200"
+            }`}
+          >
+            {onlyMine ? "내 근무만" : "전체 보기"}
+          </button>
+          <button
+            onClick={() => setSwapOpen(true)}
+            className="ml-auto text-[11px] font-bold text-white bg-blue-700 rounded-lg px-3.5 py-1.5 flex items-center gap-1"
+          >
+            <ArrowLeftRight size={12} /> 근무 교환하기
+          </button>
+        </div>
+      )}
 
       {swapFrom && (
         <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between gap-2">
@@ -229,6 +251,10 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
                       const cell = cellOf(iso, kind);
                       // 정상근무는 배치가 없으면 기사 화면에서 숨긴다 (주5일제 표에선 늘 비어 있음)
                       if (kind === "정상근무" && !cell?.profileId && role !== "admin") return null;
+                      // '내 근무만' 켜면 남의 근무는 회색 점으로 축약해 내 일정이 눈에 띄게 한다
+                      if (onlyMine && cell?.profileId && cell.profileId !== selfId) {
+                        return <p key={kind} className="text-[9.5px] text-slate-200 px-0.5">·</p>;
+                      }
                       const mine = !!cell?.profileId && cell.profileId === selfId;
                       const isFrom = !!swapFrom && !!cell && swapFrom.id === cell.id;
                       return (
@@ -254,7 +280,7 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
 
         <p className="text-[10px] text-slate-400 mt-2.5 px-1 leading-relaxed">
           이름 옆 숫자는 기사 순번입니다.
-          {role === "admin" ? " 칸을 누르면 담당자를 바꿀 수 있습니다." : " 내 근무를 누른 뒤 바꿀 상대 근무를 누르면 교환을 요청합니다."}
+          {role === "admin" ? " 칸을 누르면 담당자를 바꿀 수 있습니다." : " 위 「근무 교환하기」로 목록에서 고르거나, 달력에서 내 근무 → 상대 근무를 눌러도 됩니다."}
         </p>
         {role === "admin" && inMonth.length > 0 && (
           <button
@@ -315,6 +341,15 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
             </button>
           </div>
         </div>
+      )}
+
+      {swapOpen && (
+        <DutySwapSheet
+          schedules={schedules}
+          swaps={swaps}
+          onRequestSwap={onRequestSwap}
+          onClose={() => setSwapOpen(false)}
+        />
       )}
 
       {picking && (
