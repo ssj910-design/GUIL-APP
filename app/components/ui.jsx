@@ -1,4 +1,5 @@
-import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft } from "lucide-react";
+import { useId } from "react";
+import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, MapPin } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
 
 
@@ -14,6 +15,7 @@ import { TODAY_STR } from "@/lib/constants";
  * 돌아오면 브라우저 히스토리가 꼬여 화면이 먹통이 되는 문제가 있었다.
  */
 export function MapLinkButtons({ site, className = "" }) {
+  const gradId = useId();
   if (!site || site.lat == null || site.lng == null) return null;
   const name = encodeURIComponent(site.name ?? "현장");
   const openKakao = (e) => {
@@ -28,19 +30,28 @@ export function MapLinkButtons({ site, className = "" }) {
     <span className={`shrink-0 flex items-center gap-1 ${className}`}>
       <button
         type="button"
-        onClick={openKakao}
-        aria-label="카카오맵으로 길찾기"
-        className="w-6 h-6 rounded-md bg-[#FEE500] text-black text-[10px] font-extrabold flex items-center justify-center active:opacity-80"
+        onClick={openTmap}
+        aria-label="티맵으로 길찾기"
+        className="w-6 h-6 rounded-[7px] bg-white border border-slate-200 flex items-center justify-center active:opacity-80"
       >
-        K
+        <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true">
+          <defs>
+            <linearGradient id={gradId} x1="2" y1="3" x2="22" y2="21" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#E4179A" />
+              <stop offset="0.55" stopColor="#6B4EE6" />
+              <stop offset="1" stopColor="#17C1A3" />
+            </linearGradient>
+          </defs>
+          <path fill={`url(#${gradId})`} d="M2 3h20v6h-7v12h-6V9H2V3z" />
+        </svg>
       </button>
       <button
         type="button"
-        onClick={openTmap}
-        aria-label="티맵으로 길찾기"
-        className="w-6 h-6 rounded-md bg-[#E6017C] text-white text-[10px] font-extrabold flex items-center justify-center active:opacity-80"
+        onClick={openKakao}
+        aria-label="카카오맵으로 길찾기"
+        className="w-6 h-6 rounded-[7px] bg-[#FEE500] flex items-center justify-center active:opacity-80"
       >
-        T
+        <MapPin size={14} className="text-[#1C5CDB]" fill="#1C5CDB" strokeWidth={0} />
       </button>
     </span>
   );
