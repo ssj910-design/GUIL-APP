@@ -154,16 +154,19 @@ export function RoomTab({ feed, onSendChat, onToggleLike }) {
                   <p className="text-[10px] text-slate-400">{p.time}</p>
                 </div>
               </div>
-              {p.text && <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap mb-2">{renderText(p.text)}</p>}
-              {(p.photoUrls ?? []).length > 0 && (
-                <div className={`grid gap-1.5 mb-2 ${p.photoUrls.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
-                  {p.photoUrls.map((u) =>
-                    isVideo(u)
-                      ? <video key={u} src={u} controls playsInline className="rounded-lg w-full" />
-                      : <img key={u} src={u} alt="첨부 사진" className="rounded-lg w-full object-cover aspect-square" onClick={() => setViewerUrl(u)} />
-                  )}
-                </div>
-              )}
+              <div className="flex items-start justify-between gap-2 mb-2">
+                {p.text && <p className="flex-1 min-w-0 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{renderText(p.text)}</p>}
+                {(p.photoUrls ?? []).length > 0 && (
+                  <button onClick={() => setViewerUrl(p.photoUrls[0])} className="relative shrink-0">
+                    {isVideo(p.photoUrls[0])
+                      ? <video src={p.photoUrls[0]} className="w-16 h-16 rounded-lg object-cover" />
+                      : <img src={p.photoUrls[0]} alt="첨부 사진" className="w-16 h-16 rounded-lg object-cover" />}
+                    {p.photoUrls.length > 1 && (
+                      <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] font-bold rounded px-1">{p.photoUrls.length}</span>
+                    )}
+                  </button>
+                )}
+              </div>
               <div className="flex items-center gap-4 pt-2 border-t border-slate-100">
                 <button onClick={() => onToggleLike?.(p.id)} className={`flex items-center gap-1 text-xs font-bold ${liked ? "text-blue-600" : "text-slate-500"}`}>
                   <ThumbsUp size={14} className={liked ? "fill-blue-600" : ""} /> 좋아요{likes.length > 0 ? ` ${likes.length}` : ""}
