@@ -99,39 +99,45 @@ export default function LeavesAdmin({ data, setData }) {
       {/* 사람별 잔여 */}
       <h2 className="text-sm font-extrabold text-slate-700 mb-1">{year}년 연차 현황</h2>
       <p className="text-[11px] text-slate-400 mb-2 leading-relaxed">
-        입사일 기준 자동 계산 (1년 미만 = 개근 개월당 1일·최대 11일 / 1년 이상 15일 / 3년부터 2년마다 +1일·상한 25일).
-        출근율 미달이나 특별휴가처럼 자동으로 알 수 없는 경우만 <b>가산·조정</b>에 값을 넣어 덮어씁니다.
+        연차 일수는 입사일에서 자동으로 계산됩니다. 다르게 줘야 할 사람만 그 칸에 숫자를 직접 적으면 됩니다.
       </p>
       <div className="mb-6">
-        <AdminTable head={["이름", "입사일", "근속", "자동 계산", "가산·조정", "부여", "사용", "잔여", ""]} minWidth="60rem">
+        <AdminTable head={["이름", "입사일 · 근속", "연차", "사용", "잔여", ""]} minWidth="44rem">
           {staff.map((p) => {
             const used = usedBy(p.id);
-            // 해당 연도 말일 기준으로 계산 — 그 해에 발생하는 연차를 보여준다
+            // 해당 연도 말일 기준 — 그 해에 발생하는 연차를 보여준다
             const asOf = `${year}-12-31`;
             const auto = annualLeaveDays(p.hire_date, asOf);
-            const manual = p.annual_leave_days;
-            const grant = manual ?? auto;               // 수동값이 있으면 그것이 최종 부여 일수
+            const manual = p.annual_leave_days;      // 직접 적은 값이 있으면 그게 최종
+            const grant = manual ?? auto;
             const left = grant == null ? null : grant - used;
             return (
               <tr key={p.id} className="border-b border-slate-50">
                 <td className="pl-5 pr-3 py-2.5 font-bold whitespace-nowrap">{p.name}</td>
-                <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">{p.hire_date ?? <span className="text-red-400">미입력</span>}</td>
-                <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">
-                  {p.hire_date ? `${Math.max(0, yearsOfService(p.hire_date, asOf))}년` : "-"}
+                <td className="px-3 py-2.5 whitespace-nowrap text-slate-500 text-[11px]">
+                  {p.hire_date
+                    ? <>{p.hire_date} · <b className="text-slate-600">{Math.max(0, yearsOfService(p.hire_date, asOf))}년차</b></>
+                    : <span className="text-red-400">입사일 미입력</span>}
                 </td>
-                <td className="px-3 py-2.5 whitespace-nowrap">
-                  {auto == null ? <span className="text-slate-300">-</span> : <span className="font-bold text-slate-600">{auto}일</span>}
+                {/* 자동값은 회색 힌트(placeholder)로 깔아두고, 직접 적으면 그 값이 최종이 된다 */}
+                <td className="px-3 py-2.5 w-40">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-16">
+                      <input className={`${inputCls} text-center ${manual != null ? "font-bold" : ""}`}
+                        inputMode="decimal" placeholder={auto != null ? String(auto) : "—"}
+                        defaultValue={manual ?? ""} key={String(manual)}
+                        onBlur={(e) => { if (e.target.value !== String(manual ?? "")) saveGrant(p, e.target.value.replace(/[^0-9.]/g, "")); }} />
+                    </div>
+                    <span className="text-[11px] text-slate-400 shrink-0">일</span>
+                    {manual != null && (
+                      <button onClick={() => saveGrant(p, "")} title={`자동값 ${auto ?? "-"}일로 되돌리기`}
+                        className="text-[10px] font-bold text-amber-600 bg-amber-50 rounded px-1.5 py-1 shrink-0">
+                        직접입력 ↺
+                      </button>
+                    )}
+                  </div>
                 </td>
-                <td className="px-3 py-2.5 w-28">
-                  <input className={inputCls} inputMode="decimal" placeholder="자동값 사용"
-                    defaultValue={manual ?? ""}
-                    onBlur={(e) => { if (e.target.value !== String(manual ?? "")) saveGrant(p, e.target.value.replace(/[^0-9.]/g, "")); }} />
-                </td>
-                <td className="px-3 py-2.5 whitespace-nowrap font-bold">
-                  {grant == null ? <span className="text-slate-300">-</span> : `${grant}일`}
-                  {manual != null && <span className="ml-1 text-[10px] font-bold text-amber-600">수동</span>}
-                </td>
-                <td className="px-3 py-2.5 whitespace-nowrap">{used}일</td>
+                <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">{used}일</td>
                 <td className="px-3 py-2.5">
                   {left == null ? <span className="text-slate-300">-</span>
                     : <StatusBadge tone={left <= 0 ? "slate" : left <= 3 ? "amber" : "green"}>{left}일</StatusBadge>}
