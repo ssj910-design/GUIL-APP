@@ -597,7 +597,8 @@ function FailureResponseCard({ f, onOpenDetail }) {
 }
 
 
-function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult }) {
+function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult, onRefuse }) {
+  const { name: me } = useContext(AuthContext);
   const stage = failureStage(f);
   const unitLabel = f.elevatorNo && !f.elevatorNo.includes("호기") ? `${f.elevatorNo}호기` : f.elevatorNo;
   return (
@@ -613,12 +614,22 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
       </button>
       <div className="px-3.5 pb-3.5">
         {stage === "pending" && (
-          <button
-            onClick={() => onDispatch(f)}
-            className="w-full bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800"
-          >
-            {f.assignee ? "출동 응답" : "내가 출동하기"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => onDispatch(f)}
+              className="flex-1 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800"
+            >
+              {f.assignee ? "출동 응답" : "내가 출동하기"}
+            </button>
+            {onRefuse && f.assignee === me && (
+              <button
+                onClick={() => onRefuse(f)}
+                className="shrink-0 text-xs font-bold text-red-500 border border-red-200 px-3 rounded-lg active:bg-red-50"
+              >
+                거부
+              </button>
+            )}
+          </div>
         )}
         {stage === "dispatched" && (
           <button
@@ -642,8 +653,9 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
 }
 
 
-export function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult }) {
+export function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult, onRefuse }) {
   const stage = failureStage(f);
+  const { name: me } = useContext(AuthContext);
   return (
     <div className="w-full flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
       <button type="button" onClick={() => onOpenDetail(f)} className="min-w-0 flex-1 text-left">
@@ -651,13 +663,24 @@ export function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenR
         <p className="text-[11px] text-slate-400 truncate">{f.errorCode}</p>
       </button>
       {stage === "pending" && (
-        <button
-          type="button"
-          onClick={() => onDispatch(f)}
-          className="shrink-0 bg-blue-700 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:bg-blue-800"
-        >
-          {f.assignee ? "출동 응답" : "내가 출동하기"}
-        </button>
+        <span className="shrink-0 flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => onDispatch(f)}
+            className="bg-blue-700 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:bg-blue-800"
+          >
+            {f.assignee ? "출동 응답" : "내가 출동하기"}
+          </button>
+          {onRefuse && f.assignee === me && (
+            <button
+              type="button"
+              onClick={() => onRefuse(f)}
+              className="text-[11px] font-bold text-red-500 border border-red-200 px-2 py-1.5 rounded-lg active:bg-red-50"
+            >
+              거부
+            </button>
+          )}
+        </span>
       )}
       {stage === "dispatched" && (
         <button
@@ -682,7 +705,7 @@ export function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenR
 }
 
 
-function FailureUnassignedList({ failures, onDispatch, onArrive, onResult }) {
+function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRefuse }) {
   const list = failures.filter((f) => !f.assignee && f.status === "미처리");
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
@@ -745,7 +768,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult }) {
 }
 
 
-function FailureProcessRegister({ failures, onDispatch, onArrive, onResult }) {
+function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [showDone, setShowDone] = useState(false);
   const [detailTarget, setDetailTarget] = useState(null);
@@ -765,7 +788,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult }) {
             <p className="text-xs text-slate-400 py-3">처리중인 고장이 없습니다</p>
           ) : (
             active.map((f) => (
-              <FailureActionCard
+              <FailureActionCard onRefuse={onRefuse}
                 key={f.id}
                 f={f}
                 onOpenDetail={setDetailTarget}
@@ -907,7 +930,7 @@ function FailureStatusOverview({ failures }) {
 }
 
 
-export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, toast }) {
+export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, toast }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
   const subTabs = ["접수등록", "미배정", "처리등록", "처리현황"];
@@ -933,10 +956,10 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
       </div>
       {subTab === "접수등록" && <FailureRegisterForm failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />}
       {subTab === "미배정" && (
-        <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} />
+        <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} />
       )}
       {subTab === "처리등록" && (
-        <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} />
+        <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} />
       )}
       {subTab === "처리현황" && <FailureStatusOverview failures={failures} />}
       <SmsToast message={toast} />

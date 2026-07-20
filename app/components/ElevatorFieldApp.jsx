@@ -404,6 +404,19 @@ export default function App() {
     setTimeout(() => setFailureToast(""), 3000);
   }
 
+  // ★ 출동 거부 — 배정 해제(미배정 환원) + 우리방에 관리자 멘션 알림 (동시 2건 배정 등 못 가는 상황용)
+  async function handleRefuseFailure(failure) {
+    const reason = window.prompt("출동을 거부하고 미배정으로 돌립니다.\n사유를 입력하세요 (선택)");
+    if (reason === null) return; // 취소
+    await supabase.from("failures").update({ assignee: null, ...(v2Ready ? { assignee_id: null } : {}) }).eq("id", failure.id);
+    setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, assignee: null } : x)));
+    const admins = profilesAll.filter((p) => p.role === "admin").map((p) => "@" + p.name).join(" ");
+    handleSendFeedPost(
+      `⚠️ ${profile.name}님이 ${failure.siteName} · ${failure.elevatorNo || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` — 사유: ${reason.trim()}` : ""}. 재배정이 필요합니다 ${admins}`.trim()
+    );
+    notifyFailure("출동 거부됨 — 미배정으로 이동, 관리자에게 알림");
+  }
+
   async function handleDispatchFailure(failure, etaMinutes) {
     const assignee = failure.assignee || profile.name;
     const dispatchedAt = new Date().toTimeString().slice(0, 5);
@@ -1022,6 +1035,7 @@ export default function App() {
               onDispatch={handleDispatchFailure}
               onArrive={handleArriveFailure}
               onResult={handleFailureResult}
+              onRefuse={handleRefuseFailure}
               toast={failureToast}
             />
           )}
@@ -1033,6 +1047,7 @@ export default function App() {
               onDispatch={handleDispatchFailure}
               onArrive={handleArriveFailure}
               onResult={handleFailureResult}
+              onRefuse={handleRefuseFailure}
               toast={failureToast}
             />
           )}

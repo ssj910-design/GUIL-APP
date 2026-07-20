@@ -80,10 +80,10 @@ function FailureHistoryDetailScreen({ site, failures, onBack }) {
 }
 
 
-export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, toast }) {
+export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, onRefuse, toast }) {
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
-  const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
+  const { name: CURRENT_ENGINEER, role, engineerNames } = useContext(AuthContext);
   const mySites = role === "admin" ? sites : sites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER);
   // 지원요청/운행정지는 각각 독립적으로 판단해 배지를 함께 표시합니다 (관리자 대시보드와 동일 기준).
   const openEscalations = failures.filter((f) => f.escalation && f.status !== "완료");
@@ -140,6 +140,42 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
 
   return (
     <div className="flex-1 overflow-y-auto pb-4 relative">
+      {/* 기사 현황판 — 관리자 전용: 누가 어디서 뭘 하는지 (진행중 고장 기준) */}
+      {role === "admin" && (
+        <div className="px-5 pt-4">
+          <h3 className="font-bold text-slate-800 text-sm mb-2">기사 현황판</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {engineerNames.map((name) => {
+              const act = failures.filter((f) => f.assignee === name && f.status === "진행중");
+              const cur = act[0];
+              const state = !act.length ? null : cur.arrivalTime ? "처리중" : "출동중";
+              return (
+                <div key={name} className="bg-white rounded-xl border border-slate-200 p-3">
+                  <div className="flex items-center justify-between gap-1">
+                    <p className="text-sm font-bold truncate">{name}</p>
+                    <span className={`shrink-0 text-[10px] font-bold rounded-full px-2 py-0.5 ${
+                      state === "출동중" ? "bg-amber-50 text-amber-600" : state === "처리중" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
+                    }`}>
+                      {state ?? "대기"}
+                    </span>
+                  </div>
+                  {cur ? (
+                    <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                      {cur.siteName} · {cur.elevatorNo}
+                      <br />
+                      {state === "출동중" ? `도착 예정 ${cur.etaMinutes ?? "?"}분` : `${cur.arrivalTime} 도착`}
+                      {act.length > 1 && <span className="text-slate-400"> 외 {act.length - 1}건</span>}
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 mt-1">진행 중 없음</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* 고장 처리 현황 */}
       <div className="px-5 pt-4">
         <h3 className="font-bold text-slate-800 text-sm mb-2">고장 처리 현황</h3>
@@ -157,6 +193,7 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
                 onDispatch={setDispatchTarget}
                 onArrive={setArriveTarget}
                 onOpenResult={setResultTarget}
+                onRefuse={onRefuse}
               />
             ))
           )}
