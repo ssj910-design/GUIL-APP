@@ -1,5 +1,4 @@
-import { useId } from "react";
-import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, MapPin } from "lucide-react";
+import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
 
 
@@ -10,12 +9,12 @@ import { TODAY_STR } from "@/lib/constants";
 /**
  * 카카오맵/티맵 길안내 버튼 — 현장 좌표(sites.lat/lng, 지오코딩으로 캐시)로 경로안내를 띄운다.
  * 좌표가 없으면 아무것도 그리지 않는다(주소만으로는 앱이 엉뚱한 곳을 잡는 경우가 있어서).
+ * 아이콘은 public/icons/tmap.png·kakaomap.png (실제 앱 아이콘).
  * 반드시 window.open(새 창/앱 전환)으로만 열고 현재 탭은 절대 이동시키지 않는다 —
  * 예전엔 window.location.href로 스킴을 직접 호출해서, 지도 앱에 갔다 뒤로가기로
  * 돌아오면 브라우저 히스토리가 꼬여 화면이 먹통이 되는 문제가 있었다.
  */
 export function MapLinkButtons({ site, className = "" }) {
-  const gradId = useId();
   if (!site || site.lat == null || site.lng == null) return null;
   const name = encodeURIComponent(site.name ?? "현장");
   const openKakao = (e) => {
@@ -28,30 +27,13 @@ export function MapLinkButtons({ site, className = "" }) {
   };
   return (
     <span className={`shrink-0 flex items-center gap-1 ${className}`}>
-      <button
-        type="button"
-        onClick={openTmap}
-        aria-label="티맵으로 길찾기"
-        className="w-6 h-6 rounded-[7px] bg-white border border-slate-200 flex items-center justify-center active:opacity-80"
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true">
-          <defs>
-            <linearGradient id={gradId} x1="2" y1="3" x2="22" y2="21" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="#E4179A" />
-              <stop offset="0.55" stopColor="#6B4EE6" />
-              <stop offset="1" stopColor="#17C1A3" />
-            </linearGradient>
-          </defs>
-          <path fill={`url(#${gradId})`} d="M2 3h20v6h-7v12h-6V9H2V3z" />
-        </svg>
+      <button type="button" onClick={openTmap} aria-label="티맵으로 길찾기" className="w-6 h-6 active:opacity-70">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/icons/tmap.png" alt="" className="w-full h-full rounded-[7px]" />
       </button>
-      <button
-        type="button"
-        onClick={openKakao}
-        aria-label="카카오맵으로 길찾기"
-        className="w-6 h-6 rounded-[7px] bg-[#FEE500] flex items-center justify-center active:opacity-80"
-      >
-        <MapPin size={14} className="text-[#1C5CDB]" fill="#1C5CDB" strokeWidth={0} />
+      <button type="button" onClick={openKakao} aria-label="카카오맵으로 길찾기" className="w-6 h-6 active:opacity-70">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/icons/kakaomap.png" alt="" className="w-full h-full rounded-[7px]" />
       </button>
     </span>
   );
