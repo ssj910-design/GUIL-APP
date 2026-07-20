@@ -1,8 +1,8 @@
-import { useState, useContext } from "react";
+import { Fragment, useState, useContext } from "react";
 import { ChevronRight, X, Plus, Search, PackageCheck, PackageX } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnits, unitIdFor, profileIdByName, parsePartQty } from "@/lib/utils";
-import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
+import { TODAY_STR, QUOTE_STAGES, KIT_PARTS } from "@/lib/constants";
 import { PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
@@ -269,32 +269,58 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack }) {
         {filtered.length === 0 ? (
           <p className="text-xs text-slate-400 text-center py-10">해당 조건의 견적 요청 내역이 없습니다</p>
         ) : (
-          filtered.map((q) => {
-            const { name, qty } = parsePartQty(q.constructionType);
-            return (
-              <button
-                key={q.id}
-                type="button"
-                onClick={() => setDetailTarget({ type: "quote", data: q })}
-                className="w-full text-left bg-white rounded-xl border border-slate-200 p-3"
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-slate-700">{q.siteName} · {name}{qty ? ` · ${qty}` : ""}</p>
-                  <span
-                    className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
-                      q.displayStage === "비용청구완료" ? "bg-slate-100 text-slate-500" :
-                      q.displayStage === "자재지급완료" ? "bg-emerald-100 text-emerald-700" :
-                      q.displayStage === "승인" ? "bg-indigo-100 text-indigo-700" :
-                      q.displayStage === "견적발행" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
-                    }`}
-                  >
-                    {q.displayStage === "비용청구완료" ? "비용청구 완료" : q.displayStage}
-                  </span>
+          filtered.map((q) => (
+            <button
+              key={q.id}
+              type="button"
+              onClick={() => setDetailTarget({ type: "quote", data: q })}
+              className="w-full text-left bg-white rounded-xl border border-slate-200 p-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  {q.photoUrls?.length > 0 ? (
+                    <img src={q.photoUrls[0]} alt="" className="w-11 h-11 rounded-lg object-cover border border-slate-200 shrink-0" />
+                  ) : (
+                    <div className="w-11 h-11 rounded-lg bg-slate-100 border border-slate-200 shrink-0" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-700 truncate">{q.siteName} · {q.constructionType}</p>
+                    <p className="text-[11px] text-slate-400">신청일 {q.requestedDate} · 사진 {q.photoCount}장</p>
+                  </div>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">신청일 {q.requestedDate}{q.suppliedDate ? ` · 지급일 ${q.suppliedDate}` : ""}</p>
-              </button>
-            );
-          })
+                <span
+                  className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
+                    q.displayStage === "비용청구완료" ? "bg-slate-100 text-slate-500" :
+                    q.displayStage === "자재지급완료" ? "bg-emerald-100 text-emerald-700" :
+                    q.displayStage === "승인" ? "bg-indigo-100 text-indigo-700" :
+                    q.displayStage === "견적발행" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+                  }`}
+                >
+                  {q.displayStage === "비용청구완료" ? "비용청구 완료" : q.displayStage}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 mt-2.5">
+                {QUOTE_STAGES.map((s, idx) => (
+                  <Fragment key={s}>
+                    {idx > 0 && <div className={`h-0.5 flex-1 ${QUOTE_STAGES.indexOf(q.status) >= idx ? "bg-blue-600" : "bg-slate-200"}`} />}
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${QUOTE_STAGES.indexOf(q.status) >= idx ? "bg-blue-600" : "bg-slate-200"}`} />
+                  </Fragment>
+                ))}
+              </div>
+              <div className="flex items-start mt-1">
+                {QUOTE_STAGES.map((s) => {
+                  const dateMap = { 요청접수: q.requestedDate, 견적발행: q.quoteIssuedDate, 승인: q.approvedDate, 자재지급완료: q.suppliedDate };
+                  const d = dateMap[s];
+                  return (
+                    <div key={s} className="flex-1 flex flex-col items-center gap-0.5 px-0.5 min-w-0">
+                      <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap leading-none">{s}</span>
+                      <span className="text-[9px] text-slate-300 whitespace-nowrap leading-none">{d ? d.slice(5).replace("-", "/") : "-"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </button>
+          ))
         )}
       </div>
 
@@ -625,7 +651,6 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
   }
 
   const myRequests = requests.filter((r) => r.engineer === CURRENT_ENGINEER && !isBilled(r.id));
-  const myQuotes = quoteRequests.filter((q) => q.engineer === CURRENT_ENGINEER && !isQuoteBilled(q.id));
   const quoteFormText = formatPartRows(quoteForm.parts);
   const quoteValid = quoteForm.siteId && quoteFormText && quoteForm.contactPhone && quoteForm.photos.length > 0;
 
@@ -951,31 +976,13 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
           </div>
 
           <div className="pt-4">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-bold text-slate-800 text-sm">나의 견적 요청 현황</h3>
-              <button onClick={() => setShowQuoteHistory(true)} className="text-xs font-bold text-blue-600 flex items-center gap-0.5">
-                전체보기 <ChevronRight size={12} />
-              </button>
-            </div>
-            <div className="space-y-2">
-              {myQuotes.map((q) => {
-                const { name, qty } = parsePartQty(q.constructionType);
-                return (
-                  <button
-                    key={q.id}
-                    type="button"
-                    onClick={() => setReqDetailTarget({ type: "quote", data: q })}
-                    className="w-full text-left bg-white rounded-xl border border-slate-200 p-3"
-                  >
-                    <p className="text-sm font-semibold text-slate-700">{q.siteName} · {name}{qty ? ` · ${qty}` : ""}</p>
-                    <p className="text-[11px] text-slate-400 mt-1">신청일 {q.requestedDate}{q.suppliedDate ? ` · 지급일 ${q.suppliedDate}` : ""}</p>
-                  </button>
-                );
-              })}
-              {myQuotes.length === 0 && (
-                <p className="text-xs text-slate-400 text-center py-4">견적 요청 내역이 없습니다</p>
-              )}
-            </div>
+            <button
+              onClick={() => setShowQuoteHistory(true)}
+              className="w-full flex items-center justify-between bg-white rounded-xl border border-slate-200 px-4 py-3"
+            >
+              <h3 className="font-bold text-slate-800 text-sm">나의 견적 요청 현황 전체보기</h3>
+              <ChevronRight size={16} className="text-blue-600" />
+            </button>
           </div>
         </div>
       )}
