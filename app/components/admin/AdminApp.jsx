@@ -4,7 +4,7 @@
 // v2 스키마(units, *_id FK)를 기본으로 사용한다. 데이터는 이 셸이 한 번에 로드해
 // 각 섹션에 props로 내린다 (모바일 App 셸과 같은 관례).
 import { useState, useEffect } from "react";
-import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, CalendarCheck, Users, LayoutDashboard, BarChart3, Menu } from "lucide-react";
+import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, CalendarCheck, Users, LayoutDashboard, BarChart3, Menu , Bell } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import {
   mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest,
@@ -20,6 +20,7 @@ import TodosAdmin from "@/app/components/admin/TodosAdmin";
 import SelfChecksAdmin from "@/app/components/admin/SelfChecksAdmin";
 import EngineersAdmin from "@/app/components/admin/EngineersAdmin";
 import StatsAdmin from "@/app/components/admin/StatsAdmin";
+import NotifySettings from "@/app/components/admin/NotifySettings";
 
 const MENU = [
   { id: "dashboard", label: "대시보드", icon: LayoutDashboard },
@@ -32,6 +33,7 @@ const MENU = [
   { id: "selfChecks", label: "자체점검", icon: CalendarCheck },
   { id: "engineers", label: "인사관리", icon: Users },
   { id: "stats", label: "통계", icon: BarChart3 },
+  { id: "notify", label: "알림 설정", icon: Bell },
 ];
 
 export default function AdminApp() {
@@ -136,6 +138,8 @@ export default function AdminApp() {
           <SelfChecksAdmin data={data} setData={setData} />
         ) : menu === "engineers" ? (
           <EngineersAdmin data={data} setData={setData} sub={hrSub} onSub={setHrSub} />
+        ) : menu === "notify" ? (
+          <NotifySettings />
         ) : menu === "stats" ? (
           <StatsAdmin data={data} />
         ) : (

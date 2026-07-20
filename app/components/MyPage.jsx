@@ -1,9 +1,10 @@
 import { useState, useEffect, useContext } from "react";
-import { X, LogOut, CalendarDays, Clock, Plane, Plus } from "lucide-react";
+import { X, LogOut, CalendarDays, Clock, Plane, Plus, Bell } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { AuthContext } from "@/app/components/context";
 import { TODAY_STR } from "@/lib/constants";
 import { annualLeaveDays, yearsOfService } from "@/lib/leave";
+import { forRole, GROUPS, LEVELS, isEnabled, levelOf } from "@/lib/notifications";
 
 const KIND_TONE = { 당직: "bg-emerald-50 text-emerald-700", 숙직: "bg-blue-50 text-blue-700", 정상근무: "bg-violet-50 text-violet-500" };
 
@@ -17,6 +18,9 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
   const [applying, setApplying] = useState(false);
   const [form, setForm] = useState({ kind: "연차", start: TODAY_STR, end: TODAY_STR, note: "" });
   const [busy, setBusy] = useState(false);
+  const [orgSettings, setOrgSettings] = useState({});
+  const [prefs, setPrefs] = useState(me.notify_prefs ?? {});
+  const [notifOpen, setNotifOpen] = useState(false);
 
   const year = TODAY_STR.slice(0, 4);
   useEffect(() => {
@@ -26,6 +30,23 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
       .order("start_date", { ascending: false })
       .then(({ data }) => setLeaves(data ?? []));
   }, [selfId, year]);
+
+  // 회사에서 켜둔 알림만 개인이 조절할 수 있다
+  useEffect(() => {
+    supabase.from("notify_settings").select("*").then(({ data }) => {
+      const m = {};
+      for (const r of data ?? []) m[r.key] = { enabled: r.enabled, level: r.level };
+      setOrgSettings(m);
+    });
+  }, []);
+
+  async function toggleNotify(item, next) {
+    const nextPrefs = { ...prefs, [item.key]: next };
+    setPrefs(nextPrefs);
+    await supabase.from("profiles").update({ notify_prefs: nextPrefs }).eq("id", selfId);
+  }
+
+  const myNotifs = forRole(role).filter((n) => orgSettings[n.key]?.enabled !== false);
 
   const today = attendances.find((a) => a.profileId === selfId);
   const hhmm = (iso) => (iso ? new Date(iso).toTimeString().slice(0, 5) : null);
@@ -249,6 +270,53 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
                 </div>
               )}
 
+        </Card>
+
+        {/* 알림 설정 — 회사가 켜둔 것 중에서 본인이 끌 수 있다 */}
+        <Card
+          icon={<Bell size={13} />}
+          title="알림 설정"
+          extra={
+            <button onClick={() => setNotifOpen((v) => !v)} className="text-[11px] font-bold text-blue-700">
+              {notifOpen ? "접기" : `${myNotifs.filter((n) => isEnabled(n, orgSettings, prefs)).length}/${myNotifs.length}종 받는 중`}
+            </button>
+          }
+        >
+          {!notifOpen ? (
+            <p className="text-xs text-slate-400">받고 싶지 않은 알림은 꺼둘 수 있습니다</p>
+          ) : (
+            <div className="space-y-3">
+              {GROUPS.filter((g) => myNotifs.some((n) => n.group === g)).map((g) => (
+                <div key={g}>
+                  <p className="text-[10px] font-extrabold text-slate-400 mb-1">{g}</p>
+                  <div className="space-y-1">
+                    {myNotifs.filter((n) => n.group === g).map((n) => {
+                      const enabled = isEnabled(n, orgSettings, prefs);
+                      const lv = levelOf(n, orgSettings);
+                      return (
+                        <div key={n.key} className="flex items-center justify-between gap-2 py-1">
+                          <p className="text-[11px] text-slate-600 min-w-0">
+                            {n.label}
+                            <span className={`ml-1.5 text-[9px] font-bold rounded px-1 py-0.5 border ${LEVELS[lv].tone}`}>{LEVELS[lv].label}</span>
+                          </p>
+                          <button
+                            onClick={() => toggleNotify(n, !enabled)}
+                            className={`shrink-0 relative w-9 h-5 rounded-full transition-colors ${enabled ? "bg-blue-600" : "bg-slate-200"}`}
+                            aria-label={`${n.label} ${enabled ? "끄기" : "켜기"}`}
+                          >
+                            <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${enabled ? "left-[18px]" : "left-0.5"}`} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              <p className="text-[10px] text-slate-400 leading-relaxed pt-1 border-t border-slate-100">
+                아직 실제 푸시 알림은 나가지 않습니다(준비 중). 지금은 앱 안에서만 표시됩니다.
+              </p>
+            </div>
+          )}
         </Card>
 
         <button onClick={signOut}
