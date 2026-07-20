@@ -439,7 +439,7 @@ const ETA_OPTIONS = Array.from({ length: 12 }, (_, i) => (i + 1) * 10);
 
 
 // 관리자용 기사 배정 시트 — 기사별 현재 상태(출동중/처리중) 배지와 함께 선택
-export function AssignEngineerSheet({ failure, failures, onAssign, onClose }) {
+export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allowUnassign }) {
   const { engineerNames } = useContext(AuthContext);
   const statusOf = (name) => {
     const act = failures.filter((f) => f.assignee === name && f.status === "진행중");
@@ -448,7 +448,16 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose }) {
   };
   return (
     <Sheet title={`기사 배정 — ${failure.siteName} · ${failure.elevatorNo || "호기 미상"}`} onClose={onClose}>
+      {failure.assignee && <p className="text-xs text-slate-500 mb-2">현재 배정: <b>{failure.assignee}</b> — 재배정하면 출동 기록이 초기화되고 미처리로 돌아갑니다</p>}
       <div className="grid grid-cols-2 gap-2 pb-2">
+        {allowUnassign && (
+          <button
+            onClick={() => { onAssign(failure, null); onClose(); }}
+            className="py-3 rounded-xl text-sm font-bold border text-red-500 border-red-200 bg-white active:bg-red-50"
+          >
+            미배정으로
+          </button>
+        )}
         {engineerNames.map((name) => {
           const st = statusOf(name);
           return (
@@ -925,9 +934,10 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
 }
 
 
-function FailureStatusOverview({ failures }) {
-  const { name: CURRENT_ENGINEER } = useContext(AuthContext);
+function FailureStatusOverview({ failures, onReassign }) {
+  const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
+  const [reassignTarget, setReassignTarget] = useState(null);
   const mine = failures.filter((f) => f.assignee === CURRENT_ENGINEER);
   const myDone = mine.filter((f) => f.status === "완료").length;
   const myUndone = mine.filter((f) => f.status !== "완료").length;
@@ -961,29 +971,38 @@ function FailureStatusOverview({ failures }) {
           <p className="text-xs text-slate-400 text-center py-10">고장 접수 이력이 없습니다</p>
         ) : (
           failures.map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setDetailTarget(f)}
-              className="w-full text-left bg-white rounded-xl border border-slate-200 p-3.5 active:bg-slate-50"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <p className="font-bold text-slate-800 text-sm">{f.siteName} · {f.elevatorNo}</p>
-                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${statusColor[f.status]}`}>{f.status}</span>
-              </div>
-              <p className="text-xs text-slate-500">{f.errorCode}</p>
-              <p className="text-[11px] text-slate-400 mt-1">{f.reportedAt} 접수 · {f.assignee ?? "미배정"}</p>
-            </button>
+            <div key={f.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
+              <button onClick={() => setDetailTarget(f)} className="w-full text-left active:opacity-70">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="font-bold text-slate-800 text-sm">{f.siteName} · {f.elevatorNo}</p>
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${statusColor[f.status]}`}>{f.status}</span>
+                </div>
+                <p className="text-xs text-slate-500">{f.errorCode}</p>
+                <p className="text-[11px] text-slate-400 mt-1">{f.reportedAt} 접수 · {f.assignee ?? "미배정"}</p>
+              </button>
+              {role === "admin" && f.status !== "완료" && f.assignee && (
+                <button
+                  onClick={() => setReassignTarget(f)}
+                  className="mt-2 text-[11px] font-bold text-blue-700 border border-blue-200 rounded-lg px-2.5 py-1.5 active:bg-blue-50"
+                >
+                  재배정
+                </button>
+              )}
+            </div>
           ))
         )}
       </div>
 
       {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} />}
+      {reassignTarget && (
+        <AssignEngineerSheet failure={reassignTarget} failures={failures} onAssign={onReassign} onClose={() => setReassignTarget(null)} allowUnassign />
+      )}
     </div>
   );
 }
 
 
-export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, toast }) {
+export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, toast }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
   const subTabs = ["접수등록", "미배정", "처리등록", "처리현황"];
@@ -1014,7 +1033,7 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
       {subTab === "처리등록" && (
         <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} />
       )}
-      {subTab === "처리현황" && <FailureStatusOverview failures={failures} />}
+      {subTab === "처리현황" && <FailureStatusOverview failures={failures} onReassign={onReassign} />}
       <SmsToast message={toast} />
     </div>
   );

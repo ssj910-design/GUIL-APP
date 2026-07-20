@@ -415,6 +415,26 @@ export default function App() {
     notifyFailure(`${engineerName}에게 배정 완료`);
   }
 
+  // ★ 관리자 재배정 — 잘못 배정·중복 출동 정정용. 진행 상태를 미처리로 되돌리고 새 기사(또는 미배정)로
+  async function handleReassignFailure(failure, engineerName) {
+    const { data: ok } = await supabase.from("failures")
+      .update({
+        assignee: engineerName || null,
+        dispatched_at: null,
+        eta_minutes: null,
+        arrival_time: null,
+        status: "미처리",
+        ...(v2Ready ? { assignee_id: engineerName ? profileIdByName(profilesAll, engineerName) : null } : {}),
+      })
+      .eq("id", failure.id).neq("status", "완료")
+      .select();
+    if (!ok?.length) { alert("이미 완료된 건은 재배정할 수 없습니다."); return; }
+    setFailures((prev) => prev.map((x) => (x.id === failure.id
+      ? { ...x, assignee: engineerName || null, dispatchedAt: null, etaMinutes: null, arrivalTime: null, status: "미처리" }
+      : x)));
+    notifyFailure(engineerName ? `${engineerName}(으)로 재배정 완료` : "미배정으로 되돌림");
+  }
+
   // ★ 출동 거부 — 배정 해제(미배정 환원) + 우리방에 관리자 멘션 알림 (동시 2건 배정 등 못 가는 상황용)
   async function handleRefuseFailure(failure) {
     const reason = window.prompt("출동을 거부하고 미배정으로 돌립니다.\n사유를 입력하세요 (선택)");
@@ -1143,6 +1163,7 @@ export default function App() {
               onResult={handleFailureResult}
               onRefuse={handleRefuseFailure}
               onAssign={handleAssignFailure}
+              onReassign={handleReassignFailure}
               toast={failureToast}
             />
           )}
