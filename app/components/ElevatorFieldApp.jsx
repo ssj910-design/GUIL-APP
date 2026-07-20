@@ -12,12 +12,12 @@ import { SitesContext, UnitsContext, AuthContext } from "@/app/components/contex
 import { LoginScreen } from "@/app/components/LoginScreen";
 import { SiteTab } from "@/app/components/tabs/SiteTab";
 import { HomeTab } from "@/app/components/tabs/HomeTab";
-import { FailureTab } from "@/app/components/tabs/FailureTab";
+import { FailureTab, FailureDetailSheet, DispatchEtaModal, ArrivalTimeModal, ArrivalResultModal } from "@/app/components/tabs/FailureTab";
 import { CheckupTab } from "@/app/components/tabs/CheckupTab";
 import { InspectionTab } from "@/app/components/tabs/InspectionTab";
 import { MaterialTab } from "@/app/components/tabs/MaterialTab";
 import { BillingTab } from "@/app/components/tabs/BillingTab";
-import { TodoTab } from "@/app/components/tabs/TodoTab";
+import { TodoTab, TodoDetailSheet, getRequesterName, getCoAssignees, getSupplyPhotos } from "@/app/components/tabs/TodoTab";
 import { AdminTab } from "@/app/components/tabs/AdminTab";
 import { RoomTab } from "@/app/components/tabs/RoomTab";
 
@@ -115,8 +115,11 @@ export default function App() {
   const [roomOpen, setRoomOpen] = useState(false); // 우리방 — 탭이 아니라 플로팅 버튼으로 어디서든 연다
   const [feedReadAt, setFeedReadAt] = useState(null); // 이번 세션에서 우리방을 마지막으로 읽은 시각
   const [notifOpen, setNotifOpen] = useState(false); // 우측상단 알림(종) 드롭다운
-  const [openFailureId, setOpenFailureId] = useState(null); // 알림에서 특정 고장 건을 눌러 상세로 바로 이동
-  const [openTodoId, setOpenTodoId] = useState(null); // 알림에서 특정 할일을 눌러 상세로 바로 이동
+  const [openFailureId, setOpenFailureId] = useState(null); // 알림에서 특정 고장 건을 눌러 상세를 바로 연다 (탭 이동 없이 현재 화면 위에 띄움)
+  const [openTodoId, setOpenTodoId] = useState(null); // 알림에서 특정 할일을 눌러 상세를 바로 연다
+  const [notifDispatchTarget, setNotifDispatchTarget] = useState(null);
+  const [notifArriveTarget, setNotifArriveTarget] = useState(null);
+  const [notifResultTarget, setNotifResultTarget] = useState(null);
 
   // SKIP_LOGIN 상태에서도 ?auth=1 이면 실제 로그인 흐름을 강제한다 (인증/회원가입 사전 점검용).
   const [forceAuth, setForceAuth] = useState(false);
@@ -1091,7 +1094,7 @@ export default function App() {
                               {notifFailures.map((f) => (
                                 <NotifRow
                                   key={f.id}
-                                  onClick={() => { setNotifOpen(false); setTab("failure"); setOpenFailureId(f.id); }}
+                                  onClick={() => { setNotifOpen(false); setOpenFailureId(f.id); }}
                                   onDismiss={() => handleDismissNotif("fail:" + f.id)}
                                   title={`${f.siteName} · ${f.elevatorNo}`}
                                   subtitle={`${f.errorCode} · ${f.assignee ? "출동 대기" : "미배정"}`}
@@ -1105,7 +1108,7 @@ export default function App() {
                               {notifTodos.map((t) => (
                                 <NotifRow
                                   key={t.id}
-                                  onClick={() => { setNotifOpen(false); setTab("todo"); setOpenTodoId(t.id); }}
+                                  onClick={() => { setNotifOpen(false); setOpenTodoId(t.id); }}
                                   onDismiss={() => handleDismissNotif("todo:" + t.id)}
                                   title={t.title}
                                   subtitle={
@@ -1205,8 +1208,6 @@ export default function App() {
               onAssign={handleAssignFailure}
               onReassign={handleReassignFailure}
               toast={failureToast}
-              openFailureId={openFailureId}
-              onOpenFailureHandled={() => setOpenFailureId(null)}
             />
           )}
           {tab === "checkup" && <CheckupTab selfChecks={selfChecks} setSelfChecks={setSelfChecks} siteManagers={siteManagers} profilesAll={profilesAll} />}
@@ -1221,8 +1222,6 @@ export default function App() {
               onUpdateTodoDescription={handleUpdateTodoDescription}
               materialRequests={materialRequests}
               quoteRequests={quoteRequests}
-              openTodoId={openTodoId}
-              onOpenTodoHandled={() => setOpenTodoId(null)}
             />
           )}
           {tab === "room" && <RoomTab
@@ -1281,6 +1280,59 @@ export default function App() {
               </div>
             </div>
           )}
+
+          {/* 알림(종)에서 특정 건을 눌렀을 때 — 탭 이동 없이 지금 화면 위에 상세만 띄운다 */}
+          {openFailureId && (() => {
+            const f = failures.find((x) => x.id === openFailureId);
+            if (!f) return null;
+            return (
+              <FailureDetailSheet
+                failure={f}
+                onClose={() => setOpenFailureId(null)}
+                onDispatch={setNotifDispatchTarget}
+                onArrive={setNotifArriveTarget}
+                onOpenResult={setNotifResultTarget}
+              />
+            );
+          })()}
+          {notifDispatchTarget && (
+            <DispatchEtaModal
+              failure={notifDispatchTarget}
+              onClose={() => setNotifDispatchTarget(null)}
+              onConfirm={(eta) => { handleDispatchFailure(notifDispatchTarget, eta); setNotifDispatchTarget(null); }}
+            />
+          )}
+          {notifArriveTarget && (
+            <ArrivalTimeModal
+              failure={notifArriveTarget}
+              onClose={() => setNotifArriveTarget(null)}
+              onConfirm={(time) => { handleArriveFailure(notifArriveTarget, time); setNotifArriveTarget(null); }}
+            />
+          )}
+          {notifResultTarget && (
+            <ArrivalResultModal
+              failure={notifResultTarget}
+              onClose={() => setNotifResultTarget(null)}
+              onConfirm={(result) => { handleFailureResult(notifResultTarget, result); setNotifResultTarget(null); }}
+            />
+          )}
+          {openTodoId && (() => {
+            const t = todos.find((x) => x.id === openTodoId);
+            if (!t) return null;
+            return (
+              <TodoDetailSheet
+                todo={t}
+                requester={getRequesterName(t, materialRequests, quoteRequests)}
+                coAssignees={getCoAssignees(t, todos)}
+                supplyPhotoUrls={getSupplyPhotos(t, materialRequests, quoteRequests)}
+                onToggle={t.source === "manual" && !t.done ? handleAdminToggleTodo : null}
+                onReassign={handleReassignTodo}
+                engineerNames={engineerNames}
+                onUpdateDescription={profile.role === "admin" ? handleUpdateTodoDescription : null}
+                onClose={() => setOpenTodoId(null)}
+              />
+            );
+          })()}
 
           {/* bottom nav — 기존 형태(전체 탭 가로 스크롤), 팀 합의로 원복 (2026-07-17) */}
           <div

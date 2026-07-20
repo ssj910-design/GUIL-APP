@@ -1,4 +1,4 @@
-import { useState, useContext, useEffect } from "react";
+import { useState, useContext } from "react";
 import { ListTodo, Check, CheckCircle2, Search, Lock, Image as ImageIcon, Download } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { addDays, formatShortDate } from "@/lib/utils";
@@ -20,14 +20,14 @@ function confirmToggle(done) {
 
 // 자재/견적 신청 시점의 신청자 이름을 찾아옵니다. 지급완료 시 실제 담당자를 신청자와
 // 다르게 지정할 수 있어(★ 담당자 재배정 기능), 요청자와 담당자가 다를 수 있습니다.
-function getRequesterName(todo, materialRequests, quoteRequests) {
+export function getRequesterName(todo, materialRequests, quoteRequests) {
   if (todo.source === "material") return materialRequests?.find((r) => r.id === todo.materialRequestId)?.engineer ?? null;
   if (todo.source === "quote") return quoteRequests?.find((q) => q.id === todo.quoteRequestId)?.engineer ?? null;
   return "관리자";
 }
 
 // 같은 견적/자재 요청에 연결된 다른 담당자의 할 일(공동 담당)을 찾습니다.
-function getCoAssignees(todo, todos) {
+export function getCoAssignees(todo, todos) {
   if (!todo.quoteRequestId && !todo.materialRequestId) return [];
   return todos
     .filter(
@@ -40,7 +40,7 @@ function getCoAssignees(todo, todos) {
 }
 
 // 연결된 자재/견적 신청에 자재 담당자가 등록한 지급 사진을 찾아옵니다.
-function getSupplyPhotos(todo, materialRequests, quoteRequests) {
+export function getSupplyPhotos(todo, materialRequests, quoteRequests) {
   if (todo.source === "material") return materialRequests?.find((r) => r.id === todo.materialRequestId)?.supplyPhotoUrls ?? [];
   if (todo.source === "quote") return quoteRequests?.find((q) => q.id === todo.quoteRequestId)?.supplyPhotoUrls ?? [];
   return [];
@@ -60,20 +60,11 @@ function TodoCheckbox({ done, locked, onClick }) {
   return <button type="button" onClick={onClick} className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />;
 }
 
-export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescription, materialRequests, quoteRequests, openTodoId, onOpenTodoHandled }) {
+export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescription, materialRequests, quoteRequests }) {
   const { name: CURRENT_ENGINEER, engineerNames, role } = useContext(AuthContext);
   const [showDone, setShowDone] = useState(false);
   const [detailTarget, setDetailTarget] = useState(null);
   const mine = todos.filter((t) => t.assignee === CURRENT_ENGINEER);
-
-  // 알림(종)에서 들어온 특정 할일 상세를 자동으로 연다.
-  useEffect(() => {
-    if (!openTodoId) return;
-    const t = mine.find((x) => x.id === openTodoId);
-    if (!t) return;
-    setDetailTarget(t);
-    onOpenTodoHandled?.();
-  }, [openTodoId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function completeManualTodo(id) {
     await supabase.from("todos").update({ done: true }).eq("id", id);
@@ -174,7 +165,7 @@ function TodoRow({ t, onToggle, onOpenDetail }) {
 }
 
 
-function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhotoUrls = [], onToggle, onReassign, engineerNames, onUpdateDescription, onClose }) {
+export function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhotoUrls = [], onToggle, onReassign, engineerNames, onUpdateDescription, onClose }) {
   const [descDraft, setDescDraft] = useState(todo.description ?? "");
   const [editingDesc, setEditingDesc] = useState(false);
   const sourceLabel = todo.source === "manual" ? "관리자 부여" : todo.source === "quote" ? "견적 연동" : "자재 연동";

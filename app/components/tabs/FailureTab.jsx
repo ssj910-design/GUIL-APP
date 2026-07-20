@@ -1,4 +1,4 @@
-import { useState, useContext, useEffect } from "react";
+import { useState, useContext } from "react";
 import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone } from "@/lib/utils";
@@ -763,22 +763,13 @@ export function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenR
 }
 
 
-function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, openFailureId, onOpenFailureHandled }) {
+function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign }) {
   const [assignTarget, setAssignTarget] = useState(null);
   const list = failures.filter((f) => !f.assignee && f.status === "미처리");
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [resultTarget, setResultTarget] = useState(null);
   const [arriveTarget, setArriveTarget] = useState(null);
-
-  // 알림(종)에서 들어온 특정 고장 건 상세를 자동으로 연다.
-  useEffect(() => {
-    if (!openFailureId) return;
-    const f = list.find((x) => x.id === openFailureId);
-    if (!f) return;
-    setDetailTarget(f);
-    onOpenFailureHandled?.();
-  }, [openFailureId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -839,7 +830,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
 }
 
 
-function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse, openFailureId, onOpenFailureHandled }) {
+function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [showDone, setShowDone] = useState(false);
   const [detailTarget, setDetailTarget] = useState(null);
@@ -849,15 +840,6 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
   const mine = failures.filter((f) => f.assignee === CURRENT_ENGINEER);
   const active = mine.filter((f) => f.status !== "완료");
   const done = mine.filter((f) => f.status === "완료");
-
-  // 알림(종)에서 들어온 특정 고장 건 상세를 자동으로 연다.
-  useEffect(() => {
-    if (!openFailureId) return;
-    const f = mine.find((x) => x.id === openFailureId);
-    if (!f) return;
-    setDetailTarget(f);
-    onOpenFailureHandled?.();
-  }, [openFailureId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -1020,21 +1002,13 @@ function FailureStatusOverview({ failures, onReassign }) {
 }
 
 
-export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, toast, openFailureId, onOpenFailureHandled }) {
+export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, toast }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
   const subTabs = ["접수등록", "미배정", "처리등록", "처리현황"];
   const unassignedCount = failures.filter((f) => !f.assignee && f.status === "미처리").length;
   const waitingCount = failures.filter((f) => f.assignee === CURRENT_ENGINEER && f.status === "미처리").length;
   const badgeCount = { 미배정: unassignedCount, 처리등록: waitingCount };
-
-  // 알림(종)에서 특정 고장 건을 눌러 들어온 경우 — 배정 여부에 맞는 탭으로 이동한다.
-  useEffect(() => {
-    if (!openFailureId) return;
-    const f = failures.find((x) => x.id === openFailureId);
-    if (!f) return;
-    setSubTab(f.assignee ? "처리등록" : "미배정");
-  }, [openFailureId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -1054,10 +1028,10 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
       </div>
       {subTab === "접수등록" && <FailureRegisterForm failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />}
       {subTab === "미배정" && (
-        <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} openFailureId={openFailureId} onOpenFailureHandled={onOpenFailureHandled} />
+        <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} />
       )}
       {subTab === "처리등록" && (
-        <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} openFailureId={openFailureId} onOpenFailureHandled={onOpenFailureHandled} />
+        <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} />
       )}
       {subTab === "처리현황" && <FailureStatusOverview failures={failures} onReassign={onReassign} />}
       <SmsToast message={toast} />
