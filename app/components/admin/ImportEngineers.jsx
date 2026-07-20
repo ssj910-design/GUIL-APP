@@ -96,7 +96,7 @@ export default function ImportEngineers({ data, setData, onClose }) {
       await supabase.from("profiles").update(u.fields).eq("id", u.id);
     }
     const { data: fresh } = await supabase.from("profiles")
-      .select("id,name,role,phone,email,region,auth_user_id,minwon_id,duty_order,member_type,tel,join_status,joined_at,approved_at,edu_cert_no")
+      .select("*")
       .order("name");
     setData((prev) => ({ ...prev, profiles: fresh ?? prev.profiles }));
     setDone({ added: insertRows.length, updated: plan.update.length });

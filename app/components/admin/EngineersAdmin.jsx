@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { StatusBadge, AdminTable, inputCls } from "@/app/components/admin/adminShared";
 import ImportEngineers from "@/app/components/admin/ImportEngineers";
 
-function EngineerRow({ p, stats, onSave }) {
+function EngineerRow({ p, stats, onSave, onToggleDuty, onDelete }) {
   const [form, setForm] = useState({ phone: p.phone ?? "", email: p.email ?? "", region: p.region ?? "", minwonId: p.minwon_id ?? "", dutyOrder: p.duty_order ?? "" });
   const dirty = form.phone !== (p.phone ?? "") || form.email !== (p.email ?? "") || form.region !== (p.region ?? "") || form.minwonId !== (p.minwon_id ?? "") || String(form.dutyOrder) !== String(p.duty_order ?? "");
   return (
@@ -16,9 +16,14 @@ function EngineerRow({ p, stats, onSave }) {
       <td className="px-3 py-2.5 w-48"><input className={inputCls} placeholder="이메일" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></td>
       <td className="px-3 py-2.5 w-28"><input className={inputCls} placeholder="담당지역" value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} /></td>
       <td className="px-3 py-2.5 w-32"><input className={inputCls} placeholder="민원24 점검자 ID" value={form.minwonId} onChange={(e) => setForm({ ...form, minwonId: e.target.value })} /></td>
-      <td className="px-3 py-2.5 w-20">
-        <input className={inputCls} inputMode="numeric" placeholder="순번" value={form.dutyOrder}
-          onChange={(e) => setForm({ ...form, dutyOrder: e.target.value.replace(/[^0-9]/g, "") })} />
+      <td className="px-3 py-2.5 w-32 whitespace-nowrap">
+        <div className="flex items-center gap-1.5">
+          <input type="checkbox" checked={p.duty_enabled !== false} onChange={(e) => onToggleDuty(p, e.target.checked)}
+            className="w-4 h-4 accent-blue-700" title="당직·숙직 대상" />
+          <input className={`${inputCls} w-14`} inputMode="numeric" placeholder="순번"
+            disabled={p.duty_enabled === false} value={form.dutyOrder}
+            onChange={(e) => setForm({ ...form, dutyOrder: e.target.value.replace(/[^0-9]/g, "") })} />
+        </div>
       </td>
       <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">{p.member_type ?? "-"}</td>
       <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">{p.tel ?? "-"}</td>
@@ -35,10 +40,14 @@ function EngineerRow({ p, stats, onSave }) {
       <td className="px-3 py-2.5">
         {p.auth_user_id ? <StatusBadge tone="green">계정 연결됨</StatusBadge> : <StatusBadge tone="slate">계정 없음</StatusBadge>}
       </td>
-      <td className="px-3 py-2.5 text-right pr-4">
+      <td className="px-3 py-2.5 text-right pr-4 whitespace-nowrap">
         <button disabled={!dirty} onClick={() => onSave(p, form)}
           className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-3 py-1.5">
           저장
+        </button>
+        <button onClick={() => onDelete(p)}
+          className="ml-1.5 text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">
+          삭제
         </button>
       </td>
     </tr>
@@ -48,7 +57,7 @@ function EngineerRow({ p, stats, onSave }) {
 export default function EngineersAdmin({ data, setData }) {
   const { profiles, sites, failures, todos } = data;
   // 순번(당직·숙직 근무표 배정 순서)대로 정렬 — 순번 없는 사람은 뒤로
-  const engineers = profiles.filter((p) => p.role === "engineer")
+  const engineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false)
     .slice().sort((a, b) => (a.duty_order ?? 999) - (b.duty_order ?? 999));
   const [newName, setNewName] = useState("");
   const [newOrder, setNewOrder] = useState("");
@@ -77,6 +86,20 @@ export default function EngineersAdmin({ data, setData }) {
     };
   }
 
+  // 삭제는 실제 행 제거가 아니라 비활성 처리 — 고장·할일·자체점검이 이 프로필을 참조하고 있어
+  // 진짜 지우면 과거 기록의 담당자가 사라진다.
+  async function remove(p) {
+    if (!confirm(`${p.name} 님을 인사 목록에서 제외할까요?\n\n과거 기록(고장·할일·점검)의 담당자 표기는 그대로 남고, 목록과 배정 대상에서만 빠집니다.`)) return;
+    const { error } = await supabase.from("profiles").update({ is_active: false, duty_enabled: false }).eq("id", p.id);
+    if (error) { alert("제외 실패: " + error.message); return; }
+    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, is_active: false, duty_enabled: false } : x)) }));
+  }
+
+  async function toggleDuty(p, on) {
+    await supabase.from("profiles").update({ duty_enabled: on }).eq("id", p.id);
+    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, duty_enabled: on } : x)) }));
+  }
+
   async function save(p, form) {
     await supabase.from("profiles").update({
       phone: form.phone || null, email: form.email || null, region: form.region || null,
@@ -89,7 +112,7 @@ export default function EngineersAdmin({ data, setData }) {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <h1 className="text-xl font-extrabold mb-1">인사관리</h1>
       <p className="text-xs text-slate-500 mb-4">
         계정 연결 = 로그인 계정과 연결된 프로필 (Phase 2에서 가입 시 자동 연결). 민원24 ID = 공단에 등록된 점검자 ID — 자체점검 자동 보고(SELCHK_USID)에 사용됩니다.
@@ -115,9 +138,9 @@ export default function EngineersAdmin({ data, setData }) {
         <p className="text-[11px] text-slate-400 ml-auto max-w-xs text-right">순번 = 당직·숙직 근무표 자동 배정 순서. 당직을 서는 사람만 채우세요.</p>
       </div>
       {importing && <ImportEngineers data={data} setData={setData} onClose={() => setImporting(false)} />}
-      <AdminTable head={["이름", "휴대폰", "이메일", "담당지역", "아이디(민원24)", "순번", "회원구분", "연락처", "가입상태", "가입일/승인일", "교육수료번호", "현장/고장/할일", "로그인", ""]}>
+      <AdminTable minWidth="82rem" head={["이름", "휴대폰", "이메일", "담당지역", "아이디(민원24)", "당직 / 순번", "회원구분", "연락처", "가입상태", "가입일/승인일", "교육수료번호", "현장/고장/할일", "로그인", ""]}>
         {engineers.map((p) => (
-          <EngineerRow key={p.id} p={p} stats={statsOf(p)} onSave={save} />
+          <EngineerRow key={p.id} p={p} stats={statsOf(p)} onSave={save} onToggleDuty={toggleDuty} onDelete={remove} />
         ))}
       </AdminTable>
     </div>

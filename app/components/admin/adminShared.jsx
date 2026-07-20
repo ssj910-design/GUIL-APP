@@ -30,14 +30,14 @@ export function StatusBadge({ tone = "slate", children }) {
   return <span className={`text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap ${TONES[tone]}`}>{children}</span>;
 }
 
-export function AdminTable({ head, children }) {
+export function AdminTable({ head, children, minWidth = "48rem" }) {
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-      <table className="w-full min-w-[48rem] text-sm">
+      <table className="w-full text-sm" style={{ minWidth }}>
         <thead>
           <tr className="text-xs text-slate-400 border-b border-slate-100">
             {head.map((h, i) => (
-              <th key={i} className={`px-3 py-2.5 font-semibold ${i === 0 ? "pl-5 text-left" : "text-left"}`}>{h}</th>
+              <th key={i} className={`px-3 py-2.5 font-semibold whitespace-nowrap ${i === 0 ? "pl-5 text-left" : "text-left"}`}>{h}</th>
             ))}
           </tr>
         </thead>

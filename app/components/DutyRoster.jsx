@@ -22,7 +22,9 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
   const [swapFrom, setSwapFrom] = useState(null); // 기사: 교환 요청 출발 칸
   const [busy, setBusy] = useState(false);
 
+  // 이름 조회용은 전원, 담당자 선택은 당직 대상자 우선 정렬
   const roster = engineers.slice().sort((a, b) => (a.duty_order ?? 999) - (b.duty_order ?? 999));
+  const dutyRoster = roster.filter((e) => e.duty_enabled !== false && e.duty_order != null);
   const nameOf = (pid) => roster.find((e) => e.id === pid)?.name ?? "";
   const orderOf = (pid) => roster.find((e) => e.id === pid)?.duty_order ?? null;
 
@@ -190,7 +192,7 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
               {picking.iso.slice(5).replace("-", "/")} {picking.kind} 담당자
             </p>
             <div className="grid grid-cols-3 gap-2">
-              {roster.map((e) => (
+              {(dutyRoster.length ? dutyRoster : roster).map((e) => (
                 <button
                   key={e.id}
                   onClick={async () => { await onSetPerson(picking.iso, picking.kind, e.id); setPicking(null); }}

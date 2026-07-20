@@ -196,8 +196,11 @@ export default function App() {
   // 자동 배정: 기사 순번(profiles.duty_order)을 하루 2칸(숙직→당직)씩 끊어 순환한다.
   // 직전 배정이 있으면 그 순번 다음부터 이어받아 달이 바뀌어도 순환이 끊기지 않는다.
   async function handleGenerateDuty(ym) {
-    const roster = engineers.slice().sort((a, b) => (a.duty_order ?? 999) - (b.duty_order ?? 999));
-    if (!roster.length) return;
+    // 당직 대상(체크 on)이면서 순번이 있는 사람만 순환에 넣는다 — 인사관리에서 관리
+    const roster = engineers
+      .filter((e) => e.duty_enabled !== false && e.duty_order != null)
+      .sort((a, b) => a.duty_order - b.duty_order);
+    if (!roster.length) { alert("당직 순번이 지정된 기사가 없습니다. 관리자 콘솔 → 인사관리에서 순번을 먼저 지정하세요."); return; }
     const [y, m] = ym.split("-").map(Number);
     const days = new Date(y, m, 0).getDate();
     const first = `${ym}-01`;
@@ -318,7 +321,7 @@ export default function App() {
       setFeed((feedRes.data ?? []).map(mapFeedPost));
       const allProfiles = engineersRes.data ?? [];
       setProfilesAll(allProfiles);
-      setEngineers(allProfiles.filter((p) => p.role === "engineer"));
+      setEngineers(allProfiles.filter((p) => p.role === "engineer" && p.is_active !== false));
       setUnits((unitsRes.data ?? []).map(mapUnit)); // 테이블 없으면(마이그레이션 전) error → 빈 배열
       const loadedKitStock = (kitStockRes.data ?? []).map(mapKitStock); // kit_stock 테이블 없으면(마이그레이션 전) error → 빈 배열
       setKitStock(loadedKitStock);
