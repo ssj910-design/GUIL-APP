@@ -8,8 +8,9 @@ import { AuthContext } from "@/app/components/context";
 import { DutyRoster } from "@/app/components/DutyRoster";
 import { mapDutySchedule, mapDutySwap } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
+import { inputCls } from "@/app/components/admin/adminShared";
 
-export default function DutyAdmin({ data }) {
+export default function DutyAdmin({ data, setData }) {
   const engineers = data.profiles.filter((p) => p.role === "engineer" && p.is_active !== false);
   const [schedules, setSchedules] = useState([]);
   const [swaps, setSwaps] = useState([]);
@@ -69,9 +70,57 @@ export default function DutyAdmin({ data }) {
       .sort((a, b) => a.dutyDate.localeCompare(b.dutyDate)));
   }
 
+
+  async function saveOrder(p, value) {
+    const duty_order = value === "" ? null : Number(value);
+    await supabase.from("profiles").update({ duty_order }).eq("id", p.id);
+    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, duty_order } : x)) }));
+  }
+
+  async function toggleMode(p, mode, on) {
+    const modes = new Set(p.duty_modes ?? []);
+    on ? modes.add(mode) : modes.delete(mode);
+    const duty_modes = [...modes];
+    await supabase.from("profiles").update({ duty_modes }).eq("id", p.id);
+    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, duty_modes } : x)) }));
+  }
+
+  const sorted = engineers.slice().sort((a, b) => (a.duty_order ?? 999) - (b.duty_order ?? 999));
+
   return (
     <AuthContext.Provider value={{ name: "관리자", role: "admin", selfId: null, engineers, engineerNames: engineers.map((e) => e.name), profiles: data.profiles }}>
       <div className="max-w-3xl">
+        {/* 배정 순번 — 순번을 넣으면 당직 대상, 비우면 제외. 근무제별로 대상을 나눈다. */}
+        <div className="bg-white border border-slate-200 rounded-xl p-4 mb-4">
+          <p className="text-xs font-extrabold text-slate-700 mb-1">당직 순번 · 근무제</p>
+          <p className="text-[11px] text-slate-400 mb-3">
+            순번이 있는 사람만 자동 배정 대상입니다. 근무제(5일·4일)를 눌러 편성별 대상을 나눌 수 있습니다.
+          </p>
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+            {sorted.map((p) => (
+              <div key={p.id} className={`flex items-center gap-2 border rounded-lg px-2.5 py-2 ${
+                p.duty_order != null ? "border-slate-200" : "border-slate-100 bg-slate-50"
+              }`}>
+                <div className="w-11 shrink-0">
+                  <input className={`${inputCls} text-center`} inputMode="numeric" placeholder="—"
+                    defaultValue={p.duty_order ?? ""}
+                    onBlur={(e) => { const v = e.target.value.replace(/[^0-9]/g, ""); if (v !== String(p.duty_order ?? "")) saveOrder(p, v); }} />
+                </div>
+                <span className="text-sm font-bold text-slate-700 truncate flex-1">{p.name}</span>
+                {["주5일", "주4일"].map((mode) => (
+                  <label key={mode} className={`text-[10px] font-bold rounded px-1.5 py-1 cursor-pointer border shrink-0 ${
+                    (p.duty_modes ?? []).includes(mode) ? "bg-blue-50 text-blue-700 border-blue-200" : "text-slate-300 border-slate-100"
+                  }`}>
+                    <input type="checkbox" className="hidden" checked={(p.duty_modes ?? []).includes(mode)}
+                      onChange={(e) => toggleMode(p, mode, e.target.checked)} />
+                    {mode.replace("주", "").replace("일", "")}일
+                  </label>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+
         <DutyRoster
           embedded
           schedules={schedules}

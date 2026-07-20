@@ -7,8 +7,9 @@ import { StatusBadge, AdminTable, inputCls } from "@/app/components/admin/adminS
 import ImportEngineers from "@/app/components/admin/ImportEngineers";
 import DutyAdmin from "@/app/components/admin/DutyAdmin";
 import LeavesAdmin from "@/app/components/admin/LeavesAdmin";
+import WorkCalendar from "@/app/components/admin/WorkCalendar";
 
-function EngineerRow({ p, stats, onSave, onToggleMode, onDelete }) {
+function EngineerRow({ p, stats, onSave, onDelete }) {
   const [form, setForm] = useState({ phone: p.phone ?? "", minwonId: p.minwon_id ?? "", dutyOrder: p.duty_order ?? "", hireDate: p.hire_date ?? "" });
   const dirty = form.phone !== (p.phone ?? "") || form.minwonId !== (p.minwon_id ?? "") || String(form.dutyOrder) !== String(p.duty_order ?? "") || form.hireDate !== (p.hire_date ?? "");
   return (
@@ -20,22 +21,6 @@ function EngineerRow({ p, stats, onSave, onToggleMode, onDelete }) {
           onChange={(e) => setForm({ ...form, hireDate: e.target.value })} />
       </td>
       <td className="px-3 py-2.5 w-32"><input className={inputCls} placeholder="민원24 점검자 ID" value={form.minwonId} onChange={(e) => setForm({ ...form, minwonId: e.target.value })} /></td>
-      <td className="px-3 py-2.5 whitespace-nowrap">
-        <div className="flex items-center gap-1.5">
-          <input className={`${inputCls} w-12`} inputMode="numeric" placeholder="순번"
-            value={form.dutyOrder}
-            onChange={(e) => setForm({ ...form, dutyOrder: e.target.value.replace(/[^0-9]/g, "") })} />
-          {["주5일", "주4일"].map((mode) => (
-            <label key={mode} className={`text-[10px] font-bold rounded px-1.5 py-1 cursor-pointer border ${
-              (p.duty_modes ?? []).includes(mode) ? "bg-blue-50 text-blue-700 border-blue-200" : "text-slate-300 border-slate-100"
-            }`}>
-              <input type="checkbox" className="hidden" checked={(p.duty_modes ?? []).includes(mode)}
-                onChange={(e) => onToggleMode(p, mode, e.target.checked)} />
-              {mode.replace("주", "").replace("일", "")}일
-            </label>
-          ))}
-        </div>
-      </td>
       <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">{p.member_type ?? "-"}</td>
       <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">{p.tel ?? "-"}</td>
       <td className="px-3 py-2.5 text-center">
@@ -107,14 +92,6 @@ export default function EngineersAdmin({ data, setData }) {
     setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, is_active: false, duty_order: null, duty_modes: [] } : x)) }));
   }
 
-  // 근무제(주5일·주4일)별 당직 대상 지정 — 같은 사람이 한쪽 편성에만 들어가는 경우가 있다
-  async function toggleMode(p, mode, on) {
-    const modes = new Set(p.duty_modes ?? []);
-    on ? modes.add(mode) : modes.delete(mode);
-    const next = [...modes];
-    await supabase.from("profiles").update({ duty_modes: next }).eq("id", p.id);
-    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, duty_modes: next } : x)) }));
-  }
 
 
   async function save(p, form) {
@@ -131,7 +108,7 @@ export default function EngineersAdmin({ data, setData }) {
     <div>
       <h1 className="text-xl font-extrabold mb-3">인사관리</h1>
       <div className="flex gap-1 mb-4 border-b border-slate-200">
-        {["직원", "당직 근무표", "연차관리"].map((s) => (
+        {["직원", "당직 근무표", "연차관리", "워크 캘린더"].map((s) => (
           <button key={s} onClick={() => setSub(s)}
             className={`text-sm font-bold px-4 py-2.5 -mb-px border-b-2 ${
               sub === s ? "text-blue-700 border-blue-700" : "text-slate-400 border-transparent"
@@ -140,8 +117,9 @@ export default function EngineersAdmin({ data, setData }) {
           </button>
         ))}
       </div>
-      {sub === "당직 근무표" && <DutyAdmin data={data} />}
+      {sub === "당직 근무표" && <DutyAdmin data={data} setData={setData} />}
       {sub === "연차관리" && <LeavesAdmin data={data} setData={setData} />}
+      {sub === "워크 캘린더" && <WorkCalendar data={data} />}
       {sub !== "직원" ? null : (<>
       <p className="text-xs text-slate-500 mb-4">
         계정 연결 = 로그인 계정과 연결된 프로필 (Phase 2에서 가입 시 자동 연결). 민원24 ID = 공단에 등록된 점검자 ID — 자체점검 자동 보고(SELCHK_USID)에 사용됩니다.
@@ -151,11 +129,6 @@ export default function EngineersAdmin({ data, setData }) {
           <p className="text-[11px] font-bold text-slate-500 mb-1">기사 이름</p>
           <input className={inputCls} placeholder="예: 이승준" value={newName} onChange={(e) => setNewName(e.target.value)} />
         </div>
-        <div className="w-24">
-          <p className="text-[11px] font-bold text-slate-500 mb-1">순번</p>
-          <input className={inputCls} inputMode="numeric" placeholder="1" value={newOrder}
-            onChange={(e) => setNewOrder(e.target.value.replace(/[^0-9]/g, ""))} />
-        </div>
         <button onClick={addEngineer} disabled={!newName.trim() || adding}
           className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-4 py-2">
           {adding ? "등록 중…" : "기사 추가"}
@@ -164,12 +137,12 @@ export default function EngineersAdmin({ data, setData }) {
           className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
           공단 회원목록 엑셀로 등록
         </button>
-        <p className="text-[11px] text-slate-400 ml-auto max-w-xs text-right">순번 = 당직·숙직 근무표 자동 배정 순서. 순번이 있는 사람만 배정 대상이며, 근무제(5일·4일)별로 대상을 나눌 수 있습니다.</p>
+        <p className="text-[11px] text-slate-400 ml-auto max-w-xs text-right">당직 순번·근무제 지정은 「당직 근무표」 탭에서 합니다.</p>
       </div>
       {importing && <ImportEngineers data={data} setData={setData} onClose={() => setImporting(false)} />}
-      <AdminTable minWidth="96rem" head={["이름", "휴대폰", "입사일", "아이디(민원24)", "당직 순번 / 근무제", "회원구분", "연락처", "가입상태", "가입일/승인일", "교육수료번호", "현장/고장/할일", "로그인", ""]}>
+      <AdminTable minWidth="82rem" head={["이름", "휴대폰", "입사일", "아이디(민원24)", "회원구분", "연락처", "가입상태", "가입일/승인일", "교육수료번호", "현장/고장/할일", "로그인", ""]}>
         {engineers.map((p) => (
-          <EngineerRow key={p.id} p={p} stats={statsOf(p)} onSave={save} onToggleMode={toggleMode} onDelete={remove} />
+          <EngineerRow key={p.id} p={p} stats={statsOf(p)} onSave={save} onDelete={remove} />
         ))}
       </AdminTable>
       </>)}

@@ -206,8 +206,8 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
                       const cell = cellOf(iso, kind);
                       // 정상근무는 배치가 없으면 기사 화면에서 숨긴다 (주5일제 표에선 늘 비어 있음)
                       if (kind === "정상근무" && !cell?.profileId && role !== "admin") return null;
-                      const mine = cell?.profileId === selfId;
-                      const isFrom = swapFrom?.id === cell?.id;
+                      const mine = !!cell?.profileId && cell.profileId === selfId;
+                      const isFrom = !!swapFrom && !!cell && swapFrom.id === cell.id;
                       return (
                         <button
                           key={kind}

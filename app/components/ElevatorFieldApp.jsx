@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X } from "lucide-react";
+import { Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { DutyRoster, DutySwapNotice } from "@/app/components/DutyRoster";
+import { MyPage } from "@/app/components/MyPage";
 import { simulateSms } from "@/lib/sms";
 import { ScreenHeader } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -96,6 +97,7 @@ export default function App() {
   const [dutySchedules, setDutySchedules] = useState([]); // 당직·숙직 근무표 (이번 달 이후)
   const [dutySwaps, setDutySwaps] = useState([]);
   const [rosterOpen, setRosterOpen] = useState(false);
+  const [myPageOpen, setMyPageOpen] = useState(false);
   const [siteManagers, setSiteManagers] = useState([]);
   const [failures, setFailures] = useState([]);
   const [inspections, setInspections] = useState([]);
@@ -1199,7 +1201,10 @@ export default function App() {
           <ScreenHeader
             title={tab === "home" ? "구일엘리베이터(주)" : tabTitle}
             right={
-              <div className="relative">
+              <div className="relative flex items-center gap-1.5">
+                <button onClick={() => setMyPageOpen(true)} className="p-1.5 bg-blue-900 rounded-full" aria-label="마이페이지">
+                  <UserRound size={16} />
+                </button>
                 <button onClick={() => setNotifOpen((v) => !v)} className="relative p-1.5 bg-blue-900 rounded-full" aria-label="알림">
                   <Bell size={16} />
                   {totalNotifCnt > 0 && (
@@ -1324,6 +1329,10 @@ export default function App() {
             schedules={dutySchedules}
             onSeen={(w, as) => { handleSeenDutySwap(w, as); if (as === "target") setRosterOpen(true); }}
           />
+
+          {myPageOpen && (
+            <MyPage attendances={attendances} dutySchedules={dutySchedules} onClose={() => setMyPageOpen(false)} />
+          )}
 
           {rosterOpen && (
             <DutyRoster
