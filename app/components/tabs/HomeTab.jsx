@@ -6,7 +6,7 @@ import { Badge, DDay, DrillHeader, SmsToast } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { usePriorFlaggedInspection } from "@/app/hooks/useLiveInspections";
-import { FailureDetailSheet, DispatchEtaModal, ArrivalTimeModal, ArrivalResultModal, FailureMiniCard } from "@/app/components/tabs/FailureTab";
+import { FailureDetailSheet, DispatchEtaModal, ArrivalTimeModal, ArrivalResultModal, FailureMiniCard, AssignEngineerSheet } from "@/app/components/tabs/FailureTab";
 
 
 // 검사도래현장 한 줄: 직전 검사가 조건부합격/조건후합격이면 현장명을 눌러 당시 부적합내역을 볼 수 있다.
@@ -80,7 +80,7 @@ function FailureHistoryDetailScreen({ site, failures, onBack }) {
 }
 
 
-export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, onRefuse, toast }) {
+export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, toast }) {
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const { name: CURRENT_ENGINEER, role, engineerNames } = useContext(AuthContext);
@@ -93,6 +93,7 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
   const criticalSites = mySites.filter((s) => s.failures30d >= 3 || escalatedSiteIds.has(s.id));
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
+  const [assignTarget, setAssignTarget] = useState(null);
   const [resultTarget, setResultTarget] = useState(null);
   const [arriveTarget, setArriveTarget] = useState(null);
   const [historySite, setHistorySite] = useState(null);
@@ -194,6 +195,7 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
                 onArrive={setArriveTarget}
                 onOpenResult={setResultTarget}
                 onRefuse={onRefuse}
+                onAssignOpen={setAssignTarget}
               />
             ))
           )}
@@ -344,6 +346,9 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
           onArrive={setArriveTarget}
           onOpenResult={setResultTarget}
         />
+      )}
+      {assignTarget && (
+        <AssignEngineerSheet failure={assignTarget} failures={failures} onAssign={onAssign} onClose={() => setAssignTarget(null)} />
       )}
       {dispatchTarget && (
         <DispatchEtaModal

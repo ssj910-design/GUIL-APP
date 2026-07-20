@@ -404,6 +404,17 @@ export default function App() {
     setTimeout(() => setFailureToast(""), 3000);
   }
 
+  // ★ 관리자가 미배정 고장에 기사 배정 — 출동 시작은 기사가 "출동 응답"으로
+  async function handleAssignFailure(failure, engineerName) {
+    const { data: ok } = await supabase.from("failures")
+      .update({ assignee: engineerName, ...(v2Ready ? { assignee_id: profileIdByName(profilesAll, engineerName) } : {}) })
+      .eq("id", failure.id).eq("status", "미처리").is("assignee", null)
+      .select();
+    if (!ok?.length) { alert("이미 배정되었거나 진행 중인 건입니다."); return; }
+    setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, assignee: engineerName } : x)));
+    notifyFailure(`${engineerName}에게 배정 완료`);
+  }
+
   // ★ 출동 거부 — 배정 해제(미배정 환원) + 우리방에 관리자 멘션 알림 (동시 2건 배정 등 못 가는 상황용)
   async function handleRefuseFailure(failure) {
     const reason = window.prompt("출동을 거부하고 미배정으로 돌립니다.\n사유를 입력하세요 (선택)");
@@ -420,7 +431,9 @@ export default function App() {
   async function handleDispatchFailure(failure, etaMinutes) {
     const assignee = failure.assignee || profile.name;
     const dispatchedAt = new Date().toTimeString().slice(0, 5);
-    await supabase
+    // 선착순 보장 — "아직 미처리이고 배정 상태가 그대로일 때만" 갱신되게 조건을 걸어,
+    // 두 기사가 동시에 눌러도 DB가 먼저 도착한 한 명만 받는다 (늦은 쪽은 0행 갱신).
+    let claim = supabase
       .from("failures")
       .update({
         assignee,
@@ -429,7 +442,16 @@ export default function App() {
         status: "진행중",
         ...(v2Ready ? { assignee_id: profileIdByName(profilesAll, assignee) } : {}),
       })
-      .eq("id", failure.id);
+      .eq("id", failure.id)
+      .eq("status", "미처리");
+    claim = failure.assignee ? claim.eq("assignee", failure.assignee) : claim.is("assignee", null);
+    const { data: claimed } = await claim.select();
+    if (!claimed?.length) {
+      const { data: fresh } = await supabase.from("failures").select("*").eq("id", failure.id).single();
+      if (fresh) setFailures((prev) => prev.map((x) => (x.id === failure.id ? mapFailure(fresh) : x)));
+      alert(`이미 ${fresh?.assignee ?? "다른 기사"}님이 먼저 출동한 건입니다.`);
+      return;
+    }
     setFailures((prev) =>
       prev.map((x) => (x.id === failure.id ? { ...x, assignee, dispatchedAt, etaMinutes, status: "진행중" } : x))
     );
@@ -1107,6 +1129,7 @@ export default function App() {
               onArrive={handleArriveFailure}
               onResult={handleFailureResult}
               onRefuse={handleRefuseFailure}
+              onAssign={handleAssignFailure}
               toast={failureToast}
             />
           )}
@@ -1119,6 +1142,7 @@ export default function App() {
               onArrive={handleArriveFailure}
               onResult={handleFailureResult}
               onRefuse={handleRefuseFailure}
+              onAssign={handleAssignFailure}
               toast={failureToast}
             />
           )}
