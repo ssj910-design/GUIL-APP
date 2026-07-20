@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { ListTodo, Check, CheckCircle2, Search, Lock, Image as ImageIcon, Download } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { addDays, formatShortDate, formatYyMmDd } from "@/lib/utils";
+import { addDays, formatShortDate, formatYyMmDd, parsePartQty } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { downloadPhoto, sanitizeFilename, extOf } from "@/lib/photos";
 import { DDay, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
@@ -284,14 +284,17 @@ export function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhoto
           <span className="text-slate-400">현장</span>
           <span className="font-semibold text-slate-700">{todo.siteName}</span>
         </div>
-        {todo.billingAmount != null && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">교체부품·청구금액</span>
-            <span className="font-bold text-blue-700">
-              {todo.billingPart ? `${todo.billingPart} · ` : ""}₩{Number(todo.billingAmount).toLocaleString()}
-            </span>
-          </div>
-        )}
+        {todo.billingAmount != null && (() => {
+          const { name, qty } = parsePartQty(todo.billingPart);
+          return (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-400">부품명·수량·금액</span>
+              <span className="font-bold text-blue-700">
+                {name}{qty ? ` · ${qty}` : ""} · ₩{Number(todo.billingAmount).toLocaleString()}
+              </span>
+            </div>
+          );
+        })()}
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">출처</span>
           <span className="font-semibold text-slate-700">{sourceLabel}</span>

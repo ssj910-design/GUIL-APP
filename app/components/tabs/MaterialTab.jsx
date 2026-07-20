@@ -1,7 +1,7 @@
 import React, { useState, useContext } from "react";
 import { ChevronRight, X, Plus, Search, PackageCheck, PackageX } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnits, unitIdFor, profileIdByName } from "@/lib/utils";
+import { siteUnits, unitIdFor, profileIdByName, parsePartQty } from "@/lib/utils";
 import { TODAY_STR, QUOTE_STAGES, KIT_PARTS } from "@/lib/constants";
 import { PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -28,22 +28,27 @@ function RequestDetailSheet({ target, onClose, onPhotoClick, todos }) {
           <p className="text-[11px] text-slate-500">현장</p>
           <p className="font-bold text-slate-800">{data.siteName}</p>
         </div>
-        <div className="bg-slate-100 rounded-xl p-3">
-          <p className="text-[11px] text-slate-500">
-            {type === "material" ? "부품 내역 (부품명, 수량)" : type === "quote" ? "견적 내역 (부품명, 수량)" : "부품명"}
-          </p>
-          <p className="font-bold text-slate-800 whitespace-pre-wrap">
-            {type === "quote" ? data.constructionType : data.part}
-          </p>
-        </div>
-        {linkedTodo?.billingAmount != null && (
+        {type !== "material" && (
           <div className="bg-slate-100 rounded-xl p-3">
-            <p className="text-[11px] text-slate-500">교체부품·청구금액</p>
-            <p className="font-bold text-blue-700">
-              {linkedTodo.billingPart ? `${linkedTodo.billingPart} · ` : ""}₩{Number(linkedTodo.billingAmount).toLocaleString()}
+            <p className="text-[11px] text-slate-500">
+              {type === "quote" ? "견적 내역 (부품명, 수량)" : "부품명"}
+            </p>
+            <p className="font-bold text-slate-800 whitespace-pre-wrap">
+              {type === "quote" ? data.constructionType : data.part}
             </p>
           </div>
         )}
+        {linkedTodo?.billingAmount != null && (() => {
+          const { name, qty } = parsePartQty(linkedTodo.billingPart);
+          return (
+            <div className="bg-slate-100 rounded-xl p-3">
+              <p className="text-[11px] text-slate-500">부품명·수량·금액</p>
+              <p className="font-bold text-blue-700">
+                {name}{qty ? ` · ${qty}` : ""} · ₩{Number(linkedTodo.billingAmount).toLocaleString()}
+              </p>
+            </div>
+          );
+        })()}
         <div className="grid grid-cols-2 gap-2.5">
           {type === "material" && (
             <div className="bg-slate-100 rounded-xl p-3">
