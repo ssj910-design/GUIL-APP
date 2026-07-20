@@ -750,8 +750,13 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
                   {form.siteId && siteUnits(sites.find((s) => s.id === form.siteId)).map((u) => <option key={u} value={u}>{u}</option>)}
                 </select>
               </Field>
-              <Field label="부품 내역 (부품명, 수량)">
-                <PartsRowsInput rows={form.parts} setRows={(rows) => setForm({ ...form, parts: rows })} />
+              <Field label="부품 내역">
+                <PartsRowsInput
+                  rows={form.parts}
+                  setRows={(rows) => setForm({ ...form, parts: rows })}
+                  namePlaceholder="예: 1층 승장도어 스위치"
+                  nameLabel="부품명 (해당 층까지 기재)"
+                />
               </Field>
               <Field label="긴급도">
                 <div className="flex gap-2">
@@ -940,8 +945,13 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
                 {quoteForm.siteId && siteUnits(sites.find((s) => s.id === quoteForm.siteId)).map((u) => <option key={u} value={u}>{u}</option>)}
               </select>
             </Field>
-            <Field label="견적 내역 (부품명, 수량)">
-              <PartsRowsInput rows={quoteForm.parts} setRows={(rows) => setQuoteForm({ ...quoteForm, parts: rows })} />
+            <Field label="견적 내역">
+              <PartsRowsInput
+                rows={quoteForm.parts}
+                setRows={(rows) => setQuoteForm({ ...quoteForm, parts: rows })}
+                namePlaceholder="예: 1층 승장도어 스위치"
+                nameLabel="부품명 (해당 층까지 기재)"
+              />
             </Field>
             <Field label="현장 견적 담당자 전화번호">
               <input
