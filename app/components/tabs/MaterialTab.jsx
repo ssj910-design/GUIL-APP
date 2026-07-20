@@ -1,8 +1,8 @@
-import React, { useState, useContext } from "react";
+import { useState, useContext } from "react";
 import { ChevronRight, X, Plus, Search, PackageCheck, PackageX } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnits, unitIdFor, profileIdByName, parsePartQty } from "@/lib/utils";
-import { TODAY_STR, QUOTE_STAGES, KIT_PARTS } from "@/lib/constants";
+import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
 import { PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
@@ -269,29 +269,32 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack }) {
         {filtered.length === 0 ? (
           <p className="text-xs text-slate-400 text-center py-10">해당 조건의 견적 요청 내역이 없습니다</p>
         ) : (
-          filtered.map((q) => (
-            <button
-              key={q.id}
-              type="button"
-              onClick={() => setDetailTarget({ type: "quote", data: q })}
-              className="w-full text-left bg-white rounded-xl border border-slate-200 p-3"
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-slate-700">{q.siteName} · {q.constructionType}</p>
-                <span
-                  className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
-                    q.displayStage === "비용청구완료" ? "bg-slate-100 text-slate-500" :
-                    q.displayStage === "자재지급완료" ? "bg-emerald-100 text-emerald-700" :
-                    q.displayStage === "승인" ? "bg-indigo-100 text-indigo-700" :
-                    q.displayStage === "견적발행" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
-                  }`}
-                >
-                  {q.displayStage === "비용청구완료" ? "비용청구 완료" : q.displayStage}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1">신청일 {q.requestedDate}{q.suppliedDate ? ` · 지급일 ${q.suppliedDate}` : ""}</p>
-            </button>
-          ))
+          filtered.map((q) => {
+            const { name, qty } = parsePartQty(q.constructionType);
+            return (
+              <button
+                key={q.id}
+                type="button"
+                onClick={() => setDetailTarget({ type: "quote", data: q })}
+                className="w-full text-left bg-white rounded-xl border border-slate-200 p-3"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-700">{q.siteName} · {name}{qty ? ` · ${qty}` : ""}</p>
+                  <span
+                    className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
+                      q.displayStage === "비용청구완료" ? "bg-slate-100 text-slate-500" :
+                      q.displayStage === "자재지급완료" ? "bg-emerald-100 text-emerald-700" :
+                      q.displayStage === "승인" ? "bg-indigo-100 text-indigo-700" :
+                      q.displayStage === "견적발행" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    {q.displayStage === "비용청구완료" ? "비용청구 완료" : q.displayStage}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">신청일 {q.requestedDate}{q.suppliedDate ? ` · 지급일 ${q.suppliedDate}` : ""}</p>
+              </button>
+            );
+          })
         )}
       </div>
 
@@ -955,64 +958,20 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
               </button>
             </div>
             <div className="space-y-2">
-              {myQuotes.map((q) => (
-                <div key={q.id} className="bg-white rounded-xl border border-slate-200 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <button type="button" onClick={() => setReqDetailTarget({ type: "quote", data: q })} className="flex items-center gap-2 min-w-0 text-left">
-                      {q.photoUrls?.length > 0 ? (
-                        <img src={q.photoUrls[0]} alt="" className="w-11 h-11 rounded-lg object-cover border border-slate-200 shrink-0" />
-                      ) : (
-                        <div className="w-11 h-11 rounded-lg bg-slate-100 border border-slate-200 shrink-0" />
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-700 truncate">{q.siteName} · {q.constructionType}</p>
-                        <p className="text-[11px] text-slate-400">신청일 {q.requestedDate} · 사진 {q.photoCount}장</p>
-                      </div>
-                    </button>
-                    <span
-                      className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
-                        q.status === "자재지급완료" ? "bg-emerald-100 text-emerald-700" :
-                        q.status === "승인" ? "bg-indigo-100 text-indigo-700" :
-                        q.status === "견적발행" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
-                      }`}
-                    >
-                      {q.status}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1 mt-2.5">
-                    {QUOTE_STAGES.map((s, idx) => (
-                      <React.Fragment key={s}>
-                        {idx > 0 && <div className={`h-0.5 flex-1 ${QUOTE_STAGES.indexOf(q.status) >= idx ? "bg-blue-600" : "bg-slate-200"}`} />}
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${QUOTE_STAGES.indexOf(q.status) >= idx ? "bg-blue-600" : "bg-slate-200"}`} />
-                      </React.Fragment>
-                    ))}
-                  </div>
-                  <div className="flex items-start mt-1">
-                    {QUOTE_STAGES.map((s) => {
-                      const dateMap = { 요청접수: q.requestedDate, 견적발행: q.quoteIssuedDate, 승인: q.approvedDate, 자재지급완료: q.suppliedDate };
-                      const d = dateMap[s];
-                      return (
-                        <div key={s} className="flex-1 flex flex-col items-center gap-0.5 px-0.5 min-w-0">
-                          <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap leading-none">{s}</span>
-                          <span className="text-[9px] text-slate-300 whitespace-nowrap leading-none">{d ? d.slice(5).replace("-", "/") : "-"}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {q.status === "자재지급완료" && (
-                    <button
-                      onClick={() => {
-                        const urls = q.supplyPhotoUrls?.length ? q.supplyPhotoUrls : q.supplyPhotoUrl ? [q.supplyPhotoUrl] : [];
-                        if (urls.length) setPhotoViewer({ urls, index: 0, siteName: `${q.siteName} · ${q.constructionType}`, date: q.suppliedDate });
-                      }}
-                      className="w-full mt-2.5 flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 active:bg-emerald-100"
-                    >
-                      <span className="text-[11px] text-emerald-600 font-semibold">지급 자재 사진 확인하기</span>
-                      <ChevronRight size={13} className="text-emerald-600" />
-                    </button>
-                  )}
-                </div>
-              ))}
+              {myQuotes.map((q) => {
+                const { name, qty } = parsePartQty(q.constructionType);
+                return (
+                  <button
+                    key={q.id}
+                    type="button"
+                    onClick={() => setReqDetailTarget({ type: "quote", data: q })}
+                    className="w-full text-left bg-white rounded-xl border border-slate-200 p-3"
+                  >
+                    <p className="text-sm font-semibold text-slate-700">{q.siteName} · {name}{qty ? ` · ${qty}` : ""}</p>
+                    <p className="text-[11px] text-slate-400 mt-1">신청일 {q.requestedDate}{q.suppliedDate ? ` · 지급일 ${q.suppliedDate}` : ""}</p>
+                  </button>
+                );
+              })}
               {myQuotes.length === 0 && (
                 <p className="text-xs text-slate-400 text-center py-4">견적 요청 내역이 없습니다</p>
               )}
