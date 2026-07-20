@@ -850,7 +850,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
             <p className="text-xs text-slate-400 py-3">처리중인 고장이 없습니다</p>
           ) : (
             active.map((f) => (
-              <FailureActionCard onAssignOpen={setAssignTarget} onRefuse={onRefuse}
+              <FailureActionCard onRefuse={onRefuse}
                 key={f.id}
                 f={f}
                 onOpenDetail={setDetailTarget}
