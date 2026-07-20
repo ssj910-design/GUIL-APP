@@ -461,8 +461,18 @@ export default function App() {
   async function handleRefuseFailure(failure) {
     const reason = window.prompt("출동을 거부하고 미배정으로 돌립니다.\n사유를 입력하세요 (선택)");
     if (reason === null) return; // 취소
-    await supabase.from("failures").update({ assignee: null, ...(v2Ready ? { assignee_id: null } : {}) }).eq("id", failure.id);
-    setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, assignee: null } : x)));
+    // 출동 후 취소도 지원 — 출동 기록을 초기화하고 미처리·미배정으로 되돌린다 (완료 건은 불가)
+    const { data: ok } = await supabase.from("failures")
+      .update({
+        assignee: null, dispatched_at: null, eta_minutes: null, arrival_time: null, status: "미처리",
+        ...(v2Ready ? { assignee_id: null } : {}),
+      })
+      .eq("id", failure.id).neq("status", "완료")
+      .select();
+    if (!ok?.length) { alert("이미 완료 처리된 건입니다."); return; }
+    setFailures((prev) => prev.map((x) => (x.id === failure.id
+      ? { ...x, assignee: null, dispatchedAt: null, etaMinutes: null, arrivalTime: null, status: "미처리" }
+      : x)));
     const admins = profilesAll.filter((p) => p.role === "admin").map((p) => "@" + p.name).join(" ");
     handleSendFeedPost(
       `⚠️ ${profile.name}님이 ${failure.siteName} · ${failure.elevatorNo || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` — 사유: ${reason.trim()}` : ""}. 재배정이 필요합니다 ${admins}`.trim()

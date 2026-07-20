@@ -680,12 +680,22 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
           </div>
         )}
         {stage === "dispatched" && (
-          <button
-            onClick={() => onArrive(f)}
-            className="w-full bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800"
-          >
-            도착
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => onArrive(f)}
+              className="flex-1 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800"
+            >
+              도착
+            </button>
+            {onRefuse && f.assignee === me && (
+              <button
+                onClick={() => onRefuse(f)}
+                className="shrink-0 text-xs font-bold text-red-500 border border-red-200 px-3 rounded-lg active:bg-red-50"
+              >
+                취소
+              </button>
+            )}
+          </div>
         )}
         {stage === "arrived" && (
           <button
@@ -741,13 +751,24 @@ export function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenR
         </span>
       )}
       {stage === "dispatched" && (
+        <span className="shrink-0 flex gap-1.5">
         <button
           type="button"
           onClick={() => onArrive(f)}
-          className="shrink-0 bg-blue-700 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:bg-blue-800"
+          className="bg-blue-700 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:bg-blue-800"
         >
           도착 ({f.etaMinutes}분)
         </button>
+        {onRefuse && f.assignee === me && (
+          <button
+            type="button"
+            onClick={() => onRefuse(f)}
+            className="text-[11px] font-bold text-red-500 border border-red-200 px-2 py-1.5 rounded-lg active:bg-red-50"
+          >
+            취소
+          </button>
+        )}
+        </span>
       )}
       {stage === "arrived" && (
         <button
