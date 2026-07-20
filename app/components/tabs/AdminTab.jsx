@@ -304,7 +304,7 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
   const { engineerNames } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
   const [assigneeMap, setAssigneeMap] = useState({});
-  const [billingAmountMap, setBillingAmountMap] = useState({});
+  const [partAmountMap, setPartAmountMap] = useState({}); // { [requestId]: { [partIndex]: amount } }
   const pending = materialRequests.filter((r) => r.status === "승인대기");
   const supplied = materialRequests.filter((r) => r.status === "지급완료");
   const rejected = materialRequests.filter((r) => r.status === "반려");
@@ -345,62 +345,76 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
             <span className="text-xs font-bold text-white bg-amber-500 px-2 py-0.5 rounded-full">{pending.length}</span>
           </div>
           <div className="space-y-2.5">
-            {pending.map((r) => (
-              <div key={r.id} className="border border-amber-200 bg-amber-50 rounded-xl p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-bold text-slate-800">{r.siteName} · {r.part}</p>
+            {pending.map((r) => {
+              const parts = (r.part ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+              const amounts = partAmountMap[r.id] ?? {};
+              const total = parts.reduce((sum, _, i) => sum + (Number(amounts[i]) || 0), 0);
+              const billingPartText = parts
+                .map((part, i) => (amounts[i] ? `${part}(₩${Number(amounts[i]).toLocaleString()})` : part))
+                .join(", ");
+              return (
+                <div key={r.id} className="border border-amber-200 bg-amber-50 rounded-xl p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-bold text-slate-800">{r.siteName} · {r.part}</p>
+                    <button
+                      onClick={() => setDetailTarget({ type: "material", data: r })}
+                      className="text-[11px] font-bold text-blue-600 shrink-0 flex items-center gap-0.5"
+                    >
+                      상세보기 <ChevronRight size={12} />
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{r.engineer} 기사 신청 · {r.requestedDate} · {r.urgency}</p>
+
+                  <div className="mt-2.5">
+                    <MultiPhotoUpload
+                      photos={(r.supplyPhotoUrls ?? (r.supplyPhotoUrl ? [r.supplyPhotoUrl] : [])).map((url) => ({ url }))}
+                      uploadFolder={`materials/${r.id}/supply`}
+                      onUploaded={(url) => onAttachPhoto(r.id, url)}
+                      onRemove={(idx) => onRemoveSupplyPhoto(r.id, idx)}
+                      label="지급할 자재 사진 촬영"
+                      required={false}
+                    />
+                  </div>
+
+                  <div className="mt-2.5">
+                    <label className="text-[10px] font-bold text-slate-400 block mb-1">담당 기사 (실제 교체할 기사, 기본값 신청자)</label>
+                    <AssigneeSelect
+                      value={assigneeMap[r.id] ?? r.engineer}
+                      options={engineerNames}
+                      onChange={(name) => setAssigneeMap((m) => ({ ...m, [r.id]: name }))}
+                    />
+                  </div>
+
+                  <div className="mt-2.5">
+                    <label className="text-[10px] font-bold text-slate-400 block mb-1">청구 부품별 금액</label>
+                    <div className="space-y-1.5">
+                      {parts.map((part, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className="text-xs text-slate-600 flex-1 truncate">{part}</span>
+                          <input
+                            type="number"
+                            className={`${inputCls} w-28 shrink-0`}
+                            placeholder="금액"
+                            value={amounts[i] ?? ""}
+                            onChange={(e) => setPartAmountMap((m) => ({ ...m, [r.id]: { ...(m[r.id] ?? {}), [i]: e.target.value } }))}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    {parts.length > 1 && (
+                      <p className="text-[10px] text-slate-400 text-right mt-1">합계 ₩{total.toLocaleString()}</p>
+                    )}
+                  </div>
+
                   <button
-                    onClick={() => setDetailTarget({ type: "material", data: r })}
-                    className="text-[11px] font-bold text-blue-600 shrink-0 flex items-center gap-0.5"
+                    onClick={() => onSupplyComplete(r.id, assigneeMap[r.id] ?? r.engineer, billingPartText || null, total || null)}
+                    className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg bg-blue-700 text-white active:bg-blue-800"
                   >
-                    상세보기 <ChevronRight size={12} />
+                    <PackageCheck size={14} /> 자재 지급 완료 체크
                   </button>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">{r.engineer} 기사 신청 · {r.requestedDate} · {r.urgency}</p>
-
-                <div className="mt-2.5">
-                  <MultiPhotoUpload
-                    photos={(r.supplyPhotoUrls ?? (r.supplyPhotoUrl ? [r.supplyPhotoUrl] : [])).map((url) => ({ url }))}
-                    uploadFolder={`materials/${r.id}/supply`}
-                    onUploaded={(url) => onAttachPhoto(r.id, url)}
-                    onRemove={(idx) => onRemoveSupplyPhoto(r.id, idx)}
-                    label="지급할 자재 사진 촬영"
-                    required={false}
-                  />
-                </div>
-
-                <div className="mt-2.5">
-                  <label className="text-[10px] font-bold text-slate-400 block mb-1">담당 기사 (실제 교체할 기사, 기본값 신청자)</label>
-                  <AssigneeSelect
-                    value={assigneeMap[r.id] ?? r.engineer}
-                    options={engineerNames}
-                    onChange={(name) => setAssigneeMap((m) => ({ ...m, [r.id]: name }))}
-                  />
-                </div>
-
-                <div className="mt-2.5">
-                  <label className="text-[10px] font-bold text-slate-400 block mb-1">청구 부품</label>
-                  <p className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-700 bg-slate-50">{r.part || "-"}</p>
-                </div>
-                <div className="mt-2.5">
-                  <label className="text-[10px] font-bold text-slate-400 block mb-1">청구금액</label>
-                  <input
-                    type="number"
-                    className={inputCls}
-                    placeholder="예: 70000"
-                    value={billingAmountMap[r.id] ?? ""}
-                    onChange={(e) => setBillingAmountMap((m) => ({ ...m, [r.id]: e.target.value }))}
-                  />
-                </div>
-
-                <button
-                  onClick={() => onSupplyComplete(r.id, assigneeMap[r.id] ?? r.engineer, r.part || null, billingAmountMap[r.id] || null)}
-                  className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg bg-blue-700 text-white active:bg-blue-800"
-                >
-                  <PackageCheck size={14} /> 자재 지급 완료 체크
-                </button>
-              </div>
-            ))}
+              );
+            })}
             {pending.length === 0 && <p className="text-xs text-slate-400 text-center py-3">지급 대기 중인 자재 신청이 없습니다</p>}
           </div>
 

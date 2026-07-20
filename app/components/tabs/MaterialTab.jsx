@@ -1,7 +1,7 @@
 import { Fragment, useState, useContext } from "react";
 import { ChevronRight, X, Plus, Search, PackageCheck, PackageX } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnits, unitIdFor, profileIdByName, parsePartQty } from "@/lib/utils";
+import { siteUnits, unitIdFor, profileIdByName } from "@/lib/utils";
 import { TODAY_STR, QUOTE_STAGES, KIT_PARTS } from "@/lib/constants";
 import { PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -42,17 +42,14 @@ function RequestDetailSheet({ target, onClose, onPhotoClick, todos }) {
             </p>
           </div>
         )}
-        {linkedTodo?.billingAmount != null && (() => {
-          const { name, qty } = parsePartQty(linkedTodo.billingPart);
-          return (
-            <div className="bg-slate-100 rounded-xl p-3">
-              <p className="text-[11px] text-slate-500">부품명·수량·금액</p>
-              <p className="font-bold text-blue-700">
-                {name}{qty ? ` · ${qty}` : ""} · ₩{Number(linkedTodo.billingAmount).toLocaleString()}
-              </p>
-            </div>
-          );
-        })()}
+        {linkedTodo?.billingAmount != null && (
+          <div className="bg-slate-100 rounded-xl p-3">
+            <p className="text-[11px] text-slate-500">청구 부품·금액</p>
+            <p className="font-bold text-blue-700">
+              {linkedTodo.billingPart ? `${linkedTodo.billingPart} · ` : ""}합계 ₩{Number(linkedTodo.billingAmount).toLocaleString()}
+            </p>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2.5">
           {type === "material" && (
             <div className="bg-slate-100 rounded-xl p-3">
