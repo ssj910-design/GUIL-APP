@@ -9,12 +9,16 @@ import DutyAdmin from "@/app/components/admin/DutyAdmin";
 import LeavesAdmin from "@/app/components/admin/LeavesAdmin";
 
 function EngineerRow({ p, stats, onSave, onToggleMode, onDelete }) {
-  const [form, setForm] = useState({ phone: p.phone ?? "", minwonId: p.minwon_id ?? "", dutyOrder: p.duty_order ?? "" });
-  const dirty = form.phone !== (p.phone ?? "") || form.minwonId !== (p.minwon_id ?? "") || String(form.dutyOrder) !== String(p.duty_order ?? "");
+  const [form, setForm] = useState({ phone: p.phone ?? "", minwonId: p.minwon_id ?? "", dutyOrder: p.duty_order ?? "", hireDate: p.hire_date ?? "" });
+  const dirty = form.phone !== (p.phone ?? "") || form.minwonId !== (p.minwon_id ?? "") || String(form.dutyOrder) !== String(p.duty_order ?? "") || form.hireDate !== (p.hire_date ?? "");
   return (
     <tr className="border-b border-slate-50">
       <td className="pl-5 pr-3 py-2.5 font-bold whitespace-nowrap">{p.name}</td>
       <td className="px-3 py-2.5 w-36"><input className={inputCls} placeholder="연락처" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></td>
+      <td className="px-3 py-2.5 w-36">
+        <input type="date" className={inputCls} value={form.hireDate}
+          onChange={(e) => setForm({ ...form, hireDate: e.target.value })} />
+      </td>
       <td className="px-3 py-2.5 w-32"><input className={inputCls} placeholder="민원24 점검자 ID" value={form.minwonId} onChange={(e) => setForm({ ...form, minwonId: e.target.value })} /></td>
       <td className="px-3 py-2.5 whitespace-nowrap">
         <div className="flex items-center gap-1.5">
@@ -115,11 +119,11 @@ export default function EngineersAdmin({ data, setData }) {
 
   async function save(p, form) {
     await supabase.from("profiles").update({
-      phone: form.phone || null, minwon_id: form.minwonId || null, duty_order: form.dutyOrder === "" ? null : Number(form.dutyOrder),
+      phone: form.phone || null, minwon_id: form.minwonId || null, hire_date: form.hireDate || null, duty_order: form.dutyOrder === "" ? null : Number(form.dutyOrder),
     }).eq("id", p.id);
     setData((prev) => ({
       ...prev,
-      profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, phone: form.phone || null, minwon_id: form.minwonId || null, duty_order: form.dutyOrder === "" ? null : Number(form.dutyOrder) } : x)),
+      profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, phone: form.phone || null, minwon_id: form.minwonId || null, hire_date: form.hireDate || null, duty_order: form.dutyOrder === "" ? null : Number(form.dutyOrder) } : x)),
     }));
   }
 
@@ -163,7 +167,7 @@ export default function EngineersAdmin({ data, setData }) {
         <p className="text-[11px] text-slate-400 ml-auto max-w-xs text-right">순번 = 당직·숙직 근무표 자동 배정 순서. 순번이 있는 사람만 배정 대상이며, 근무제(5일·4일)별로 대상을 나눌 수 있습니다.</p>
       </div>
       {importing && <ImportEngineers data={data} setData={setData} onClose={() => setImporting(false)} />}
-      <AdminTable minWidth="90rem" head={["이름", "휴대폰", "아이디(민원24)", "당직 순번 / 근무제", "회원구분", "연락처", "가입상태", "가입일/승인일", "교육수료번호", "현장/고장/할일", "로그인", ""]}>
+      <AdminTable minWidth="96rem" head={["이름", "휴대폰", "입사일", "아이디(민원24)", "당직 순번 / 근무제", "회원구분", "연락처", "가입상태", "가입일/승인일", "교육수료번호", "현장/고장/할일", "로그인", ""]}>
         {engineers.map((p) => (
           <EngineerRow key={p.id} p={p} stats={statsOf(p)} onSave={save} onToggleMode={toggleMode} onDelete={remove} />
         ))}

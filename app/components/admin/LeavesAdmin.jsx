@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { AdminTable, inputCls, StatusBadge } from "@/app/components/admin/adminShared";
 import { TODAY_STR } from "@/lib/constants";
+import { annualLeaveDays, yearsOfService } from "@/lib/leave";
 
 const KINDS = ["연차", "반차", "병가", "공가", "기타"];
 // 반차는 0.5일. 그 외는 시작~종료 일수 그대로 (주말 제외는 회사 규정이 갈려 자동 계산하지 않는다)
@@ -98,22 +99,41 @@ export default function LeavesAdmin({ data, setData }) {
       </div>
 
       {/* 사람별 잔여 */}
-      <h2 className="text-sm font-extrabold text-slate-700 mb-2">{year}년 연차 현황</h2>
+      <h2 className="text-sm font-extrabold text-slate-700 mb-1">{year}년 연차 현황</h2>
+      <p className="text-[11px] text-slate-400 mb-2 leading-relaxed">
+        입사일 기준 자동 계산 (1년 미만 = 개근 개월당 1일·최대 11일 / 1년 이상 15일 / 3년부터 2년마다 +1일·상한 25일).
+        출근율 미달이나 특별휴가처럼 자동으로 알 수 없는 경우만 <b>가산·조정</b>에 값을 넣어 덮어씁니다.
+      </p>
       <div className="mb-6">
-        <AdminTable head={["이름", "부여 일수", "사용", "잔여", ""]}>
+        <AdminTable head={["이름", "입사일", "근속", "자동 계산", "가산·조정", "부여", "사용", "잔여", ""]} minWidth="60rem">
           {staff.map((p) => {
             const used = usedBy(p.id);
-            const grant = p.annual_leave_days;
+            // 해당 연도 말일 기준으로 계산 — 그 해에 발생하는 연차를 보여준다
+            const asOf = `${year}-12-31`;
+            const auto = annualLeaveDays(p.hire_date, asOf);
+            const manual = p.annual_leave_days;
+            const grant = manual ?? auto;               // 수동값이 있으면 그것이 최종 부여 일수
             const left = grant == null ? null : grant - used;
             return (
               <tr key={p.id} className="border-b border-slate-50">
                 <td className="pl-5 pr-3 py-2.5 font-bold whitespace-nowrap">{p.name}</td>
-                <td className="px-3 py-2.5 w-28">
-                  <input className={inputCls} inputMode="decimal" placeholder="미지정"
-                    defaultValue={grant ?? ""}
-                    onBlur={(e) => { if (e.target.value !== String(grant ?? "")) saveGrant(p, e.target.value.replace(/[^0-9.]/g, "")); }} />
+                <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">{p.hire_date ?? <span className="text-red-400">미입력</span>}</td>
+                <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">
+                  {p.hire_date ? `${Math.max(0, yearsOfService(p.hire_date, asOf))}년` : "-"}
                 </td>
-                <td className="px-3 py-2.5">{used}일</td>
+                <td className="px-3 py-2.5 whitespace-nowrap">
+                  {auto == null ? <span className="text-slate-300">-</span> : <span className="font-bold text-slate-600">{auto}일</span>}
+                </td>
+                <td className="px-3 py-2.5 w-28">
+                  <input className={inputCls} inputMode="decimal" placeholder="자동값 사용"
+                    defaultValue={manual ?? ""}
+                    onBlur={(e) => { if (e.target.value !== String(manual ?? "")) saveGrant(p, e.target.value.replace(/[^0-9.]/g, "")); }} />
+                </td>
+                <td className="px-3 py-2.5 whitespace-nowrap font-bold">
+                  {grant == null ? <span className="text-slate-300">-</span> : `${grant}일`}
+                  {manual != null && <span className="ml-1 text-[10px] font-bold text-amber-600">수동</span>}
+                </td>
+                <td className="px-3 py-2.5 whitespace-nowrap">{used}일</td>
                 <td className="px-3 py-2.5">
                   {left == null ? <span className="text-slate-300">-</span>
                     : <StatusBadge tone={left <= 0 ? "slate" : left <= 3 ? "amber" : "green"}>{left}일</StatusBadge>}
