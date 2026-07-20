@@ -1,5 +1,5 @@
 import { useState, useContext, useRef } from "react";
-import { Send, Plus, X, Download, MessageCircle, ThumbsUp, MoreVertical, ChevronLeft, Pin } from "lucide-react";
+import { Send, Plus, X, Download, MessageCircle, ThumbsUp, MoreVertical, ChevronLeft, Pin, Search } from "lucide-react";
 import { AuthContext } from "@/app/components/context";
 import { uploadPhoto, downloadPhoto } from "@/lib/photos";
 
@@ -11,8 +11,15 @@ function renderText(text) {
   );
 }
 
-// 첨부파일 "⋮" 메뉴 — 공지로 등록, 삭제, (본인 글이면) 수정
-function PostMenu({ post, mine, canNotice, onClose, onNotice, onEdit, onDelete }) {
+function formatDateTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// 첨부파일 "⋮" 메뉴 — 공지로 등록(누구나), 수정·삭제(관리자 또는 본인 글만)
+function PostMenu({ post, canManage, canNotice, onClose, onNotice, onEdit, onDelete }) {
   return (
     <div className="absolute right-0 top-6 z-10 bg-white rounded-xl border border-slate-200 shadow-lg py-1 w-36" onClick={(e) => e.stopPropagation()}>
       {canNotice && (
@@ -20,14 +27,16 @@ function PostMenu({ post, mine, canNotice, onClose, onNotice, onEdit, onDelete }
           {post.isNotice ? "공지 해제" : "공지로 등록"}
         </button>
       )}
-      {mine && (
+      {canManage && (
         <button onClick={() => { onEdit(); onClose(); }} className="w-full text-left px-3.5 py-2 text-xs font-bold text-slate-700 active:bg-slate-50">
           수정하기
         </button>
       )}
-      <button onClick={() => { onDelete(); onClose(); }} className="w-full text-left px-3.5 py-2 text-xs font-bold text-red-600 active:bg-red-50">
-        삭제하기
-      </button>
+      {canManage && (
+        <button onClick={() => { onDelete(); onClose(); }} className="w-full text-left px-3.5 py-2 text-xs font-bold text-red-600 active:bg-red-50">
+          삭제하기
+        </button>
+      )}
     </div>
   );
 }
@@ -44,7 +53,7 @@ function CommentRow({ c, onLike, liked, likeCount }) {
           <span className="text-xs text-slate-700">{renderText(c.text)}</span>
         </div>
         <div className="flex items-center gap-2 mt-0.5 px-1">
-          <span className="text-[10px] text-slate-400">{c.time}</span>
+          <span className="text-[10px] text-slate-400">{formatDateTime(c.createdAt)}</span>
           <button onClick={onLike} className={`text-[10px] font-bold ${liked ? "text-blue-600" : "text-slate-400"}`}>
             좋아요{likeCount > 0 ? ` ${likeCount}` : ""}
           </button>
@@ -54,8 +63,9 @@ function CommentRow({ c, onLike, liked, likeCount }) {
   );
 }
 
-// 게시글 헤더(작성자·시간·⋮메뉴) — 목록 카드/상세화면 공용
-function PostHeader({ p, mine, canNotice, menuOpen, onToggleMenu, onCloseMenu, onNotice, onEdit, onDelete }) {
+// 게시글 헤더(작성자·게시일시·⋮메뉴) — 목록 카드/상세화면 공용
+function PostHeader({ p, canManage, canNotice, menuOpen, onToggleMenu, onCloseMenu, onNotice, onEdit, onDelete }) {
+  const showMenuBtn = canNotice || canManage;
   return (
     <div className="flex items-center gap-2 mb-2 relative">
       <span className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center shrink-0">
@@ -70,17 +80,19 @@ function PostHeader({ p, mine, canNotice, menuOpen, onToggleMenu, onCloseMenu, o
             </span>
           )}
         </p>
-        <p className="text-[10px] text-slate-400">{p.time}</p>
+        <p className="text-[10px] text-slate-400">{formatDateTime(p.createdAt)}</p>
       </div>
-      <button
-        onClick={(e) => { e.stopPropagation(); onToggleMenu(); }}
-        className="p-1 text-slate-400 active:text-slate-600 shrink-0"
-        aria-label="더보기"
-      >
-        <MoreVertical size={16} />
-      </button>
+      {showMenuBtn && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleMenu(); }}
+          className="p-1 text-slate-400 active:text-slate-600 shrink-0"
+          aria-label="더보기"
+        >
+          <MoreVertical size={16} />
+        </button>
+      )}
       {menuOpen && (
-        <PostMenu post={p} mine={mine} canNotice={canNotice} onClose={onCloseMenu} onNotice={onNotice} onEdit={onEdit} onDelete={onDelete} />
+        <PostMenu post={p} canManage={canManage} canNotice={canNotice} onClose={onCloseMenu} onNotice={onNotice} onEdit={onEdit} onDelete={onDelete} />
       )}
     </div>
   );
@@ -90,6 +102,8 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   const { name: CURRENT_ENGINEER, role, signOut, profiles } = useContext(AuthContext);
   const [composing, setComposing] = useState(false);
   const [postInput, setPostInput] = useState("");
+  const [postIsNotice, setPostIsNotice] = useState(false);
+  const [pendingPhotos, setPendingPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [viewerUrl, setViewerUrl] = useState(null);
   const [commentDrafts, setCommentDrafts] = useState({});
@@ -97,7 +111,9 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState("");
   const [openPostId, setOpenPostId] = useState(null);
+  const [search, setSearch] = useState("");
   const fileRef = useRef(null);
+  const isAdmin = role === "admin";
 
   function goToPost(id) {
     setMenuFor(null);
@@ -110,13 +126,26 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   const commentsOf = (postId) =>
     feed.filter((p) => p.replyToId === postId).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
+  // 검색 — 게시자, 글내용, 댓글내용까지 모두 대상
+  const searchQuery = search.trim();
+  const visiblePosts = posts.filter((p) => {
+    if (!searchQuery) return true;
+    if ((p.author ?? "").includes(searchQuery)) return true;
+    if ((p.text ?? "").includes(searchQuery)) return true;
+    return commentsOf(p.id).some((c) => (c.text ?? "").includes(searchQuery));
+  });
+
   function submitPost() {
-    if (!postInput.trim()) return;
-    onSendChat(postInput.trim(), { replyToId: null });
+    if (!postInput.trim() && pendingPhotos.length === 0) return;
+    onSendChat(postInput.trim(), { photoUrls: pendingPhotos, replyToId: null, isNotice: postIsNotice });
     setPostInput("");
+    setPendingPhotos([]);
+    setPostIsNotice(false);
     setComposing(false);
   }
 
+  // 사진·영상은 바로 게시하지 않고 미리보기로 모아뒀다가 "게시" 버튼을 눌러야 올라간다.
+  // + 버튼을 여러 번 눌러 계속 추가할 수 있다.
   async function pickFiles(e) {
     const files = [...(e.target.files ?? [])].slice(0, 5);
     e.target.value = "";
@@ -126,9 +155,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
     try {
       const urls = [];
       for (const f of files) urls.push(await uploadPhoto(f, "room"));
-      onSendChat(postInput.trim(), { photoUrls: urls, replyToId: null });
-      setPostInput("");
-      setComposing(false);
+      setPendingPhotos((prev) => [...prev, ...urls]);
     } catch (err) {
       alert("업로드에 실패했습니다: " + err.message);
     }
@@ -210,7 +237,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
     const likes = openPost.reactions?.["👍"] ?? [];
     const liked = likes.includes(CURRENT_ENGINEER);
     const comments = commentsOf(openPost.id);
-    const mine = openPost.author === CURRENT_ENGINEER;
+    const canManage = isAdmin || openPost.author === CURRENT_ENGINEER;
     return (
       <div className="flex-1 flex flex-col overflow-hidden bg-white">
         <div className="px-4 pt-4 pb-2.5 flex items-center gap-2 shrink-0 border-b border-slate-100">
@@ -221,7 +248,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-3">
           <PostHeader
-            p={openPost} mine={mine} canNotice={!!onSetNotice}
+            p={openPost} canManage={canManage} canNotice={!!onSetNotice}
             menuOpen={menuFor === openPost.id}
             onToggleMenu={() => setMenuFor(menuFor === openPost.id ? null : openPost.id)}
             onCloseMenu={() => setMenuFor(null)}
@@ -286,6 +313,18 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
         </div>
       </div>
 
+      <div className="px-4 pt-3 shrink-0">
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            className="w-full bg-white border border-slate-200 rounded-full pl-8 pr-3 py-2 text-sm focus:outline-none"
+            placeholder="게시자·글내용·댓글로 검색"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
+
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {/* 글쓰기 */}
         <div className="bg-white rounded-2xl border border-slate-200 p-3.5">
@@ -314,14 +353,38 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
                   ))}
                 </div>
               )}
+              {pendingPhotos.length > 0 && (
+                <div className="flex gap-2 flex-wrap mb-2">
+                  {pendingPhotos.map((u, i) => (
+                    <div key={u} className="relative">
+                      {isVideo(u)
+                        ? <video src={u} className="w-14 h-14 rounded-lg object-cover" />
+                        : <img src={u} alt="첨부" className="w-14 h-14 rounded-lg object-cover" />}
+                      <button
+                        onClick={() => setPendingPhotos((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-800 text-white flex items-center justify-center"
+                        aria-label="첨부 제거"
+                      >
+                        <X size={11} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {!!onSetNotice && (
+                <label className="flex items-center gap-1.5 mb-2 text-xs font-bold text-slate-600">
+                  <input type="checkbox" checked={postIsNotice} onChange={(e) => setPostIsNotice(e.target.checked)} />
+                  공지로 등록
+                </label>
+              )}
               <div className="flex items-center justify-between pt-2 border-t border-slate-100 mt-2">
                 <input ref={fileRef} type="file" accept="image/*,video/*" multiple hidden onChange={pickFiles} />
                 <button onClick={() => fileRef.current?.click()} disabled={uploading} aria-label="사진·영상 첨부" className="w-9 h-9 rounded-full border border-slate-300 text-slate-500 flex items-center justify-center active:bg-slate-100">
                   <Plus size={16} />
                 </button>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => { setComposing(false); setPostInput(""); }} className="text-xs font-bold text-slate-400 px-3 py-2">취소</button>
-                  <button onClick={submitPost} disabled={!postInput.trim() || uploading} className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-full px-4 py-2">
+                  <button onClick={() => { setComposing(false); setPostInput(""); setPendingPhotos([]); setPostIsNotice(false); }} className="text-xs font-bold text-slate-400 px-3 py-2">취소</button>
+                  <button onClick={submitPost} disabled={(!postInput.trim() && pendingPhotos.length === 0) || uploading} className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-full px-4 py-2">
                     {uploading ? "업로드 중..." : "게시"}
                   </button>
                 </div>
@@ -331,11 +394,11 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
         </div>
 
         {/* 게시글 목록 — 카드를 누르면 상세화면(첨부파일처럼)으로 진입 */}
-        {posts.map((p) => {
+        {visiblePosts.map((p) => {
           const likes = p.reactions?.["👍"] ?? [];
           const liked = likes.includes(CURRENT_ENGINEER);
           const commentCount = commentsOf(p.id).length;
-          const mine = p.author === CURRENT_ENGINEER;
+          const canManage = isAdmin || p.author === CURRENT_ENGINEER;
           return (
             <div
               key={p.id}
@@ -343,7 +406,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
               className={`bg-white rounded-2xl border p-3.5 cursor-pointer ${p.isNotice ? "border-amber-300" : "border-slate-200"}`}
             >
               <PostHeader
-                p={p} mine={mine} canNotice={!!onSetNotice}
+                p={p} canManage={canManage} canNotice={!!onSetNotice}
                 menuOpen={menuFor === p.id}
                 onToggleMenu={() => setMenuFor(menuFor === p.id ? null : p.id)}
                 onCloseMenu={() => setMenuFor(null)}
@@ -364,6 +427,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
           );
         })}
         {posts.length === 0 && <p className="text-xs text-slate-400 text-center py-10">아직 게시글이 없습니다. 첫 소식을 올려보세요!</p>}
+        {posts.length > 0 && visiblePosts.length === 0 && <p className="text-xs text-slate-400 text-center py-10">검색 결과가 없습니다</p>}
       </div>
 
       {/* 이미지 확대보기 — 저장/닫기 */}

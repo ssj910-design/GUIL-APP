@@ -528,6 +528,7 @@ export default function App() {
       photoUrls: extra.photoUrls ?? [],
       replyToId: extra.replyToId ?? null,
       reactions: {},
+      isNotice: extra.isNotice ?? false,
     };
     await supabase.from("feed_posts").insert({
       id: newPost.id,
@@ -536,6 +537,7 @@ export default function App() {
       photo_urls: newPost.photoUrls.length ? newPost.photoUrls : null,
       reply_to_id: newPost.replyToId,
       ...(v2Ready ? { author_id: profileIdByName(profilesAll, newPost.author) } : {}),
+      ...(feedNoticeReady ? { is_notice: newPost.isNotice } : {}),
     });
     setFeed((prev) => [...prev, newPost]);
   }
