@@ -132,6 +132,8 @@ export default function EngineersAdmin({ data, setData }) {
   const [newOrder, setNewOrder] = useState("");
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
+  const archived = profiles.filter((p) => p.is_active === false)
+    .sort((a, b) => String(b.deleted_at ?? "").localeCompare(String(a.deleted_at ?? "")));
   const [sub, setSub] = useState("직원"); // 직원 | 당직 근무표 | 연차관리
 
   async function addEngineer() {
@@ -158,11 +160,21 @@ export default function EngineersAdmin({ data, setData }) {
 
   // 삭제는 실제 행 제거가 아니라 비활성 처리 — 고장·할일·자체점검이 이 프로필을 참조하고 있어
   // 진짜 지우면 과거 기록의 담당자가 사라진다.
+  // 제외(삭제) — 행을 지우지 않고 사유·시각만 남긴다. 순번·근무제는 보존해 복구 시 그대로 돌아온다.
+  // 모인 이력은 나중에 슈퍼관리자 콘솔에서 업체별 퇴사/제외 현황으로 쓴다.
   async function remove(p) {
-    if (!confirm(`${p.name} 님을 인사 목록에서 제외할까요?\n\n과거 기록(고장·할일·점검)의 담당자 표기는 그대로 남고, 목록과 배정 대상에서만 빠집니다.`)) return;
-    const { error } = await supabase.from("profiles").update({ is_active: false, duty_order: null, duty_modes: [] }).eq("id", p.id);
+    const reason = prompt(`${p.name} 님을 인사 목록에서 제외합니다.\n사유를 적어주세요 (퇴사·부서이동 등). 비워도 됩니다.`);
+    if (reason === null) return; // 취소
+    const patch = { is_active: false, deleted_at: new Date().toISOString(), delete_reason: reason.trim() || null };
+    const { error } = await supabase.from("profiles").update(patch).eq("id", p.id);
     if (error) { alert("제외 실패: " + error.message); return; }
-    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, is_active: false, duty_order: null, duty_modes: [] } : x)) }));
+    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, ...patch } : x)) }));
+  }
+
+  async function restore(p) {
+    const patch = { is_active: true, deleted_at: null, delete_reason: null };
+    await supabase.from("profiles").update(patch).eq("id", p.id);
+    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, ...patch } : x)) }));
   }
 
 
@@ -225,6 +237,37 @@ export default function EngineersAdmin({ data, setData }) {
         ))}
       </AdminTable>
       </div>
+
+      {archived.length > 0 && (
+        <details className="mt-5 bg-white border border-slate-200 rounded-xl px-4 py-3">
+          <summary className="text-xs font-bold text-slate-500 cursor-pointer">
+            제외된 직원 {archived.length}명 — 기록 보관 중
+          </summary>
+          <p className="text-[11px] text-slate-400 mt-2 mb-2.5">
+            데이터는 지워지지 않습니다. 과거 고장·할일·점검의 담당자 표기가 유지되며,
+            슈퍼관리자 콘솔에서 퇴사·제외 이력으로 집계할 예정입니다.
+          </p>
+          <div className="space-y-1.5">
+            {archived.map((p) => (
+              <div key={p.id} className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2">
+                <p className="text-xs text-slate-600 min-w-0">
+                  <span className="font-bold text-slate-800">{p.name}</span>
+                  <span className="text-slate-400"> · {p.member_type ?? "구분 없음"}</span>
+                  <br />
+                  <span className="text-[11px] text-slate-400">
+                    {p.deleted_at ? String(p.deleted_at).slice(0, 10) : "일자 미상"} 제외
+                    {p.delete_reason && ` · ${p.delete_reason}`}
+                  </span>
+                </p>
+                <button onClick={() => restore(p)}
+                  className="shrink-0 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5">
+                  복구
+                </button>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
       </>)}
     </div>
   );
