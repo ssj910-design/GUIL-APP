@@ -367,12 +367,19 @@ export default function App() {
     loadData();
   }, [session, skipLogin]);
 
-  // 우리방 새 글 감지 — 30초 폴링 (작은 팀이라 실시간 구독 대신 단순하게)
+  // 새 글·근무 교환 감지 — 30초 폴링 (작은 팀이라 실시간 구독 대신 단순하게)
+  // 교환은 상대가 수락하면 근무표 자체가 바뀌므로 duty_schedules도 같이 받는다.
   useEffect(() => {
     if (!skipLogin && !session) return;
     const t = setInterval(async () => {
-      const { data } = await supabase.from("feed_posts").select("*").order("created_at", { ascending: true });
-      if (data) setFeed(data.map(mapFeedPost));
+      const [feedRes, swapRes, dutyRes] = await Promise.all([
+        supabase.from("feed_posts").select("*").order("created_at", { ascending: true }),
+        supabase.from("duty_swaps").select("*"),
+        supabase.from("duty_schedules").select("*").gte("duty_date", TODAY_STR.slice(0, 8) + "01").order("duty_date"),
+      ]);
+      if (feedRes.data) setFeed(feedRes.data.map(mapFeedPost));
+      if (swapRes.data) setDutySwaps(swapRes.data.map(mapDutySwap));
+      if (dutyRes.data) setDutySchedules(dutyRes.data.map(mapDutySchedule));
     }, 30000);
     return () => clearInterval(t);
   }, [session, skipLogin]);
