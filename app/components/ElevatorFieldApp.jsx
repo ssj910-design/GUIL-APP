@@ -955,6 +955,17 @@ export default function App() {
   const unreadPosts = feed.filter((p) => p.author !== myName && p.createdAt && new Date(p.createdAt).getTime() > readMs);
   const mentionCnt = unreadPosts.filter((p) => (p.text ?? "").includes("@" + myName) || (p.text ?? "").includes("@모두")).length;
 
+  // 알림(종) — 고장/할일/자재지급: "안읽음" 개념이 없어 각 탭이 이미 쓰는 "지금 나에게 처리 필요한 건" 기준을 그대로 재사용한다.
+  const notifFailures = failures.filter((f) => f.status !== "완료" && (f.assignee === myName || !f.assignee));
+  const notifTodos = todos.filter((t) => t.assignee === myName && !t.done);
+  const isMaterialBilled = (id) => todos.some((t) => t.materialRequestId === id && t.done === true);
+  const isQuoteBilled = (id) => todos.some((t) => t.quoteRequestId === id && t.done === true);
+  const notifMaterials = materialRequests.filter((r) => r.engineer === myName && r.status === "지급완료" && !isMaterialBilled(r.id));
+  const notifQuotes = quoteRequests.filter((q) => q.engineer === myName && q.status === "자재지급완료" && !isQuoteBilled(q.id));
+  const notifRestock = restockRequests.filter((r) => r.engineer === myName && r.status === "완료" && !r.receivedAt);
+  const notifSupplyCnt = notifMaterials.length + notifQuotes.length + notifRestock.length;
+  const totalNotifCnt = unreadPosts.length + notifFailures.length + notifTodos.length + notifSupplyCnt;
+
   if (!skipLogin && session === undefined) {
     return (
       <div className="h-dvh w-screen bg-slate-50 flex items-center justify-center">
@@ -986,9 +997,9 @@ export default function App() {
               <div className="relative">
                 <button onClick={() => setNotifOpen((v) => !v)} className="relative p-1.5 bg-blue-900 rounded-full" aria-label="알림">
                   <Bell size={16} />
-                  {unreadPosts.length > 0 && (
+                  {totalNotifCnt > 0 && (
                     <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center border border-blue-950">
-                      {unreadPosts.length > 99 ? "99+" : unreadPosts.length}
+                      {totalNotifCnt > 99 ? "99+" : totalNotifCnt}
                     </span>
                   )}
                 </button>
@@ -999,27 +1010,87 @@ export default function App() {
                       <div className="px-4 py-3 border-b border-slate-100">
                         <p className="text-sm font-bold text-slate-800">알림</p>
                       </div>
-                      {unreadPosts.length === 0 ? (
+                      {totalNotifCnt === 0 ? (
                         <p className="text-xs text-slate-400 text-center py-8">새 알림이 없습니다</p>
                       ) : (
-                        [...unreadPosts].reverse().map((p) => (
-                          <button
-                            key={p.id}
-                            onClick={() => { setNotifOpen(false); setRoomOpen(true); }}
-                            className="w-full text-left px-4 py-2.5 border-b border-slate-50 last:border-0 active:bg-slate-50"
-                          >
-                            <p className="text-xs font-bold text-slate-700">
-                              {(p.text ?? "").includes("@" + myName) || (p.text ?? "").includes("@모두") ? (
-                                <span className="text-amber-600">@멘션 · </span>
-                              ) : null}
-                              {p.author}
-                            </p>
-                            <p className="text-xs text-slate-500 truncate mt-0.5">
-                              {p.text || ((p.photoUrls ?? []).length > 0 ? "사진을 게시했습니다" : "")}
-                            </p>
-                            <p className="text-[10px] text-slate-400 mt-0.5">{(p.createdAt ?? "").slice(0, 10)} {p.time}</p>
-                          </button>
-                        ))
+                        <>
+                          {notifFailures.length > 0 && (
+                            <div>
+                              <p className="px-4 pt-2.5 pb-1 text-[10px] font-bold text-slate-400">고장</p>
+                              {notifFailures.map((f) => (
+                                <button
+                                  key={f.id}
+                                  onClick={() => { setNotifOpen(false); setTab("failure"); }}
+                                  className="w-full text-left px-4 py-2 border-b border-slate-50 active:bg-slate-50"
+                                >
+                                  <p className="text-xs font-bold text-slate-700">{f.siteName} · {f.elevatorNo}</p>
+                                  <p className="text-xs text-slate-500 truncate mt-0.5">{f.errorCode} · {f.assignee ? "출동 대기" : "미배정"}</p>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {notifTodos.length > 0 && (
+                            <div>
+                              <p className="px-4 pt-2.5 pb-1 text-[10px] font-bold text-slate-400">할일</p>
+                              {notifTodos.map((t) => (
+                                <button
+                                  key={t.id}
+                                  onClick={() => { setNotifOpen(false); setTab("todo"); }}
+                                  className="w-full text-left px-4 py-2 border-b border-slate-50 active:bg-slate-50"
+                                >
+                                  <p className="text-xs font-bold text-slate-700">{t.title}</p>
+                                  <p className="text-xs text-slate-500 truncate mt-0.5">{t.siteName ?? ""}{t.dueDate ? ` · ~${t.dueDate}` : ""}</p>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {notifSupplyCnt > 0 && (
+                            <div>
+                              <p className="px-4 pt-2.5 pb-1 text-[10px] font-bold text-slate-400">자재지급</p>
+                              {notifMaterials.map((r) => (
+                                <button key={r.id} onClick={() => { setNotifOpen(false); setTab("material"); }} className="w-full text-left px-4 py-2 border-b border-slate-50 active:bg-slate-50">
+                                  <p className="text-xs font-bold text-slate-700">{r.part}</p>
+                                  <p className="text-xs text-slate-500 truncate mt-0.5">{r.siteName ?? ""} · 지급완료</p>
+                                </button>
+                              ))}
+                              {notifQuotes.map((q) => (
+                                <button key={q.id} onClick={() => { setNotifOpen(false); setTab("material"); }} className="w-full text-left px-4 py-2 border-b border-slate-50 active:bg-slate-50">
+                                  <p className="text-xs font-bold text-slate-700">{q.constructionType}</p>
+                                  <p className="text-xs text-slate-500 truncate mt-0.5">{q.siteName ?? ""} · 자재지급완료</p>
+                                </button>
+                              ))}
+                              {notifRestock.map((r) => (
+                                <button key={r.id} onClick={() => { setNotifOpen(false); setTab("material"); }} className="w-full text-left px-4 py-2 border-b border-slate-50 active:bg-slate-50">
+                                  <p className="text-xs font-bold text-slate-700">{r.part} 상비부품</p>
+                                  <p className="text-xs text-slate-500 truncate mt-0.5">{r.suppliedDate} 지급완료 · 수령확인 필요</p>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {unreadPosts.length > 0 && (
+                            <div>
+                              <p className="px-4 pt-2.5 pb-1 text-[10px] font-bold text-slate-400">게시판</p>
+                              {[...unreadPosts].reverse().map((p) => (
+                                <button
+                                  key={p.id}
+                                  onClick={() => { setNotifOpen(false); setRoomOpen(true); }}
+                                  className="w-full text-left px-4 py-2.5 border-b border-slate-50 last:border-0 active:bg-slate-50"
+                                >
+                                  <p className="text-xs font-bold text-slate-700">
+                                    {(p.text ?? "").includes("@" + myName) || (p.text ?? "").includes("@모두") ? (
+                                      <span className="text-amber-600">@멘션 · </span>
+                                    ) : null}
+                                    {p.author}
+                                  </p>
+                                  <p className="text-xs text-slate-500 truncate mt-0.5">
+                                    {p.text || ((p.photoUrls ?? []).length > 0 ? "사진을 게시했습니다" : "")}
+                                  </p>
+                                  <p className="text-[10px] text-slate-400 mt-0.5">{(p.createdAt ?? "").slice(0, 10)} {p.time}</p>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </>
