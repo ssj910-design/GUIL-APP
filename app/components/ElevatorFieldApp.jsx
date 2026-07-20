@@ -198,7 +198,7 @@ export default function App() {
   async function handleGenerateDuty(ym, mode = "주5일") {
     // 선택한 근무제(주5일·주4일)에 속하면서 순번이 있는 사람만 순환에 넣는다 — 인사관리에서 관리
     const roster = engineers
-      .filter((e) => e.duty_enabled !== false && e.duty_order != null && (e.duty_modes ?? []).includes(mode))
+      .filter((e) => e.duty_order != null && (e.duty_modes ?? []).includes(mode))
       .sort((a, b) => a.duty_order - b.duty_order);
     if (!roster.length) { alert(`${mode} 근무제 대상자가 없습니다. 관리자 콘솔 → 인사관리에서 순번과 근무제를 지정하세요.`); return; }
     const [y, m] = ym.split("-").map(Number);

@@ -6,21 +6,18 @@ import { supabase } from "@/lib/supabaseClient";
 import { StatusBadge, AdminTable, inputCls } from "@/app/components/admin/adminShared";
 import ImportEngineers from "@/app/components/admin/ImportEngineers";
 
-function EngineerRow({ p, stats, onSave, onToggleDuty, onToggleMode, onDelete }) {
-  const [form, setForm] = useState({ phone: p.phone ?? "", region: p.region ?? "", minwonId: p.minwon_id ?? "", dutyOrder: p.duty_order ?? "" });
-  const dirty = form.phone !== (p.phone ?? "") || form.region !== (p.region ?? "") || form.minwonId !== (p.minwon_id ?? "") || String(form.dutyOrder) !== String(p.duty_order ?? "");
+function EngineerRow({ p, stats, onSave, onToggleMode, onDelete }) {
+  const [form, setForm] = useState({ phone: p.phone ?? "", minwonId: p.minwon_id ?? "", dutyOrder: p.duty_order ?? "" });
+  const dirty = form.phone !== (p.phone ?? "") || form.minwonId !== (p.minwon_id ?? "") || String(form.dutyOrder) !== String(p.duty_order ?? "");
   return (
     <tr className="border-b border-slate-50">
       <td className="pl-5 pr-3 py-2.5 font-bold whitespace-nowrap">{p.name}</td>
       <td className="px-3 py-2.5 w-36"><input className={inputCls} placeholder="연락처" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></td>
-      <td className="px-3 py-2.5 w-28"><input className={inputCls} placeholder="담당지역" value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} /></td>
       <td className="px-3 py-2.5 w-32"><input className={inputCls} placeholder="민원24 점검자 ID" value={form.minwonId} onChange={(e) => setForm({ ...form, minwonId: e.target.value })} /></td>
       <td className="px-3 py-2.5 whitespace-nowrap">
         <div className="flex items-center gap-1.5">
-          <input type="checkbox" checked={p.duty_enabled !== false} onChange={(e) => onToggleDuty(p, e.target.checked)}
-            className="w-4 h-4 accent-blue-700" title="당직 대상 (끄면 순번은 유지한 채 배정에서만 제외)" />
           <input className={`${inputCls} w-12`} inputMode="numeric" placeholder="순번"
-            disabled={p.duty_enabled === false} value={form.dutyOrder}
+            value={form.dutyOrder}
             onChange={(e) => setForm({ ...form, dutyOrder: e.target.value.replace(/[^0-9]/g, "") })} />
           {["주5일", "주4일"].map((mode) => (
             <label key={mode} className={`text-[10px] font-bold rounded px-1.5 py-1 cursor-pointer border ${
@@ -98,9 +95,9 @@ export default function EngineersAdmin({ data, setData }) {
   // 진짜 지우면 과거 기록의 담당자가 사라진다.
   async function remove(p) {
     if (!confirm(`${p.name} 님을 인사 목록에서 제외할까요?\n\n과거 기록(고장·할일·점검)의 담당자 표기는 그대로 남고, 목록과 배정 대상에서만 빠집니다.`)) return;
-    const { error } = await supabase.from("profiles").update({ is_active: false, duty_enabled: false }).eq("id", p.id);
+    const { error } = await supabase.from("profiles").update({ is_active: false, duty_order: null, duty_modes: [] }).eq("id", p.id);
     if (error) { alert("제외 실패: " + error.message); return; }
-    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, is_active: false, duty_enabled: false } : x)) }));
+    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, is_active: false, duty_order: null, duty_modes: [] } : x)) }));
   }
 
   // 근무제(주5일·주4일)별 당직 대상 지정 — 같은 사람이 한쪽 편성에만 들어가는 경우가 있다
@@ -112,19 +109,14 @@ export default function EngineersAdmin({ data, setData }) {
     setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, duty_modes: next } : x)) }));
   }
 
-  async function toggleDuty(p, on) {
-    await supabase.from("profiles").update({ duty_enabled: on }).eq("id", p.id);
-    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, duty_enabled: on } : x)) }));
-  }
 
   async function save(p, form) {
     await supabase.from("profiles").update({
-      phone: form.phone || null, region: form.region || null,
-      minwon_id: form.minwonId || null, duty_order: form.dutyOrder === "" ? null : Number(form.dutyOrder),
+      phone: form.phone || null, minwon_id: form.minwonId || null, duty_order: form.dutyOrder === "" ? null : Number(form.dutyOrder),
     }).eq("id", p.id);
     setData((prev) => ({
       ...prev,
-      profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, phone: form.phone || null, region: form.region || null, minwon_id: form.minwonId || null, duty_order: form.dutyOrder === "" ? null : Number(form.dutyOrder) } : x)),
+      profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, phone: form.phone || null, minwon_id: form.minwonId || null, duty_order: form.dutyOrder === "" ? null : Number(form.dutyOrder) } : x)),
     }));
   }
 
@@ -152,12 +144,12 @@ export default function EngineersAdmin({ data, setData }) {
           className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
           공단 회원목록 엑셀로 등록
         </button>
-        <p className="text-[11px] text-slate-400 ml-auto max-w-xs text-right">순번 = 당직·숙직 근무표 자동 배정 순서. 당직을 서는 사람만 채우세요.</p>
+        <p className="text-[11px] text-slate-400 ml-auto max-w-xs text-right">순번 = 당직·숙직 근무표 자동 배정 순서. 순번이 있는 사람만 배정 대상이며, 근무제(5일·4일)별로 대상을 나눌 수 있습니다.</p>
       </div>
       {importing && <ImportEngineers data={data} setData={setData} onClose={() => setImporting(false)} />}
-      <AdminTable minWidth="90rem" head={["이름", "휴대폰", "담당지역", "아이디(민원24)", "당직 / 순번 / 근무제", "회원구분", "연락처", "가입상태", "가입일/승인일", "교육수료번호", "현장/고장/할일", "로그인", ""]}>
+      <AdminTable minWidth="90rem" head={["이름", "휴대폰", "아이디(민원24)", "당직 순번 / 근무제", "회원구분", "연락처", "가입상태", "가입일/승인일", "교육수료번호", "현장/고장/할일", "로그인", ""]}>
         {engineers.map((p) => (
-          <EngineerRow key={p.id} p={p} stats={statsOf(p)} onSave={save} onToggleDuty={toggleDuty} onToggleMode={toggleMode} onDelete={remove} />
+          <EngineerRow key={p.id} p={p} stats={statsOf(p)} onSave={save} onToggleMode={toggleMode} onDelete={remove} />
         ))}
       </AdminTable>
     </div>

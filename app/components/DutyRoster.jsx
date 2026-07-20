@@ -27,7 +27,7 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
 
   // 이름 조회용은 전원, 담당자 선택은 당직 대상자 우선 정렬
   const roster = engineers.slice().sort((a, b) => (a.duty_order ?? 999) - (b.duty_order ?? 999));
-  const dutyRoster = roster.filter((e) => e.duty_enabled !== false && e.duty_order != null);
+  const dutyRoster = roster.filter((e) => e.duty_order != null);
   // 근무제별 대상자 — 인사관리에서 지정한 duty_modes로 거른다
   const rosterOf = (mode) => dutyRoster.filter((e) => (e.duty_modes ?? []).includes(mode));
   const nameOf = (pid) => roster.find((e) => e.id === pid)?.name ?? "";
