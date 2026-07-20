@@ -1,4 +1,4 @@
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect } from "react";
 import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone } from "@/lib/utils";
@@ -1031,9 +1031,13 @@ function FailureStatusOverview({ failures, onReassign }) {
 }
 
 
-export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, toast }) {
+export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
+  // 홈 "모두 보기" 등 외부에서 특정 서브탭으로 진입 (SiteTab focusSiteId와 같은 패턴)
+  useEffect(() => {
+    if (focusSubTab) { setSubTab(focusSubTab); onFocusHandled?.(); }
+  }, [focusSubTab]); // eslint-disable-line react-hooks/exhaustive-deps
   const subTabs = ["접수등록", "미배정", "처리등록", "처리현황"];
   const unassignedCount = failures.filter((f) => !f.assignee && f.status === "미처리").length;
   const waitingCount = failures.filter((f) => f.assignee === CURRENT_ENGINEER && f.status === "미처리").length;

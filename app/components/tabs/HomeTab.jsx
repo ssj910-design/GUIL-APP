@@ -80,7 +80,7 @@ function FailureHistoryDetailScreen({ site, failures, onBack }) {
 }
 
 
-export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, toast }) {
+export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onShowAllFailures, toast }) {
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const { name: CURRENT_ENGINEER, role, engineerNames } = useContext(AuthContext);
@@ -136,9 +136,12 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
   const activeMine = failures.filter((f) => f.status !== "완료" && (f.assignee === CURRENT_ENGINEER || !f.assignee));
   // 진행 중(작업중·출동중)을 위로, 그다음 응답대기·미배정 — 접수 순서는 유지
   const stageRank = (f) => (f.status === "진행중" ? 0 : f.assignee ? 1 : 2);
-  const sortedActive = [...activeMine].sort((a, b) => stageRank(a) - stageRank(b));
+  // 관리자 홈은 액션이 필요한 것만(미배정·응답대기) — 출동중·작업중은 기사 현황판과 "모두 보기"로
+  const listSource = role === "admin"
+    ? activeMine.filter((f) => f.status === "미처리").sort((a, b) => (a.assignee ? 1 : 0) - (b.assignee ? 1 : 0))
+    : [...activeMine].sort((a, b) => stageRank(a) - stageRank(b));
   const [showAllFailures, setShowAllFailures] = useState(false);
-  const shownFailures = showAllFailures ? sortedActive : sortedActive.slice(0, 5);
+  const shownFailures = showAllFailures ? listSource : listSource.slice(0, 5);
 
   if (historySite) {
     return <FailureHistoryDetailScreen site={historySite} failures={failures} onBack={() => setHistorySite(null)} />;
@@ -147,48 +150,72 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
   return (
     <div className="flex-1 overflow-y-auto pb-4 relative">
       {/* 기사 현황판 — 관리자 전용: 누가 어디서 뭘 하는지 (진행중 고장 기준) */}
-      {role === "admin" && (
-        <div className="px-5 pt-4">
-          <h3 className="font-bold text-slate-800 text-sm mb-2">기사 현황판</h3>
-          <div className="grid grid-cols-2 gap-2">
-            {engineerNames.map((name) => {
-              const act = failures.filter((f) => f.assignee === name && f.status === "진행중");
-              const cur = act[0];
-              const state = !act.length ? null : cur.arrivalTime ? "처리중" : "출동중";
-              return (
-                <div key={name} className="bg-white rounded-xl border border-slate-200 p-3">
-                  <div className="flex items-center justify-between gap-1">
-                    <p className="text-sm font-bold truncate">{name}</p>
-                    <span className={`shrink-0 text-[10px] font-bold rounded-full px-2 py-0.5 ${
-                      state === "출동중" ? "bg-amber-50 text-amber-600" : state === "처리중" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
-                    }`}>
-                      {state ?? "대기"}
-                    </span>
-                  </div>
-                  {cur ? (
+      {role === "admin" && (() => {
+        // 활동 중(진행중 건 보유) 기사만 카드로 — 인원이 많아져도 카드는 "지금 뛰는 사람 수"만큼만
+        const engStates = engineerNames.map((name) => {
+          const act = failures.filter((f) => f.assignee === name && f.status === "진행중");
+          const cur = act[0];
+          return { name, act, cur, state: !act.length ? null : cur.arrivalTime ? "처리중" : "출동중" };
+        });
+        const working = engStates.filter((e) => e.state);
+        const idle = engStates.filter((e) => !e.state);
+        return (
+          <div className="px-5 pt-4">
+            <h3 className="font-bold text-slate-800 text-sm mb-2">기사 현황판</h3>
+            {working.length === 0 ? (
+              <div className="bg-white rounded-xl border border-slate-200 py-4 mb-2">
+                <p className="text-xs text-slate-400 text-center">지금 출동·작업 중인 기사가 없습니다</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                {working.map(({ name, act, cur, state }) => (
+                  <div key={name} className="bg-white rounded-xl border border-slate-200 p-3">
+                    <div className="flex items-center justify-between gap-1">
+                      <p className="text-sm font-bold truncate">{name}</p>
+                      <span className={`shrink-0 text-[10px] font-bold rounded-full px-2 py-0.5 ${
+                        state === "출동중" ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600"
+                      }`}>
+                        {state}
+                      </span>
+                    </div>
                     <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
                       {cur.siteName} · {cur.elevatorNo}
                       <br />
                       {state === "출동중" ? `도착 예정 ${cur.etaMinutes ?? "?"}분` : `${cur.arrivalTime} 도착`}
                       {act.length > 1 && <span className="text-slate-400"> 외 {act.length - 1}건</span>}
                     </p>
-                  ) : (
-                    <p className="text-[11px] text-slate-400 mt-1">진행 중 없음</p>
-                  )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {idle.length > 0 && (
+              <details className="bg-white rounded-xl border border-slate-200 px-4 py-3">
+                <summary className="text-xs font-bold text-slate-500 cursor-pointer">대기 {idle.length}명</summary>
+                <div className="flex flex-wrap gap-1.5 pt-2">
+                  {idle.map(({ name }) => (
+                    <span key={name} className="text-[11px] font-bold text-slate-600 bg-slate-100 rounded-full px-2.5 py-1">{name}</span>
+                  ))}
                 </div>
-              );
-            })}
+              </details>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 고장 처리 현황 */}
       <div className="px-5 pt-4">
-        <h3 className="font-bold text-slate-800 text-sm mb-2">고장 처리 현황</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-bold text-slate-800 text-sm">{role === "admin" ? "배정 대기 고장" : "고장 처리 현황"}</h3>
+          {role === "admin" && onShowAllFailures && (
+            <button onClick={onShowAllFailures} className="text-[11px] font-bold text-blue-700">
+              모두 보기 (출동·작업·완료 포함) →
+            </button>
+          )}
+        </div>
         <div className="space-y-2.5">
           {activeMine.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-200 py-5">
-              <p className="text-xs text-slate-400 text-center">진행 중인 고장이 없습니다</p>
+              <p className="text-xs text-slate-400 text-center">{role === "admin" ? "배정 대기 중인 고장이 없습니다" : "진행 중인 고장이 없습니다"}</p>
             </div>
           ) : (
             shownFailures.map((f) => (
@@ -204,12 +231,12 @@ export function HomeTab({ inspections, failures, onDispatch, onArrive, onResult,
               />
             ))
           )}
-          {sortedActive.length > 5 && (
+          {listSource.length > 5 && (
             <button
               onClick={() => setShowAllFailures(!showAllFailures)}
               className="w-full text-center text-xs font-bold text-blue-700 bg-white border border-slate-200 rounded-xl py-2.5"
             >
-              {showAllFailures ? "접기" : `전체 ${sortedActive.length}건 보기`}
+              {showAllFailures ? "접기" : `전체 ${listSource.length}건 보기`}
             </button>
           )}
         </div>

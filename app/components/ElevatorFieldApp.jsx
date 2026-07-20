@@ -86,6 +86,7 @@ export default function App() {
 
   const [tab, setTab] = useState("home");
   const [focusSiteId, setFocusSiteId] = useState(null);
+  const [failureFocusTab, setFailureFocusTab] = useState(null); // 고장접수 탭 진입 시 열 서브탭 (홈 "모두 보기" 등)
   const [focusUnit, setFocusUnit] = useState(null);
   const [sites, setSites] = useState([]);
   const [units, setUnits] = useState([]); // v2: 호기 목록 (마이그레이션 전 DB에서는 빈 배열)
@@ -1215,6 +1216,7 @@ export default function App() {
               onResult={handleFailureResult}
               onRefuse={handleRefuseFailure}
               onAssign={handleAssignFailure}
+              onShowAllFailures={() => { setFailureFocusTab("처리현황"); setTab("failure"); }}
               toast={failureToast}
             />
           )}
@@ -1229,6 +1231,8 @@ export default function App() {
               onRefuse={handleRefuseFailure}
               onAssign={handleAssignFailure}
               onReassign={handleReassignFailure}
+              focusSubTab={failureFocusTab}
+              onFocusHandled={() => setFailureFocusTab(null)}
               toast={failureToast}
             />
           )}
