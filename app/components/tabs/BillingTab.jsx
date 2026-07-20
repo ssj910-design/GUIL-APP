@@ -18,7 +18,8 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [uploadSession] = useState(() => Date.now());
   const [mode, setMode] = useState("material"); // material | manual
-  const openTodos = todos.filter((t) => !t.done && t.assignee === CURRENT_ENGINEER);
+  // 자재지급건 청구는 기사가 자재신청/견적요청으로 만든 할일만 대상 — 관리자가 직접 부여한 할일(source: manual)은 제외.
+  const openTodos = todos.filter((t) => !t.done && t.assignee === CURRENT_ENGINEER && t.source !== "manual");
   const [selectedId, setSelectedId] = useState(openTodos[0]?.id ?? "");
   const [materialCost, setMaterialCost] = useState("");
   const [materialReplaceDate, setMaterialReplaceDate] = useState(TODAY_STR);

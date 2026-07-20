@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { ListTodo, Check, CheckCircle2, Search, Lock, Image as ImageIcon, Download } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { addDays, formatShortDate } from "@/lib/utils";
+import { addDays, formatShortDate, formatYyMmDd } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { downloadPhoto, sanitizeFilename, extOf } from "@/lib/photos";
 import { DDay, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
@@ -281,12 +281,6 @@ export function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhoto
           <span className="text-slate-400">현장</span>
           <span className="font-semibold text-slate-700">{todo.siteName}</span>
         </div>
-        {todo.part && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">부품/공사</span>
-            <span className="font-semibold text-slate-700">{todo.part}</span>
-          </div>
-        )}
         {todo.billingAmount != null && (
           <div className="flex items-center justify-between text-sm">
             <span className="text-slate-400">교체부품·청구금액</span>
@@ -301,11 +295,11 @@ export function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhoto
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">부여일</span>
-          <span className="font-semibold text-slate-700">{todo.assignedDate}</span>
+          <span className="font-semibold text-slate-700">{formatYyMmDd(todo.assignedDate)}</span>
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">마감일</span>
-          <span className="font-semibold text-slate-700">{formatShortDate(todo.dueDate)}</span>
+          <span className="font-semibold text-slate-700">{formatYyMmDd(todo.dueDate)}</span>
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">상태</span>
