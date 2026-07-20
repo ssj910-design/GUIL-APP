@@ -2,14 +2,14 @@ import { useState, useContext } from "react";
 import { ChevronLeft, ChevronRight, X, ArrowLeftRight } from "lucide-react";
 import { AuthContext } from "@/app/components/context";
 import { TODAY_STR } from "@/lib/constants";
-import holidays from "@/lib/holidays.json";
+import { useHolidays } from "@/app/hooks/useHolidays";
 
 // 칸에 그리는 순서 — 당직 → 숙직 → 정상근무.
 // 정상근무는 주4일제 표에서 금요일에만 쓰이는 자리라 값이 있을 때(또는 관리자)만 칸을 보여준다.
 const KINDS = ["당직", "숙직", "정상근무"];
 const KIND_TEXT = { 당직: "text-emerald-700", 숙직: "text-blue-700", 정상근무: "text-violet-500" };
 const KIND_DOT = { 당직: "bg-emerald-500", 숙직: "bg-blue-500", 정상근무: "bg-violet-400" };
-const HOLIDAY = holidays.days;
+
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
 const ymOf = (y, m) => `${y}-${String(m + 1).padStart(2, "0")}`;
@@ -82,6 +82,7 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
   const [swapFrom, setSwapFrom] = useState(null); // 기사: 교환 요청 출발 칸
   const [busy, setBusy] = useState(false);
   const [genMode, setGenMode] = useState(null); // 근무제 선택 시트 (주5일 | 주4일)
+  const { days: HOLIDAY } = useHolidays();
 
   // 이름 조회용은 전원, 담당자 선택은 당직 대상자 우선 정렬
   const roster = engineers.slice().sort((a, b) => (a.duty_order ?? 999) - (b.duty_order ?? 999));

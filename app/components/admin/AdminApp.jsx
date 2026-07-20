@@ -36,6 +36,7 @@ const MENU = [
 
 export default function AdminApp() {
   const [menu, setMenu] = useState("dashboard");
+  const [hrSub, setHrSub] = useState("직원"); // 인사관리 하위 탭 (대시보드에서 워크 캘린더로 바로 진입)
   const [navOpen, setNavOpen] = useState(false); // 모바일 드로어
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
@@ -118,7 +119,7 @@ export default function AdminApp() {
         {loading ? (
           <p className="text-sm text-slate-400 pt-20 text-center">데이터를 불러오는 중...</p>
         ) : menu === "dashboard" ? (
-          <Dashboard data={data} />
+          <Dashboard data={data} onOpenWorkCalendar={() => { setHrSub("워크 캘린더"); setMenu("engineers"); }} />
         ) : menu === "sites" ? (
           <SitesAdmin data={data} setData={setData} />
         ) : menu === "failures" ? (
@@ -134,7 +135,7 @@ export default function AdminApp() {
         ) : menu === "selfChecks" ? (
           <SelfChecksAdmin data={data} setData={setData} />
         ) : menu === "engineers" ? (
-          <EngineersAdmin data={data} setData={setData} />
+          <EngineersAdmin data={data} setData={setData} sub={hrSub} onSub={setHrSub} />
         ) : menu === "stats" ? (
           <StatsAdmin data={data} />
         ) : (

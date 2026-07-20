@@ -7,7 +7,7 @@ import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
-import holidays from "@/lib/holidays.json";
+import { useHolidays } from "@/app/hooks/useHolidays";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const KIND_TONE = {
@@ -16,7 +16,7 @@ const KIND_TONE = {
   정상근무: "bg-violet-50 text-violet-500",
 };
 const LEAVE_TONE = "bg-amber-50 text-amber-700";
-const HOLIDAY = holidays.days; // 공휴일은 일요일과 같은 빨간 날로 취급한다
+
 
 const ymOf = (y, m) => `${y}-${String(m + 1).padStart(2, "0")}`;
 
@@ -26,6 +26,7 @@ export default function WorkCalendar({ data }) {
   const [duties, setDuties] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [show, setShow] = useState({ 근무: true, 휴가: true });
+  const { days: HOLIDAY, source: holidaySource, stale: holidayStale } = useHolidays(cursor.y);
 
   const { y, m } = cursor;
   const ym = ymOf(y, m);
@@ -82,6 +83,15 @@ export default function WorkCalendar({ data }) {
         </div>
       </div>
 
+      {holidayStale && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 mb-3">
+          <p className="text-[11px] font-bold text-amber-800">{y}년 공휴일 데이터가 없습니다</p>
+          <p className="text-[11px] text-amber-700 mt-0.5">
+            공휴일 자동 동기화(특일정보 API) 키가 아직 등록되지 않았습니다. 등록 전까지는 2026년만 표시됩니다.
+          </p>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
           {DOW.map((d, i) => (
@@ -119,7 +129,7 @@ export default function WorkCalendar({ data }) {
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-blue-400 inline-block" /> 파랑 — 숙직</span>
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-violet-400 inline-block" /> 보라 — 정상근무</span>
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-amber-400 inline-block" /> 노랑 — 휴가</span>
-        <span className="ml-auto">공휴일 {monthHolidays}일 · 휴가 {monthLeaveDays}일</span>
+        <span className="ml-auto">공휴일 {monthHolidays}일 · 휴가 {monthLeaveDays}일 <span className="text-slate-300">({holidaySource === "db" ? "자동 동기화" : "내장 파일"})</span></span>
       </div>
     </div>
   );

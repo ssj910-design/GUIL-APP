@@ -3,6 +3,7 @@
 // 관리자 대시보드 — 오늘 처리해야 할 일이 한눈에 보이는 화면.
 // 호기·담당자 표기는 v2 FK(unitId/assigneeId)를 우선 쓰고, 옛 라벨은 fallback.
 import { useState } from "react";
+import WeekStrip from "@/app/components/admin/WeekStrip";
 import { AlertOctagon } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
 import { addDays, unitsToInspections, stripCityPrefix, groupBySite } from "@/lib/utils";
@@ -69,7 +70,7 @@ export function FailureDetailContent({ f, units, sites }) {
   );
 }
 
-export default function Dashboard({ data }) {
+export default function Dashboard({ data, onOpenWorkCalendar }) {
   const { sites, units, failures, inspections, materialRequests, quoteRequests, todos, billings, selfChecks, profiles } = data;
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const [historySite, setHistorySite] = useState(null);
@@ -167,6 +168,8 @@ export default function Dashboard({ data }) {
           tone={monthChecks.length && doneChecks.length < monthChecks.length ? "text-amber-600" : "text-slate-900"}
         />
       </div>
+
+      <WeekStrip data={data} onOpenCalendar={onOpenWorkCalendar} />
 
       {/* 집중 관리현장 */}
       <section className="bg-red-50 border border-red-200 rounded-xl p-5 mb-6">

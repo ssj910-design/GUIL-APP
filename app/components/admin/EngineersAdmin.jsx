@@ -125,7 +125,7 @@ function EngineerCard({ p, stats, onSave, onDelete }) {
   );
 }
 
-export default function EngineersAdmin({ data, setData }) {
+export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
   const { profiles, sites, failures, todos } = data;
   // 순번(당직·숙직 근무표 배정 순서)대로 정렬 — 순번 없는 사람은 뒤로
   const engineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false)
@@ -136,7 +136,10 @@ export default function EngineersAdmin({ data, setData }) {
   const [importing, setImporting] = useState(false);
   const archived = profiles.filter((p) => p.is_active === false)
     .sort((a, b) => String(b.deleted_at ?? "").localeCompare(String(a.deleted_at ?? "")));
-  const [sub, setSub] = useState("직원"); // 직원 | 당직 근무표 | 연차관리
+  const [subLocal, setSubLocal] = useState("직원");
+  // 대시보드에서 특정 탭으로 바로 들어오는 경우가 있어 상위에서 제어할 수 있게 열어 둔다
+  const sub = subProp ?? subLocal;
+  const setSub = onSub ?? setSubLocal;
 
   async function addEngineer() {
     const name = newName.trim();

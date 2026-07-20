@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/sync-inspection-cache",
       "schedule": "0 19 * * *"
+    },
+    {
+      "path": "/api/cron/sync-holidays",
+      "schedule": "0 3 1 * *"
     }
   ]
 }
