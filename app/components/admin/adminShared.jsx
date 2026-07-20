@@ -111,3 +111,39 @@ export function sortRows(rows, sort, getVal) {
   });
   return sort.dir === "desc" ? sorted.reverse() : sorted;
 }
+
+
+// 날짜 입력 — 모바일은 년/월/일 셀렉트(네이티브 휠 피커로 뜬다), PC는 직접 타이핑.
+// input[type=date]의 달력 팝업이 모바일에서 쓰기 불편하다는 피드백으로 나눠 놓았다.
+export function DateField({ value, onChange, fromYear = 1980, toYear = new Date().getFullYear() + 1 }) {
+  const [y, m, d] = (value ?? "").split("-");
+  const set = (ny, nm, nd) => {
+    if (!ny || !nm || !nd) { onChange(""); return; }
+    // 말일 보정 — 2/31 같은 조합이 만들어지지 않게
+    const last = new Date(Number(ny), Number(nm), 0).getDate();
+    onChange(`${ny}-${nm.padStart(2, "0")}-${String(Math.min(Number(nd), last)).padStart(2, "0")}`);
+  };
+  const years = Array.from({ length: toYear - fromYear + 1 }, (_, i) => String(toYear - i));
+  const nums = (n) => Array.from({ length: n }, (_, i) => String(i + 1).padStart(2, "0"));
+  const selCls = "border border-slate-300 rounded-lg px-1.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500";
+
+  return (
+    <>
+      <div className="flex gap-1 sm:hidden">
+        <select className={`${selCls} flex-1`} value={y ?? ""} onChange={(e) => set(e.target.value, m ?? "01", d ?? "01")}>
+          <option value="">년</option>
+          {years.map((v) => <option key={v} value={v}>{v}</option>)}
+        </select>
+        <select className={selCls} value={m ?? ""} onChange={(e) => set(y, e.target.value, d ?? "01")}>
+          <option value="">월</option>
+          {nums(12).map((v) => <option key={v} value={v}>{Number(v)}</option>)}
+        </select>
+        <select className={selCls} value={d ?? ""} onChange={(e) => set(y, m ?? "01", e.target.value)}>
+          <option value="">일</option>
+          {nums(y && m ? new Date(Number(y), Number(m), 0).getDate() : 31).map((v) => <option key={v} value={v}>{Number(v)}</option>)}
+        </select>
+      </div>
+      <input type="date" className={`${inputCls} hidden sm:block`} value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
+    </>
+  );
+}

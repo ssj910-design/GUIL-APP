@@ -3,7 +3,7 @@
 // 연차관리 — 사람별 부여 일수(profiles.annual_leave_days)에서 사용 내역(leaves)을 빼 잔여를 계산한다.
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { AdminTable, inputCls, StatusBadge } from "@/app/components/admin/adminShared";
+import { AdminTable, inputCls, StatusBadge, DateField } from "@/app/components/admin/adminShared";
 import { TODAY_STR } from "@/lib/constants";
 import { annualLeaveDays, yearsOfService } from "@/lib/leave";
 
@@ -63,7 +63,7 @@ export default function LeavesAdmin({ data, setData }) {
       </div>
 
       {/* 사용 등록 */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-5 flex items-end gap-2 flex-wrap">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-5 grid grid-cols-1 sm:flex sm:items-end gap-2 sm:flex-wrap">
         <div>
           <p className="text-[11px] font-bold text-slate-500 mb-1">직원</p>
           <select className={inputCls} value={form.profileId} onChange={(e) => setForm({ ...form, profileId: e.target.value })}>
@@ -79,14 +79,12 @@ export default function LeavesAdmin({ data, setData }) {
         </div>
         <div>
           <p className="text-[11px] font-bold text-slate-500 mb-1">시작일</p>
-          <input type="date" className={inputCls} value={form.start}
-            onChange={(e) => setForm({ ...form, start: e.target.value, end: e.target.value > form.end ? e.target.value : form.end })} />
+          <DateField value={form.start}
+            onChange={(v) => setForm({ ...form, start: v, end: v > form.end ? v : form.end })} />
         </div>
         <div>
           <p className="text-[11px] font-bold text-slate-500 mb-1">종료일</p>
-          <input type="date" className={inputCls} value={form.end} min={form.start}
-            disabled={form.kind === "반차"}
-            onChange={(e) => setForm({ ...form, end: e.target.value })} />
+          <DateField value={form.end} onChange={(v) => setForm({ ...form, end: v })} />
         </div>
         <div className="w-56">
           <p className="text-[11px] font-bold text-slate-500 mb-1">비고</p>
