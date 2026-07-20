@@ -1163,6 +1163,14 @@ export default function App() {
   // 자재/견적 지급완료는 지급 즉시 관련 할일이 자동 생성된다 — 그 할일이 존재하는 동안은
   // "할일" 알림 하나로만 보여주고 "자재지급" 알림은 중복으로 띄우지 않는다(할일이 처리되면 자동 삭제되므로 재노출 불필요).
   const notifFailures = failures.filter((f) => f.status !== "완료" && (f.assignee === myName || !f.assignee) && !dismissedIds.has("fail:" + f.id));
+  // 담당기사(현장 기본 담당)와 배정기사(이 건을 실제로 처리한 기사)가 다른 경우,
+  // 배정기사가 처리완료했을 때 담당기사에게 알려준다.
+  const siteAssigneeById = new Map(sites.map((s) => [s.id, s.assignedEngineer]));
+  const notifCompletedFailures = failures.filter((f) => {
+    if (f.status !== "완료" || !f.assignee || f.assignee === myName) return false;
+    if (siteAssigneeById.get(f.siteId) !== myName) return false;
+    return !dismissedIds.has("faildone:" + f.id);
+  });
   const notifTodos = todos.filter((t) => t.assignee === myName && !t.done && !dismissedIds.has("todo:" + t.id));
   const notifMaterials = materialRequests.filter((r) => r.engineer === myName && r.status === "지급완료" && !todos.some((t) => t.materialRequestId === r.id) && !dismissedIds.has("mat:" + r.id));
   const notifQuotes = quoteRequests.filter((q) => q.engineer === myName && q.status === "자재지급완료" && !todos.some((t) => t.quoteRequestId === q.id) && !dismissedIds.has("quote:" + q.id));
@@ -1171,7 +1179,7 @@ export default function App() {
   // 게시판 알림은 글 하나를 눌러도(팝업으로만 확인) feedReadAt 전체읽음은 건드리지 않고, 그 글만 지운 것으로 처리한다
   // — 그래야 나머지 안읽은 글 알림이 같이 사라지지 않는다.
   const notifPosts = unreadPosts.filter((p) => !dismissedIds.has("post:" + p.id));
-  const totalNotifCnt = notifPosts.length + notifFailures.length + notifTodos.length + notifSupplyCnt;
+  const totalNotifCnt = notifPosts.length + notifFailures.length + notifCompletedFailures.length + notifTodos.length + notifSupplyCnt;
 
   if (!skipLogin && session === undefined) {
     return (
@@ -1234,6 +1242,20 @@ export default function App() {
                                   onDismiss={() => handleDismissNotif("fail:" + f.id)}
                                   title={`${f.siteName} · ${f.elevatorNo}`}
                                   subtitle={`${f.errorCode} · ${f.assignee ? "출동 대기" : "미배정"}`}
+                                />
+                              ))}
+                            </div>
+                          )}
+                          {notifCompletedFailures.length > 0 && (
+                            <div>
+                              <p className="px-4 pt-2.5 pb-1 text-[10px] font-bold text-slate-400">고장 처리완료</p>
+                              {notifCompletedFailures.map((f) => (
+                                <NotifRow
+                                  key={f.id}
+                                  onClick={() => { setNotifOpen(false); setOpenFailureId(f.id); }}
+                                  onDismiss={() => handleDismissNotif("faildone:" + f.id)}
+                                  title={`${f.siteName} · ${f.elevatorNo}`}
+                                  subtitle={`${f.assignee} 기사가 처리완료했습니다`}
                                 />
                               ))}
                             </div>
