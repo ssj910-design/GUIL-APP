@@ -16,10 +16,13 @@ import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets
 function FailureRegisterForm({ failures, setFailures, goToUnassigned }) {
   const sites = useContext(SitesContext);
   const units = useContext(UnitsContext);
-  const { engineerNames, profiles: allProfiles, selfId } = useContext(AuthContext);
+  const { engineerNames, profiles: allProfiles, selfId, name: myName, role } = useContext(AuthContext);
   const v2Ready = units.length > 0;
+  // 기사 본인이 접수하면 기본 배정 = 본인, 단 지금 처리 중(진행중 건 보유)이면 미배정으로
+  const isBusy = (name) => failures.some((f) => f.assignee === name && f.status === "진행중");
+  const defaultAssignee = () => (role === "engineer" && !isBusy(myName) ? myName : "");
   const [form, setForm] = useState({
-    siteId: "", units: [], faultType: "", faultDetail: "", details: {}, notFault: false, assignee: "", reporterPhone: "", sendSms: false,
+    siteId: "", units: [], faultType: "", faultDetail: "", details: {}, notFault: false, assignee: defaultAssignee(), reporterPhone: "", sendSms: false,
   });
   const [step, setStep] = useState(0); // 스텝형 접수 (0~3)
   const site = sites.find((s) => s.id === form.siteId);
@@ -63,7 +66,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned }) {
       } : {}),
     })));
     setFailures((prev) => [...newFailures, ...prev]);
-    setForm({ siteId: "", units: [], faultType: "", faultDetail: "", details: {}, notFault: false, assignee: "", reporterPhone: "", sendSms: false });
+    setForm({ siteId: "", units: [], faultType: "", faultDetail: "", details: {}, notFault: false, assignee: defaultAssignee(), reporterPhone: "", sendSms: false });
     setStep(0);
     goToUnassigned();
   }
@@ -137,6 +140,11 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned }) {
                       </button>
                     ))}
                   </div>
+                  {form.units.length > 1 && (
+                    <p className="text-[11px] text-blue-600 font-semibold mt-1.5">
+                      선택 {form.units.length}대 — 호기별로 접수 {form.units.length}건이 각각 생성됩니다
+                    </p>
+                  )}
                 </div>
                 <div className="bg-white rounded-xl border border-slate-200 p-4 text-sm space-y-1.5">
                   {infoRows.map(([k, v]) => (
@@ -251,6 +259,11 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned }) {
                   );
                 })}
               </div>
+              {role === "engineer" && isBusy(myName) && (
+                <p className="text-[11px] text-amber-600 font-semibold mt-1.5">
+                  지금 처리 중인 고장이 있어 기본을 "나중에 배정"으로 뒀어요 — 필요하면 본인을 직접 선택하세요
+                </p>
+              )}
             </div>
             <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
               <div className="flex items-center justify-between">
@@ -276,6 +289,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned }) {
               {[
                 ["현장", site?.name],
                 ["호기", form.units.length ? form.units.join(", ") : "미지정"],
+                ["접수 건수", `${form.units.length || 1}건${form.units.length > 1 ? " (호기별 1건)" : ""}`],
                 ["고장구분", form.faultType],
                 ["상세내역", form.units.length > 1
                   ? form.units.map((u) => `${u}: ${form.details[u] || "-"}`).join(" / ")
@@ -313,7 +327,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned }) {
             다음
           </button>
         ) : (
-          <div className="flex-1"><PrimaryButton onClick={submit} disabled={!canSubmit}>접수완료</PrimaryButton></div>
+          <div className="flex-1"><PrimaryButton onClick={submit} disabled={!canSubmit}>접수완료{form.units.length > 1 ? ` (${form.units.length}건 등록)` : ""}</PrimaryButton></div>
         )}
       </div>
     </div>
