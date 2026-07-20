@@ -81,15 +81,10 @@ function FailureHistoryDetailScreen({ site, failures, onBack }) {
 
 
 // 출퇴근 체크 — 기사는 출근/퇴근·당직 버튼, 관리자는 오늘 출근 인원 요약.
-// 17:30이 지나도록 퇴근 처리가 없으면 모달로 한 번 물어본다 (캡처용 강제: ?off=1).
+// 출근 시 현위치를 1회 받아 저장한다(고장 배정 시 가까운 기사 정렬용).
 function AttendanceBar({ attendances, onAttendance, onOpenRoster, swapCount = 0 }) {
   const { role, selfId, engineers } = useContext(AuthContext);
-  const [now, setNow] = useState(() => new Date());
-  const [dismissed, setDismissed] = useState(false);
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 60000);
-    return () => clearInterval(t);
-  }, []);
+  const [checking, setChecking] = useState(false);
 
   const rosterBtn = onOpenRoster ? (
     <button
@@ -129,24 +124,25 @@ function AttendanceBar({ attendances, onAttendance, onOpenRoster, swapCount = 0 
 
   const mine = attendances.find((a) => a.profileId === selfId);
   const hhmm = (iso) => new Date(iso).toTimeString().slice(0, 5);
-  const forced = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("off");
-  const afterOff = forced || now.getHours() * 60 + now.getMinutes() >= 17 * 60 + 30;
-  const showOffModal = !!mine?.checkedInAt && !mine.checkedOutAt && afterOff && !dismissed;
 
   return (
     <>
       <div className="px-5 pt-4">
         {!mine?.checkedInAt ? (
           <button
-            onClick={() => onAttendance("in")}
-            className="w-full bg-blue-700 text-white text-sm font-bold py-3.5 rounded-xl active:bg-blue-800"
+            onClick={async () => { setChecking(true); await onAttendance("in"); setChecking(false); }}
+            disabled={checking}
+            className="w-full bg-blue-700 text-white text-sm font-bold py-3.5 rounded-xl active:bg-blue-800 disabled:opacity-60"
           >
-            출근 체크
+            {checking ? "위치 확인 중…" : "출근 체크"}
           </button>
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center justify-between gap-2">
             <p className="text-xs font-bold text-slate-500">
               출근 <span className="text-slate-800">{hhmm(mine.checkedInAt)}</span>
+              {mine.lat != null
+                ? <span className="ml-1.5 text-[10px] font-bold text-emerald-600">위치 기록됨</span>
+                : <span className="ml-1.5 text-[10px] font-bold text-slate-300">위치 없음</span>}
               {mine.checkedOutAt && (
                 <span className="ml-2">{mine.status} <span className="text-slate-800">{hhmm(mine.checkedOutAt)}</span></span>
               )}
@@ -161,19 +157,6 @@ function AttendanceBar({ attendances, onAttendance, onOpenRoster, swapCount = 0 
         )}
         {rosterBtn}
       </div>
-      {showOffModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-8">
-          <div className="bg-white rounded-2xl w-full max-w-xs p-5 text-center">
-            <p className="text-base font-extrabold text-slate-800">퇴근 시간입니다</p>
-            <p className="text-xs text-slate-500 mt-1.5">17:30 — 오늘 근무를 마감해 주세요</p>
-            <div className="flex gap-2 mt-4">
-              <button onClick={() => { onAttendance("duty"); setDismissed(true); }} className="flex-1 bg-amber-500 text-white text-sm font-bold py-3 rounded-xl active:bg-amber-600">당직</button>
-              <button onClick={() => { onAttendance("out"); setDismissed(true); }} className="flex-1 bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800">퇴근</button>
-            </div>
-            <button onClick={() => setDismissed(true)} className="text-[11px] text-slate-400 font-semibold mt-3">나중에</button>
-          </div>
-        </div>
-      )}
     </>
   );
 }
@@ -446,7 +429,7 @@ export function HomeTab({ attendances = [], onAttendance, onOpenRoster, swapCoun
         />
       )}
       {assignTarget && (
-        <AssignEngineerSheet failure={assignTarget} failures={failures} onAssign={onAssign} onClose={() => setAssignTarget(null)} />
+        <AssignEngineerSheet failure={assignTarget} failures={failures} onAssign={onAssign} attendances={attendances} onClose={() => setAssignTarget(null)} />
       )}
       {dispatchTarget && (
         <DispatchEtaModal

@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone } from "@/lib/utils";
+import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
 import { useLiveInspections } from "@/app/hooks/useLiveInspections";
 import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast } from "@/app/components/ui";
@@ -450,16 +450,41 @@ const ETA_OPTIONS = Array.from({ length: 12 }, (_, i) => (i + 1) * 10);
 
 
 // 관리자용 기사 배정 시트 — 기사별 현재 상태(출동중/처리중) 배지와 함께 선택
-export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allowUnassign }) {
-  const { engineerNames } = useContext(AuthContext);
+export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allowUnassign, attendances = [] }) {
+  const { engineerNames, engineers = [] } = useContext(AuthContext);
+  const sites = useContext(SitesContext);
   const statusOf = (name) => {
     const act = failures.filter((f) => f.assignee === name && f.status === "진행중");
     if (!act.length) return null;
     return act.some((f) => !f.arrivalTime) ? "출동중" : "처리중";
   };
+
+  // 가까운 기사 정렬 — 기사 위치는 오늘 출근 체크 시 1회 받아둔 좌표를 쓴다.
+  // 실시간 위치가 아니므로 "출근한 곳에서 가까운 순"이라는 뜻이고, 직선거리 기준이다.
+  const site = sites.find((x) => x.id === failure.siteId);
+  const hereOf = (name) => {
+    const pid = engineers.find((e) => e.name === name)?.id;
+    const a = attendances.find((x) => x.profileId === pid && x.lat != null);
+    return a ? { lat: a.lat, lng: a.lng } : null;
+  };
+  const rows = engineerNames
+    .map((name) => ({ name, km: distanceKm(hereOf(name), site?.lat != null ? { lat: site.lat, lng: site.lng } : null) }))
+    .sort((a, b) => {
+      if (a.km == null && b.km == null) return 0;
+      if (a.km == null) return 1;   // 위치 모르는 기사는 뒤로
+      if (b.km == null) return -1;
+      return a.km - b.km;
+    });
+  const anyDistance = rows.some((r) => r.km != null);
+
   return (
     <Sheet title={`기사 배정 — ${failure.siteName} · ${failure.elevatorNo || "호기 미상"}`} onClose={onClose}>
       {failure.assignee && <p className="text-xs text-slate-500 mb-2">현재 배정: <b>{failure.assignee}</b> — 재배정하면 출동 기록이 초기화되고 미처리로 돌아갑니다</p>}
+      <p className="text-[11px] text-slate-400 mb-2">
+        {anyDistance
+          ? "오늘 출근 위치 기준 직선거리 순입니다 (실시간 위치가 아닙니다)"
+          : site?.lat == null ? "현장 좌표가 없어 거리순 정렬을 못 합니다" : "출근 체크한 기사가 없어 거리를 계산할 수 없습니다"}
+      </p>
       <div className="grid grid-cols-2 gap-2 pb-2">
         {allowUnassign && (
           <button
@@ -469,16 +494,24 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allo
             미배정으로
           </button>
         )}
-        {engineerNames.map((name) => {
+        {rows.map(({ name, km }, i) => {
           const st = statusOf(name);
           return (
             <button
               key={name}
               onClick={() => { onAssign(failure, name); onClose(); }}
-              className="py-3 rounded-xl text-sm font-bold border text-slate-700 border-slate-200 bg-white active:bg-blue-50"
+              className={`py-3 rounded-xl text-sm font-bold border bg-white active:bg-blue-50 ${
+                i === 0 && km != null && !st ? "text-blue-700 border-blue-300" : "text-slate-700 border-slate-200"
+              }`}
             >
               {name}
-              {st && <span className={`block text-[10px] font-bold mt-0.5 ${st === "출동중" ? "text-amber-600" : "text-emerald-600"}`}>{st}</span>}
+              {i === 0 && km != null && !st && <span className="ml-1 text-[9px] font-extrabold text-blue-500">최단</span>}
+              <span className="block text-[10px] font-bold mt-0.5">
+                {km != null
+                  ? <span className="text-slate-400">{km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`}</span>
+                  : <span className="text-slate-300">위치 없음</span>}
+                {st && <span className={`ml-1 ${st === "출동중" ? "text-amber-600" : "text-emerald-600"}`}>{st}</span>}
+              </span>
             </button>
           );
         })}
@@ -803,7 +836,7 @@ export function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenR
 }
 
 
-function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign }) {
+function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances }) {
   const [assignTarget, setAssignTarget] = useState(null);
   const list = failures.filter((f) => !f.assignee && f.status === "미처리");
   const [detailTarget, setDetailTarget] = useState(null);
@@ -834,7 +867,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
         />
       )}
       {assignTarget && (
-        <AssignEngineerSheet failure={assignTarget} failures={failures} onAssign={onAssign} onClose={() => setAssignTarget(null)} />
+        <AssignEngineerSheet failure={assignTarget} failures={failures} onAssign={onAssign} attendances={attendances} onClose={() => setAssignTarget(null)} />
       )}
       {dispatchTarget && (
         <DispatchEtaModal
@@ -871,7 +904,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
 }
 
 
-function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign }) {
+function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances }) {
   const [assignTarget, setAssignTarget] = useState(null);
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [showDone, setShowDone] = useState(false);
@@ -943,7 +976,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
         />
       )}
       {assignTarget && (
-        <AssignEngineerSheet failure={assignTarget} failures={failures} onAssign={onAssign} onClose={() => setAssignTarget(null)} />
+        <AssignEngineerSheet failure={assignTarget} failures={failures} onAssign={onAssign} attendances={attendances} onClose={() => setAssignTarget(null)} />
       )}
       {dispatchTarget && (
         <DispatchEtaModal
@@ -1041,14 +1074,14 @@ function FailureStatusOverview({ failures, onReassign }) {
 
       {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} />}
       {reassignTarget && (
-        <AssignEngineerSheet failure={reassignTarget} failures={failures} onAssign={onReassign} onClose={() => setReassignTarget(null)} allowUnassign />
+        <AssignEngineerSheet failure={reassignTarget} failures={failures} onAssign={onReassign} attendances={attendances} onClose={() => setReassignTarget(null)} allowUnassign />
       )}
     </div>
   );
 }
 
 
-export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast }) {
+export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [] }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
   // 홈 "모두 보기" 등 외부에서 특정 서브탭으로 진입 (SiteTab focusSiteId와 같은 패턴)
@@ -1078,10 +1111,10 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
       </div>
       {subTab === "접수등록" && <FailureRegisterForm failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />}
       {subTab === "미배정" && (
-        <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} />
+        <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} />
       )}
       {subTab === "처리등록" && (
-        <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} />
+        <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} />
       )}
       {subTab === "처리현황" && <FailureStatusOverview failures={failures} onReassign={onReassign} />}
       <SmsToast message={toast} />

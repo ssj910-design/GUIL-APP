@@ -179,12 +179,26 @@ export default function App() {
   }
 
   // 출퇴근 체크 — 하루 1행(profile_id + work_date). 출근은 insert, 퇴근/당직은 같은 행 update.
+  // 출근 시에만 현위치를 1회 받는다 — GPS 상시 추적은 배터리 때문에 못 쓴다.
+  // 권한 거부·시간초과여도 출근 체크는 그대로 진행한다(좌표만 비워둔다).
+  function getPositionOnce() {
+    return new Promise((resolve) => {
+      if (typeof navigator === "undefined" || !navigator.geolocation) return resolve(null);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => resolve(null),
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+      );
+    });
+  }
+
   async function handleAttendance(kind) {
     const pid = profileIdByName(profilesAll, profile.name);
     if (!pid) return;
     const now = new Date().toISOString();
+    const here = kind === "in" ? await getPositionOnce() : null;
     const patch = kind === "in"
-      ? { checked_in_at: now, status: null }
+      ? { checked_in_at: now, status: null, ...(here ? { lat: here.lat, lng: here.lng, located_at: now } : {}) }
       : { checked_out_at: now, status: kind === "duty" ? "당직" : "퇴근" };
     const { data } = await supabase
       .from("attendances")
@@ -1388,6 +1402,7 @@ export default function App() {
           {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} siteManagers={siteManagers} onUpdateSiteNotes={handleUpdateSiteNotes} focusSiteId={focusSiteId} focusUnit={focusUnit} onFocusSiteHandled={() => { setFocusSiteId(null); setFocusUnit(null); }} />}
           {tab === "failure" && (
             <FailureTab
+              attendances={attendances}
               failures={failures}
               setFailures={setFailures}
               onDispatch={handleDispatchFailure}
