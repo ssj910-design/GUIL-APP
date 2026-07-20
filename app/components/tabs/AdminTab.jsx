@@ -304,6 +304,8 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
   const { engineerNames } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
   const [assigneeMap, setAssigneeMap] = useState({});
+  const [billingPartMap, setBillingPartMap] = useState({});
+  const [billingAmountMap, setBillingAmountMap] = useState({});
   const pending = materialRequests.filter((r) => r.status === "승인대기");
   const supplied = materialRequests.filter((r) => r.status === "지급완료");
   const rejected = materialRequests.filter((r) => r.status === "반려");
@@ -377,8 +379,34 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
                   />
                 </div>
 
+                <div className="mt-2.5 grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 block mb-1">청구 부품</label>
+                    <select
+                      className={inputCls}
+                      value={billingPartMap[r.id] ?? ""}
+                      onChange={(e) => setBillingPartMap((m) => ({ ...m, [r.id]: e.target.value }))}
+                    >
+                      <option value="">선택 안 함</option>
+                      {(r.part ?? "").split(",").map((s) => s.trim()).filter(Boolean).map((part) => (
+                        <option key={part} value={part}>{part}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 block mb-1">청구금액</label>
+                    <input
+                      type="number"
+                      className={inputCls}
+                      placeholder="예: 70000"
+                      value={billingAmountMap[r.id] ?? ""}
+                      onChange={(e) => setBillingAmountMap((m) => ({ ...m, [r.id]: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
                 <button
-                  onClick={() => r.hasSupplyPhoto && onSupplyComplete(r.id, assigneeMap[r.id] ?? r.engineer)}
+                  onClick={() => r.hasSupplyPhoto && onSupplyComplete(r.id, assigneeMap[r.id] ?? r.engineer, billingPartMap[r.id] || null, billingAmountMap[r.id] || null)}
                   disabled={!r.hasSupplyPhoto}
                   className={`w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg ${
                     r.hasSupplyPhoto ? "bg-blue-700 text-white active:bg-blue-800" : "bg-slate-200 text-slate-400"

@@ -104,6 +104,7 @@ export default function App() {
   const [feed, setFeed] = useState([]);
   // is_notice 컬럼은 마이그레이션 022 실행 전엔 존재하지 않는다 — undefined면 아직 미실행으로 간주.
   const feedNoticeReady = feed.some((p) => p.isNotice !== undefined);
+  const todoBillingReady = todos.some((t) => t.billingAmount !== undefined);
   // 지급 사진을 여러 장 연달아 올릴 때, setState 업데이터 함수가 React 렌더링 타이밍에 따라
   // 아직 반영되지 않은 상태를 기준으로 계산될 수 있어(경쟁 상태) ref에 최신값을 직접 보관합니다.
   const supplyPhotoUrlsRef = useRef({ material: {}, quote: {}, restock: {} });
@@ -692,7 +693,7 @@ export default function App() {
   // ★ 자재 지급 완료 트리거: 이 순간에만 할 일이 자동 생성됩니다 (D-30 시작)
   // assignee를 넘기면(신청자와 실제 교체 기사가 다른 경우) 그 이름으로 할 일이 생성되고,
   // 생략하면 지금처럼 신청 기사 본인 앞으로 생성됩니다.
-  async function handleSupplyComplete(requestId, assignee) {
+  async function handleSupplyComplete(requestId, assignee, billingPart, billingAmount) {
     const req = materialRequests.find((r) => r.id === requestId);
     if (!req || !req.hasSupplyPhoto) return;
 
@@ -716,6 +717,8 @@ export default function App() {
       assignedDate: TODAY_STR,
       dueDate: addDays(TODAY_STR, 30),
       done: false,
+      billingPart: billingPart || null,
+      billingAmount: billingAmount || null,
     };
     await supabase.from("todos").insert({
       id: newTodo.id,
@@ -733,6 +736,7 @@ export default function App() {
         unit_id: req.unitId ?? unitIdFor(units, req.siteId, req.elevatorNo),
         assignee_id: profileIdByName(profilesAll, newTodo.assignee),
       } : {}),
+      ...(todoBillingReady ? { billing_part: newTodo.billingPart, billing_amount: newTodo.billingAmount } : {}),
     });
     setTodos((prev) => [newTodo, ...prev]);
   }

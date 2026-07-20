@@ -287,6 +287,14 @@ export function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhoto
             <span className="font-semibold text-slate-700">{todo.part}</span>
           </div>
         )}
+        {todo.billingAmount != null && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-400">청구금액</span>
+            <span className="font-bold text-blue-700">
+              ₩{Number(todo.billingAmount).toLocaleString()}{todo.billingPart ? ` · ${todo.billingPart}` : ""}
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">출처</span>
           <span className="font-semibold text-slate-700">{sourceLabel}</span>
