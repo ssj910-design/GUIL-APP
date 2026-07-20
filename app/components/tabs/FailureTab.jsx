@@ -92,16 +92,36 @@ function FailureRegisterForm({ setFailures, goToUnassigned }) {
           <>
             <div>
               <p className="text-xs font-bold text-slate-500 mb-1.5">현장명 *</p>
-              <SiteSearchSelect value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unit: "" })} placeholder="현장명 검색" />
+              <SiteSearchSelect
+                value={form.siteId}
+                onChange={(id) => {
+                  // 호기가 1대뿐인 현장은 자동 선택 (여러 대는 오접수 방지를 위해 명시적 선택)
+                  const s = sites.find((x) => x.id === id);
+                  const us = s ? siteUnits(s) : [];
+                  setForm({ ...form, siteId: id, unit: us.length === 1 ? us[0] : "" });
+                }}
+                placeholder="현장명 검색"
+              />
             </div>
             {site && (
               <>
                 <div>
-                  <p className="text-xs font-bold text-slate-500 mb-1.5">호기</p>
-                  <select className={inputCls} value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })}>
-                    <option value="">호기를 선택해주세요</option>
-                    {siteUnits(site).map((u) => <option key={u} value={u}>{u}</option>)}
-                  </select>
+                  <p className="text-xs font-bold text-slate-500 mb-1.5">
+                    호기{siteUnits(site).length === 1 && <span className="text-blue-600 font-semibold"> — 1대 현장, 자동 선택됨</span>}
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {siteUnits(site).map((u) => (
+                      <button
+                        key={u}
+                        onClick={() => setForm({ ...form, unit: u })}
+                        className={`py-3 rounded-xl text-sm font-bold border ${
+                          form.unit === u ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200 bg-white"
+                        }`}
+                      >
+                        {u}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className="bg-white rounded-xl border border-slate-200 p-4 text-sm space-y-1.5">
                   {infoRows.map(([k, v]) => (

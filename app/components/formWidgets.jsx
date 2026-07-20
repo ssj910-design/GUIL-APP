@@ -23,7 +23,7 @@ export function SiteSearchSelect({ value, onChange, placeholder = "현장명을 
         <input
           className={`${inputCls} pl-8`}
           placeholder={placeholder}
-          value={open ? query : selected ? `${selected.name} · ${selected.elevatorNo}` : ""}
+          value={open ? query : selected ? (selected.elevatorNo ? `${selected.name} · ${selected.elevatorNo}` : selected.name) : ""}
           onFocus={() => { setOpen(true); setQuery(""); }}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onChange={(e) => setQuery(e.target.value)}
