@@ -58,7 +58,7 @@ export default function SelfChecksAdmin({ data, setData }) {
         <div className="bg-white rounded-xl border border-slate-200 px-5 py-4 mb-4">
           <div className="flex items-center justify-between text-sm mb-2">
             <span className="font-bold">{ym} 진행률</span>
-            <span className="text-slate-500">완료 {done.length} / {rows.length}</span>
+            <span className="text-slate-500">완료 {done.length} / {rows.length} · 공단 제출 {rows.filter((c) => c.govResultCode === "000").length}</span>
           </div>
           <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
             <div className="h-full bg-blue-600 rounded-full" style={{ width: `${rows.length ? (done.length / rows.length) * 100 : 0}%` }} />
@@ -71,7 +71,7 @@ export default function SelfChecksAdmin({ data, setData }) {
           {ym} 출석부가 아직 없습니다 — 위 버튼으로 생성하세요 (활성 호기 전체에 1줄씩)
         </div>
       ) : (
-        <AdminTable head={["현장 · 호기", "담당 기사", "예정일", "완료일", "상태", ""]}>
+        <AdminTable head={["현장 · 호기", "담당 기사", "예정일", "완료일", "상태", "공단 제출", ""]}>
           {rows.map((c) => (
             <tr key={c.id} className="border-b border-slate-50">
               <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{c.loc}</td>
@@ -80,6 +80,16 @@ export default function SelfChecksAdmin({ data, setData }) {
               <td className="px-3 py-2.5 text-slate-500">{c.doneDate ?? "-"}</td>
               <td className="px-3 py-2.5">
                 <StatusBadge tone={c.status === "완료" ? "green" : c.status === "누락" ? "red" : "amber"}>{c.status}</StatusBadge>
+              </td>
+              <td className="px-3 py-2.5" title={c.govResultMsg ?? ""}>
+                {/* 모바일 정기점검 탭에서 제출 — 여기선 결과만 모니터링 (000=성공, CheckupTab과 동일 규약) */}
+                {c.govResultCode === "000" ? (
+                  <StatusBadge tone="green">제출완료</StatusBadge>
+                ) : c.govResultCode ? (
+                  <StatusBadge tone="red">실패 {c.govResultCode}</StatusBadge>
+                ) : (
+                  <StatusBadge tone="slate">미제출</StatusBadge>
+                )}
               </td>
               <td className="px-3 py-2.5 text-right pr-4">
                 {c.status !== "완료" && (
