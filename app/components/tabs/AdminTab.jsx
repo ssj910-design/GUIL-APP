@@ -3,6 +3,7 @@ import { ShieldCheck, Package, Receipt, ListTodo, ChevronRight, Users, FileText,
 import { Badge, PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { SitesContext, AuthContext } from "@/app/components/context";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
+import { parsePartQty } from "@/lib/utils";
 import { BillingHistoryScreen } from "@/app/components/tabs/BillingTab";
 import { TodoManageScreen } from "@/app/components/tabs/TodoTab";
 
@@ -387,19 +388,29 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
 
                   <div className="mt-2.5">
                     <label className="text-[10px] font-bold text-slate-400 block mb-1">청구 부품별 금액</label>
+                    <div className="flex gap-1.5 mb-1 px-0.5">
+                      <span className="text-[10px] font-bold text-slate-400" style={{ flex: 2 }}>부품명</span>
+                      <span className="text-[10px] font-bold text-slate-400" style={{ flex: 1 }}>수량</span>
+                      <span className="text-[10px] font-bold text-slate-400" style={{ flex: 1.2 }}>금액</span>
+                    </div>
                     <div className="space-y-1.5">
-                      {parts.map((part, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <span className="text-xs text-slate-600 flex-1 truncate">{part}</span>
-                          <input
-                            type="number"
-                            className={`${inputCls} w-28 shrink-0`}
-                            placeholder="금액"
-                            value={amounts[i] ?? ""}
-                            onChange={(e) => setPartAmountMap((m) => ({ ...m, [r.id]: { ...(m[r.id] ?? {}), [i]: e.target.value } }))}
-                          />
-                        </div>
-                      ))}
+                      {parts.map((part, i) => {
+                        const { name, qty } = parsePartQty(part);
+                        return (
+                          <div key={i} className="flex items-center gap-1.5">
+                            <span className="text-xs text-slate-700 truncate" style={{ flex: 2 }}>{name || part}</span>
+                            <span className="text-xs text-slate-500" style={{ flex: 1 }}>{qty || "-"}</span>
+                            <input
+                              type="number"
+                              className={inputCls}
+                              style={{ flex: 1.2 }}
+                              placeholder="금액"
+                              value={amounts[i] ?? ""}
+                              onChange={(e) => setPartAmountMap((m) => ({ ...m, [r.id]: { ...(m[r.id] ?? {}), [i]: e.target.value } }))}
+                            />
+                          </div>
+                        );
+                      })}
                     </div>
                     {parts.length > 1 && (
                       <p className="text-[10px] text-slate-400 text-right mt-1">합계 ₩{total.toLocaleString()}</p>
