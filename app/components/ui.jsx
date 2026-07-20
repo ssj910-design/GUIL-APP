@@ -1,4 +1,4 @@
-import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, Route } from "lucide-react";
+import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
 
 
@@ -7,32 +7,42 @@ import { TODAY_STR } from "@/lib/constants";
 /* ------------------------------------------------------------------ */
 
 /**
- * 티맵 길안내 버튼 — 현장 좌표(sites.lat/lng, 티맵 지오코딩으로 캐시)로 바로 경로안내를 띄운다.
+ * 카카오맵/티맵 길안내 버튼 — 현장 좌표(sites.lat/lng, 지오코딩으로 캐시)로 경로안내를 띄운다.
  * 좌표가 없으면 아무것도 그리지 않는다(주소만으로는 앱이 엉뚱한 곳을 잡는 경우가 있어서).
- * 앱이 없는 기기를 대비해 길게 누르지 않아도 되도록, 스킴 호출이 실패하면 티맵 설치 안내로 넘어간다.
+ * 반드시 window.open(새 창/앱 전환)으로만 열고 현재 탭은 절대 이동시키지 않는다 —
+ * 예전엔 window.location.href로 스킴을 직접 호출해서, 지도 앱에 갔다 뒤로가기로
+ * 돌아오면 브라우저 히스토리가 꼬여 화면이 먹통이 되는 문제가 있었다.
  */
-export function TmapButton({ site, label = true, className = "" }) {
+export function MapLinkButtons({ site, className = "" }) {
   if (!site || site.lat == null || site.lng == null) return null;
-  const go = (e) => {
+  const name = encodeURIComponent(site.name ?? "현장");
+  const openKakao = (e) => {
     e.stopPropagation();
-    const name = encodeURIComponent(site.name ?? "현장");
-    const scheme = `tmap://route?goalname=${name}&goalx=${site.lng}&goaly=${site.lat}`;
-    const t = setTimeout(() => {
-      // 앱이 없으면 페이지가 그대로 남는다 → 지도 웹으로 대체
-      window.open(`https://map.kakao.com/link/to/${name},${site.lat},${site.lng}`, "_blank");
-    }, 1200);
-    window.addEventListener("blur", () => clearTimeout(t), { once: true });
-    window.location.href = scheme;
+    window.open(`https://map.kakao.com/link/to/${name},${site.lat},${site.lng}`, "_blank");
+  };
+  const openTmap = (e) => {
+    e.stopPropagation();
+    window.open(`tmap://route?goalname=${name}&goalx=${site.lng}&goaly=${site.lat}`, "_blank");
   };
   return (
-    <button
-      onClick={go}
-      aria-label="티맵 길안내"
-      className={`shrink-0 flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-2 py-1.5 active:bg-blue-100 ${className}`}
-    >
-      <Route size={12} />
-      {label && "길안내"}
-    </button>
+    <span className={`shrink-0 flex items-center gap-1 ${className}`}>
+      <button
+        type="button"
+        onClick={openKakao}
+        aria-label="카카오맵으로 길찾기"
+        className="w-6 h-6 rounded-md bg-[#FEE500] text-black text-[10px] font-extrabold flex items-center justify-center active:opacity-80"
+      >
+        K
+      </button>
+      <button
+        type="button"
+        onClick={openTmap}
+        aria-label="티맵으로 길찾기"
+        className="w-6 h-6 rounded-md bg-[#E6017C] text-white text-[10px] font-extrabold flex items-center justify-center active:opacity-80"
+      >
+        T
+      </button>
+    </span>
   );
 }
 

@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { siteUnitList } from "@/lib/utils";
 import { mapSelfCheck, mapSelfCheckItem, mapSelfCheckItemState } from "@/lib/mappers";
-import { PrimaryButton, Sheet, Field, inputCls , TmapButton } from "@/app/components/ui";
+import { PrimaryButton, Sheet, Field, inputCls, MapLinkButtons } from "@/app/components/ui";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import SELF_CHECK_ITEM_CODES from "@/lib/data/selfCheckItemCodes.json";
@@ -359,7 +359,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
                       <p className="text-[11px] text-slate-400 truncate">{s.address}</p>
                     </div>
                     <div className="shrink-0 flex items-center gap-1.5">
-                      <TmapButton site={s} />
+                      <MapLinkButtons site={s} />
                       {hasUnits ? (
                         <>
                           <button

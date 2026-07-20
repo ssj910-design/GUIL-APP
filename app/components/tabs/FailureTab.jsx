@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
 import { useLiveInspections } from "@/app/hooks/useLiveInspections";
-import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, TmapButton } from "@/app/components/ui";
+import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 
@@ -372,7 +372,7 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
         <div className="flex items-center justify-between gap-2 text-sm">
           <span className="text-slate-400 shrink-0">주소</span>
           <span className="font-semibold text-slate-700 text-right min-w-0">{site?.address ?? "-"}</span>
-          <TmapButton site={site} />
+          <MapLinkButtons site={site} />
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">신고자 전화번호</span>
@@ -406,6 +406,30 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
           <div className="flex items-center justify-between text-sm">
             <span className="text-slate-400">조치 결과</span>
             <span className="font-semibold text-red-600">{failure.escalation}</span>
+          </div>
+        )}
+        {failure.faultErrorCode && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-400">에러코드</span>
+            <span className="font-semibold text-slate-700">{failure.faultErrorCode}</span>
+          </div>
+        )}
+        {failure.faultCause && (
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="text-slate-400 shrink-0">원인</span>
+            <span className="font-semibold text-slate-700 text-right">{failure.faultCause}</span>
+          </div>
+        )}
+        {failure.processContent && (
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="text-slate-400 shrink-0">처리내용</span>
+            <span className="font-semibold text-slate-700 text-right">{failure.processContent}</span>
+          </div>
+        )}
+        {failure.processNote && (
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="text-slate-400 shrink-0">비고</span>
+            <span className="font-semibold text-slate-700 text-right">{failure.processNote}</span>
           </div>
         )}
       </div>
@@ -723,7 +747,7 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
       </button>
       {stage !== "done" && (
         <div className="px-3.5 -mt-1 pb-1">
-          <TmapButton site={siteOf(f)} />
+          <MapLinkButtons site={siteOf(f)} />
         </div>
       )}
       <div className="px-3.5 pb-3.5">
@@ -810,7 +834,7 @@ export function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenR
         </div>
         <p className="text-[11px] text-slate-400 truncate">{f.errorCode}</p>
       </button>
-      {stage !== "done" && <TmapButton site={siteOf(f)} />}
+      {stage !== "done" && <MapLinkButtons site={siteOf(f)} />}
       {stage === "pending" && (
         <span className="shrink-0 flex gap-1.5">
           {role === "admin" && !f.assignee && onAssignOpen ? (
