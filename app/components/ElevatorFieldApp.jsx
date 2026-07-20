@@ -19,7 +19,7 @@ import { MaterialTab } from "@/app/components/tabs/MaterialTab";
 import { BillingTab } from "@/app/components/tabs/BillingTab";
 import { TodoTab, TodoDetailSheet, getRequesterName, getCoAssignees, getSupplyPhotos } from "@/app/components/tabs/TodoTab";
 import { AdminTab } from "@/app/components/tabs/AdminTab";
-import { RoomTab } from "@/app/components/tabs/RoomTab";
+import { RoomTab, PostDetailOverlay } from "@/app/components/tabs/RoomTab";
 
 
 const TABS = [
@@ -117,6 +117,7 @@ export default function App() {
   const [notifOpen, setNotifOpen] = useState(false); // 우측상단 알림(종) 드롭다운
   const [openFailureId, setOpenFailureId] = useState(null); // 알림에서 특정 고장 건을 눌러 상세를 바로 연다 (탭 이동 없이 현재 화면 위에 띄움)
   const [openTodoId, setOpenTodoId] = useState(null); // 알림에서 특정 할일을 눌러 상세를 바로 연다
+  const [openFeedPostId, setOpenFeedPostId] = useState(null); // 알림에서 특정 게시글을 눌러 그 글만 팝업으로 연다 (게시판 전체를 열어 안읽음을 한번에 지우지 않도록)
   const [notifDispatchTarget, setNotifDispatchTarget] = useState(null);
   const [notifArriveTarget, setNotifArriveTarget] = useState(null);
   const [notifResultTarget, setNotifResultTarget] = useState(null);
@@ -1038,7 +1039,10 @@ export default function App() {
   const notifQuotes = quoteRequests.filter((q) => q.engineer === myName && q.status === "자재지급완료" && !todos.some((t) => t.quoteRequestId === q.id) && !dismissedIds.has("quote:" + q.id));
   const notifRestock = restockRequests.filter((r) => r.engineer === myName && r.status === "완료" && !r.receivedAt && !dismissedIds.has("restock:" + r.id));
   const notifSupplyCnt = notifMaterials.length + notifQuotes.length + notifRestock.length;
-  const totalNotifCnt = unreadPosts.length + notifFailures.length + notifTodos.length + notifSupplyCnt;
+  // 게시판 알림은 글 하나를 눌러도(팝업으로만 확인) feedReadAt 전체읽음은 건드리지 않고, 그 글만 지운 것으로 처리한다
+  // — 그래야 나머지 안읽은 글 알림이 같이 사라지지 않는다.
+  const notifPosts = unreadPosts.filter((p) => !dismissedIds.has("post:" + p.id));
+  const totalNotifCnt = notifPosts.length + notifFailures.length + notifTodos.length + notifSupplyCnt;
 
   if (!skipLogin && session === undefined) {
     return (
@@ -1152,26 +1156,30 @@ export default function App() {
                               ))}
                             </div>
                           )}
-                          {unreadPosts.length > 0 && (
+                          {notifPosts.length > 0 && (
                             <div>
                               <p className="px-4 pt-2.5 pb-1 text-[10px] font-bold text-slate-400">게시판</p>
-                              {[...unreadPosts].reverse().map((p) => (
-                                <button
-                                  key={p.id}
-                                  onClick={() => { setNotifOpen(false); setRoomOpen(true); }}
-                                  className="w-full text-left px-4 py-2.5 border-b border-slate-50 last:border-0 active:bg-slate-50"
-                                >
-                                  <p className="text-xs font-bold text-slate-700">
-                                    {(p.text ?? "").includes("@" + myName) || (p.text ?? "").includes("@모두") ? (
-                                      <span className="text-amber-600">@멘션 · </span>
-                                    ) : null}
-                                    {p.author}
-                                  </p>
-                                  <p className="text-xs text-slate-500 truncate mt-0.5">
-                                    {p.text || ((p.photoUrls ?? []).length > 0 ? "사진을 게시했습니다" : "")}
-                                  </p>
-                                  <p className="text-[10px] text-slate-400 mt-0.5">{(p.createdAt ?? "").slice(0, 10)} {p.time}</p>
-                                </button>
+                              {[...notifPosts].reverse().map((p) => (
+                                <div key={p.id} className="flex items-center border-b border-slate-50 last:border-0 active:bg-slate-50">
+                                  <button
+                                    onClick={() => { setNotifOpen(false); setOpenFeedPostId(p.id); handleDismissNotif("post:" + p.id); }}
+                                    className="flex-1 min-w-0 text-left px-4 py-2.5"
+                                  >
+                                    <p className="text-xs font-bold text-slate-700">
+                                      {(p.text ?? "").includes("@" + myName) || (p.text ?? "").includes("@모두") ? (
+                                        <span className="text-amber-600">@멘션 · </span>
+                                      ) : null}
+                                      {p.author}
+                                    </p>
+                                    <p className="text-xs text-slate-500 truncate mt-0.5">
+                                      {p.text || ((p.photoUrls ?? []).length > 0 ? "사진을 게시했습니다" : "")}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400 mt-0.5">{(p.createdAt ?? "").slice(0, 10)} {p.time}</p>
+                                  </button>
+                                  <button onClick={() => handleDismissNotif("post:" + p.id)} className="p-2 pr-3 text-slate-300 active:text-slate-500 shrink-0" aria-label="알림 지우기">
+                                    <X size={14} />
+                                  </button>
+                                </div>
                               ))}
                             </div>
                           )}
@@ -1333,6 +1341,18 @@ export default function App() {
               />
             );
           })()}
+          {openFeedPostId && (
+            <PostDetailOverlay
+              feed={feed}
+              postId={openFeedPostId}
+              onSendChat={handleSendFeedPost}
+              onToggleLike={handleToggleLike}
+              onUpdatePost={handleUpdateFeedPost}
+              onDeletePost={handleDeleteFeedPost}
+              onSetNotice={feedNoticeReady ? handleSetFeedNotice : null}
+              onClose={() => setOpenFeedPostId(null)}
+            />
+          )}
 
           {/* bottom nav — 기존 형태(전체 탭 가로 스크롤), 팀 합의로 원복 (2026-07-17) */}
           <div

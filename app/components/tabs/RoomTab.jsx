@@ -98,6 +98,129 @@ function PostHeader({ p, canManage, canNotice, menuOpen, onToggleMenu, onCloseMe
   );
 }
 
+// 알림(종)에서 게시글 하나를 눌렀을 때 — 게시판 전체를 열지 않고 그 글만 팝업으로 보여준다
+// (게시판을 열면 전체 안읽음이 한번에 읽음 처리되는데, 다른 안읽은 글 알림까지 사라지는 걸 막기 위함).
+export function PostDetailOverlay({ feed, postId, onSendChat, onToggleLike, onUpdatePost, onDeletePost, onSetNotice, onClose }) {
+  const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
+  const isAdmin = role === "admin";
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState("");
+  const [commentDraft, setCommentDraft] = useState("");
+  const [viewerUrl, setViewerUrl] = useState(null);
+
+  const post = feed.find((p) => p.id === postId);
+  if (!post) return null;
+  const comments = feed.filter((p) => p.replyToId === postId).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  const likes = post.reactions?.["👍"] ?? [];
+  const liked = likes.includes(CURRENT_ENGINEER);
+  const canManage = isAdmin || post.author === CURRENT_ENGINEER;
+
+  function submitComment() {
+    const text = commentDraft.trim();
+    if (!text) return;
+    onSendChat(text, { replyToId: postId });
+    setCommentDraft("");
+  }
+  function saveEdit() {
+    if (!editText.trim()) return;
+    onUpdatePost?.(postId, editText.trim());
+    setEditing(false);
+  }
+  function doDelete() {
+    if (!confirm("이 글을 삭제할까요? 댓글도 함께 삭제됩니다.")) return;
+    onDeletePost?.(postId);
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 flex flex-col bg-black/40" onClick={onClose}>
+      <div className="mt-auto" />
+      <div className="bg-white rounded-t-3xl h-[85%] flex flex-col shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="px-4 pt-4 pb-2.5 flex items-center justify-between shrink-0 border-b border-slate-100">
+          <p className="text-sm font-bold text-slate-800">게시글</p>
+          <button onClick={onClose} className="p-1 text-slate-400 active:text-slate-700" aria-label="닫기"><X size={20} /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          <PostHeader
+            p={post} canManage={canManage} canNotice={!!onSetNotice}
+            menuOpen={menuOpen}
+            onToggleMenu={() => setMenuOpen((v) => !v)}
+            onCloseMenu={() => setMenuOpen(false)}
+            onNotice={() => onSetNotice?.(postId, !post.isNotice)}
+            onEdit={() => { setEditing(true); setEditText(post.text ?? ""); setMenuOpen(false); }}
+            onDelete={doDelete}
+          />
+          {editing ? (
+            <div className="mb-2">
+              <textarea className="w-full text-sm border border-slate-200 rounded-xl p-2.5 resize-none focus:outline-none" rows={3} value={editText} onChange={(e) => setEditText(e.target.value)} />
+              <div className="flex justify-end gap-2 mt-1.5">
+                <button onClick={() => setEditing(false)} className="text-xs font-bold text-slate-400 px-2.5 py-1.5">취소</button>
+                <button onClick={saveEdit} className="text-xs font-bold text-white bg-blue-700 rounded-full px-3.5 py-1.5">저장</button>
+              </div>
+            </div>
+          ) : (
+            <div className="mb-2">
+              {post.text && <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{renderText(post.text)}</p>}
+              {(post.photoUrls ?? []).length > 0 && (
+                <div className="space-y-1.5 mt-2">
+                  {post.photoUrls.map((u) =>
+                    isVideo(u)
+                      ? <video key={u} src={u} controls playsInline className="rounded-lg w-full" />
+                      : <img key={u} src={u} alt="첨부 사진" className="rounded-lg w-full object-cover" onClick={() => setViewerUrl(u)} />
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex items-center gap-4 py-2.5 border-t border-b border-slate-100">
+            <button onClick={() => onToggleLike?.(postId)} className={`flex items-center gap-1 text-xs font-bold ${liked ? "text-blue-600" : "text-slate-500"}`}>
+              <ThumbsUp size={14} className={liked ? "fill-blue-600" : ""} /> 좋아요{likes.length > 0 ? ` ${likes.length}` : ""}
+            </button>
+            <span className="flex items-center gap-1 text-xs font-bold text-slate-500">
+              <MessageCircle size={14} /> 댓글 {comments.length}
+            </span>
+          </div>
+          <div className="pt-2 space-y-0.5">
+            {comments.length === 0
+              ? <p className="text-xs text-slate-400 text-center py-6">첫 댓글을 남겨보세요</p>
+              : comments.map((c) => {
+                  const cLikes = c.reactions?.["👍"] ?? [];
+                  return <CommentRow key={c.id} c={c} onLike={() => onToggleLike?.(c.id)} liked={cLikes.includes(CURRENT_ENGINEER)} likeCount={cLikes.length} />;
+                })}
+          </div>
+        </div>
+        <div className="shrink-0 border-t border-slate-100 bg-white px-4 py-3 flex items-center gap-2">
+          <input
+            className="flex-1 bg-slate-100 rounded-full px-3.5 py-2.5 text-sm focus:outline-none"
+            placeholder="댓글을 입력하세요"
+            value={commentDraft}
+            onChange={(e) => setCommentDraft(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submitComment()}
+          />
+          <button onClick={submitComment} disabled={!commentDraft.trim()} className="w-9 h-9 rounded-full bg-blue-700 disabled:bg-slate-300 text-white flex items-center justify-center shrink-0">
+            <Send size={14} />
+          </button>
+        </div>
+        {viewerUrl && (
+          <div className="fixed inset-0 z-50 bg-black/90 flex flex-col" onClick={() => setViewerUrl(null)}>
+            <div className="flex justify-end gap-2 p-4 shrink-0">
+              <button onClick={(e) => { e.stopPropagation(); downloadPhoto(viewerUrl, "게시판-사진"); }} className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="사진 저장">
+                <Download size={18} />
+              </button>
+              <button className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="닫기" onClick={() => setViewerUrl(null)}><X size={18} /></button>
+            </div>
+            <div className="flex-1 flex items-center justify-center p-2 overflow-hidden">
+              <img src={viewerUrl} alt="확대 사진" className="max-w-full max-h-full object-contain" onClick={(e) => e.stopPropagation()} />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDeletePost, onSetNotice }) {
   const { name: CURRENT_ENGINEER, role, profiles } = useContext(AuthContext);
   const [composing, setComposing] = useState(false);
