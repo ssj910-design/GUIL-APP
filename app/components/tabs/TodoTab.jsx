@@ -289,9 +289,9 @@ export function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhoto
         )}
         {todo.billingAmount != null && (
           <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">청구금액</span>
+            <span className="text-slate-400">교체부품·청구금액</span>
             <span className="font-bold text-blue-700">
-              ₩{Number(todo.billingAmount).toLocaleString()}{todo.billingPart ? ` · ${todo.billingPart}` : ""}
+              {todo.billingPart ? `${todo.billingPart} · ` : ""}₩{Number(todo.billingAmount).toLocaleString()}
             </span>
           </div>
         )}

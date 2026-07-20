@@ -11,10 +11,11 @@ import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
 
 // 자재 신청/견적 요청/상비부품 보충 각각의 상세보기(신청 사진 포함)에 공용으로 쓰는 시트.
 // target = { type: "material" | "quote" | "restock", data }
-function RequestDetailSheet({ target, onClose, onPhotoClick }) {
+function RequestDetailSheet({ target, onClose, onPhotoClick, todos }) {
   if (!target) return null;
   const { type, data } = target;
   const title = type === "material" ? "자재 신청 상세" : type === "quote" ? "견적 요청 상세" : "상비부품 보충 상세";
+  const linkedTodo = type === "material" ? todos?.find((t) => t.materialRequestId === data.id) : null;
   const photos = type === "restock"
     ? (data.supplyPhotoUrls?.length ? data.supplyPhotoUrls : data.supplyPhotoUrl ? [data.supplyPhotoUrl] : [])
     : (data.photoUrls ?? []);
@@ -35,6 +36,14 @@ function RequestDetailSheet({ target, onClose, onPhotoClick }) {
             {type === "quote" ? data.constructionType : data.part}
           </p>
         </div>
+        {linkedTodo?.billingAmount != null && (
+          <div className="bg-slate-100 rounded-xl p-3">
+            <p className="text-[11px] text-slate-500">교체부품·청구금액</p>
+            <p className="font-bold text-blue-700">
+              {linkedTodo.billingPart ? `${linkedTodo.billingPart} · ` : ""}₩{Number(linkedTodo.billingAmount).toLocaleString()}
+            </p>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2.5">
           {type === "material" && (
             <div className="bg-slate-100 rounded-xl p-3">
@@ -95,7 +104,7 @@ function RequestDetailSheet({ target, onClose, onPhotoClick }) {
 }
 
 
-function MaterialHistoryScreen({ requests, isBilled, onBack }) {
+function MaterialHistoryScreen({ requests, todos, isBilled, onBack }) {
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState("전체");
   const [detailTarget, setDetailTarget] = useState(null);
@@ -137,36 +146,45 @@ function MaterialHistoryScreen({ requests, isBilled, onBack }) {
         {filtered.length === 0 ? (
           <p className="text-xs text-slate-400 text-center py-10">해당 조건의 신청 내역이 없습니다</p>
         ) : (
-          filtered.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => setDetailTarget({ type: "material", data: r })}
-              className={`w-full text-left bg-white rounded-xl border p-3 ${r.status === "반려" ? "border-red-200" : "border-slate-200"}`}
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-slate-700">{r.siteName} · {r.part}</p>
-                <span
-                  className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
-                    r.displayStage === "비용청구완료" ? "bg-slate-100 text-slate-500" :
-                    r.displayStage === "지급완료" ? "bg-emerald-100 text-emerald-700" :
-                    r.displayStage === "반려" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
-                  }`}
-                >
-                  {r.displayStage === "비용청구완료" ? "비용청구 완료" : r.displayStage}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1">{r.urgency} · 신청일 {r.requestedDate}{r.suppliedDate ? ` · 지급일 ${r.suppliedDate}` : ""}</p>
-              {r.status === "반려" && r.rejectReason && (
-                <p className="text-[11px] text-red-600 mt-1.5">반려 사유: {r.rejectReason}</p>
-              )}
-            </button>
-          ))
+          filtered.map((r) => {
+            const linkedTodo = todos?.find((t) => t.materialRequestId === r.id);
+            return (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => setDetailTarget({ type: "material", data: r })}
+                className={`w-full text-left bg-white rounded-xl border p-3 ${r.status === "반려" ? "border-red-200" : "border-slate-200"}`}
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-700">{r.siteName} · {r.part}</p>
+                  <span
+                    className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
+                      r.displayStage === "비용청구완료" ? "bg-slate-100 text-slate-500" :
+                      r.displayStage === "지급완료" ? "bg-emerald-100 text-emerald-700" :
+                      r.displayStage === "반려" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    {r.displayStage === "비용청구완료" ? "비용청구 완료" : r.displayStage}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">{r.urgency} · 신청일 {r.requestedDate}{r.suppliedDate ? ` · 지급일 ${r.suppliedDate}` : ""}</p>
+                {linkedTodo?.billingAmount != null && (
+                  <p className="text-[11px] font-bold text-blue-700 mt-1">
+                    교체부품·청구금액 · {linkedTodo.billingPart ? `${linkedTodo.billingPart} · ` : ""}₩{Number(linkedTodo.billingAmount).toLocaleString()}
+                  </p>
+                )}
+                {r.status === "반려" && r.rejectReason && (
+                  <p className="text-[11px] text-red-600 mt-1.5">반려 사유: {r.rejectReason}</p>
+                )}
+              </button>
+            );
+          })
         )}
       </div>
 
       <RequestDetailSheet
         target={detailTarget}
+        todos={todos}
         onClose={() => setDetailTarget(null)}
         onPhotoClick={(urls, i) => setPhotoViewer({ urls, index: i, siteName: detailTarget?.data.siteName, date: detailTarget?.data.requestedDate })}
       />
@@ -630,6 +648,7 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
     return (
       <MaterialHistoryScreen
         requests={requests.filter((r) => r.engineer === CURRENT_ENGINEER)}
+        todos={todos}
         isBilled={isBilled}
         onBack={() => setShowMaterialHistory(false)}
       />
@@ -1001,6 +1020,7 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
 
       <RequestDetailSheet
         target={reqDetailTarget}
+        todos={todos}
         onClose={() => setReqDetailTarget(null)}
         onPhotoClick={(urls, i) => setPhotoViewer({ urls, index: i, siteName: reqDetailTarget?.data.siteName, date: reqDetailTarget?.data.requestedDate })}
       />
