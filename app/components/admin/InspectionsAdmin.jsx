@@ -66,9 +66,29 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
   );
 }
 
+// 조건부·불합격 전용 행 — 수기입력 기한/검사기관/결과 열 없이 보완기한과 부적합 내역만 본다.
+function FlaggedRow({ i, site, onOpenFail, clickable }) {
+  return (
+    <tr className={`border-b border-slate-50 ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`} onClick={clickable ? () => onOpenFail(i) : undefined}>
+      <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{i.siteName} · {i.unitLabel}</td>
+      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{site?.assignedEngineer || "미배정"}</td>
+      <td className="px-3 py-2.5 whitespace-nowrap">
+        {i.result === "fail" ? (
+          <span className="text-red-600 font-bold">불합격</span>
+        ) : (
+          <span className="text-slate-700">{i.apiDueDate || i.dueDate || "-"}</span>
+        )}
+      </td>
+      <td className="px-3 py-2.5 text-xs text-blue-600 font-semibold">
+        {clickable ? "클릭해서 부적합 상세" : "-"}
+      </td>
+    </tr>
+  );
+}
+
 export default function InspectionsAdmin({ data, setData }) {
   const { sites, units, inspections } = data;
-  const [view, setView] = useState("dueSoon");
+  const [view, setView] = useState("all");
   const [search, setSearch] = useState("");
   const [failTarget, setFailTarget] = useState(null);
 
@@ -102,11 +122,9 @@ export default function InspectionsAdmin({ data, setData }) {
     return { ...i, unitLabel: u?.unitNo ?? i.elevatorNo ?? "-", daysLeft: daysLeftOf(i.dueDate, TODAY_STR) };
   });
 
-  // 도래현장: 수기입력 검사예정일 기준 과거 60일(연체) ~ 미래 60일 (미입력 건은 제외)
-  const dueSoon = withUnitLabel.filter((i) => i.dueDate && i.daysLeft >= -60 && i.daysLeft <= 60);
   const flagged = withUnitLabel.filter((i) => i.result === "conditional" || i.result === "fail");
 
-  const base = view === "dueSoon" ? dueSoon : view === "flagged" ? flagged : withUnitLabel;
+  const base = view === "flagged" ? flagged : withUnitLabel;
   const rows = base
     .filter((i) => !search || (i.siteName ?? "").includes(search))
     .sort((a, b) => (a.dueDate ? a.daysLeft : Infinity) - (b.dueDate ? b.daysLeft : Infinity));
@@ -154,18 +172,19 @@ export default function InspectionsAdmin({ data, setData }) {
           value={view}
           onChange={setView}
           options={[
-            { value: "dueSoon", label: "60일 이내", count: dueSoon.length },
-            { value: "flagged", label: "조건부·불합격", count: flagged.length },
             { value: "all", label: "전체", count: withUnitLabel.length },
+            { value: "flagged", label: "조건부·불합격", count: flagged.length },
           ]}
         />
         <input className={`${inputCls} max-w-56`} placeholder="현장명 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
-      <AdminTable head={["현장 · 호기", "종류", "검사기관", "기한(수기입력)", "D-day", "결과", "비고", ""]}>
+      <AdminTable head={view === "flagged" ? ["현장 · 호기", "담당자", "보완기한", "부적합 내역"] : ["현장 · 호기", "종류", "검사기관", "기한(수기입력)", "D-day", "결과", "비고", ""]}>
         {rows.map((i) => {
           const clickable = i.isLive && (i.result === "conditional" || i.result === "fail");
-          return (
+          return view === "flagged" ? (
+            <FlaggedRow key={i.id} i={i} site={sites.find((s) => s.id === i.siteId)} onOpenFail={setFailTarget} clickable={clickable} />
+          ) : (
             <InspectionRow key={i.id} i={i} onSaveDueDate={saveDueDate} onOpenFail={setFailTarget} clickable={clickable} />
           );
         })}
