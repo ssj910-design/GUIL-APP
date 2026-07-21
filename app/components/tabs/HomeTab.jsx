@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { ShieldCheck, AlertOctagon } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, failures30dBySite } from "@/lib/utils";
 import { Badge, DDay, DrillHeader, SmsToast } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -171,7 +171,10 @@ export function HomeTab({ attendances = [], onAttendance, onOpenRoster, swapCoun
   const supportSiteIds = new Set(openEscalations.filter((f) => f.escalation === "지원요청").map((f) => f.siteId));
   const stoppedSiteIds = new Set(openEscalations.filter((f) => f.escalation === "운행정지").map((f) => f.siteId));
   const escalatedSiteIds = new Set([...supportSiteIds, ...stoppedSiteIds]);
-  const criticalSites = mySites.filter((s) => s.failures30d >= 3 || escalatedSiteIds.has(s.id));
+  // 최근 30일 고장 건수는 실시간 계산 — 처리완료 여부와 무관하게 누적되어야 하므로
+  // 현장에 수동 저장된 failures30d 대신 실제 failures 레코드에서 직접 센다.
+  const recentFailureCounts = failures30dBySite(failures);
+  const criticalSites = mySites.filter((s) => (recentFailureCounts.get(s.id) ?? 0) >= 3 || escalatedSiteIds.has(s.id));
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [assignTarget, setAssignTarget] = useState(null);
@@ -296,6 +299,7 @@ export function HomeTab({ attendances = [], onAttendance, onOpenRoster, swapCoun
               {criticalSites.map((s) => {
                 const stopped = stoppedSiteIds.has(s.id);
                 const support = supportSiteIds.has(s.id);
+                const count30d = recentFailureCounts.get(s.id) ?? 0;
                 return (
                   <button
                     key={s.id}
@@ -309,7 +313,7 @@ export function HomeTab({ attendances = [], onAttendance, onOpenRoster, swapCoun
                     <span className="flex gap-1 shrink-0">
                       {support && <span className="text-xs font-extrabold text-amber-600 bg-amber-100 px-2 py-1 rounded-full">지원요청</span>}
                       {stopped && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">운행정지</span>}
-                      {s.failures30d > 0 && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">{s.failures30d}회 고장</span>}
+                      {count30d > 0 && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">{count30d}회 고장</span>}
                     </span>
                   </button>
                 );
