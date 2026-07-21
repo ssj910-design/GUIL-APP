@@ -9,8 +9,8 @@ import { Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapUnit } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays } from "@/lib/utils";
-import { useLiveInspections } from "@/app/hooks/useLiveInspections";
+import { addDays, govDateToDashed } from "@/lib/utils";
+import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { Modal, StatusBadge } from "@/app/components/admin/adminShared";
@@ -40,9 +40,10 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
   const unitFailures = failures
     .filter((f) => (f.unitId ? f.unitId === unit.id : f.siteId === site.id))
     .sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt));
-  const unitInspections = liveInspections.length > 0
-    ? liveInspections
-    : inspections.filter((i) => (i.unitId ? i.unitId === unit.id : i.siteId === site.id));
+  // 검사내역 탭: 최신 상태 1건이 아니라 과거 전체 검사결과(합격·조건부합격·불합격)를 나열한다
+  // (모바일 앱 SiteTab "검사" 탭과 동일 — 목록은 즉시 받고, 부적합상세는 클릭 시 지연 조회+캐시).
+  const { history: inspectionHistory, loading: historyLoading } = useInspectionHistory(unit.govNo);
+  const manualInspections = inspections.filter((i) => (i.unitId ? i.unitId === unit.id : i.siteId === site.id));
   const unitBillings = billings.filter((b) => (b.unitId ? b.unitId === unit.id : b.siteName === site.name));
 
   // 모바일 앱 "승강기정보 - 정보" 탭과 동일한 항목·순서.
@@ -106,26 +107,50 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
         )}
 
         {tab === "검사내역" && (
-          unitInspections.length === 0 ? <p className="text-xs text-slate-400 text-center py-10">등록된 검사 이력이 없습니다</p> : (
-            <div className="space-y-2">
-              {unitInspections.map((i) => {
-                const isLive = i.id?.startsWith("gov-");
-                const clickable = isLive && (i.result === "conditional" || i.result === "fail");
-                return (
-                  <div
-                    key={i.id}
-                    onClick={clickable ? () => setFailTarget(i) : undefined}
-                    className={`border border-slate-200 rounded-lg p-3 ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="font-bold text-sm">{i.type}</p>
-                      {i.result ? <Badge result={i.result} /> : <StatusBadge tone="slate">예정</StatusBadge>}
+          unit.govNo ? (
+            historyLoading ? (
+              <p className="text-xs text-slate-400 text-center py-10">국가승강기정보센터에서 검사이력을 조회하는 중...</p>
+            ) : inspectionHistory.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-10">등록된 검사 이력이 없습니다</p>
+            ) : (
+              <div className="space-y-2">
+                {inspectionHistory.map((h, hi) => {
+                  const resultCode = mapGovResultToCode(h.record.dispWords);
+                  const clickable = resultCode === "conditional" || resultCode === "fail";
+                  const inspDate = govDateToDashed(h.record.inspctDe);
+                  return (
+                    <div
+                      key={hi}
+                      onClick={clickable ? () => setFailTarget({
+                        inspection: { siteName: site.name, elevatorNo: unit.unitNo, result: resultCode, govElevatorNo: unit.govNo },
+                        preloaded: h,
+                      }) : undefined}
+                      className={`border border-slate-200 rounded-lg p-3 ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="font-bold text-sm">{h.record.inspctKindNm ? `${h.record.inspctKindNm}검사` : "정기검사"}</p>
+                        {resultCode ? <Badge result={resultCode} /> : <StatusBadge tone="slate">{h.record.dispWords ?? "-"}</StatusBadge>}
+                      </div>
+                      <p className="text-xs text-slate-500">{h.record.inspctInsttNm ?? "-"} · 검사일 {inspDate ?? "-"}</p>
+                      {clickable && <p className="text-[10px] text-blue-600 font-semibold mt-1">클릭해서 부적합 상세 항목 보기</p>}
                     </div>
-                    <p className="text-xs text-slate-500">{i.org} · 기한 {i.dueDate}</p>
-                    {clickable && <p className="text-[10px] text-blue-600 font-semibold mt-1">클릭해서 부적합 상세 항목 보기</p>}
+                  );
+                })}
+              </div>
+            )
+          ) : manualInspections.length === 0 ? (
+            <p className="text-xs text-slate-400 text-center py-10">등록된 검사 이력이 없습니다</p>
+          ) : (
+            <div className="space-y-2">
+              {manualInspections.map((i) => (
+                <div key={i.id} className="border border-slate-200 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="font-bold text-sm">{i.type}</p>
+                    {i.result ? <Badge result={i.result} /> : <StatusBadge tone="slate">예정</StatusBadge>}
                   </div>
-                );
-              })}
+                  <p className="text-xs text-slate-500">{i.org} · 기한 {i.dueDate}</p>
+                </div>
+              ))}
             </div>
           )
         )}
@@ -157,7 +182,9 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
         )}
       </div>
 
-      {failTarget && <InspectionFailDetailSheet inspection={failTarget} onClose={() => setFailTarget(null)} />}
+      {failTarget && (
+        <InspectionFailDetailSheet inspection={failTarget.inspection} preloaded={failTarget.preloaded} onClose={() => setFailTarget(null)} />
+      )}
     </Modal>
   );
 }
