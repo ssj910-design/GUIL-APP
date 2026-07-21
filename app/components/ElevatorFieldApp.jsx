@@ -230,22 +230,43 @@ export default function App() {
   // (사무실·대기소에 가만히 있는 기사도 배정 거리 계산에 최신 위치가 반영되게)
   // ⚠️ 웹은 앱이 열려 있을 때만 위치를 받는다(백그라운드 불가). 앱을 켜두거나 다시 열 때 동작.
   // 위치 공유 ON + 권한 granted + 근무 중(출근O·마감X)인 본인만 대상.
+  // PWA를 하루 넘게 열어두면 TODAY_STR(모듈 로드 시 1회 계산)이 어제로 고착돼,
+  // 다음날 출근 버튼이 안 뜨거나 어제 날짜 행에 기록되는 문제가 생긴다.
+  // KST 날짜가 바뀐 걸 감지하면 리로드해 모듈을 다시 평가한다(현장 업무폰은 앱을 종일 켜둔다).
+  useEffect(() => {
+    const check = () => {
+      if (document.visibilityState !== "visible") return;
+      const nowStr = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
+      if (nowStr !== TODAY_STR) window.location.reload();
+    };
+    const t = setInterval(check, 60 * 1000);
+    document.addEventListener("visibilitychange", check);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", check); };
+  }, []);
+
+  // ⚠️ 최신 profilesAll·attendances는 ref로 읽는다. 의존성 배열에 넣으면,
+  // updateLastLocation이 setProfilesAll로 profilesAll을 바꿔 effect를 재실행 → refresh(true) →
+  // 또 갱신 → 무한 루프(GPS·DB 쓰기 폭주)가 된다. deps는 profile(로그인)만 둔다.
+  const liveRef = useRef({ profilesAll, attendances });
+  liveRef.current = { profilesAll, attendances };
   useEffect(() => {
     if (!profile || profile.role !== "engineer") return;
-    const pid = profileIdByName(profilesAll, profile.name);
-    const self = profilesAll.find((p) => p.id === pid);
-    if (!pid || !self || self.share_location === false) return;
+    const pid = profileIdByName(liveRef.current.profilesAll, profile.name);
+    if (!pid) return;
 
     const REFRESH_MS = 2 * 60 * 60 * 1000;
     // force=true: 앱을 새로 열 때(마운트) — 2시간 조건 없이 매번 갱신.
     // force=false: 열어둔 채 대기 중 — 마지막 갱신이 2시간 넘었을 때만.
-    // 어느 경우든 '근무 중(출근O·마감X)'일 때만 — 퇴근/미출근 시엔 집 위치가 잡히지 않게.
+    // 어느 경우든 위치 공유 ON + '근무 중(출근O·마감X)'일 때만 — 퇴근/미출근·공유OFF면 집 위치가 잡히지 않게.
+    // (공유 상태·출근 상태는 매 호출 시 ref로 최신값을 확인해 마이페이지 토글·출퇴근이 바로 반영된다.)
     async function refresh(force) {
-      const todayAtt = attendances.find((a) => a.profileId === pid);
+      const { profilesAll: pa, attendances: att } = liveRef.current;
+      const self = pa.find((p) => p.id === pid);
+      if (!self || self.share_location === false) return;
+      const todayAtt = att.find((a) => a.profileId === pid);
       if (!todayAtt?.checkedInAt || todayAtt.checkedOutAt) return;
       if (!force) {
-        const cur = profilesAll.find((p) => p.id === pid);
-        const lastAt = cur?.last_loc_at ? new Date(cur.last_loc_at).getTime() : 0;
+        const lastAt = self.last_loc_at ? new Date(self.last_loc_at).getTime() : 0;
         if (Date.now() - lastAt < REFRESH_MS) return;
       }
       if (navigator.permissions?.query) {
@@ -261,7 +282,7 @@ export default function App() {
     const onVisible = () => { if (document.visibilityState === "visible") refresh(false); };
     document.addEventListener("visibilitychange", onVisible);
     return () => { clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
-  }, [profile, profilesAll, attendances]);
+  }, [profile]);
 
   // kind: in(출근) | out(퇴근) | duty(당직) | relocate(위치만 다시 받기)
   // 위치는 in·relocate에서만 받는다. 권한 거부·실패면 위치 없이 넘어가되,
@@ -515,7 +536,8 @@ export default function App() {
     const now = new Date().toISOString();
     setFeedReadAt(now);
     const pid = profileIdByName(profilesAll, profile.name);
-    if (pid) supabase.from("profiles").update({ feed_read_at: now }).eq("id", pid);
+    // .then()이 있어야 실제 HTTP 요청이 나간다 (supabase-js 빌더는 lazy thenable)
+    if (pid) supabase.from("profiles").update({ feed_read_at: now }).eq("id", pid).then(() => {});
   }, [roomOpen, tab, feed.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // v2 마이그레이션이 실행된 DB인지 (units 존재 여부로 판단).
