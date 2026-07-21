@@ -4,7 +4,12 @@
 //
 // 같은 건물(site)의 호기는 승강기고유번호 1개만 조회해도 전 호기가 함께 반환되므로,
 // 사이트당 1콜로 묶어서 869개 호기를 869콜이 아니라 사이트 수만큼만 호출한다.
+//
+// 조건부합격/불합격으로 확인된 호기는 부적합 상세(getInspectsafeList → getInspectFailList)까지
+// 여기서 같이 가져와 units.fail_items에 캐싱해둔다 — 검사관리 조건부·불합격 탭이 페이지 열 때마다
+// 라이브로 부적합상세를 조회하느라 느렸던 문제 해결(이제 이 캐시만 읽어서 즉시 뜬다).
 import { createClient } from "@supabase/supabase-js";
+import { resolveLatestFailItems } from "@/lib/govFailApi";
 
 export const maxDuration = 300;
 
@@ -68,6 +73,7 @@ export async function GET(request) {
   let sitesQueried = 0;
   let unitsUpdated = 0;
   let sitesFailed = 0;
+  let failItemsCached = 0;
 
   for (let i = 0; i < siteGroups.length; i += CONCURRENCY) {
     const batch = siteGroups.slice(i, i + CONCURRENCY);
@@ -81,14 +87,20 @@ export async function GET(request) {
           siteUnits.map(async (u) => {
             const item = itemByGovNo.get(u.gov_no);
             if (!item) return;
-            const { error: updateError } = await supabase
-              .from("units")
-              .update({
-                inspection_start: normalizeDate(item.applcBeDt),
-                inspection_end: normalizeDate(item.applcEnDt),
-                inspection_result: item.resultNm || null,
-              })
-              .eq("id", u.id);
+            const patch = {
+              inspection_start: normalizeDate(item.applcBeDt),
+              inspection_end: normalizeDate(item.applcEnDt),
+              inspection_result: item.resultNm || null,
+            };
+            // 조건부합격/불합격인 호기만 부적합상세까지 같이 캐싱한다(대상이 적어 트래픽 부담 적음).
+            if (item.resultNm === "조건부합격" || item.resultNm === "불합격") {
+              const { items: failItems, reason } = await resolveLatestFailItems(supabase, u.gov_no);
+              patch.fail_items = failItems;
+              patch.fail_reason = reason;
+              patch.fail_checked_at = new Date().toISOString();
+              failItemsCached++;
+            }
+            const { error: updateError } = await supabase.from("units").update(patch).eq("id", u.id);
             if (!updateError) unitsUpdated++;
           })
         );
@@ -101,5 +113,6 @@ export async function GET(request) {
     sitesQueried,
     sitesFailed,
     unitsUpdated,
+    failItemsCached,
   });
 }

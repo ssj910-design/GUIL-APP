@@ -76,7 +76,13 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
 // 조건부·불합격 전용 행 — 수기입력 기한/검사기관/결과 열 없이 보완기한과 부적합 내역만 본다.
 // 부적합 내역은 클릭 없이 바로 불러온다 — 기준 조항 설명 줄은 빼고 실제 부적합 내용·검사원 의견만 보여준다.
 function FlaggedRow({ i, site, isLive }) {
-  const { loading, items, reason } = useInspectionFailItems(isLive ? i.govElevatorNo : null, i.startDate);
+  // sync-inspection-cache 크론이 매일 미리 캐싱해둔 값을 우선 쓴다(즉시 표시, 외부 API 호출 없음).
+  // 아직 캐싱 전(오늘 새로 조건부/불합격이 된 경우 등)이면 지금처럼 실시간 조회로 대신한다.
+  const hasCached = Array.isArray(i.failItems);
+  const live = useInspectionFailItems(!hasCached && isLive ? i.govElevatorNo : null, i.startDate);
+  const loading = hasCached ? false : live.loading;
+  const items = hasCached ? i.failItems : live.items;
+  const reason = hasCached ? i.failReason : live.reason;
   return (
     <tr className="border-b border-slate-50">
       <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap align-top">{i.siteName} · {i.unitLabel}</td>
