@@ -2,7 +2,7 @@ import { useState, useContext, useEffect } from "react";
 import { ShieldCheck, AlertOctagon } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, formatUnitLabel } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, formatUnitLabel, distanceKm } from "@/lib/utils";
 import { Badge, DDay, SmsToast, Sheet } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -387,7 +387,14 @@ function WorkEndRow({ onAttendance, dutyKind }) {
 export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, onCloseNight, onAttendance, onOpenRoster, swapCount, inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, toast, todayLeaves = [] }) {
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
-  const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
+  const { name: CURRENT_ENGINEER, role, selfId, engineers = [] } = useContext(AuthContext);
+  // 기사 본인 위치 — 미배정 고장을 가까운 순으로 정렬·표시하는 기준.
+  const selfLoc = engineers.find((e) => e.id === selfId);
+  const selfCoord = selfLoc?.last_lat != null ? { lat: selfLoc.last_lat, lng: selfLoc.last_lng } : null;
+  const distOf = (f) => {
+    const s = siteById.get(f.siteId);
+    return distanceKm(selfCoord, s?.lat != null ? { lat: s.lat, lng: s.lng } : null);
+  };
   const mySites = role === "admin" ? sites : sites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER);
   // 지원요청/운행정지는 각각 독립적으로 판단해 배지를 함께 표시합니다 (관리자 대시보드와 동일 기준).
   const openEscalations = failures.filter((f) => f.escalation && f.status !== "완료");
@@ -445,12 +452,23 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
   const activeMine = failures.filter(
     (f) => f.status !== "완료" && (role === "admin" || f.assignee === CURRENT_ENGINEER || !f.assignee)
   );
-  // 진행 중(작업중·출동중)을 위로, 그다음 응답대기·미배정 — 접수 순서는 유지
+  // 진행 중(작업중·출동중)을 위로, 그다음 응답대기·미배정
   const stageRank = (f) => (f.status === "진행중" ? 0 : f.assignee ? 1 : 2);
   // 관리자 홈은 액션이 필요한 것만(미배정·응답대기) — 출동중·작업중은 "모두 보기"로
+  // 기사 홈은 같은 단계 안에서 미배정 건을 '가까운 순'으로(내가 출동할 후보라 가까운 게 먼저).
+  // 거리를 못 구하면(내 위치 없거나 현장 좌표 없음) 맨 뒤로 보낸다.
+  const byDistance = (a, b) => {
+    const r = stageRank(a) - stageRank(b);
+    if (r !== 0) return r;
+    const da = distOf(a), db = distOf(b);
+    if (da == null && db == null) return 0;
+    if (da == null) return 1;
+    if (db == null) return -1;
+    return da - db;
+  };
   const listSource = role === "admin"
     ? activeMine.filter((f) => f.status === "미처리").sort((a, b) => (a.assignee ? 1 : 0) - (b.assignee ? 1 : 0))
-    : [...activeMine].sort((a, b) => stageRank(a) - stageRank(b));
+    : [...activeMine].sort(byDistance);
   const [showAllFailures, setShowAllFailures] = useState(false);
   const shownFailures = showAllFailures ? listSource : listSource.slice(0, 5);
 
@@ -485,6 +503,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
               <FailureMiniCard
                 key={f.id}
                 f={f}
+                dist={role !== "admin" && !f.assignee ? distOf(f) : null}
                 onOpenDetail={setDetailTarget}
                 onDispatch={setDispatchTarget}
                 onArrive={setArriveTarget}

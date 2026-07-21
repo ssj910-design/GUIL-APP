@@ -854,7 +854,9 @@ function useSiteOf() {
   return (f) => sites.find((x) => x.id === f.siteId);
 }
 
-export function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult, onRefuse, onAssignOpen }) {
+// dist: 기사 홈에서 미배정 고장까지의 거리(km). 있으면 거리 뱃지를 보여준다(없으면 생략).
+const fmtDist = (km) => (km == null ? null : km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`);
+export function FailureMiniCard({ f, dist, onOpenDetail, onDispatch, onArrive, onOpenResult, onRefuse, onAssignOpen }) {
   const siteOf = useSiteOf();
   const stage = failureStage(f);
   const { name: me, role } = useContext(AuthContext);
@@ -864,13 +866,16 @@ export function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenR
     : f.assignee ? { label: `${f.assignee} 응답대기`, bar: "border-l-amber-400", chip: "bg-amber-50 text-amber-600" }
     : { label: "미배정", bar: "border-l-red-500", chip: "bg-red-50 text-red-600" };
   return (
-    <div className={`w-full flex items-center justify-between gap-2 rounded-xl border border-slate-200 border-l-4 ${state.bar} bg-white px-3 py-2.5`}>
+    <div className={`w-full flex items-center justify-between gap-2 rounded-xl border border-slate-200 border-l-4 ${state.bar} bg-white px-3.5 py-3`}>
       <button type="button" onClick={() => onOpenDetail(f)} className="min-w-0 flex-1 text-left">
         <div className="flex items-center gap-1.5 min-w-0">
           <p className="font-bold text-slate-800 text-sm truncate">{f.siteName} · {formatUnitLabel(f.elevatorNo)}</p>
           <span className={`shrink-0 text-[10px] font-bold rounded-full px-1.5 py-0.5 ${state.chip}`}>{state.label}</span>
         </div>
-        <p className="text-[11px] text-slate-400 truncate">{f.errorCode}</p>
+        <p className="text-[11px] text-slate-400 truncate">
+          {dist != null && <span className="font-bold text-blue-600">📍 {fmtDist(dist)} · </span>}
+          {f.errorCode}
+        </p>
       </button>
       {stage !== "done" && <MapLinkButtons site={siteOf(f)} />}
       {stage === "pending" && (
