@@ -686,19 +686,19 @@ export function ArrivalResultModal({ failure, onConfirm, onClose }) {
           </select>
         </div>
         <div>
-          <label className="text-xs font-bold text-slate-600 mb-1 block">증상</label>
+          <label className="text-xs font-bold text-slate-600 mb-1 block">증상 <span className="text-red-500">*</span></label>
           <input className={inputCls} value={symptom} onChange={(e) => setSymptom(e.target.value)} placeholder="예: 도어가 완전히 닫히지 않음" />
         </div>
         <div>
-          <label className="text-xs font-bold text-slate-600 mb-1 block">에러코드</label>
+          <label className="text-xs font-bold text-slate-600 mb-1 block">에러코드 <span className="text-red-500">*</span></label>
           <input className={inputCls} value={errorCode} onChange={(e) => setErrorCode(e.target.value)} placeholder="예: E-32" />
         </div>
         <div>
-          <label className="text-xs font-bold text-slate-600 mb-1 block">발생원인</label>
+          <label className="text-xs font-bold text-slate-600 mb-1 block">발생원인 <span className="text-red-500">*</span></label>
           <input className={inputCls} value={cause} onChange={(e) => setCause(e.target.value)} placeholder="예: 도어 센서 오작동" />
         </div>
         <div>
-          <label className="text-xs font-bold text-slate-600 mb-1 block">처리내용</label>
+          <label className="text-xs font-bold text-slate-600 mb-1 block">처리내용 <span className="text-red-500">*</span></label>
           <input className={inputCls} value={processContent} onChange={(e) => setProcessContent(e.target.value)} placeholder="예: 센서 교체 및 재조정" />
         </div>
         <div>
@@ -713,13 +713,19 @@ export function ArrivalResultModal({ failure, onConfirm, onClose }) {
           label="처리 사진"
           required={false}
         />
-        <button
-          type="button"
-          onClick={() => onConfirm({ result, symptom, errorCode, cause, processContent, note, photoCount: photos.length, photoUrls: photos.map((p) => p.url) })}
-          className={`w-full text-white text-sm font-bold py-3 rounded-xl ${FAILURE_RESULT_BTN_CLS[result]}`}
-        >
-          {result} 등록
-        </button>
+        {(() => {
+          const valid = symptom.trim() && errorCode.trim() && cause.trim() && processContent.trim();
+          return (
+            <button
+              type="button"
+              disabled={!valid}
+              onClick={() => onConfirm({ result, symptom, errorCode, cause, processContent, note, photoCount: photos.length, photoUrls: photos.map((p) => p.url) })}
+              className={`w-full text-white text-sm font-bold py-3 rounded-xl ${valid ? FAILURE_RESULT_BTN_CLS[result] : "bg-slate-300"}`}
+            >
+              {result} 등록
+            </button>
+          );
+        })()}
       </div>
     </Sheet>
   );
