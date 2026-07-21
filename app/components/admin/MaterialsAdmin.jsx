@@ -102,6 +102,58 @@ export default function MaterialsAdmin({ data, setData }) {
     }));
   }
 
+  async function handleQuoteSupplyComplete(quote, { assigneeIds, photoUrls }) {
+    const patch = {
+      status: "자재지급완료",
+      supplied_date: TODAY_STR,
+      has_supply_photo: photoUrls.length > 0,
+      supply_photo_urls: photoUrls.length ? photoUrls : null,
+    };
+    const { error } = await supabase.from("quote_requests").update(patch).eq("id", quote.id);
+    if (error) { alert("자재지급완료 처리 실패: " + error.message); return; }
+
+    const unitId = quote.unitId ?? unitIdFor(data.units, quote.siteId, quote.elevatorNo);
+    const dueDate = addDays(TODAY_STR, 30);
+    const newTodos = assigneeIds.map((assigneeId, idx) => {
+      const engineer = (data.profiles ?? []).find((p) => p.id === assigneeId);
+      return {
+        id: `todo-quote-${quote.id}-${idx}`,
+        quoteRequestId: quote.id,
+        materialRequestId: null,
+        source: "quote",
+        title: `${quote.siteName} ${quote.constructionType} 시공 확인 및 서류 제출`,
+        siteName: quote.siteName,
+        elevatorNo: quote.elevatorNo,
+        part: quote.constructionType,
+        assignee: engineer?.name ?? quote.engineer,
+        assignedDate: TODAY_STR,
+        dueDate,
+        done: false,
+        unitId,
+        assigneeId,
+      };
+    });
+    const { error: todoError } = await supabase.from("todos").insert(
+      newTodos.map((t) => ({
+        id: t.id, quote_request_id: t.quoteRequestId, source: t.source, title: t.title,
+        site_name: t.siteName, elevator_no: t.elevatorNo, part: t.part,
+        assignee: t.assignee, assigned_date: t.assignedDate, due_date: t.dueDate, done: t.done,
+        unit_id: t.unitId, assignee_id: t.assigneeId,
+      }))
+    );
+    if (todoError) { alert("할 일 생성 실패: " + todoError.message); return; }
+
+    setData((prev) => ({
+      ...prev,
+      quoteRequests: prev.quoteRequests.map((x) =>
+        x.id === quote.id
+          ? { ...x, status: "자재지급완료", suppliedDate: TODAY_STR, hasSupplyPhoto: patch.has_supply_photo, supplyPhotoUrls: photoUrls }
+          : x
+      ),
+      todos: [...newTodos, ...prev.todos],
+    }));
+  }
+
   return (
     <div className="max-w-6xl">
       <h1 className="text-xl font-extrabold mb-4">자재·견적 신청내역</h1>
@@ -199,6 +251,15 @@ export default function MaterialsAdmin({ data, setData }) {
           profiles={data.profiles ?? []}
           onClose={() => setPayTarget(null)}
           onSubmit={async (input) => { await handleMaterialSupplyComplete(payTarget, input); setPayTarget(null); }}
+        />
+      )}
+
+      {quoteSupplyTarget && (
+        <QuoteSupplyModal
+          quote={quoteSupplyTarget}
+          profiles={data.profiles ?? []}
+          onClose={() => setQuoteSupplyTarget(null)}
+          onSubmit={async (input) => { await handleQuoteSupplyComplete(quoteSupplyTarget, input); setQuoteSupplyTarget(null); }}
         />
       )}
     </div>
@@ -299,6 +360,90 @@ function MaterialSupplyModal({ request, profiles, onClose, onSubmit }) {
           className="w-full bg-blue-700 disabled:bg-slate-300 text-white text-sm font-bold py-2.5 rounded-lg"
         >
           {saving ? "처리 중..." : "지급완료 처리"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function QuoteSupplyModal({ quote, profiles, onClose, onSubmit }) {
+  const engineers = profiles.filter((p) => p.role === "engineer");
+  const defaultId = engineers.find((p) => p.name === quote.engineer)?.id;
+  const [assigneeIds, setAssigneeIds] = useState(defaultId ? [defaultId] : []);
+  const [photos, setPhotos] = useState(quote.supplyPhotoUrls ?? []);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  function toggle(id) {
+    setAssigneeIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  async function handleFiles(e) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const urls = await Promise.all(files.map((f) => uploadPhoto(f, `quotes/${quote.id}/supply`)));
+      setPhotos((p) => [...p, ...urls]);
+    } catch (err) {
+      alert("사진 업로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  }
+
+  async function submit() {
+    if (assigneeIds.length === 0) return;
+    setSaving(true);
+    await onSubmit({ assigneeIds, photoUrls: photos });
+    setSaving(false);
+  }
+
+  return (
+    <Modal title={`${quote.siteName ?? "-"} · ${quote.constructionType} — 자재지급완료 처리`} onClose={onClose}>
+      <div className="space-y-3">
+        <div>
+          <label className="text-xs font-bold text-slate-400 block mb-1">지급 사진 (선택)</label>
+          <div className="flex flex-wrap gap-1.5 mb-1.5">
+            {photos.map((url, i) => (
+              <div key={i} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+                <button
+                  onClick={() => setPhotos((p) => p.filter((_, idx) => idx !== i))}
+                  className="absolute -top-1.5 -right-1.5 bg-slate-800 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+          <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 cursor-pointer">
+            사진 추가
+            <input type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} disabled={uploading} />
+          </label>
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-slate-400 block mb-1">담당 기사 (2명 이상 가능)</label>
+          <div className="space-y-1">
+            {engineers.map((p) => (
+              <label key={p.id} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={assigneeIds.includes(p.id)} onChange={() => toggle(p.id)} />
+                {p.name}
+              </label>
+            ))}
+          </div>
+          {assigneeIds.length === 0 && <p className="text-[10px] text-red-500 mt-1">담당 기사를 1명 이상 선택해주세요</p>}
+        </div>
+
+        <button
+          onClick={submit}
+          disabled={saving || uploading || assigneeIds.length === 0}
+          className="w-full bg-blue-700 disabled:bg-slate-300 text-white text-sm font-bold py-2.5 rounded-lg"
+        >
+          {saving ? "처리 중..." : "자재 지급 완료 체크"}
         </button>
       </div>
     </Modal>
