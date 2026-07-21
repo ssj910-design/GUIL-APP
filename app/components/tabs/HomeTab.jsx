@@ -101,6 +101,13 @@ function AdminAttendanceCard({ attendances, engineers, onSendPost }) {
   const geoOff = rows.filter((r) => r.e.geo_perm && r.e.geo_perm !== "granted");
   const hhmm = (iso) => (iso ? new Date(iso).toTimeString().slice(0, 5) : "");
 
+  // 근무 중(출근O·마감X)인데 앱을 2시간 넘게 안 본 사람 — '연락 두절'이 아니라 '확인해볼 사람'.
+  // 미출근·퇴근자는 앱 안 봐도 정상이라 제외. 관리자만 본다(기사에겐 안 보임).
+  const STALE_MS = 2 * 60 * 60 * 1000;
+  const hoursAgo = (iso) => (iso ? (Date.now() - new Date(iso)) / 3600000 : Infinity);
+  const isWorking = (a) => a?.checkedInAt && !a.checkedOutAt;
+  const staleRows = rows.filter((r) => isWorking(r.a) && (Date.now() - new Date(r.e.last_seen_at ?? 0)) > STALE_MS);
+
   const permLabel = (s) => (s === "granted" ? "위치 켜짐" : s === "denied" ? "위치 거부" : s === "prompt" ? "위치 미설정" : "미확인");
   const permTone = (s) => (s === "granted" ? "text-emerald-600" : s === "denied" ? "text-red-500" : "text-amber-600");
 
@@ -117,6 +124,7 @@ function AdminAttendanceCard({ attendances, engineers, onSendPost }) {
         <span className="text-xs font-bold text-slate-500">오늘 출근</span>
         <span className="flex items-center gap-1.5">
           <span className="text-sm font-bold text-slate-800">{inCount} / {engineers.length}명</span>
+          {staleRows.length > 0 && <span className="text-[10px] font-extrabold text-white bg-red-500 rounded-full px-1.5 py-0.5">2시간+ 미확인 {staleRows.length}</span>}
           {geoOff.length > 0 && <span className="text-[10px] font-extrabold text-white bg-amber-500 rounded-full px-1.5 py-0.5">위치 미설정 {geoOff.length}</span>}
           <span className="text-[11px] font-bold text-blue-700">{open ? "접기" : "명단"}</span>
         </span>
@@ -131,17 +139,21 @@ function AdminAttendanceCard({ attendances, engineers, onSendPost }) {
             </button>
           )}
           <div className="space-y-1.5">
-            {rows.map(({ e, a }) => (
-              <div key={e.id} className="flex items-center justify-between gap-2 text-xs">
-                <span className="font-bold text-slate-700 min-w-0 truncate">{e.name}</span>
-                <span className="flex items-center gap-2 shrink-0">
-                  {a?.checkedInAt
-                    ? <span className="text-slate-500">{hhmm(a.checkedInAt)} 출근{a.checkedOutAt && ` · ${a.status} ${hhmm(a.checkedOutAt)}`}</span>
-                    : <span className="text-slate-300">미출근</span>}
-                  <span className={`font-bold ${permTone(e.geo_perm)}`}>{permLabel(e.geo_perm)}</span>
-                </span>
-              </div>
-            ))}
+            {rows.map(({ e, a }) => {
+              const stale = isWorking(a) && hoursAgo(e.last_seen_at) >= 2;
+              return (
+                <div key={e.id} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="font-bold text-slate-700 min-w-0 truncate">{e.name}</span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    {stale && <span className="text-[10px] font-bold text-red-500">{Math.floor(hoursAgo(e.last_seen_at))}시간째 미확인</span>}
+                    {a?.checkedInAt
+                      ? <span className="text-slate-500">{hhmm(a.checkedInAt)} 출근{a.checkedOutAt && ` · ${a.status} ${hhmm(a.checkedOutAt)}`}</span>
+                      : <span className="text-slate-300">미출근</span>}
+                    <span className={`font-bold ${permTone(e.geo_perm)}`}>{permLabel(e.geo_perm)}</span>
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

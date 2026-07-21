@@ -67,12 +67,15 @@ function DailyView({ engineers, rows, day }) {
   const byPid = new Map(rows.filter((r) => r.work_date === day).map((r) => [r.profile_id, r]));
   const inCount = engineers.filter((e) => byPid.get(e.id)?.checked_in_at).length;
   const isToday = day === TODAY_STR;
-  // 마지막 접속 표시 — 오늘 조회일 때만 의미(단일 최신값이라 과거 날짜엔 안 맞음)
-  const seenText = (iso) => {
-    if (!iso) return { t: "-", tone: "text-slate-300" };
+  // 마지막 접속 표시 — 오늘 조회일 때만 의미(단일 최신값이라 과거 날짜엔 안 맞음).
+  // 근무 중인데 2시간 넘게 앱을 안 봤으면(stale) 주황으로 강조 — '확인해볼 사람'.
+  const seenText = (iso, working) => {
+    if (!iso) return { t: working ? "접속 기록 없음" : "-", tone: working ? "text-red-500 font-bold" : "text-slate-300" };
     const d = iso.slice(0, 10);
-    if (d === TODAY_STR) return { t: `오늘 ${hhmm(iso)}`, tone: "text-emerald-600 font-bold" };
-    return { t: d.slice(5).replace("-", "/"), tone: "text-slate-400" };
+    if (d !== TODAY_STR) return { t: d.slice(5).replace("-", "/"), tone: "text-slate-400" };
+    const h = (Date.now() - new Date(iso)) / 3600000;
+    if (working && h >= 2) return { t: `${hhmm(iso)} · ${Math.floor(h)}시간째 미확인`, tone: "text-amber-600 font-bold" };
+    return { t: `오늘 ${hhmm(iso)}`, tone: "text-emerald-600 font-bold" };
   };
 
   return (
@@ -92,7 +95,7 @@ function DailyView({ engineers, rows, day }) {
           <tbody>
             {engineers.map((e) => {
               const a = byPid.get(e.id);
-              const seen = seenText(e.last_seen_at);
+              const seen = seenText(e.last_seen_at, a?.checked_in_at && !a.checked_out_at);
               return (
                 <tr key={e.id} className="border-b border-slate-50">
                   <td className="pl-5 pr-3 py-2.5 font-bold whitespace-nowrap">{e.name}</td>
