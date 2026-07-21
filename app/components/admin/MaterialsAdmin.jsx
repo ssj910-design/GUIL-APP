@@ -20,6 +20,7 @@ export default function MaterialsAdmin({ data, setData }) {
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
   const [payTarget, setPayTarget] = useState(null); // 지급완료 처리 중인 자재신청
+  const [quoteSupplyTarget, setQuoteSupplyTarget] = useState(null); // 자재지급완료 처리 중인 견적요청
 
   const query = search.trim();
   const materialRequests = allMaterialRequests.filter((m) =>
@@ -83,6 +84,24 @@ export default function MaterialsAdmin({ data, setData }) {
     }));
   }
 
+  async function handleQuoteAdvance(quote) {
+    const isIssue = quote.status === "요청접수";
+    const patch = isIssue
+      ? { status: "견적발행", quote_issued_date: TODAY_STR }
+      : { status: "승인", approved_date: TODAY_STR };
+    const { error } = await supabase.from("quote_requests").update(patch).eq("id", quote.id);
+    if (error) { alert("처리 실패: " + error.message); return; }
+    setData((prev) => ({
+      ...prev,
+      quoteRequests: prev.quoteRequests.map((x) => {
+        if (x.id !== quote.id) return x;
+        return isIssue
+          ? { ...x, status: "견적발행", quoteIssuedDate: TODAY_STR }
+          : { ...x, status: "승인", approvedDate: TODAY_STR };
+      }),
+    }));
+  }
+
   return (
     <div className="max-w-6xl">
       <h1 className="text-xl font-extrabold mb-4">자재·견적 신청내역</h1>
@@ -138,7 +157,7 @@ export default function MaterialsAdmin({ data, setData }) {
       {(tab === "quote" || tab === "all") && (
         <>
         {tab === "all" && <h2 className="text-xs font-bold text-slate-400 mb-2 mt-6">견적요청</h2>}
-        <AdminTable head={["신청일", "현장 · 호기", "공사 내용", "신청 기사", "발행/승인/지급", "상태"]}>
+        <AdminTable head={["신청일", "현장 · 호기", "공사 내용", "신청 기사", "발행/승인/지급", "상태", "처리"]}>
           {quoteRequests.map((q) => (
             <tr key={q.id} className="border-b border-slate-50">
               <td className="pl-5 pr-3 py-2.5 text-slate-500 whitespace-nowrap">{q.requestedDate}</td>
@@ -149,6 +168,24 @@ export default function MaterialsAdmin({ data, setData }) {
                 {q.quoteIssuedDate ?? "-"} / {q.approvedDate ?? "-"} / {q.suppliedDate ?? "-"}
               </td>
               <td className="px-3 py-2.5"><StatusBadge tone={QUOTE_TONE[q.status] ?? "slate"}>{q.status}</StatusBadge></td>
+              <td className="px-3 py-2.5 whitespace-nowrap">
+                {q.status === "요청접수" && (
+                  <button onClick={() => handleQuoteAdvance(q)} className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-lg">
+                    견적발행 처리
+                  </button>
+                )}
+                {q.status === "견적발행" && (
+                  <button onClick={() => handleQuoteAdvance(q)} className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1.5 rounded-lg">
+                    승인 처리
+                  </button>
+                )}
+                {q.status === "승인" && (
+                  <button onClick={() => setQuoteSupplyTarget(q)} className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-lg">
+                    지급완료 처리
+                  </button>
+                )}
+                {q.status === "자재지급완료" && <span className="text-xs text-slate-300">-</span>}
+              </td>
             </tr>
           ))}
         </AdminTable>
