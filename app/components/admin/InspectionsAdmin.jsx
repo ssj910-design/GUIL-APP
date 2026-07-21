@@ -10,7 +10,7 @@ import { unitsToInspections } from "@/lib/utils";
 import { mapInspection } from "@/lib/mappers";
 import { Badge, DDay, inputCls as mobileInputCls } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
-import { StatusBadge, AdminTable, FilterPills, inputCls } from "@/app/components/admin/adminShared";
+import { StatusBadge, AdminTable, FilterPills, inputCls, Modal } from "@/app/components/admin/adminShared";
 
 function daysLeftOf(dueDate, today) {
   return Math.ceil((new Date(dueDate) - new Date(today)) / 86400000);
@@ -172,7 +172,7 @@ export default function InspectionsAdmin({ data, setData }) {
       </AdminTable>
       {rows.length === 0 && <p className="text-xs text-slate-400 text-center py-10">해당 조건의 검사 이력이 없습니다</p>}
 
-      {failTarget && <InspectionFailDetailSheet inspection={failTarget} onClose={() => setFailTarget(null)} />}
+      {failTarget && <InspectionFailDetailSheet inspection={failTarget} onClose={() => setFailTarget(null)} Container={Modal} />}
     </div>
   );
 }

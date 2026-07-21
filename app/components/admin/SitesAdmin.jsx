@@ -187,7 +187,7 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
       </div>
 
       {failTarget && (
-        <InspectionFailDetailSheet inspection={failTarget.inspection} preloaded={failTarget.preloaded} onClose={() => setFailTarget(null)} />
+        <InspectionFailDetailSheet inspection={failTarget.inspection} preloaded={failTarget.preloaded} onClose={() => setFailTarget(null)} Container={Modal} />
       )}
     </Modal>
   );

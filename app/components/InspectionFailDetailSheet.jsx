@@ -13,7 +13,10 @@ function isValidDateStr(s) {
 // items까지 채워져 있으면(예전 전체이력 조회) 재조회하지 않지만, 검사이력 화면이 이제 목록만
 // 먼저 받고 부적합상세는 지연 조회하므로 items가 없는 preloaded도 흔하다 — 그때는 record의
 // 검사일자를 anchorDate 삼아 그 회차 하나만 새로 조회한다.
-export function InspectionFailDetailSheet({ inspection, preloaded, onClose }) {
+// Container: 팝업 껍데기 컴포넌트({title, onClose, children} 받는 것) — 기본은 모바일 하단시트(Sheet).
+// 관리자 웹콘솔에서는 데스크톱 중앙 모달(admin/adminShared의 Modal)을 넘겨써서 모바일과
+// 동일한 하단시트로 뜨지 않게 한다.
+export function InspectionFailDetailSheet({ inspection, preloaded, onClose, Container = Sheet }) {
   const [retryCount, setRetryCount] = useState(0);
   const preloadedReady = preloaded && preloaded.items !== undefined;
   const [state, setState] = useState(
@@ -65,7 +68,7 @@ export function InspectionFailDetailSheet({ inspection, preloaded, onClose }) {
   const inspectedOn = state.record ? govDateToDashed(state.record.inspctDe) : null;
 
   return (
-    <Sheet title="조건부·불합격 상세" onClose={onClose}>
+    <Container title="조건부·불합격 상세" onClose={onClose}>
       <div className="bg-slate-100 rounded-xl p-3 mb-3 flex items-center justify-between">
         <div>
           <p className="font-bold text-slate-800">{inspection.siteName} · {inspection.elevatorNo}</p>
@@ -111,6 +114,6 @@ export function InspectionFailDetailSheet({ inspection, preloaded, onClose }) {
           ))}
         </div>
       )}
-    </Sheet>
+    </Container>
   );
 }
