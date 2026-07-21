@@ -227,6 +227,15 @@ export default function App() {
     if (site?.lat != null && pid) updateLastLocation(pid, site.lat, site.lng, `${site.name} ${label}`);
   }
 
+  // 어제 마감 안 한 숙직을 마감한다 (익일 출근 시 자동 호출 / 연차·미출근이면 홈 버튼).
+  // 밤샘 마감 위치는 의미가 없어 시각·상태만 기록한다.
+  async function closeNightDuty() {
+    if (!pendingNight) return;
+    const now = new Date().toISOString();
+    await supabase.from("attendances").update({ checked_out_at: now, status: "숙직" }).eq("id", pendingNight.id);
+    setPendingNight(null);
+  }
+
   // 대기 중 기사 위치 자동 갱신 — 출동·도착 같은 업무 이벤트가 없어도 2시간마다 위치를 최신화한다.
   // (사무실·대기소에 가만히 있는 기사도 배정 거리 계산에 최신 위치가 반영되게)
   // ⚠️ 웹은 앱이 열려 있을 때만 위치를 받는다(백그라운드 불가). 앱을 켜두거나 다시 열 때 동작.
@@ -244,6 +253,29 @@ export default function App() {
     document.addEventListener("visibilitychange", check);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", check); };
   }, []);
+
+  // 어제 숙직을 마감 안 하고 밤샘한 경우를 잡아둔다 (오늘 조회엔 어제 행이 안 들어오므로 따로 조회).
+  // → 익일 출근하면 handleAttendance가 자동 마감, 연차·미출근이면 홈의 '어제 숙직 마감' 버튼으로.
+  useEffect(() => {
+    if (!profile || profile.role !== "engineer") { setPendingNight(null); return; }
+    const pid = profileIdByName(profilesAll, profile.name);
+    if (!pid) return;
+    const y = new Date(TODAY_STR + "T12:00:00Z");
+    y.setUTCDate(y.getUTCDate() - 1);
+    const ystStr = y.toISOString().slice(0, 10); // 어제 (KST 기준 날짜)
+    let alive = true;
+    (async () => {
+      const { data: att } = await supabase.from("attendances").select("*")
+        .eq("profile_id", pid).eq("work_date", ystStr)
+        .not("checked_in_at", "is", null).is("checked_out_at", null).limit(1);
+      if (!alive) return;
+      if (!att?.length) { setPendingNight(null); return; }
+      const { data: duty } = await supabase.from("duty_schedules").select("id")
+        .eq("profile_id", pid).eq("duty_date", ystStr).eq("kind", "숙직").limit(1);
+      if (alive) setPendingNight(duty?.length ? mapAttendance(att[0]) : null);
+    })();
+    return () => { alive = false; };
+  }, [profile, profilesAll.length]);
 
   // ⚠️ 최신 profilesAll·attendances는 ref로 읽는다. 의존성 배열에 넣으면,
   // updateLastLocation이 setProfilesAll로 profilesAll을 바꿔 effect를 재실행 → refresh(true) →
@@ -291,6 +323,8 @@ export default function App() {
   async function handleAttendance(kind) {
     const pid = profileIdByName(profilesAll, profile.name);
     if (!pid) return {};
+    // 익일 출근 시, 어제 마감 안 한 숙직을 먼저 자동 마감한다.
+    if (kind === "in" && pendingNight) await closeNightDuty();
     const now = new Date().toISOString();
     // 위치 공유를 끈 사람은 위치를 받지 않는다.
     // 출근·위치재시도는 출근 위치(lat/lng)로, 퇴근·당직은 퇴근 위치(out_lat/out_lng)로 저장.
@@ -1585,6 +1619,8 @@ export default function App() {
               attendances={attendances}
               dutySchedules={dutySchedules}
               todayLeaves={todayLeaves}
+              pendingNight={pendingNight}
+              onCloseNight={closeNightDuty}
               onAttendance={handleAttendance}
               onOpenRoster={() => setRosterOpen(true)}
               onSendPost={handleSendFeedPost}

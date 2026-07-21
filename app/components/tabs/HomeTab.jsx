@@ -155,7 +155,7 @@ function AdminAttendanceCard({ attendances, engineers }) {
 
 // 출퇴근 체크 — 기사는 출근/퇴근·당직 버튼, 관리자는 오늘 출근 인원 요약.
 // 출근 시 현위치를 1회 받아 저장한다(고장 배정 시 가까운 기사 정렬용).
-function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRoster, swapCount = 0 }) {
+function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseNight, onAttendance, onOpenRoster, swapCount = 0 }) {
   const { role, selfId, engineers } = useContext(AuthContext);
   const [checking, setChecking] = useState(false);
   const [geoModalDismissed, setGeoModalDismissed] = useState(false);
@@ -266,6 +266,7 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
           </div>
         </div>
       )}
+      {pendingNight && <NightCloseCard onCloseNight={onCloseNight} />}
       <div className="px-5 pt-4">
         {!mine?.checkedInAt ? (
           <>
@@ -331,6 +332,22 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
   );
 }
 
+// 어제 숙직을 마감 안 하고 넘긴 경우 — 익일 출근 버튼을 누르면 자동 마감되지만,
+// 오늘 연차·미출근이라 출근을 안 할 사람을 위해 홈 상단에 수동 마감 버튼을 띄운다.
+function NightCloseCard({ onCloseNight }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="mx-5 mt-4 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+      <p className="text-xs font-bold text-blue-800">🌙 어제 숙직이 아직 마감되지 않았어요</p>
+      <p className="text-[11px] text-blue-600 mt-0.5 leading-relaxed">출근하면 자동으로 마감돼요. 오늘 쉬는 날이면 아래 버튼으로 마감하세요.</p>
+      <button disabled={busy} onClick={async () => { setBusy(true); await onCloseNight(); setBusy(false); }}
+        className="w-full mt-2 bg-blue-700 text-white text-xs font-bold py-2 rounded-lg disabled:opacity-60">
+        {busy ? "마감 중…" : "어제 숙직 마감하기"}
+      </button>
+    </div>
+  );
+}
+
 // 퇴근·당직·숙직을 바로 노출하면 오터치가 난다. '근무 종료'를 눌러야 선택지가 열리게 한다
 // (2단계라 언제 눌러도 안전 — 시간대 제한 없음).
 // 오늘 본인 근무표(dutyKind)가 당직/숙직이면 그 마감 버튼을 띄우고, 없으면 퇴근만 뜬다 —
@@ -367,7 +384,7 @@ function WorkEndRow({ onAttendance, dutyKind }) {
   );
 }
 
-export function HomeTab({ attendances = [], dutySchedules = [], onAttendance, onOpenRoster, swapCount, inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, toast, todayLeaves = [] }) {
+export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, onCloseNight, onAttendance, onOpenRoster, swapCount, inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, toast, todayLeaves = [] }) {
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
@@ -439,7 +456,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], onAttendance, on
 
   return (
     <div className="flex-1 overflow-y-auto pb-4 relative">
-      {onAttendance && <AttendanceBar attendances={attendances} dutySchedules={dutySchedules} onAttendance={onAttendance} onOpenRoster={onOpenRoster} swapCount={swapCount} />}
+      {onAttendance && <AttendanceBar attendances={attendances} dutySchedules={dutySchedules} pendingNight={pendingNight} onCloseNight={onCloseNight} onAttendance={onAttendance} onOpenRoster={onOpenRoster} swapCount={swapCount} />}
 
       {/* 고장 처리 현황 */}
       <div className="px-5 pt-4">
