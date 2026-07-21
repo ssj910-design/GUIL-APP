@@ -237,23 +237,28 @@ export default function App() {
     if (!pid || !self || self.share_location === false) return;
 
     const REFRESH_MS = 2 * 60 * 60 * 1000;
-    async function maybeRefresh() {
+    // force=true: 앱을 새로 열 때(마운트) — 2시간 조건 없이 매번 갱신.
+    // force=false: 열어둔 채 대기 중 — 마지막 갱신이 2시간 넘었을 때만.
+    // 어느 경우든 '근무 중(출근O·마감X)'일 때만 — 퇴근/미출근 시엔 집 위치가 잡히지 않게.
+    async function refresh(force) {
       const todayAtt = attendances.find((a) => a.profileId === pid);
-      if (!todayAtt?.checkedInAt || todayAtt.checkedOutAt) return; // 근무 중일 때만
-      const cur = profilesAll.find((p) => p.id === pid);
-      const lastAt = cur?.last_loc_at ? new Date(cur.last_loc_at).getTime() : 0;
-      if (Date.now() - lastAt < REFRESH_MS) return; // 아직 2시간 안 지남
+      if (!todayAtt?.checkedInAt || todayAtt.checkedOutAt) return;
+      if (!force) {
+        const cur = profilesAll.find((p) => p.id === pid);
+        const lastAt = cur?.last_loc_at ? new Date(cur.last_loc_at).getTime() : 0;
+        if (Date.now() - lastAt < REFRESH_MS) return;
+      }
       if (navigator.permissions?.query) {
         const perm = await navigator.permissions.query({ name: "geolocation" }).catch(() => null);
         if (perm && perm.state !== "granted") return; // 권한 없으면 조용히 스킵(팝업 안 띄움)
       }
       const here = await getPositionOnce();
-      if (here) updateLastLocation(pid, here.lat, here.lng, "대기 중 자동");
+      if (here) updateLastLocation(pid, here.lat, here.lng, force ? "앱 실행" : "대기 중 자동");
     }
 
-    maybeRefresh(); // 앱 열 때 / 포그라운드 복귀 시
-    const timer = setInterval(maybeRefresh, 10 * 60 * 1000); // 열려 있는 동안 10분마다 '2시간 경과?' 체크
-    const onVisible = () => { if (document.visibilityState === "visible") maybeRefresh(); };
+    refresh(true); // 앱을 열 때마다 갱신 (근무 중이면)
+    const timer = setInterval(() => refresh(false), 10 * 60 * 1000); // 대기 중이면 2시간마다
+    const onVisible = () => { if (document.visibilityState === "visible") refresh(false); };
     document.addEventListener("visibilitychange", onVisible);
     return () => { clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
   }, [profile, profilesAll, attendances]);
@@ -265,9 +270,11 @@ export default function App() {
     const pid = profileIdByName(profilesAll, profile.name);
     if (!pid) return {};
     const now = new Date().toISOString();
-    // 위치 공유를 끈 사람은 출근해도 위치를 받지 않는다
+    // 위치 공유를 끈 사람은 위치를 받지 않는다.
+    // 출근·위치재시도는 출근 위치(lat/lng)로, 퇴근·당직은 퇴근 위치(out_lat/out_lng)로 저장.
     const shareLoc = profilesAll.find((p) => p.id === pid)?.share_location !== false;
-    const wantLoc = (kind === "in" || kind === "relocate") && shareLoc;
+    const isOut = kind === "out" || kind === "duty";
+    const wantLoc = (kind === "in" || kind === "relocate" || isOut) && shareLoc;
     const here = wantLoc ? await getPositionOnce() : null;
 
     // 위치만 다시 받기인데 실패하면 아무것도 저장하지 않는다
@@ -277,7 +284,7 @@ export default function App() {
       ? { lat: here.lat, lng: here.lng, located_at: now }
       : kind === "in"
       ? { checked_in_at: now, status: null, ...(here ? { lat: here.lat, lng: here.lng, located_at: now } : {}) }
-      : { checked_out_at: now, status: kind === "duty" ? "당직" : "퇴근" };
+      : { checked_out_at: now, status: kind === "duty" ? "당직" : "퇴근", ...(here ? { out_lat: here.lat, out_lng: here.lng } : {}) };
 
     const { data } = await supabase
       .from("attendances")
@@ -285,7 +292,7 @@ export default function App() {
       .select();
     const row = data?.[0];
     if (row) setAttendances((prev) => [...prev.filter((a) => a.id !== row.id), mapAttendance(row)]);
-    // 출근 GPS를 받았으면 마지막 위치도 갱신 (배정 기준)
+    // 출근 GPS는 마지막 위치도 갱신(배정 기준). 퇴근 위치는 배정에 안 씀(퇴근하면 배정 대상 아님).
     if (here && (kind === "in" || kind === "relocate")) updateLastLocation(pid, here.lat, here.lng, "출근");
     return { locFailed: wantLoc && !here };
   }

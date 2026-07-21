@@ -87,7 +87,7 @@ function DailyView({ engineers, rows, day }) {
         <table className="w-full text-sm" style={{ minWidth: "48rem" }}>
           <thead>
             <tr className="text-xs text-slate-400 border-b border-slate-100">
-              {["이름", "출근", "마감", "마지막 위치", ...(isToday ? ["마지막 접속"] : [])].map((h, i) => (
+              {["이름", "출근", "마감", "퇴근 위치", "마지막 위치", ...(isToday ? ["마지막 접속"] : [])].map((h, i) => (
                 <th key={h} className={`px-3 py-2.5 font-semibold ${i === 0 ? "pl-5 text-left" : "text-left"}`}>{h}</th>
               ))}
             </tr>
@@ -104,6 +104,12 @@ function DailyView({ engineers, rows, day }) {
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap">
                     {a?.checked_out_at ? `${a.status} ${hhmm(a.checked_out_at)}` : <span className="text-slate-300">-</span>}
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    {a?.out_lat != null
+                      ? <a href={`https://map.kakao.com/link/map/퇴근위치,${a.out_lat},${a.out_lng}`} target="_blank" rel="noreferrer"
+                          className="text-[11px] font-bold text-blue-700">📍 지도</a>
+                      : <span className="text-slate-300 text-[11px]">-</span>}
                   </td>
                   <td className="px-3 py-2.5 text-slate-500 text-[11px] whitespace-nowrap">{e.last_loc_label ?? "-"}</td>
                   {isToday && <td className={`px-3 py-2.5 text-[11px] whitespace-nowrap ${seen.tone}`}>{seen.t}</td>}
