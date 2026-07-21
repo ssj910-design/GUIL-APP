@@ -94,5 +94,6 @@
 ## 더 깊은 문서 (필요할 때만)
 
 - HANDOVER.md — 프로젝트 전체 상세 (⚠️ DB 스키마 부분은 구버전 — 실DB가 진실)
+- docs/ATTENDANCE.md — 근태·위치(출근체크) PRD·플로우·점검결과·알려진 이슈
 - docs/DESIGN-v2.md — v2 재설계 설계서 (11장 보완이 최신 결정)
 - supabase/MIGRATION.md — v2 DB 전환 절차·진행 상태
