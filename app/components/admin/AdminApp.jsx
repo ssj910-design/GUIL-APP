@@ -133,7 +133,7 @@ export default function AdminApp() {
         ) : menu === "inspections" ? (
           <InspectionsAdmin data={data} setData={setData} />
         ) : menu === "materials" ? (
-          <MaterialsAdmin data={data} />
+          <MaterialsAdmin data={data} setData={setData} />
         ) : menu === "billings" ? (
           <BillingsAdmin data={data} setData={setData} />
         ) : menu === "todos" ? (
