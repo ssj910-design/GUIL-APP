@@ -90,7 +90,15 @@ function RegisterFailureModal({ data, onClose, onCreate }) {
       <div className="space-y-3">
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">현장 *</p>
-          <SiteAutocomplete sites={sites} value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitIds: [] })} />
+          <SiteAutocomplete
+            sites={sites}
+            value={form.siteId}
+            onChange={(id) => {
+              // 배정 기사는 현장 담당 기사를 기본값으로 — 다른 사람으로 바꾸고 싶으면 직접 고르면 된다.
+              const s = sites.find((x) => x.id === id);
+              setForm({ ...form, siteId: id, unitIds: [], assignee: s?.assignedEngineer || "" });
+            }}
+          />
         </div>
         {form.siteId && (
           <div>
