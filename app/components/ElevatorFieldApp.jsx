@@ -1466,6 +1466,7 @@ export default function App() {
               onResult={handleFailureResult}
               onRefuse={handleRefuseFailure}
               onAssign={handleAssignFailure}
+              onReassign={handleReassignFailure}
               onShowAllFailures={() => { setFailureFocusTab("처리현황"); setTab("failure"); }}
               toast={failureToast}
             />

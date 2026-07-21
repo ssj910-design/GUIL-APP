@@ -161,7 +161,7 @@ function AttendanceBar({ attendances, onAttendance, onOpenRoster, swapCount = 0 
   );
 }
 
-export function HomeTab({ attendances = [], onAttendance, onOpenRoster, swapCount, inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onShowAllFailures, toast, todayLeaves = [] }) {
+export function HomeTab({ attendances = [], onAttendance, onOpenRoster, swapCount, inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, toast, todayLeaves = [] }) {
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
@@ -429,7 +429,15 @@ export function HomeTab({ attendances = [], onAttendance, onOpenRoster, swapCoun
         />
       )}
       {assignTarget && (
-        <AssignEngineerSheet failure={assignTarget} failures={failures} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} onClose={() => setAssignTarget(null)} />
+        <AssignEngineerSheet
+          failure={assignTarget}
+          failures={failures}
+          onAssign={assignTarget.assignee ? onReassign : onAssign}
+          attendances={attendances}
+          todayLeaves={todayLeaves}
+          onClose={() => setAssignTarget(null)}
+          allowUnassign={!!assignTarget.assignee}
+        />
       )}
       {dispatchTarget && (
         <DispatchEtaModal

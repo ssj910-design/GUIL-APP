@@ -450,14 +450,14 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
           </div>
         </div>
       )}
-      {/* 관리자는 직접 출동하지 않는다 — 미배정 건은 기사 배정으로 */}
-      {stage === "pending" && role === "admin" && !failure.assignee ? (
+      {/* 관리자는 직접 출동하지 않는다 — 미배정 건은 기사 배정, 이미 배정된 건은 재배정 */}
+      {stage === "pending" && role === "admin" ? (
         onAssignOpen && (
           <button
             onClick={() => { onAssignOpen(failure); onClose(); }}
             className="w-full bg-slate-800 text-white text-sm font-bold py-3 rounded-xl active:bg-slate-900"
           >
-            기사 배정
+            {failure.assignee ? "재배정" : "기사 배정"}
           </button>
         )
       ) : stage === "pending" && onDispatch && role !== "admin" ? (
@@ -868,13 +868,13 @@ export function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenR
       {stage !== "done" && <MapLinkButtons site={siteOf(f)} />}
       {stage === "pending" && (
         <span className="shrink-0 flex gap-1.5">
-          {role === "admin" && !f.assignee && onAssignOpen ? (
+          {role === "admin" && onAssignOpen ? (
             <button
               type="button"
               onClick={() => onAssignOpen(f)}
               className="bg-blue-700 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:bg-blue-800"
             >
-              기사 배정
+              {f.assignee ? "재배정" : "기사 배정"}
             </button>
           ) : (
           <button
