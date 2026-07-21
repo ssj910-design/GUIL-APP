@@ -4,11 +4,11 @@
 // v2 스키마(units, *_id FK)를 기본으로 사용한다. 데이터는 이 셸이 한 번에 로드해
 // 각 섹션에 props로 내린다 (모바일 App 셸과 같은 관례).
 import { useState, useEffect } from "react";
-import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, CalendarCheck, Users, LayoutDashboard, BarChart3, Menu , Bell } from "lucide-react";
+import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, CalendarCheck, Users, LayoutDashboard, BarChart3, Menu , Bell, MessageSquare } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import {
   mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest,
-  mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck,
+  mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck, mapFeedPost,
 } from "@/lib/mappers";
 import Dashboard from "@/app/components/admin/Dashboard";
 import SitesAdmin from "@/app/components/admin/SitesAdmin";
@@ -21,6 +21,7 @@ import SelfChecksAdmin from "@/app/components/admin/SelfChecksAdmin";
 import EngineersAdmin from "@/app/components/admin/EngineersAdmin";
 import StatsAdmin from "@/app/components/admin/StatsAdmin";
 import NotifySettings from "@/app/components/admin/NotifySettings";
+import RoomAdmin from "@/app/components/admin/RoomAdmin";
 
 const MENU = [
   { id: "dashboard", label: "대시보드", icon: LayoutDashboard },
@@ -31,6 +32,7 @@ const MENU = [
   { id: "billings", label: "청구내역", icon: Receipt },
   { id: "todos", label: "할 일 관리", icon: ListTodo },
   { id: "selfChecks", label: "자체점검", icon: CalendarCheck },
+  { id: "room", label: "게시판", icon: MessageSquare },
   { id: "engineers", label: "인사관리", icon: Users },
   { id: "stats", label: "통계", icon: BarChart3 },
   { id: "notify", label: "알림 설정", icon: Bell },
@@ -44,12 +46,12 @@ export default function AdminApp() {
   const [data, setData] = useState({
     sites: [], units: [], siteManagers: [], failures: [], inspections: [],
     materialRequests: [], quoteRequests: [], todos: [], billings: [],
-    selfChecks: [], profiles: [],
+    selfChecks: [], profiles: [], feed: [],
   });
 
   useEffect(() => {
     async function load() {
-      const [sites, units, siteManagers, failures, inspections, materials, quotes, todos, billings, selfChecks, profiles] =
+      const [sites, units, siteManagers, failures, inspections, materials, quotes, todos, billings, selfChecks, profiles, feed] =
         await Promise.all([
           supabase.from("sites").select("*").order("name"),
           supabase.from("units").select("*").order("seq"),
@@ -62,6 +64,7 @@ export default function AdminApp() {
           supabase.from("billings").select("*").order("created_at", { ascending: false }),
           supabase.from("self_checks").select("*"),
           supabase.from("profiles").select("*").order("name"),
+          supabase.from("feed_posts").select("*").order("created_at", { ascending: true }),
         ]);
       setData({
         sites: (sites.data ?? []).map(mapSite),
@@ -75,6 +78,7 @@ export default function AdminApp() {
         billings: (billings.data ?? []).map(mapBilling),
         selfChecks: (selfChecks.data ?? []).map(mapSelfCheck),
         profiles: profiles.data ?? [],
+        feed: (feed.data ?? []).map(mapFeedPost),
       });
       setLoading(false);
     }
@@ -136,6 +140,8 @@ export default function AdminApp() {
           <TodosAdmin data={data} setData={setData} />
         ) : menu === "selfChecks" ? (
           <SelfChecksAdmin data={data} setData={setData} />
+        ) : menu === "room" ? (
+          <RoomAdmin data={data} setData={setData} />
         ) : menu === "engineers" ? (
           <EngineersAdmin data={data} setData={setData} sub={hrSub} onSub={setHrSub} />
         ) : menu === "notify" ? (
