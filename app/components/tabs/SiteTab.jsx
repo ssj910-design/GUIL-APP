@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
 import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Flame, Download } from "lucide-react";
-import { siteUnits, addDays, labelToSeq, govDateToDashed, formatShortDate, recentFailuresBySite } from "@/lib/utils";
+import { siteUnits, addDays, labelToSeq, govDateToDashed, formatShortDate, recentFailuresBySite, siteMatchesQuery } from "@/lib/utils";
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
@@ -414,6 +414,8 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
             }
           />
           <TimelineRow icon={Flame} label="계약구분" value={site.contractType || "-"} valueColor={site.contractType === "FM(종합계약)" ? "text-red-600 font-bold" : "text-slate-700"} />
+          <TimelineRow icon={PhoneCall} label="비상통화장치 번호(통신사)" value={site.emergencyPhone || "-"} valueColor="text-blue-600" />
+          <TimelineRow icon={Flag} label="방식" value={site.emergencyType || "-"} />
           {siteManagers.map((m, idx) => {
             const n = siteManagers.length > 1 ? `${idx + 1}` : "";
             return (
@@ -499,6 +501,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
 
 export function SiteTab({ inspections, failures, billings, siteManagers, onUpdateSiteNotes, focusSiteId, focusUnit, onFocusSiteHandled }) {
   const allSites = useContext(SitesContext);
+  const allUnits = useContext(UnitsContext);
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   // 현장관리는 기사·관리자 모두 전체 현장을 볼 수 있다 — "내 현장만 보기"로 좁혀볼 수 있다.
   const sites = allSites;
@@ -527,7 +530,7 @@ export function SiteTab({ inspections, failures, billings, siteManagers, onUpdat
   }, [focusSiteId]);
 
   const list = sites
-    .filter((s) => s.name.includes(query.trim()))
+    .filter((s) => siteMatchesQuery(s, query, { units: allUnits, siteManagers }))
     .filter((s) => !onlyMine || s.assignedEngineer === CURRENT_ENGINEER);
 
   function latestInspection(siteId) {
@@ -589,7 +592,7 @@ export function SiteTab({ inspections, failures, billings, siteManagers, onUpdat
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="건물명으로 검색"
+            placeholder="현장정보·현장담당자정보·승강기정보 검색"
             className="w-full border border-slate-300 rounded-xl pl-9 pr-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>

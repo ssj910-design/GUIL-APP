@@ -9,7 +9,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapUnit } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, govDateToDashed } from "@/lib/utils";
+import { addDays, govDateToDashed, siteMatchesQuery } from "@/lib/utils";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -17,6 +17,7 @@ import { Modal, StatusBadge } from "@/app/components/admin/adminShared";
 import ImportSites from "@/app/components/admin/ImportSites";
 
 const CONTRACT_TYPES = ["POG(일반계약)", "FM(종합계약)"];
+const EMERGENCY_TYPES = ["국선", "무선"];
 const CONTACT_ROLES = ["대표", "담당자", "관리소장", "건물주", "경비실", "입주민 대표", "기타"];
 const UNIT_TYPES = ["엘리베이터", "에스컬레이터", "휠체어리프트", "카리프트"];
 const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
@@ -289,7 +290,7 @@ export default function SitesAdmin({ data, setData }) {
   const [contractFilter, setContractFilter] = useState("all"); // all | expiring | ended
 
   const filtered = sites
-    .filter((s) => !search || s.name.includes(search) || (s.address ?? "").includes(search))
+    .filter((s) => siteMatchesQuery(s, search, { units, siteManagers }))
     .filter((s) => !onlyUnassigned || !s.assignedEngineer)
     .filter((s) =>
       contractFilter === "ended" ? s.isActive === false :
@@ -299,6 +300,7 @@ export default function SitesAdmin({ data, setData }) {
   // contract_date/maintenance_cost 컬럼은 각 마이그레이션 실행 전엔 존재하지 않는다 — undefined면 아직 미실행으로 간주.
   const contractDateReady = sites.some((s) => s.contractDate !== undefined);
   const maintenanceCostReady = sites.some((s) => s.maintenanceCost !== undefined);
+  const emergencyReady = sites.some((s) => s.emergencyPhone !== undefined);
 
   const contacts = siteManagers.filter((m) => m.siteId === selectedId);
 
@@ -321,6 +323,7 @@ export default function SitesAdmin({ data, setData }) {
       name: s.name, address: s.address ?? "", contractType: s.contractType ?? CONTRACT_TYPES[0],
       notes: s.notes ?? "", assignedEngineer: s.assignedEngineer ?? "",
       phone: s.phone ?? "", fax: s.fax ?? "", email: s.email ?? "",
+      emergencyPhone: s.emergencyPhone ?? "", emergencyType: s.emergencyType ?? "",
       contractDate: s.contractDate ?? "", contractEnd: s.contractEnd ?? "", maintenanceCost: s.maintenanceCost ?? "",
     });
   }
@@ -418,6 +421,7 @@ export default function SitesAdmin({ data, setData }) {
     await supabase.from("sites").update({
       name: siteForm.name, address: siteForm.address, contract_type: siteForm.contractType, notes: siteForm.notes || null,
       phone: siteForm.phone || null, fax: siteForm.fax || null, email: siteForm.email || null,
+      ...(emergencyReady ? { emergency_phone: siteForm.emergencyPhone || null, emergency_type: siteForm.emergencyType || null } : {}),
       ...(contractDateReady ? { contract_date: siteForm.contractDate || null } : {}),
       contract_end: siteForm.contractEnd || null,
       ...(maintenanceCostReady ? { maintenance_cost: siteForm.maintenanceCost === "" ? null : Number(siteForm.maintenanceCost) } : {}),
@@ -508,7 +512,7 @@ export default function SitesAdmin({ data, setData }) {
         {/* 현장 목록 */}
         <div className="xl:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col h-[28rem] xl:h-[40rem]">
           <div className="p-3 border-b border-slate-100 shrink-0 space-y-2">
-            <input className={inputCls} placeholder="현장명·주소 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input className={inputCls} placeholder="현장정보·현장담당자정보·승강기정보 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
             {/* 계약 상태 필터 — 종료 계약 모아보기 */}
             <div className="flex gap-1.5">
               {[["all", `전체 (${sites.length})`], ["expiring", `만료임박 (${expiringSites.length})`], ["ended", `종료 계약 (${endedSites.length})`]].map(([v, label]) => (
@@ -633,6 +637,8 @@ export default function SitesAdmin({ data, setData }) {
                         <div><p className="text-xs font-bold text-slate-400 mb-1">전화번호</p><p className="font-semibold text-slate-800">{site.phone || "-"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">팩스</p><p className="font-semibold text-slate-800">{site.fax || "-"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">이메일</p><p className="font-semibold text-slate-800">{site.email || "-"}</p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">비상통화장치 번호(통신사)</p><p className="font-semibold text-slate-800">{site.emergencyPhone || "-"}</p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">방식</p><p className="font-semibold text-slate-800">{site.emergencyType || "-"}</p></div>
                         <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(전달사항)</p><p className="text-slate-700">{site.notes || "-"}</p></div>
                       </div>
                       <button onClick={() => setEditingInfo(true)} className="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 whitespace-nowrap ml-3">
@@ -715,6 +721,12 @@ export default function SitesAdmin({ data, setData }) {
                       <div><p className="text-xs font-bold text-slate-500 mb-1">전화번호</p><input className={inputCls} placeholder="관리사무소 대표번호" value={siteForm.phone} onChange={(e) => setSiteForm({ ...siteForm, phone: e.target.value })} /></div>
                       <div><p className="text-xs font-bold text-slate-500 mb-1">팩스</p><input className={inputCls} value={siteForm.fax} onChange={(e) => setSiteForm({ ...siteForm, fax: e.target.value })} /></div>
                       <div><p className="text-xs font-bold text-slate-500 mb-1">이메일</p><input className={inputCls} value={siteForm.email} onChange={(e) => setSiteForm({ ...siteForm, email: e.target.value })} /></div>
+                      <div><p className="text-xs font-bold text-slate-500 mb-1">비상통화장치 번호(통신사){!emergencyReady && " (마이그레이션 대기)"}</p><input className={inputCls} disabled={!emergencyReady} value={siteForm.emergencyPhone} onChange={(e) => setSiteForm({ ...siteForm, emergencyPhone: e.target.value })} /></div>
+                      <div><p className="text-xs font-bold text-slate-500 mb-1">방식{!emergencyReady && " (마이그레이션 대기)"}</p>
+                        <select className={inputCls} disabled={!emergencyReady} value={siteForm.emergencyType} onChange={(e) => setSiteForm({ ...siteForm, emergencyType: e.target.value })}>
+                          <option value="">선택</option>
+                          {EMERGENCY_TYPES.map((t) => <option key={t}>{t}</option>)}
+                        </select></div>
                     </div>
                     <div className="flex items-end gap-3">
                       <div className="flex-1"><p className="text-xs font-bold text-slate-500 mb-1">비고(전달사항)</p><input className={inputCls} value={siteForm.notes} onChange={(e) => setSiteForm({ ...siteForm, notes: e.target.value })} /></div>
