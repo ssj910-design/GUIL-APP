@@ -8,6 +8,7 @@ import ImportEngineers from "@/app/components/admin/ImportEngineers";
 import DutyAdmin from "@/app/components/admin/DutyAdmin";
 import LeavesAdmin from "@/app/components/admin/LeavesAdmin";
 import WorkCalendar from "@/app/components/admin/WorkCalendar";
+import AttendanceAdmin from "@/app/components/admin/AttendanceAdmin";
 
 function EngineerRow({ p, stats, onSave, onDelete }) {
   const [form, setForm] = useState({ phone: p.phone ?? "", minwonId: p.minwon_id ?? "", dutyOrder: p.duty_order ?? "", hireDate: p.hire_date ?? "" });
@@ -198,7 +199,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
     <div>
       <h1 className="text-xl font-extrabold mb-3">인사관리</h1>
       <div className="flex gap-1 mb-4 border-b border-slate-200">
-        {["직원", "당직 근무표", "연차관리", "워크 캘린더"].map((s) => (
+        {["직원", "당직 근무표", "출근부", "연차관리", "워크 캘린더"].map((s) => (
           <button key={s} onClick={() => setSub(s)}
             className={`text-sm font-bold px-4 py-2.5 -mb-px border-b-2 ${
               sub === s ? "text-blue-700 border-blue-700" : "text-slate-400 border-transparent"
@@ -209,6 +210,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
       </div>
       {sub === "당직 근무표" && <DutyAdmin data={data} setData={setData} />}
       {sub === "연차관리" && <LeavesAdmin data={data} setData={setData} />}
+      {sub === "출근부" && <AttendanceAdmin data={data} />}
       {sub === "워크 캘린더" && <WorkCalendar data={data} />}
       {sub !== "직원" ? null : (<>
       <p className="text-xs text-slate-500 mb-4">
