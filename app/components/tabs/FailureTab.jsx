@@ -1184,7 +1184,9 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
   }, [focusSubTab]); // eslint-disable-line react-hooks/exhaustive-deps
   const subTabs = ["접수등록", "미배정", "처리등록", "처리현황"];
   const unassignedCount = failures.filter((f) => !f.assignee && f.status === "미처리").length;
-  const waitingCount = failures.filter((f) => f.assignee === CURRENT_ENGINEER && f.status === "미처리").length;
+  // 처리등록 배지는 그 탭에서 보여주는 "처리중인 고장"(active) 목록과 동일한 기준 —
+  // 미처리(출동 전)뿐 아니라 진행중(도착 후 결과 미등록)도 아직 처리등록이 끝난 게 아니라서 포함한다.
+  const waitingCount = failures.filter((f) => f.assignee === CURRENT_ENGINEER && f.status !== "완료").length;
   const badgeCount = { 미배정: unassignedCount, 처리등록: waitingCount };
 
   return (
