@@ -3,11 +3,61 @@
 // 고장관리 — 전체 고장 테이블 + 기사 배정(듀얼라이트) + 고장접수(신규 등록).
 // 출동/도착/처리결과 입력은 현장 기사의 모바일 앱 몫이므로 여기서는 하지 않는다.
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR, FAULT_TYPES } from "@/lib/constants";
+import { formatPhone, sortEngineersByDistance } from "@/lib/utils";
 import { locOf, personOf, StatusBadge, AdminTable, FilterPills, Modal, inputCls } from "@/app/components/admin/adminShared";
 import { FailureDetailContent } from "@/app/components/admin/Dashboard";
+
+// 현장 검색·자동완성 — 드롭다운 대신 이름/주소로 찾아서 고른다.
+function SiteAutocomplete({ sites, value, onChange }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const selected = sites.find((s) => s.id === value);
+  const filtered = sites.filter((s) => (s.name ?? "").includes(query.trim()) || (s.address ?? "").includes(query.trim()));
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          className={`${inputCls} pl-8`}
+          placeholder="현장명·주소 검색"
+          value={open ? query : selected?.name ?? ""}
+          onFocus={() => { setOpen(true); setQuery(""); }}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
+      {open && (
+        <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+          {filtered.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onMouseDown={() => { onChange(s.id); setOpen(false); }}
+              className="w-full text-left px-3 py-2.5 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0"
+            >
+              <span className="font-semibold text-slate-700">{s.name}</span>
+              <span className="text-slate-400 text-xs ml-1.5">{s.address}</span>
+            </button>
+          ))}
+          {filtered.length === 0 && <p className="text-xs text-slate-400 text-center py-3">검색 결과가 없습니다</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 배정 기사 <select> 공통 옵션 — 현장과 가까운 순으로 정렬하고 거리를 함께 표시한다.
+function EngineerOptions({ engineers, site }) {
+  return sortEngineersByDistance(engineers, site).map(({ engineer: p, km }) => (
+    <option key={p.id} value={p.name}>
+      {p.name}{km != null ? ` (${km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`})` : ""}
+    </option>
+  ));
+}
 
 function RegisterFailureModal({ data, onClose, onCreate }) {
   const { sites, units, profiles } = data;
@@ -16,6 +66,7 @@ function RegisterFailureModal({ data, onClose, onCreate }) {
     siteId: "", unitIds: [], faultType: "", detail: "", details: {}, assignee: "", reporterPhone: "", notFault: false,
   });
   const [saving, setSaving] = useState(false);
+  const site = sites.find((s) => s.id === form.siteId);
   const siteUnits = units.filter((u) => u.siteId === form.siteId);
   const detailFilled = form.unitIds.length > 1
     ? form.unitIds.every((id) => (form.details[id] ?? "").trim().length > 0)
@@ -39,10 +90,7 @@ function RegisterFailureModal({ data, onClose, onCreate }) {
       <div className="space-y-3">
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">현장 *</p>
-          <select className={inputCls} value={form.siteId} onChange={(e) => setForm({ ...form, siteId: e.target.value, unitIds: [] })}>
-            <option value="">현장을 선택하세요</option>
-            {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+          <SiteAutocomplete sites={sites} value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitIds: [] })} />
         </div>
         {form.siteId && (
           <div>
@@ -102,13 +150,13 @@ function RegisterFailureModal({ data, onClose, onCreate }) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <p className="text-xs font-bold text-slate-500 mb-1">신고자 연락처 *</p>
-            <input className={inputCls} placeholder="010-0000-0000" value={form.reporterPhone} onChange={(e) => setForm({ ...form, reporterPhone: e.target.value })} />
+            <input className={inputCls} placeholder="010-0000-0000" value={form.reporterPhone} onChange={(e) => setForm({ ...form, reporterPhone: formatPhone(e.target.value) })} />
           </div>
           <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">배정 기사</p>
+            <p className="text-xs font-bold text-slate-500 mb-1">배정 기사{site && <span className="text-slate-400 font-normal"> — 가까운 순</span>}</p>
             <select className={inputCls} value={form.assignee} onChange={(e) => setForm({ ...form, assignee: e.target.value })}>
               <option value="">미배정</option>
-              {engineers.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+              <EngineerOptions engineers={engineers} site={site} />
             </select>
           </div>
         </div>
@@ -227,7 +275,7 @@ export default function FailuresAdmin({ data, setData }) {
                   disabled={f.status === "완료"}
                 >
                   <option value="">미배정</option>
-                  {engineers.map((p) => <option key={p.id}>{p.name}</option>)}
+                  <EngineerOptions engineers={engineers} site={sites.find((s) => s.id === f.siteId)} />
                 </select>
               </td>
               <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">

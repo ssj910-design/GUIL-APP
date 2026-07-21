@@ -3,7 +3,7 @@ import { ShieldCheck, Package, Receipt, ListTodo, ChevronRight, Users, FileText,
 import { Badge, PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { SitesContext, AuthContext } from "@/app/components/context";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
-import { parsePartQty } from "@/lib/utils";
+import { parsePartQty, formatPhone } from "@/lib/utils";
 import { BillingHistoryScreen } from "@/app/components/tabs/BillingTab";
 import { TodoManageScreen } from "@/app/components/tabs/TodoTab";
 
@@ -38,9 +38,9 @@ function ManagerRow({ manager, onSave, onDelete }) {
   return (
     <div className="border border-slate-200 rounded-lg p-3 mb-2.5 space-y-2">
       <input className={inputCls} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="담당자 이름" />
-      <input className={inputCls} value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} placeholder="전화번호" />
+      <input className={inputCls} value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: formatPhone(e.target.value) })} placeholder="전화번호" />
       <input className={inputCls} value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="메일주소" />
-      <input className={inputCls} value={draft.fax} onChange={(e) => setDraft({ ...draft, fax: e.target.value })} placeholder="FAX" />
+      <input className={inputCls} value={draft.fax} onChange={(e) => setDraft({ ...draft, fax: formatPhone(e.target.value) })} placeholder="FAX" />
       <div className="flex gap-2">
         <button type="button" onClick={() => onSave(draft)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2 rounded-lg active:bg-blue-800">저장</button>
         <button type="button" onClick={onDelete} className="flex-1 bg-red-50 text-red-600 text-xs font-bold py-2 rounded-lg active:bg-red-100">삭제</button>
@@ -234,7 +234,7 @@ function EngineerContactRow({ engineer, onSave }) {
     <div className="bg-white rounded-xl border border-slate-200 p-3.5 mb-2.5">
       <p className="font-bold text-slate-800 text-sm mb-2">{engineer.name}</p>
       <div className="space-y-2">
-        <input className={inputCls} value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} placeholder="전화번호" />
+        <input className={inputCls} value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: formatPhone(e.target.value) })} placeholder="전화번호" />
         <input className={inputCls} value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="메일주소" />
       </div>
       <button

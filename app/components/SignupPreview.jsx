@@ -5,6 +5,7 @@
 // 실제 가입 처리는 Phase 2(로그인·RLS·테넌트)에서 연결한다 — 지금 각 검증은 시뮬레이션.
 import { useState } from "react";
 import { Building2, Mail, KeyRound, UserRound, Check } from "lucide-react";
+import { formatPhone } from "@/lib/utils";
 
 const inputCls = "w-full border border-slate-300 rounded-xl px-3.5 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500";
 const labelCls = "block text-xs font-bold text-slate-500 mb-1.5";
@@ -169,7 +170,7 @@ export default function SignupPreview() {
               </div>
               <div>
                 <label className={labelCls}>휴대폰 번호 <span className="font-normal text-slate-400">(로그인 아이디)</span></label>
-                <input className={inputCls} inputMode="numeric" placeholder="010-0000-0000" value={form.phone} onChange={(e) => set({ phone: e.target.value })} />
+                <input className={inputCls} inputMode="numeric" placeholder="010-0000-0000" value={form.phone} onChange={(e) => set({ phone: formatPhone(e.target.value) })} />
               </div>
               <div>
                 <label className={labelCls}>비밀번호</label>

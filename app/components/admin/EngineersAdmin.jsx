@@ -3,6 +3,7 @@
 // 기사 관리 — 프로필(연락처·담당지역) 편집 + 배정 현장·업무량 한눈에.
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { formatPhone } from "@/lib/utils";
 import { StatusBadge, AdminTable, inputCls, DateField } from "@/app/components/admin/adminShared";
 import ImportEngineers from "@/app/components/admin/ImportEngineers";
 import DutyAdmin from "@/app/components/admin/DutyAdmin";
@@ -19,7 +20,7 @@ function EngineerRow({ p, stats, onSave, onDelete }) {
         <p className="font-bold">{p.name}</p>
         <p className="text-[10px] text-slate-400 font-semibold">{p.member_type ?? "구분 없음"}</p>
       </td>
-      <td className="px-3 py-2.5 w-36"><input className={inputCls} placeholder="연락처" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></td>
+      <td className="px-3 py-2.5 w-36"><input className={inputCls} placeholder="연락처" value={form.phone} onChange={(e) => setForm({ ...form, phone: formatPhone(e.target.value) })} /></td>
       <td className="px-3 py-2.5 w-36">
         <DateField value={form.hireDate} onChange={(v) => setForm({ ...form, hireDate: v })} />
       </td>
@@ -97,7 +98,7 @@ function EngineerCard({ p, stats, onSave, onDelete }) {
         <div className="mt-3 pt-3 border-t border-slate-100 space-y-2.5">
           <div>
             <p className="text-[11px] font-bold text-slate-500 mb-1">휴대폰</p>
-            <input className={inputCls} inputMode="numeric" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            <input className={inputCls} inputMode="numeric" value={form.phone} onChange={(e) => setForm({ ...form, phone: formatPhone(e.target.value) })} />
           </div>
           <div>
             <p className="text-[11px] font-bold text-slate-500 mb-1">입사일</p>

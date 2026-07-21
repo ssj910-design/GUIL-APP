@@ -9,7 +9,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapUnit } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, govDateToDashed, siteMatchesQuery } from "@/lib/utils";
+import { addDays, govDateToDashed, siteMatchesQuery, formatPhone } from "@/lib/utils";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -252,9 +252,9 @@ function ContactRow({ c, onSave, onDelete, onSetPrimary }) {
         </select>
       </td>
       <td className="px-2 py-2"><input className={inputCls} placeholder="이름" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></td>
-      <td className="px-2 py-2"><input className={inputCls} placeholder="전화번호" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></td>
+      <td className="px-2 py-2"><input className={inputCls} placeholder="전화번호" value={form.phone} onChange={(e) => setForm({ ...form, phone: formatPhone(e.target.value) })} /></td>
       <td className="px-2 py-2"><input className={inputCls} placeholder="이메일" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></td>
-      <td className="px-2 py-2"><input className={inputCls} placeholder="팩스" value={form.fax} onChange={(e) => setForm({ ...form, fax: e.target.value })} /></td>
+      <td className="px-2 py-2"><input className={inputCls} placeholder="팩스" value={form.fax} onChange={(e) => setForm({ ...form, fax: formatPhone(e.target.value) })} /></td>
       <td className="px-2 py-2 whitespace-nowrap text-right pr-3">
         <button disabled={!dirty} onClick={() => onSave(c, form)} className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-3 py-1.5 mr-1">저장</button>
         <button onClick={() => onDelete(c)} className="text-xs font-bold text-red-400 border border-red-100 rounded-lg px-2 py-1.5">삭제</button>
@@ -718,10 +718,10 @@ export default function SitesAdmin({ data, setData }) {
                         </select></div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div><p className="text-xs font-bold text-slate-500 mb-1">전화번호</p><input className={inputCls} placeholder="관리사무소 대표번호" value={siteForm.phone} onChange={(e) => setSiteForm({ ...siteForm, phone: e.target.value })} /></div>
-                      <div><p className="text-xs font-bold text-slate-500 mb-1">팩스</p><input className={inputCls} value={siteForm.fax} onChange={(e) => setSiteForm({ ...siteForm, fax: e.target.value })} /></div>
+                      <div><p className="text-xs font-bold text-slate-500 mb-1">전화번호</p><input className={inputCls} placeholder="관리사무소 대표번호" value={siteForm.phone} onChange={(e) => setSiteForm({ ...siteForm, phone: formatPhone(e.target.value) })} /></div>
+                      <div><p className="text-xs font-bold text-slate-500 mb-1">팩스</p><input className={inputCls} value={siteForm.fax} onChange={(e) => setSiteForm({ ...siteForm, fax: formatPhone(e.target.value) })} /></div>
                       <div><p className="text-xs font-bold text-slate-500 mb-1">이메일</p><input className={inputCls} value={siteForm.email} onChange={(e) => setSiteForm({ ...siteForm, email: e.target.value })} /></div>
-                      <div><p className="text-xs font-bold text-slate-500 mb-1">비상통화장치 번호(통신사){!emergencyReady && " (마이그레이션 대기)"}</p><input className={inputCls} disabled={!emergencyReady} value={siteForm.emergencyPhone} onChange={(e) => setSiteForm({ ...siteForm, emergencyPhone: e.target.value })} /></div>
+                      <div><p className="text-xs font-bold text-slate-500 mb-1">비상통화장치 번호(통신사){!emergencyReady && " (마이그레이션 대기)"}</p><input className={inputCls} disabled={!emergencyReady} value={siteForm.emergencyPhone} onChange={(e) => setSiteForm({ ...siteForm, emergencyPhone: formatPhone(e.target.value) })} /></div>
                       <div><p className="text-xs font-bold text-slate-500 mb-1">방식{!emergencyReady && " (마이그레이션 대기)"}</p>
                         <select className={inputCls} disabled={!emergencyReady} value={siteForm.emergencyType} onChange={(e) => setSiteForm({ ...siteForm, emergencyType: e.target.value })}>
                           <option value="">선택</option>

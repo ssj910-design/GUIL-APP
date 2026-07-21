@@ -1,7 +1,7 @@
 import { Fragment, useState, useContext } from "react";
 import { ChevronRight, X, Plus, Search, PackageCheck, PackageX } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnits, unitIdFor, profileIdByName } from "@/lib/utils";
+import { siteUnits, unitIdFor, profileIdByName, formatPhone } from "@/lib/utils";
 import { TODAY_STR, QUOTE_STAGES, KIT_PARTS } from "@/lib/constants";
 import { PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -958,7 +958,7 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
                 className={inputCls}
                 placeholder="예: 010-1234-5678"
                 value={quoteForm.contactPhone}
-                onChange={(e) => setQuoteForm({ ...quoteForm, contactPhone: e.target.value })}
+                onChange={(e) => setQuoteForm({ ...quoteForm, contactPhone: formatPhone(e.target.value) })}
               />
             </Field>
             <Field label="현장 상태 사진">

@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { Receipt, Check, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnits } from "@/lib/utils";
+import { siteUnits, formatPhone } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
 import { DDay, PrimaryButton, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { SitesContext, AuthContext } from "@/app/components/context";
@@ -249,7 +249,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                 className={inputCls}
                 placeholder="예: 010-1234-5678"
                 value={manualForm.contactPhone}
-                onChange={(e) => setManualForm({ ...manualForm, contactPhone: e.target.value })}
+                onChange={(e) => setManualForm({ ...manualForm, contactPhone: formatPhone(e.target.value) })}
               />
             </Field>
             <Field label="교체 전 사진">
