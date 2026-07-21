@@ -765,6 +765,12 @@ export default function App() {
     setFailures((prev) =>
       prev.map((x) => (x.id === failure.id ? { ...x, assignee, dispatchedAt, etaMinutes, status: "진행중" } : x))
     );
+    // 출동 응답 = "지금 여기서 출발" → 출발 시점 GPS로 마지막 위치 갱신 (위치 공유 켠 사람만).
+    // 출동 처리를 지연시키지 않도록 백그라운드로 받는다(await 안 함).
+    const selfPid = profileIdByName(profilesAll, profile.name);
+    if (selfPid && profilesAll.find((p) => p.id === selfPid)?.share_location !== false) {
+      getPositionOnce().then((here) => { if (here) updateLastLocation(selfPid, here.lat, here.lng, "출동 출발"); });
+    }
     simulateSms(failure.reporterPhone, `구일엘리베이터입니다. 담당 기사가 약 ${etaMinutes}분 후 도착 예정입니다.`);
     notifyFailure(`문자 발송 완료 · ${failure.reporterPhone || "신고자"}에게 도착예정시간 안내`);
     setFocusSiteId(failure.siteId);
