@@ -317,7 +317,8 @@ export function HomeTab({ attendances = [], onAttendance, onOpenRoster, onSendPo
   // 최근 30일 고장 목록은 실시간 계산 — 처리완료 여부와 무관하게 누적되어야 하므로
   // 현장에 수동 저장된 failures30d 대신 실제 failures 레코드에서 직접 센다.
   const recentFailuresBySiteId = recentFailuresBySite(failures);
-  const criticalSites = mySites.filter((s) => (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || escalatedSiteIds.has(s.id));
+  // 집중관리현장은 담당 배정과 무관하게 전체 현장 기준 — 기사도 회사 전체 위험 현장을 볼 수 있어야 한다.
+  const criticalSites = sites.filter((s) => (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || escalatedSiteIds.has(s.id));
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [assignTarget, setAssignTarget] = useState(null);
