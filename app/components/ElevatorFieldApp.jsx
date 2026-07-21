@@ -213,7 +213,9 @@ export default function App() {
     const pid = profileIdByName(profilesAll, profile.name);
     if (!pid) return {};
     const now = new Date().toISOString();
-    const wantLoc = kind === "in" || kind === "relocate";
+    // 위치 공유를 끈 사람은 출근해도 위치를 받지 않는다
+    const shareLoc = profilesAll.find((p) => p.id === pid)?.share_location !== false;
+    const wantLoc = (kind === "in" || kind === "relocate") && shareLoc;
     const here = wantLoc ? await getPositionOnce() : null;
 
     // 위치만 다시 받기인데 실패하면 아무것도 저장하지 않는다
