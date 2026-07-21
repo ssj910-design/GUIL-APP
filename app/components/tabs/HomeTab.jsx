@@ -321,8 +321,8 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
               </button>
             )}
 
-            {/* 근무 종료 — 아침부터 튀지 않게 작은 링크로. 눌러야 당직/퇴근 선택이 열린다 */}
-            {!done && <WorkEndRow onAttendance={onAttendance} />}
+            {/* 근무 종료 — 아침엔 오터치 방지로 작은 링크, 퇴근시간(17:30) 지나면 눈에 띄게. 눌러야 당직/퇴근이 열린다 */}
+            {!done && <WorkEndRow onAttendance={onAttendance} afterShiftEnd={afterShiftEnd} />}
           </div>
         )}
         {rosterBtn}
@@ -332,12 +332,16 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
 }
 
 // 퇴근·당직을 아침부터 노출하면 오터치가 난다. '근무 종료'를 눌러야 열리게 한다.
-function WorkEndRow({ onAttendance }) {
+// 다만 퇴근시간(17:30)이 지나면 실제로 눌러야 할 때라 작은 링크 → 또렷한 버튼으로 키운다.
+function WorkEndRow({ onAttendance, afterShiftEnd }) {
   const [open, setOpen] = useState(false);
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)} className="w-full mt-2 text-[11px] font-bold text-slate-400 py-1.5">
-        근무 종료하기
+      <button onClick={() => setOpen(true)}
+        className={afterShiftEnd
+          ? "w-full mt-2 text-xs font-bold text-slate-700 bg-slate-100 border border-slate-300 rounded-lg py-2.5 active:bg-slate-200"
+          : "w-full mt-2 text-[11px] font-bold text-slate-400 py-1.5"}>
+        {afterShiftEnd ? "🏠 퇴근 · 당직 (근무 종료)" : "근무 종료하기"}
       </button>
     );
   }
