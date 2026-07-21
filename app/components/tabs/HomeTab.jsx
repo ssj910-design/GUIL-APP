@@ -92,6 +92,25 @@ function FailureHistoryDetailScreen({ site, failures, onBack }) {
 function AttendanceBar({ attendances, onAttendance, onOpenRoster, swapCount = 0 }) {
   const { role, selfId, engineers } = useContext(AuthContext);
   const [checking, setChecking] = useState(false);
+  const [geoPerm, setGeoPerm] = useState("unknown"); // granted | denied | prompt | unknown
+
+  // 위치 권한 상태를 미리 파악해 둔다 — '아직 안 물어봄(prompt)'이면 안내 카드로 먼저 유도.
+  useEffect(() => {
+    if (role === "admin" || typeof navigator === "undefined" || !navigator.permissions?.query) return;
+    let p;
+    navigator.permissions.query({ name: "geolocation" }).then((res) => {
+      p = res;
+      setGeoPerm(res.state);
+      res.onchange = () => setGeoPerm(res.state);
+    }).catch(() => setGeoPerm("unknown"));
+    return () => { if (p) p.onchange = null; };
+  }, [role]);
+
+  // [위치 허용하기] — 시스템 권한 팝업을 띄운다. 결과는 위 onchange가 잡아 카드가 사라진다.
+  function primeLocation() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(() => setGeoPerm("granted"), () => {}, { timeout: 8000 });
+  }
 
   const rosterBtn = onOpenRoster ? (
     <button
@@ -145,6 +164,23 @@ function AttendanceBar({ attendances, onAttendance, onOpenRoster, swapCount = 0 
       <div className="px-5 pt-4">
         {!mine?.checkedInAt ? (
           <>
+            {/* 위치 권한을 아직 안 물어봤으면 먼저 맥락을 주고 허용을 유도한다 (거부율↓, 아이폰 대응) */}
+            {geoPerm === "prompt" && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-2">
+                <p className="text-xs font-bold text-blue-800">📍 위치 사용 안내</p>
+                <p className="text-[11px] text-blue-700 mt-1 leading-relaxed">
+                  출근할 때 현위치를 1회만 기록해 가까운 현장에 우선 배정합니다. 상시 추적하지 않습니다.
+                </p>
+                <button onClick={primeLocation} className="w-full mt-2 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800">
+                  위치 허용하기
+                </button>
+              </div>
+            )}
+            {geoPerm === "denied" && (
+              <p className="text-[11px] text-amber-600 font-semibold bg-amber-50 rounded-lg px-3 py-2 mb-2 leading-relaxed">
+                위치 권한이 꺼져 있습니다. 켜면 가까운 현장에 우선 배정됩니다 — 설정 → 위치, 또는 주소창 자물쇠 → 위치에서 허용.
+              </p>
+            )}
             <button
               onClick={async () => { setChecking(true); await onAttendance("in"); setChecking(false); }}
               disabled={checking}
