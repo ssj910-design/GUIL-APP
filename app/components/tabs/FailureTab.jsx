@@ -856,14 +856,17 @@ function useSiteOf() {
 
 // dist: 기사 홈에서 미배정 고장까지의 거리(km). 있으면 거리 뱃지를 보여준다(없으면 생략).
 const fmtDist = (km) => (km == null ? null : km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`);
-export function FailureMiniCard({ f, dist, onOpenDetail, onDispatch, onArrive, onOpenResult, onRefuse, onAssignOpen }) {
+export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispatch, onArrive, onOpenResult, onRefuse, onAssignOpen }) {
   const siteOf = useSiteOf();
   const stage = failureStage(f);
   const { name: me, role } = useContext(AuthContext);
-  // 상태별 컬러 — 미배정(빨강) / 배정·응답대기(노랑) / 출동중(파랑) / 작업중(초록)
+  // 상태별 컬러 — 작업중(초록)/출동중(파랑)/응답대기(노랑) 우선, 그다음 미배정을 세분:
+  // 운행정지(빨강 심각) / 지원미배정=지원요청에서 넘어옴(주황) / 일반 미배정(빨강)
   const state = stage === "arrived" ? { label: "작업중", bar: "border-l-emerald-500", chip: "bg-emerald-50 text-emerald-600" }
     : stage === "dispatched" ? { label: "출동중", bar: "border-l-blue-500", chip: "bg-blue-50 text-blue-600" }
     : f.assignee ? { label: `${f.assignee} 응답대기`, bar: "border-l-amber-400", chip: "bg-amber-50 text-amber-600" }
+    : f.escalation === "운행정지" ? { label: "운행정지", bar: "border-l-red-600", chip: "bg-red-100 text-red-700" }
+    : f.escalation === "지원요청" ? { label: "지원미배정", bar: "border-l-amber-500", chip: "bg-amber-100 text-amber-700" }
     : { label: "미배정", bar: "border-l-red-500", chip: "bg-red-50 text-red-600" };
   return (
     <div className={`w-full flex items-center justify-between gap-2 rounded-xl border border-slate-200 border-l-4 ${state.bar} bg-white px-3.5 py-3`}>
@@ -871,6 +874,7 @@ export function FailureMiniCard({ f, dist, onOpenDetail, onDispatch, onArrive, o
         <div className="flex items-center gap-1.5 min-w-0">
           <p className="font-bold text-slate-800 text-sm truncate">{f.siteName} · {formatUnitLabel(f.elevatorNo)}</p>
           <span className={`shrink-0 text-[10px] font-bold rounded-full px-1.5 py-0.5 ${state.chip}`}>{state.label}</span>
+          {warnCount >= 3 && <span className="shrink-0 text-[10px] font-bold rounded-full px-1.5 py-0.5 bg-red-100 text-red-600" title={`최근 30일 ${warnCount}회 고장`}>🔁{warnCount}</span>}
         </div>
         <p className="text-[11px] text-slate-400 truncate">
           {dist != null && <span className="font-bold text-blue-600">📍 {fmtDist(dist)} · </span>}
