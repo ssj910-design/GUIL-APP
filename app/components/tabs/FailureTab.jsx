@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from "react";
-import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, Repeat } from "lucide-react";
+import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, labelToSeq, formatUnitLabel } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
@@ -865,17 +865,16 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
   const state = stage === "arrived" ? { label: "작업중", bar: "border-l-emerald-500", chip: "bg-emerald-50 text-emerald-600" }
     : stage === "dispatched" ? { label: "출동중", bar: "border-l-blue-500", chip: "bg-blue-50 text-blue-600" }
     : f.assignee ? { label: `${f.assignee} 응답대기`, bar: "border-l-amber-400", chip: "bg-amber-50 text-amber-600" }
-    // 운행정지 = 승강기 멈춤(최우선) → 카드 배경까지 빨갛게·배지 빨간 채움으로 확실히 강조
-    : f.escalation === "운행정지" ? { label: "⛔ 운행정지", bar: "border-l-red-600", chip: "bg-red-600 text-white", card: "border-red-300 bg-red-50" }
+    : f.escalation === "운행정지" ? { label: "운행정지", bar: "border-l-red-600", chip: "bg-red-100 text-red-700" }
     : f.escalation === "지원요청" ? { label: "지원미배정", bar: "border-l-amber-500", chip: "bg-amber-100 text-amber-700" }
     : { label: "미배정", bar: "border-l-red-500", chip: "bg-red-50 text-red-600" };
   return (
-    <div className={`w-full flex items-center justify-between gap-2 rounded-xl border border-l-4 ${state.bar} ${state.card ?? "border-slate-200 bg-white"} px-3.5 py-3`}>
+    <div className={`w-full flex items-center justify-between gap-2 rounded-xl border border-slate-200 border-l-4 ${state.bar} bg-white px-3.5 py-3`}>
       <button type="button" onClick={() => onOpenDetail(f)} className="min-w-0 flex-1 text-left">
         <div className="flex items-center gap-1.5 min-w-0">
           <p className="font-bold text-slate-800 text-sm truncate">{f.siteName} · {formatUnitLabel(f.elevatorNo)}</p>
           <span className={`shrink-0 text-[10px] font-bold rounded-full px-1.5 py-0.5 ${state.chip}`}>{state.label}</span>
-          {warnCount >= 3 && <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold rounded-full px-1.5 py-0.5 bg-red-100 text-red-600" title={`최근 30일 ${warnCount}회 고장`}><Repeat size={10} strokeWidth={2.8} />{warnCount}</span>}
+          {warnCount >= 3 && <span className="shrink-0 text-[10px] font-bold rounded-full px-1.5 py-0.5 bg-red-100 text-red-600" title={`최근 30일 ${warnCount}회 고장`}>🔁{warnCount}</span>}
         </div>
         <p className="text-[11px] text-slate-400 truncate">
           {dist != null && <span className="font-bold text-blue-600">📍 {fmtDist(dist)} · </span>}
