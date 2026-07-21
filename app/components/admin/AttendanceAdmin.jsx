@@ -66,6 +66,14 @@ export default function AttendanceAdmin({ data }) {
 function DailyView({ engineers, rows, day }) {
   const byPid = new Map(rows.filter((r) => r.work_date === day).map((r) => [r.profile_id, r]));
   const inCount = engineers.filter((e) => byPid.get(e.id)?.checked_in_at).length;
+  const isToday = day === TODAY_STR;
+  // 마지막 접속 표시 — 오늘 조회일 때만 의미(단일 최신값이라 과거 날짜엔 안 맞음)
+  const seenText = (iso) => {
+    if (!iso) return { t: "-", tone: "text-slate-300" };
+    const d = iso.slice(0, 10);
+    if (d === TODAY_STR) return { t: `오늘 ${hhmm(iso)}`, tone: "text-emerald-600 font-bold" };
+    return { t: d.slice(5).replace("-", "/"), tone: "text-slate-400" };
+  };
 
   return (
     <>
@@ -73,10 +81,10 @@ function DailyView({ engineers, rows, day }) {
         {DOW[new Date(`${day}T00:00:00`).getDay()]}요일 · 출근 {inCount} / {engineers.length}명
       </p>
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-        <table className="w-full text-sm" style={{ minWidth: "40rem" }}>
+        <table className="w-full text-sm" style={{ minWidth: "48rem" }}>
           <thead>
             <tr className="text-xs text-slate-400 border-b border-slate-100">
-              {["이름", "출근", "마감", "마지막 위치"].map((h, i) => (
+              {["이름", "출근", "마감", "마지막 위치", ...(isToday ? ["마지막 접속"] : [])].map((h, i) => (
                 <th key={h} className={`px-3 py-2.5 font-semibold ${i === 0 ? "pl-5 text-left" : "text-left"}`}>{h}</th>
               ))}
             </tr>
@@ -84,6 +92,7 @@ function DailyView({ engineers, rows, day }) {
           <tbody>
             {engineers.map((e) => {
               const a = byPid.get(e.id);
+              const seen = seenText(e.last_seen_at);
               return (
                 <tr key={e.id} className="border-b border-slate-50">
                   <td className="pl-5 pr-3 py-2.5 font-bold whitespace-nowrap">{e.name}</td>
@@ -94,12 +103,14 @@ function DailyView({ engineers, rows, day }) {
                     {a?.checked_out_at ? `${a.status} ${hhmm(a.checked_out_at)}` : <span className="text-slate-300">-</span>}
                   </td>
                   <td className="px-3 py-2.5 text-slate-500 text-[11px] whitespace-nowrap">{e.last_loc_label ?? "-"}</td>
+                  {isToday && <td className={`px-3 py-2.5 text-[11px] whitespace-nowrap ${seen.tone}`}>{seen.t}</td>}
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+      {isToday && <p className="text-[11px] text-slate-400 mt-2">‘마지막 접속’은 기사가 앱(홈)을 마지막으로 연 시각입니다. 오늘 조회에서만 표시됩니다.</p>}
     </>
   );
 }

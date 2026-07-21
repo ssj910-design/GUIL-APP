@@ -157,6 +157,12 @@ function AttendanceBar({ attendances, onAttendance, onOpenRoster, onSendPost, sw
   const shareLoc = allProfiles.find((p) => p.id === selfId)?.share_location !== false;
   const [geoPerm, setGeoPerm] = useState("unknown"); // granted | denied | prompt | unknown
 
+  // 기사가 홈을 열면 '마지막 접속 시각'을 기록한다 (출근부에서 '오늘 앱 봤나' 확인용).
+  useEffect(() => {
+    if (role === "admin" || !selfId) return;
+    supabase.from("profiles").update({ last_seen_at: new Date().toISOString() }).eq("id", selfId).then(() => {});
+  }, [role, selfId]);
+
   // 위치 권한 상태를 미리 파악해 둔다 — '아직 안 물어봄(prompt)'이면 안내 카드로 먼저 유도.
   // 확정된 상태는 서버에 보고해 관리자가 '위치 안 켠 사람'을 파악할 수 있게 한다.
   useEffect(() => {
@@ -210,6 +216,9 @@ function AttendanceBar({ attendances, onAttendance, onOpenRoster, onSendPost, sw
   const mine = attendances.find((a) => a.profileId === selfId);
   const hhmm = (iso) => new Date(iso).toTimeString().slice(0, 5);
   const done = !!mine?.checkedOutAt; // 오늘 근무 마감(퇴근·당직)
+  // 위치를 쓰기로 했는데(공유 ON) 권한이 거부·미결정이면 출근을 막는다.
+  // 위치 공유 OFF이거나 권한 API 미지원(unknown)이면 그냥 출근 가능.
+  const needGeo = shareLoc && (geoPerm === "denied" || geoPerm === "prompt");
 
   async function relocate() {
     setChecking(true);
@@ -242,10 +251,10 @@ function AttendanceBar({ attendances, onAttendance, onOpenRoster, onSendPost, sw
             )}
             <button
               onClick={async () => { setChecking(true); await onAttendance("in"); setChecking(false); }}
-              disabled={checking}
+              disabled={checking || needGeo}
               className="w-full bg-blue-700 text-white text-sm font-bold py-3.5 rounded-xl active:bg-blue-800 disabled:opacity-60"
             >
-              {checking ? "위치 확인 중…" : "출근 체크"}
+              {checking ? "위치 확인 중…" : needGeo ? "위치 허용 후 출근 가능" : "출근 체크"}
             </button>
             <p className="text-[10px] text-slate-400 mt-1.5 px-1">{shareLoc ? "출근 시 현위치를 1회 기록해 가까운 현장 배정에 씁니다 (상시 추적 아님)" : "위치 공유가 꺼져 있습니다 (마이페이지에서 켤 수 있어요)"}</p>
           </>
