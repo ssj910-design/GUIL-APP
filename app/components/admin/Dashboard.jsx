@@ -392,7 +392,7 @@ export default function Dashboard({ data, onOpenWorkCalendar }) {
         </Modal>
       )}
 
-      {failTarget && <InspectionFailDetailSheet inspection={failTarget} onClose={() => setFailTarget(null)} />}
+      {failTarget && <InspectionFailDetailSheet inspection={failTarget} onClose={() => setFailTarget(null)} Container={Modal} />}
     </div>
   );
 }
