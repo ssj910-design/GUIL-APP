@@ -5,12 +5,11 @@
 승강기 유지보수 기사·관리자용 모바일 웹앱(PWA). Next.js 16(App Router) + React 19 + Tailwind v4 + Supabase(백엔드 서버 없음).
 로그인은 꺼져 있음(`SKIP_LOGIN = true`) — `localhost:3000/?as=admin` 또는 `?as=engineer&name=이름`으로 역할 전환.
 
-## 📌 처리 대기 중인 요청 (2026-07-20, 차호근 → ssj910-design)
+## 📌 상대에게 넘긴 요청은 docs/HANDOFF.md 확인
 
-**웹 푸시 알림을 붙였는데 Vercel 환경변수(VAPID)가 없어 배포본에서 동작하지 않습니다.**
-`docs/SETUP-ENV.md` 3번 항목대로 키 생성 → Vercel 환경변수 3개 등록 → Redeploy 부탁드립니다.
-로컬에서는 발송·수신 확인 완료. 이 작업 전까지 배포본은 알림만 안 가고 나머지는 정상입니다.
-완료하면 이 블록을 지워 주세요.
+한쪽 권한으로 막혀 상대가 처리해야 하는 작업(예: 상대 Vercel 계정 환경변수)은
+**`docs/HANDOFF.md`** 에 모읍니다. 세션 시작 시 이 문서에 `🔴 대기 중` 항목이 있으면 먼저 확인하세요.
+현재 대기: **웹 푸시 Vercel VAPID 키 등록** (배포본 알림 활성화).
 
 ## ⚠️ 절대 규칙
 
