@@ -2,6 +2,15 @@
 // 1) getInspectsafeList로 해당 승강기의 전체 검사이력을 가져오고
 // 2) anchorDate가 있으면 그 날짜와 가장 가까운 회차 하나만, 없으면 전체 회차를 반환합니다.
 //    회차마다 부적합내역조회코드(failCd)가 있으면 getInspectFailList로 실제 부적합 항목을 붙입니다.
+//
+// 회차별 부적합상세(getInspectFailList)는 두 가지로 느려지지 않게 손봤습니다:
+// - 캐시: 과거 회차의 부적합내역은 한번 확정되면 절대 안 바뀌는 데이터라 fail_cd 기준으로
+//   inspection_fail_cache(Supabase)에 저장해두고, 있으면 외부 API를 다시 안 부릅니다.
+// - 지연 조회: anchorDate 없이 부르는 "검사이력 화면" 전체 목록 조회는 이제 회차 목록만
+//   즉시 돌려주고(빠른 API 1번), 부적합상세는 사용자가 그 회차를 클릭했을 때
+//   anchorDate로 그 회차 하나만 다시 조회합니다(InspectionFailDetailSheet가 처리).
+import { createClient } from "@supabase/supabase-js";
+
 const SAFE_URL = "https://apis.data.go.kr/B553664/ElevatorInspectsafeService/getInspectsafeList";
 const FAIL_URL = "https://apis.data.go.kr/B553664/ElevatorInspectsafeService/getInspectFailList";
 
@@ -37,12 +46,20 @@ async function fetchFailItemsOnce(failCd) {
   return { items, reason: items.length === 0 ? "no_items_for_fail_code" : null };
 }
 
-// 검사이력 화면은 회차마다 이 함수를 호출한다 — 한꺼번에 몰아서 부르면 순간적으로 레이트리밋에
-// 걸려 일부만 실패할 수 있어(현재&미래 사례), 실패 시 한 번 더 시도한다.
-async function fetchFailItems(failCd) {
+// 한 번 더 재시도(레이트리밋 대비)한 뒤, 성공(fetch_failed가 아님)이면 캐시에 남겨 다음부터는
+// 외부 API를 아예 안 부르게 한다. 캐시 테이블이 없는 배포본(마이그레이션 미실행)에서도
+// 안전하게 동작하도록 캐시 조회·저장 실패는 조용히 무시한다.
+async function fetchFailItems(supabase, failCd) {
+  if (supabase) {
+    const { data: cached } = await supabase.from("inspection_fail_cache").select("items, reason").eq("fail_cd", failCd).maybeSingle();
+    if (cached) return { items: cached.items ?? [], reason: cached.reason };
+  }
   const first = await fetchFailItemsOnce(failCd);
-  if (first.reason !== "fetch_failed") return first;
-  return fetchFailItemsOnce(failCd);
+  const result = first.reason !== "fetch_failed" ? first : await fetchFailItemsOnce(failCd);
+  if (supabase && result.reason !== "fetch_failed") {
+    await supabase.from("inspection_fail_cache").upsert({ fail_cd: failCd, items: result.items, reason: result.reason }).select();
+  }
+  return result;
 }
 
 const ONE_DAY_MS = 86400000;
@@ -56,6 +73,9 @@ export async function GET(request) {
   if (!elevatorNo) {
     return Response.json({ error: "elevatorNo가 필요합니다" }, { status: 400 });
   }
+  const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+    : null;
 
   const safeUrl = `${SAFE_URL}?serviceKey=${process.env.ELEVATOR_API_SERVICE_KEY}&pageNo=1&numOfRows=50&elevator_no=${encodeURIComponent(elevatorNo)}`;
   const safeRes = await fetch(safeUrl);
@@ -74,18 +94,13 @@ export async function GET(request) {
     return Response.json({ records: records.slice(0, 10) });
   }
 
-  // anchorDate 없이 호출하면 검사이력 화면용으로 전체 회차를 최신순으로 반환한다.
-  // 회차별 조회를 병렬로 몰아서 보내면 순간적으로 레이트리밋에 걸릴 수 있어(현재&미래 사례) 순차로 처리한다.
+  // anchorDate 없이 호출하면 검사이력 화면용으로 전체 회차를 최신순으로 반환한다 — 목록만,
+  // 부적합상세는 안 붙인다(회차를 클릭했을 때 anchorDate로 그 회차만 따로 조회).
+  // failCd가 없는 회차는 조회할 것도 없으니 그 자리에서 바로 확정해서 내려준다.
   if (!anchorDate) {
-    const history = [];
-    for (const record of records) {
-      if (!record.failCd) {
-        history.push({ record, items: [], reason: "no_fail_code" });
-        continue;
-      }
-      const { items, reason } = await fetchFailItems(record.failCd);
-      history.push({ record, items, reason });
-    }
+    const history = records.map((record) =>
+      record.failCd ? { record } : { record, items: [], reason: "no_fail_code" }
+    );
     return Response.json({ history });
   }
 
@@ -108,6 +123,6 @@ export async function GET(request) {
   if (!record.failCd) {
     return Response.json({ items: [], record, reason: "no_fail_code" });
   }
-  const { items, reason } = await fetchFailItems(record.failCd);
+  const { items, reason } = await fetchFailItems(supabase, record.failCd);
   return Response.json({ items, record, reason });
 }
