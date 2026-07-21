@@ -202,6 +202,8 @@ export default function MaterialsAdmin({ data, setData }) {
                   <button onClick={() => setPayTarget(m)} className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-lg">
                     지급완료 처리
                   </button>
+                ) : m.status === "지급완료" ? (
+                  <span className="text-[11px] text-emerald-600 font-semibold">✓ 할 일 자동 생성됨</span>
                 ) : (
                   <span className="text-xs text-slate-300">-</span>
                 )}
@@ -242,7 +244,9 @@ export default function MaterialsAdmin({ data, setData }) {
                     지급완료 처리
                   </button>
                 )}
-                {q.status === "자재지급완료" && <span className="text-xs text-slate-300">-</span>}
+                {q.status === "자재지급완료" && (
+                  <span className="text-[11px] text-emerald-600 font-semibold">✓ 할 일 자동 생성됨</span>
+                )}
               </td>
             </tr>
           ))}
