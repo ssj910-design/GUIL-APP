@@ -92,7 +92,7 @@ const GEO_HELP =
   "· 아이폰: 설정 → Safari(또는 홈 화면 추가한 앱) → 위치 → 허용, 그리고 설정 → 개인정보 보호 → 위치 서비스 ON";
 
 // 관리자 출근 현황 — 요약을 누르면 출근·미출근 명단과 위치 권한 상태를 펼친다.
-function AdminAttendanceCard({ attendances, engineers, onSendPost }) {
+function AdminAttendanceCard({ attendances, engineers }) {
   const [open, setOpen] = useState(false);
   const attByPid = new Map(attendances.map((a) => [a.profileId, a]));
   const rows = engineers.map((e) => ({ e, a: attByPid.get(e.id) }));
@@ -111,13 +111,6 @@ function AdminAttendanceCard({ attendances, engineers, onSendPost }) {
   const permLabel = (s) => (s === "granted" ? "위치 켜짐" : s === "denied" ? "위치 거부" : s === "prompt" ? "위치 미설정" : "미확인");
   const permTone = (s) => (s === "granted" ? "text-emerald-600" : s === "denied" ? "text-red-500" : "text-amber-600");
 
-  function notifyGeoOff() {
-    if (!geoOff.length || !onSendPost) return;
-    const names = geoOff.map((r) => `@${r.e.name}`).join(" ");
-    onSendPost(`${names}\n${GEO_HELP}`);
-    alert(`${geoOff.length}명에게 우리방으로 안내를 보냈습니다.`);
-  }
-
   return (
     <div className="bg-white rounded-xl border border-slate-200">
       <button onClick={() => setOpen((v) => !v)} className="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50 rounded-xl">
@@ -132,11 +125,10 @@ function AdminAttendanceCard({ attendances, engineers, onSendPost }) {
 
       {open && (
         <div className="px-4 pb-3 border-t border-slate-100 pt-2.5">
-          {geoOff.length > 0 && onSendPost && (
-            <button onClick={notifyGeoOff}
-              className="w-full mb-2.5 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg py-2">
-              위치 안 켠 {geoOff.length}명에게 켜는 법 안내 보내기 →
-            </button>
+          {geoOff.length > 0 && (
+            <p className="text-[11px] text-slate-400 mb-2.5 leading-relaxed">
+              위치 미설정 기사에게는 본인 앱에서 켜라는 안내가 자동으로 뜹니다 (게시판에 노출되지 않음).
+            </p>
           )}
           <div className="space-y-1.5">
             {rows.map(({ e, a }) => {
@@ -163,9 +155,10 @@ function AdminAttendanceCard({ attendances, engineers, onSendPost }) {
 
 // 출퇴근 체크 — 기사는 출근/퇴근·당직 버튼, 관리자는 오늘 출근 인원 요약.
 // 출근 시 현위치를 1회 받아 저장한다(고장 배정 시 가까운 기사 정렬용).
-function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRoster, onSendPost, swapCount = 0 }) {
+function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRoster, swapCount = 0 }) {
   const { role, selfId, engineers, profiles: allProfiles = [] } = useContext(AuthContext);
   const [checking, setChecking] = useState(false);
+  const [geoModalDismissed, setGeoModalDismissed] = useState(false);
   const shareLoc = allProfiles.find((p) => p.id === selfId)?.share_location !== false;
   const [geoPerm, setGeoPerm] = useState("unknown"); // granted | denied | prompt | unknown
 
@@ -219,7 +212,7 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
   if (role === "admin") {
     return (
       <div className="px-5 pt-4">
-        <AdminAttendanceCard attendances={attendances} engineers={engineers} onSendPost={onSendPost} />
+        <AdminAttendanceCard attendances={attendances} engineers={engineers} />
         {rosterBtn}
       </div>
     );
@@ -247,8 +240,33 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
     if (r?.locFailed) alert("위치를 받지 못했습니다.\n브라우저 위치 권한을 허용한 뒤 다시 시도해 주세요.\n(설정 → 위치, 또는 주소창 왼쪽 자물쇠 → 위치)");
   }
 
+  // 위치 안 켠 기사에게는 본인 앱에서만 모달로 알린다 (게시판은 전원 공개라 부적절).
+  // 열 때 한 번 뜨고, '나중에'로 닫으면 이 화면에선 다시 안 뜬다(다음에 앱 새로 열면 아직 꺼졌을 때 또 안내).
+  const showGeoModal = shareLoc && (geoPerm === "denied" || geoPerm === "prompt") && !geoModalDismissed;
+
   return (
     <>
+      {showGeoModal && (
+        <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center px-8" onClick={() => setGeoModalDismissed(true)}>
+          <div className="bg-white rounded-2xl w-full max-w-xs p-5" onClick={(e) => e.stopPropagation()}>
+            <p className="text-base font-extrabold text-slate-800 text-center">📍 위치 권한을 켜주세요</p>
+            <p className="text-xs text-slate-600 mt-2 leading-relaxed text-center">
+              출근할 때 현위치를 1회만 기록해 가까운 현장에 우선 배정합니다. 상시 추적하지 않습니다.
+            </p>
+            {geoPerm === "denied" && (
+              <p className="text-[11px] text-slate-400 mt-2.5 leading-relaxed whitespace-pre-line bg-slate-50 rounded-lg p-2.5">{GEO_HELP}</p>
+            )}
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setGeoModalDismissed(true)}
+                className="flex-1 text-xs font-bold text-slate-500 bg-slate-100 rounded-lg py-2.5">나중에</button>
+              {geoPerm === "prompt" && (
+                <button onClick={() => { primeLocation(); setGeoModalDismissed(true); }}
+                  className="flex-1 text-xs font-bold text-white bg-blue-700 rounded-lg py-2.5">위치 허용하기</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="px-5 pt-4">
         {!mine?.checkedInAt ? (
           <>
@@ -333,7 +351,7 @@ function WorkEndRow({ onAttendance }) {
   );
 }
 
-export function HomeTab({ attendances = [], dutySchedules = [], onAttendance, onOpenRoster, onSendPost, swapCount, inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, toast, todayLeaves = [] }) {
+export function HomeTab({ attendances = [], dutySchedules = [], onAttendance, onOpenRoster, swapCount, inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, toast, todayLeaves = [] }) {
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
@@ -405,7 +423,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], onAttendance, on
 
   return (
     <div className="flex-1 overflow-y-auto pb-4 relative">
-      {onAttendance && <AttendanceBar attendances={attendances} dutySchedules={dutySchedules} onAttendance={onAttendance} onOpenRoster={onOpenRoster} onSendPost={onSendPost} swapCount={swapCount} />}
+      {onAttendance && <AttendanceBar attendances={attendances} dutySchedules={dutySchedules} onAttendance={onAttendance} onOpenRoster={onOpenRoster} swapCount={swapCount} />}
 
       {/* 고장 처리 현황 */}
       <div className="px-5 pt-4">
