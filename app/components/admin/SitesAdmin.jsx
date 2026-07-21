@@ -17,7 +17,6 @@ import { Modal, StatusBadge } from "@/app/components/admin/adminShared";
 import ImportSites from "@/app/components/admin/ImportSites";
 
 const CONTRACT_TYPES = ["POG(일반계약)", "FM(종합계약)"];
-const EMERGENCY_TYPES = ["국선", "무선"];
 const CONTACT_ROLES = ["대표", "담당자", "관리소장", "건물주", "경비실", "입주민 대표", "기타"];
 const UNIT_TYPES = ["엘리베이터", "에스컬레이터", "휠체어리프트", "카리프트"];
 const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
@@ -199,10 +198,12 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
   );
 }
 
-function UnitRow({ unit, onSave, onToggleActive, onDelete, onOpenDetail }) {
+function UnitRow({ unit, emergencyPhone, onSave, onSaveEmergencyPhone, onToggleActive, onDelete, onOpenDetail }) {
   const [form, setForm] = useState({ unitType: unit.unitType, model: unit.model ?? "", installDate: unit.installDate ?? "", govNo: unit.govNo ?? "" });
+  const [emergencyDraft, setEmergencyDraft] = useState(emergencyPhone ?? "");
   const [saving, setSaving] = useState(false);
   const dirty = form.unitType !== unit.unitType || form.model !== (unit.model ?? "") || form.installDate !== (unit.installDate ?? "") || form.govNo !== (unit.govNo ?? "");
+  const emergencyDirty = emergencyDraft !== (emergencyPhone ?? "");
 
   return (
     <tr className={`border-b border-slate-50 ${unit.isActive === false ? "opacity-40" : ""}`}>
@@ -217,10 +218,16 @@ function UnitRow({ unit, onSave, onToggleActive, onDelete, onOpenDetail }) {
       <td className="px-2 py-2"><input className={inputCls} value={form.model} placeholder="모델명" onChange={(e) => setForm({ ...form, model: e.target.value })} /></td>
       <td className="px-2 py-2"><input className={inputCls} type="date" value={form.installDate} onChange={(e) => setForm({ ...form, installDate: e.target.value })} /></td>
       <td className="px-2 py-2"><input className={inputCls} value={form.govNo} placeholder="승강기고유번호" onChange={(e) => setForm({ ...form, govNo: e.target.value })} /></td>
+      <td className="px-2 py-2"><input className={inputCls} value={emergencyDraft} placeholder="번호,통신사,국선/무선" onChange={(e) => setEmergencyDraft(e.target.value)} /></td>
       <td className="px-2 py-2 whitespace-nowrap text-right">
         <button
-          disabled={!dirty || saving}
-          onClick={async () => { setSaving(true); await onSave(unit, form); setSaving(false); }}
+          disabled={(!dirty && !emergencyDirty) || saving}
+          onClick={async () => {
+            setSaving(true);
+            if (dirty) await onSave(unit, form);
+            if (emergencyDirty) await onSaveEmergencyPhone(emergencyDraft);
+            setSaving(false);
+          }}
           className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-3 py-1.5 mr-1"
         >
           저장
@@ -300,7 +307,6 @@ export default function SitesAdmin({ data, setData }) {
   // contract_date/maintenance_cost 컬럼은 각 마이그레이션 실행 전엔 존재하지 않는다 — undefined면 아직 미실행으로 간주.
   const contractDateReady = sites.some((s) => s.contractDate !== undefined);
   const maintenanceCostReady = sites.some((s) => s.maintenanceCost !== undefined);
-  const emergencyReady = sites.some((s) => s.emergencyPhone !== undefined);
 
   const contacts = siteManagers.filter((m) => m.siteId === selectedId);
 
@@ -323,7 +329,6 @@ export default function SitesAdmin({ data, setData }) {
       name: s.name, address: s.address ?? "", contractType: s.contractType ?? CONTRACT_TYPES[0],
       notes: s.notes ?? "", assignedEngineer: s.assignedEngineer ?? "",
       phone: s.phone ?? "", fax: s.fax ?? "", email: s.email ?? "",
-      emergencyPhone: s.emergencyPhone ?? "", emergencyType: s.emergencyType ?? "",
       contractDate: s.contractDate ?? "", contractEnd: s.contractEnd ?? "", maintenanceCost: s.maintenanceCost ?? "",
     });
   }
@@ -421,7 +426,6 @@ export default function SitesAdmin({ data, setData }) {
     await supabase.from("sites").update({
       name: siteForm.name, address: siteForm.address, contract_type: siteForm.contractType, notes: siteForm.notes || null,
       phone: siteForm.phone || null, fax: siteForm.fax || null, email: siteForm.email || null,
-      ...(emergencyReady ? { emergency_phone: siteForm.emergencyPhone || null, emergency_type: siteForm.emergencyType || null } : {}),
       ...(contractDateReady ? { contract_date: siteForm.contractDate || null } : {}),
       contract_end: siteForm.contractEnd || null,
       ...(maintenanceCostReady ? { maintenance_cost: siteForm.maintenanceCost === "" ? null : Number(siteForm.maintenanceCost) } : {}),
@@ -435,6 +439,12 @@ export default function SitesAdmin({ data, setData }) {
 
   function cancelEditInfo() {
     select(site);
+  }
+
+  // 비상통화장치 번호(통신사, 국선/무선) — 승강기 정보 표에서 편집한다(호기 공통 값, 사이트 단위 저장).
+  async function saveEmergencyPhone(value) {
+    await supabase.from("sites").update({ emergency_phone: value || null }).eq("id", selectedId);
+    setData((prev) => ({ ...prev, sites: prev.sites.map((s) => (s.id === selectedId ? { ...s, emergencyPhone: value || null } : s)) }));
   }
 
   async function changeLead(engineerName) {
@@ -637,8 +647,6 @@ export default function SitesAdmin({ data, setData }) {
                         <div><p className="text-xs font-bold text-slate-400 mb-1">전화번호</p><p className="font-semibold text-slate-800">{site.phone || "-"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">팩스</p><p className="font-semibold text-slate-800">{site.fax || "-"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">이메일</p><p className="font-semibold text-slate-800">{site.email || "-"}</p></div>
-                        <div><p className="text-xs font-bold text-slate-400 mb-1">비상통화장치 번호(통신사)</p><p className="font-semibold text-slate-800">{site.emergencyPhone || "-"}</p></div>
-                        <div><p className="text-xs font-bold text-slate-400 mb-1">방식</p><p className="font-semibold text-slate-800">{site.emergencyType || "-"}</p></div>
                         <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(전달사항)</p><p className="text-slate-700">{site.notes || "-"}</p></div>
                       </div>
                       <button onClick={() => setEditingInfo(true)} className="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 whitespace-nowrap ml-3">
@@ -721,12 +729,6 @@ export default function SitesAdmin({ data, setData }) {
                       <div><p className="text-xs font-bold text-slate-500 mb-1">전화번호</p><input className={inputCls} placeholder="관리사무소 대표번호" value={siteForm.phone} onChange={(e) => setSiteForm({ ...siteForm, phone: formatPhone(e.target.value) })} /></div>
                       <div><p className="text-xs font-bold text-slate-500 mb-1">팩스</p><input className={inputCls} value={siteForm.fax} onChange={(e) => setSiteForm({ ...siteForm, fax: formatPhone(e.target.value) })} /></div>
                       <div><p className="text-xs font-bold text-slate-500 mb-1">이메일</p><input className={inputCls} value={siteForm.email} onChange={(e) => setSiteForm({ ...siteForm, email: e.target.value })} /></div>
-                      <div><p className="text-xs font-bold text-slate-500 mb-1">비상통화장치 번호(통신사){!emergencyReady && " (마이그레이션 대기)"}</p><input className={inputCls} disabled={!emergencyReady} value={siteForm.emergencyPhone} onChange={(e) => setSiteForm({ ...siteForm, emergencyPhone: formatPhone(e.target.value) })} /></div>
-                      <div><p className="text-xs font-bold text-slate-500 mb-1">방식{!emergencyReady && " (마이그레이션 대기)"}</p>
-                        <select className={inputCls} disabled={!emergencyReady} value={siteForm.emergencyType} onChange={(e) => setSiteForm({ ...siteForm, emergencyType: e.target.value })}>
-                          <option value="">선택</option>
-                          {EMERGENCY_TYPES.map((t) => <option key={t}>{t}</option>)}
-                        </select></div>
                     </div>
                     <div className="flex items-end gap-3">
                       <div className="flex-1"><p className="text-xs font-bold text-slate-500 mb-1">비고(전달사항)</p><input className={inputCls} value={siteForm.notes} onChange={(e) => setSiteForm({ ...siteForm, notes: e.target.value })} /></div>
@@ -820,12 +822,22 @@ export default function SitesAdmin({ data, setData }) {
                         <th className="text-left px-2 py-2 font-semibold">모델</th>
                         <th className="text-left px-2 py-2 font-semibold w-32">설치일</th>
                         <th className="text-left px-2 py-2 font-semibold w-32">승강기고유번호</th>
+                        <th className="text-left px-2 py-2 font-semibold w-40">비상통화장치 번호(통신사, 국선/무선)</th>
                         <th className="w-40" />
                       </tr>
                     </thead>
                     <tbody>
                       {siteUnits.map((u) => (
-                        <UnitRow key={u.id} unit={u} onSave={saveUnit} onToggleActive={toggleUnitActive} onDelete={deleteUnit} onOpenDetail={setUnitDetail} />
+                        <UnitRow
+                          key={u.id}
+                          unit={u}
+                          emergencyPhone={site.emergencyPhone}
+                          onSave={saveUnit}
+                          onSaveEmergencyPhone={saveEmergencyPhone}
+                          onToggleActive={toggleUnitActive}
+                          onDelete={deleteUnit}
+                          onOpenDetail={setUnitDetail}
+                        />
                       ))}
                     </tbody>
                   </table></div>
@@ -839,6 +851,7 @@ export default function SitesAdmin({ data, setData }) {
                         <th className="text-left px-2 py-2 font-semibold">모델</th>
                         <th className="text-left px-2 py-2 font-semibold w-40">운행층수</th>
                         <th className="text-left px-2 py-2 font-semibold w-32">설치일자</th>
+                        <th className="text-left px-2 py-2 font-semibold w-40">비상통화장치 번호(통신사, 국선/무선)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -854,6 +867,7 @@ export default function SitesAdmin({ data, setData }) {
                             <td className="px-2 py-2 truncate" title={u.model ?? ""}>{u.model || "-"}</td>
                             <td className="px-2 py-2 truncate">{live?.groundFloorCnt ? `지상 ${live.groundFloorCnt} / 지하 ${live.undgrndFloorCnt ?? 0}` : u.floors || "-"}</td>
                             <td className="px-2 py-2 whitespace-nowrap">{live?.frstInstallationDe || u.installDate || "-"}</td>
+                            <td className="px-2 py-2 truncate" title={site.emergencyPhone ?? ""}>{site.emergencyPhone || "-"}</td>
                           </tr>
                         );
                       })}
