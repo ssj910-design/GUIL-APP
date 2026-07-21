@@ -7,8 +7,24 @@ import { Plus, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR, FAULT_TYPES } from "@/lib/constants";
 import { formatPhone, sortEngineersByDistance } from "@/lib/utils";
-import { locOf, personOf, StatusBadge, AdminTable, FilterPills, Modal, inputCls } from "@/app/components/admin/adminShared";
+import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls } from "@/app/components/admin/adminShared";
 import { FailureDetailContent } from "@/app/components/admin/Dashboard";
+
+// 대시보드 KPI 카드와 같은 스타일이되, 클릭하면 상태 필터로도 쓰인다.
+function StatBox({ label, value, tone = "text-slate-900", active, onClick, sub }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`text-left bg-white rounded-xl border px-5 py-4 transition ${
+        active ? "border-blue-500 ring-2 ring-blue-100" : "border-slate-200 hover:border-slate-300"
+      }`}
+    >
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className={`text-2xl font-extrabold mt-1 ${tone}`}>{value}</p>
+      {sub && <p className="text-[11px] text-slate-400 mt-1.5">{sub}</p>}
+    </button>
+  );
+}
 
 // 현장 검색·자동완성 — 드롭다운 대신 이름/주소로 찾아서 고른다.
 function SiteAutocomplete({ sites, value, onChange }) {
@@ -194,10 +210,16 @@ export default function FailuresAdmin({ data, setData }) {
   const [registering, setRegistering] = useState(false);
   const engineers = profiles.filter((p) => p.role === "engineer");
 
-  const rows = failures.filter((f) =>
-    (status === "all" || f.status === status) &&
-    (!search || (f.siteName ?? "").includes(search) || (f.errorCode ?? "").includes(search))
-  );
+  const rows = failures.filter((f) => {
+    if (status !== "all" && f.status !== status) return false;
+    const q = search.trim();
+    if (!q) return true;
+    const site = sites.find((s) => s.id === f.siteId);
+    const haystack = [f.reportedAt, f.siteName, site?.name, f.errorCode, site?.assignedEngineer, f.assignee]
+      .filter(Boolean)
+      .join(" ");
+    return haystack.includes(q);
+  });
 
   async function assign(f, name) {
     const p = profiles.find((x) => x.name === name);
@@ -242,28 +264,46 @@ export default function FailuresAdmin({ data, setData }) {
   }
 
   const count = (s) => failures.filter((f) => f.status === s).length;
+  // 지원요청·운행정지는 미완료 건에 걸린 에스컬레이션만 센다(대시보드 집중관리현장과 동일 기준).
+  const openEscalations = failures.filter((f) => f.escalation && f.status !== "완료");
+  const supportCount = openEscalations.filter((f) => f.escalation === "지원요청").length;
+  const stoppedCount = openEscalations.filter((f) => f.escalation === "운행정지").length;
 
   return (
     <div className="max-w-6xl">
-      <h1 className="text-xl font-extrabold mb-4">고장관리</h1>
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <FilterPills
-          value={status}
-          onChange={setStatus}
-          options={[
-            { value: "all", label: "전체", count: failures.length },
-            { value: "미처리", label: "미처리", count: count("미처리") },
-            { value: "진행중", label: "진행중", count: count("진행중") },
-            { value: "완료", label: "완료", count: count("완료") },
-          ]}
-        />
-        <div className="flex items-center gap-2">
-          <input className={`${inputCls} max-w-56`} placeholder="현장·증상 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
-          <button onClick={() => setRegistering(true)} className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
-            <Plus size={15} /> 고장접수
-          </button>
-        </div>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-extrabold">고장관리</h1>
+        <button onClick={() => setRegistering(true)} className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
+          <Plus size={15} /> 고장접수
+        </button>
       </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+        <StatBox label="전체" value={failures.length} active={status === "all"} onClick={() => setStatus("all")} />
+        <StatBox
+          label="미처리"
+          value={count("미처리")}
+          tone={count("미처리") ? "text-red-600" : "text-slate-900"}
+          active={status === "미처리"}
+          onClick={() => setStatus("미처리")}
+        />
+        <StatBox
+          label="진행중"
+          value={count("진행중")}
+          tone="text-amber-600"
+          active={status === "진행중"}
+          onClick={() => setStatus("진행중")}
+          sub={`지원요청 ${supportCount} · 운행정지 ${stoppedCount}`}
+        />
+        <StatBox label="완료" value={count("완료")} tone="text-emerald-600" active={status === "완료"} onClick={() => setStatus("완료")} />
+      </div>
+
+      <input
+        className={`${inputCls} w-full mb-3`}
+        placeholder="접수일자·현장명·증상·담당기사·배정기사 검색"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
 
       <AdminTable head={["접수", "현장 · 호기", "증상", "처리내용", "신고자", "담당 기사", "출동/도착", "상태"]}>
         {rows.map((f) => {
