@@ -136,14 +136,15 @@ function MonthlyView({ engineers, rows, cursor }) {
     const iso = isoDay(cursor.y, cursor.m, d);
     const a = map.get(`${e.id}|${iso}`);
     if (!a?.checked_in_at) return <span className="text-slate-200">·</span>;
-    if (a.status === "당직") return <span className="text-amber-600 font-bold" title={`당직 · 출근 ${hhmm(a.checked_in_at)}`}>◆</span>;
-    return <span className="text-emerald-600 font-bold" title={`출근 ${hhmm(a.checked_in_at)}`}>●</span>;
+    if (a.status === "당직") return <span className="text-emerald-600 font-bold" title={`당직 · 출근 ${hhmm(a.checked_in_at)}`}>◆</span>;
+    if (a.status === "숙직") return <span className="text-blue-600 font-bold" title={`숙직 · 출근 ${hhmm(a.checked_in_at)}`}>▲</span>;
+    return <span className="text-slate-500 font-bold" title={`출근 ${hhmm(a.checked_in_at)}`}>●</span>;
   };
   const countIn = (e) => dayNums.filter((d) => map.get(`${e.id}|${isoDay(cursor.y, cursor.m, d)}`)?.checked_in_at).length;
 
   return (
     <>
-      <p className="text-xs text-slate-500 mb-3">● 출근 · <span className="text-amber-600">◆</span> 당직 마감 · 빈칸 미출근 (지각 판정 없음)</p>
+      <p className="text-xs text-slate-500 mb-3"><span className="text-slate-500">●</span> 출근 · <span className="text-emerald-600">◆</span> 당직 · <span className="text-blue-600">▲</span> 숙직 · 빈칸 미출근 (지각 판정 없음)</p>
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <table className="text-xs" style={{ minWidth: `${20 + days * 1.6}rem` }}>
           <thead>

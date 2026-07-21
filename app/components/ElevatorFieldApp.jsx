@@ -273,18 +273,19 @@ export default function App() {
     // 위치 공유를 끈 사람은 위치를 받지 않는다.
     // 출근·위치재시도는 출근 위치(lat/lng)로, 퇴근·당직은 퇴근 위치(out_lat/out_lng)로 저장.
     const shareLoc = profilesAll.find((p) => p.id === pid)?.share_location !== false;
-    const isOut = kind === "out" || kind === "duty";
+    const isOut = kind === "out" || kind === "duty" || kind === "night";
     const wantLoc = (kind === "in" || kind === "relocate" || isOut) && shareLoc;
     const here = wantLoc ? await getPositionOnce() : null;
 
     // 위치만 다시 받기인데 실패하면 아무것도 저장하지 않는다
     if (kind === "relocate" && !here) return { locFailed: true };
 
+    const outStatus = kind === "duty" ? "당직" : kind === "night" ? "숙직" : "퇴근";
     const patch = kind === "relocate"
       ? { lat: here.lat, lng: here.lng, located_at: now }
       : kind === "in"
       ? { checked_in_at: now, status: null, ...(here ? { lat: here.lat, lng: here.lng, located_at: now } : {}) }
-      : { checked_out_at: now, status: kind === "duty" ? "당직" : "퇴근", ...(here ? { out_lat: here.lat, out_lng: here.lng } : {}) };
+      : { checked_out_at: now, status: outStatus, ...(here ? { out_lat: here.lat, out_lng: here.lng } : {}) };
 
     const { data } = await supabase
       .from("attendances")

@@ -331,26 +331,32 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
   );
 }
 
-// 퇴근·당직을 아침부터 노출하면 오터치가 난다. '근무 종료'를 눌러야 열리게 한다.
+// 퇴근·당직·숙직을 아침부터 노출하면 오터치가 난다. '근무 종료'를 눌러야 열리게 한다.
 // 다만 퇴근시간(17:30)이 지나면 실제로 눌러야 할 때라 작은 링크 → 또렷한 버튼으로 키운다.
+// 버튼을 누르면 위치(GPS)를 받느라 몇 초 걸리므로 그동안 '처리 중…'을 보여 먹통처럼 보이지 않게 한다.
 function WorkEndRow({ onAttendance, afterShiftEnd }) {
   const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const end = async (kind) => { setBusy(true); await onAttendance(kind); setBusy(false); };
   if (!open) {
     return (
       <button onClick={() => setOpen(true)}
         className={afterShiftEnd
           ? "w-full mt-2 text-xs font-bold text-slate-700 bg-slate-100 border border-slate-300 rounded-lg py-2.5 active:bg-slate-200"
           : "w-full mt-2 text-[11px] font-bold text-slate-400 py-1.5"}>
-        {afterShiftEnd ? "🏠 퇴근 · 당직 (근무 종료)" : "근무 종료하기"}
+        {afterShiftEnd ? "🏠 근무 종료하기 (퇴근 · 당직 · 숙직)" : "근무 종료하기"}
       </button>
     );
   }
   return (
-    <div className="mt-2 flex items-center gap-1.5">
-      <span className="text-[11px] font-bold text-slate-500 mr-auto">오늘 근무를 마칠까요?</span>
-      <button onClick={() => onAttendance("duty")} className="text-[11px] font-bold text-amber-700 bg-amber-50 rounded-lg px-2.5 py-1.5">당직</button>
-      <button onClick={() => onAttendance("out")} className="text-[11px] font-bold text-white bg-blue-700 rounded-lg px-2.5 py-1.5">퇴근</button>
-      <button onClick={() => setOpen(false)} className="text-[11px] font-bold text-slate-400 px-1">취소</button>
+    <div className="mt-2">
+      <p className="text-[11px] font-bold text-slate-500 mb-1.5">{busy ? "위치 확인 중…" : "오늘 근무를 어떻게 마칠까요?"}</p>
+      <div className="flex gap-1.5">
+        <button disabled={busy} onClick={() => end("duty")} className="flex-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 rounded-lg py-2 disabled:opacity-50">당직</button>
+        <button disabled={busy} onClick={() => end("night")} className="flex-1 text-[11px] font-bold text-blue-700 bg-blue-50 rounded-lg py-2 disabled:opacity-50">숙직</button>
+        <button disabled={busy} onClick={() => end("out")} className="flex-1 text-[11px] font-bold text-white bg-slate-700 rounded-lg py-2 disabled:opacity-50">퇴근</button>
+        <button disabled={busy} onClick={() => setOpen(false)} className="text-[11px] font-bold text-slate-400 px-2 disabled:opacity-50">취소</button>
+      </div>
     </div>
   );
 }
