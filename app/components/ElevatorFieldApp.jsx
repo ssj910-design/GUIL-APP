@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap } from "@/lib/mappers";
-import { addDays, profileIdByName, unitIdFor, parseErrorCode } from "@/lib/utils";
+import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { DutyRoster, DutySwapNotice } from "@/app/components/DutyRoster";
 import { MyPage } from "@/app/components/MyPage";
@@ -627,7 +627,7 @@ export default function App() {
     setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, assignee: engineerName } : x)));
     sendPush("failure_assigned", [assignedId], {
       title: "고장이 배정되었습니다",
-      body: `${failure.siteName} · ${failure.elevatorNo || "호기 미상"} — ${parseErrorCode(failure.errorCode).faultType}`,
+      body: `${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} — ${parseErrorCode(failure.errorCode).faultType}`,
     });
     notifyFailure(`${engineerName}에게 배정 완료`);
   }
@@ -657,7 +657,7 @@ export default function App() {
   function handleFailureReported(created) {
     const first = created[0];
     if (!first) return;
-    const where = `${first.siteName} · ${created.map((f) => f.elevatorNo).filter(Boolean).join(", ") || "호기 미상"}`;
+    const where = `${first.siteName} · ${created.map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean).join(", ") || "호기 미상"}`;
     const what = parseErrorCode(first.errorCode).faultType;
     const more = created.length > 1 ? ` 외 ${created.length - 1}건` : "";
 
@@ -693,11 +693,11 @@ export default function App() {
       : x)));
     sendPush("failure_refused", adminIds(), {
       title: "출동 거부됨 — 재배정 필요",
-      body: `${profile.name}님이 ${failure.siteName} · ${failure.elevatorNo || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` (${reason.trim()})` : ""}`,
+      body: `${profile.name}님이 ${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` (${reason.trim()})` : ""}`,
     });
     const admins = profilesAll.filter((p) => p.role === "admin").map((p) => "@" + p.name).join(" ");
     handleSendFeedPost(
-      `⚠️ ${profile.name}님이 ${failure.siteName} · ${failure.elevatorNo || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` — 사유: ${reason.trim()}` : ""}. 재배정이 필요합니다 ${admins}`.trim()
+      `⚠️ ${profile.name}님이 ${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` — 사유: ${reason.trim()}` : ""}. 재배정이 필요합니다 ${admins}`.trim()
     );
     notifyFailure("출동 거부됨 — 미배정으로 이동, 관리자에게 알림");
   }
@@ -1346,7 +1346,7 @@ export default function App() {
                                   key={f.id}
                                   onClick={() => { setNotifOpen(false); setOpenFailureId(f.id); }}
                                   onDismiss={() => handleDismissNotif("fail:" + f.id)}
-                                  title={`${f.siteName} · ${f.elevatorNo}`}
+                                  title={`${f.siteName} · ${formatUnitLabel(f.elevatorNo)}`}
                                   subtitle={`${f.errorCode} · ${f.assignee ? "출동 대기" : "미배정"}`}
                                 />
                               ))}
@@ -1360,7 +1360,7 @@ export default function App() {
                                   key={f.id}
                                   onClick={() => { setNotifOpen(false); setOpenFailureId(f.id); }}
                                   onDismiss={() => handleDismissNotif("faildone:" + f.id)}
-                                  title={`${f.siteName} · ${f.elevatorNo}`}
+                                  title={`${f.siteName} · ${formatUnitLabel(f.elevatorNo)}`}
                                   subtitle={`${f.assignee} 기사가 처리완료했습니다`}
                                 />
                               ))}

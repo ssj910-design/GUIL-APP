@@ -6,14 +6,14 @@ import { useState } from "react";
 import WeekStrip from "@/app/components/admin/WeekStrip";
 import { AlertOctagon } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite } from "@/lib/utils";
+import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, formatUnitLabel } from "@/lib/utils";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { Modal, StatusBadge } from "@/app/components/admin/adminShared";
 
 function unitLabel(units, sites, unitId, fallbackSiteName, fallbackLabel) {
   const u = units.find((x) => x.id === unitId);
-  if (!u) return { site: fallbackSiteName ?? "-", unit: fallbackLabel ?? "-", siteObj: sites.find((x) => x.name === fallbackSiteName) };
+  if (!u) return { site: fallbackSiteName ?? "-", unit: formatUnitLabel(fallbackLabel) ?? "-", siteObj: sites.find((x) => x.name === fallbackSiteName) };
   const s = sites.find((x) => x.id === u.siteId);
   return { site: s?.name ?? fallbackSiteName ?? "-", unit: u.unitNo, siteObj: s };
 }
@@ -186,8 +186,8 @@ export default function Dashboard({ data, onOpenWorkCalendar }) {
               const support = supportSiteIds.has(s.id);
               const recent = recentFailuresBySiteId.get(s.id) ?? [];
               const count30d = recent.length;
-              const units = [...new Set(recent.map((f) => f.elevatorNo).filter(Boolean))];
-              const unitText = units.length ? units.join(", ") : s.elevatorNo;
+              const units = [...new Set(recent.map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean))];
+              const unitText = units.length ? units.join(", ") : formatUnitLabel(s.elevatorNo);
               return (
                 <button
                   key={s.id}
@@ -372,7 +372,7 @@ export default function Dashboard({ data, onOpenWorkCalendar }) {
                   className="w-full text-left border border-slate-200 rounded-xl p-3 hover:bg-slate-50"
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <p className="font-bold text-slate-800 text-sm">{f.errorCode}{f.elevatorNo ? ` · ${f.elevatorNo}` : ""}</p>
+                    <p className="font-bold text-slate-800 text-sm">{f.errorCode}{f.elevatorNo ? ` · ${formatUnitLabel(f.elevatorNo)}` : ""}</p>
                     <StatusBadge tone={f.status === "완료" ? "green" : f.status === "진행중" ? "amber" : "red"}>
                       {f.escalation ? `${f.status}·${f.escalation}` : f.status}
                     </StatusBadge>

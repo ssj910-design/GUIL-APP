@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { ShieldCheck, AlertOctagon } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, formatUnitLabel } from "@/lib/utils";
 import { Badge, DDay, DrillHeader, SmsToast } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -55,7 +55,7 @@ function FailureHistoryDetailScreen({ site, failures, onBack }) {
       <DrillHeader title="고장처리내역 상세" onBack={onBack} onHome={onBack} />
       <div className="flex-1 overflow-y-auto px-5 py-4">
         <div className="bg-slate-100 rounded-xl p-3 mb-4">
-          <p className="font-bold text-slate-800">{site.name} · {site.elevatorNo}</p>
+          <p className="font-bold text-slate-800">{site.name} · {formatUnitLabel(site.elevatorNo)}</p>
           <p className="text-xs text-slate-400 mt-0.5">{site.address}</p>
         </div>
         <div className="space-y-2.5">
@@ -70,7 +70,7 @@ function FailureHistoryDetailScreen({ site, failures, onBack }) {
                 className="w-full text-left border border-slate-200 rounded-xl p-3.5 active:bg-slate-50"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <p className="font-bold text-slate-800 text-sm">{f.errorCode}{f.elevatorNo ? ` · ${f.elevatorNo}` : ""}</p>
+                  <p className="font-bold text-slate-800 text-sm">{f.errorCode}{f.elevatorNo ? ` · ${formatUnitLabel(f.elevatorNo)}` : ""}</p>
                   <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${f.status === "완료" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{f.status}</span>
                 </div>
                 <p className="text-xs text-slate-500 mb-1">{f.reportedAt} 접수 · {f.assignee ?? "미배정"}</p>
@@ -308,8 +308,8 @@ export function HomeTab({ attendances = [], onAttendance, onOpenRoster, swapCoun
                 const support = supportSiteIds.has(s.id);
                 const recent = recentFailuresBySiteId.get(s.id) ?? [];
                 const count30d = recent.length;
-                const units = [...new Set(recent.map((f) => f.elevatorNo).filter(Boolean))];
-                const unitLabel = units.length ? units.join(", ") : s.elevatorNo;
+                const units = [...new Set(recent.map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean))];
+                const unitLabel = units.length ? units.join(", ") : formatUnitLabel(s.elevatorNo);
                 return (
                   <button
                     key={s.id}

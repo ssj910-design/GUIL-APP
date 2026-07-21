@@ -19,7 +19,7 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
   const unitFailures = failures.filter((f) =>
     realUnit?.id && f.unitId ? f.unitId === realUnit.id : f.siteId === site.id && f.elevatorNo === unit
   );
-  const unitIndex = (realUnit ? realUnit.seq : Number(unit?.split("-")[1])) - 1;
+  const unitIndex = (realUnit ? realUnit.seq : labelToSeq(unit)) - 1;
   const unitGovNo = realUnit?.govNo ?? site.govElevatorNos?.[unitIndex];
   const liveInspections = useLiveInspections(
     unitGovNo ? [{ key: `${site.id}-${unitIndex}`, siteId: site.id, siteName: site.name, govElevatorNo: unitGovNo }] : []

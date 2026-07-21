@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm } from "@/lib/utils";
+import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, labelToSeq, formatUnitLabel } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
 import { useLiveInspections } from "@/app/hooks/useLiveInspections";
 import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons } from "@/app/components/ui";
@@ -347,8 +347,8 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
   const site = sites.find((s) => s.id === failure.siteId);
   const stage = failureStage(failure);
   const { faultType, faultDetail } = parseErrorCode(failure.errorCode);
-  const unitLabel = failure.elevatorNo && !failure.elevatorNo.includes("호기") ? `${failure.elevatorNo}호기` : failure.elevatorNo;
-  const unitIndex = failure.elevatorNo ? Number(failure.elevatorNo.split("-")[1]) - 1 : NaN;
+  const unitLabel = formatUnitLabel(failure.elevatorNo);
+  const unitIndex = (labelToSeq(failure.elevatorNo) ?? NaN) - 1;
   const unitGovNo = site?.govElevatorNos?.[unitIndex];
   const liveInspections = useLiveInspections(
     unitGovNo ? [{ key: `${failure.siteId}-${unitIndex}`, siteId: failure.siteId, siteName: failure.siteName, govElevatorNo: unitGovNo }] : []
@@ -543,7 +543,7 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allo
   const anyDistance = rows.some((r) => r.km != null);
 
   return (
-    <Sheet title={`기사 배정 — ${failure.siteName} · ${failure.elevatorNo || "호기 미상"}`} onClose={onClose}>
+    <Sheet title={`기사 배정 — ${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"}`} onClose={onClose}>
       {failure.assignee && <p className="text-xs text-slate-500 mb-2">현재 배정: <b>{failure.assignee}</b> — 재배정하면 출동 기록이 초기화되고 미처리로 돌아갑니다</p>}
       <p className="text-[11px] text-slate-400 mb-2">
         {anyDistance
@@ -606,7 +606,7 @@ export function DispatchEtaModal({ failure, onConfirm, onClose }) {
   const valid = eta !== "";
   return (
     <Sheet title="도착 예정 시간 입력" onClose={onClose}>
-      <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {failure.elevatorNo}</p>
+      <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {formatUnitLabel(failure.elevatorNo)}</p>
       <Field label="도착 예정 시간 *">
         <select value={eta} onChange={(e) => setEta(e.target.value)} className={inputCls}>
           <option value="">선택해주세요</option>
@@ -636,7 +636,7 @@ export function ArrivalTimeModal({ failure, onConfirm, onClose }) {
   const valid = /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
   return (
     <Sheet title="실제 도착 시간 입력" onClose={onClose}>
-      <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {failure.elevatorNo}</p>
+      <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {formatUnitLabel(failure.elevatorNo)}</p>
       <Field label="도착 시간 *">
         <input
           type="text"
@@ -679,7 +679,7 @@ export function ArrivalResultModal({ failure, onConfirm, onClose }) {
 
   return (
     <Sheet title="고장처리결과 입력" onClose={onClose}>
-      <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {failure.elevatorNo}</p>
+      <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {formatUnitLabel(failure.elevatorNo)}</p>
       <div className="space-y-3.5">
         <div>
           <label className="text-xs font-bold text-slate-600 mb-1 block">처리결과</label>
@@ -739,7 +739,7 @@ export function ArrivalResultModal({ failure, onConfirm, onClose }) {
 function FailureResponseCard({ f, onOpenDetail }) {
   const stage = failureStage(f);
   const { faultType, faultDetail } = parseErrorCode(f.errorCode);
-  const unitLabel = f.elevatorNo && !f.elevatorNo.includes("호기") ? `${f.elevatorNo}호기` : f.elevatorNo;
+  const unitLabel = formatUnitLabel(f.elevatorNo);
   return (
     <button type="button" onClick={() => onOpenDetail(f)} className="w-full text-left rounded-xl border border-slate-200 bg-white overflow-hidden p-3.5">
       <div className="flex items-center justify-between mb-1">
@@ -770,7 +770,7 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
   const siteOf = useSiteOf();
   const { name: me, role } = useContext(AuthContext);
   const stage = failureStage(f);
-  const unitLabel = f.elevatorNo && !f.elevatorNo.includes("호기") ? `${f.elevatorNo}호기` : f.elevatorNo;
+  const unitLabel = formatUnitLabel(f.elevatorNo);
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
       <div className="w-full flex items-center gap-2 p-3.5">
@@ -864,7 +864,7 @@ export function FailureMiniCard({ f, onOpenDetail, onDispatch, onArrive, onOpenR
     <div className={`w-full flex items-center justify-between gap-2 rounded-xl border border-slate-200 border-l-4 ${state.bar} bg-white px-3 py-2.5`}>
       <button type="button" onClick={() => onOpenDetail(f)} className="min-w-0 flex-1 text-left">
         <div className="flex items-center gap-1.5 min-w-0">
-          <p className="font-bold text-slate-800 text-sm truncate">{f.siteName} · {f.elevatorNo}</p>
+          <p className="font-bold text-slate-800 text-sm truncate">{f.siteName} · {formatUnitLabel(f.elevatorNo)}</p>
           <span className={`shrink-0 text-[10px] font-bold rounded-full px-1.5 py-0.5 ${state.chip}`}>{state.label}</span>
         </div>
         <p className="text-[11px] text-slate-400 truncate">{f.errorCode}</p>
@@ -1052,7 +1052,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
               done.map((f) => (
                 <button key={f.id} onClick={() => setDetailTarget(f)} className="w-full text-left bg-white rounded-xl border border-slate-200 p-3.5 opacity-70">
                   <div className="flex items-center justify-between mb-1">
-                    <p className="font-bold text-slate-800 text-sm">{f.siteName} · {f.elevatorNo}</p>
+                    <p className="font-bold text-slate-800 text-sm">{f.siteName} · {formatUnitLabel(f.elevatorNo)}</p>
                     <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">완료</span>
                   </div>
                   <p className="text-xs text-slate-500">{f.errorCode}</p>
@@ -1151,7 +1151,7 @@ function FailureStatusOverview({ failures, onReassign }) {
             <div key={f.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
               <button onClick={() => setDetailTarget(f)} className="w-full text-left active:opacity-70">
                 <div className="flex items-center justify-between mb-1">
-                  <p className="font-bold text-slate-800 text-sm">{f.siteName} · {f.elevatorNo}</p>
+                  <p className="font-bold text-slate-800 text-sm">{f.siteName} · {formatUnitLabel(f.elevatorNo)}</p>
                   <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${statusColor[f.status]}`}>{f.status}</span>
                 </div>
                 <p className="text-xs text-slate-500">{f.errorCode}</p>
