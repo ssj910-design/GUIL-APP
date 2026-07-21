@@ -226,6 +226,38 @@ export default function App() {
     if (site?.lat != null && pid) updateLastLocation(pid, site.lat, site.lng, `${site.name} ${label}`);
   }
 
+  // 대기 중 기사 위치 자동 갱신 — 출동·도착 같은 업무 이벤트가 없어도 2시간마다 위치를 최신화한다.
+  // (사무실·대기소에 가만히 있는 기사도 배정 거리 계산에 최신 위치가 반영되게)
+  // ⚠️ 웹은 앱이 열려 있을 때만 위치를 받는다(백그라운드 불가). 앱을 켜두거나 다시 열 때 동작.
+  // 위치 공유 ON + 권한 granted + 근무 중(출근O·마감X)인 본인만 대상.
+  useEffect(() => {
+    if (!profile || profile.role !== "engineer") return;
+    const pid = profileIdByName(profilesAll, profile.name);
+    const self = profilesAll.find((p) => p.id === pid);
+    if (!pid || !self || self.share_location === false) return;
+
+    const REFRESH_MS = 2 * 60 * 60 * 1000;
+    async function maybeRefresh() {
+      const todayAtt = attendances.find((a) => a.profileId === pid);
+      if (!todayAtt?.checkedInAt || todayAtt.checkedOutAt) return; // 근무 중일 때만
+      const cur = profilesAll.find((p) => p.id === pid);
+      const lastAt = cur?.last_loc_at ? new Date(cur.last_loc_at).getTime() : 0;
+      if (Date.now() - lastAt < REFRESH_MS) return; // 아직 2시간 안 지남
+      if (navigator.permissions?.query) {
+        const perm = await navigator.permissions.query({ name: "geolocation" }).catch(() => null);
+        if (perm && perm.state !== "granted") return; // 권한 없으면 조용히 스킵(팝업 안 띄움)
+      }
+      const here = await getPositionOnce();
+      if (here) updateLastLocation(pid, here.lat, here.lng, "대기 중 자동");
+    }
+
+    maybeRefresh(); // 앱 열 때 / 포그라운드 복귀 시
+    const timer = setInterval(maybeRefresh, 10 * 60 * 1000); // 열려 있는 동안 10분마다 '2시간 경과?' 체크
+    const onVisible = () => { if (document.visibilityState === "visible") maybeRefresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
+  }, [profile, profilesAll, attendances]);
+
   // kind: in(출근) | out(퇴근) | duty(당직) | relocate(위치만 다시 받기)
   // 위치는 in·relocate에서만 받는다. 권한 거부·실패면 위치 없이 넘어가되,
   // 반환값 locFailed로 화면이 "위치 다시 받기"를 안내할 수 있게 한다.
