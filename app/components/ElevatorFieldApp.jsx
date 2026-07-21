@@ -883,12 +883,20 @@ export default function App() {
   async function handleFailureResult(failure, payload) {
     const { result, symptom, errorCode, cause, processContent, note, photoCount, photoUrls } = payload;
     const isClosed = result === "처리완료" || result === "오신고";
+    // 지원요청·운행정지 = 혼자 못 끝냄 → 미배정(미처리)으로 되돌려 지원 갈 기사가 이어받게 한다.
+    // 출동 기록(배정자·출발·ETA·도착)을 초기화하되, escalation은 남겨 위험 상태로 표시한다.
+    const isEscalation = result === "지원요청" || result === "운행정지";
     if (result === "처리완료") markAtSite(failure, "처리완료"); // 완료한 그 현장 = 마지막 위치
-    const escalation = result === "처리완료" ? null : result;
+    const escalation = isClosed ? null : result;
+    const statePatch = isClosed
+      ? { status: "완료" }
+      : isEscalation
+      ? { status: "미처리", assignee: null, dispatched_at: null, eta_minutes: null, arrival_time: null, ...(v2Ready ? { assignee_id: null } : {}) }
+      : { status: failure.status };
     await supabase
       .from("failures")
       .update({
-        status: isClosed ? "완료" : failure.status,
+        ...statePatch,
         process_result: result,
         escalation,
         fault_symptom: symptom || null,
@@ -905,7 +913,8 @@ export default function App() {
         x.id === failure.id
           ? {
               ...x,
-              status: isClosed ? "완료" : x.status,
+              status: isClosed ? "완료" : isEscalation ? "미처리" : x.status,
+              ...(isEscalation ? { assignee: null, assigneeId: null, dispatchedAt: null, etaMinutes: null, arrivalTime: null } : {}),
               processResult: result,
               escalation,
               faultSymptom: symptom || null,
