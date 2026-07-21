@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "deploy": "git push && git commit --allow-empty -m '[deploy] 운영 반영' && git push"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.2",
