@@ -276,15 +276,18 @@ export default function FailuresAdmin({ data, setData }) {
               <td className="px-3 py-2.5 text-slate-600">{f.processContent || "-"}</td>
               <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{f.reporterPhone ?? "-"}</td>
               <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                <select
-                  className={`${inputCls} min-w-28`}
-                  value={personOf(data, f.assigneeId, f.assignee) === "-" ? "" : personOf(data, f.assigneeId, f.assignee)}
-                  onChange={(e) => assign(f, e.target.value)}
-                  disabled={f.status === "완료"}
-                >
-                  <option value="">미배정</option>
-                  <EngineerOptions engineers={engineers} site={sites.find((s) => s.id === f.siteId)} />
-                </select>
+                {f.status === "완료" ? (
+                  <span className="text-slate-600">{personOf(data, f.assigneeId, f.assignee)}</span>
+                ) : (
+                  <select
+                    className={`${inputCls} min-w-28`}
+                    value={personOf(data, f.assigneeId, f.assignee) === "-" ? "" : personOf(data, f.assigneeId, f.assignee)}
+                    onChange={(e) => assign(f, e.target.value)}
+                  >
+                    <option value="">미배정</option>
+                    <EngineerOptions engineers={engineers} site={sites.find((s) => s.id === f.siteId)} />
+                  </select>
+                )}
               </td>
               <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">
                 {f.dispatchedAt ? `출동 ${f.dispatchedAt}` : "-"}{f.arrivalTime ? ` · 도착 ${f.arrivalTime}` : ""}
