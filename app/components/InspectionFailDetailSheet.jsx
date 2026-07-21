@@ -45,15 +45,25 @@ export function InspectionFailDetailSheet({ inspection, preloaded, onClose, Cont
         if (hasValidAnchor) {
           setState({ loading: false, items: data.items ?? [], error: data.error ?? null, reason: data.reason ?? null, record: data.record ?? null });
         } else {
-          // anchorDate 없이 부르면 전체 이력을 최신순으로 받는다 — 첫 번째(최신) 회차를 쓴다.
+          // anchorDate 없이 부르면 전체 이력을 최신순으로 받는다 — 첫 번째(최신) 회차가 지금 보고 있는 결과다.
+          // 단, 이제 회차 목록은 items를 바로 안 채워주므로(지연 조회), items가 비어있으면
+          // 그 회차 자신의 검사일자를 anchorDate 삼아 한 번 더 조회해야 실제 부적합 항목을 얻는다.
           const latest = (data.history ?? [])[0];
-          setState({
-            loading: false,
-            items: latest?.items ?? [],
-            error: data.error ?? null,
-            reason: latest ? latest.reason : "no_record",
-            record: latest?.record ?? null,
-          });
+          if (!latest) {
+            setState({ loading: false, items: [], error: data.error ?? null, reason: "no_record", record: null });
+          } else if (latest.items !== undefined) {
+            setState({ loading: false, items: latest.items ?? [], error: data.error ?? null, reason: latest.reason ?? null, record: latest.record ?? null });
+          } else {
+            const latestAnchor = govDateToDashed(latest.record?.inspctDe);
+            if (!isValidDateStr(latestAnchor)) {
+              setState({ loading: false, items: [], error: null, reason: "no_record", record: latest.record ?? null });
+            } else {
+              const res2 = await fetch(`/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(inspection.govElevatorNo)}&anchorDate=${encodeURIComponent(latestAnchor)}`);
+              const data2 = await res2.json();
+              if (cancelled) return;
+              setState({ loading: false, items: data2.items ?? [], error: data2.error ?? null, reason: data2.reason ?? null, record: data2.record ?? null });
+            }
+          }
         }
       } catch {
         if (!cancelled) setState({ loading: false, items: [], error: "조회에 실패했습니다", reason: null, record: null });
