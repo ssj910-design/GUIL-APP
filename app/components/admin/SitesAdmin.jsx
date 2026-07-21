@@ -218,7 +218,7 @@ function UnitRow({ unit, emergencyPhone, onSave, onSaveEmergencyPhone, onToggleA
       <td className="px-2 py-2"><input className={inputCls} value={form.model} placeholder="모델명" onChange={(e) => setForm({ ...form, model: e.target.value })} /></td>
       <td className="px-2 py-2"><input className={inputCls} type="date" value={form.installDate} onChange={(e) => setForm({ ...form, installDate: e.target.value })} /></td>
       <td className="px-2 py-2"><input className={inputCls} value={form.govNo} placeholder="승강기고유번호" onChange={(e) => setForm({ ...form, govNo: e.target.value })} /></td>
-      <td className="px-2 py-2"><input className={inputCls} value={emergencyDraft} placeholder="번호,통신사,국선/무선" onChange={(e) => setEmergencyDraft(e.target.value)} /></td>
+      <td className="px-2 py-2"><input className={inputCls} value={emergencyDraft} placeholder="EMCALL,통신사,국선/무선" onChange={(e) => setEmergencyDraft(e.target.value)} /></td>
       <td className="px-2 py-2 whitespace-nowrap text-right">
         <button
           disabled={(!dirty && !emergencyDirty) || saving}
@@ -441,7 +441,7 @@ export default function SitesAdmin({ data, setData }) {
     select(site);
   }
 
-  // 비상통화장치 번호(통신사, 국선/무선) — 승강기 정보 표에서 편집한다(호기 공통 값, 사이트 단위 저장).
+  // EMCALL,통신사,국선/무선 — 승강기 정보 표에서 편집한다(호기 공통 값, 사이트 단위 저장).
   async function saveEmergencyPhone(value) {
     await supabase.from("sites").update({ emergency_phone: value || null }).eq("id", selectedId);
     setData((prev) => ({ ...prev, sites: prev.sites.map((s) => (s.id === selectedId ? { ...s, emergencyPhone: value || null } : s)) }));
@@ -822,7 +822,7 @@ export default function SitesAdmin({ data, setData }) {
                         <th className="text-left px-2 py-2 font-semibold">모델</th>
                         <th className="text-left px-2 py-2 font-semibold w-32">설치일</th>
                         <th className="text-left px-2 py-2 font-semibold w-32">승강기고유번호</th>
-                        <th className="text-left px-2 py-2 font-semibold w-40">비상통화장치 번호(통신사, 국선/무선)</th>
+                        <th className="text-left px-2 py-2 font-semibold w-40">EMCALL,통신사,국선/무선</th>
                         <th className="w-40" />
                       </tr>
                     </thead>
@@ -851,7 +851,7 @@ export default function SitesAdmin({ data, setData }) {
                         <th className="text-left px-2 py-2 font-semibold">모델</th>
                         <th className="text-left px-2 py-2 font-semibold w-40">운행층수</th>
                         <th className="text-left px-2 py-2 font-semibold w-32">설치일자</th>
-                        <th className="text-left px-2 py-2 font-semibold w-40">비상통화장치 번호(통신사, 국선/무선)</th>
+                        <th className="text-left px-2 py-2 font-semibold w-40">EMCALL,통신사,국선/무선</th>
                       </tr>
                     </thead>
                     <tbody>

@@ -460,7 +460,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
               <div className="flex-1 pb-3">
                 <p className="text-sm font-bold text-slate-800 py-2.5">
                   {u} ({site.govElevatorNos?.[idx] || "승강기고유번호 미등록"})
-                  {site.emergencyPhone && ` (비상통화장치 번호 ${site.emergencyPhone})`}
+                  {site.emergencyPhone && ` (EMCALL 번호, 통신사, 무선 ${site.emergencyPhone})`}
                 </p>
                 <button
                   onClick={() => onOpenUnit(u)}
