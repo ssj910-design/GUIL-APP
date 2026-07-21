@@ -28,7 +28,10 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
   const [step, setStep] = useState(0); // 스텝형 접수 (0~3)
   const site = sites.find((s) => s.id === form.siteId);
   const nowLabel = TODAY_STR + " " + new Date().toTimeString().slice(0, 5);
-  const canSubmit = !!site && !!form.faultType && form.reporterPhone.trim().length > 0;
+  const detailFilled = form.units.length > 1
+    ? form.units.every((u) => (form.details[u] ?? "").trim().length > 0)
+    : form.faultDetail.trim().length > 0;
+  const canSubmit = !!site && !!form.faultType && detailFilled && form.reporterPhone.trim().length > 0;
 
   async function submit() {
     if (!canSubmit) return;
@@ -84,7 +87,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
   const STEP_TITLES = ["현장 선택", "고장 내용", "신고자 정보", "확인 · 접수"];
   const canNext =
     step === 0 ? !!site :
-    step === 1 ? !!form.faultType :
+    step === 1 ? !!form.faultType && detailFilled :
     step === 2 ? form.reporterPhone.trim().length > 0 : true;
 
   const infoRows = site ? [
@@ -181,7 +184,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
             </div>
             {form.units.length > 1 ? (
               <div>
-                <p className="text-xs font-bold text-slate-500 mb-1.5">호기별 상세증상</p>
+                <p className="text-xs font-bold text-slate-500 mb-1.5">호기별 상세증상 *</p>
                 <div className="space-y-2">
                   {form.units.map((u) => (
                     <div key={u} className="flex items-center gap-2">
@@ -198,7 +201,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
               </div>
             ) : (
               <div>
-                <p className="text-xs font-bold text-slate-500 mb-1.5">고장상세내역</p>
+                <p className="text-xs font-bold text-slate-500 mb-1.5">고장상세내역 *</p>
                 <input className={inputCls} placeholder="예: 3층에서 문이 안 닫힘" value={form.faultDetail} onChange={(e) => setForm({ ...form, faultDetail: e.target.value })} />
               </div>
             )}
