@@ -7,9 +7,10 @@ import WeekStrip from "@/app/components/admin/WeekStrip";
 import { AlertOctagon } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
 import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, formatUnitLabel } from "@/lib/utils";
+import { supabase } from "@/lib/supabaseClient";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
-import { Modal, StatusBadge } from "@/app/components/admin/adminShared";
+import { Modal, StatusBadge, inputCls } from "@/app/components/admin/adminShared";
 
 function unitLabel(units, sites, unitId, fallbackSiteName, fallbackLabel) {
   const u = units.find((x) => x.id === unitId);
@@ -70,12 +71,24 @@ export function FailureDetailContent({ f, units, sites }) {
   );
 }
 
-export default function Dashboard({ data, onOpenWorkCalendar }) {
+export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
   const { sites, units, failures, inspections, materialRequests, quoteRequests, todos, billings, selfChecks, profiles } = data;
   const siteById = new Map(sites.map((s) => [s.id, s]));
+  const engineers = profiles.filter((p) => p.role === "engineer");
   const [historySite, setHistorySite] = useState(null);
   const [failureDetail, setFailureDetail] = useState(null);
   const [failTarget, setFailTarget] = useState(null);
+
+  async function assign(f, name) {
+    const p = profiles.find((x) => x.name === name);
+    await supabase.from("failures")
+      .update({ assignee: name || null, assignee_id: p?.id ?? null })
+      .eq("id", f.id);
+    setData((prev) => ({
+      ...prev,
+      failures: prev.failures.map((x) => (x.id === f.id ? { ...x, assignee: name || null, assigneeId: p?.id ?? null } : x)),
+    }));
+  }
 
   const openFailures = failures.filter((f) => f.status === "미처리");
   const activeFailures = failures.filter((f) => f.status === "진행중");
@@ -239,7 +252,16 @@ export default function Dashboard({ data, onOpenWorkCalendar }) {
                     <td className="px-1 py-2.5 font-semibold whitespace-nowrap">{loc.site} · {loc.unit}</td>
                     <td className="px-2 py-2.5 text-slate-600">{f.errorCode}</td>
                     <td className="px-2 py-2.5 whitespace-nowrap">{loc.siteObj?.assignedEngineer || "미배정"}</td>
-                    <td className="px-2 py-2.5 whitespace-nowrap">{engineerName(f.assigneeId, f.assignee)}</td>
+                    <td className="px-2 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      <select
+                        className={`${inputCls} min-w-24`}
+                        value={engineerName(f.assigneeId, f.assignee) === "미배정" ? "" : engineerName(f.assigneeId, f.assignee)}
+                        onChange={(e) => assign(f, e.target.value)}
+                      >
+                        <option value="">미배정</option>
+                        {engineers.map((p) => <option key={p.id}>{p.name}</option>)}
+                      </select>
+                    </td>
                     <td className="px-2 py-2.5 whitespace-nowrap text-slate-500">{f.dispatchedAt || "-"}</td>
                     <td className="px-2 py-2.5 whitespace-nowrap text-slate-500">{f.arrivalTime || "-"}</td>
                     <td className="px-5 py-2.5 text-right">

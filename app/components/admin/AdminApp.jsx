@@ -26,7 +26,7 @@ import RoomAdmin from "@/app/components/admin/RoomAdmin";
 const MENU = [
   { id: "dashboard", label: "대시보드", icon: LayoutDashboard },
   { id: "sites", label: "현장정보", icon: Building2 },
-  { id: "failures", label: "고장 관제", icon: AlertTriangle },
+  { id: "failures", label: "고장관리", icon: AlertTriangle },
   { id: "inspections", label: "검사관리", icon: ShieldCheck },
   { id: "materials", label: "자재·견적 신청내역", icon: Package },
   { id: "billings", label: "청구내역", icon: Receipt },
@@ -125,7 +125,7 @@ export default function AdminApp() {
         {loading ? (
           <p className="text-sm text-slate-400 pt-20 text-center">데이터를 불러오는 중...</p>
         ) : menu === "dashboard" ? (
-          <Dashboard data={data} onOpenWorkCalendar={() => { setHrSub("워크 캘린더"); setMenu("engineers"); }} />
+          <Dashboard data={data} setData={setData} onOpenWorkCalendar={() => { setHrSub("워크 캘린더"); setMenu("engineers"); }} />
         ) : menu === "sites" ? (
           <SitesAdmin data={data} setData={setData} />
         ) : menu === "failures" ? (
