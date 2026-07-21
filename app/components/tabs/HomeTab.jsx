@@ -3,7 +3,7 @@ import { ShieldCheck, AlertOctagon } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, formatUnitLabel } from "@/lib/utils";
-import { Badge, DDay, DrillHeader, SmsToast } from "@/app/components/ui";
+import { Badge, DDay, SmsToast, Sheet } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { usePriorFlaggedInspection } from "@/app/hooks/useLiveInspections";
@@ -52,38 +52,35 @@ function FailureHistoryDetailScreen({ site, failures, onBack }) {
   const history = failures.filter((f) => f.siteId === site.id);
   const [detailTarget, setDetailTarget] = useState(null);
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-white">
-      <DrillHeader title="고장처리내역 상세" onBack={onBack} onHome={onBack} />
-      <div className="flex-1 overflow-y-auto px-5 py-4">
-        <div className="bg-slate-100 rounded-xl p-3 mb-4">
-          <p className="font-bold text-slate-800">{site.name} · {formatUnitLabel(site.elevatorNo)}</p>
-          <p className="text-xs text-slate-400 mt-0.5">{site.address}</p>
-        </div>
-        <div className="space-y-2.5">
-          {history.length === 0 ? (
-            <p className="text-xs text-slate-400 text-center py-10">고장 이력이 없습니다</p>
-          ) : (
-            history.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setDetailTarget(f)}
-                className="w-full text-left border border-slate-200 rounded-xl p-3.5 active:bg-slate-50"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <p className="font-bold text-slate-800 text-sm">{f.errorCode}{f.elevatorNo ? ` · ${formatUnitLabel(f.elevatorNo)}` : ""}</p>
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${f.status === "완료" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{f.status}</span>
-                </div>
-                <p className="text-xs text-slate-500 mb-1">{f.reportedAt} 접수 · {f.assignee ?? "미배정"}</p>
-                {f.escalation && <p className="text-xs font-bold text-red-600">조치 결과: {f.escalation}</p>}
-                {f.processResult && <p className="text-xs text-slate-500">처리결과: {f.processResult}</p>}
-              </button>
-            ))
-          )}
-        </div>
+    <Sheet title="고장처리내역 상세" onClose={onBack}>
+      <div className="bg-slate-100 rounded-xl p-3 mb-4">
+        <p className="font-bold text-slate-800">{site.name} · {formatUnitLabel(site.elevatorNo)}</p>
+        <p className="text-xs text-slate-400 mt-0.5">{site.address}</p>
+      </div>
+      <div className="space-y-2.5">
+        {history.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-10">고장 이력이 없습니다</p>
+        ) : (
+          history.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setDetailTarget(f)}
+              className="w-full text-left border border-slate-200 rounded-xl p-3.5 active:bg-slate-50"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <p className="font-bold text-slate-800 text-sm">{f.errorCode}{f.elevatorNo ? ` · ${formatUnitLabel(f.elevatorNo)}` : ""}</p>
+                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${f.status === "완료" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{f.status}</span>
+              </div>
+              <p className="text-xs text-slate-500 mb-1">{f.reportedAt} 접수 · {f.assignee ?? "미배정"}</p>
+              {f.escalation && <p className="text-xs font-bold text-red-600">조치 결과: {f.escalation}</p>}
+              {f.processResult && <p className="text-xs text-slate-500">처리결과: {f.processResult}</p>}
+            </button>
+          ))
+        )}
       </div>
       {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} />}
-    </div>
+    </Sheet>
   );
 }
 
@@ -376,10 +373,6 @@ export function HomeTab({ attendances = [], onAttendance, onOpenRoster, onSendPo
   const [showAllFailures, setShowAllFailures] = useState(false);
   const shownFailures = showAllFailures ? listSource : listSource.slice(0, 5);
 
-  if (historySite) {
-    return <FailureHistoryDetailScreen site={historySite} failures={failures} onBack={() => setHistorySite(null)} />;
-  }
-
   return (
     <div className="flex-1 overflow-y-auto pb-4 relative">
       {onAttendance && <AttendanceBar attendances={attendances} onAttendance={onAttendance} onOpenRoster={onOpenRoster} onSendPost={onSendPost} swapCount={swapCount} />}
@@ -624,6 +617,9 @@ export function HomeTab({ attendances = [], onAttendance, onOpenRoster, onSendPo
       )}
       {inspectionFailTarget && (
         <InspectionFailDetailSheet inspection={inspectionFailTarget} onClose={() => setInspectionFailTarget(null)} />
+      )}
+      {historySite && (
+        <FailureHistoryDetailScreen site={historySite} failures={failures} onBack={() => setHistorySite(null)} />
       )}
       <SmsToast message={toast} />
     </div>
