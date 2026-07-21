@@ -223,11 +223,12 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
   const done = !!mine?.checkedOutAt; // 오늘 근무 마감(퇴근·당직)
   // 오늘 내 근무표(당직·숙직·정상근무). 당직·숙직은 정규 퇴근시간(17:30)이 지나면 그 상태로 전환한다.
   const todayDuty = dutySchedules.find((d) => d.dutyDate === TODAY_STR && d.profileId === selfId);
+  const dutyKind = todayDuty && (todayDuty.kind === "당직" || todayDuty.kind === "숙직") ? todayDuty.kind : null;
   const afterShiftEnd = new Date().getHours() * 60 + new Date().getMinutes() >= 17 * 60 + 30;
-  const dutyOn = todayDuty && (todayDuty.kind === "당직" || todayDuty.kind === "숙직") && afterShiftEnd;
-  const workLabel = dutyOn ? `${todayDuty.kind} 중` : "근무 중";
+  const dutyOn = dutyKind && afterShiftEnd;
+  const workLabel = dutyOn ? `${dutyKind} 중` : "근무 중";
   const workTone = dutyOn
-    ? (todayDuty.kind === "당직" ? "text-emerald-700 bg-emerald-50" : "text-blue-700 bg-blue-50")
+    ? (dutyKind === "당직" ? "text-emerald-700 bg-emerald-50" : "text-blue-700 bg-blue-50")
     : "text-blue-600 bg-blue-50";
   // 위치를 쓰기로 했는데(공유 ON) 권한이 거부·미결정이면 출근을 막는다.
   // 위치 공유 OFF이거나 권한 API 미지원(unknown)이면 그냥 출근 가능.
@@ -321,8 +322,9 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
               </button>
             )}
 
-            {/* 근무 종료 — 아침엔 오터치 방지로 작은 링크, 퇴근시간(17:30) 지나면 눈에 띄게. 눌러야 당직/퇴근이 열린다 */}
-            {!done && <WorkEndRow onAttendance={onAttendance} afterShiftEnd={afterShiftEnd} />}
+            {/* 근무 종료 — 아침엔 오터치 방지로 작은 링크, 퇴근시간(17:30) 지나면 눈에 띄게.
+                오늘 본인 근무표(dutyKind)가 당직/숙직이면 그 마감 버튼만, 없으면 퇴근만 뜬다 */}
+            {!done && <WorkEndRow onAttendance={onAttendance} afterShiftEnd={afterShiftEnd} dutyKind={dutyKind} />}
           </div>
         )}
         {rosterBtn}
@@ -333,8 +335,10 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
 
 // 퇴근·당직·숙직을 아침부터 노출하면 오터치가 난다. '근무 종료'를 눌러야 열리게 한다.
 // 다만 퇴근시간(17:30)이 지나면 실제로 눌러야 할 때라 작은 링크 → 또렷한 버튼으로 키운다.
-// 버튼을 누르면 위치(GPS)를 받느라 몇 초 걸리므로 그동안 '처리 중…'을 보여 먹통처럼 보이지 않게 한다.
-function WorkEndRow({ onAttendance, afterShiftEnd }) {
+// 오늘 본인 근무표(dutyKind)가 당직/숙직이면 그 마감 버튼을 띄우고, 없으면 퇴근만 뜬다 —
+// 기사가 매번 당직/숙직을 직접 고를 필요 없이 근무표대로 뜬다.
+// 버튼을 누르면 위치(GPS)를 받느라 몇 초 걸리므로 그동안 '위치 확인 중…'을 보여 먹통처럼 보이지 않게 한다.
+function WorkEndRow({ onAttendance, afterShiftEnd, dutyKind }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const end = async (kind) => { setBusy(true); await onAttendance(kind); setBusy(false); };
@@ -344,16 +348,22 @@ function WorkEndRow({ onAttendance, afterShiftEnd }) {
         className={afterShiftEnd
           ? "w-full mt-2 text-xs font-bold text-slate-700 bg-slate-100 border border-slate-300 rounded-lg py-2.5 active:bg-slate-200"
           : "w-full mt-2 text-[11px] font-bold text-slate-400 py-1.5"}>
-        {afterShiftEnd ? "🏠 근무 종료하기 (퇴근 · 당직 · 숙직)" : "근무 종료하기"}
+        {afterShiftEnd ? `🏠 근무 종료하기${dutyKind ? ` (오늘 ${dutyKind})` : ""}` : "근무 종료하기"}
       </button>
     );
   }
+  const dutyBtn = dutyKind === "당직"
+    ? <button disabled={busy} onClick={() => end("duty")} className="flex-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 rounded-lg py-2 disabled:opacity-50">당직 마감</button>
+    : dutyKind === "숙직"
+    ? <button disabled={busy} onClick={() => end("night")} className="flex-1 text-[11px] font-bold text-blue-700 bg-blue-50 rounded-lg py-2 disabled:opacity-50">숙직 마감</button>
+    : null;
   return (
     <div className="mt-2">
-      <p className="text-[11px] font-bold text-slate-500 mb-1.5">{busy ? "위치 확인 중…" : "오늘 근무를 어떻게 마칠까요?"}</p>
+      <p className="text-[11px] font-bold text-slate-500 mb-1.5">
+        {busy ? "위치 확인 중…" : dutyKind ? `오늘은 ${dutyKind} 근무예요` : "오늘 근무를 마칠까요?"}
+      </p>
       <div className="flex gap-1.5">
-        <button disabled={busy} onClick={() => end("duty")} className="flex-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 rounded-lg py-2 disabled:opacity-50">당직</button>
-        <button disabled={busy} onClick={() => end("night")} className="flex-1 text-[11px] font-bold text-blue-700 bg-blue-50 rounded-lg py-2 disabled:opacity-50">숙직</button>
+        {dutyBtn}
         <button disabled={busy} onClick={() => end("out")} className="flex-1 text-[11px] font-bold text-white bg-slate-700 rounded-lg py-2 disabled:opacity-50">퇴근</button>
         <button disabled={busy} onClick={() => setOpen(false)} className="text-[11px] font-bold text-slate-400 px-2 disabled:opacity-50">취소</button>
       </div>
