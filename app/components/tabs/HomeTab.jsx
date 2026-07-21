@@ -163,7 +163,7 @@ function AdminAttendanceCard({ attendances, engineers, onSendPost }) {
 
 // 출퇴근 체크 — 기사는 출근/퇴근·당직 버튼, 관리자는 오늘 출근 인원 요약.
 // 출근 시 현위치를 1회 받아 저장한다(고장 배정 시 가까운 기사 정렬용).
-function AttendanceBar({ attendances, onAttendance, onOpenRoster, onSendPost, swapCount = 0 }) {
+function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRoster, onSendPost, swapCount = 0 }) {
   const { role, selfId, engineers, profiles: allProfiles = [] } = useContext(AuthContext);
   const [checking, setChecking] = useState(false);
   const shareLoc = allProfiles.find((p) => p.id === selfId)?.share_location !== false;
@@ -228,6 +228,14 @@ function AttendanceBar({ attendances, onAttendance, onOpenRoster, onSendPost, sw
   const mine = attendances.find((a) => a.profileId === selfId);
   const hhmm = (iso) => new Date(iso).toTimeString().slice(0, 5);
   const done = !!mine?.checkedOutAt; // 오늘 근무 마감(퇴근·당직)
+  // 오늘 내 근무표(당직·숙직·정상근무). 당직·숙직은 정규 퇴근시간(17:30)이 지나면 그 상태로 전환한다.
+  const todayDuty = dutySchedules.find((d) => d.dutyDate === TODAY_STR && d.profileId === selfId);
+  const afterShiftEnd = new Date().getHours() * 60 + new Date().getMinutes() >= 17 * 60 + 30;
+  const dutyOn = todayDuty && (todayDuty.kind === "당직" || todayDuty.kind === "숙직") && afterShiftEnd;
+  const workLabel = dutyOn ? `${todayDuty.kind} 중` : "근무 중";
+  const workTone = dutyOn
+    ? (todayDuty.kind === "당직" ? "text-emerald-700 bg-emerald-50" : "text-blue-700 bg-blue-50")
+    : "text-blue-600 bg-blue-50";
   // 위치를 쓰기로 했는데(공유 ON) 권한이 거부·미결정이면 출근을 막는다.
   // 위치 공유 OFF이거나 권한 API 미지원(unknown)이면 그냥 출근 가능.
   const needGeo = shareLoc && (geoPerm === "denied" || geoPerm === "prompt");
@@ -283,7 +291,7 @@ function AttendanceBar({ attendances, onAttendance, onOpenRoster, onSendPost, sw
                 )}
               </p>
               {!done && (
-                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full px-2 py-0.5 shrink-0">근무 중</span>
+                <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 shrink-0 ${workTone}`}>{workLabel}</span>
               )}
             </div>
 
@@ -325,7 +333,7 @@ function WorkEndRow({ onAttendance }) {
   );
 }
 
-export function HomeTab({ attendances = [], onAttendance, onOpenRoster, onSendPost, swapCount, inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, toast, todayLeaves = [] }) {
+export function HomeTab({ attendances = [], dutySchedules = [], onAttendance, onOpenRoster, onSendPost, swapCount, inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, toast, todayLeaves = [] }) {
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
@@ -397,7 +405,7 @@ export function HomeTab({ attendances = [], onAttendance, onOpenRoster, onSendPo
 
   return (
     <div className="flex-1 overflow-y-auto pb-4 relative">
-      {onAttendance && <AttendanceBar attendances={attendances} onAttendance={onAttendance} onOpenRoster={onOpenRoster} onSendPost={onSendPost} swapCount={swapCount} />}
+      {onAttendance && <AttendanceBar attendances={attendances} dutySchedules={dutySchedules} onAttendance={onAttendance} onOpenRoster={onOpenRoster} onSendPost={onSendPost} swapCount={swapCount} />}
 
       {/* 고장 처리 현황 */}
       <div className="px-5 pt-4">

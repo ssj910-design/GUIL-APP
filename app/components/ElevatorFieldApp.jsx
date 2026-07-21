@@ -1560,6 +1560,7 @@ export default function App() {
           {tab === "home" && (
             <HomeTab
               attendances={attendances}
+              dutySchedules={dutySchedules}
               todayLeaves={todayLeaves}
               onAttendance={handleAttendance}
               onOpenRoster={() => setRosterOpen(true)}
