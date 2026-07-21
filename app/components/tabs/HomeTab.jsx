@@ -322,9 +322,9 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
               </button>
             )}
 
-            {/* 근무 종료 — 아침엔 오터치 방지로 작은 링크, 퇴근시간(17:30) 지나면 눈에 띄게.
+            {/* 근무 종료 — 언제든 누를 수 있게(2단계라 오터치 안전). 눌러야 당직/퇴근 선택이 열린다.
                 오늘 본인 근무표(dutyKind)가 당직/숙직이면 그 마감 버튼만, 없으면 퇴근만 뜬다 */}
-            {!done && <WorkEndRow onAttendance={onAttendance} afterShiftEnd={afterShiftEnd} dutyKind={dutyKind} />}
+            {!done && <WorkEndRow onAttendance={onAttendance} dutyKind={dutyKind} />}
           </div>
         )}
         {rosterBtn}
@@ -333,22 +333,20 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
   );
 }
 
-// 퇴근·당직·숙직을 아침부터 노출하면 오터치가 난다. '근무 종료'를 눌러야 열리게 한다.
-// 다만 퇴근시간(17:30)이 지나면 실제로 눌러야 할 때라 작은 링크 → 또렷한 버튼으로 키운다.
+// 퇴근·당직·숙직을 바로 노출하면 오터치가 난다. '근무 종료'를 눌러야 선택지가 열리게 한다
+// (2단계라 언제 눌러도 안전 — 시간대 제한 없음).
 // 오늘 본인 근무표(dutyKind)가 당직/숙직이면 그 마감 버튼을 띄우고, 없으면 퇴근만 뜬다 —
 // 기사가 매번 당직/숙직을 직접 고를 필요 없이 근무표대로 뜬다.
 // 버튼을 누르면 위치(GPS)를 받느라 몇 초 걸리므로 그동안 '위치 확인 중…'을 보여 먹통처럼 보이지 않게 한다.
-function WorkEndRow({ onAttendance, afterShiftEnd, dutyKind }) {
+function WorkEndRow({ onAttendance, dutyKind }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const end = async (kind) => { setBusy(true); await onAttendance(kind); setBusy(false); };
   if (!open) {
     return (
       <button onClick={() => setOpen(true)}
-        className={afterShiftEnd
-          ? "w-full mt-2 text-xs font-bold text-slate-700 bg-slate-100 border border-slate-300 rounded-lg py-2.5 active:bg-slate-200"
-          : "w-full mt-2 text-[11px] font-bold text-slate-400 py-1.5"}>
-        {afterShiftEnd ? `🏠 근무 종료하기${dutyKind ? ` (오늘 ${dutyKind})` : ""}` : "근무 종료하기"}
+        className="w-full mt-2 text-xs font-bold text-slate-700 bg-slate-100 border border-slate-300 rounded-lg py-2.5 active:bg-slate-200">
+        🏠 근무 종료하기{dutyKind ? ` (오늘 ${dutyKind})` : ""}
       </button>
     );
   }
