@@ -1494,6 +1494,7 @@ export default function App() {
               todayLeaves={todayLeaves}
               onAttendance={handleAttendance}
               onOpenRoster={() => setRosterOpen(true)}
+              onSendPost={handleSendFeedPost}
               swapCount={dutySwaps.filter((w) => w.status === "대기" && w.targetId === profileIdByName(profilesAll, profile.name)).length}
               inspections={inspections}
               failures={failures}

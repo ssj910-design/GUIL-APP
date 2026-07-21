@@ -1,5 +1,6 @@
 import { useState, useContext, useEffect } from "react";
 import { ShieldCheck, AlertOctagon } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, formatUnitLabel } from "@/lib/utils";
 import { Badge, DDay, DrillHeader, SmsToast } from "@/app/components/ui";
@@ -87,25 +88,97 @@ function FailureHistoryDetailScreen({ site, failures, onBack }) {
 }
 
 
+// 위치 켜는 법 안내문 — OS별로 경로가 달라 둘 다 적어 준다. 우리방으로 쏘거나 복사해 전달한다.
+const GEO_HELP =
+  "📍 위치 권한을 켜주세요 (출근 시 가까운 현장 우선 배정에 씁니다)\n" +
+  "· 안드로이드 크롬: 주소창 왼쪽 자물쇠 → 권한 → 위치 → 허용\n" +
+  "· 아이폰: 설정 → Safari(또는 홈 화면 추가한 앱) → 위치 → 허용, 그리고 설정 → 개인정보 보호 → 위치 서비스 ON";
+
+// 관리자 출근 현황 — 요약을 누르면 출근·미출근 명단과 위치 권한 상태를 펼친다.
+function AdminAttendanceCard({ attendances, engineers, onSendPost }) {
+  const [open, setOpen] = useState(false);
+  const attByPid = new Map(attendances.map((a) => [a.profileId, a]));
+  const rows = engineers.map((e) => ({ e, a: attByPid.get(e.id) }));
+  const inCount = rows.filter((r) => r.a?.checkedInAt).length;
+  // 위치 권한을 안 켠 사람(거부·미결정) — 보고된 값 기준. granted가 아니면 안내 대상.
+  const geoOff = rows.filter((r) => r.e.geo_perm && r.e.geo_perm !== "granted");
+  const hhmm = (iso) => (iso ? new Date(iso).toTimeString().slice(0, 5) : "");
+
+  const permLabel = (s) => (s === "granted" ? "위치 켜짐" : s === "denied" ? "위치 거부" : s === "prompt" ? "위치 미설정" : "미확인");
+  const permTone = (s) => (s === "granted" ? "text-emerald-600" : s === "denied" ? "text-red-500" : "text-amber-600");
+
+  function notifyGeoOff() {
+    if (!geoOff.length || !onSendPost) return;
+    const names = geoOff.map((r) => `@${r.e.name}`).join(" ");
+    onSendPost(`${names}\n${GEO_HELP}`);
+    alert(`${geoOff.length}명에게 우리방으로 안내를 보냈습니다.`);
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200">
+      <button onClick={() => setOpen((v) => !v)} className="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50 rounded-xl">
+        <span className="text-xs font-bold text-slate-500">오늘 출근</span>
+        <span className="flex items-center gap-1.5">
+          <span className="text-sm font-bold text-slate-800">{inCount} / {engineers.length}명</span>
+          {geoOff.length > 0 && <span className="text-[10px] font-extrabold text-white bg-amber-500 rounded-full px-1.5 py-0.5">위치 미설정 {geoOff.length}</span>}
+          <span className="text-[11px] font-bold text-blue-700">{open ? "접기" : "명단"}</span>
+        </span>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-3 border-t border-slate-100 pt-2.5">
+          {geoOff.length > 0 && onSendPost && (
+            <button onClick={notifyGeoOff}
+              className="w-full mb-2.5 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg py-2">
+              위치 안 켠 {geoOff.length}명에게 켜는 법 안내 보내기 →
+            </button>
+          )}
+          <div className="space-y-1.5">
+            {rows.map(({ e, a }) => (
+              <div key={e.id} className="flex items-center justify-between gap-2 text-xs">
+                <span className="font-bold text-slate-700 min-w-0 truncate">{e.name}</span>
+                <span className="flex items-center gap-2 shrink-0">
+                  {a?.checkedInAt
+                    ? <span className="text-slate-500">{hhmm(a.checkedInAt)} 출근{a.checkedOutAt && ` · ${a.status} ${hhmm(a.checkedOutAt)}`}</span>
+                    : <span className="text-slate-300">미출근</span>}
+                  <span className={`font-bold ${permTone(e.geo_perm)}`}>{permLabel(e.geo_perm)}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // 출퇴근 체크 — 기사는 출근/퇴근·당직 버튼, 관리자는 오늘 출근 인원 요약.
 // 출근 시 현위치를 1회 받아 저장한다(고장 배정 시 가까운 기사 정렬용).
-function AttendanceBar({ attendances, onAttendance, onOpenRoster, swapCount = 0 }) {
+function AttendanceBar({ attendances, onAttendance, onOpenRoster, onSendPost, swapCount = 0 }) {
   const { role, selfId, engineers, profiles: allProfiles = [] } = useContext(AuthContext);
   const [checking, setChecking] = useState(false);
   const shareLoc = allProfiles.find((p) => p.id === selfId)?.share_location !== false;
   const [geoPerm, setGeoPerm] = useState("unknown"); // granted | denied | prompt | unknown
 
   // 위치 권한 상태를 미리 파악해 둔다 — '아직 안 물어봄(prompt)'이면 안내 카드로 먼저 유도.
+  // 확정된 상태는 서버에 보고해 관리자가 '위치 안 켠 사람'을 파악할 수 있게 한다.
   useEffect(() => {
     if (role === "admin" || typeof navigator === "undefined" || !navigator.permissions?.query) return;
     let p;
+    const report = (state) => {
+      setGeoPerm(state);
+      if (selfId && state !== "unknown") {
+        // Supabase 쿼리는 .then/await가 있어야 실제로 전송된다 (lazy builder)
+        supabase.from("profiles").update({ geo_perm: state, geo_perm_at: new Date().toISOString() }).eq("id", selfId).then(() => {});
+      }
+    };
     navigator.permissions.query({ name: "geolocation" }).then((res) => {
       p = res;
-      setGeoPerm(res.state);
-      res.onchange = () => setGeoPerm(res.state);
+      report(res.state);
+      res.onchange = () => report(res.state);
     }).catch(() => setGeoPerm("unknown"));
     return () => { if (p) p.onchange = null; };
-  }, [role]);
+  }, [role, selfId]);
 
   // [위치 허용하기] — 시스템 권한 팝업을 띄운다. 결과는 위 onchange가 잡아 카드가 사라진다.
   function primeLocation() {
@@ -129,21 +202,9 @@ function AttendanceBar({ attendances, onAttendance, onOpenRoster, swapCount = 0 
   ) : null;
 
   if (role === "admin") {
-    const inCount = attendances.filter((a) => a.checkedInAt).length;
-    const done = attendances.filter((a) => a.checkedOutAt);
     return (
       <div className="px-5 pt-4">
-        <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center justify-between">
-          <p className="text-xs font-bold text-slate-500">오늘 출근</p>
-          <p className="text-sm font-bold text-slate-800">
-            {inCount} / {engineers.length}명
-            {done.length > 0 && (
-              <span className="ml-1.5 text-[11px] font-semibold text-slate-400">
-                퇴근 {done.filter((a) => a.status === "퇴근").length} · 당직 {done.filter((a) => a.status === "당직").length}
-              </span>
-            )}
-          </p>
-        </div>
+        <AdminAttendanceCard attendances={attendances} engineers={engineers} onSendPost={onSendPost} />
         {rosterBtn}
       </div>
     );
@@ -246,7 +307,7 @@ function WorkEndRow({ onAttendance }) {
   );
 }
 
-export function HomeTab({ attendances = [], onAttendance, onOpenRoster, swapCount, inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, toast, todayLeaves = [] }) {
+export function HomeTab({ attendances = [], onAttendance, onOpenRoster, onSendPost, swapCount, inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, toast, todayLeaves = [] }) {
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
@@ -321,7 +382,7 @@ export function HomeTab({ attendances = [], onAttendance, onOpenRoster, swapCoun
 
   return (
     <div className="flex-1 overflow-y-auto pb-4 relative">
-      {onAttendance && <AttendanceBar attendances={attendances} onAttendance={onAttendance} onOpenRoster={onOpenRoster} swapCount={swapCount} />}
+      {onAttendance && <AttendanceBar attendances={attendances} onAttendance={onAttendance} onOpenRoster={onOpenRoster} onSendPost={onSendPost} swapCount={swapCount} />}
 
       {/* 고장 처리 현황 */}
       <div className="px-5 pt-4">
