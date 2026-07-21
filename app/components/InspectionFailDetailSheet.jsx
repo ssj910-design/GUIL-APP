@@ -9,13 +9,17 @@ function isValidDateStr(s) {
 
 // inspection: 조건부/불합격 목록에서 클릭한 건(govElevatorNo·startDate 기준으로 가장 가까운 회차를 서버에서 찾음).
 // startDate가 없으면(조건부합격은 API에 검사일자 자체가 안 채워진 경우가 있음) 전체 이력을 받아 최신 회차를 쓴다.
-// preloaded: 이미 회차가 정해진 경우({ record, items, reason }, 검사이력 목록에서 특정 회차를 클릭했을 때) — 있으면 재조회하지 않는다.
+// preloaded: 회차가 이미 정해진 경우({ record, items?, reason? }, 검사이력 목록에서 특정 회차를 클릭했을 때).
+// items까지 채워져 있으면(예전 전체이력 조회) 재조회하지 않지만, 검사이력 화면이 이제 목록만
+// 먼저 받고 부적합상세는 지연 조회하므로 items가 없는 preloaded도 흔하다 — 그때는 record의
+// 검사일자를 anchorDate 삼아 그 회차 하나만 새로 조회한다.
 export function InspectionFailDetailSheet({ inspection, preloaded, onClose }) {
   const [retryCount, setRetryCount] = useState(0);
+  const preloadedReady = preloaded && preloaded.items !== undefined;
   const [state, setState] = useState(
-    preloaded
+    preloadedReady
       ? { loading: false, items: preloaded.items ?? [], error: null, reason: preloaded.reason ?? null, record: preloaded.record ?? null }
-      : { loading: true, items: [], error: null, reason: null, record: null }
+      : { loading: true, items: [], error: null, reason: null, record: preloaded?.record ?? null }
   );
 
   // preloaded인 경우, 회차 고유 날짜(record.inspctDe)를 anchorDate로 넘겨 같은 회차를 다시 조회한다.
@@ -24,7 +28,7 @@ export function InspectionFailDetailSheet({ inspection, preloaded, onClose }) {
   const canRetry = Boolean(inspection?.govElevatorNo);
 
   useEffect(() => {
-    if (preloaded && retryCount === 0) return;
+    if (preloadedReady && retryCount === 0) return;
     let cancelled = false;
     async function load() {
       setState((s) => ({ ...s, loading: true }));
@@ -56,7 +60,7 @@ export function InspectionFailDetailSheet({ inspection, preloaded, onClose }) {
     return () => {
       cancelled = true;
     };
-  }, [preloaded, retryCount, inspection?.govElevatorNo, hasValidAnchor, retryAnchorDate]);
+  }, [preloaded, preloadedReady, retryCount, inspection?.govElevatorNo, hasValidAnchor, retryAnchorDate]);
 
   const inspectedOn = state.record ? govDateToDashed(state.record.inspctDe) : null;
 
