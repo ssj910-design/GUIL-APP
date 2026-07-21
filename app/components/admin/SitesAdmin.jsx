@@ -41,12 +41,12 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
     unitGovNo ? [{ key: unit.id, siteId: site.id, siteName: site.name, govElevatorNo: unitGovNo }] : []
   );
   const liveInfo = liveInspections[0];
-  const unitFailures = failures
-    .filter((f) => (f.unitId ? f.unitId === unit.id : f.siteId === site.id))
-    .sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt));
   // 검사내역 탭: 최신 상태 1건이 아니라 과거 전체 검사결과(합격·조건부합격·불합격)를 나열한다
   // (모바일 앱 SiteTab "검사" 탭과 동일 — 목록은 즉시 받고, 부적합상세는 클릭 시 지연 조회+캐시).
   const { history: inspectionHistory, loading: historyLoading } = useInspectionHistory(unitGovNo);
+  const unitFailures = failures
+    .filter((f) => (f.unitId ? f.unitId === unit.id : f.siteId === site.id))
+    .sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt));
   const manualInspections = inspections.filter((i) => (i.unitId ? i.unitId === unit.id : i.siteId === site.id));
   const unitBillings = billings.filter((b) => (b.unitId ? b.unitId === unit.id : b.siteName === site.name));
 
@@ -187,7 +187,11 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
       </div>
 
       {failTarget && (
-        <InspectionFailDetailSheet inspection={failTarget.inspection} preloaded={failTarget.preloaded} onClose={() => setFailTarget(null)} />
+        <InspectionFailDetailSheet
+          inspection={failTarget.inspection}
+          preloaded={failTarget.preloaded}
+          onClose={() => setFailTarget(null)}
+        />
       )}
     </Modal>
   );
