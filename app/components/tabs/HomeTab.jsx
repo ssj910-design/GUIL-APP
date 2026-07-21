@@ -292,7 +292,7 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
               disabled={checking || needGeo}
               className="w-full bg-blue-700 text-white text-sm font-bold py-3.5 rounded-xl active:bg-blue-800 disabled:opacity-60"
             >
-              {checking ? "위치 확인 중…" : needGeo ? "위치 허용 후 출근 가능" : "출근 체크"}
+              {checking ? "위치 확인 중…" : needGeo ? "위치 허용 후 출근신고 가능" : "출근 체크"}
             </button>
             <p className="text-[10px] text-slate-400 mt-1.5 px-1">{shareLoc ? "출근할 때 위치를 한 번만 확인해요 · 급한 출동 때 가까운 현장 우선 안내에 쓰여요" : "위치 공유가 꺼져 있습니다 (마이페이지에서 켤 수 있어요)"}</p>
           </>
