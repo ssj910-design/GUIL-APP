@@ -54,7 +54,7 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
             <p className="px-5 pt-4 pb-2 text-xs font-bold text-slate-400">기본정보</p>
             <div className="bg-white">
               <TimelineRow icon={Flag} label="건물명" value={site.name} />
-              <TimelineRow icon={Flag} label="호기" value={unit} />
+              <TimelineRow icon={Flag} label="호기" value={`${unit}${site.emergencyPhone ? ` (비상통화장치 ${site.emergencyPhone})` : ""}`} />
               <TimelineRow icon={Flag} label="승강기번호" value={liveInfo?.govElevatorNo || "미등록"} valueColor={liveInfo ? "text-blue-600" : "text-slate-700"} />
               <TimelineRow icon={Flag} label="승강기종류" value={liveInfo?.kindNm || realUnit?.kind || "-"} />
               <TimelineRow icon={Flag} label="승강기형식" value={liveInfo?.form || realUnit?.form || "-"} />
