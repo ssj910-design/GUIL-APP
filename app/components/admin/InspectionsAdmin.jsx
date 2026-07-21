@@ -17,12 +17,15 @@ function daysLeftOf(dueDate, today) {
   return Math.ceil((new Date(dueDate) - new Date(today)) / 86400000);
 }
 
+const INSPECTION_TYPES = ["정기검사", "정밀검사", "수시검사"];
+
 // 검사예정일(수기입력)을 인라인으로 수정할 수 있는 행. 실시간 연동 현장이어도 수기입력 기한은 항상 편집 가능하다.
 function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
   const [date, setDate] = useState(i.dueDate ?? "");
   const [time, setTime] = useState(i.dueTime ?? "");
+  const [type, setType] = useState(i.type || INSPECTION_TYPES[0]);
   const [saving, setSaving] = useState(false);
-  const dirty = date !== (i.dueDate ?? "") || time !== (i.dueTime ?? "");
+  const dirty = date !== (i.dueDate ?? "") || time !== (i.dueTime ?? "") || type !== (i.type || INSPECTION_TYPES[0]);
   const isFlagged = i.result === "conditional" || i.result === "fail";
   // 조건부/불합격의 보완기한은 관리자 수기입력(다음 검사 예정일)이 아니라
   // 국가승강기정보센터 검사 유효기간(유효기간종료일)을 기준으로 본다.
@@ -31,33 +34,36 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
   return (
     <tr className={`border-b border-slate-50 ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`} onClick={clickable ? () => onOpenFail(i) : undefined}>
       <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{i.siteName} · {i.unitLabel}</td>
-      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{i.type}</td>
-      <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{i.org}</td>
+      <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+        <select className={`${mobileInputCls} w-24`} value={type} onChange={(e) => setType(e.target.value)}>
+          {INSPECTION_TYPES.map((t) => <option key={t}>{t}</option>)}
+        </select>
+      </td>
       <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
         <div className="flex gap-1">
-          <input type="date" className={mobileInputCls} value={date} onChange={(e) => setDate(e.target.value)} />
-          <input type="time" className={mobileInputCls} value={time} onChange={(e) => setTime(e.target.value)} />
+          <input type="date" className={`${mobileInputCls} w-32`} value={date} onChange={(e) => setDate(e.target.value)} />
+          <input type="time" className={`${mobileInputCls} w-20`} value={time} onChange={(e) => setTime(e.target.value)} />
         </div>
         {i.apiDueDate && (
-          <p className="text-[9px] text-emerald-600 mt-0.5">
-            {isFlagged ? "보완기한(검사 유효기간) " : "API 유효기간 참고 "}~{i.apiDueDate}
+          <p className="text-[9px] text-emerald-600 mt-0.5 whitespace-nowrap">
+            {isFlagged ? "보완기한 " : "API 유효 "}~{i.apiDueDate}
           </p>
         )}
       </td>
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2.5 whitespace-nowrap">
         {ddayDate ? <DDay dueDate={ddayDate} /> : <span className="text-[10px] text-slate-400">미입력</span>}
       </td>
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2.5 whitespace-nowrap">
         {i.result ? <Badge result={i.result} /> : <StatusBadge tone="slate">예정</StatusBadge>}
       </td>
-      <td className="px-3 py-2.5 text-xs text-slate-500">
+      <td className="px-3 py-2.5 text-xs text-slate-500 max-w-[10rem] truncate" title={i.notes || ""}>
         {i.notes || "-"}
-        {clickable && <span className="ml-2 text-[10px] text-blue-600 font-semibold whitespace-nowrap">클릭해서 부적합 상세</span>}
+        {clickable && <span className="ml-2 text-[10px] text-blue-600 font-semibold">클릭해서 부적합 상세</span>}
       </td>
-      <td className="px-3 py-2.5 text-right pr-4" onClick={(e) => e.stopPropagation()}>
+      <td className="px-3 py-2.5 text-right pr-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
         <button
           disabled={!dirty || saving}
-          onClick={async () => { setSaving(true); await onSaveDueDate(i, date, time); setSaving(false); }}
+          onClick={async () => { setSaving(true); await onSaveDueDate(i, date, time, type); setSaving(false); }}
           className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-3 py-1.5"
         >
           저장
@@ -182,16 +188,16 @@ export default function InspectionsAdmin({ data, setData }) {
     : filteredRows.sort((a, b) => (a.dueDate ? a.daysLeft : Infinity) - (b.dueDate ? b.daysLeft : Infinity));
 
   // manualId가 있으면 기존 수기입력 행을 갱신하고, 없으면(실시간 연동 현장에 수기입력 기한이 처음 등록되는 경우) 새로 만든다.
-  async function saveDueDate(i, newDate, newTime) {
+  async function saveDueDate(i, newDate, newTime, newType) {
     if (i.manualId) {
       const { error } = await supabase
         .from("inspections")
-        .update({ due_date: newDate || null, due_time: newTime || null })
+        .update({ due_date: newDate || null, due_time: newTime || null, type: newType })
         .eq("id", i.manualId);
       if (error) { alert("저장 실패: " + error.message); return; }
       setData((prev) => ({
         ...prev,
-        inspections: prev.inspections.map((x) => (x.id === i.manualId ? { ...x, dueDate: newDate, dueTime: newTime } : x)),
+        inspections: prev.inspections.map((x) => (x.id === i.manualId ? { ...x, dueDate: newDate, dueTime: newTime, type: newType } : x)),
       }));
       return;
     }
@@ -202,7 +208,7 @@ export default function InspectionsAdmin({ data, setData }) {
         unit_id: i.unitId ?? null,
         site_name: i.siteName,
         elevator_no: i.elevatorNo,
-        type: i.type,
+        type: newType,
         org: i.org,
         due_date: newDate || null,
         due_time: newTime || null,
@@ -250,7 +256,7 @@ export default function InspectionsAdmin({ data, setData }) {
           </table>
         </div>
       ) : (
-        <AdminTable head={["현장 · 호기", "종류", "검사기관", "기한(수기입력)", "D-day", "결과", "비고", ""]}>
+        <AdminTable head={["현장 · 호기", "종류", "기한(수기입력)", "D-day", "결과", "비고", ""]}>
           {rows.map((i) => {
             const clickable = i.isLive && (i.result === "conditional" || i.result === "fail");
             return <InspectionRow key={i.id} i={i} onSaveDueDate={saveDueDate} onOpenFail={setFailTarget} clickable={clickable} />;
