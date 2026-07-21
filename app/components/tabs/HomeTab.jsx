@@ -451,9 +451,13 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
   // 관리자 홈은 액션이 필요한 것만(미배정·응답대기) — 출동중·작업중은 "모두 보기"로
   // 기사 홈은 같은 단계 안에서 미배정 건을 '가까운 순'으로(내가 출동할 후보라 가까운 게 먼저).
   // 거리를 못 구하면(내 위치 없거나 현장 좌표 없음) 맨 뒤로 보낸다.
+  // 같은 미배정 안에서도 심각도 우선: 운행정지(승강기 멈춤) > 지원미배정 > 일반 미배정
+  const sevRank = (f) => (f.escalation === "운행정지" ? 0 : f.escalation === "지원요청" ? 1 : 2);
   const byDistance = (a, b) => {
     const r = stageRank(a) - stageRank(b);
     if (r !== 0) return r;
+    const s = sevRank(a) - sevRank(b);
+    if (s !== 0) return s;
     const da = distOf(a), db = distOf(b);
     if (da == null && db == null) return 0;
     if (da == null) return 1;
