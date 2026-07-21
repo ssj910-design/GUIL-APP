@@ -131,40 +131,81 @@ function AttendanceBar({ attendances, onAttendance, onOpenRoster, swapCount = 0 
 
   const mine = attendances.find((a) => a.profileId === selfId);
   const hhmm = (iso) => new Date(iso).toTimeString().slice(0, 5);
+  const done = !!mine?.checkedOutAt; // 오늘 근무 마감(퇴근·당직)
+
+  async function relocate() {
+    setChecking(true);
+    const r = await onAttendance("relocate");
+    setChecking(false);
+    if (r?.locFailed) alert("위치를 받지 못했습니다.\n브라우저 위치 권한을 허용한 뒤 다시 시도해 주세요.\n(설정 → 위치, 또는 주소창 왼쪽 자물쇠 → 위치)");
+  }
 
   return (
     <>
       <div className="px-5 pt-4">
         {!mine?.checkedInAt ? (
-          <button
-            onClick={async () => { setChecking(true); await onAttendance("in"); setChecking(false); }}
-            disabled={checking}
-            className="w-full bg-blue-700 text-white text-sm font-bold py-3.5 rounded-xl active:bg-blue-800 disabled:opacity-60"
-          >
-            {checking ? "위치 확인 중…" : "출근 체크"}
-          </button>
+          <>
+            <button
+              onClick={async () => { setChecking(true); await onAttendance("in"); setChecking(false); }}
+              disabled={checking}
+              className="w-full bg-blue-700 text-white text-sm font-bold py-3.5 rounded-xl active:bg-blue-800 disabled:opacity-60"
+            >
+              {checking ? "위치 확인 중…" : "출근 체크"}
+            </button>
+            <p className="text-[10px] text-slate-400 mt-1.5 px-1">출근 시 현위치를 1회 기록해 가까운 현장 배정에 씁니다 (상시 추적 아님)</p>
+          </>
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center justify-between gap-2">
-            <p className="text-xs font-bold text-slate-500">
-              출근 <span className="text-slate-800">{hhmm(mine.checkedInAt)}</span>
-              {mine.lat != null
-                ? <span className="ml-1.5 text-[10px] font-bold text-emerald-600">위치 기록됨</span>
-                : <span className="ml-1.5 text-[10px] font-bold text-slate-300">위치 없음</span>}
-              {mine.checkedOutAt && (
-                <span className="ml-2">{mine.status} <span className="text-slate-800">{hhmm(mine.checkedOutAt)}</span></span>
+          <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-bold text-slate-500">
+                출근 <span className="text-slate-800">{hhmm(mine.checkedInAt)}</span>
+                {mine.lat != null
+                  ? <span className="ml-1.5 text-[10px] font-bold text-emerald-600">· 위치 확인됨</span>
+                  : <span className="ml-1.5 text-[10px] font-bold text-amber-600">· 위치 미기록</span>}
+                {done && (
+                  <span className="ml-2 text-slate-800">{mine.status} {hhmm(mine.checkedOutAt)}</span>
+                )}
+              </p>
+              {!done && (
+                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full px-2 py-0.5 shrink-0">근무 중</span>
               )}
-            </p>
-            {!mine.checkedOutAt && (
-              <div className="flex gap-1.5 shrink-0">
-                <button onClick={() => onAttendance("duty")} className="text-[11px] font-bold text-amber-700 bg-amber-50 rounded-lg px-2.5 py-1.5">당직</button>
-                <button onClick={() => onAttendance("out")} className="text-[11px] font-bold text-slate-600 bg-slate-100 rounded-lg px-2.5 py-1.5">퇴근</button>
-              </div>
+            </div>
+
+            {/* 위치를 못 받았으면 다시 받을 수 있게 (처음에 권한 거부했어도 나중에 켜서 재수집) */}
+            {mine.lat == null && !done && (
+              <button onClick={relocate} disabled={checking}
+                className="w-full mt-2 text-[11px] font-bold text-blue-700 bg-blue-50 rounded-lg py-2 disabled:opacity-60">
+                {checking ? "위치 확인 중…" : "📍 위치 다시 받기"}
+              </button>
             )}
+
+            {/* 근무 종료 — 아침부터 튀지 않게 작은 링크로. 눌러야 당직/퇴근 선택이 열린다 */}
+            {!done && <WorkEndRow onAttendance={onAttendance} />}
           </div>
         )}
         {rosterBtn}
       </div>
     </>
+  );
+}
+
+// 퇴근·당직을 아침부터 노출하면 오터치가 난다. '근무 종료'를 눌러야 열리게 한다.
+function WorkEndRow({ onAttendance }) {
+  const [open, setOpen] = useState(false);
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="w-full mt-2 text-[11px] font-bold text-slate-400 py-1.5">
+        근무 종료하기
+      </button>
+    );
+  }
+  return (
+    <div className="mt-2 flex items-center gap-1.5">
+      <span className="text-[11px] font-bold text-slate-500 mr-auto">오늘 근무를 마칠까요?</span>
+      <button onClick={() => onAttendance("duty")} className="text-[11px] font-bold text-amber-700 bg-amber-50 rounded-lg px-2.5 py-1.5">당직</button>
+      <button onClick={() => onAttendance("out")} className="text-[11px] font-bold text-white bg-blue-700 rounded-lg px-2.5 py-1.5">퇴근</button>
+      <button onClick={() => setOpen(false)} className="text-[11px] font-bold text-slate-400 px-1">취소</button>
+    </div>
   );
 }
 

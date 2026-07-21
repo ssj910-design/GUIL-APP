@@ -206,20 +206,32 @@ export default function App() {
     });
   }
 
+  // kind: in(출근) | out(퇴근) | duty(당직) | relocate(위치만 다시 받기)
+  // 위치는 in·relocate에서만 받는다. 권한 거부·실패면 위치 없이 넘어가되,
+  // 반환값 locFailed로 화면이 "위치 다시 받기"를 안내할 수 있게 한다.
   async function handleAttendance(kind) {
     const pid = profileIdByName(profilesAll, profile.name);
-    if (!pid) return;
+    if (!pid) return {};
     const now = new Date().toISOString();
-    const here = kind === "in" ? await getPositionOnce() : null;
-    const patch = kind === "in"
+    const wantLoc = kind === "in" || kind === "relocate";
+    const here = wantLoc ? await getPositionOnce() : null;
+
+    // 위치만 다시 받기인데 실패하면 아무것도 저장하지 않는다
+    if (kind === "relocate" && !here) return { locFailed: true };
+
+    const patch = kind === "relocate"
+      ? { lat: here.lat, lng: here.lng, located_at: now }
+      : kind === "in"
       ? { checked_in_at: now, status: null, ...(here ? { lat: here.lat, lng: here.lng, located_at: now } : {}) }
       : { checked_out_at: now, status: kind === "duty" ? "당직" : "퇴근" };
+
     const { data } = await supabase
       .from("attendances")
       .upsert({ profile_id: pid, work_date: TODAY_STR, ...patch }, { onConflict: "profile_id,work_date" })
       .select();
     const row = data?.[0];
     if (row) setAttendances((prev) => [...prev.filter((a) => a.id !== row.id), mapAttendance(row)]);
+    return { locFailed: wantLoc && !here };
   }
 
   // ---------- 당직·숙직 근무표 ----------
