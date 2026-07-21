@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { govDateToDashed } from "@/lib/utils";
 
 
 // 국가승강기정보센터 API의 최종검사판정결과 문자열을 앱 내부 코드로 변환합니다.
@@ -105,6 +106,63 @@ export function useInspectionHistory(govElevatorNo) {
       cancelled = true;
     };
   }, [govElevatorNo]);
+
+  return state;
+}
+
+
+// govElevatorNo(+startDate 있으면 그 회차)의 부적합 상세를 클릭 없이 바로 가져온다 —
+// 검사관리 조건부·불합격 탭처럼 목록에서 바로 내용을 보여줄 때 씀.
+// InspectionFailDetailSheet의 조회 로직과 같은 흐름(anchorDate 없으면 최신 회차를 찾아 한 번 더 조회)
+// 이지만, 그 컴포넌트는 preloaded/재시도 UI까지 얽혀 있어 목록용으로 그대로 재사용하기보다 이쪽에 따로 둔다.
+export function useInspectionFailItems(govElevatorNo, startDate) {
+  const [state, setState] = useState({ loading: true, items: [], reason: null, record: null });
+
+  useEffect(() => {
+    if (!govElevatorNo) {
+      setState({ loading: false, items: [], reason: null, record: null });
+      return;
+    }
+    let cancelled = false;
+    async function load() {
+      setState((s) => ({ ...s, loading: true }));
+      try {
+        const hasAnchor = Boolean(startDate) && !Number.isNaN(new Date(startDate).getTime());
+        const url = hasAnchor
+          ? `/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(govElevatorNo)}&anchorDate=${encodeURIComponent(startDate)}`
+          : `/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(govElevatorNo)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (cancelled) return;
+        if (hasAnchor) {
+          setState({ loading: false, items: data.items ?? [], reason: data.reason ?? null, record: data.record ?? null });
+          return;
+        }
+        const latest = (data.history ?? [])[0];
+        if (!latest) {
+          setState({ loading: false, items: [], reason: "no_record", record: null });
+        } else if (latest.items !== undefined) {
+          setState({ loading: false, items: latest.items ?? [], reason: latest.reason ?? null, record: latest.record ?? null });
+        } else {
+          const latestAnchor = govDateToDashed(latest.record?.inspctDe);
+          if (!latestAnchor || Number.isNaN(new Date(latestAnchor).getTime())) {
+            setState({ loading: false, items: [], reason: "no_record", record: latest.record ?? null });
+          } else {
+            const res2 = await fetch(`/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(govElevatorNo)}&anchorDate=${encodeURIComponent(latestAnchor)}`);
+            const data2 = await res2.json();
+            if (cancelled) return;
+            setState({ loading: false, items: data2.items ?? [], reason: data2.reason ?? null, record: data2.record ?? null });
+          }
+        }
+      } catch {
+        if (!cancelled) setState({ loading: false, items: [], reason: "fetch_failed", record: null });
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [govElevatorNo, startDate]);
 
   return state;
 }

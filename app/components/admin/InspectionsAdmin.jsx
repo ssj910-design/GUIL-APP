@@ -3,13 +3,14 @@
 // 검사관리 — 전체 현장의 정기검사 현황을 관제한다.
 // 검사예정일(기한)은 국가승강기정보센터 API 유효기간이 아니라 이 화면에서 관리자가 수기입력하는 값(inspections.due_date)이 기준이다.
 // 실시간 연동 현장(승강기고유번호 등록됨)도 여기서 검사예정일을 수기로 입력·수정할 수 있다 — API 유효기간은 참고용으로만 함께 보여준다.
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { unitsToInspections } from "@/lib/utils";
 import { mapInspection } from "@/lib/mappers";
 import { Badge, DDay, inputCls as mobileInputCls } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
+import { useInspectionFailItems } from "@/app/hooks/useLiveInspections";
 import { StatusBadge, AdminTable, FilterPills, inputCls, Modal } from "@/app/components/admin/adminShared";
 
 function daysLeftOf(dueDate, today) {
@@ -67,20 +68,42 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
 }
 
 // 조건부·불합격 전용 행 — 수기입력 기한/검사기관/결과 열 없이 보완기한과 부적합 내역만 본다.
-function FlaggedRow({ i, site, onOpenFail, clickable }) {
+// 부적합 내역은 클릭 없이 바로 불러온다 — 기준 조항 설명 줄은 빼고 실제 부적합 내용·검사원 의견만 보여준다.
+function FlaggedRow({ i, site, isLive }) {
+  const { loading, items, reason } = useInspectionFailItems(isLive ? i.govElevatorNo : null, i.startDate);
   return (
-    <tr className={`border-b border-slate-50 ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`} onClick={clickable ? () => onOpenFail(i) : undefined}>
-      <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{i.siteName} · {i.unitLabel}</td>
-      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{site?.assignedEngineer || "미배정"}</td>
-      <td className="px-3 py-2.5 whitespace-nowrap">
+    <tr className="border-b border-slate-50">
+      <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap align-top">{i.siteName} · {i.unitLabel}</td>
+      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap align-top">{site?.assignedEngineer || "미배정"}</td>
+      <td className="px-3 py-2.5 whitespace-nowrap align-top">
         {i.result === "fail" ? (
           <span className="text-red-600 font-bold">불합격</span>
         ) : (
           <span className="text-slate-700">{i.apiDueDate || i.dueDate || "-"}</span>
         )}
       </td>
-      <td className="px-3 py-2.5 text-xs text-blue-600 font-semibold">
-        {clickable ? "클릭해서 부적합 상세" : "-"}
+      <td className="px-3 py-2.5 text-xs max-w-md">
+        {!isLive ? (
+          <span className="text-slate-400">실시간 연동 안 됨</span>
+        ) : loading ? (
+          <span className="text-slate-400">조회 중...</span>
+        ) : items.length === 0 ? (
+          <span className="text-slate-400">
+            {reason === "no_record" ? "검사이력 없음"
+              : reason === "no_fail_code" ? "부적합코드 없음"
+              : reason === "fetch_failed" ? "조회 실패"
+              : "부적합 상세 없음"}
+          </span>
+        ) : (
+          <ul className="space-y-1.5">
+            {items.map((item, idx) => (
+              <li key={idx} className="border-b border-slate-50 last:border-0 pb-1.5 last:pb-0">
+                <p className="font-semibold text-slate-800">{item.failDesc}</p>
+                {item.failDescInspector && <p className="text-slate-500 mt-0.5">검사원 의견: {item.failDescInspector}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
       </td>
     </tr>
   );
@@ -91,6 +114,20 @@ export default function InspectionsAdmin({ data, setData }) {
   const [view, setView] = useState("all");
   const [search, setSearch] = useState("");
   const [failTarget, setFailTarget] = useState(null);
+
+  // 수기입력 검사예정일은 하루라도 지나면 자동으로 지운다 — 이미 지나간 예정일이 계속
+  // 남아있으면 검사를 받았는지 여부와 무관하게 도래현장에 계속 뜨는 문제가 있었다.
+  useEffect(() => {
+    const stale = inspections.filter((i) => i.dueDate && daysLeftOf(i.dueDate, TODAY_STR) < 0);
+    if (stale.length === 0) return;
+    (async () => {
+      await Promise.all(stale.map((i) => supabase.from("inspections").update({ due_date: null, due_time: null }).eq("id", i.id)));
+      setData((prev) => ({
+        ...prev,
+        inspections: prev.inspections.map((x) => (stale.some((s) => s.id === x.id) ? { ...x, dueDate: null, dueTime: null } : x)),
+      }));
+    })();
+  }, [inspections]);
 
   // 검사유효기간(API)은 units의 DB 캐시를 쓴다 (전 호기 실시간 API 호출 금지 — 트래픽 한도).
   // 실시간 연동 현장이라도 "기한"으로 쓰는 값은 수기입력(inspections.due_date)이다 — API 값은 참고용(apiDueDate)으로만 붙인다.
@@ -183,7 +220,7 @@ export default function InspectionsAdmin({ data, setData }) {
         {rows.map((i) => {
           const clickable = i.isLive && (i.result === "conditional" || i.result === "fail");
           return view === "flagged" ? (
-            <FlaggedRow key={i.id} i={i} site={sites.find((s) => s.id === i.siteId)} onOpenFail={setFailTarget} clickable={clickable} />
+            <FlaggedRow key={i.id} i={i} site={sites.find((s) => s.id === i.siteId)} isLive={i.isLive} />
           ) : (
             <InspectionRow key={i.id} i={i} onSaveDueDate={saveDueDate} onOpenFail={setFailTarget} clickable={clickable} />
           );
