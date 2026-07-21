@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
 import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Flame, Download } from "lucide-react";
-import { siteUnits, addDays, labelToSeq, govDateToDashed, formatShortDate, failures30dBySite } from "@/lib/utils";
+import { siteUnits, addDays, labelToSeq, govDateToDashed, formatShortDate, recentFailuresBySite } from "@/lib/utils";
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
@@ -537,7 +537,7 @@ export function SiteTab({ inspections, failures, billings, siteManagers, onUpdat
     return failures.filter((f) => f.siteId === siteId && f.status !== "완료").length;
   }
   // 최근 30일 고장 건수 — 처리완료 여부와 무관하게 누적(집중관리 판정용, 홈/대시보드와 동일 기준).
-  const recentFailureCounts = failures30dBySite(failures);
+  const recentFailuresMap = recentFailuresBySite(failures);
 
   function backToList() {
     setView("list");
@@ -615,7 +615,7 @@ export function SiteTab({ inspections, failures, billings, siteManagers, onUpdat
               <div className="flex items-center justify-between gap-2 mb-1">
                 <p className="font-bold text-slate-800 text-sm">{s.name} · {siteUnits(s).length}대</p>
                 <div className="flex items-center gap-1.5 flex-wrap shrink-0">
-                  {(recentFailureCounts.get(s.id) ?? 0) >= 3 && (
+                  {(recentFailuresMap.get(s.id)?.length ?? 0) >= 3 && (
                     <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">집중관리</span>
                   )}
                   {openF > 0 && (

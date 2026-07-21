@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { ShieldCheck, AlertOctagon } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, failures30dBySite } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite } from "@/lib/utils";
 import { Badge, DDay, DrillHeader, SmsToast } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -49,6 +49,7 @@ function DueSoonRow({ i, address, govElevatorNo, onOpenFail }) {
 
 function FailureHistoryDetailScreen({ site, failures, onBack }) {
   const history = failures.filter((f) => f.siteId === site.id);
+  const [detailTarget, setDetailTarget] = useState(null);
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
       <DrillHeader title="고장처리내역 상세" onBack={onBack} onHome={onBack} />
@@ -62,19 +63,25 @@ function FailureHistoryDetailScreen({ site, failures, onBack }) {
             <p className="text-xs text-slate-400 text-center py-10">고장 이력이 없습니다</p>
           ) : (
             history.map((f) => (
-              <div key={f.id} className="border border-slate-200 rounded-xl p-3.5">
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setDetailTarget(f)}
+                className="w-full text-left border border-slate-200 rounded-xl p-3.5 active:bg-slate-50"
+              >
                 <div className="flex items-center justify-between mb-1">
-                  <p className="font-bold text-slate-800 text-sm">{f.errorCode}</p>
+                  <p className="font-bold text-slate-800 text-sm">{f.errorCode}{f.elevatorNo ? ` · ${f.elevatorNo}` : ""}</p>
                   <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${f.status === "완료" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{f.status}</span>
                 </div>
                 <p className="text-xs text-slate-500 mb-1">{f.reportedAt} 접수 · {f.assignee ?? "미배정"}</p>
                 {f.escalation && <p className="text-xs font-bold text-red-600">조치 결과: {f.escalation}</p>}
                 {f.processResult && <p className="text-xs text-slate-500">처리결과: {f.processResult}</p>}
-              </div>
+              </button>
             ))
           )}
         </div>
       </div>
+      {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} />}
     </div>
   );
 }
@@ -171,10 +178,10 @@ export function HomeTab({ attendances = [], onAttendance, onOpenRoster, swapCoun
   const supportSiteIds = new Set(openEscalations.filter((f) => f.escalation === "지원요청").map((f) => f.siteId));
   const stoppedSiteIds = new Set(openEscalations.filter((f) => f.escalation === "운행정지").map((f) => f.siteId));
   const escalatedSiteIds = new Set([...supportSiteIds, ...stoppedSiteIds]);
-  // 최근 30일 고장 건수는 실시간 계산 — 처리완료 여부와 무관하게 누적되어야 하므로
+  // 최근 30일 고장 목록은 실시간 계산 — 처리완료 여부와 무관하게 누적되어야 하므로
   // 현장에 수동 저장된 failures30d 대신 실제 failures 레코드에서 직접 센다.
-  const recentFailureCounts = failures30dBySite(failures);
-  const criticalSites = mySites.filter((s) => (recentFailureCounts.get(s.id) ?? 0) >= 3 || escalatedSiteIds.has(s.id));
+  const recentFailuresBySiteId = recentFailuresBySite(failures);
+  const criticalSites = mySites.filter((s) => (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || escalatedSiteIds.has(s.id));
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [assignTarget, setAssignTarget] = useState(null);
@@ -299,7 +306,10 @@ export function HomeTab({ attendances = [], onAttendance, onOpenRoster, swapCoun
               {criticalSites.map((s) => {
                 const stopped = stoppedSiteIds.has(s.id);
                 const support = supportSiteIds.has(s.id);
-                const count30d = recentFailureCounts.get(s.id) ?? 0;
+                const recent = recentFailuresBySiteId.get(s.id) ?? [];
+                const count30d = recent.length;
+                const units = [...new Set(recent.map((f) => f.elevatorNo).filter(Boolean))];
+                const unitLabel = units.length ? units.join(", ") : s.elevatorNo;
                 return (
                   <button
                     key={s.id}
@@ -307,7 +317,7 @@ export function HomeTab({ attendances = [], onAttendance, onOpenRoster, swapCoun
                     className={`w-full flex items-center justify-between bg-white rounded-xl px-3 py-2.5 border text-left active:bg-red-50 ${stopped ? "border-red-300" : "border-red-100"}`}
                   >
                     <div>
-                      <p className="font-bold text-slate-800 text-sm">{s.name} · {s.elevatorNo}</p>
+                      <p className="font-bold text-slate-800 text-sm">{s.name}{unitLabel ? ` · ${unitLabel}` : ""}</p>
                       <p className="text-[11px] text-slate-400">{s.address}</p>
                     </div>
                     <span className="flex gap-1 shrink-0">

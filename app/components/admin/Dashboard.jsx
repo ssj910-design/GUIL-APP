@@ -6,7 +6,7 @@ import { useState } from "react";
 import WeekStrip from "@/app/components/admin/WeekStrip";
 import { AlertOctagon } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, unitsToInspections, stripCityPrefix, groupBySite, failures30dBySite } from "@/lib/utils";
+import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite } from "@/lib/utils";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { Modal, StatusBadge } from "@/app/components/admin/adminShared";
@@ -130,10 +130,10 @@ export default function Dashboard({ data, onOpenWorkCalendar }) {
   const supportSiteIds = new Set(openEscalations.filter((f) => f.escalation === "지원요청").map((f) => f.siteId));
   const stoppedSiteIds = new Set(openEscalations.filter((f) => f.escalation === "운행정지").map((f) => f.siteId));
   const escalatedSiteIds = new Set([...supportSiteIds, ...stoppedSiteIds]);
-  // 최근 30일 고장 건수는 실시간 계산 — 처리완료 여부와 무관하게 누적되어야 하므로
+  // 최근 30일 고장 목록은 실시간 계산 — 처리완료 여부와 무관하게 누적되어야 하므로
   // 현장에 수동 저장된 failures30d 대신 실제 failures 레코드에서 직접 센다.
-  const recentFailureCounts = failures30dBySite(failures);
-  const criticalSites = sites.filter((s) => (recentFailureCounts.get(s.id) ?? 0) >= 3 || escalatedSiteIds.has(s.id));
+  const recentFailuresBySiteId = recentFailuresBySite(failures);
+  const criticalSites = sites.filter((s) => (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || escalatedSiteIds.has(s.id));
 
   const engineerName = (id, fallback) => profiles.find((p) => p.id === id)?.name ?? fallback ?? "미배정";
 
@@ -184,7 +184,10 @@ export default function Dashboard({ data, onOpenWorkCalendar }) {
             {criticalSites.map((s) => {
               const stopped = stoppedSiteIds.has(s.id);
               const support = supportSiteIds.has(s.id);
-              const count30d = recentFailureCounts.get(s.id) ?? 0;
+              const recent = recentFailuresBySiteId.get(s.id) ?? [];
+              const count30d = recent.length;
+              const units = [...new Set(recent.map((f) => f.elevatorNo).filter(Boolean))];
+              const unitText = units.length ? units.join(", ") : s.elevatorNo;
               return (
                 <button
                   key={s.id}
@@ -192,7 +195,7 @@ export default function Dashboard({ data, onOpenWorkCalendar }) {
                   className={`flex items-center justify-between bg-white rounded-lg px-3.5 py-2.5 border text-left ${stopped ? "border-red-300" : "border-red-100"}`}
                 >
                   <div className="min-w-0">
-                    <p className="font-bold text-slate-800 text-sm truncate">{s.name} · {s.elevatorNo}</p>
+                    <p className="font-bold text-slate-800 text-sm truncate">{s.name}{unitText ? ` · ${unitText}` : ""}</p>
                     <p className="text-[11px] text-slate-400 truncate">{s.address}</p>
                   </div>
                   <span className="flex gap-1 shrink-0 ml-2">
@@ -369,7 +372,7 @@ export default function Dashboard({ data, onOpenWorkCalendar }) {
                   className="w-full text-left border border-slate-200 rounded-xl p-3 hover:bg-slate-50"
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <p className="font-bold text-slate-800 text-sm">{f.errorCode}</p>
+                    <p className="font-bold text-slate-800 text-sm">{f.errorCode}{f.elevatorNo ? ` · ${f.elevatorNo}` : ""}</p>
                     <StatusBadge tone={f.status === "완료" ? "green" : f.status === "진행중" ? "amber" : "red"}>
                       {f.escalation ? `${f.status}·${f.escalation}` : f.status}
                     </StatusBadge>
