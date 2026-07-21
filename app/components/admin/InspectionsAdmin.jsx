@@ -11,7 +11,7 @@ import { mapInspection } from "@/lib/mappers";
 import { Badge, DDay, inputCls as mobileInputCls } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { useInspectionFailItems } from "@/app/hooks/useLiveInspections";
-import { StatusBadge, AdminTable, FilterPills, inputCls, Modal } from "@/app/components/admin/adminShared";
+import { StatusBadge, AdminTable, FilterPills, SortableTh, sortRows, inputCls, Modal } from "@/app/components/admin/adminShared";
 
 function daysLeftOf(dueDate, today) {
   return Math.ceil((new Date(dueDate) - new Date(today)) / 86400000);
@@ -113,6 +113,8 @@ export default function InspectionsAdmin({ data, setData }) {
   const { sites, units, inspections } = data;
   const [view, setView] = useState("all");
   const [search, setSearch] = useState("");
+  // 조건부·불합격 탭 정렬 — 디폴트는 보완기한 적게 남은 순(오름차순).
+  const [sort, setSort] = useState({ key: "dueDate", dir: "asc" });
   const [failTarget, setFailTarget] = useState(null);
 
   // 수기입력 검사예정일은 하루라도 지나면 자동으로 지운다 — 이미 지나간 예정일이 계속
@@ -162,9 +164,22 @@ export default function InspectionsAdmin({ data, setData }) {
   const flagged = withUnitLabel.filter((i) => i.result === "conditional" || i.result === "fail");
 
   const base = view === "flagged" ? flagged : withUnitLabel;
-  const rows = base
-    .filter((i) => !search || (i.siteName ?? "").includes(search))
-    .sort((a, b) => (a.dueDate ? a.daysLeft : Infinity) - (b.dueDate ? b.daysLeft : Infinity));
+  const filteredRows = base.filter((i) => !search || (i.siteName ?? "").includes(search));
+
+  // 조건부·불합격: 현장·호기/담당자/보완기한 정렬 가능(할일관리와 동일한 SortableTh 방식).
+  // 보완기한은 화면에 보이는 값(조건부합격=유효기간, 불합격=날짜 없음) 기준으로 비교한다.
+  const getFlaggedVal = (i, key) => {
+    switch (key) {
+      case "loc": return `${i.siteName ?? ""} · ${i.unitLabel ?? ""}`;
+      case "person": return sites.find((s) => s.id === i.siteId)?.assignedEngineer ?? "";
+      case "dueDate": return i.result === "fail" ? null : (i.apiDueDate || i.dueDate || null);
+      default: return "";
+    }
+  };
+
+  const rows = view === "flagged"
+    ? sortRows(filteredRows, sort, getFlaggedVal)
+    : filteredRows.sort((a, b) => (a.dueDate ? a.daysLeft : Infinity) - (b.dueDate ? b.daysLeft : Infinity));
 
   // manualId가 있으면 기존 수기입력 행을 갱신하고, 없으면(실시간 연동 현장에 수기입력 기한이 처음 등록되는 경우) 새로 만든다.
   async function saveDueDate(i, newDate, newTime) {
@@ -216,16 +231,32 @@ export default function InspectionsAdmin({ data, setData }) {
         <input className={`${inputCls} max-w-56`} placeholder="현장명 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
-      <AdminTable head={view === "flagged" ? ["현장 · 호기", "담당자", "보완기한", "부적합 내역"] : ["현장 · 호기", "종류", "검사기관", "기한(수기입력)", "D-day", "결과", "비고", ""]}>
-        {rows.map((i) => {
-          const clickable = i.isLive && (i.result === "conditional" || i.result === "fail");
-          return view === "flagged" ? (
-            <FlaggedRow key={i.id} i={i} site={sites.find((s) => s.id === i.siteId)} isLive={i.isLive} />
-          ) : (
-            <InspectionRow key={i.id} i={i} onSaveDueDate={saveDueDate} onOpenFail={setFailTarget} clickable={clickable} />
-          );
-        })}
-      </AdminTable>
+      {view === "flagged" ? (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+          <table className="w-full min-w-[44rem] text-sm">
+            <thead>
+              <tr className="text-xs text-slate-400 border-b border-slate-100">
+                <SortableTh label="현장 · 호기" sortKey="loc" sort={sort} setSort={setSort} className="pl-5" />
+                <SortableTh label="담당자" sortKey="person" sort={sort} setSort={setSort} />
+                <SortableTh label="보완기한" sortKey="dueDate" sort={sort} setSort={setSort} />
+                <th className="px-3 py-2.5 font-semibold text-left">부적합 내역</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((i) => (
+                <FlaggedRow key={i.id} i={i} site={sites.find((s) => s.id === i.siteId)} isLive={i.isLive} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <AdminTable head={["현장 · 호기", "종류", "검사기관", "기한(수기입력)", "D-day", "결과", "비고", ""]}>
+          {rows.map((i) => {
+            const clickable = i.isLive && (i.result === "conditional" || i.result === "fail");
+            return <InspectionRow key={i.id} i={i} onSaveDueDate={saveDueDate} onOpenFail={setFailTarget} clickable={clickable} />;
+          })}
+        </AdminTable>
+      )}
       {rows.length === 0 && <p className="text-xs text-slate-400 text-center py-10">해당 조건의 검사 이력이 없습니다</p>}
 
       {failTarget && <InspectionFailDetailSheet inspection={failTarget} onClose={() => setFailTarget(null)} Container={Modal} />}
