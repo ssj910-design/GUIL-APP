@@ -228,7 +228,9 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
               />
             </div>
             <div>
-              <p className="text-xs font-bold text-slate-500 mb-1.5">배정 기사 (선택)</p>
+              <p className="text-xs font-bold text-slate-500 mb-1.5">
+                {role === "admin" ? "배정 기사 (선택)" : "내가 처리할까요? (선택)"}
+              </p>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => setForm({ ...form, assignee: "" })}
@@ -238,7 +240,9 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                 >
                   나중에 배정
                 </button>
-                {engineerNames.map((name) => {
+                {/* 기사는 본인만 배정할 수 있다 — 타 기사 배정은 관리자 권한.
+                    기사가 남을 배정하면 배정된 사람이 상황을 모른 채 책임만 지게 된다. */}
+                {(role === "admin" ? engineerNames : engineerNames.filter((n) => n === myName)).map((name) => {
                   const st = engineerStatus(name);
                   const sel = form.assignee === name;
                   return (
@@ -249,7 +253,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                         sel ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200 bg-white"
                       }`}
                     >
-                      {name}
+                      {role === "engineer" && name === myName ? "나에게" : name}
                       {st && (
                         <span className={`block text-[10px] font-bold mt-0.5 ${
                           sel ? "text-amber-200" : st === "출동중" ? "text-amber-600" : "text-emerald-600"
