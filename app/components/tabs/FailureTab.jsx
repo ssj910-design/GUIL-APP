@@ -516,13 +516,13 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allo
     return act.some((f) => !f.arrivalTime) ? "출동중" : "처리중";
   };
 
-  // 가까운 기사 정렬 — 기사 위치는 오늘 출근 체크 시 1회 받아둔 좌표를 쓴다.
-  // 실시간 위치가 아니므로 "출근한 곳에서 가까운 순"이라는 뜻이고, 직선거리 기준이다.
+  // 가까운 기사 정렬 — 기사의 '마지막 확인 위치'(profiles.last_lat) 기준.
+  // 출근 시 GPS, 이후 현장 도착·처리완료 때 그 현장 좌표로 갱신되므로 오후에도 최신에 가깝다.
+  // 상시 추적이 아니라 이벤트마다 갱신된 값이고, 직선거리 기준이다.
   const site = sites.find((x) => x.id === failure.siteId);
   const hereOf = (name) => {
-    const pid = engineers.find((e) => e.name === name)?.id;
-    const a = attendances.find((x) => x.profileId === pid && x.lat != null);
-    return a ? { lat: a.lat, lng: a.lng } : null;
+    const e = engineers.find((e) => e.name === name);
+    return e?.last_lat != null ? { lat: e.last_lat, lng: e.last_lng } : null;
   };
   // 오늘 휴가 중인 사람은 아예 못 고르게 한다 — 회사에 없는 사람에게 배정되면 아무도 안 간다.
   // 반대로 '출동중'은 막지 않는다: 같은 건물·인근 현장을 연달아 처리하는 경우가 실제로 있어
@@ -547,8 +547,8 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allo
       {failure.assignee && <p className="text-xs text-slate-500 mb-2">현재 배정: <b>{failure.assignee}</b> — 재배정하면 출동 기록이 초기화되고 미처리로 돌아갑니다</p>}
       <p className="text-[11px] text-slate-400 mb-2">
         {anyDistance
-          ? "오늘 출근 위치 기준 직선거리 순입니다 (실시간 위치가 아닙니다)"
-          : site?.lat == null ? "현장 좌표가 없어 거리순 정렬을 못 합니다" : "출근 체크한 기사가 없어 거리를 계산할 수 없습니다"}
+          ? "마지막 확인 위치 기준 직선거리 순 (출근·현장 도착 때 갱신됨)"
+          : site?.lat == null ? "현장 좌표가 없어 거리순 정렬을 못 합니다" : "위치가 확인된 기사가 없어 거리를 계산할 수 없습니다"}
       </p>
       <div className="grid grid-cols-2 gap-2 pb-2">
         {allowUnassign && (

@@ -206,6 +206,26 @@ export default function App() {
     });
   }
 
+  // 기사의 '마지막 확인 위치'를 갱신한다 (배정 거리 계산의 기준).
+  //  - 출근: GPS 좌표 (label='출근')
+  //  - 현장 도착·처리완료·점검완료: 그 현장 좌표 (GPS 불필요)
+  // profilesAll도 함께 갱신해 배정 시트가 바로 최신 위치를 쓰게 한다.
+  async function updateLastLocation(profileId, lat, lng, label) {
+    if (!profileId || lat == null || lng == null) return;
+    const at = new Date().toISOString();
+    const patch = { last_lat: lat, last_lng: lng, last_loc_at: at, last_loc_label: label };
+    await supabase.from("profiles").update(patch).eq("id", profileId);
+    setProfilesAll((prev) => prev.map((p) => (p.id === profileId ? { ...p, ...patch } : p)));
+    setEngineers((prev) => prev.map((e) => (e.id === profileId ? { ...e, ...patch } : e))); // 배정 시트가 쓰는 목록도 갱신
+  }
+
+  // 현장 액션(도착·완료)이 일어나면 그 현장 좌표를 나의 마지막 위치로 기록한다.
+  function markAtSite(failure, label) {
+    const site = sites.find((s) => s.id === failure.siteId);
+    const pid = failure.assigneeId ?? profileIdByName(profilesAll, failure.assignee);
+    if (site?.lat != null && pid) updateLastLocation(pid, site.lat, site.lng, `${site.name} ${label}`);
+  }
+
   // kind: in(출근) | out(퇴근) | duty(당직) | relocate(위치만 다시 받기)
   // 위치는 in·relocate에서만 받는다. 권한 거부·실패면 위치 없이 넘어가되,
   // 반환값 locFailed로 화면이 "위치 다시 받기"를 안내할 수 있게 한다.
@@ -233,6 +253,8 @@ export default function App() {
       .select();
     const row = data?.[0];
     if (row) setAttendances((prev) => [...prev.filter((a) => a.id !== row.id), mapAttendance(row)]);
+    // 출근 GPS를 받았으면 마지막 위치도 갱신 (배정 기준)
+    if (here && (kind === "in" || kind === "relocate")) updateLastLocation(pid, here.lat, here.lng, "출근");
     return { locFailed: wantLoc && !here };
   }
 
@@ -753,11 +775,13 @@ export default function App() {
   async function handleArriveFailure(failure, arrivalTime) {
     await supabase.from("failures").update({ arrival_time: arrivalTime }).eq("id", failure.id);
     setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, arrivalTime } : x)));
+    markAtSite(failure, "도착"); // 도착 = 그 현장에 있음 → 마지막 위치 갱신
   }
 
   async function handleFailureResult(failure, payload) {
     const { result, symptom, errorCode, cause, processContent, note, photoCount, photoUrls } = payload;
     const isClosed = result === "처리완료" || result === "오신고";
+    if (result === "처리완료") markAtSite(failure, "처리완료"); // 완료한 그 현장 = 마지막 위치
     const escalation = result === "처리완료" ? null : result;
     await supabase
       .from("failures")
