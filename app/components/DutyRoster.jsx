@@ -42,26 +42,23 @@ export function DutySwapNotice({ swaps, schedules, onSeen }) {
   if (!notice) return null;
   const isTarget = notice === asTarget;
   const accepted = notice.status === "수락";
+  const kind = notice.kind ?? "교환";
+  // 요청 받은 사람에게 보이는 제목·설명 (교환/넘기기/대신서기별로 다르다)
+  const reqTitle = kind === "넘기기" ? "근무 넘김 요청" : kind === "대신서기" ? "대신 서기 요청" : "근무 교환 요청";
+  const reqBody =
+    kind === "넘기기" ? <><b>{nameOf(notice.requesterId)}</b>님이 {labelOf(notice.fromScheduleId)} 근무를 나에게 넘기려 합니다</>
+    : kind === "대신서기" ? <><b>{nameOf(notice.requesterId)}</b>님이 내 {labelOf(notice.fromScheduleId)} 근무를 대신 서겠다고 합니다</>
+    : <><b>{nameOf(notice.requesterId)}</b>님이 근무 교환을 요청했습니다.<br />{labelOf(notice.fromScheduleId)} ↔ 내 {labelOf(notice.toScheduleId)}</>;
 
   return (
     <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center px-8">
       <div className="bg-white rounded-2xl w-full max-w-xs p-5 text-center">
         <p className="text-base font-extrabold text-slate-800">
-          {isTarget ? "근무 교환 요청" : accepted ? "교환이 성사됐습니다" : "교환이 거절됐습니다"}
+          {isTarget ? reqTitle : accepted ? "요청이 수락됐습니다" : "요청이 거절됐습니다"}
         </p>
         <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-          {isTarget ? (
-            <>
-              <b>{nameOf(notice.requesterId)}</b>님이 근무 교환을 요청했습니다.
-              <br />
-              {labelOf(notice.fromScheduleId)} ↔ 내 {labelOf(notice.toScheduleId)}
-            </>
-          ) : (
-            <>
-              <b>{nameOf(notice.targetId)}</b>님이 요청을 {accepted ? "수락" : "거절"}했습니다.
-              <br />
-              {labelOf(notice.fromScheduleId)} ↔ {labelOf(notice.toScheduleId)}
-            </>
+          {isTarget ? reqBody : (
+            <><b>{nameOf(notice.targetId)}</b>님이 요청을 {accepted ? "수락" : "거절"}했습니다.</>
           )}
         </p>
         <button
@@ -164,7 +161,7 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
             onClick={() => setSwapOpen(true)}
             className="ml-auto text-[11px] font-bold text-white bg-blue-700 rounded-lg px-3.5 py-1.5 flex items-center gap-1"
           >
-            <ArrowLeftRight size={12} /> 근무 교환하기
+            <ArrowLeftRight size={12} /> 근무 조정
           </button>
         </div>
       )}
@@ -183,13 +180,15 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
       <div className={embedded ? "px-0 py-3" : "flex-1 overflow-y-auto px-3 py-3"}>
         {incoming.length > 0 && (
           <div className="mb-3 bg-white rounded-xl border border-blue-200 p-3">
-            <p className="text-xs font-extrabold text-blue-800 mb-2">받은 교환 요청 {incoming.length}건</p>
+            <p className="text-xs font-extrabold text-blue-800 mb-2">받은 근무 요청 {incoming.length}건</p>
             <div className="space-y-2">
               {incoming.map((w) => (
                 <div key={w.id} className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2 first:border-0 first:pt-0">
                   <p className="text-[11px] text-slate-600 leading-relaxed">
-                    <span className="font-bold text-slate-800">{nameOf(w.requesterId)}</span>님의 {labelOf(w.fromScheduleId)}
-                    <br />↔ 내 {labelOf(w.toScheduleId)}
+                    <span className="font-bold text-slate-800">{nameOf(w.requesterId)}</span>
+                    {(w.kind ?? "교환") === "넘기기" ? <> — {labelOf(w.fromScheduleId)} 근무를 나에게 넘김</>
+                      : (w.kind ?? "교환") === "대신서기" ? <> — 내 {labelOf(w.fromScheduleId)} 근무를 대신</>
+                      : <>님의 {labelOf(w.fromScheduleId)}<br />↔ 내 {labelOf(w.toScheduleId)}</>}
                   </p>
                   <div className="flex gap-1.5 shrink-0">
                     <button onClick={() => onRespondSwap(w, "수락")} className="text-[11px] font-bold text-white bg-blue-700 rounded-lg px-2.5 py-1.5">수락</button>

@@ -271,16 +271,31 @@ export default function App() {
     if (row) setDutySchedules((prev) => [...prev.filter((p) => p.id !== row.id), mapDutySchedule(row)].sort((a, b) => a.dutyDate.localeCompare(b.dutyDate)));
   }
 
-  async function handleRequestDutySwap(from, to) {
-    const { data } = await supabase.from("duty_swaps").insert({
-      from_schedule_id: from.id, to_schedule_id: to.id,
-      requester_id: from.profileId, target_id: to.profileId,
-    }).select();
+  // opts.kind: 교환(기본) | 넘기기 | 대신서기
+  //  교환   — from(내 근무) ↔ to(상대 근무). 승인자 = to의 주인
+  //  넘기기 — from(내 근무)을 opts.toPersonId에게 넘김. 승인자 = 받을 사람
+  //  대신서기 — from(남의 근무)을 내가 대신. 승인자 = from의 원주인
+  async function handleRequestDutySwap(from, to, opts = {}) {
+    const kind = opts.kind ?? "교환";
+    const myId = profileIdByName(profilesAll, profile.name);
+    const nameOfId = (id) => (engineers.find((e) => e.id === id)?.name ?? "");
+    let row, targetId, msg;
+    if (kind === "교환") {
+      targetId = to.profileId;
+      row = { from_schedule_id: from.id, to_schedule_id: to.id, requester_id: from.profileId, target_id: targetId, kind };
+      msg = `${profile.name}님이 ${from.dutyDate.slice(5)} ${from.kind} ↔ ${to.dutyDate.slice(5)} ${to.kind} 교환을 요청했습니다`;
+    } else if (kind === "넘기기") {
+      targetId = opts.toPersonId;
+      row = { from_schedule_id: from.id, to_schedule_id: null, requester_id: myId, target_id: targetId, kind };
+      msg = `${profile.name}님이 ${from.dutyDate.slice(5)} ${from.kind} 근무를 넘기려 합니다`;
+    } else { // 대신서기 — from은 남의 근무
+      targetId = from.profileId;
+      row = { from_schedule_id: from.id, to_schedule_id: null, requester_id: myId, target_id: targetId, kind };
+      msg = `${profile.name}님이 ${from.dutyDate.slice(5)} ${from.kind} 근무를 대신 서겠다고 합니다`;
+    }
+    const { data } = await supabase.from("duty_swaps").insert(row).select();
     if (data?.[0]) setDutySwaps((prev) => [...prev, mapDutySwap(data[0])]);
-    sendPush("duty_swap_request", [to.profileId], {
-      title: "근무 교환 요청",
-      body: `${profile.name}님이 ${from.dutyDate.slice(5)} ${from.kind} ↔ ${to.dutyDate.slice(5)} ${to.kind} 교환을 요청했습니다`,
-    });
+    sendPush("duty_swap_request", [targetId], { title: "근무 요청", body: msg });
   }
 
   // 수락 = 두 칸의 담당자를 맞바꾼다. 같은 달이든 다음 달이든 동일 로직(이월도 이걸로 처리).
@@ -296,17 +311,24 @@ export default function App() {
       });
       return;
     }
-    await Promise.all([
-      supabase.from("duty_schedules").update({ profile_id: swap.targetId }).eq("id", swap.fromScheduleId),
-      supabase.from("duty_schedules").update({ profile_id: swap.requesterId }).eq("id", swap.toScheduleId),
-    ]);
-    setDutySchedules((prev) => prev.map((d) =>
-      d.id === swap.fromScheduleId ? { ...d, profileId: swap.targetId }
-        : d.id === swap.toScheduleId ? { ...d, profileId: swap.requesterId } : d
-    ));
+    // 교환: 두 칸 맞바꿈 / 넘기기: from 주인=넘겨받은 사람(target) / 대신서기: from 주인=요청자(requester)
+    if (swap.kind === "교환") {
+      await Promise.all([
+        supabase.from("duty_schedules").update({ profile_id: swap.targetId }).eq("id", swap.fromScheduleId),
+        supabase.from("duty_schedules").update({ profile_id: swap.requesterId }).eq("id", swap.toScheduleId),
+      ]);
+      setDutySchedules((prev) => prev.map((d) =>
+        d.id === swap.fromScheduleId ? { ...d, profileId: swap.targetId }
+          : d.id === swap.toScheduleId ? { ...d, profileId: swap.requesterId } : d
+      ));
+    } else {
+      const newOwner = swap.kind === "넘기기" ? swap.targetId : swap.requesterId;
+      await supabase.from("duty_schedules").update({ profile_id: newOwner }).eq("id", swap.fromScheduleId);
+      setDutySchedules((prev) => prev.map((d) => (d.id === swap.fromScheduleId ? { ...d, profileId: newOwner } : d)));
+    }
     sendPush("duty_swap_result", [swap.requesterId], {
-      title: "교환이 성사됐습니다",
-      body: `${profile.name}님이 근무 교환을 수락했습니다`,
+      title: swap.kind === "교환" ? "교환이 성사됐습니다" : "근무 요청이 수락됐습니다",
+      body: `${profile.name}님이 수락했습니다`,
     });
   }
 
