@@ -33,14 +33,6 @@ export default function MaterialsAdmin({ data, setData }) {
   async function handleMaterialSupplyComplete(request, { assigneeId, billingPart, billingAmount, photoUrls }) {
     const engineer = (data.profiles ?? []).find((p) => p.id === assigneeId);
     const assigneeName = engineer?.name ?? request.engineer;
-    const patch = {
-      status: "지급완료",
-      supplied_date: TODAY_STR,
-      has_supply_photo: photoUrls.length > 0,
-      supply_photo_urls: photoUrls.length ? photoUrls : null,
-    };
-    const { error } = await supabase.from("material_requests").update(patch).eq("id", request.id);
-    if (error) { alert("지급완료 처리 실패: " + error.message); return; }
 
     const todoId = "todo-" + request.id;
     const dueDate = addDays(TODAY_STR, 30);
@@ -62,8 +54,20 @@ export default function MaterialsAdmin({ data, setData }) {
       billing_part: billingPart,
       billing_amount: billingAmount,
     };
-    const { error: todoError } = await supabase.from("todos").insert(todoRow);
+    // 할 일을 먼저 upsert(=재시도 시 같은 id로 다시 써도 안전)한 뒤 상태를 바꾼다 —
+    // 반대 순서면 상태 변경 후 할 일 생성이 실패했을 때 DB(지급완료)와 화면(승인대기)이
+    // 어긋나고, insert였다면 재시도 시 같은 id 충돌로 영구히 막히는 문제가 있었다.
+    const { error: todoError } = await supabase.from("todos").upsert(todoRow);
     if (todoError) { alert("할 일 생성 실패: " + todoError.message); return; }
+
+    const patch = {
+      status: "지급완료",
+      supplied_date: TODAY_STR,
+      has_supply_photo: photoUrls.length > 0,
+      supply_photo_urls: photoUrls.length ? photoUrls : null,
+    };
+    const { error } = await supabase.from("material_requests").update(patch).eq("id", request.id);
+    if (error) { alert("지급완료 처리 실패: " + error.message); return; }
 
     setData((prev) => ({
       ...prev,
@@ -103,15 +107,6 @@ export default function MaterialsAdmin({ data, setData }) {
   }
 
   async function handleQuoteSupplyComplete(quote, { assigneeIds, photoUrls }) {
-    const patch = {
-      status: "자재지급완료",
-      supplied_date: TODAY_STR,
-      has_supply_photo: photoUrls.length > 0,
-      supply_photo_urls: photoUrls.length ? photoUrls : null,
-    };
-    const { error } = await supabase.from("quote_requests").update(patch).eq("id", quote.id);
-    if (error) { alert("자재지급완료 처리 실패: " + error.message); return; }
-
     const unitId = quote.unitId ?? unitIdFor(data.units, quote.siteId, quote.elevatorNo);
     const dueDate = addDays(TODAY_STR, 30);
     const newTodos = assigneeIds.map((assigneeId, idx) => {
@@ -133,7 +128,9 @@ export default function MaterialsAdmin({ data, setData }) {
         assigneeId,
       };
     });
-    const { error: todoError } = await supabase.from("todos").insert(
+    // 할 일을 먼저 upsert(=재시도 시 같은 id로 다시 써도 안전)한 뒤 상태를 바꾼다 — 자재
+    // 지급완료와 동일한 이유(순서 반대면 부분 실패 시 DB/화면 불일치 및 재시도 충돌 발생).
+    const { error: todoError } = await supabase.from("todos").upsert(
       newTodos.map((t) => ({
         id: t.id, quote_request_id: t.quoteRequestId, source: t.source, title: t.title,
         site_name: t.siteName, elevator_no: t.elevatorNo, part: t.part,
@@ -142,6 +139,15 @@ export default function MaterialsAdmin({ data, setData }) {
       }))
     );
     if (todoError) { alert("할 일 생성 실패: " + todoError.message); return; }
+
+    const patch = {
+      status: "자재지급완료",
+      supplied_date: TODAY_STR,
+      has_supply_photo: photoUrls.length > 0,
+      supply_photo_urls: photoUrls.length ? photoUrls : null,
+    };
+    const { error } = await supabase.from("quote_requests").update(patch).eq("id", quote.id);
+    if (error) { alert("자재지급완료 처리 실패: " + error.message); return; }
 
     setData((prev) => ({
       ...prev,
@@ -368,7 +374,7 @@ function MaterialSupplyModal({ request, profiles, onClose, onSubmit }) {
 
 function QuoteSupplyModal({ quote, profiles, onClose, onSubmit }) {
   const engineers = profiles.filter((p) => p.role === "engineer");
-  const defaultId = engineers.find((p) => p.name === quote.engineer)?.id;
+  const defaultId = quote.requesterId || engineers.find((p) => p.name === quote.engineer)?.id || "";
   const [assigneeIds, setAssigneeIds] = useState(defaultId ? [defaultId] : []);
   const [photos, setPhotos] = useState(quote.supplyPhotoUrls ?? []);
   const [uploading, setUploading] = useState(false);
