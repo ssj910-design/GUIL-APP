@@ -33,8 +33,12 @@ function legacySiteFields(siteUnits) {
 function UnitDetailModal({ unit, site, failures, inspections, billings, onClose }) {
   const [tab, setTab] = useState("정보");
   const [failTarget, setFailTarget] = useState(null);
+  // units.gov_no가 아직 안 채워진 호기가 있다(마이그레이션 진행 중) — 그런 경우
+  // 모바일 앱과 동일하게 sites의 옛 컬럼(gov_elevator_nos)에서 찾아 폴백한다.
+  // 편집·저장은 아니라 조회 전용이라 v2 네이티브 원칙과 충돌하지 않는다.
+  const unitGovNo = unit.govNo || site.govElevatorNos?.[(unit.seq ?? 1) - 1] || null;
   const liveInspections = useLiveInspections(
-    unit.govNo ? [{ key: unit.id, siteId: site.id, siteName: site.name, govElevatorNo: unit.govNo }] : []
+    unitGovNo ? [{ key: unit.id, siteId: site.id, siteName: site.name, govElevatorNo: unitGovNo }] : []
   );
   const liveInfo = liveInspections[0];
   const unitFailures = failures
@@ -42,7 +46,7 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
     .sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt));
   // 검사내역 탭: 최신 상태 1건이 아니라 과거 전체 검사결과(합격·조건부합격·불합격)를 나열한다
   // (모바일 앱 SiteTab "검사" 탭과 동일 — 목록은 즉시 받고, 부적합상세는 클릭 시 지연 조회+캐시).
-  const { history: inspectionHistory, loading: historyLoading } = useInspectionHistory(unit.govNo);
+  const { history: inspectionHistory, loading: historyLoading } = useInspectionHistory(unitGovNo);
   const manualInspections = inspections.filter((i) => (i.unitId ? i.unitId === unit.id : i.siteId === site.id));
   const unitBillings = billings.filter((b) => (b.unitId ? b.unitId === unit.id : b.siteName === site.name));
 
@@ -50,7 +54,7 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
   const infoRows = [
     ["건물명", site.name],
     ["호기", unit.unitNo],
-    ["승강기번호", liveInfo?.govElevatorNo || unit.govNo || "미등록"],
+    ["승강기번호", liveInfo?.govElevatorNo || unitGovNo || "미등록"],
     ["승강기종류", liveInfo?.kindNm || unit.kind || "-"],
     ["승강기형식", liveInfo?.form || unit.form || "-"],
     ["승강기모델", unit.model || "-"],
@@ -107,7 +111,7 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
         )}
 
         {tab === "검사내역" && (
-          unit.govNo ? (
+          unitGovNo ? (
             historyLoading ? (
               <p className="text-xs text-slate-400 text-center py-10">국가승강기정보센터에서 검사이력을 조회하는 중...</p>
             ) : inspectionHistory.length === 0 ? (
@@ -122,7 +126,7 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
                     <div
                       key={hi}
                       onClick={clickable ? () => setFailTarget({
-                        inspection: { siteName: site.name, elevatorNo: unit.unitNo, result: resultCode, govElevatorNo: unit.govNo },
+                        inspection: { siteName: site.name, elevatorNo: unit.unitNo, result: resultCode, govElevatorNo: unitGovNo },
                         preloaded: h,
                       }) : undefined}
                       className={`border border-slate-200 rounded-lg p-3 ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`}
