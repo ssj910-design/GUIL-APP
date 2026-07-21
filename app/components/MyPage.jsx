@@ -85,7 +85,13 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
     ? 0.5
     : Math.max(1, Math.floor((new Date(form.end) - new Date(form.start)) / 86400000) + 1);
 
+  // 신청 기간에 내 당직·숙직이 끼면 신청을 막는다 — 근무를 먼저 교환한 뒤 연차를 써야 한다.
+  const dutyConflicts = dutySchedules.filter(
+    (d) => d.profileId === selfId && d.dutyDate >= form.start && d.dutyDate <= form.end
+  );
+
   async function submitLeave() {
+    if (dutyConflicts.length) return;
     setBusy(true);
     const { data, error } = await supabase.from("leaves").insert({
       profile_id: selfId, start_date: form.start, end_date: form.end,
@@ -244,11 +250,17 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
                   {left != null && reqDays > left && (
                     <p className="text-[11px] font-bold text-red-500">잔여 {left}일보다 많이 신청했습니다</p>
                   )}
+                  {dutyConflicts.length > 0 && (
+                    <p className="text-[11px] font-bold text-red-500 leading-relaxed">
+                      {dutyConflicts.map((d) => `${d.dutyDate.slice(5).replace("-", "/")} ${d.kind}`).join(", ")} 근무가 있습니다.
+                      먼저 근무 교환을 한 뒤 신청하세요.
+                    </p>
+                  )}
                   <div className="flex gap-1.5">
                     <button onClick={() => setApplying(false)} className="flex-1 text-xs font-bold text-slate-500 bg-slate-100 py-2.5 rounded-lg">취소</button>
-                    <button onClick={submitLeave} disabled={busy}
+                    <button onClick={submitLeave} disabled={busy || dutyConflicts.length > 0 || (left != null && reqDays > left)}
                       className="flex-1 text-xs font-bold text-white bg-blue-700 py-2.5 rounded-lg disabled:bg-slate-200">
-                      {busy ? "신청 중…" : `${reqDays}일 신청`}
+                      {busy ? "신청 중…" : dutyConflicts.length ? "근무일 포함" : `${reqDays}일 신청`}
                     </button>
                   </div>
                 </div>
