@@ -4,7 +4,7 @@ import { siteUnits, addDays, labelToSeq, govDateToDashed, formatShortDate, failu
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
-import { Badge, TimelineRow, HistoryCard, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
+import { Badge, TimelineRow, HistoryCard, PrimaryButton, Sheet, Field, inputCls, DrillHeader, MapLinkButtons } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { BillingCard } from "@/app/components/tabs/BillingTab";
@@ -402,7 +402,17 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
           <TimelineRow icon={Flag} label="승강기 번호" value={site.elevatorNo} valueColor="text-blue-600" />
           <TimelineRow icon={Flag} label="현장명" value={site.name} />
           <TimelineRow icon={Flag} label="대수" value={`${units.length} 대`} />
-          <TimelineRow icon={MapPin} label="주소" value={site.address} valueColor="text-blue-600" />
+          <TimelineRow
+            icon={MapPin}
+            label="주소"
+            valueColor="text-blue-600"
+            value={
+              <span className="flex items-center justify-end gap-1.5">
+                <MapLinkButtons site={site} />
+                {site.address}
+              </span>
+            }
+          />
           <TimelineRow icon={Flame} label="계약구분" value={site.contractType || "-"} valueColor={site.contractType === "FM(종합계약)" ? "text-red-600 font-bold" : "text-slate-700"} />
           {siteManagers.map((m, idx) => {
             const n = siteManagers.length > 1 ? `${idx + 1}` : "";
@@ -597,10 +607,10 @@ export function SiteTab({ inspections, failures, billings, siteManagers, onUpdat
           const insp = latestInspection(s.id);
           const openF = openFailures(s.id);
           return (
-            <button
+            <div
               key={s.id}
               onClick={() => { setSelectedSite(s); setView("site"); }}
-              className="w-full text-left bg-white rounded-xl border border-slate-200 p-3.5 active:bg-slate-50"
+              className="w-full text-left bg-white rounded-xl border border-slate-200 p-3.5 active:bg-slate-50 cursor-pointer"
             >
               <div className="flex items-center justify-between gap-2 mb-1">
                 <p className="font-bold text-slate-800 text-sm">{s.name} · {siteUnits(s).length}대</p>
@@ -614,8 +624,11 @@ export function SiteTab({ inspections, failures, billings, siteManagers, onUpdat
                   {insp?.result && <Badge result={insp.result} />}
                 </div>
               </div>
-              <p className="text-[11px] text-slate-400">{s.address}</p>
-            </button>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] text-slate-400 truncate">{s.address}</p>
+                <MapLinkButtons site={s} />
+              </div>
+            </div>
           );
         })}
         {list.length === 0 && <p className="text-xs text-slate-400 text-center py-8">검색 결과가 없습니다</p>}
