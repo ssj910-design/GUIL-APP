@@ -95,6 +95,7 @@ export default function App() {
   const [profilesAll, setProfilesAll] = useState([]); // v2: 전 직원 프로필 (이름→id 매핑용)
   const [attendances, setAttendances] = useState([]); // 오늘 출퇴근 기록
   const [dutySchedules, setDutySchedules] = useState([]); // 당직·숙직 근무표 (이번 달 이후)
+  const [pendingNight, setPendingNight] = useState(null); // 어제 마감 안 한 숙직(익일 출근 시 자동 마감 / 연차면 홈 버튼으로)
   const [dutySwaps, setDutySwaps] = useState([]);
   const [todayLeaves, setTodayLeaves] = useState([]); // 오늘 휴가 중인 사람 (배정 차단용)
   const [rosterOpen, setRosterOpen] = useState(false);
@@ -262,7 +263,7 @@ export default function App() {
     async function refresh(force) {
       const { profilesAll: pa, attendances: att } = liveRef.current;
       const self = pa.find((p) => p.id === pid);
-      if (!self || self.share_location === false) return;
+      if (!self) return;
       const todayAtt = att.find((a) => a.profileId === pid);
       if (!todayAtt?.checkedInAt || todayAtt.checkedOutAt) return;
       if (!force) {
@@ -293,9 +294,8 @@ export default function App() {
     const now = new Date().toISOString();
     // 위치 공유를 끈 사람은 위치를 받지 않는다.
     // 출근·위치재시도는 출근 위치(lat/lng)로, 퇴근·당직은 퇴근 위치(out_lat/out_lng)로 저장.
-    const shareLoc = profilesAll.find((p) => p.id === pid)?.share_location !== false;
     const isOut = kind === "out" || kind === "duty" || kind === "night";
-    const wantLoc = (kind === "in" || kind === "relocate" || isOut) && shareLoc;
+    const wantLoc = kind === "in" || kind === "relocate" || isOut; // 위치는 항상 사용(권한 필수)
     const here = wantLoc ? await getPositionOnce() : null;
 
     // 위치만 다시 받기인데 실패하면 아무것도 저장하지 않는다
@@ -827,10 +827,10 @@ export default function App() {
     setFailures((prev) =>
       prev.map((x) => (x.id === failure.id ? { ...x, assignee, dispatchedAt, etaMinutes, status: "진행중" } : x))
     );
-    // 출동 응답 = "지금 여기서 출발" → 출발 시점 GPS로 마지막 위치 갱신 (위치 공유 켠 사람만).
+    // 출동 응답 = "지금 여기서 출발" → 출발 시점 GPS로 마지막 위치 갱신.
     // 출동 처리를 지연시키지 않도록 백그라운드로 받는다(await 안 함).
     const selfPid = profileIdByName(profilesAll, profile.name);
-    if (selfPid && profilesAll.find((p) => p.id === selfPid)?.share_location !== false) {
+    if (selfPid) {
       getPositionOnce().then((here) => { if (here) updateLastLocation(selfPid, here.lat, here.lng, "출동 출발"); });
     }
     simulateSms(failure.reporterPhone, `구일엘리베이터입니다. 담당 기사가 약 ${etaMinutes}분 후 도착 예정입니다.`);

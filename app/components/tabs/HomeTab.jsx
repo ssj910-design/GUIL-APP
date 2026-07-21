@@ -156,10 +156,9 @@ function AdminAttendanceCard({ attendances, engineers }) {
 // 출퇴근 체크 — 기사는 출근/퇴근·당직 버튼, 관리자는 오늘 출근 인원 요약.
 // 출근 시 현위치를 1회 받아 저장한다(고장 배정 시 가까운 기사 정렬용).
 function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRoster, swapCount = 0 }) {
-  const { role, selfId, engineers, profiles: allProfiles = [] } = useContext(AuthContext);
+  const { role, selfId, engineers } = useContext(AuthContext);
   const [checking, setChecking] = useState(false);
   const [geoModalDismissed, setGeoModalDismissed] = useState(false);
-  const shareLoc = allProfiles.find((p) => p.id === selfId)?.share_location !== false;
   const [geoPerm, setGeoPerm] = useState("unknown"); // granted | denied | prompt | unknown
 
   // 기사가 홈을 열면 '마지막 접속 시각'을 기록한다 (출근부에서 '오늘 앱 봤나' 확인용).
@@ -230,9 +229,8 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
   const workTone = dutyOn
     ? (dutyKind === "당직" ? "text-emerald-700 bg-emerald-50" : "text-blue-700 bg-blue-50")
     : "text-blue-600 bg-blue-50";
-  // 위치를 쓰기로 했는데(공유 ON) 권한이 거부·미결정이면 출근을 막는다.
-  // 위치 공유 OFF이거나 권한 API 미지원(unknown)이면 그냥 출근 가능.
-  const needGeo = shareLoc && (geoPerm === "denied" || geoPerm === "prompt");
+  // 위치 권한이 거부·미결정이면 출근을 막는다(위치는 필수). 권한 API 미지원(unknown)이면 통과.
+  const needGeo = geoPerm === "denied" || geoPerm === "prompt";
 
   async function relocate() {
     setChecking(true);
@@ -243,7 +241,7 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
 
   // 위치 안 켠 기사에게는 본인 앱에서만 모달로 알린다 (게시판은 전원 공개라 부적절).
   // 열 때 한 번 뜨고, '나중에'로 닫으면 이 화면에선 다시 안 뜬다(다음에 앱 새로 열면 아직 꺼졌을 때 또 안내).
-  const showGeoModal = shareLoc && (geoPerm === "denied" || geoPerm === "prompt") && !geoModalDismissed;
+  const showGeoModal = (geoPerm === "denied" || geoPerm === "prompt") && !geoModalDismissed;
 
   return (
     <>
@@ -272,7 +270,7 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
         {!mine?.checkedInAt ? (
           <>
             {/* 위치 권한을 아직 안 물어봤으면 먼저 맥락을 주고 허용을 유도한다 (거부율↓, 아이폰 대응) */}
-            {shareLoc && geoPerm === "prompt" && (
+            {geoPerm === "prompt" && (
               <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-2">
                 <p className="text-xs font-bold text-blue-800">📍 위치 사용 안내</p>
                 <p className="text-[11px] text-blue-700 mt-1 leading-relaxed">
@@ -283,7 +281,7 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
                 </button>
               </div>
             )}
-            {shareLoc && geoPerm === "denied" && (
+            {geoPerm === "denied" && (
               <p className="text-[11px] text-amber-600 font-semibold bg-amber-50 rounded-lg px-3 py-2 mb-2 leading-relaxed">
                 위치 권한이 꺼져 있습니다. 켜면 급한 출동 때 가까운 현장을 먼저 안내받을 수 있어요 — 설정 → 위치, 또는 주소창 자물쇠 → 위치에서 허용.
               </p>
@@ -295,16 +293,16 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
             >
               {checking ? "위치 확인 중…" : needGeo ? "위치 허용 후 출근신고 가능" : "출근 체크"}
             </button>
-            <p className="text-[10px] text-slate-400 mt-1.5 px-1">{shareLoc ? "출근할 때 위치를 한 번만 확인해요 · 급한 출동 때 가까운 현장 우선 안내에 쓰여요" : "위치 공유가 꺼져 있습니다 (마이페이지에서 켤 수 있어요)"}</p>
+            <p className="text-[10px] text-slate-400 mt-1.5 px-1">출근할 때 위치를 한 번만 확인해요 · 급한 출동 때 가까운 현장 우선 안내에 쓰여요</p>
           </>
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-bold text-slate-500">
                 출근 <span className="text-slate-800">{hhmm(mine.checkedInAt)}</span>
-                {shareLoc && (mine.lat != null
+                {mine.lat != null
                   ? <span className="ml-1.5 text-[10px] font-bold text-emerald-600">· 위치 확인됨</span>
-                  : <span className="ml-1.5 text-[10px] font-bold text-amber-600">· 위치 미기록</span>)}
+                  : <span className="ml-1.5 text-[10px] font-bold text-amber-600">· 위치 미기록</span>}
                 {done && (
                   <span className="ml-2 text-slate-800">{mine.status} {hhmm(mine.checkedOutAt)}</span>
                 )}
@@ -315,7 +313,7 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
             </div>
 
             {/* 위치를 못 받았으면 다시 받을 수 있게 (처음에 권한 거부했어도 나중에 켜서 재수집) */}
-            {shareLoc && mine.lat == null && !done && (
+            {mine.lat == null && !done && (
               <button onClick={relocate} disabled={checking}
                 className="w-full mt-2 text-[11px] font-bold text-blue-700 bg-blue-50 rounded-lg py-2 disabled:opacity-60">
                 {checking ? "위치 확인 중…" : "📍 위치 다시 받기"}

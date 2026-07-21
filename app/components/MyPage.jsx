@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react";
-import { X, LogOut, CalendarDays, Plane, Plus, Bell, BellRing, MapPin } from "lucide-react";
+import { X, LogOut, CalendarDays, Plane, Plus, Bell, BellRing } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { AuthContext } from "@/app/components/context";
 import { TODAY_STR } from "@/lib/constants";
@@ -61,13 +61,6 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
     const nextPrefs = { ...prefs, [item.key]: next };
     setPrefs(nextPrefs);
     await supabase.from("profiles").update({ notify_prefs: nextPrefs }).eq("id", selfId);
-  }
-
-  const [shareLoc, setShareLoc] = useState(me.share_location !== false);
-  async function toggleShareLoc() {
-    const next = !shareLoc;
-    setShareLoc(next);
-    await supabase.from("profiles").update({ share_location: next }).eq("id", selfId);
   }
 
   const myNotifs = forRole(role).filter((n) => orgSettings[n.key]?.enabled !== false);
@@ -274,27 +267,6 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
               )}
 
         </Card>
-
-        {/* 위치 공유 — 출근 시 1회 기록 여부를 본인이 켜고 끈다 */}
-        {role !== "admin" && (
-          <Card
-            icon={<MapPin size={13} />}
-            title="위치 공유"
-            extra={
-              <button onClick={toggleShareLoc}
-                className={`relative w-11 h-6 rounded-full transition-colors ${shareLoc ? "bg-blue-600" : "bg-slate-200"}`}
-                aria-label={`위치 공유 ${shareLoc ? "끄기" : "켜기"}`}>
-                <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${shareLoc ? "left-[22px]" : "left-0.5"}`} />
-              </button>
-            }
-          >
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              {shareLoc
-                ? "출근 체크할 때 위치를 한 번만 확인해요. 급한 출동이 생기면 가까운 현장을 먼저 안내받을 수 있어요."
-                : "위치를 공유하지 않습니다. 출근해도 위치가 저장되지 않고, 가까운 현장 우선 안내에서 빠집니다."}
-            </p>
-          </Card>
-        )}
 
         {/* 알림 설정 — 회사가 켜둔 것 중에서 본인이 끌 수 있다 */}
         <Card
