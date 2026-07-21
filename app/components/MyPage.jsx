@@ -290,7 +290,7 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
           >
             <p className="text-[11px] text-slate-500 leading-relaxed">
               {shareLoc
-                ? "출근 체크할 때 위치를 한 번만 확인해요. 급한 출동이 생기면 가까운 현장을 먼저 안내받을 수 있고, 평소엔 위치를 보지 않아요."
+                ? "출근 체크할 때 위치를 한 번만 확인해요. 급한 출동이 생기면 가까운 현장을 먼저 안내받을 수 있어요."
                 : "위치를 공유하지 않습니다. 출근해도 위치가 저장되지 않고, 가까운 현장 우선 안내에서 빠집니다."}
             </p>
           </Card>

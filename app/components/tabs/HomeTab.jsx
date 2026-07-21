@@ -251,7 +251,7 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
           <div className="bg-white rounded-2xl w-full max-w-xs p-5" onClick={(e) => e.stopPropagation()}>
             <p className="text-base font-extrabold text-slate-800 text-center">📍 위치 권한을 켜주세요</p>
             <p className="text-xs text-slate-600 mt-2 leading-relaxed text-center">
-              출근할 때 위치를 한 번만 확인해요. 급한 출동이 생기면 가까운 현장을 먼저 안내받을 수 있고, 평소엔 위치를 보지 않아요.
+              출근할 때 위치를 한 번만 확인해요. 급한 출동이 생기면 가까운 현장을 먼저 안내받을 수 있어요.
             </p>
             {geoPerm === "denied" && (
               <p className="text-[11px] text-slate-400 mt-2.5 leading-relaxed whitespace-pre-line bg-slate-50 rounded-lg p-2.5">{GEO_HELP}</p>
@@ -275,7 +275,7 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
               <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-2">
                 <p className="text-xs font-bold text-blue-800">📍 위치 사용 안내</p>
                 <p className="text-[11px] text-blue-700 mt-1 leading-relaxed">
-                  출근할 때 위치를 한 번만 확인해요. 급한 출동이 생기면 가까운 현장을 먼저 안내받을 수 있고, 평소엔 위치를 보지 않아요.
+                  출근할 때 위치를 한 번만 확인해요. 급한 출동이 생기면 가까운 현장을 먼저 안내받을 수 있어요.
                 </p>
                 <button onClick={primeLocation} className="w-full mt-2 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800">
                   위치 허용하기
@@ -294,7 +294,7 @@ function AttendanceBar({ attendances, dutySchedules = [], onAttendance, onOpenRo
             >
               {checking ? "위치 확인 중…" : needGeo ? "위치 허용 후 출근 가능" : "출근 체크"}
             </button>
-            <p className="text-[10px] text-slate-400 mt-1.5 px-1">{shareLoc ? "출근할 때 위치를 한 번만 확인해요 · 가까운 현장 우선 안내에 쓰이고 평소엔 보지 않아요" : "위치 공유가 꺼져 있습니다 (마이페이지에서 켤 수 있어요)"}</p>
+            <p className="text-[10px] text-slate-400 mt-1.5 px-1">{shareLoc ? "출근할 때 위치를 한 번만 확인해요 · 급한 출동 때 가까운 현장 우선 안내에 쓰여요" : "위치 공유가 꺼져 있습니다 (마이페이지에서 켤 수 있어요)"}</p>
           </>
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
