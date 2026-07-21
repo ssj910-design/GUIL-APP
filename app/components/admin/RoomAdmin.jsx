@@ -20,8 +20,21 @@ function timeOf(iso) {
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-function PhotoGrid({ urls, onOpen }) {
+function PhotoGrid({ urls, onOpen, compact }) {
   if (!urls?.length) return null;
+  // compact: 목록 카드용 — 모바일 앱과 동일하게 썸네일 1장 + 매수 배지만 보여줘서
+  // 사진 여러 장인 글도 카드 세로 길이가 늘어나지 않게 한다.
+  if (compact) {
+    return (
+      <button onClick={(e) => { e.stopPropagation(); onOpen(urls, 0); }} className="relative shrink-0">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={urls[0]} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
+        {urls.length > 1 && (
+          <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] font-bold rounded px-1">{urls.length}</span>
+        )}
+      </button>
+    );
+  }
   return (
     <div className="mt-2 grid grid-cols-4 gap-1.5 max-w-md">
       {urls.map((url, i) => (
@@ -189,7 +202,7 @@ export default function RoomAdmin({ data, setData }) {
   const detailPost = detailId ? feed.find((p) => p.id === detailId) : null;
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
+    <div className="max-w-6xl space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-800">게시판</h1>
         <div className="relative w-64">
@@ -229,8 +242,10 @@ export default function RoomAdmin({ data, setData }) {
                     <Trash2 size={15} />
                   </button>
                 </div>
-                <p className="text-sm text-slate-700 whitespace-pre-wrap cursor-pointer" onClick={() => setDetailId(p.id)}>{p.text}</p>
-                <PhotoGrid urls={p.photoUrls} onOpen={(urls, index) => setPhotoViewer({ urls, index })} />
+                <div className="flex items-start justify-between gap-3 cursor-pointer" onClick={() => setDetailId(p.id)}>
+                  <p className="flex-1 min-w-0 text-sm text-slate-700 whitespace-pre-wrap">{p.text}</p>
+                  <PhotoGrid urls={p.photoUrls} onOpen={(urls, index) => setPhotoViewer({ urls, index })} compact />
+                </div>
                 <div className="flex items-center gap-3 mt-3 pt-2.5 border-t border-slate-50">
                   <button onClick={() => toggleLike(p.id)} className={`flex items-center gap-1 text-xs font-bold ${liked ? "text-blue-600" : "text-slate-400"}`}>
                     <ThumbsUp size={14} fill={liked ? "currentColor" : "none"} /> {likes.length > 0 ? likes.length : "좋아요"}
