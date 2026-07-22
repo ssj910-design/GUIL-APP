@@ -756,7 +756,7 @@ function FailureResponseCard({ f, dist, warnCount = 0, site, onOpenDetail, onDis
       </div>
       {stage === "pending" && (
         <div className="flex items-center gap-2 px-3.5 pb-2">
-          <MapLinkButtons site={site} size={38} />
+          <MapLinkButtons site={site} />
           {role === "admin" && onAssignOpen ? (
             <button onClick={() => onAssignOpen(f)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800">기사 배정</button>
           ) : (
@@ -796,7 +796,7 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
           {stage === "dispatched" && <p className="text-[11px] text-blue-600 font-semibold mt-1">출동 {f.dispatchedAt} · {f.etaMinutes}분 후 도착예정</p>}
           {stage === "arrived" && <p className="text-[11px] text-amber-600 font-semibold mt-1">{f.arrivalTime} 도착 · 작업 중</p>}
         </button>
-        {stage !== "done" && <MapLinkButtons site={siteOf(f)} size={30} />}
+        {stage !== "done" && <MapLinkButtons site={siteOf(f)} />}
       </div>
       <div className="px-3.5 pb-3.5">
         {stage === "pending" && (

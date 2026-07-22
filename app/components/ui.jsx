@@ -1,3 +1,6 @@
+"use client";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
 
@@ -14,7 +17,7 @@ import { TODAY_STR } from "@/lib/constants";
  * 예전엔 window.location.href로 스킴을 직접 호출해서, 지도 앱에 갔다 뒤로가기로
  * 돌아오면 브라우저 히스토리가 꼬여 화면이 먹통이 되는 문제가 있었다.
  */
-export function MapLinkButtons({ site, className = "", size = 24 }) {
+export function MapLinkButtons({ site, className = "", size = 30 }) {
   if (!site || site.lat == null || site.lng == null) return null;
   const name = encodeURIComponent(site.name ?? "현장");
   const openKakao = (e) => {
@@ -253,7 +256,11 @@ export function PrimaryButton({ children, onClick, disabled, tone = "blue", clas
 
 
 export function Sheet({ title, onClose, children }) {
-  return (
+  // body Portal로 렌더 — 탭 콘텐츠(PullToRefresh)의 transform이 fixed를 가두는 걸 피해,
+  // 플로팅 버튼(게시판 퀵) 등 다른 요소가 시트 위로 겹치지 않게 한다.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const content = (
     <div className="fixed inset-0 z-30 flex flex-col bg-black/40" onClick={onClose}>
       <div className="mt-auto" />
       <div
@@ -270,6 +277,7 @@ export function Sheet({ title, onClose, children }) {
       </div>
     </div>
   );
+  return mounted ? createPortal(content, document.body) : null;
 }
 
 
