@@ -5,7 +5,8 @@
 import { useState } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid } from "@/app/components/admin/adminShared";
+import { shortDate } from "@/lib/utils";
+import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate } from "@/app/components/admin/adminShared";
 
 const BILLING_METHODS = ["계좌이체", "CMS", "지로"];
 
@@ -14,58 +15,6 @@ function siteManagerOf(data, unitId, fallbackSiteName) {
   const unit = data.units.find((u) => u.id === unitId);
   const site = unit ? data.sites.find((s) => s.id === unit.siteId) : data.sites.find((s) => s.name === fallbackSiteName);
   return site?.manager || "-";
-}
-
-// "2026-05-20" → "26.05.20"
-function shortDate(d) {
-  return d ? d.slice(2).replace(/-/g, ".") : "-";
-}
-
-// "26.06.08" → "2026-06-08" (형식이 안 맞으면 null)
-function parseShortDate(text) {
-  const m = text.trim().match(/^(\d{2})\.(\d{2})\.(\d{2})$/);
-  if (!m) return null;
-  const [, yy, mm, dd] = m;
-  return `20${yy}-${mm}-${dd}`;
-}
-
-// 숫자만 입력해도(예: 260101) 자동으로 "26.01.01" 형태로 점을 채워 넣어준다.
-function autoFormatShortDate(raw) {
-  const digits = raw.replace(/\D/g, "").slice(0, 6);
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 4) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
-  return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4)}`;
-}
-
-// 청구일 — 달력 대신 "26.01.01" 형식을 키보드로 직접 입력(숫자만 쳐도 점은 자동으로 채워짐).
-// 입력 중엔 로컬 상태로만 갖고 있다가 포커스를 벗어날 때 파싱해서 저장한다
-// (매 키입력마다 커밋하면 커서가 튄다). 부모가 key={value}로 렌더링해 저장된 값이 실제로
-// 바뀔 때만 리마운트되어 새 값을 반영한다(매 렌더마다 useEffect로 동기화하면 impure-render
-// 린트 규칙에 걸린다).
-function BillingDateCell({ value, onCommit }) {
-  const [text, setText] = useState(shortDate(value) === "-" ? "" : shortDate(value));
-
-  function commit() {
-    if (text.trim() === "") { onCommit(null); return; }
-    const parsed = parseShortDate(text);
-    if (!parsed) {
-      alert("날짜 형식이 올바르지 않습니다 (예: 26.01.01)");
-      setText(shortDate(value) === "-" ? "" : shortDate(value));
-      return;
-    }
-    onCommit(parsed);
-  }
-
-  return (
-    <input
-      className={`${inputCls} min-w-24`}
-      placeholder="26.01.01"
-      value={text}
-      onChange={(e) => setText(autoFormatShortDate(e.target.value))}
-      onBlur={commit}
-      onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
-    />
-  );
 }
 
 function BillingDetailModal({ b, data, onClose, onSave, onToggleFree }) {
@@ -121,7 +70,7 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree }) {
               <p className="font-semibold text-slate-800">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</p>
             )}
           </div>
-          <div><p className="text-xs font-bold text-slate-400 mb-1">제출일</p><p className="font-semibold text-slate-800">{b.submittedAt}</p></div>
+          <div><p className="text-xs font-bold text-slate-400 mb-1">제출일</p><p className="font-semibold text-slate-800">{shortDate(b.submittedAt)}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">현장 담당자 연락처</p><p className="font-semibold text-slate-800">{b.contactPhone || "-"}</p></div>
           <div>
             {b.materialRequestId || b.type === "material"
@@ -140,7 +89,7 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree }) {
           </div>
           <div>
             <p className="text-xs font-bold text-slate-500 mb-1">기한(교체일자) 수정</p>
-            <input className={inputCls} type="date" value={form.replaceDate} onChange={(e) => setForm({ ...form, replaceDate: e.target.value })} />
+            <DateTextInput key={form.replaceDate ?? "unset"} value={form.replaceDate} onChange={(v) => setForm({ ...form, replaceDate: v })} />
           </div>
         </div>
 
@@ -259,7 +208,7 @@ export default function BillingsAdmin({ data, setData }) {
                 : <StatusBadge tone="slate">직접 입력</StatusBadge>}
             </td>
             <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-              <BillingDateCell key={b.billingDate ?? "unset"} value={b.billingDate} onCommit={(v) => updateManualField(b, "billing_date", "billingDate", v)} />
+              <EditableDate key={b.billingDate ?? "unset"} value={b.billingDate} onCommit={(v) => updateManualField(b, "billing_date", "billingDate", v)} />
             </td>
             <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
               <select

@@ -5,6 +5,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
+import { DateTextInput } from "@/app/components/admin/adminShared";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const hhmm = (iso) => (iso ? new Date(iso).toTimeString().slice(0, 5) : null);
@@ -44,8 +45,7 @@ export default function AttendanceAdmin({ data }) {
         </div>
         {view === "일별" ? (
           <div className="flex items-center gap-2">
-            <input type="date" value={day} onChange={(e) => setDay(e.target.value)}
-              className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm" />
+            <DateTextInput key={day} value={day} onChange={setDay} className="max-w-28" />
             {day !== TODAY_STR && <button onClick={() => setDay(TODAY_STR)} className="text-[11px] font-bold text-blue-700">오늘</button>}
           </div>
         ) : (

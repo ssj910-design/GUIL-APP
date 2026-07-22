@@ -6,12 +6,12 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections } from "@/lib/utils";
+import { unitsToInspections, shortDate } from "@/lib/utils";
 import { mapInspection } from "@/lib/mappers";
 import { Badge, DDay, inputCls as mobileInputCls } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { useInspectionFailItems } from "@/app/hooks/useLiveInspections";
-import { StatusBadge, AdminTable, FilterPills, SortableTh, sortRows, inputCls, Modal } from "@/app/components/admin/adminShared";
+import { StatusBadge, AdminTable, FilterPills, SortableTh, sortRows, inputCls, Modal, EditableDate } from "@/app/components/admin/adminShared";
 
 function daysLeftOf(dueDate, today) {
   return Math.ceil((new Date(dueDate) - new Date(today)) / 86400000);
@@ -40,13 +40,13 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
         </select>
       </td>
       <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-        <div className="flex gap-1">
-          <input type="date" className={`${mobileInputCls} w-32`} value={date} onChange={(e) => setDate(e.target.value)} />
+        <div className="flex gap-1 items-center">
+          <EditableDate value={date} onCommit={setDate} />
           <input type="time" className={`${mobileInputCls} w-20`} value={time} onChange={(e) => setTime(e.target.value)} />
         </div>
         {i.apiDueDate && (
           <p className="text-[9px] text-emerald-600 mt-0.5 whitespace-nowrap">
-            {isFlagged ? "보완기한 " : "API 유효 "}~{i.apiDueDate}
+            {isFlagged ? "보완기한 " : "API 유효 "}~{shortDate(i.apiDueDate)}
           </p>
         )}
       </td>
@@ -91,7 +91,7 @@ function FlaggedRow({ i, site, isLive }) {
         {i.result === "fail" ? (
           <span className="text-red-600 font-bold">불합격</span>
         ) : (
-          <span className="text-slate-700">{i.apiDueDate || i.dueDate || "-"}</span>
+          <span className="text-slate-700">{shortDate(i.apiDueDate || i.dueDate)}</span>
         )}
       </td>
       <td className="px-3 py-2.5 text-xs max-w-md">

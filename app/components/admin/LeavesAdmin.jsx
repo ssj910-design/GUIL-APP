@@ -7,9 +7,10 @@
 // (profiles.annual_leave_days 컬럼은 남아 있으나 현재 미사용)
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { AdminTable, inputCls, StatusBadge, DateField } from "@/app/components/admin/adminShared";
+import { AdminTable, inputCls, StatusBadge, DateTextInput } from "@/app/components/admin/adminShared";
 import { TODAY_STR } from "@/lib/constants";
 import { annualLeaveDays, yearsOfService } from "@/lib/leave";
+import { shortDate } from "@/lib/utils";
 
 const KINDS = ["연차", "반차", "병가", "공가", "기타"];
 // 반차는 0.5일. 그 외는 시작~종료 일수 그대로 (주말 제외는 회사 규정이 갈려 자동 계산하지 않는다)
@@ -35,7 +36,7 @@ export default function LeavesAdmin({ data, setData }) {
   const pending = leaves.filter((l) => st(l) === "신청").sort((a, b) => a.start_date.localeCompare(b.start_date));
 
   async function decide(l, decision) {
-    const reason = decision === "반려" ? prompt(`${nameOf(l.profile_id)}님의 ${l.start_date} ${l.kind} 신청을 반려합니다.\n사유 (선택):`) : null;
+    const reason = decision === "반려" ? prompt(`${nameOf(l.profile_id)}님의 ${shortDate(l.start_date)} ${l.kind} 신청을 반려합니다.\n사유 (선택):`) : null;
     if (decision === "반려" && reason === null) return;
     const patch = { status: decision, decided_at: new Date().toISOString(), reject_reason: reason?.trim() || null };
     const { error } = await supabase.from("leaves").update(patch).eq("id", l.id);
@@ -90,12 +91,12 @@ export default function LeavesAdmin({ data, setData }) {
         </div>
         <div>
           <p className="text-[11px] font-bold text-slate-500 mb-1">시작일</p>
-          <DateField value={form.start}
+          <DateTextInput key={form.start} value={form.start}
             onChange={(v) => setForm({ ...form, start: v, end: v > form.end ? v : form.end })} />
         </div>
         <div>
           <p className="text-[11px] font-bold text-slate-500 mb-1">종료일</p>
-          <DateField value={form.end} onChange={(v) => setForm({ ...form, end: v })} />
+          <DateTextInput key={form.end} value={form.end} onChange={(v) => setForm({ ...form, end: v })} />
         </div>
         <div className="w-56">
           <p className="text-[11px] font-bold text-slate-500 mb-1">비고</p>
@@ -118,7 +119,7 @@ export default function LeavesAdmin({ data, setData }) {
                   <b className="text-slate-800">{nameOf(l.profile_id)}</b> · {l.kind} {l.days}일
                   <br />
                   <span className="text-[11px] text-slate-400">
-                    {l.start_date}{l.end_date !== l.start_date && ` ~ ${l.end_date}`}
+                    {shortDate(l.start_date)}{l.end_date !== l.start_date && ` ~ ${shortDate(l.end_date)}`}
                     {l.note && ` · ${l.note}`}
                   </span>
                 </p>
@@ -151,7 +152,7 @@ export default function LeavesAdmin({ data, setData }) {
                 <td className="pl-5 pr-3 py-2.5 font-bold whitespace-nowrap">{p.name}</td>
                 <td className="px-3 py-2.5 whitespace-nowrap text-slate-500 text-[11px]">
                   {p.hire_date
-                    ? <>{p.hire_date} · <b className="text-slate-600">{Math.max(0, yearsOfService(p.hire_date, asOf))}년차</b></>
+                    ? <>{shortDate(p.hire_date)} · <b className="text-slate-600">{Math.max(0, yearsOfService(p.hire_date, asOf))}년차</b></>
                     : <span className="text-red-400">입사일 미입력</span>}
                 </td>
                 <td className="px-3 py-2.5 whitespace-nowrap font-bold text-slate-700">
@@ -179,7 +180,7 @@ export default function LeavesAdmin({ data, setData }) {
             <td className="pl-5 pr-3 py-2.5 font-bold whitespace-nowrap">{nameOf(l.profile_id)}</td>
             <td className="px-3 py-2.5">{l.kind}</td>
             <td className="px-3 py-2.5 whitespace-nowrap">
-              {l.start_date}{l.end_date !== l.start_date && ` ~ ${l.end_date}`}
+              {shortDate(l.start_date)}{l.end_date !== l.start_date && ` ~ ${shortDate(l.end_date)}`}
             </td>
             <td className="px-3 py-2.5">{l.days}일</td>
             <td className="px-3 py-2.5">

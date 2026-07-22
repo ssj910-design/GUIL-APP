@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapSelfCheck, mapSelfCheckItem } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
+import { shortDate } from "@/lib/utils";
 import { locOf, personOf, StatusBadge, AdminTable, Modal, PhotoGrid } from "@/app/components/admin/adminShared";
 import SELF_CHECK_ITEM_CODES from "@/lib/data/selfCheckItemCodes.json";
 
@@ -104,8 +105,8 @@ function EngineerDetailModal({ name, rows, onClose }) {
             <tr key={r.id} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setLogRow(r)}>
               <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{r.loc}</td>
               <td className="px-3 py-2.5 text-slate-500">{r.address ?? "-"}</td>
-              <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{r.doneDate ?? "-"}</td>
-              <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{r.govSubmittedAt ? r.govSubmittedAt.slice(0, 10) : "-"}</td>
+              <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(r.doneDate)}</td>
+              <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{r.govSubmittedAt ? shortDate(r.govSubmittedAt.slice(0, 10)) : "-"}</td>
               <td className="px-3 py-2.5"><GovBadge code={r.govResultCode} msg={r.govResultMsg} /></td>
             </tr>
           ))}

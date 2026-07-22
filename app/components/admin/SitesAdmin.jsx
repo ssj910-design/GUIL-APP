@@ -9,11 +9,11 @@ import { Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapUnit } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, govDateToDashed, siteMatchesQuery, formatPhone } from "@/lib/utils";
+import { addDays, govDateToDashed, siteMatchesQuery, formatPhone, shortDate } from "@/lib/utils";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
-import { Modal, StatusBadge } from "@/app/components/admin/adminShared";
+import { Modal, StatusBadge, DateTextInput, EditableDate } from "@/app/components/admin/adminShared";
 import ImportSites from "@/app/components/admin/ImportSites";
 
 const CONTRACT_TYPES = ["POG(일반계약)", "FM(종합계약)"];
@@ -135,7 +135,7 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
                         <p className="font-bold text-sm">{h.record.inspctKindNm ? `${h.record.inspctKindNm}검사` : "정기검사"}</p>
                         {resultCode ? <Badge result={resultCode} /> : <StatusBadge tone="slate">{h.record.dispWords ?? "-"}</StatusBadge>}
                       </div>
-                      <p className="text-xs text-slate-500">{h.record.inspctInsttNm ?? "-"} · 검사일 {inspDate ?? "-"}</p>
+                      <p className="text-xs text-slate-500">{h.record.inspctInsttNm ?? "-"} · 검사일 {inspDate ? shortDate(inspDate) : "-"}</p>
                       {clickable && <p className="text-[10px] text-blue-600 font-semibold mt-1">클릭해서 부적합 상세 항목 보기</p>}
                     </div>
                   );
@@ -152,7 +152,7 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
                     <p className="font-bold text-sm">{i.type}</p>
                     {i.result ? <Badge result={i.result} /> : <StatusBadge tone="slate">예정</StatusBadge>}
                   </div>
-                  <p className="text-xs text-slate-500">{i.org} · 기한 {i.dueDate}</p>
+                  <p className="text-xs text-slate-500">{i.org} · 기한 {shortDate(i.dueDate)}</p>
                 </div>
               ))}
             </div>
@@ -170,7 +170,7 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
                       <p className="font-bold text-sm">{b.part}</p>
                       <span className="text-sm font-bold">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</span>
                     </div>
-                    <p className="text-xs text-slate-500">{b.replaceDate ?? "-"} · {b.engineer ?? "-"}</p>
+                    <p className="text-xs text-slate-500">{shortDate(b.replaceDate)} · {b.engineer ?? "-"}</p>
                     {photos.length > 0 && (
                       <div className="flex gap-1.5 mt-2 overflow-x-auto">
                         {photos.map((url, i) => (
@@ -216,7 +216,7 @@ function UnitRow({ unit, emergencyPhone, onSave, onSaveEmergencyPhone, onToggleA
         </select>
       </td>
       <td className="px-2 py-2"><input className={inputCls} value={form.model} placeholder="모델명" onChange={(e) => setForm({ ...form, model: e.target.value })} /></td>
-      <td className="px-2 py-2"><input className={inputCls} type="date" value={form.installDate} onChange={(e) => setForm({ ...form, installDate: e.target.value })} /></td>
+      <td className="px-2 py-2"><EditableDate value={form.installDate} onCommit={(v) => setForm({ ...form, installDate: v })} /></td>
       <td className="px-2 py-2"><input className={inputCls} value={form.govNo} placeholder="승강기고유번호" onChange={(e) => setForm({ ...form, govNo: e.target.value })} /></td>
       <td className="px-2 py-2"><input className={inputCls} value={emergencyDraft} placeholder="EMCALL,통신사,국선/무선" onChange={(e) => setEmergencyDraft(e.target.value)} /></td>
       <td className="px-2 py-2 whitespace-nowrap text-right">
@@ -627,10 +627,10 @@ export default function SitesAdmin({ data, setData }) {
                       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 flex-1 text-sm">
                         <div><p className="text-xs font-bold text-slate-400 mb-1">계약구분</p><p className="font-semibold text-slate-800">{site.contractType || "-"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">보수료(VAT별도)</p><p className="font-semibold text-slate-800">{maintenanceCostReady ? (site.maintenanceCost != null ? Number(site.maintenanceCost).toLocaleString() + "원" : "-") : "마이그레이션 대기"}</p></div>
-                        <div><p className="text-xs font-bold text-slate-400 mb-1">계약일자</p><p className="font-semibold text-slate-800">{contractDateReady ? (site.contractDate || "-") : "마이그레이션 대기"}</p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">계약일자</p><p className="font-semibold text-slate-800">{contractDateReady ? shortDate(site.contractDate) : "마이그레이션 대기"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">계약종료일</p>
                           <p className="font-semibold text-slate-800">
-                            {site.contractEnd || "-"}
+                            {shortDate(site.contractEnd)}
                             {/* D-day 상시 표시 — 통보 기한 관리를 위해 멀어도 보여준다 (묵시적 갱신 대비) */}
                             {site.contractEnd && (
                               isExpired(site.contractEnd)
@@ -660,8 +660,8 @@ export default function SitesAdmin({ data, setData }) {
                           {site.isActive === false
                             ? "계약이 종료된 현장입니다"
                             : isExpired(site.contractEnd)
-                            ? `계약이 만료되었습니다 (${site.contractEnd})`
-                            : `계약 만료까지 D-${dday(site.contractEnd)} (${site.contractEnd})`}
+                            ? `계약이 만료되었습니다 (${shortDate(site.contractEnd)})`
+                            : `계약 만료까지 D-${dday(site.contractEnd)} (${shortDate(site.contractEnd)})`}
                           {" — "}재계약 여부를 협의하세요
                         </p>
                         <p className="text-[11px] text-amber-600 mt-0.5">
@@ -680,9 +680,9 @@ export default function SitesAdmin({ data, setData }) {
                         ) : (
                           <div className="flex flex-wrap items-end gap-2 mt-2">
                             <div><p className="text-[10px] font-bold text-amber-700 mb-1">새 계약일자</p>
-                              <input className={inputCls} type="date" value={renew.start} onChange={(e) => setRenew({ ...renew, start: e.target.value })} /></div>
+                              <DateTextInput key={renew.start} value={renew.start} onChange={(v) => setRenew({ ...renew, start: v })} /></div>
                             <div><p className="text-[10px] font-bold text-amber-700 mb-1">새 계약종료일</p>
-                              <input className={inputCls} type="date" value={renew.end} onChange={(e) => setRenew({ ...renew, end: e.target.value })} /></div>
+                              <DateTextInput key={renew.end} value={renew.end} onChange={(v) => setRenew({ ...renew, end: v })} /></div>
                             <button onClick={renewContract} className="text-xs font-bold text-white bg-amber-600 rounded-lg px-3 py-2">재계약 확정</button>
                             <button onClick={() => setRenew(null)} className="text-xs font-bold text-slate-500 border border-slate-200 rounded-lg px-3 py-2 bg-white">취소</button>
                           </div>
@@ -713,11 +713,15 @@ export default function SitesAdmin({ data, setData }) {
                       </div>
                       <div>
                         <p className="text-xs font-bold text-slate-500 mb-1">계약일자{!contractDateReady && " (마이그레이션 대기)"}</p>
-                        <input className={inputCls} type="date" disabled={!contractDateReady} value={siteForm.contractDate} onChange={(e) => setSiteForm({ ...siteForm, contractDate: e.target.value })} />
+                        {contractDateReady ? (
+                          <DateTextInput key={siteForm.contractDate} value={siteForm.contractDate} onChange={(v) => setSiteForm({ ...siteForm, contractDate: v })} />
+                        ) : (
+                          <input className={inputCls} disabled value="" />
+                        )}
                       </div>
                       <div>
                         <p className="text-xs font-bold text-slate-500 mb-1">계약종료일</p>
-                        <input className={inputCls} type="date" value={siteForm.contractEnd} onChange={(e) => setSiteForm({ ...siteForm, contractEnd: e.target.value })} />
+                        <DateTextInput key={siteForm.contractEnd} value={siteForm.contractEnd} onChange={(v) => setSiteForm({ ...siteForm, contractEnd: v })} />
                       </div>
                       <div><p className="text-xs font-bold text-slate-500 mb-1">담당 기사</p>
                         <select className={inputCls} value={siteForm.assignedEngineer} onChange={(e) => setSiteForm({ ...siteForm, assignedEngineer: e.target.value })}>

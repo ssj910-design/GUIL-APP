@@ -3,8 +3,8 @@
 // 기사 관리 — 프로필(연락처·담당지역) 편집 + 배정 현장·업무량 한눈에.
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { formatPhone } from "@/lib/utils";
-import { StatusBadge, AdminTable, inputCls, DateField } from "@/app/components/admin/adminShared";
+import { formatPhone, shortDate } from "@/lib/utils";
+import { StatusBadge, AdminTable, inputCls, DateTextInput, EditableDate } from "@/app/components/admin/adminShared";
 import ImportEngineers from "@/app/components/admin/ImportEngineers";
 import DutyAdmin from "@/app/components/admin/DutyAdmin";
 import LeavesAdmin from "@/app/components/admin/LeavesAdmin";
@@ -22,7 +22,7 @@ function EngineerRow({ p, stats, onSave, onDelete }) {
       </td>
       <td className="px-3 py-2.5 w-36"><input className={inputCls} placeholder="연락처" value={form.phone} onChange={(e) => setForm({ ...form, phone: formatPhone(e.target.value) })} /></td>
       <td className="px-3 py-2.5 w-36">
-        <DateField value={form.hireDate} onChange={(v) => setForm({ ...form, hireDate: v })} />
+        <EditableDate value={form.hireDate} onCommit={(v) => setForm({ ...form, hireDate: v })} />
       </td>
       <td className="px-3 py-2.5 w-32"><input className={inputCls} placeholder="민원24 점검자 ID" value={form.minwonId} onChange={(e) => setForm({ ...form, minwonId: e.target.value })} /></td>
       <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">{p.tel ?? "-"}</td>
@@ -30,7 +30,7 @@ function EngineerRow({ p, stats, onSave, onDelete }) {
         {p.join_status ? <StatusBadge tone={p.join_status === "승인" ? "green" : "slate"}>{p.join_status}</StatusBadge> : "-"}
       </td>
       <td className="px-3 py-2.5 whitespace-nowrap text-slate-400 text-[11px]">
-        {p.joined_at ?? "-"}<br />{p.approved_at ?? "-"}
+        {shortDate(p.joined_at)}<br />{shortDate(p.approved_at)}
       </td>
       <td className="px-3 py-2.5 whitespace-nowrap text-slate-500 text-[11px]">{p.edu_cert_no ?? "-"}</td>
       <td className="px-3 py-2.5 text-center whitespace-nowrap text-slate-500">
@@ -76,7 +76,7 @@ function EngineerCard({ p, stats, onSave, onDelete }) {
           </p>
           <p className="text-[11px] text-slate-400 mt-0.5">
             {p.member_type ?? "구분 미지정"}
-            {p.hire_date && ` · 입사 ${p.hire_date}`}
+            {p.hire_date && ` · 입사 ${shortDate(p.hire_date)}`}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
@@ -90,7 +90,7 @@ function EngineerCard({ p, stats, onSave, onDelete }) {
         <Line k="연락처" v={p.tel} />
         <Line k="아이디(민원24)" v={p.minwon_id} />
         <Line k="교육수료번호" v={p.edu_cert_no} />
-        <Line k="가입 / 승인" v={p.joined_at ? `${p.joined_at} / ${p.approved_at ?? "-"}` : null} />
+        <Line k="가입 / 승인" v={p.joined_at ? `${shortDate(p.joined_at)} / ${p.approved_at ? shortDate(p.approved_at) : "-"}` : null} />
         <Line k="현장 / 고장 / 할일" v={`${stats.sites} / ${stats.activeFailures} / ${stats.openTodos}`} />
       </div>
 
@@ -102,7 +102,7 @@ function EngineerCard({ p, stats, onSave, onDelete }) {
           </div>
           <div>
             <p className="text-[11px] font-bold text-slate-500 mb-1">입사일</p>
-            <DateField value={form.hireDate} onChange={(v) => setForm({ ...form, hireDate: v })} />
+            <DateTextInput value={form.hireDate} onChange={(v) => setForm({ ...form, hireDate: v })} />
           </div>
           <div>
             <p className="text-[11px] font-bold text-slate-500 mb-1">아이디(민원24)</p>

@@ -3,8 +3,9 @@
 // 관리자 콘솔 공용 헬퍼 — 표기(호기·담당자)는 v2 FK 우선, 옛 라벨 fallback.
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil } from "lucide-react";
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
+import { shortDate, parseShortDate, autoFormatShortDate } from "@/lib/utils";
 
 export const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
 
@@ -120,36 +121,58 @@ export function sortRows(rows, sort, getVal) {
 
 // 날짜 입력 — 모바일은 년/월/일 셀렉트(네이티브 휠 피커로 뜬다), PC는 직접 타이핑.
 // input[type=date]의 달력 팝업이 모바일에서 쓰기 불편하다는 피드백으로 나눠 놓았다.
-export function DateField({ value, onChange, fromYear = 1980, toYear = new Date().getFullYear() + 1 }) {
-  const [y, m, d] = (value ?? "").split("-");
-  const set = (ny, nm, nd) => {
-    if (!ny || !nm || !nd) { onChange(""); return; }
-    // 말일 보정 — 2/31 같은 조합이 만들어지지 않게
-    const last = new Date(Number(ny), Number(nm), 0).getDate();
-    onChange(`${ny}-${nm.padStart(2, "0")}-${String(Math.min(Number(nd), last)).padStart(2, "0")}`);
-  };
-  const years = Array.from({ length: toYear - fromYear + 1 }, (_, i) => String(toYear - i));
-  const nums = (n) => Array.from({ length: n }, (_, i) => String(i + 1).padStart(2, "0"));
-  const selCls = "border border-slate-300 rounded-lg px-1.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500";
+// 캘린더 팝업 대신 "26.01.01" 형식을 키보드로 직접 입력 — 숫자만 쳐도 점은 자동으로 채워진다.
+// 입력 중엔 로컬 상태로만 갖고 있다가 포커스를 벗어날 때 파싱해서 커밋한다(매 키입력마다
+// 커밋하면 커서가 튄다). 저장된 값이 바뀌면 부모가 key={value}로 감싸 리마운트시켜야 반영된다.
+export function DateTextInput({ value, onChange, placeholder = "26.01.01", className = "", autoFocus = false }) {
+  const [text, setText] = useState(shortDate(value) === "-" ? "" : shortDate(value));
+
+  function commit() {
+    if (text.trim() === "") { onChange(""); return; }
+    const parsed = parseShortDate(text);
+    if (!parsed) {
+      alert("날짜 형식이 올바르지 않습니다 (예: 26.01.01)");
+      setText(shortDate(value) === "-" ? "" : shortDate(value));
+      return;
+    }
+    onChange(parsed);
+  }
 
   return (
-    <>
-      <div className="flex gap-1 sm:hidden">
-        <select className={`${selCls} flex-1`} value={y ?? ""} onChange={(e) => set(e.target.value, m ?? "01", d ?? "01")}>
-          <option value="">년</option>
-          {years.map((v) => <option key={v} value={v}>{v}</option>)}
-        </select>
-        <select className={selCls} value={m ?? ""} onChange={(e) => set(y, e.target.value, d ?? "01")}>
-          <option value="">월</option>
-          {nums(12).map((v) => <option key={v} value={v}>{Number(v)}</option>)}
-        </select>
-        <select className={selCls} value={d ?? ""} onChange={(e) => set(y, m ?? "01", e.target.value)}>
-          <option value="">일</option>
-          {nums(y && m ? new Date(Number(y), Number(m), 0).getDate() : 31).map((v) => <option key={v} value={v}>{Number(v)}</option>)}
-        </select>
-      </div>
-      <input type="date" className={`${inputCls} hidden sm:block`} value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
-    </>
+    <input
+      autoFocus={autoFocus}
+      className={`${inputCls} ${className}`}
+      placeholder={placeholder}
+      value={text}
+      onChange={(e) => setText(autoFormatShortDate(e.target.value))}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
+    />
+  );
+}
+
+// 값이 있는 칸은 평소엔 읽기 전용 텍스트("26.01.01")로 보여주고, 연필 아이콘을 눌러야
+// 입력창이 뜬다 — 목록·상세보기에 입력창이 항상 떠 있으면 실수로 건드리기 쉬워서다.
+export function EditableDate({ value, onCommit, emptyText = "-", className = "" }) {
+  const [editing, setEditing] = useState(false);
+  if (editing) {
+    return (
+      <DateTextInput
+        key={value ?? "unset"}
+        value={value}
+        autoFocus
+        className={`min-w-24 ${className}`}
+        onChange={(v) => { onCommit(v); setEditing(false); }}
+      />
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`text-slate-600 ${className}`}>{value ? shortDate(value) : emptyText}</span>
+      <button type="button" onClick={() => setEditing(true)} className="text-slate-300 hover:text-slate-500 shrink-0" aria-label="날짜 수정">
+        <Pencil size={12} />
+      </button>
+    </span>
   );
 }
 

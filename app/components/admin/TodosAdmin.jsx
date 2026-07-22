@@ -8,10 +8,10 @@ import { Plus, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto } from "@/lib/photos";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays } from "@/lib/utils";
+import { addDays, shortDate } from "@/lib/utils";
 import {
   locOf, personOf, StatusBadge, AdminTable, FilterPills,
-  Modal, SortableTh, sortRows, inputCls,
+  Modal, SortableTh, sortRows, inputCls, DateTextInput,
 } from "@/app/components/admin/adminShared";
 
 const SOURCE_LABEL = { material: "자재", quote: "견적", manual: "수동" };
@@ -109,11 +109,11 @@ function TodoDetailModal({ t, data, onClose, onSave }) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <p className="text-xs font-bold text-slate-500 mb-1">배정일</p>
-            <input className={inputCls} type="date" value={form.assignedDate} onChange={(e) => setForm({ ...form, assignedDate: e.target.value })} />
+            <DateTextInput key={form.assignedDate} value={form.assignedDate} onChange={(v) => setForm({ ...form, assignedDate: v })} />
           </div>
           <div>
             <p className="text-xs font-bold text-slate-500 mb-1">기한</p>
-            <input className={inputCls} type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
+            <DateTextInput key={form.dueDate} value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
           </div>
         </div>
       </div>
@@ -213,7 +213,7 @@ function AssignTodoModal({ data, onClose, onCreate }) {
           </div>
           <div>
             <p className="text-xs font-bold text-slate-500 mb-1">기한</p>
-            <input className={inputCls} type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
+            <DateTextInput key={form.dueDate} value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
           </div>
         </div>
         <div>
@@ -394,8 +394,8 @@ export default function TodosAdmin({ data, setData }) {
                 <td className="px-3 py-2.5 font-semibold">{t.title}</td>
                 <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{locOf(data, t.unitId, t.siteName, t.elevatorNo)}</td>
                 <td className="px-3 py-2.5 whitespace-nowrap">{personOf(data, t.assigneeId, t.assignee)}</td>
-                <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{t.assignedDate}</td>
-                <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{t.dueDate ?? "-"}</td>
+                <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(t.assignedDate)}</td>
+                <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(t.dueDate)}</td>
                 <td className="px-3 py-2.5">{t.done ? <StatusBadge tone="green">완료</StatusBadge> : <StatusBadge tone="amber">진행</StatusBadge>}</td>
               </tr>
             ))}

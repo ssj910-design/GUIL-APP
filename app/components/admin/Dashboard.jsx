@@ -6,7 +6,7 @@ import { useState } from "react";
 import WeekStrip from "@/app/components/admin/WeekStrip";
 import { AlertOctagon } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, formatUnitLabel } from "@/lib/utils";
+import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, formatUnitLabel, shortDate } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -334,7 +334,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
                 </div>
                 <span className="flex items-center gap-1.5 shrink-0">
                   <span className="text-xs text-slate-400">{i.type}</span>
-                  <span className="text-xs font-bold text-blue-700 whitespace-nowrap">{i.dueTime || i.dueDate}</span>
+                  <span className="text-xs font-bold text-blue-700 whitespace-nowrap">{i.dueTime || shortDate(i.dueDate)}</span>
                 </span>
               </li>
             ))}
@@ -368,7 +368,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-[11px] text-slate-400 truncate min-w-0">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
-                    <span className="shrink-0 text-xs font-bold text-blue-700">보완기한 {i.dueDate || "미정"}</span>
+                    <span className="shrink-0 text-xs font-bold text-blue-700">보완기한 {i.dueDate ? shortDate(i.dueDate) : "미정"}</span>
                   </div>
                   {(i.notes || i.scheduleTime) && (
                     <div className="flex items-start justify-between gap-2">
