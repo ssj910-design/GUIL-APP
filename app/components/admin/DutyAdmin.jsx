@@ -92,53 +92,56 @@ export default function DutyAdmin({ data, setData }) {
   const count4 = inMode("주4일");
   const noOrder = sorted.filter((e) => e.duty_order == null).length;
 
+  // 배정 순번 — 순번을 넣으면 당직 대상, 비우면 제외. 근무제(5일·4일)별로 대상을 나눈다.
+  // 거의 안 바뀌는 설정이라 접어둔다. summary에 flex를 주면 브라우저 기본 삼각형이
+  // 사라져 눌러지는 줄 모르므로 화살표를 직접 그린다.
+  // 달력 아래, "빈 칸 채우기" 버튼 바로 위에 배치한다(DutyRoster의 belowCalendar 슬롯).
+  const orderAndMode = (
+    <details className="group bg-white border border-slate-200 rounded-xl overflow-hidden">
+      <summary className="text-xs font-extrabold text-slate-700 cursor-pointer flex items-center gap-2 p-4 hover:bg-slate-50 list-none">
+        <ChevronRight size={14} className="text-slate-400 transition-transform group-open:rotate-90 shrink-0" />
+        <span>당직 순번 · 근무제</span>
+        <span className="ml-auto text-[11px] font-bold text-slate-400">
+          주5일 <span className="text-blue-700">{count5}명</span> · 주4일 <span className="text-blue-700">{count4}명</span>
+          {noOrder > 0 && <span className="text-slate-300"> · 미지정 {noOrder}명</span>}
+        </span>
+        <span className="text-[11px] font-bold text-blue-700 shrink-0 group-open:hidden">수정</span>
+        <span className="text-[11px] font-bold text-slate-400 shrink-0 hidden group-open:inline">접기</span>
+      </summary>
+      <div className="px-4 pb-4">
+      <p className="text-[11px] text-slate-400 mt-2 mb-3">
+        순번이 있는 사람만 자동 배정 대상입니다. 근무제(5일·4일)를 눌러 편성별 대상을 나눌 수 있습니다.
+      </p>
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+        {sorted.map((p) => (
+          <div key={p.id} className={`flex items-center gap-2 border rounded-lg px-2.5 py-2 ${
+            p.duty_order != null ? "border-slate-200" : "border-slate-100 bg-slate-50"
+          }`}>
+            <div className="w-11 shrink-0">
+              <input className={`${inputCls} text-center`} inputMode="numeric" placeholder="—"
+                defaultValue={p.duty_order ?? ""}
+                onBlur={(e) => { const v = e.target.value.replace(/[^0-9]/g, ""); if (v !== String(p.duty_order ?? "")) saveOrder(p, v); }} />
+            </div>
+            <span className="text-sm font-bold text-slate-700 truncate flex-1">{p.name}</span>
+            {["주5일", "주4일"].map((mode) => (
+              <label key={mode} className={`text-[10px] font-bold rounded px-1.5 py-1 cursor-pointer border shrink-0 ${
+                (p.duty_modes ?? []).includes(mode) ? "bg-blue-50 text-blue-700 border-blue-200" : "text-slate-300 border-slate-100"
+              }`}>
+                <input type="checkbox" className="hidden" checked={(p.duty_modes ?? []).includes(mode)}
+                  onChange={(e) => toggleMode(p, mode, e.target.checked)} />
+                {mode.replace("주", "").replace("일", "")}일
+              </label>
+            ))}
+          </div>
+        ))}
+      </div>
+      </div>
+    </details>
+  );
+
   return (
     <AuthContext.Provider value={{ name: "관리자", role: "admin", selfId: null, engineers, engineerNames: engineers.map((e) => e.name), profiles: data.profiles }}>
       <div className="max-w-3xl">
-        {/* 배정 순번 — 순번을 넣으면 당직 대상, 비우면 제외. 근무제별로 대상을 나눈다. */}
-        {/* 거의 안 바뀌는 설정이라 접어둔다. summary에 flex를 주면 브라우저 기본 삼각형이
-            사라져 눌러지는 줄 모르므로 화살표를 직접 그린다. */}
-        <details className="group bg-white border border-slate-200 rounded-xl mb-4 overflow-hidden">
-          <summary className="text-xs font-extrabold text-slate-700 cursor-pointer flex items-center gap-2 p-4 hover:bg-slate-50 list-none">
-            <ChevronRight size={14} className="text-slate-400 transition-transform group-open:rotate-90 shrink-0" />
-            <span>당직 순번 · 근무제</span>
-            <span className="ml-auto text-[11px] font-bold text-slate-400">
-              주5일 <span className="text-blue-700">{count5}명</span> · 주4일 <span className="text-blue-700">{count4}명</span>
-              {noOrder > 0 && <span className="text-slate-300"> · 미지정 {noOrder}명</span>}
-            </span>
-            <span className="text-[11px] font-bold text-blue-700 shrink-0 group-open:hidden">수정</span>
-            <span className="text-[11px] font-bold text-slate-400 shrink-0 hidden group-open:inline">접기</span>
-          </summary>
-          <div className="px-4 pb-4">
-          <p className="text-[11px] text-slate-400 mt-2 mb-3">
-            순번이 있는 사람만 자동 배정 대상입니다. 근무제(5일·4일)를 눌러 편성별 대상을 나눌 수 있습니다.
-          </p>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
-            {sorted.map((p) => (
-              <div key={p.id} className={`flex items-center gap-2 border rounded-lg px-2.5 py-2 ${
-                p.duty_order != null ? "border-slate-200" : "border-slate-100 bg-slate-50"
-              }`}>
-                <div className="w-11 shrink-0">
-                  <input className={`${inputCls} text-center`} inputMode="numeric" placeholder="—"
-                    defaultValue={p.duty_order ?? ""}
-                    onBlur={(e) => { const v = e.target.value.replace(/[^0-9]/g, ""); if (v !== String(p.duty_order ?? "")) saveOrder(p, v); }} />
-                </div>
-                <span className="text-sm font-bold text-slate-700 truncate flex-1">{p.name}</span>
-                {["주5일", "주4일"].map((mode) => (
-                  <label key={mode} className={`text-[10px] font-bold rounded px-1.5 py-1 cursor-pointer border shrink-0 ${
-                    (p.duty_modes ?? []).includes(mode) ? "bg-blue-50 text-blue-700 border-blue-200" : "text-slate-300 border-slate-100"
-                  }`}>
-                    <input type="checkbox" className="hidden" checked={(p.duty_modes ?? []).includes(mode)}
-                      onChange={(e) => toggleMode(p, mode, e.target.checked)} />
-                    {mode.replace("주", "").replace("일", "")}일
-                  </label>
-                ))}
-              </div>
-            ))}
-          </div>
-          </div>
-        </details>
-
         <DutyRoster
           embedded
           schedules={schedules}
@@ -147,6 +150,7 @@ export default function DutyAdmin({ data, setData }) {
           onSetPerson={setPerson}
           onRequestSwap={() => {}}
           onRespondSwap={() => {}}
+          belowCalendar={orderAndMode}
         />
       </div>
     </AuthContext.Provider>

@@ -72,7 +72,7 @@ export function DutySwapNotice({ swaps, schedules, onSeen }) {
   );
 }
 
-export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onRequestSwap, onRespondSwap, onClose, embedded = false, showControls = !embedded }) {
+export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onRequestSwap, onRespondSwap, onClose, embedded = false, showControls = !embedded, belowCalendar = null }) {
   const { role, selfId, engineers } = useContext(AuthContext);
   const today = new Date(`${TODAY_STR}T00:00:00`);
   const [cursor, setCursor] = useState({ y: today.getFullYear(), m: today.getMonth() });
@@ -285,6 +285,9 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
           이름 옆 숫자는 기사 순번입니다.
           {role === "admin" && " 칸을 누르면 담당자를 바꿀 수 있습니다."}
         </p>
+
+        {role === "admin" && belowCalendar && <div className="mt-3">{belowCalendar}</div>}
+
         {role === "admin" && inMonth.length > 0 && (
           <button
             onClick={() => setGenMode("주5일")}
