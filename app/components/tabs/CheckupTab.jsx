@@ -2,6 +2,7 @@ import { useState, useContext } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
+import { useHolidays } from "@/app/hooks/useHolidays";
 import { siteUnitList } from "@/lib/utils";
 import { mapSelfCheck, mapSelfCheckItem, mapSelfCheckItemState } from "@/lib/mappers";
 import { PrimaryButton, Sheet, Field, inputCls, MapLinkButtons } from "@/app/components/ui";
@@ -132,7 +133,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     (it) => !itemQuery.trim() || it.name.includes(itemQuery.trim()) || it.no.includes(itemQuery.trim())
   );
 
-  // 달력: 오늘이 속한 달을 기준으로 그린다.
+  // 달력: 오늘이 속한 달을 기준으로 그린다. (워크캘린더와 같은 룩 — 공휴일 포함)
   const today = new Date(`${TODAY_STR}T00:00:00`);
   const year = today.getFullYear();
   const month = today.getMonth(); // 0-indexed
@@ -140,6 +141,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   const startDow = new Date(year, month, 1).getDay();
   const monthDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const isoOf = (d) => `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const { days: HOLIDAY } = useHolidays(year);
 
   async function registerSchedule() {
     const targetUnits = siteUnitList(scheduleTarget, units).filter((u) => u.id);
@@ -422,44 +424,53 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
         )}
 
         {subTab === "달력" && (
-          <div className="pb-4">
-            <div className="grid grid-cols-7 text-center text-sm font-bold px-2">
-              {WEEK_LABELS.map((d, idx) => (
-                <div key={d} className={`py-2.5 ${idx === 0 ? "text-red-400" : idx === 6 ? "text-sky-400" : "text-slate-500"}`}>{d}</div>
-              ))}
-            </div>
-            <div className="grid grid-cols-7 border-t border-slate-100">
-              {Array.from({ length: startDow }).map((_, i) => (
-                <div key={"pad" + i} className="min-h-[84px] border-b border-r border-slate-50" />
-              ))}
-              {monthDays.map((d) => {
-                const dow = (startDow + d - 1) % 7;
-                const iso = isoOf(d);
-                const isToday = iso === TODAY_STR;
-                const daySchedules = checksThisMonth.filter((c) => c.plannedDate === iso);
-                const numColorCls = dow === 0 ? "text-red-400" : dow === 6 ? "text-sky-400" : "text-slate-700";
-                return (
-                  <button
-                    key={d}
-                    onClick={() => setDayPopup(iso)}
-                    className="min-h-[84px] border-b border-r border-slate-50 p-1.5 flex flex-col items-start text-left active:bg-slate-50"
-                  >
-                    <span className={`shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${isToday ? "bg-blue-500 text-white" : numColorCls}`}>
-                      {d}
-                    </span>
-                    {daySchedules.length > 0 && (
-                      <div className="mt-1 space-y-0.5 w-full">
-                        {daySchedules.slice(0, 2).map((c) => (
-                          <p key={c.id} className="text-[10px] text-blue-700 font-semibold truncate">{siteById.get(unitById.get(c.unitId)?.siteId)?.name ?? "-"}</p>
-                        ))}
-                        {daySchedules.length > 2 && (
-                          <p className="text-[9px] text-slate-400">+{daySchedules.length - 2}건 더</p>
-                        )}
+          <div className="pb-4 px-2">
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
+                {WEEK_LABELS.map((d, idx) => (
+                  <p key={d} className={`text-center text-[11px] font-bold py-2 ${idx === 0 ? "text-red-500" : idx === 6 ? "text-blue-500" : "text-slate-500"}`}>{d}</p>
+                ))}
+              </div>
+              <div className="grid grid-cols-7">
+                {Array.from({ length: startDow }).map((_, i) => (
+                  <div key={"pad" + i} className="min-h-[84px] border-b border-r border-slate-100 bg-slate-50/40" />
+                ))}
+                {monthDays.map((d) => {
+                  const dow = (startDow + d - 1) % 7;
+                  const iso = isoOf(d);
+                  const isToday = iso === TODAY_STR;
+                  const holiday = HOLIDAY[iso];
+                  const daySchedules = checksThisMonth.filter((c) => c.plannedDate === iso);
+                  const numColorCls = holiday || dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : isToday ? "text-blue-700" : "text-slate-500";
+                  return (
+                    <button
+                      key={d}
+                      onClick={() => setDayPopup(iso)}
+                      className={`min-h-[84px] border-b border-r border-slate-100 p-1.5 flex flex-col items-start text-left active:bg-slate-50 ${isToday ? "bg-blue-50" : holiday ? "bg-red-50/40" : ""}`}
+                    >
+                      <div className="flex items-baseline gap-1 mb-0.5 w-full min-w-0">
+                        <span className={`text-[11px] font-bold ${numColorCls}`}>{d}</span>
+                        {holiday && <span className="text-[9px] font-bold text-red-400 truncate">{holiday}</span>}
                       </div>
-                    )}
-                  </button>
-                );
-              })}
+                      {daySchedules.length > 0 && (
+                        <div className="space-y-0.5 w-full">
+                          {daySchedules.slice(0, 2).map((c) => (
+                            <p key={c.id} className="text-[10px] font-semibold rounded px-1 py-0.5 truncate bg-blue-50 text-blue-700">{siteById.get(unitById.get(c.unitId)?.siteId)?.name ?? "-"}</p>
+                          ))}
+                          {daySchedules.length > 2 && (
+                            <p className="text-[9px] text-slate-400 px-1">+{daySchedules.length - 2}건 더</p>
+                          )}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex items-center gap-3 mt-2.5 px-1 text-[10px] text-slate-400 flex-wrap">
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-100 inline-block" /> 점검 예정 현장</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-50 border border-blue-300 inline-block" /> 오늘</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-50 border border-red-200 inline-block" /> 공휴일</span>
             </div>
           </div>
         )}
