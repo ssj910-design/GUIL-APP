@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from "react";
-import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame } from "lucide-react";
+import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, labelToSeq, formatUnitLabel, recentFailuresBySite } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
@@ -732,22 +732,22 @@ function FailureResponseCard({ f, dist, warnCount = 0, site, onOpenDetail, onDis
         <div className="flex items-center justify-between gap-2 mb-1">
           <p className="font-bold text-slate-800 text-[15px] truncate">{f.siteName} · {unitLabel}</p>
           <span className="flex items-center gap-1 shrink-0">
-            {warnCount >= 3 && <span className="text-[10px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full" title={`최근 30일 ${warnCount}회 고장`}>🔁{warnCount}</span>}
+            {warnCount >= 3 && <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full" title={`최근 30일 ${warnCount}회 고장`}><Repeat size={10} strokeWidth={2.8} />{warnCount}</span>}
             {f.escalation && <span className="text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{f.escalation}</span>}
           </span>
         </div>
-        <p className="text-[13px] text-slate-500 mb-2">
-          {dist != null && <span className="font-bold text-blue-600">📍 {fmtDist(dist)} · </span>}
-          {f.reportedAt} 접수
+        <p className="text-[13px] text-slate-500 mb-2 flex items-center gap-1">
+          {dist != null && <span className="inline-flex items-center gap-0.5 font-bold text-blue-600"><MapPin size={12} strokeWidth={2.5} />{fmtDist(dist)} ·</span>}
+          <span>{f.reportedAt} 접수</span>
         </p>
-        <div className="bg-blue-500 text-white rounded-lg px-3 py-2.5 text-center mb-2">
-          <p className="text-sm font-semibold">{faultType}</p>
-          {faultDetail && <p className="text-xs mt-0.5 text-blue-50">{faultDetail}</p>}
+        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/70 rounded-lg px-3 py-2 mb-2">
+          <AlertTriangle size={15} className="text-amber-500 shrink-0" />
+          <p className="text-[13px]"><span className="font-bold text-slate-800">{faultType}</span>{faultDetail && <span className="text-slate-500"> · {faultDetail}</span>}</p>
         </div>
         {(site?.address || f.reporterPhone) && (
-          <div className="text-[12px] text-slate-500 space-y-0.5">
-            {site?.address && <p className="truncate">📍 {site.address}</p>}
-            {f.reporterPhone && <p>📞 신고자 {formatPhone(f.reporterPhone)}</p>}
+          <div className="text-[12px] text-slate-500 space-y-1">
+            {site?.address && <p className="flex items-center gap-1 min-w-0"><MapPin size={12} className="shrink-0 text-slate-400" /><span className="truncate">{site.address}</span></p>}
+            {f.reporterPhone && <p className="flex items-center gap-1"><PhoneCall size={12} className="shrink-0 text-slate-400" />신고자 {formatPhone(f.reporterPhone)}</p>}
           </div>
         )}
         {stage === "dispatched" && <p className="text-xs font-semibold text-blue-700 mt-2 text-center">출동 {f.dispatchedAt} · {f.etaMinutes}분 후 도착예정</p>}
@@ -873,11 +873,11 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
         <div className="flex items-center gap-1.5 min-w-0">
           <p className="font-bold text-slate-800 text-sm truncate">{f.siteName} · {formatUnitLabel(f.elevatorNo)}</p>
           <span className={`shrink-0 text-[10px] font-bold rounded-full px-1.5 py-0.5 ${state.chip}`}>{state.label}</span>
-          {warnCount >= 3 && <span className="shrink-0 text-[10px] font-bold rounded-full px-1.5 py-0.5 bg-red-100 text-red-600" title={`최근 30일 ${warnCount}회 고장`}>🔁{warnCount}</span>}
+          {warnCount >= 3 && <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold rounded-full px-1.5 py-0.5 bg-red-100 text-red-600" title={`최근 30일 ${warnCount}회 고장`}><Repeat size={10} strokeWidth={2.8} />{warnCount}</span>}
         </div>
-        <p className="text-[11px] text-slate-400 truncate">
-          {dist != null && <span className="font-bold text-blue-600">📍 {fmtDist(dist)} · </span>}
-          {f.errorCode}
+        <p className="text-[11px] text-slate-400 truncate flex items-center gap-0.5">
+          {dist != null && <span className="inline-flex items-center gap-0.5 font-bold text-blue-600"><MapPin size={11} strokeWidth={2.5} />{fmtDist(dist)} ·</span>}
+          <span className="truncate">{f.errorCode}</span>
         </p>
       </button>
       {stage !== "done" && <MapLinkButtons site={siteOf(f)} />}
