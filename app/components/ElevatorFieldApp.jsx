@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { Home, AlertTriangle, CalendarCheck, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Home, AlertTriangle, CalendarCheck, CalendarClock, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound } from "lucide-react";
+import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase } from "@/lib/supabaseClient";
 import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel } from "@/lib/utils";
@@ -34,7 +35,7 @@ const TABS = [
   { id: "material", label: "자재·견적", icon: Package },
   { id: "billing", label: "비용청구", icon: Receipt },
   { id: "todo", label: "할일관리", icon: ListTodo },
-  { id: "room", label: "게시판", icon: MessagesSquare },
+  { id: "workcalendar", label: "워크캘린더", icon: CalendarClock },
   { id: "admin", label: "관리자 모드", icon: Settings },
 ];
 
@@ -124,7 +125,6 @@ export default function App() {
   const kitStockRef = useRef({});
   const [failureToast, setFailureToast] = useState("");
   const [loading, setLoading] = useState(true);
-  const [roomOpen, setRoomOpen] = useState(false); // 우리방 — 탭이 아니라 플로팅 버튼으로 어디서든 연다
   const [feedReadAt, setFeedReadAt] = useState(null); // 이번 세션에서 우리방을 마지막으로 읽은 시각
   const [notifOpen, setNotifOpen] = useState(false); // 우측상단 알림(종) 드롭다운
   const [openFailureId, setOpenFailureId] = useState(null); // 알림에서 특정 고장 건을 눌러 상세를 바로 연다 (탭 이동 없이 현재 화면 위에 띄움)
@@ -477,9 +477,8 @@ export default function App() {
 
   // 로그인이 완료된 뒤에만 Supabase에서 실제 데이터를 불러옵니다.
   // (예전에는 INITIAL_FAILURES 같은 가짜 배열로 시작했지만, 이제는 DB가 기준입니다)
-  useEffect(() => {
-    if (!skipLogin && !session) return;
-    async function loadData() {
+  // useCallback으로 빼둔 이유: 최초 로드뿐 아니라 당겨서 새로고침(PullToRefresh)에서도 그대로 재사용한다.
+  const loadData = useCallback(async () => {
       const [
         sitesRes,
         siteManagersRes,
@@ -543,9 +542,12 @@ export default function App() {
       setDutySwaps((dutySwapRes.data ?? []).map(mapDutySwap));
       setTodayLeaves((leaveRes.data ?? []).filter((l) => (l.status ?? "승인") === "승인"));
       setLoading(false);
-    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!skipLogin && !session) return;
     loadData();
-  }, [session, skipLogin]);
+  }, [session, skipLogin, loadData]);
 
   // 새 글·근무 교환 감지 — 30초 폴링 (작은 팀이라 실시간 구독 대신 단순하게)
   // 교환은 상대가 수락하면 근무표 자체가 바뀌므로 duty_schedules도 같이 받는다.
@@ -564,15 +566,15 @@ export default function App() {
     return () => clearInterval(t);
   }, [session, skipLogin]);
 
-  // 우리방을 보는 순간(플로팅 시트든 탭이든, 보는 동안 새 글이 와도) 읽음 처리
+  // 우리방을 보는 순간(보는 동안 새 글이 와도) 읽음 처리
   useEffect(() => {
-    if ((!roomOpen && tab !== "room") || !profile) return;
+    if (tab !== "room" || !profile) return;
     const now = new Date().toISOString();
     setFeedReadAt(now);
     const pid = profileIdByName(profilesAll, profile.name);
     // .then()이 있어야 실제 HTTP 요청이 나간다 (supabase-js 빌더는 lazy thenable)
     if (pid) supabase.from("profiles").update({ feed_read_at: now }).eq("id", pid).then(() => {});
-  }, [roomOpen, tab, feed.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, feed.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // v2 마이그레이션이 실행된 DB인지 (units 존재 여부로 판단).
   // 마이그레이션 전 DB에 새 컬럼을 보내면 insert 전체가 실패하므로 반드시 이 가드를 통과해야 한다.
@@ -1493,7 +1495,7 @@ export default function App() {
     );
   }
 
-  const tabTitle = TABS.find((t) => t.id === tab)?.label ?? "";
+  const tabTitle = tab === "room" ? "게시판" : TABS.find((t) => t.id === tab)?.label ?? "";
   const visibleTabs = TABS.filter((t) => t.id !== "admin" || profile?.role === "admin");
 
   // 우리방 안읽음/멘션 — 세션 로컬 읽음 시각이 있으면 그걸, 없으면 DB(profiles.feed_read_at) 기준
@@ -1723,6 +1725,7 @@ export default function App() {
             />
           )}
 
+          <PullToRefresh onRefresh={loadData}>
           {tab === "home" && (
             <HomeTab
               attendances={attendances}
@@ -1788,11 +1791,12 @@ export default function App() {
                   onSetNotice={feedNoticeReady ? handleSetFeedNotice : null}
                 />}
           {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onUpdateTodoDescription={handleUpdateTodoDescription} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
+          </PullToRefresh>
 
-          {/* 우리방 플로팅 버튼 — 어느 탭에서든 즉시 팀 채팅 (우리방 탭에서는 숨김) */}
+          {/* 우리방 플로팅 버튼 — 어느 탭에서든 즉시 게시판으로 이동 (우리방 탭에서는 숨김) */}
           {tab !== "room" && (
           <button
-            onClick={() => setRoomOpen(true)}
+            onClick={() => setTab("room")}
             aria-label="게시판 열기"
             className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95 ${tab === "failure" ? "bottom-36" : "bottom-20"}`}
           >
@@ -1808,32 +1812,6 @@ export default function App() {
               </span>
             )}
           </button>
-          )}
-
-          {/* 우리방 바텀시트 */}
-          {roomOpen && (
-            <div className="fixed inset-0 z-30 flex flex-col bg-black/40" onClick={() => setRoomOpen(false)}>
-              <div className="mt-auto" />
-              <div
-                className="bg-slate-50 rounded-t-3xl h-[85%] flex flex-col shadow-2xl overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-white shrink-0">
-                  <h2 className="font-bold text-slate-900">게시판</h2>
-                  <button onClick={() => setRoomOpen(false)} className="p-1 text-slate-400 active:text-slate-700">
-                    <X size={20} />
-                  </button>
-                </div>
-                <RoomTab
-                  feed={feed}
-                  onSendChat={handleSendFeedPost}
-                  onToggleLike={handleToggleLike}
-                  onUpdatePost={handleUpdateFeedPost}
-                  onDeletePost={handleDeleteFeedPost}
-                  onSetNotice={feedNoticeReady ? handleSetFeedNotice : null}
-                />
-              </div>
-            </div>
           )}
 
           {/* 알림(종)에서 특정 건을 눌렀을 때 — 탭 이동 없이 지금 화면 위에 상세만 띄운다 */}
@@ -1901,11 +1879,12 @@ export default function App() {
           >
             {visibleTabs.map((t) => {
               const Icon = t.icon;
-              const active = tab === t.id;
+              const active = t.id === "workcalendar" ? rosterOpen : tab === t.id;
+              const onClick = t.id === "workcalendar" ? () => setRosterOpen(true) : () => setTab(t.id);
               return (
                 <button
                   key={t.id}
-                  onClick={() => setTab(t.id)}
+                  onClick={onClick}
                   className={`flex flex-col items-center justify-center gap-1 py-3 px-2 shrink-0 border-r border-slate-200 last:border-r-0 ${active ? "bg-blue-900" : "bg-transparent"}`}
                   style={{ minWidth: "68px" }}
                 >
