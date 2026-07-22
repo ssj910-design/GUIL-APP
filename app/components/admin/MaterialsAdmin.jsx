@@ -299,14 +299,13 @@ export default function MaterialsAdmin({ data, setData }) {
         {tab === "all" && <h2 className="text-xs font-bold text-slate-400 mb-2">자재신청</h2>}
         <AdminTable head={["신청일", "현장 · 호기", "자재", "긴급도", "신청 기사", "지급사진", "상태", "처리"]}>
           {materialRequests.map((m) => (
-            <tr key={m.id} className="border-b border-slate-50">
+            <tr
+              key={m.id}
+              className="border-b border-slate-50 cursor-pointer hover:bg-slate-50"
+              onClick={() => setDetailTarget({ type: "material", data: m })}
+            >
               <td className="pl-5 pr-3 py-2.5 text-slate-500 whitespace-nowrap">{m.requestedDate}</td>
-              <td
-                className="px-3 py-2.5 font-semibold whitespace-nowrap cursor-pointer hover:text-blue-700 hover:underline"
-                onClick={() => setDetailTarget({ type: "material", data: m })}
-              >
-                {locOf(data, m.unitId, m.siteName, m.elevatorNo)}
-              </td>
+              <td className="px-3 py-2.5 font-semibold whitespace-nowrap">{locOf(data, m.unitId, m.siteName, m.elevatorNo)}</td>
               <td className="px-3 py-2.5 text-slate-600">{m.part}</td>
               <td className="px-3 py-2.5">
                 {m.urgency === "긴급" ? <StatusBadge tone="red">긴급</StatusBadge> : <span className="text-slate-500 text-xs">{m.urgency}</span>}
@@ -325,16 +324,13 @@ export default function MaterialsAdmin({ data, setData }) {
               </td>
               <td className="px-3 py-2.5 whitespace-nowrap">
                 {m.status === "승인대기" ? (
-                  <button onClick={() => setPayTarget(m)} className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-lg">
-                    지급완료 처리
+                  <button onClick={(e) => { e.stopPropagation(); setPayTarget(m); }} className="text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors px-2.5 py-1.5 rounded-lg">
+                    지급하기
                   </button>
                 ) : m.status === "지급완료" ? (
-                  <div>
-                    <button onClick={() => setPayTarget(m)} className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-lg">
-                      수정
-                    </button>
-                    <p className="text-[10px] text-emerald-600 font-semibold mt-1">✓ 할 일 자동 생성됨</p>
-                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); setPayTarget(m); }} className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors px-2.5 py-1.5 rounded-lg">
+                    수정
+                  </button>
                 ) : (
                   <span className="text-xs text-slate-300">-</span>
                 )}
@@ -350,14 +346,13 @@ export default function MaterialsAdmin({ data, setData }) {
         {tab === "all" && <h2 className="text-xs font-bold text-slate-400 mb-2 mt-6">견적요청</h2>}
         <AdminTable head={["신청일", "현장 · 호기", "공사 내용", "신청 기사", "발행/승인/지급", "상태", "처리"]}>
           {quoteRequests.map((q) => (
-            <tr key={q.id} className="border-b border-slate-50">
+            <tr
+              key={q.id}
+              className="border-b border-slate-50 cursor-pointer hover:bg-slate-50"
+              onClick={() => setDetailTarget({ type: "quote", data: q })}
+            >
               <td className="pl-5 pr-3 py-2.5 text-slate-500 whitespace-nowrap">{q.requestedDate}</td>
-              <td
-                className="px-3 py-2.5 font-semibold whitespace-nowrap cursor-pointer hover:text-blue-700 hover:underline"
-                onClick={() => setDetailTarget({ type: "quote", data: q })}
-              >
-                {locOf(data, q.unitId, q.siteName, q.elevatorNo)}
-              </td>
+              <td className="px-3 py-2.5 font-semibold whitespace-nowrap">{locOf(data, q.unitId, q.siteName, q.elevatorNo)}</td>
               <td className="px-3 py-2.5 text-slate-600">{q.constructionType}</td>
               <td className="px-3 py-2.5 whitespace-nowrap">{personOf(data, q.requesterId, q.engineer)}</td>
               <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">
@@ -374,27 +369,24 @@ export default function MaterialsAdmin({ data, setData }) {
               </td>
               <td className="px-3 py-2.5 whitespace-nowrap">
                 {q.status === "요청접수" && (
-                  <button onClick={() => handleQuoteAdvance(q)} className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-lg">
+                  <button onClick={(e) => { e.stopPropagation(); handleQuoteAdvance(q); }} className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-lg">
                     견적발행 처리
                   </button>
                 )}
                 {q.status === "견적발행" && (
-                  <button onClick={() => handleQuoteAdvance(q)} className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1.5 rounded-lg">
+                  <button onClick={(e) => { e.stopPropagation(); handleQuoteAdvance(q); }} className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1.5 rounded-lg">
                     승인 처리
                   </button>
                 )}
                 {q.status === "승인" && (
-                  <button onClick={() => setQuoteSupplyTarget(q)} className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-lg">
-                    지급완료 처리
+                  <button onClick={(e) => { e.stopPropagation(); setQuoteSupplyTarget(q); }} className="text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors px-2.5 py-1.5 rounded-lg">
+                    지급하기
                   </button>
                 )}
                 {q.status === "자재지급완료" && (
-                  <div>
-                    <button onClick={() => setQuoteSupplyTarget(q)} className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-lg">
-                      수정
-                    </button>
-                    <p className="text-[10px] text-emerald-600 font-semibold mt-1">✓ 할 일 자동 생성됨</p>
-                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); setQuoteSupplyTarget(q); }} className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors px-2.5 py-1.5 rounded-lg">
+                    수정
+                  </button>
                 )}
               </td>
             </tr>
@@ -636,85 +628,67 @@ function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
   );
 }
 
+// 청구내역(BillingsAdmin.jsx의 BillingDetailModal)과 동일한 구성 —
+// 라벨/값 그리드 + 사진 그리드. 실제 수정(담당기사/금액/사진)은 목록의
+// "지급완료 처리"/"수정" 버튼이 여는 전용 모달에서 하므로 여기는 읽기 전용이다.
 function RequestDetailModal({ target, data, onClose }) {
   const { type, data: r } = target;
   const isMaterial = type === "material";
   const assignee = assigneeNames(data, isMaterial ? "materialRequestId" : "quoteRequestId", r.id);
-  return (
-    <Modal title={`${locOf(data, r.unitId, r.siteName, r.elevatorNo)} — 상세내역`} onClose={onClose} wide>
-      <div className="space-y-3 text-sm">
-        <div className="grid grid-cols-2 gap-2.5">
-          <div className="bg-slate-100 rounded-xl p-3">
-            <p className="text-[11px] text-slate-500">{isMaterial ? "긴급도" : "현장 담당자 연락처"}</p>
-            <p className="font-bold text-slate-800">{isMaterial ? r.urgency : (r.contactPhone || "-")}</p>
-          </div>
-          <div className="bg-slate-100 rounded-xl p-3">
-            <p className="text-[11px] text-slate-500">신청 기사</p>
-            <p className="font-bold text-slate-800">{personOf(data, r.requesterId, r.engineer)}</p>
-          </div>
-          <div className="bg-slate-100 rounded-xl p-3">
-            <p className="text-[11px] text-slate-500">담당 기사</p>
-            <p className="font-bold text-slate-800">{assignee ?? "미배정"}</p>
-          </div>
-          <div className="bg-slate-100 rounded-xl p-3">
-            <p className="text-[11px] text-slate-500">신청일</p>
-            <p className="font-bold text-slate-800">{r.requestedDate}</p>
-          </div>
-        </div>
+  const displayStatus = isMaterial
+    ? r.status === "지급완료"
+      ? (billingCompleteFor(data.todos ?? [], "materialRequestId", r.id) ? "교체완료" : "지급완료")
+      : r.status
+    : r.status === "자재지급완료"
+      ? (billingCompleteFor(data.todos ?? [], "quoteRequestId", r.id) ? "교체완료" : "지급완료")
+      : r.status;
+  const tone = (isMaterial ? MATERIAL_TONE : QUOTE_TONE)[displayStatus] ?? "slate";
+  const photos = [...(r.photoUrls ?? []), ...(r.supplyPhotoUrls ?? [])];
 
-        <div className="bg-slate-100 rounded-xl p-3">
-          <p className="text-[11px] text-slate-500">{isMaterial ? "부품 내역" : "공사 내용"}</p>
-          <p className="font-bold text-slate-800 whitespace-pre-wrap">{isMaterial ? r.part : r.constructionType}</p>
+  return (
+    <Modal title={isMaterial ? "자재신청 상세내역" : "견적요청 상세내역"} onClose={onClose} wide>
+      <div className="space-y-3 mb-4">
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div><p className="text-xs font-bold text-slate-400 mb-1">현장 · 호기</p><p className="font-semibold text-slate-800">{locOf(data, r.unitId, r.siteName, r.elevatorNo)}</p></div>
+          <div><p className="text-xs font-bold text-slate-400 mb-1">{isMaterial ? "부품 내역" : "공사 내용"}</p><p className="font-semibold text-slate-800">{isMaterial ? r.part : r.constructionType}</p></div>
+          <div><p className="text-xs font-bold text-slate-400 mb-1">{isMaterial ? "긴급도" : "현장 담당자 연락처"}</p><p className="font-semibold text-slate-800">{isMaterial ? r.urgency : (r.contactPhone || "-")}</p></div>
+          <div><p className="text-xs font-bold text-slate-400 mb-1">신청일</p><p className="font-semibold text-slate-800">{r.requestedDate}</p></div>
+          <div><p className="text-xs font-bold text-slate-400 mb-1">신청 기사</p><p className="font-semibold text-slate-800">{personOf(data, r.requesterId, r.engineer)}</p></div>
+          <div><p className="text-xs font-bold text-slate-400 mb-1">담당 기사</p><p className="font-semibold text-slate-800">{assignee ?? "미배정"}</p></div>
+          <div><StatusBadge tone={tone}>{displayStatus}</StatusBadge></div>
         </div>
 
         {!isMaterial && (
-          <div className="bg-slate-100 rounded-xl p-3">
-            <p className="text-[11px] text-slate-500">발행일 / 승인일 / 지급일</p>
-            <p className="font-bold text-slate-800">{r.quoteIssuedDate ?? "-"} / {r.approvedDate ?? "-"} / {r.suppliedDate ?? "-"}</p>
-          </div>
+          <div><p className="text-xs font-bold text-slate-400 mb-1">발행일 / 승인일 / 지급일</p><p className="font-semibold text-slate-800">{r.quoteIssuedDate ?? "-"} / {r.approvedDate ?? "-"} / {r.suppliedDate ?? "-"}</p></div>
         )}
 
         {r.note && (
-          <div className="bg-slate-100 rounded-xl p-3">
-            <p className="text-[11px] text-slate-500">기사 의견</p>
-            <p className="text-slate-700 mt-0.5 whitespace-pre-wrap">{r.note}</p>
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">기사 의견</p>
+            <p className="text-sm text-slate-700 whitespace-pre-wrap">{r.note}</p>
           </div>
         )}
 
         {isMaterial && r.status === "반려" && r.rejectReason && (
-          <div className="bg-red-50 border border-red-100 rounded-xl p-3">
-            <p className="text-[11px] text-red-600 font-semibold">반려 사유</p>
-            <p className="text-red-700 mt-0.5">{r.rejectReason}</p>
+          <div>
+            <p className="text-xs font-bold text-red-500 mb-1">반려 사유</p>
+            <p className="text-sm text-red-700">{r.rejectReason}</p>
           </div>
         )}
+      </div>
 
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-2">신청 시 첨부 사진 ({r.photoUrls?.length ?? 0}장)</p>
-          {r.photoUrls?.length > 0 ? (
-            <div className="grid grid-cols-3 gap-2">
-              {r.photoUrls.map((url, i) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={i} src={url} alt="" className="w-full aspect-square rounded-xl object-cover border border-slate-200" />
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-slate-400">사진 없음</p>
-          )}
-        </div>
-
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-2">지급 사진 ({r.supplyPhotoUrls?.length ?? 0}장)</p>
-          {r.supplyPhotoUrls?.length > 0 ? (
-            <div className="grid grid-cols-3 gap-2">
-              {r.supplyPhotoUrls.map((url, i) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={i} src={url} alt="" className="w-full aspect-square rounded-xl object-cover border border-slate-200" />
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-slate-400">아직 지급 사진이 없습니다</p>
-          )}
-        </div>
+      <div>
+        <p className="text-xs font-bold text-slate-500 mb-2">사진 ({photos.length}장)</p>
+        {photos.length === 0 ? (
+          <p className="text-xs text-slate-400">등록된 사진이 없습니다</p>
+        ) : (
+          <div className="grid grid-cols-4 gap-2">
+            {photos.map((url, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={i} src={url} alt="" className="w-full aspect-square rounded-lg object-cover border border-slate-200" />
+            ))}
+          </div>
+        )}
       </div>
     </Modal>
   );
