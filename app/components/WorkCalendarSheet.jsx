@@ -229,7 +229,7 @@ function LeaveCalendarTab({ schedules = [] }) {
               {["연차", "반차", "병가", "공가"].map((k) => (
                 <button
                   key={k}
-                  onClick={() => setForm({ ...form, kind: k })}
+                  onClick={() => setForm({ ...form, kind: k, end: k === "반차" ? form.start : form.end })}
                   className={`py-2 rounded-lg text-xs font-bold border ${form.kind === k ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200"}`}
                 >
                   {k}
@@ -249,23 +249,31 @@ function LeaveCalendarTab({ schedules = [] }) {
                 ))}
               </div>
             )}
-            <div className="flex items-center gap-1.5">
+            {form.kind === "반차" ? (
               <input
                 type="date"
                 value={form.start}
-                onChange={(e) => setForm({ ...form, start: e.target.value, end: e.target.value > form.end ? e.target.value : form.end })}
-                className="flex-1 border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-800"
+                onChange={(e) => setForm({ ...form, start: e.target.value, end: e.target.value })}
+                className="w-full border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-800"
               />
-              <span className="text-[11px] text-slate-400">~</span>
-              <input
-                type="date"
-                value={form.end}
-                min={form.start}
-                disabled={form.kind === "반차"}
-                onChange={(e) => setForm({ ...form, end: e.target.value })}
-                className="flex-1 border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-800 disabled:bg-slate-50"
-              />
-            </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="date"
+                  value={form.start}
+                  onChange={(e) => setForm({ ...form, start: e.target.value, end: e.target.value > form.end ? e.target.value : form.end })}
+                  className="flex-1 border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-800"
+                />
+                <span className="text-[11px] text-slate-400">~</span>
+                <input
+                  type="date"
+                  value={form.end}
+                  min={form.start}
+                  onChange={(e) => setForm({ ...form, end: e.target.value })}
+                  className="flex-1 border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-800"
+                />
+              </div>
+            )}
             <input
               value={form.note}
               onChange={(e) => setForm({ ...form, note: e.target.value })}
