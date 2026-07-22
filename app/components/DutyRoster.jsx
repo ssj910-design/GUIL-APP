@@ -162,7 +162,7 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
             {onlyMine ? "내 근무만" : "전체 보기"}
           </button>
           <button
-            onClick={() => setSwapOpen(true)}
+            onClick={() => { alert("근무 조정 시 당사자간 충분한 협의 후 조정바랍니다."); setSwapOpen(true); }}
             className="ml-auto text-[11px] font-bold text-white bg-blue-700 rounded-lg px-3.5 py-1.5 flex items-center gap-1"
           >
             <ArrowLeftRight size={12} /> 근무 조정
@@ -282,7 +282,7 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
         )}
 
         <p className="text-[10px] text-slate-400 mt-2.5 px-1 leading-relaxed">
-          이름 옆 숫자는 기사 순번입니다.
+          이름 옆 숫자는 근무 순번임.
           {role === "admin" && " 칸을 누르면 담당자를 바꿀 수 있습니다."}
         </p>
 

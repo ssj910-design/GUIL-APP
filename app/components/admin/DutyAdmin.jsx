@@ -307,16 +307,9 @@ export default function DutyAdmin({ data, setData }) {
         </div>
       </div>
 
-      <div className="border border-slate-100 rounded-lg p-3 mb-3">
-        <p className="text-[11px] font-bold text-slate-500 mb-1.5">배정 순서</p>
-        {genRoster.length === 0 ? (
-          <p className="text-[11px] text-red-500">{genMode} 대상자가 없습니다. 위 순번표에서 카드를 눌러 포함시키고 순번을 지정하세요.</p>
-        ) : (
-          <p className="text-[11px] text-slate-600 leading-relaxed">
-            {genRoster.map((e) => `${e.name}(${e.duty_order})`).join(" → ")}
-          </p>
-        )}
-      </div>
+      {genRoster.length === 0 && (
+        <p className="text-[11px] text-red-500 mb-3">{genMode} 대상자가 없습니다. 위 순번표에서 카드를 눌러 포함시키고 순번을 지정하세요.</p>
+      )}
 
       {/* 실시간 미리보기 캘린더 — 위 순번표를 고치면 버튼 없이 바로 다시 그려진다. 새로 채워질 칸은 눌러서 수동 지정 가능. */}
       <div className="mb-3">
