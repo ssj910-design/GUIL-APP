@@ -12,8 +12,16 @@ import { unitIdFor, addDays } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { locOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal } from "@/app/components/admin/adminShared";
 
-const MATERIAL_TONE = { 승인대기: "blue", 지급완료: "green", 반려: "red", 교체완료: "green" };
-const QUOTE_TONE = { 요청접수: "blue", 견적발행: "amber", 승인: "amber", 자재지급완료: "green", 교체완료: "green" };
+const MATERIAL_TONE = { 승인대기: "blue", 지급완료: "green", 반려: "red", 교체완료: "indigo" };
+const QUOTE_TONE = { 요청접수: "blue", 견적발행: "amber", 승인: "amber", 지급완료: "green", 교체완료: "indigo" };
+
+// 부품별 금액 필수 입력값을 지급 문자열("부품명(₩1,000)")에서 되찾아 수정 모달 기본값으로 쓴다.
+function parseAmountFromBillingPart(billingPart, part) {
+  if (!billingPart) return "";
+  const escaped = part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const m = billingPart.match(new RegExp(`${escaped}\\(₩([0-9,]+)\\)`));
+  return m ? m[1].replace(/,/g, "") : "";
+}
 
 // 자재/견적 완료 후 실제 "교체완료" 여부 — 정상 완료 경로인 기사 비용청구가 들어오면
 // 연결된 할 일(todos)의 done이 true가 된다(TodosAdmin.jsx 참고). 담당자가 여러 명인
@@ -97,6 +105,35 @@ export default function MaterialsAdmin({ data, setData }) {
     }));
   }
 
+  // 지급완료된 자재신청 수정 — 상태/지급일은 그대로 두고 사진·담당기사·금액만 바꾼다
+  // (연결된 할 일은 이미 있으므로 새로 만들지 않고 그 자리에서 update).
+  async function handleMaterialEdit(request, { assigneeId, billingPart, billingAmount, photoUrls }) {
+    const engineer = (data.profiles ?? []).find((p) => p.id === assigneeId);
+    const assigneeName = engineer?.name ?? request.engineer;
+
+    const patch = {
+      has_supply_photo: photoUrls.length > 0,
+      supply_photo_urls: photoUrls.length ? photoUrls : null,
+    };
+    const { error } = await supabase.from("material_requests").update(patch).eq("id", request.id);
+    if (error) { alert("수정 실패: " + error.message); return; }
+
+    const todoId = "todo-" + request.id;
+    const todoPatch = { assignee: assigneeName, assignee_id: assigneeId || null, billing_part: billingPart, billing_amount: billingAmount };
+    const { error: todoError } = await supabase.from("todos").update(todoPatch).eq("id", todoId);
+    if (todoError) { alert("할 일 수정 실패: " + todoError.message); return; }
+
+    setData((prev) => ({
+      ...prev,
+      materialRequests: prev.materialRequests.map((r) =>
+        r.id === request.id ? { ...r, hasSupplyPhoto: patch.has_supply_photo, supplyPhotoUrls: photoUrls } : r
+      ),
+      todos: prev.todos.map((t) =>
+        t.id === todoId ? { ...t, assignee: assigneeName, assigneeId: assigneeId || null, billingPart, billingAmount } : t
+      ),
+    }));
+  }
+
   async function handleQuoteAdvance(quote) {
     const isIssue = quote.status === "요청접수";
     const patch = isIssue
@@ -169,6 +206,67 @@ export default function MaterialsAdmin({ data, setData }) {
     }));
   }
 
+  // 자재지급완료(표시상 지급완료)된 견적요청 수정 — 사진과 담당 기사 구성을 바꾼다.
+  // 담당 기사가 빠지면 그 사람 할 일은 삭제하고, 새로 추가되면 할 일을 새로 만든다.
+  async function handleQuoteEdit(quote, { assigneeIds, photoUrls }) {
+    const patch = {
+      has_supply_photo: photoUrls.length > 0,
+      supply_photo_urls: photoUrls.length ? photoUrls : null,
+    };
+    const { error } = await supabase.from("quote_requests").update(patch).eq("id", quote.id);
+    if (error) { alert("수정 실패: " + error.message); return; }
+
+    const existingTodos = (data.todos ?? []).filter((t) => t.quoteRequestId === quote.id);
+    const toRemove = existingTodos.filter((t) => !assigneeIds.includes(t.assigneeId));
+    const toAddIds = assigneeIds.filter((id) => !existingTodos.some((t) => t.assigneeId === id));
+
+    if (toRemove.length) {
+      const { error: delError } = await supabase.from("todos").delete().in("id", toRemove.map((t) => t.id));
+      if (delError) { alert("할 일 정리 실패: " + delError.message); return; }
+    }
+
+    const unitId = quote.unitId ?? unitIdFor(data.units, quote.siteId, quote.elevatorNo);
+    const startIdx = existingTodos.length;
+    const newTodos = toAddIds.map((assigneeId, i) => {
+      const engineer = (data.profiles ?? []).find((p) => p.id === assigneeId);
+      return {
+        id: `todo-quote-${quote.id}-${startIdx + i}`,
+        quoteRequestId: quote.id,
+        materialRequestId: null,
+        source: "quote",
+        title: `${quote.siteName} ${quote.constructionType} 시공 확인 및 서류 제출`,
+        siteName: quote.siteName,
+        elevatorNo: quote.elevatorNo,
+        part: quote.constructionType,
+        assignee: engineer?.name ?? "",
+        assignedDate: TODAY_STR,
+        dueDate: addDays(TODAY_STR, 30),
+        done: false,
+        unitId,
+        assigneeId,
+      };
+    });
+    if (newTodos.length) {
+      const { error: todoError } = await supabase.from("todos").upsert(
+        newTodos.map((t) => ({
+          id: t.id, quote_request_id: t.quoteRequestId, source: t.source, title: t.title,
+          site_name: t.siteName, elevator_no: t.elevatorNo, part: t.part,
+          assignee: t.assignee, assigned_date: t.assignedDate, due_date: t.dueDate, done: t.done,
+          unit_id: t.unitId, assignee_id: t.assigneeId,
+        }))
+      );
+      if (todoError) { alert("할 일 생성 실패: " + todoError.message); return; }
+    }
+
+    setData((prev) => ({
+      ...prev,
+      quoteRequests: prev.quoteRequests.map((x) =>
+        x.id === quote.id ? { ...x, hasSupplyPhoto: patch.has_supply_photo, supplyPhotoUrls: photoUrls } : x
+      ),
+      todos: [...newTodos, ...prev.todos.filter((t) => !toRemove.some((r) => r.id === t.id))],
+    }));
+  }
+
   return (
     <div className="max-w-6xl">
       <h1 className="text-xl font-extrabold mb-4">자재·견적 신청내역</h1>
@@ -223,7 +321,12 @@ export default function MaterialsAdmin({ data, setData }) {
                     지급완료 처리
                   </button>
                 ) : m.status === "지급완료" ? (
-                  <span className="text-[11px] text-emerald-600 font-semibold">✓ 할 일 자동 생성됨</span>
+                  <div>
+                    <button onClick={() => setPayTarget(m)} className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-lg">
+                      수정
+                    </button>
+                    <p className="text-[10px] text-emerald-600 font-semibold mt-1">✓ 할 일 자동 생성됨</p>
+                  </div>
                 ) : (
                   <span className="text-xs text-slate-300">-</span>
                 )}
@@ -255,8 +358,8 @@ export default function MaterialsAdmin({ data, setData }) {
               <td className="px-3 py-2.5">
                 {(() => {
                   const displayStatus =
-                    q.status === "자재지급완료" && billingCompleteFor(data.todos ?? [], "quoteRequestId", q.id)
-                      ? "교체완료"
+                    q.status === "자재지급완료"
+                      ? billingCompleteFor(data.todos ?? [], "quoteRequestId", q.id) ? "교체완료" : "지급완료"
                       : q.status;
                   return <StatusBadge tone={QUOTE_TONE[displayStatus] ?? "slate"}>{displayStatus}</StatusBadge>;
                 })()}
@@ -278,7 +381,12 @@ export default function MaterialsAdmin({ data, setData }) {
                   </button>
                 )}
                 {q.status === "자재지급완료" && (
-                  <span className="text-[11px] text-emerald-600 font-semibold">✓ 할 일 자동 생성됨</span>
+                  <div>
+                    <button onClick={() => setQuoteSupplyTarget(q)} className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-lg">
+                      수정
+                    </button>
+                    <p className="text-[10px] text-emerald-600 font-semibold mt-1">✓ 할 일 자동 생성됨</p>
+                  </div>
                 )}
               </td>
             </tr>
@@ -292,8 +400,13 @@ export default function MaterialsAdmin({ data, setData }) {
         <MaterialSupplyModal
           request={payTarget}
           profiles={data.profiles ?? []}
+          todos={data.todos ?? []}
           onClose={() => setPayTarget(null)}
-          onSubmit={async (input) => { await handleMaterialSupplyComplete(payTarget, input); setPayTarget(null); }}
+          onSubmit={async (input) => {
+            if (payTarget.status === "지급완료") await handleMaterialEdit(payTarget, input);
+            else await handleMaterialSupplyComplete(payTarget, input);
+            setPayTarget(null);
+          }}
         />
       )}
 
@@ -301,8 +414,13 @@ export default function MaterialsAdmin({ data, setData }) {
         <QuoteSupplyModal
           quote={quoteSupplyTarget}
           profiles={data.profiles ?? []}
+          todos={data.todos ?? []}
           onClose={() => setQuoteSupplyTarget(null)}
-          onSubmit={async (input) => { await handleQuoteSupplyComplete(quoteSupplyTarget, input); setQuoteSupplyTarget(null); }}
+          onSubmit={async (input) => {
+            if (quoteSupplyTarget.status === "자재지급완료") await handleQuoteEdit(quoteSupplyTarget, input);
+            else await handleQuoteSupplyComplete(quoteSupplyTarget, input);
+            setQuoteSupplyTarget(null);
+          }}
         />
       )}
 
@@ -313,20 +431,30 @@ export default function MaterialsAdmin({ data, setData }) {
   );
 }
 
-function MaterialSupplyModal({ request, profiles, onClose, onSubmit }) {
+function MaterialSupplyModal({ request, profiles, todos, onClose, onSubmit }) {
+  const isEdit = request.status === "지급완료";
+  const existingTodo = todos.find((t) => t.materialRequestId === request.id);
   const engineers = profiles.filter((p) => p.role === "engineer");
-  const defaultAssigneeId = request.requesterId || engineers.find((p) => p.name === request.engineer)?.id || "";
+  const defaultAssigneeId = existingTodo?.assigneeId || request.requesterId || engineers.find((p) => p.name === request.engineer)?.id || "";
   const [assigneeId, setAssigneeId] = useState(defaultAssigneeId);
   const [photos, setPhotos] = useState(request.supplyPhotoUrls ?? []);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [amounts, setAmounts] = useState({});
 
   const parts = (request.part ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const [amounts, setAmounts] = useState(() => {
+    const initial = {};
+    parts.forEach((part, i) => {
+      const found = parseAmountFromBillingPart(existingTodo?.billingPart, part);
+      if (found) initial[i] = found;
+    });
+    return initial;
+  });
   const total = parts.reduce((sum, _, i) => sum + (Number(amounts[i]) || 0), 0);
   const billingPartText = parts
     .map((part, i) => (amounts[i] ? `${part}(₩${Number(amounts[i]).toLocaleString()})` : part))
     .join(", ");
+  const allAmountsFilled = parts.every((_, i) => Number(amounts[i]) > 0);
 
   async function handleFiles(e) {
     const files = Array.from(e.target.files ?? []);
@@ -350,7 +478,7 @@ function MaterialSupplyModal({ request, profiles, onClose, onSubmit }) {
   }
 
   return (
-    <Modal title={`${request.siteName ?? "-"} · ${request.part} — 지급완료 처리`} onClose={onClose}>
+    <Modal title={`${request.siteName ?? "-"} · ${request.part} — ${isEdit ? "지급 내역 수정" : "지급완료 처리"}`} onClose={onClose}>
       <div className="space-y-3">
         <div>
           <label className="text-xs font-bold text-slate-400 block mb-1">지급 사진 (선택)</label>
@@ -383,7 +511,7 @@ function MaterialSupplyModal({ request, profiles, onClose, onSubmit }) {
         </div>
 
         <div>
-          <label className="text-xs font-bold text-slate-400 block mb-1">부품별 금액</label>
+          <label className="text-xs font-bold text-slate-400 block mb-1">부품별 금액 (필수)</label>
           <div className="space-y-1.5">
             {parts.map((part, i) => (
               <div key={i} className="flex items-center gap-1.5">
@@ -399,24 +527,27 @@ function MaterialSupplyModal({ request, profiles, onClose, onSubmit }) {
             ))}
           </div>
           {parts.length > 1 && <p className="text-[10px] text-slate-400 text-right mt-1">합계 ₩{total.toLocaleString()}</p>}
+          {!allAmountsFilled && <p className="text-[10px] text-red-500 mt-1">모든 부품의 금액을 입력해주세요</p>}
         </div>
 
         <button
           onClick={submit}
-          disabled={saving || uploading}
+          disabled={saving || uploading || !allAmountsFilled}
           className="w-full bg-blue-700 disabled:bg-slate-300 text-white text-sm font-bold py-2.5 rounded-lg"
         >
-          {saving ? "처리 중..." : "지급완료 처리"}
+          {saving ? "처리 중..." : isEdit ? "수정 저장" : "지급완료 처리"}
         </button>
       </div>
     </Modal>
   );
 }
 
-function QuoteSupplyModal({ quote, profiles, onClose, onSubmit }) {
+function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
+  const isEdit = quote.status === "자재지급완료";
   const engineers = profiles.filter((p) => p.role === "engineer");
+  const existingAssigneeIds = todos.filter((t) => t.quoteRequestId === quote.id).map((t) => t.assigneeId);
   const defaultId = quote.requesterId || engineers.find((p) => p.name === quote.engineer)?.id || "";
-  const [assigneeIds, setAssigneeIds] = useState(defaultId ? [defaultId] : []);
+  const [assigneeIds, setAssigneeIds] = useState(existingAssigneeIds.length ? existingAssigneeIds : (defaultId ? [defaultId] : []));
   const [photos, setPhotos] = useState(quote.supplyPhotoUrls ?? []);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -448,7 +579,7 @@ function QuoteSupplyModal({ quote, profiles, onClose, onSubmit }) {
   }
 
   return (
-    <Modal title={`${quote.siteName ?? "-"} · ${quote.constructionType} — 자재지급완료 처리`} onClose={onClose}>
+    <Modal title={`${quote.siteName ?? "-"} · ${quote.constructionType} — ${isEdit ? "지급 내역 수정" : "지급완료 처리"}`} onClose={onClose}>
       <div className="space-y-3">
         <div>
           <label className="text-xs font-bold text-slate-400 block mb-1">지급 사진 (선택)</label>
@@ -490,7 +621,7 @@ function QuoteSupplyModal({ quote, profiles, onClose, onSubmit }) {
           disabled={saving || uploading || assigneeIds.length === 0}
           className="w-full bg-blue-700 disabled:bg-slate-300 text-white text-sm font-bold py-2.5 rounded-lg"
         >
-          {saving ? "처리 중..." : "자재 지급 완료 체크"}
+          {saving ? "처리 중..." : isEdit ? "수정 저장" : "자재 지급 완료 체크"}
         </button>
       </div>
     </Modal>
