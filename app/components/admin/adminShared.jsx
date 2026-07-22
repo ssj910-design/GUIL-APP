@@ -23,6 +23,7 @@ const TONES = {
   amber: "bg-amber-50 text-amber-700",
   green: "bg-emerald-50 text-emerald-700",
   blue: "bg-blue-50 text-blue-700",
+  indigo: "bg-indigo-50 text-indigo-700",
   slate: "bg-slate-100 text-slate-500",
 };
 
