@@ -458,7 +458,13 @@ export function FailureDetailSheet({ failure, failures = [], onClose, onDispatch
                     <span className="font-semibold text-slate-700 truncate">{fmtMD(h.createdAt)} · {ec.faultType}{ec.faultDetail && <span className="font-normal text-slate-500"> · {ec.faultDetail}</span>}</span>
                     <span className={`shrink-0 text-[10px] font-bold ${h.status === "완료" ? "text-emerald-600" : "text-amber-600"}`}>{h.status}</span>
                   </div>
-                  {done && <p className="text-[12px] text-slate-500 mt-0.5 truncate">{done}</p>}
+                  {(h.assignee || done) && (
+                    <p className="text-[12px] text-slate-500 mt-0.5 truncate">
+                      {h.assignee && <span className="font-medium text-slate-600">{h.assignee}</span>}
+                      {h.assignee && done && " · "}
+                      {done}
+                    </p>
+                  )}
                 </li>
               );
             })}
@@ -758,10 +764,7 @@ function FailureResponseCard({ f, dist, history = [], site, onOpenDetail, onDisp
       <div className="p-3.5 pb-2.5">
         <div className="flex items-center justify-between gap-2 mb-1">
           <p className="font-bold text-slate-800 text-[15px] truncate">{f.siteName} · {unitLabel}</p>
-          <span className="flex items-center gap-1 shrink-0">
-            {history.length > 0 && <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${history.length >= 3 ? "text-red-600 bg-red-100" : "text-slate-500 bg-slate-100"}`} title={`이 호기 총 ${history.length}회 재발 · 직전 ${fmtMD(history[0].createdAt)}`}><Repeat size={10} strokeWidth={2.8} />{history.length} · {fmtMD(history[0].createdAt)}</span>}
-            {f.escalation && <span className="text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{f.escalation}</span>}
-          </span>
+          {f.escalation && <span className="shrink-0 text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{f.escalation}</span>}
         </div>
         <p className="text-[13px] text-slate-500 mb-2 flex items-center gap-1">
           {dist != null && <span className="inline-flex items-center gap-0.5 font-bold text-blue-600"><MapPin size={12} strokeWidth={2.5} />{fmtDist(dist)} ·</span>}
@@ -771,6 +774,12 @@ function FailureResponseCard({ f, dist, history = [], site, onOpenDetail, onDisp
           <AlertTriangle size={15} className="text-amber-500 shrink-0" />
           <p className="text-[13px]"><span className="font-bold text-slate-800">{faultType}</span>{faultDetail && <span className="text-slate-500"> · {faultDetail}</span>}</p>
         </div>
+        {history.length > 0 && (
+          <p className={`text-[12px] font-semibold mb-2 flex items-center gap-1 ${history.length >= 3 ? "text-red-600" : "text-slate-500"}`}>
+            <Repeat size={12} strokeWidth={2.5} className="shrink-0" />
+            <span className="truncate">고장 {history.length}회 · 최근 {fmtMD(history[0].createdAt)}{history[0].assignee ? ` · ${history[0].assignee}` : ""}</span>
+          </p>
+        )}
         {(site?.address || f.reporterPhone || site?.elevatorModel) && (
           <div className="text-[12px] text-slate-500 space-y-1">
             {site?.address && <p className="flex items-center gap-1 min-w-0"><MapPin size={12} className="shrink-0 text-slate-400" /><span className="truncate">{site.address}</span></p>}
