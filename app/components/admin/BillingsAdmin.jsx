@@ -29,10 +29,19 @@ function parseShortDate(text) {
   return `20${yy}-${mm}-${dd}`;
 }
 
-// 청구일 — 달력 대신 "26.06.08" 형식을 키보드로 직접 입력. 입력 중엔 로컬 상태로만
-// 갖고 있다가 포커스를 벗어날 때 파싱해서 저장한다(매 키입력마다 커밋하면 커서가 튄다).
-// 부모가 key={value}로 렌더링해 저장된 값이 실제로 바뀔 때만 리마운트되어 새 값을 반영한다
-// (매 렌더마다 useEffect로 동기화하면 impure-render 린트 규칙에 걸린다).
+// 숫자만 입력해도(예: 260101) 자동으로 "26.01.01" 형태로 점을 채워 넣어준다.
+function autoFormatShortDate(raw) {
+  const digits = raw.replace(/\D/g, "").slice(0, 6);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4)}`;
+}
+
+// 청구일 — 달력 대신 "26.01.01" 형식을 키보드로 직접 입력(숫자만 쳐도 점은 자동으로 채워짐).
+// 입력 중엔 로컬 상태로만 갖고 있다가 포커스를 벗어날 때 파싱해서 저장한다
+// (매 키입력마다 커밋하면 커서가 튄다). 부모가 key={value}로 렌더링해 저장된 값이 실제로
+// 바뀔 때만 리마운트되어 새 값을 반영한다(매 렌더마다 useEffect로 동기화하면 impure-render
+// 린트 규칙에 걸린다).
 function BillingDateCell({ value, onCommit }) {
   const [text, setText] = useState(shortDate(value) === "-" ? "" : shortDate(value));
 
@@ -40,7 +49,7 @@ function BillingDateCell({ value, onCommit }) {
     if (text.trim() === "") { onCommit(null); return; }
     const parsed = parseShortDate(text);
     if (!parsed) {
-      alert("날짜 형식이 올바르지 않습니다 (예: 26.06.08)");
+      alert("날짜 형식이 올바르지 않습니다 (예: 26.01.01)");
       setText(shortDate(value) === "-" ? "" : shortDate(value));
       return;
     }
@@ -50,16 +59,16 @@ function BillingDateCell({ value, onCommit }) {
   return (
     <input
       className={`${inputCls} min-w-24`}
-      placeholder="26.06.08"
+      placeholder="26.01.01"
       value={text}
-      onChange={(e) => setText(e.target.value)}
+      onChange={(e) => setText(autoFormatShortDate(e.target.value))}
       onBlur={commit}
       onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
     />
   );
 }
 
-function BillingDetailModal({ b, data, onClose, onSave }) {
+function BillingDetailModal({ b, data, onClose, onSave, onToggleFree }) {
   const { profiles } = data;
   const engineers = profiles.filter((p) => p.role === "engineer");
   const notesReady = data.billings.some((x) => x.notes !== undefined);
@@ -85,13 +94,33 @@ function BillingDetailModal({ b, data, onClose, onSave }) {
     onClose();
   }
 
+  // 무상 처리 — 켤 때는 사유를 받아 내용(notes)에 남긴다. 이미 무상이면 사유 없이 바로 해제.
+  async function handleToggleFree() {
+    if (b.isFree) {
+      await onToggleFree(b, null);
+      onClose();
+      return;
+    }
+    const reason = prompt("무상 처리 사유를 입력해주세요 (부품 하자 A/S, 서비스 차원 등)");
+    if (reason === null) return; // 취소
+    await onToggleFree(b, reason.trim() || null);
+    onClose();
+  }
+
   return (
     <Modal title="청구 상세내역" onClose={onClose} wide>
       <div className="space-y-3 mb-4">
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div><p className="text-xs font-bold text-slate-400 mb-1">현장 · 호기</p><p className="font-semibold text-slate-800">{locOf(data, b.unitId, b.siteName, b.elevatorNo)}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">교체내역</p><p className="font-semibold text-slate-800">{b.part}</p></div>
-          <div><p className="text-xs font-bold text-slate-400 mb-1">금액</p><p className="font-semibold text-slate-800">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</p></div>
+          <div>
+            <p className="text-xs font-bold text-slate-400 mb-1">금액</p>
+            {b.isFree ? (
+              <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">무상</span>
+            ) : (
+              <p className="font-semibold text-slate-800">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</p>
+            )}
+          </div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">제출일</p><p className="font-semibold text-slate-800">{b.submittedAt}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">현장 담당자 연락처</p><p className="font-semibold text-slate-800">{b.contactPhone || "-"}</p></div>
           <div>
@@ -133,7 +162,10 @@ function BillingDetailModal({ b, data, onClose, onSave }) {
         <PhotoGrid urls={photos} />
       </div>
 
-      <div className="flex justify-end mt-4">
+      <div className="flex justify-between mt-4">
+        <button onClick={handleToggleFree} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-5 py-2.5">
+          {b.isFree ? "무상 해제하기" : "무상 처리하기"}
+        </button>
         <button disabled={saving} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
           저장
         </button>
@@ -177,12 +209,21 @@ export default function BillingsAdmin({ data, setData }) {
     setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, [key]: value || null } : x)) }));
   }
 
-  // 무상 처리 — 이 관리자웹 화면에서만 지원(모바일 앱엔 없음). 금액은 그대로 두고 표시·합계에서만 제외.
-  async function toggleFree(b) {
+  // 무상 처리 — 청구 상세내역에서만 지원(모바일 앱엔 없음). 금액은 그대로 두고 표시·합계에서만
+  // 제외한다. 켤 때 받은 사유는 내용(notes)에 남겨 상세내역에서 그대로 볼 수 있게 한다.
+  async function toggleFree(b, reason) {
     const next = !b.isFree;
-    const { error } = await supabase.from("billings").update({ is_free: next }).eq("id", b.id);
+    const notesReady = data.billings.some((x) => x.notes !== undefined);
+    const patch = { is_free: next };
+    if (next && reason && notesReady) {
+      patch.notes = (b.notes ? b.notes + "\n" : "") + `[무상처리] ${reason}`;
+    }
+    const { error } = await supabase.from("billings").update(patch).eq("id", b.id);
     if (error) { alert("저장 실패: " + error.message); return; }
-    setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, isFree: next } : x)) }));
+    setData((prev) => ({
+      ...prev,
+      billings: prev.billings.map((x) => (x.id === b.id ? { ...x, isFree: next, ...(patch.notes !== undefined ? { notes: patch.notes } : {}) } : x)),
+    }));
   }
 
   return (
@@ -204,17 +245,12 @@ export default function BillingsAdmin({ data, setData }) {
             <td className="px-3 py-2.5 whitespace-nowrap">{siteManagerOf(data, b.unitId, b.siteName)}</td>
             <td className="px-3 py-2.5 whitespace-nowrap">{personOf(data, b.engineerId, b.engineer)}</td>
             <td className="px-3 py-2.5 text-slate-600">{b.part}</td>
-            <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center gap-1.5">
-                {b.isFree ? (
-                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">무상</span>
-                ) : (
-                  <span className="font-bold">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</span>
-                )}
-                <button onClick={() => toggleFree(b)} className="text-[10px] text-slate-400 hover:text-emerald-600 underline whitespace-nowrap">
-                  {b.isFree ? "해제" : "무상처리"}
-                </button>
-              </div>
+            <td className="px-3 py-2.5 whitespace-nowrap">
+              {b.isFree ? (
+                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">무상</span>
+              ) : (
+                <span className="font-bold">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</span>
+              )}
             </td>
             <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(b.replaceDate)}</td>
             <td className="px-3 py-2.5">
@@ -239,7 +275,7 @@ export default function BillingsAdmin({ data, setData }) {
         ))}
       </AdminTable>
 
-      {detail && <BillingDetailModal b={detail} data={data} onClose={() => setDetail(null)} onSave={saveBilling} />}
+      {detail && <BillingDetailModal b={detail} data={data} onClose={() => setDetail(null)} onSave={saveBilling} onToggleFree={toggleFree} />}
     </div>
   );
 }
