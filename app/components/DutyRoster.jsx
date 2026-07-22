@@ -1,18 +1,9 @@
-import { useState, useContext, useEffect } from "react";
+import { useState, useContext } from "react";
 import { ChevronLeft, ChevronRight, X, ArrowLeftRight } from "lucide-react";
 import { DutySwapSheet } from "@/app/components/DutySwapSheet";
 import { AuthContext } from "@/app/components/context";
-import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { useHolidays } from "@/app/hooks/useHolidays";
-
-// 반차 신청 시 note 맨 앞에 "오전"/"오후"를 적어두므로(WorkCalendarSheet.jsx의 submitLeave 참고)
-// 날짜 상세 팝업에도 그대로 꺼내 보여준다.
-function periodOf(note) {
-  const m = (note ?? "").match(/^(오전|오후)/);
-  return m ? m[1] : null;
-}
-const LEAVE_KINDS = ["연차", "반차", "병가", "공가"];
 
 // 칸에 그리는 순서 — 당직 → 숙직 → 정상근무.
 // 정상근무는 주4일제 표에서 금요일에만 쓰이는 자리라 값이 있을 때(또는 관리자)만 칸을 보여준다.
@@ -82,7 +73,7 @@ export function DutySwapNotice({ swaps, schedules, onSeen }) {
 }
 
 export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onRequestSwap, onRespondSwap, onClose, embedded = false, showControls = !embedded, belowCalendar = null, showFillButton = true }) {
-  const { role, selfId, engineers, profiles = [] } = useContext(AuthContext);
+  const { role, selfId, engineers } = useContext(AuthContext);
   const today = new Date(`${TODAY_STR}T00:00:00`);
   const [cursor, setCursor] = useState({ y: today.getFullYear(), m: today.getMonth() });
   const [picking, setPicking] = useState(null); // 관리자: 담당자 지정할 칸
@@ -92,8 +83,6 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
   const { days: HOLIDAY } = useHolidays();
   const [swapOpen, setSwapOpen] = useState(false);
   const [onlyMine, setOnlyMine] = useState(false); // 기사: 내 근무만 보기
-  const [dayDetail, setDayDetail] = useState(null); // 날짜 클릭 시 당직·숙직·연차 인원 모아보기
-  const [monthLeaves, setMonthLeaves] = useState([]);
 
   // 이름 조회용은 전원, 담당자 선택은 당직 대상자 우선 정렬
   const roster = engineers.slice().sort((a, b) => (a.duty_order ?? 999) - (b.duty_order ?? 999));
@@ -113,16 +102,6 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
   // 애초에 정상근무 레코드가 없으니 그걸로 판단해 범례·칸을 통째로 숨긴다.
   const monthHasNormalWork = inMonth.some((s) => s.kind === "정상근무");
   const visibleKinds = monthHasNormalWork ? KINDS : KINDS.filter((k) => k !== "정상근무");
-
-  // 날짜 클릭 시 당직·숙직과 함께 보여줄 연차·반차·병가·공가 — 보이는 달 것만 불러온다.
-  // 승인된 것만 보여준다(신청·반려는 아직 확정이 아니라 남들 눈에 보이면 안 된다).
-  const monthLast = `${monthKey}-${String(daysInMonth).padStart(2, "0")}`;
-  useEffect(() => {
-    supabase.from("leaves").select("*").lte("start_date", monthLast).gte("end_date", `${monthKey}-01`)
-      .then(({ data }) => setMonthLeaves((data ?? []).filter((l) => (l.status ?? "승인") === "승인")));
-  }, [monthKey, monthLast]);
-  const leaveNameOf = (pid) => profiles.find((p) => p.id === pid)?.name ?? "";
-  const leavesOf = (iso) => monthLeaves.filter((l) => l.start_date <= iso && iso <= l.end_date);
 
   // 나에게 온 교환 요청 (대기 중)
   const incoming = swaps.filter((w) => w.status === "대기" && w.targetId === selfId);
@@ -253,17 +232,12 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
                 const isHoliday = !!HOLIDAY[iso];
                 return (
                   <div key={d} className={`border-b border-r border-slate-100 min-h-[76px] p-1 ${isToday ? "bg-blue-50" : isHoliday ? "bg-red-50/40" : ""}`}>
-                    <button
-                      type="button"
-                      onClick={() => setDayDetail(iso)}
-                      className={`w-full text-right pr-0.5 truncate text-[10px] font-bold ${
-                        HOLIDAY[iso] || dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-slate-400"
-                      }`}
-                      title={HOLIDAY[iso] ?? ""}
-                    >
+                    <p className={`text-[10px] font-bold text-right pr-0.5 truncate ${
+                      HOLIDAY[iso] || dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-slate-400"
+                    }`} title={HOLIDAY[iso] ?? ""}>
                       {HOLIDAY[iso] && <span className="float-left text-[8.5px] text-red-400 font-bold max-w-[70%] truncate">{HOLIDAY[iso]}</span>}
                       {d}
-                    </button>
+                    </p>
                     {visibleKinds.map((kind) => {
                       const cell = cellOf(iso, kind);
                       // 정상근무는 배치가 없으면 기사 화면에서 숨긴다 (해당 요일에 아직 미배정인 칸)
@@ -382,49 +356,6 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
           onRequestSwap={onRequestSwap}
           onClose={() => setSwapOpen(false)}
         />
-      )}
-
-      {dayDetail && (
-        <div className="fixed inset-0 z-[60] bg-black/40 flex items-end" onClick={() => setDayDetail(null)}>
-          <div className="bg-white w-full rounded-t-2xl p-5 max-h-[70vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-extrabold text-slate-800">
-                {dayDetail.slice(5).replace("-", "/")} 근무·휴가
-              </p>
-              <button onClick={() => setDayDetail(null)} className="p-1 text-slate-400" aria-label="닫기"><X size={16} /></button>
-            </div>
-            <div className="space-y-2.5">
-              {visibleKinds.map((kind) => {
-                const cell = cellOf(dayDetail, kind);
-                return (
-                  <div key={kind} className="flex items-center justify-between text-sm border-b border-slate-50 pb-2 last:border-0 last:pb-0">
-                    <span className={`font-bold ${KIND_TEXT[kind]}`}>{kind}</span>
-                    <span className="text-slate-700 font-semibold">{cell?.profileId ? nameOf(cell.profileId) : "미배정"}</span>
-                  </div>
-                );
-              })}
-              {LEAVE_KINDS.map((kind) => {
-                const people = leavesOf(dayDetail).filter((l) => l.kind === kind);
-                if (!people.length) return null;
-                return (
-                  <div key={kind}>
-                    <p className="text-xs font-bold text-slate-500 mb-1">{kind}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {people.map((l) => (
-                        <span key={l.id} className="text-xs font-semibold bg-emerald-50 text-emerald-700 rounded-full px-2.5 py-1">
-                          {leaveNameOf(l.profile_id)}{kind === "반차" && periodOf(l.note) ? `(${periodOf(l.note)})` : ""}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-              {leavesOf(dayDetail).length === 0 && visibleKinds.every((k) => !cellOf(dayDetail, k)?.profileId) && (
-                <p className="text-xs text-slate-400 text-center py-3">이 날 등록된 근무·휴가가 없습니다</p>
-              )}
-            </div>
-          </div>
-        </div>
       )}
 
       {picking && (

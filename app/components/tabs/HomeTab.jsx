@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from "react";
-import { ShieldCheck, AlertOctagon } from "lucide-react";
+import { ShieldCheck, AlertOctagon, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, formatUnitLabel, distanceKm } from "@/lib/utils";
@@ -317,6 +317,13 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
+// 반차 신청 시 note 맨 앞에 "오전"/"오후"를 적어두므로(WorkCalendarSheet.jsx의 submitLeave 참고)
+// 날짜 상세 팝업에도 그대로 꺼내 보여준다.
+function periodOf(note) {
+  const m = (note ?? "").match(/^(오전|오후)/);
+  return m ? m[1] : null;
+}
+
 // 홈탭용 워크 캘린더 미리보기 — 관리자 대시보드의 WeekStrip(admin/WeekStrip.jsx)을 좁은
 // 모바일 화면에 맞게 압축한 버전. 카드 폭이 좁아 "당직 아무개" 같은 라벨은 안 들어가서
 // 색점(당직=초록/숙직=파랑/휴가=호박색)만으로 구분하고 이름만 보여준다. 오늘은 고정으로
@@ -325,6 +332,7 @@ const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
   const [duties, setDuties] = useState([]);
   const [leaves, setLeaves] = useState([]);
+  const [dayDetail, setDayDetail] = useState(null); // 날짜 카드 클릭 시 당직·숙직·휴가 인원 모아보기
 
   const center = new Date(`${TODAY_STR}T00:00:00`);
   const week = Array.from({ length: 7 }, (_, i) => {
@@ -365,9 +373,11 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
           const dutyDay = duties.filter((x) => x.duty_date === d && (x.kind === "당직" || x.kind === "숙직"));
           const leaveDay = leaves.filter((l) => l.start_date <= d && d <= l.end_date);
           return (
-            <div
+            <button
               key={d}
-              className={`shrink-0 w-[54px] rounded-lg border p-1.5 ${
+              type="button"
+              onClick={() => setDayDetail(d)}
+              className={`shrink-0 w-[54px] text-left rounded-lg border p-1.5 ${
                 d === TODAY_STR ? "border-blue-300 bg-blue-50" : "border-slate-100"
               }`}
             >
@@ -388,10 +398,48 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
                   </p>
                 ))}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
+
+      {dayDetail && (
+        <div className="fixed inset-0 z-[60] bg-black/40 flex items-end" onClick={() => setDayDetail(null)}>
+          <div className="bg-white w-full rounded-t-2xl p-5 max-h-[70vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-extrabold text-slate-800">{dayDetail.slice(5).replace("-", "/")} 근무·휴가</p>
+              <button onClick={() => setDayDetail(null)} className="p-1 text-slate-400" aria-label="닫기"><X size={16} /></button>
+            </div>
+            <div className="space-y-2.5">
+              {["당직", "숙직"].map((kind) => {
+                const person = duties.find((x) => x.duty_date === dayDetail && x.kind === kind);
+                return (
+                  <div key={kind} className="flex items-center justify-between text-sm border-b border-slate-50 pb-2 last:border-0 last:pb-0">
+                    <span className={`font-bold ${kind === "당직" ? "text-emerald-700" : "text-blue-700"}`}>{kind}</span>
+                    <span className="text-slate-700 font-semibold">{person ? nameOf(person.profile_id) : "미배정"}</span>
+                  </div>
+                );
+              })}
+              {(() => {
+                const people = leaves.filter((l) => l.start_date <= dayDetail && dayDetail <= l.end_date);
+                if (!people.length) return null;
+                return (
+                  <div>
+                    <p className="text-xs font-bold text-slate-500 mb-1">휴가</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {people.map((l) => (
+                        <span key={l.id} className="text-xs font-semibold bg-amber-50 text-amber-700 rounded-full px-2.5 py-1">
+                          {nameOf(l.profile_id)}{l.kind === "반차" && periodOf(l.note) ? `(${periodOf(l.note)})` : ""}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
