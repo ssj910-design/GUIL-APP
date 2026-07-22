@@ -7,7 +7,7 @@ import { Badge, DDay, SmsToast, Sheet } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { usePriorFlaggedInspection } from "@/app/hooks/useLiveInspections";
-import { FailureDetailSheet, DispatchEtaModal, ArrivalTimeModal, ArrivalResultModal, FailureMiniCard, AssignEngineerSheet } from "@/app/components/tabs/FailureTab";
+import { FailureDetailSheet, DispatchEtaModal, ArrivalResultModal, FailureMiniCard, AssignEngineerSheet } from "@/app/components/tabs/FailureTab";
 
 
 // 검사도래현장 한 줄: 직전 검사가 조건부합격/조건후합격이면 현장명을 눌러 당시 부적합내역을 볼 수 있다.
@@ -409,7 +409,6 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [assignTarget, setAssignTarget] = useState(null);
   const [resultTarget, setResultTarget] = useState(null);
-  const [arriveTarget, setArriveTarget] = useState(null);
   const [historySite, setHistorySite] = useState(null);
   const [inspectionFailTarget, setInspectionFailTarget] = useState(null);
 
@@ -506,7 +505,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
                 warnCount={recentFailuresBySiteId.get(f.siteId)?.length ?? 0}
                 onOpenDetail={setDetailTarget}
                 onDispatch={setDispatchTarget}
-                onArrive={setArriveTarget}
+                onArrive={onArrive}
                 onOpenResult={setResultTarget}
                 onRefuse={onRefuse}
                 onAssignOpen={setAssignTarget}
@@ -692,16 +691,6 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
           onConfirm={(eta) => {
             onDispatch(dispatchTarget, eta);
             setDispatchTarget(null);
-          }}
-        />
-      )}
-      {arriveTarget && (
-        <ArrivalTimeModal
-          failure={arriveTarget}
-          onClose={() => setArriveTarget(null)}
-          onConfirm={(time) => {
-            onArrive(arriveTarget, time);
-            setArriveTarget(null);
           }}
         />
       )}

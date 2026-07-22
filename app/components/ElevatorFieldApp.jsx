@@ -15,7 +15,7 @@ import { SitesContext, UnitsContext, AuthContext } from "@/app/components/contex
 import { LoginScreen } from "@/app/components/LoginScreen";
 import { SiteTab } from "@/app/components/tabs/SiteTab";
 import { HomeTab } from "@/app/components/tabs/HomeTab";
-import { FailureTab, FailureDetailSheet, DispatchEtaModal, ArrivalTimeModal, ArrivalResultModal } from "@/app/components/tabs/FailureTab";
+import { FailureTab, FailureDetailSheet, DispatchEtaModal, ArrivalResultModal } from "@/app/components/tabs/FailureTab";
 import { CheckupTab } from "@/app/components/tabs/CheckupTab";
 import { InspectionTab } from "@/app/components/tabs/InspectionTab";
 import { MaterialTab } from "@/app/components/tabs/MaterialTab";
@@ -131,7 +131,6 @@ export default function App() {
   const [openTodoId, setOpenTodoId] = useState(null); // 알림에서 특정 할일을 눌러 상세를 바로 연다
   const [openFeedPostId, setOpenFeedPostId] = useState(null); // 알림에서 특정 게시글을 눌러 그 글만 팝업으로 연다 (게시판 전체를 열어 안읽음을 한번에 지우지 않도록)
   const [notifDispatchTarget, setNotifDispatchTarget] = useState(null);
-  const [notifArriveTarget, setNotifArriveTarget] = useState(null);
   const [notifResultTarget, setNotifResultTarget] = useState(null);
 
   // SKIP_LOGIN 상태에서도 ?auth=1 이면 실제 로그인 흐름을 강제한다 (인증/회원가입 사전 점검용).
@@ -875,7 +874,10 @@ export default function App() {
     setTab("sites");
   }
 
-  async function handleArriveFailure(failure, arrivalTime) {
+  // 도착 = 원터치. 버튼을 누른 그 순간을 도착 시각으로 기록한다.
+  // (사람이 갇힌 급한 현장에선 앱에 도착시간을 입력할 여유가 없다 — 일단 도착만 찍고 구조부터, 처리결과는 나중에.)
+  async function handleArriveFailure(failure) {
+    const arrivalTime = new Date().toTimeString().slice(0, 5); // "HH:MM" — 기존 도착시간 형식과 일치(모달 입력값과 동일)
     await supabase.from("failures").update({ arrival_time: arrivalTime }).eq("id", failure.id);
     setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, arrivalTime } : x)));
     markAtSite(failure, "도착"); // 도착 = 그 현장에 있음 → 마지막 위치 갱신
@@ -1842,7 +1844,7 @@ export default function App() {
                 failure={f}
                 onClose={() => setOpenFailureId(null)}
                 onDispatch={setNotifDispatchTarget}
-                onArrive={setNotifArriveTarget}
+                onArrive={handleArriveFailure}
                 onOpenResult={setNotifResultTarget}
               />
             );
@@ -1852,13 +1854,6 @@ export default function App() {
               failure={notifDispatchTarget}
               onClose={() => setNotifDispatchTarget(null)}
               onConfirm={(eta) => { handleDispatchFailure(notifDispatchTarget, eta); setNotifDispatchTarget(null); }}
-            />
-          )}
-          {notifArriveTarget && (
-            <ArrivalTimeModal
-              failure={notifArriveTarget}
-              onClose={() => setNotifArriveTarget(null)}
-              onConfirm={(time) => { handleArriveFailure(notifArriveTarget, time); setNotifArriveTarget(null); }}
             />
           )}
           {notifResultTarget && (

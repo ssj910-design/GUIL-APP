@@ -634,28 +634,6 @@ function formatTimeInput(raw) {
 }
 
 
-export function ArrivalTimeModal({ failure, onConfirm, onClose }) {
-  const [time, setTime] = useState("");
-  const valid = /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
-  return (
-    <Sheet title="실제 도착 시간 입력" onClose={onClose}>
-      <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {formatUnitLabel(failure.elevatorNo)}</p>
-      <Field label="도착 시간 *">
-        <input
-          type="text"
-          inputMode="numeric"
-          value={time}
-          onChange={(e) => setTime(formatTimeInput(e.target.value))}
-          placeholder="예: 14:30"
-          className={inputCls}
-        />
-      </Field>
-      <PrimaryButton onClick={() => valid && onConfirm(time)} disabled={!valid}>도착 확인</PrimaryButton>
-    </Sheet>
-  );
-}
-
-
 const FAILURE_RESULT_OPTIONS = [
   { value: "처리완료", emoji: "🟢" },
   { value: "지원요청", emoji: "🟡" },
@@ -952,7 +930,6 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [resultTarget, setResultTarget] = useState(null);
-  const [arriveTarget, setArriveTarget] = useState(null);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -971,7 +948,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
           failure={detailTarget}
           onClose={() => setDetailTarget(null)}
           onDispatch={setDispatchTarget}
-          onArrive={setArriveTarget}
+          onArrive={onArrive}
           onOpenResult={setResultTarget}
           onAssignOpen={setAssignTarget}
         />
@@ -986,16 +963,6 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
           onConfirm={(eta) => {
             onDispatch(dispatchTarget, eta);
             setDispatchTarget(null);
-          }}
-        />
-      )}
-      {arriveTarget && (
-        <ArrivalTimeModal
-          failure={arriveTarget}
-          onClose={() => setArriveTarget(null)}
-          onConfirm={(time) => {
-            onArrive(arriveTarget, time);
-            setArriveTarget(null);
           }}
         />
       )}
@@ -1021,7 +988,6 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [resultTarget, setResultTarget] = useState(null);
-  const [arriveTarget, setArriveTarget] = useState(null);
   const mine = failures.filter((f) => f.assignee === CURRENT_ENGINEER);
   const active = mine.filter((f) => f.status !== "완료");
   const done = mine.filter((f) => f.status === "완료");
@@ -1040,7 +1006,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
                 f={f}
                 onOpenDetail={setDetailTarget}
                 onDispatch={setDispatchTarget}
-                onArrive={setArriveTarget}
+                onArrive={onArrive}
                 onOpenResult={setResultTarget}
               />
             ))
@@ -1080,7 +1046,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
           failure={detailTarget}
           onClose={() => setDetailTarget(null)}
           onDispatch={setDispatchTarget}
-          onArrive={setArriveTarget}
+          onArrive={onArrive}
           onOpenResult={setResultTarget}
           onAssignOpen={setAssignTarget}
         />
@@ -1095,16 +1061,6 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
           onConfirm={(eta) => {
             onDispatch(dispatchTarget, eta);
             setDispatchTarget(null);
-          }}
-        />
-      )}
-      {arriveTarget && (
-        <ArrivalTimeModal
-          failure={arriveTarget}
-          onClose={() => setArriveTarget(null)}
-          onConfirm={(time) => {
-            onArrive(arriveTarget, time);
-            setArriveTarget(null);
           }}
         />
       )}
