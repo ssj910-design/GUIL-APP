@@ -3,16 +3,25 @@
 // 자체점검 출석부 (v2 신설) — 법정 월 1회 점검을 "출석부" 방식으로 관리.
 // 매월 1일 generate_self_checks(ym) 호출로 활성 호기 전체에 줄이 생기고,
 // 기사가 완료 처리하면 남은 줄이 곧 누락 후보다. (DESIGN-v2 §7-3)
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { mapSelfCheck } from "@/lib/mappers";
+import { mapSelfCheck, mapSelfCheckItem } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
 import { locOf, personOf, StatusBadge, AdminTable, Modal, PhotoGrid } from "@/app/components/admin/adminShared";
+import SELF_CHECK_ITEM_CODES from "@/lib/data/selfCheckItemCodes.json";
+
+const RESULT_LABEL = { A: "양호", B: "주의관찰", C: "긴급수리", E: "없음" };
+const RESULT_TONE = { A: "green", B: "amber", C: "red", E: "slate" };
+const OVERDUE_DAYS = 10;
 
 // 주소에서 "구/군"만 추출 — 예: "서울특별시 강남구 학동로 120" -> "강남구". region 컬럼은 항상 비어있어 주소로 대신한다.
 function guOf(address) {
   const m = (address ?? "").trim().match(/^\S+\s+(\S+?[구군])(\s|$)/);
   return m ? m[1] : null;
+}
+
+function daysBetween(dateA, dateB) {
+  return Math.round((new Date(dateB) - new Date(dateA)) / 86400000);
 }
 
 function GovBadge({ code, msg }) {
@@ -29,33 +38,80 @@ function GovBadge({ code, msg }) {
   );
 }
 
-// 담당자 한 명의 담당 현장 목록 — 현장호기·주소·완료일·공단제출·점검사진.
+// 자체점검일지 — 이번 달 기록 중 기본값(양호)과 다른 예외 항목 + 특이사항 + 점검사진.
+function SelfCheckLogModal({ c, onClose }) {
+  const [items, setItems] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    supabase.from("self_check_items").select("*").eq("self_check_id", c.id).then(({ data }) => {
+      if (alive) setItems((data ?? []).map(mapSelfCheckItem));
+    });
+    return () => { alive = false; };
+  }, [c.id]);
+
+  return (
+    <Modal title={`${c.loc} · 자체점검일지`} onClose={onClose} wide="xl">
+      <div className="space-y-4">
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-2">점검 결과 (기본값과 다른 예외 항목만 표시 · 나머지는 전부 양호)</p>
+          {items == null ? (
+            <p className="text-xs text-slate-400">불러오는 중...</p>
+          ) : items.length === 0 ? (
+            <p className="text-xs text-slate-400">전 항목 양호(기본값)</p>
+          ) : (
+            <div className="border border-slate-200 rounded-xl divide-y divide-slate-100">
+              {items.map((it) => {
+                const meta = SELF_CHECK_ITEM_CODES.find((x) => x.code === it.itemCd);
+                return (
+                  <div key={it.id} className="px-3 py-2 text-sm flex items-center justify-between gap-3">
+                    <span className="text-slate-700">{meta ? `${meta.no} ${meta.name}` : it.itemCd}</span>
+                    <span className="flex items-center gap-2 shrink-0">
+                      {it.remark && <span className="text-xs text-slate-400">{it.remark}</span>}
+                      <StatusBadge tone={RESULT_TONE[it.result] ?? "slate"}>{RESULT_LABEL[it.result] ?? it.result}</StatusBadge>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {c.notes && (
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">특이사항</p>
+            <p className="text-sm text-slate-700 whitespace-pre-wrap">{c.notes}</p>
+          </div>
+        )}
+
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-2">점검사진 ({(c.photos ?? []).length}장)</p>
+          <PhotoGrid urls={c.photos ?? []} emptyText="등록된 점검사진이 없습니다" />
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// 담당자 한 명의 담당 현장 목록 — 카드 클릭 시 자체점검일지(항목결과·특이사항·사진)를 연다.
 function EngineerDetailModal({ name, rows, onClose }) {
-  const [photoRow, setPhotoRow] = useState(null);
+  const [logRow, setLogRow] = useState(null);
   return (
     <>
-      <Modal title={`${name} · 담당 현장 (${rows.length}건)`} onClose={onClose} wide>
-        <AdminTable head={["현장 · 호기", "주소", "점검완료일", "공단 제출", ""]}>
+      <Modal title={`${name} · 담당 현장 (${rows.length}건)`} onClose={onClose} wide="xl">
+        <AdminTable head={["현장 · 호기", "주소", "점검완료일", "공단 제출일자", "공단 제출"]}>
           {rows.map((r) => (
-            <tr key={r.id} className="border-b border-slate-50">
+            <tr key={r.id} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setLogRow(r)}>
               <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{r.loc}</td>
               <td className="px-3 py-2.5 text-slate-500">{r.address ?? "-"}</td>
               <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{r.doneDate ?? "-"}</td>
+              <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{r.govSubmittedAt ? r.govSubmittedAt.slice(0, 10) : "-"}</td>
               <td className="px-3 py-2.5"><GovBadge code={r.govResultCode} msg={r.govResultMsg} /></td>
-              <td className="px-3 py-2.5 text-right pr-4">
-                <button onClick={() => setPhotoRow(r)} className="text-xs font-bold text-blue-700 border border-blue-100 bg-blue-50 rounded-lg px-2.5 py-1.5">
-                  사진 보기
-                </button>
-              </td>
             </tr>
           ))}
         </AdminTable>
       </Modal>
-      {photoRow && (
-        <Modal title={`${photoRow.loc} · 점검사진`} onClose={() => setPhotoRow(null)}>
-          <PhotoGrid urls={photoRow.photos ?? []} emptyText="등록된 점검사진이 없습니다" />
-        </Modal>
-      )}
+      {logRow && <SelfCheckLogModal c={logRow} onClose={() => setLogRow(null)} />}
     </>
   );
 }
@@ -89,6 +145,7 @@ export default function SelfChecksAdmin({ data, setData }) {
       gus: [...new Set(list.map((r) => r.gu).filter(Boolean))],
       total: list.length,
       doneCount: list.filter((r) => r.status === "완료").length,
+      overdueCount: list.filter((r) => r.doneDate && r.govSubmittedAt && daysBetween(r.doneDate, r.govSubmittedAt.slice(0, 10)) > OVERDUE_DAYS).length,
       rows: list,
     }))
     .sort((a, b) => (a.key === "__unassigned" ? 1 : b.key === "__unassigned" ? -1 : a.name.localeCompare(b.name, "ko")));
@@ -138,13 +195,14 @@ export default function SelfChecksAdmin({ data, setData }) {
           {ym} 출석부가 아직 없습니다 — 위 버튼으로 생성하세요 (활성 호기 전체에 1줄씩)
         </div>
       ) : (
-        <AdminTable head={["담당자", "담당 지역", "담당대수", "점검완료대수"]}>
+        <AdminTable head={["담당자", "담당 지역", "담당대수", "점검완료", `입력기한초과 (${OVERDUE_DAYS}일)`]}>
           {summaryRows.map((g) => (
             <tr key={g.key} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setEngineerKey(g.key)}>
               <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{g.name}</td>
               <td className="px-3 py-2.5 text-slate-500">{g.gus.length ? g.gus.join(", ") : "-"}</td>
               <td className="px-3 py-2.5">{g.total}</td>
               <td className="px-3 py-2.5">{g.doneCount}</td>
+              <td className="px-3 py-2.5">{g.overdueCount > 0 ? <StatusBadge tone="red">{g.overdueCount}</StatusBadge> : g.overdueCount}</td>
             </tr>
           ))}
         </AdminTable>
