@@ -1063,7 +1063,7 @@ export default function App() {
   // ★ 자재 지급 완료 트리거: 이 순간에만 할 일이 자동 생성됩니다 (D-30 시작)
   // assignee를 넘기면(신청자와 실제 교체 기사가 다른 경우) 그 이름으로 할 일이 생성되고,
   // 생략하면 지금처럼 신청 기사 본인 앞으로 생성됩니다.
-  async function handleSupplyComplete(requestId, assignee, billingPart, billingAmount) {
+  async function handleSupplyComplete(requestId, assignee, billingPart, billingAmount, dueDate, description) {
     const req = materialRequests.find((r) => r.id === requestId);
     if (!req) return;
 
@@ -1085,10 +1085,11 @@ export default function App() {
       part: req.part,
       assignee: assignee || req.engineer,
       assignedDate: TODAY_STR,
-      dueDate: addDays(TODAY_STR, 30),
+      dueDate: dueDate || addDays(TODAY_STR, 30),
       done: false,
       billingPart: billingPart || null,
       billingAmount: billingAmount || null,
+      description: description || null,
     };
     await supabase.from("todos").insert({
       id: newTodo.id,
@@ -1102,6 +1103,7 @@ export default function App() {
       assigned_date: newTodo.assignedDate,
       due_date: newTodo.dueDate,
       done: newTodo.done,
+      description: newTodo.description,
       ...(v2Ready ? {
         unit_id: req.unitId ?? unitIdFor(units, req.siteId, req.elevatorNo),
         assignee_id: profileIdByName(profilesAll, newTodo.assignee),

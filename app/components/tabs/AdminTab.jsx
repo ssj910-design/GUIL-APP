@@ -307,6 +307,8 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
   const [detailTarget, setDetailTarget] = useState(null);
   const [assigneeMap, setAssigneeMap] = useState({});
   const [partAmountMap, setPartAmountMap] = useState({}); // { [requestId]: { [partIndex]: amount } }
+  const [dueDateMap, setDueDateMap] = useState({});
+  const [descriptionMap, setDescriptionMap] = useState({});
   const pending = materialRequests.filter((r) => r.status === "승인대기");
   const supplied = materialRequests.filter((r) => r.status === "지급완료");
   const rejected = materialRequests.filter((r) => r.status === "반려");
@@ -355,6 +357,8 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
                 .map((part, i) => (amounts[i] ? `${part}(₩${Number(amounts[i]).toLocaleString()})` : part))
                 .join(", ");
               const allAmountsFilled = parts.every((_, i) => Number(amounts[i]) > 0);
+              const dueDate = dueDateMap[r.id] ?? addDays(TODAY_STR, 30);
+              const description = descriptionMap[r.id] ?? "";
               return (
                 <div key={r.id} className="border border-amber-200 bg-amber-50 rounded-xl p-3">
                   <div className="flex items-start justify-between gap-2">
@@ -422,8 +426,29 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
                     )}
                   </div>
 
+                  <div className="mt-2.5">
+                    <label className="text-[10px] font-bold text-slate-400 block mb-1">할 일 기한</label>
+                    <input
+                      type="date"
+                      className={inputCls}
+                      value={dueDate}
+                      onChange={(e) => setDueDateMap((m) => ({ ...m, [r.id]: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className="mt-2.5">
+                    <label className="text-[10px] font-bold text-slate-400 block mb-1">내용</label>
+                    <textarea
+                      className={inputCls}
+                      rows={3}
+                      placeholder="담당 기사에게 전달할 내용을 입력하세요"
+                      value={description}
+                      onChange={(e) => setDescriptionMap((m) => ({ ...m, [r.id]: e.target.value }))}
+                    />
+                  </div>
+
                   <button
-                    onClick={() => allAmountsFilled && onSupplyComplete(r.id, assigneeMap[r.id] ?? r.engineer, billingPartText || null, total || null)}
+                    onClick={() => allAmountsFilled && onSupplyComplete(r.id, assigneeMap[r.id] ?? r.engineer, billingPartText || null, total || null, dueDate, description)}
                     disabled={!allAmountsFilled}
                     className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg bg-blue-700 disabled:bg-slate-300 text-white active:bg-blue-800"
                   >
