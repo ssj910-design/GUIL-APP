@@ -1063,7 +1063,7 @@ export default function App() {
   // ★ 자재 지급 완료 트리거: 이 순간에만 할 일이 자동 생성됩니다 (D-30 시작)
   // assignee를 넘기면(신청자와 실제 교체 기사가 다른 경우) 그 이름으로 할 일이 생성되고,
   // 생략하면 지금처럼 신청 기사 본인 앞으로 생성됩니다.
-  async function handleSupplyComplete(requestId, assignee, billingPart, billingAmount) {
+  async function handleSupplyComplete(requestId, assignee, billingPart, billingAmount, dueDate, description) {
     const req = materialRequests.find((r) => r.id === requestId);
     if (!req) return;
 
@@ -1085,10 +1085,11 @@ export default function App() {
       part: req.part,
       assignee: assignee || req.engineer,
       assignedDate: TODAY_STR,
-      dueDate: addDays(TODAY_STR, 30),
+      dueDate: dueDate || addDays(TODAY_STR, 30),
       done: false,
       billingPart: billingPart || null,
       billingAmount: billingAmount || null,
+      description: description || null,
     };
     await supabase.from("todos").insert({
       id: newTodo.id,
@@ -1102,6 +1103,7 @@ export default function App() {
       assigned_date: newTodo.assignedDate,
       due_date: newTodo.dueDate,
       done: newTodo.done,
+      description: newTodo.description,
       ...(v2Ready ? {
         unit_id: req.unitId ?? unitIdFor(units, req.siteId, req.elevatorNo),
         assignee_id: profileIdByName(profilesAll, newTodo.assignee),
@@ -1260,10 +1262,11 @@ export default function App() {
   // assignees(배열)를 넘기면 신청자 외에 실제 시공 기사를 2명 이상 지정할 수 있고,
   // 각 담당자마다 할 일이 하나씩 생성됩니다 (같은 quoteRequestId를 공유 — 한 명이 비용청구를
   // 하면 나머지 담당자의 할 일도 함께 자동완료됩니다).
-  async function handleCompleteQuoteSupply(quoteId, assignees) {
+  async function handleCompleteQuoteSupply(quoteId, assignees, dueDate, description) {
     const q = quoteRequests.find((x) => x.id === quoteId);
     if (!q) return;
     const finalAssignees = assignees?.length ? assignees : [q.engineer];
+    const finalDueDate = dueDate || addDays(TODAY_STR, 30);
 
     await supabase.from("quote_requests").update({ status: "자재지급완료", supplied_date: TODAY_STR }).eq("id", quoteId);
     setQuoteRequests((prev) =>
@@ -1281,8 +1284,9 @@ export default function App() {
       part: q.constructionType,
       assignee,
       assignedDate: TODAY_STR,
-      dueDate: addDays(TODAY_STR, 30),
+      dueDate: finalDueDate,
       done: false,
+      description: description || null,
     }));
     await supabase.from("todos").insert(
       newTodos.map((t) => ({
@@ -1297,6 +1301,7 @@ export default function App() {
         assigned_date: t.assignedDate,
         due_date: t.dueDate,
         done: t.done,
+        description: t.description,
         ...(v2Ready ? {
           unit_id: q.unitId ?? unitIdFor(units, q.siteId, q.elevatorNo),
           assignee_id: profileIdByName(profilesAll, t.assignee),

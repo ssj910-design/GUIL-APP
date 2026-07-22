@@ -396,10 +396,15 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
     return distanceKm(selfCoord, s?.lat != null ? { lat: s.lat, lng: s.lng } : null);
   };
   const mySites = role === "admin" ? sites : sites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER);
-  // 최근 30일 고장 목록은 실시간 계산 — 처리완료 여부와 무관하게 누적되어야 하므로
-  // 현장에 수동 저장된 failures30d 대신 실제 failures 레코드에서 직접 센다.
-  // 고장현황 카드의 '🔁N회'(3회 이상) 위험 배지 계산에 쓴다(집중관리 섹션을 여기로 통합).
+  // 지원요청/운행정지가 걸린 현장 — 집중관리 섹션 + 고장현황 카드 라벨 양쪽에서 쓴다.
+  const openEscalations = failures.filter((f) => f.escalation && f.status !== "완료");
+  const supportSiteIds = new Set(openEscalations.filter((f) => f.escalation === "지원요청").map((f) => f.siteId));
+  const stoppedSiteIds = new Set(openEscalations.filter((f) => f.escalation === "운행정지").map((f) => f.siteId));
+  const escalatedSiteIds = new Set([...supportSiteIds, ...stoppedSiteIds]);
+  // 최근 30일 고장 목록은 실시간 계산 — 처리완료 여부와 무관하게 누적. 3회↑ 재발 배지·집중관리 판정에 쓴다.
   const recentFailuresBySiteId = recentFailuresBySite(failures);
+  // 집중관리현장: 3회 이상 고장 또는 지원요청/운행정지 걸린 현장 (담당 무관 — 기사도 회사 전체 위험 현장을 봄).
+  const criticalSites = sites.filter((s) => (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || escalatedSiteIds.has(s.id));
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [assignTarget, setAssignTarget] = useState(null);
@@ -519,6 +524,46 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
         </div>
       </div>
 
+      {/* 집중 관리 현장 — 기사는 보고 자발 지원, 관리자는 지원자 배정 (담당 무관, 전 현장 기준) */}
+      <div className="px-5 pt-4">
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertOctagon size={18} className="text-red-600" />
+            <h3 className="font-extrabold text-red-700 text-sm whitespace-nowrap">집중 관리현장(고장 3회 이상 · 지원요청/운행정지)</h3>
+          </div>
+          {criticalSites.length === 0 ? (
+            <p className="text-xs text-red-500">현재 집중 관리 대상 현장이 없습니다.</p>
+          ) : (
+            <div className="space-y-2">
+              {criticalSites.map((s) => {
+                const stopped = stoppedSiteIds.has(s.id);
+                const support = supportSiteIds.has(s.id);
+                const recent = recentFailuresBySiteId.get(s.id) ?? [];
+                const count30d = recent.length;
+                const units = [...new Set(recent.map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean))];
+                const unitLabel = units.length ? units.join(", ") : formatUnitLabel(s.elevatorNo);
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setHistorySite(s)}
+                    className={`w-full flex items-center justify-between bg-white rounded-xl px-3 py-2.5 border text-left active:bg-red-50 ${stopped ? "border-red-300" : "border-red-100"}`}
+                  >
+                    <div>
+                      <p className="font-bold text-slate-800 text-sm">{s.name}{unitLabel ? ` · ${unitLabel}` : ""}</p>
+                      <p className="text-[11px] text-slate-400">{s.address}</p>
+                    </div>
+                    <span className="flex gap-1 shrink-0">
+                      {support && <span className="text-xs font-extrabold text-amber-600 bg-amber-100 px-2 py-1 rounded-full">지원요청</span>}
+                      {stopped && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">운행정지</span>}
+                      {count30d > 0 && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">{count30d}회 고장</span>}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* 공공데이터 실시간 검사 관제 */}
       <div className="px-5 pt-4">

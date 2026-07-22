@@ -3,7 +3,8 @@ import { ShieldCheck, Package, Receipt, ListTodo, ChevronRight, Users, FileText,
 import { Badge, PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { SitesContext, AuthContext } from "@/app/components/context";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
-import { parsePartQty, formatPhone } from "@/lib/utils";
+import { parsePartQty, formatPhone, addDays } from "@/lib/utils";
+import { TODAY_STR } from "@/lib/constants";
 import { BillingHistoryScreen } from "@/app/components/tabs/BillingTab";
 import { TodoManageScreen } from "@/app/components/tabs/TodoTab";
 
@@ -306,6 +307,8 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
   const [detailTarget, setDetailTarget] = useState(null);
   const [assigneeMap, setAssigneeMap] = useState({});
   const [partAmountMap, setPartAmountMap] = useState({}); // { [requestId]: { [partIndex]: amount } }
+  const [dueDateMap, setDueDateMap] = useState({});
+  const [descriptionMap, setDescriptionMap] = useState({});
   const pending = materialRequests.filter((r) => r.status === "승인대기");
   const supplied = materialRequests.filter((r) => r.status === "지급완료");
   const rejected = materialRequests.filter((r) => r.status === "반려");
@@ -353,6 +356,9 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
               const billingPartText = parts
                 .map((part, i) => (amounts[i] ? `${part}(₩${Number(amounts[i]).toLocaleString()})` : part))
                 .join(", ");
+              const allAmountsFilled = parts.every((_, i) => Number(amounts[i]) > 0);
+              const dueDate = dueDateMap[r.id] ?? addDays(TODAY_STR, 30);
+              const description = descriptionMap[r.id] ?? "";
               return (
                 <div key={r.id} className="border border-amber-200 bg-amber-50 rounded-xl p-3">
                   <div className="flex items-start justify-between gap-2">
@@ -415,11 +421,36 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
                     {parts.length > 1 && (
                       <p className="text-[10px] text-slate-400 text-right mt-1">합계 ₩{total.toLocaleString()}</p>
                     )}
+                    {!allAmountsFilled && (
+                      <p className="text-[10px] text-red-500 mt-1">모든 부품의 금액을 입력해주세요</p>
+                    )}
+                  </div>
+
+                  <div className="mt-2.5">
+                    <label className="text-[10px] font-bold text-slate-400 block mb-1">할 일 기한</label>
+                    <input
+                      type="date"
+                      className={inputCls}
+                      value={dueDate}
+                      onChange={(e) => setDueDateMap((m) => ({ ...m, [r.id]: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className="mt-2.5">
+                    <label className="text-[10px] font-bold text-slate-400 block mb-1">내용</label>
+                    <textarea
+                      className={inputCls}
+                      rows={3}
+                      placeholder="담당 기사에게 전달할 내용을 입력하세요"
+                      value={description}
+                      onChange={(e) => setDescriptionMap((m) => ({ ...m, [r.id]: e.target.value }))}
+                    />
                   </div>
 
                   <button
-                    onClick={() => onSupplyComplete(r.id, assigneeMap[r.id] ?? r.engineer, billingPartText || null, total || null)}
-                    className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg bg-blue-700 text-white active:bg-blue-800"
+                    onClick={() => allAmountsFilled && onSupplyComplete(r.id, assigneeMap[r.id] ?? r.engineer, billingPartText || null, total || null, dueDate, description)}
+                    disabled={!allAmountsFilled}
+                    className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg bg-blue-700 disabled:bg-slate-300 text-white active:bg-blue-800"
                   >
                     <PackageCheck size={14} /> 자재 지급 완료 체크
                   </button>
@@ -504,6 +535,8 @@ function QuoteRequestsScreen({ quoteRequests, onAdvanceQuote, onAttachQuotePhoto
   const { engineerNames } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
   const [assigneesMap, setAssigneesMap] = useState({});
+  const [dueDateMap, setDueDateMap] = useState({});
+  const [descriptionMap, setDescriptionMap] = useState({});
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
@@ -552,6 +585,8 @@ function QuoteRequestsScreen({ quoteRequests, onAdvanceQuote, onAttachQuotePhoto
                 {q.status === "승인" && (() => {
                   const assignees = assigneesMap[q.id] ?? [q.engineer];
                   const canComplete = assignees.length > 0;
+                  const dueDate = dueDateMap[q.id] ?? addDays(TODAY_STR, 30);
+                  const description = descriptionMap[q.id] ?? "";
                   return (
                     <>
                       <div className="mb-2">
@@ -572,8 +607,27 @@ function QuoteRequestsScreen({ quoteRequests, onAdvanceQuote, onAttachQuotePhoto
                           onChange={(names) => setAssigneesMap((m) => ({ ...m, [q.id]: names }))}
                         />
                       </div>
+                      <div className="mb-2">
+                        <label className="text-[10px] font-bold text-slate-400 block mb-1">할 일 기한</label>
+                        <input
+                          type="date"
+                          className={inputCls}
+                          value={dueDate}
+                          onChange={(e) => setDueDateMap((m) => ({ ...m, [q.id]: e.target.value }))}
+                        />
+                      </div>
+                      <div className="mb-2">
+                        <label className="text-[10px] font-bold text-slate-400 block mb-1">내용</label>
+                        <textarea
+                          className={inputCls}
+                          rows={3}
+                          placeholder="담당 기사에게 전달할 내용을 입력하세요"
+                          value={description}
+                          onChange={(e) => setDescriptionMap((m) => ({ ...m, [q.id]: e.target.value }))}
+                        />
+                      </div>
                       <button
-                        onClick={() => canComplete && onCompleteQuoteSupply(q.id, assignees)}
+                        onClick={() => canComplete && onCompleteQuoteSupply(q.id, assignees, dueDate, description)}
                         disabled={!canComplete}
                         className={`w-full flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg ${
                           canComplete ? "bg-blue-700 text-white active:bg-blue-800" : "bg-slate-200 text-slate-400"

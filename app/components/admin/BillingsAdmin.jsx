@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls } from "@/app/components/admin/adminShared";
+import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid } from "@/app/components/admin/adminShared";
 
 const BILLING_METHODS = ["계좌이체", "CMS", "지로"];
 
@@ -92,15 +92,7 @@ function BillingDetailModal({ b, data, onClose, onSave }) {
 
       <div>
         <p className="text-xs font-bold text-slate-500 mb-2">사진 ({photos.length}장)</p>
-        {photos.length === 0 ? (
-          <p className="text-xs text-slate-400">등록된 사진이 없습니다</p>
-        ) : (
-          <div className="grid grid-cols-4 gap-2">
-            {photos.map((url, i) => (
-              <img key={i} src={url} alt="" className="w-full aspect-square rounded-lg object-cover border border-slate-200" />
-            ))}
-          </div>
-        )}
+        <PhotoGrid urls={photos} />
       </div>
 
       <div className="flex justify-end mt-4">

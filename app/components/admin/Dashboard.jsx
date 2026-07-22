@@ -10,7 +10,7 @@ import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailur
 import { supabase } from "@/lib/supabaseClient";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
-import { Modal, StatusBadge, inputCls } from "@/app/components/admin/adminShared";
+import { Modal, StatusBadge, inputCls, PhotoGrid } from "@/app/components/admin/adminShared";
 
 function unitLabel(units, sites, unitId, fallbackSiteName, fallbackLabel) {
   const u = units.find((x) => x.id === unitId);
@@ -29,9 +29,11 @@ function Kpi({ label, value, tone = "text-slate-900" }) {
 }
 
 // 고장상세내역 — 대시보드 집중관리현장 -> 고장내역 -> 이 고장 클릭 시. (FailuresAdmin에서도 재사용)
+// 청구내역(BillingsAdmin.jsx의 BillingDetailModal)과 동일한 구성 — 짧은 항목은
+// 라벨/값 2열 그리드, 긴 텍스트(증상·처리내용 등)는 전체너비 블록, 사진은 PhotoGrid.
 export function FailureDetailContent({ f, units, sites }) {
   const loc = unitLabel(units, sites, f.unitId, f.siteName, f.elevatorNo);
-  const rows = [
+  const gridRows = [
     { label: "현장 · 호기", value: `${loc.site} · ${loc.unit}` },
     { label: "접수번호", value: f.errorCode },
     { label: "접수일시", value: f.reportedAt },
@@ -40,33 +42,38 @@ export function FailureDetailContent({ f, units, sites }) {
     { label: "배정 기사", value: f.assignee || "미배정" },
     { label: "상태", value: f.escalation ? `${f.status} (${f.escalation})` : f.status },
   ];
-  if (f.faultSymptom) rows.push({ label: "증상", value: f.faultSymptom });
-  if (f.faultErrorCode) rows.push({ label: "에러코드", value: f.faultErrorCode });
-  if (f.faultCause) rows.push({ label: "원인", value: f.faultCause });
-  if (f.dispatchedAt) rows.push({ label: "출동", value: `${f.dispatchedAt}${f.etaMinutes ? ` (${f.etaMinutes}분 소요예정)` : ""}` });
-  if (f.arrivalTime) rows.push({ label: "도착", value: f.arrivalTime });
-  if (f.processContent) rows.push({ label: "처리내용", value: f.processContent });
-  if (f.processNote) rows.push({ label: "비고", value: f.processNote });
-  if (f.notFault) rows.push({ label: "구분", value: "고장 아님" });
+  const textRows = [];
+  if (f.faultSymptom) textRows.push({ label: "증상", value: f.faultSymptom });
+  if (f.faultErrorCode) textRows.push({ label: "에러코드", value: f.faultErrorCode });
+  if (f.faultCause) textRows.push({ label: "원인", value: f.faultCause });
+  if (f.dispatchedAt) textRows.push({ label: "출동", value: `${f.dispatchedAt}${f.etaMinutes ? ` (${f.etaMinutes}분 소요예정)` : ""}` });
+  if (f.arrivalTime) textRows.push({ label: "도착", value: f.arrivalTime });
+  if (f.processContent) textRows.push({ label: "처리내용", value: f.processContent });
+  if (f.processNote) textRows.push({ label: "비고", value: f.processNote });
+  if (f.notFault) textRows.push({ label: "구분", value: "고장 아님" });
 
   return (
-    <div className="space-y-2.5">
-      {rows.map((r) => (
-        <div key={r.label} className="flex justify-between gap-4 text-sm border-b border-slate-50 pb-2">
-          <span className="text-slate-400 shrink-0">{r.label}</span>
-          <span className="font-semibold text-slate-800 text-right">{r.value}</span>
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3 text-sm">
+        {gridRows.map((r) => (
+          <div key={r.label}>
+            <p className="text-xs font-bold text-slate-400 mb-1">{r.label}</p>
+            <p className="font-semibold text-slate-800">{r.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {textRows.map((r) => (
+        <div key={r.label}>
+          <p className="text-xs font-bold text-slate-500 mb-1">{r.label}</p>
+          <p className="text-sm text-slate-700 whitespace-pre-wrap">{r.value}</p>
         </div>
       ))}
-      {f.photoUrls?.length > 0 && (
-        <div>
-          <p className="text-xs font-bold text-slate-500 mt-3 mb-2">사진 ({f.photoUrls.length}장)</p>
-          <div className="grid grid-cols-3 gap-2">
-            {f.photoUrls.map((url, i) => (
-              <img key={i} src={url} alt="" className="w-full aspect-square rounded-lg object-cover border border-slate-200" />
-            ))}
-          </div>
-        </div>
-      )}
+
+      <div>
+        <p className="text-xs font-bold text-slate-500 mb-2">사진 ({f.photoUrls?.length ?? 0}장)</p>
+        <PhotoGrid urls={f.photoUrls ?? []} />
+      </div>
     </div>
   );
 }
