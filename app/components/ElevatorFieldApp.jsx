@@ -1114,6 +1114,33 @@ export default function App() {
     setTodos((prev) => [newTodo, ...prev]);
   }
 
+  // ★ 이미 지급완료된 자재신청 수정 — 상태/지급일/사진(별도 handleAttachPhoto)은 그대로 두고
+  // 연결된 할 일(담당기사·청구금액·기한·내용)만 그 자리에서 갱신한다 (새 할 일을 만들지 않음).
+  async function handleSupplyEdit(requestId, assignee, billingPart, billingAmount, dueDate, description) {
+    const req = materialRequests.find((r) => r.id === requestId);
+    if (!req) return;
+    const todoId = "todo-" + requestId;
+    const assigneeName = assignee || req.engineer;
+    const finalDueDate = dueDate || addDays(TODAY_STR, 30);
+    const patch = {
+      assignee: assigneeName,
+      due_date: finalDueDate,
+      description: description || null,
+      ...(v2Ready ? { assignee_id: profileIdByName(profilesAll, assigneeName) } : {}),
+      ...(todoBillingReady ? { billing_part: billingPart || null, billing_amount: billingAmount || null } : {}),
+    };
+    const { error } = await supabase.from("todos").update(patch).eq("id", todoId);
+    if (error) { alert("수정 실패: " + error.message); return; }
+    setTodos((prev) => prev.map((t) => (t.id === todoId ? {
+      ...t,
+      assignee: assigneeName,
+      dueDate: finalDueDate,
+      description: description || null,
+      ...(v2Ready ? { assigneeId: patch.assignee_id } : {}),
+      ...(todoBillingReady ? { billingPart: billingPart || null, billingAmount: billingAmount || null } : {}),
+    } : t)));
+  }
+
   // ★ 기사가 비용청구에서 "상비부품에서 사용함"을 체크하고 제출하면 보충 요청이 자동 생성되고,
   // 사용한 수량만큼 그 기사의 상비부품 재고(kit_stock)가 즉시 차감됩니다 (0 아래로는 내려가지 않음).
   async function handleUseKitPart({ part, siteName, qty }) {
@@ -1310,6 +1337,70 @@ export default function App() {
       }))
     );
     setTodos((prev) => [...newTodos, ...prev]);
+  }
+
+  // ★ 이미 자재지급완료된 견적요청 수정 — 상태/지급일/사진(별도 onAttachQuotePhoto)은 그대로 두고
+  // 담당 기사 구성이 바뀐 만큼만 할 일을 정리한다: 빠진 담당자는 할 일 삭제, 새로 추가된
+  // 담당자는 할 일 신규 생성, 그대로 남는 담당자는 새 기한/내용으로 갱신 (admin 콘솔의
+  // handleQuoteEdit과 동일한 로직 — 새 할 일을 무작정 다시 만들지 않는다).
+  async function handleQuoteSupplyEdit(quoteId, assignees, dueDate, description) {
+    const q = quoteRequests.find((x) => x.id === quoteId);
+    if (!q) return;
+    const finalAssignees = assignees?.length ? assignees : [q.engineer];
+    const finalDueDate = dueDate || addDays(TODAY_STR, 30);
+
+    const existingTodos = todos.filter((t) => t.quoteRequestId === quoteId);
+    const kept = existingTodos.filter((t) => finalAssignees.includes(t.assignee));
+    const toRemove = existingTodos.filter((t) => !finalAssignees.includes(t.assignee));
+    const toAddNames = finalAssignees.filter((name) => !existingTodos.some((t) => t.assignee === name));
+
+    if (toRemove.length) {
+      const { error: delError } = await supabase.from("todos").delete().in("id", toRemove.map((t) => t.id));
+      if (delError) { alert("할 일 정리 실패: " + delError.message); return; }
+    }
+    if (kept.length) {
+      const { error: keepError } = await supabase.from("todos")
+        .update({ due_date: finalDueDate, description: description || null })
+        .in("id", kept.map((t) => t.id));
+      if (keepError) { alert("할 일 수정 실패: " + keepError.message); return; }
+    }
+
+    const newTodos = toAddNames.map((assignee, idx) => ({
+      id: `todo-quote-${quoteId}-edit-${Date.now()}-${idx}`,
+      materialRequestId: null,
+      quoteRequestId: quoteId,
+      source: "quote",
+      title: `${q.siteName} ${q.constructionType} 시공 확인 및 서류 제출`,
+      siteName: q.siteName,
+      elevatorNo: q.elevatorNo,
+      part: q.constructionType,
+      assignee,
+      assignedDate: TODAY_STR,
+      dueDate: finalDueDate,
+      done: false,
+      description: description || null,
+    }));
+    if (newTodos.length) {
+      const { error: insError } = await supabase.from("todos").insert(
+        newTodos.map((t) => ({
+          id: t.id, quote_request_id: t.quoteRequestId, source: t.source, title: t.title,
+          site_name: t.siteName, elevator_no: t.elevatorNo, part: t.part, assignee: t.assignee,
+          assigned_date: t.assignedDate, due_date: t.dueDate, done: t.done, description: t.description,
+          ...(v2Ready ? {
+            unit_id: q.unitId ?? unitIdFor(units, q.siteId, q.elevatorNo),
+            assignee_id: profileIdByName(profilesAll, t.assignee),
+          } : {}),
+        }))
+      );
+      if (insError) { alert("할 일 생성 실패: " + insError.message); return; }
+    }
+
+    setTodos((prev) => [
+      ...newTodos,
+      ...prev
+        .filter((t) => !toRemove.some((r) => r.id === t.id))
+        .map((t) => (kept.some((k) => k.id === t.id) ? { ...t, dueDate: finalDueDate, description: description || null } : t)),
+    ]);
   }
 
   // ★ 관리자가 직원(1명 이상)에게 할 일을 직접 부여 — 담당자마다 할 일을 하나씩 만듭니다
@@ -1693,7 +1784,7 @@ export default function App() {
                   onDeletePost={handleDeleteFeedPost}
                   onSetNotice={feedNoticeReady ? handleSetFeedNotice : null}
                 />}
-          {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onUpdateTodoDescription={handleUpdateTodoDescription} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
+          {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onUpdateTodoDescription={handleUpdateTodoDescription} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
 
           {/* 우리방 플로팅 버튼 — 어느 탭에서든 즉시 팀 채팅 (우리방 탭에서는 숨김) */}
           {tab !== "room" && (

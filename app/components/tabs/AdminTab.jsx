@@ -1,5 +1,5 @@
 import { useState, useContext } from "react";
-import { ShieldCheck, Package, Receipt, ListTodo, ChevronRight, Users, FileText, PackageCheck, RotateCcw, PackageX, Building2 } from "lucide-react";
+import { ShieldCheck, Package, Receipt, ListTodo, ChevronRight, Users, FileText, PackageCheck, RotateCcw, PackageX, Building2, Search } from "lucide-react";
 import { Badge, PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { SitesContext, AuthContext } from "@/app/components/context";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
@@ -302,20 +302,213 @@ function MultiAssigneeSelect({ values, options, onChange }) {
   );
 }
 
-function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onBack }) {
+// 청구금액 문자열("부품A(₩10,000), 부품B")에서 특정 부품의 금액만 다시 뽑아낸다 — 지급완료 내역 수정 시
+// 기존에 입력된 부품별 금액을 폼에 미리 채워 넣기 위한 용도.
+function parseAmountFromBillingPart(billingPart, part) {
+  if (!billingPart) return "";
+  const escaped = part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const m = billingPart.match(new RegExp(`${escaped}\\(₩([0-9,]+)\\)`));
+  return m ? m[1].replace(/,/g, "") : "";
+}
+
+// 지급완료된 자재신청 한 건을 수정하는 폼 — 담당기사·부품별 금액·할 일 기한·내용을 기존 할 일 값으로
+// 미리 채우고, 저장 시 onSupplyEdit으로 그 할 일만 갱신한다(상태·지급일·사진은 별도).
+function SupplyEditForm({ r, existingTodo, engineerNames, onSubmit, onAttachPhoto, onRemoveSupplyPhoto }) {
+  const [assignee, setAssignee] = useState(existingTodo?.assignee ?? r.engineer);
+  const parts = (r.part ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const [amounts, setAmounts] = useState(() => {
+    const initial = {};
+    parts.forEach((part, i) => {
+      const found = parseAmountFromBillingPart(existingTodo?.billingPart, part);
+      if (found) initial[i] = found;
+    });
+    return initial;
+  });
+  const [dueDate, setDueDate] = useState(existingTodo?.dueDate ?? addDays(TODAY_STR, 30));
+  const [description, setDescription] = useState(existingTodo?.description ?? "");
+  const [saving, setSaving] = useState(false);
+
+  const total = parts.reduce((sum, _, i) => sum + (Number(amounts[i]) || 0), 0);
+  const billingPartText = parts
+    .map((part, i) => (amounts[i] ? `${part}(₩${Number(amounts[i]).toLocaleString()})` : part))
+    .join(", ");
+  const allAmountsFilled = parts.every((_, i) => Number(amounts[i]) > 0);
+
+  async function submit() {
+    if (!allAmountsFilled) return;
+    setSaving(true);
+    await onSubmit(assignee, billingPartText || null, total || null, dueDate, description);
+    setSaving(false);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="bg-slate-100 rounded-xl p-3">
+        <p className="text-[11px] text-slate-500">현장</p>
+        <p className="font-bold text-slate-800">{r.siteName} · {r.part}</p>
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold text-slate-400 block mb-1">지급 사진</label>
+        <MultiPhotoUpload
+          photos={(r.supplyPhotoUrls ?? (r.supplyPhotoUrl ? [r.supplyPhotoUrl] : [])).map((url) => ({ url }))}
+          uploadFolder={`materials/${r.id}/supply`}
+          onUploaded={(url) => onAttachPhoto(r.id, url)}
+          onRemove={(idx) => onRemoveSupplyPhoto(r.id, idx)}
+          label="지급할 자재 사진 촬영"
+          required={false}
+        />
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold text-slate-400 block mb-1">담당 기사</label>
+        <AssigneeSelect value={assignee} options={engineerNames} onChange={setAssignee} />
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold text-slate-400 block mb-1">청구 부품별 금액</label>
+        <div className="space-y-1.5">
+          {parts.map((part, i) => {
+            const { name, qty } = parsePartQty(part);
+            return (
+              <div key={i} className="flex items-center gap-1.5">
+                <span className="text-xs text-slate-700 flex-1 truncate">{name || part}</span>
+                <span className="text-xs text-slate-500 w-8">{qty || "-"}</span>
+                <input
+                  type="number"
+                  className={`${inputCls} w-28`}
+                  placeholder="금액"
+                  value={amounts[i] ?? ""}
+                  onChange={(e) => setAmounts((m) => ({ ...m, [i]: e.target.value }))}
+                />
+              </div>
+            );
+          })}
+        </div>
+        {parts.length > 1 && <p className="text-[10px] text-slate-400 text-right mt-1">합계 ₩{total.toLocaleString()}</p>}
+        {!allAmountsFilled && <p className="text-[10px] text-red-500 mt-1">모든 부품의 금액을 입력해주세요</p>}
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold text-slate-400 block mb-1">할 일 기한</label>
+        <input type="date" className={inputCls} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold text-slate-400 block mb-1">내용</label>
+        <textarea
+          className={inputCls}
+          rows={3}
+          placeholder="담당 기사에게 전달할 내용을 입력하세요"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+      </div>
+
+      <button
+        onClick={submit}
+        disabled={saving || !allAmountsFilled}
+        className="w-full bg-blue-700 disabled:bg-slate-300 text-white text-sm font-bold py-2.5 rounded-lg"
+      >
+        {saving ? "저장 중..." : "수정 저장"}
+      </button>
+    </div>
+  );
+}
+
+// 지급완료 내역 전체보기 — "나의 자재 신청 전체보기"(MaterialHistoryScreen)와 동일한 구성
+// (DrillHeader 전체화면 + 검색창 + 카드 목록). 카드 클릭 시 지급 내역 수정 폼이 열린다.
+function SupplyHistoryScreen({ supplied, todos, engineerNames, onSupplyEdit, onAttachPhoto, onRemoveSupplyPhoto, onBack }) {
+  const [query, setQuery] = useState("");
+  const [editTarget, setEditTarget] = useState(null);
+  const q = query.trim();
+  const filtered = supplied
+    .filter((r) => r.siteName.includes(q) || r.part.includes(q))
+    .sort((a, b) => new Date(b.suppliedDate) - new Date(a.suppliedDate));
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden bg-white">
+      <DrillHeader title="지급완료 내역 전체보기" onBack={onBack} onHome={onBack} />
+      <div className="px-5 pt-3 pb-2 shrink-0">
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            className={`${inputCls} pl-8`}
+            placeholder="현장명 또는 부품명으로 검색"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-2.5">
+        {filtered.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-10">해당 조건의 지급완료 내역이 없습니다</p>
+        ) : (
+          filtered.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setEditTarget(r)}
+              className="w-full text-left bg-white rounded-xl border border-slate-200 p-3"
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-slate-700">{r.siteName} · {r.part}</p>
+                <span className="text-xs font-bold px-2 py-1 rounded-full shrink-0 bg-emerald-100 text-emerald-700">지급완료</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">지급일 {r.suppliedDate} · D-30 시작</p>
+            </button>
+          ))
+        )}
+      </div>
+
+      {editTarget && (
+        <Sheet title={`${editTarget.siteName ?? "-"} · 지급 내역 수정`} onClose={() => setEditTarget(null)}>
+          <SupplyEditForm
+            r={editTarget}
+            existingTodo={todos.find((t) => t.materialRequestId === editTarget.id)}
+            engineerNames={engineerNames}
+            onAttachPhoto={onAttachPhoto}
+            onRemoveSupplyPhoto={onRemoveSupplyPhoto}
+            onSubmit={async (assignee, billingPart, billingAmount, dueDate, description) => {
+              await onSupplyEdit(editTarget.id, assignee, billingPart, billingAmount, dueDate, description);
+              setEditTarget(null);
+            }}
+          />
+        </Sheet>
+      )}
+    </div>
+  );
+}
+
+function MaterialRequestsScreen({ materialRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onBack }) {
   const { engineerNames } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
   const [assigneeMap, setAssigneeMap] = useState({});
   const [partAmountMap, setPartAmountMap] = useState({}); // { [requestId]: { [partIndex]: amount } }
   const [dueDateMap, setDueDateMap] = useState({});
   const [descriptionMap, setDescriptionMap] = useState({});
+  const [historyOpen, setHistoryOpen] = useState(false);
   const pending = materialRequests.filter((r) => r.status === "승인대기");
   const supplied = materialRequests.filter((r) => r.status === "지급완료");
   const rejected = materialRequests.filter((r) => r.status === "반려");
 
+  if (historyOpen) {
+    return (
+      <SupplyHistoryScreen
+        supplied={supplied}
+        todos={todos}
+        engineerNames={engineerNames}
+        onSupplyEdit={onSupplyEdit}
+        onAttachPhoto={onAttachPhoto}
+        onRemoveSupplyPhoto={onRemoveSupplyPhoto}
+        onBack={() => setHistoryOpen(false)}
+      />
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
-      <DrillHeader title="자재 지급 대기" onBack={onBack} onHome={onBack} />
+      <DrillHeader title="자재출하관리" onBack={onBack} onHome={onBack} />
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
         {rejected.length > 0 && (
           <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
@@ -460,20 +653,18 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
             {pending.length === 0 && <p className="text-xs text-slate-400 text-center py-3">지급 대기 중인 자재 신청이 없습니다</p>}
           </div>
 
-          {supplied.length > 0 && (
-            <>
-              <p className="text-xs font-bold text-slate-400 mt-4 mb-2">최근 지급완료 (할 일 자동 생성됨)</p>
-              <div className="space-y-1.5">
-                {supplied.map((r) => (
-                  <div key={r.id} className="flex items-center justify-between text-xs text-slate-500">
-                    <span>{r.siteName} · {r.part}</span>
-                    <span className="text-emerald-600 font-semibold">{r.suppliedDate} 지급 · D-30 시작</span>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
         </div>
+
+        {supplied.length > 0 && (
+          <div className="px-0.5">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-bold text-slate-800 text-sm">지급완료 내역</h3>
+              <button onClick={() => setHistoryOpen(true)} className="text-xs font-bold text-blue-600 flex items-center gap-0.5">
+                전체보기 <ChevronRight size={12} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {detailTarget?.type === "material" && (
@@ -531,20 +722,169 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
 }
 
 
-function QuoteRequestsScreen({ quoteRequests, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onBack }) {
+// 자재지급완료된 견적요청 한 건 수정 — 담당기사 구성·할 일 기한·내용을 기존 값으로 미리 채우고,
+// 저장 시 onQuoteSupplyEdit으로 담당자별 할 일만 갱신한다(상태·지급일·사진은 별도).
+function QuoteSupplyEditForm({ q, existingTodos, engineerNames, onSubmit, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto }) {
+  const [assignees, setAssignees] = useState(existingTodos.length ? existingTodos.map((t) => t.assignee) : [q.engineer]);
+  const [dueDate, setDueDate] = useState(existingTodos[0]?.dueDate ?? addDays(TODAY_STR, 30));
+  const [description, setDescription] = useState(existingTodos[0]?.description ?? "");
+  const [saving, setSaving] = useState(false);
+  const canSave = assignees.length > 0;
+
+  async function submit() {
+    if (!canSave) return;
+    setSaving(true);
+    await onSubmit(assignees, dueDate, description);
+    setSaving(false);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="bg-slate-100 rounded-xl p-3">
+        <p className="text-[11px] text-slate-500">현장</p>
+        <p className="font-bold text-slate-800">{q.siteName} · {q.constructionType}</p>
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold text-slate-400 block mb-1">지급 사진</label>
+        <MultiPhotoUpload
+          photos={(q.supplyPhotoUrls ?? (q.supplyPhotoUrl ? [q.supplyPhotoUrl] : [])).map((url) => ({ url }))}
+          uploadFolder={`quotes/${q.id}/supply`}
+          onUploaded={(url) => onAttachQuotePhoto(q.id, url)}
+          onRemove={(idx) => onRemoveQuoteSupplyPhoto(q.id, idx)}
+          label="지급할 자재 사진 촬영"
+          required={false}
+        />
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold text-slate-400 block mb-1">담당 기사 (실제 시공할 기사, 2명 이상 지정 가능)</label>
+        <MultiAssigneeSelect values={assignees} options={engineerNames} onChange={setAssignees} />
+        {assignees.length === 0 && <p className="text-[10px] text-slate-400 mt-1">담당 기사를 1명 이상 선택해주세요</p>}
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold text-slate-400 block mb-1">할 일 기한</label>
+        <input type="date" className={inputCls} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold text-slate-400 block mb-1">내용</label>
+        <textarea
+          className={inputCls}
+          rows={3}
+          placeholder="담당 기사에게 전달할 내용을 입력하세요"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+      </div>
+
+      <button
+        onClick={submit}
+        disabled={saving || !canSave}
+        className="w-full bg-blue-700 disabled:bg-slate-300 text-white text-sm font-bold py-2.5 rounded-lg"
+      >
+        {saving ? "저장 중..." : "수정 저장"}
+      </button>
+    </div>
+  );
+}
+
+// 자재지급완료 내역 전체보기 — SupplyHistoryScreen(자재출하관리)과 동일한 구성.
+function QuoteSupplyHistoryScreen({ completed, todos, engineerNames, onQuoteSupplyEdit, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onBack }) {
+  const [query, setQuery] = useState("");
+  const [editTarget, setEditTarget] = useState(null);
+  const q = query.trim();
+  const filtered = completed
+    .filter((r) => r.siteName.includes(q) || r.constructionType.includes(q))
+    .sort((a, b) => new Date(b.suppliedDate) - new Date(a.suppliedDate));
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden bg-white">
+      <DrillHeader title="자재지급완료 내역 전체보기" onBack={onBack} onHome={onBack} />
+      <div className="px-5 pt-3 pb-2 shrink-0">
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            className={`${inputCls} pl-8`}
+            placeholder="현장명 또는 공사내용으로 검색"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-2.5">
+        {filtered.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-10">해당 조건의 지급완료 내역이 없습니다</p>
+        ) : (
+          filtered.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setEditTarget(r)}
+              className="w-full text-left bg-white rounded-xl border border-slate-200 p-3"
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-slate-700">{r.siteName} · {r.constructionType}</p>
+                <span className="text-xs font-bold px-2 py-1 rounded-full shrink-0 bg-emerald-100 text-emerald-700">자재지급완료</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">지급일 {r.suppliedDate} · D-30 시작</p>
+            </button>
+          ))
+        )}
+      </div>
+
+      {editTarget && (
+        <Sheet title={`${editTarget.siteName ?? "-"} · 지급 내역 수정`} onClose={() => setEditTarget(null)}>
+          <QuoteSupplyEditForm
+            q={editTarget}
+            existingTodos={todos.filter((t) => t.quoteRequestId === editTarget.id)}
+            engineerNames={engineerNames}
+            onAttachQuotePhoto={onAttachQuotePhoto}
+            onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
+            onSubmit={async (assignees, dueDate, description) => {
+              await onQuoteSupplyEdit(editTarget.id, assignees, dueDate, description);
+              setEditTarget(null);
+            }}
+          />
+        </Sheet>
+      )}
+    </div>
+  );
+}
+
+function QuoteRequestsScreen({ quoteRequests, todos, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onBack }) {
   const { engineerNames } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
   const [assigneesMap, setAssigneesMap] = useState({});
   const [dueDateMap, setDueDateMap] = useState({});
   const [descriptionMap, setDescriptionMap] = useState({});
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  const active = quoteRequests.filter((q) => q.status !== "자재지급완료");
+  const completed = quoteRequests.filter((q) => q.status === "자재지급완료");
+
+  if (historyOpen) {
+    return (
+      <QuoteSupplyHistoryScreen
+        completed={completed}
+        todos={todos}
+        engineerNames={engineerNames}
+        onQuoteSupplyEdit={onQuoteSupplyEdit}
+        onAttachQuotePhoto={onAttachQuotePhoto}
+        onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
+        onBack={() => setHistoryOpen(false)}
+      />
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
       <DrillHeader title="견적 요청 관리" onBack={onBack} onHome={onBack} />
-      <div className="flex-1 overflow-y-auto px-5 py-4">
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
         <div className="bg-white rounded-2xl border border-slate-200 p-4">
           <div className="space-y-3">
-            {quoteRequests.map((q) => (
+            {active.map((q) => (
               <div key={q.id} className="border border-slate-100 rounded-xl p-3">
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-sm font-bold text-slate-800">{q.siteName} · {q.constructionType}</p>
@@ -641,16 +981,22 @@ function QuoteRequestsScreen({ quoteRequests, onAdvanceQuote, onAttachQuotePhoto
                     </>
                   );
                 })()}
-                {q.status === "자재지급완료" && (
-                  <p className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
-                    <PackageCheck size={12} /> {q.suppliedDate} 지급완료 · 담당 기사에게 할 일 자동 생성됨
-                  </p>
-                )}
               </div>
             ))}
-            {quoteRequests.length === 0 && <p className="text-xs text-slate-400 text-center py-3">접수된 견적 요청이 없습니다</p>}
+            {active.length === 0 && <p className="text-xs text-slate-400 text-center py-3">진행 중인 견적 요청이 없습니다</p>}
           </div>
         </div>
+
+        {completed.length > 0 && (
+          <div className="px-0.5">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-bold text-slate-800 text-sm">자재지급완료 내역</h3>
+              <button onClick={() => setHistoryOpen(true)} className="text-xs font-bold text-blue-600 flex items-center gap-0.5">
+                전체보기 <ChevronRight size={12} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {detailTarget?.type === "quote" && (
@@ -785,7 +1131,7 @@ function RestockScreen({ restockRequests, onAttachRestockPhoto, onRemoveRestockS
 }
 
 
-export function AdminTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onAdminToggleTodo, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onUpdateTodoDescription, onAddSite, onUpdateSite, onDeleteSite, siteManagers, onAddSiteManager, onUpdateSiteManager, onDeleteSiteManager, onUpdateEngineerContact }) {
+export function AdminTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAdminToggleTodo, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onUpdateTodoDescription, onAddSite, onUpdateSite, onDeleteSite, siteManagers, onAddSiteManager, onUpdateSiteManager, onDeleteSiteManager, onUpdateEngineerContact }) {
   const sites = useContext(SitesContext);
   const { engineerNames, engineers } = useContext(AuthContext);
   const [billingViewOpen, setBillingViewOpen] = useState(false);
@@ -845,7 +1191,9 @@ export function AdminTab({ inspections, materialRequests, billings, quoteRequest
     return (
       <MaterialRequestsScreen
         materialRequests={materialRequests}
+        todos={todos}
         onSupplyComplete={onSupplyComplete}
+        onSupplyEdit={onSupplyEdit}
         onReprocess={onReprocess}
         onAttachPhoto={onAttachPhoto}
         onRemoveSupplyPhoto={onRemoveSupplyPhoto}
@@ -858,10 +1206,12 @@ export function AdminTab({ inspections, materialRequests, billings, quoteRequest
     return (
       <QuoteRequestsScreen
         quoteRequests={quoteRequests}
+        todos={todos}
         onAdvanceQuote={onAdvanceQuote}
         onAttachQuotePhoto={onAttachQuotePhoto}
         onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
         onCompleteQuoteSupply={onCompleteQuoteSupply}
+        onQuoteSupplyEdit={onQuoteSupplyEdit}
         onBack={() => setAdminScreen(null)}
       />
     );
@@ -889,7 +1239,7 @@ export function AdminTab({ inspections, materialRequests, billings, quoteRequest
         <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
           <AdminMenuRow icon={Building2} label="현장정보" badge={sites.length} onClick={() => setAdminScreen("sites")} />
           <AdminMenuRow icon={Users} label="기사관리" badge={engineers.length} onClick={() => setAdminScreen("engineers")} />
-          <AdminMenuRow icon={PackageCheck} label="자재 지급 대기" badge={pendingCount} onClick={() => setAdminScreen("materials")} />
+          <AdminMenuRow icon={PackageCheck} label="자재출하관리" badge={pendingCount} onClick={() => setAdminScreen("materials")} />
           <AdminMenuRow icon={Package} label="상비부품 보충" badge={restockRequests.filter((r) => r.status === "대기").length} onClick={() => setAdminScreen("restock")} />
           <AdminMenuRow icon={FileText} label="견적 요청 관리" badge={quoteActiveCount} onClick={() => setAdminScreen("quotes")} />
           <AdminMenuRow icon={ListTodo} label="할 일 관리" badge={todos.filter((t) => !t.done).length} onClick={() => setTodoViewOpen(true)} />

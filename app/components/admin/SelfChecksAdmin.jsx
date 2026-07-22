@@ -165,8 +165,7 @@ export default function SelfChecksAdmin({ data, setData }) {
     <div className="max-w-5xl">
       <div className="flex items-end justify-between mb-4">
         <div>
-          <h1 className="text-xl font-extrabold">자체점검 출석부</h1>
-          <p className="text-xs text-slate-500 mt-0.5">법정 월 1회 · 호기 단위 · 출석부에 남은 줄 = 누락 후보</p>
+          <h1 className="text-xl font-extrabold">자체점검 현황</h1>
         </div>
         <div className="flex items-center gap-2">
           <input type="month" className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white" value={ym} onChange={(e) => setYm(e.target.value)} />
