@@ -404,8 +404,8 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
       </div>
 
       {dayDetail && (
-        <div className="fixed inset-0 z-[60] bg-black/40 flex items-end" onClick={() => setDayDetail(null)}>
-          <div className="bg-white w-full rounded-t-2xl p-5 max-h-[70vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center px-6" onClick={() => setDayDetail(null)}>
+          <div className="bg-white w-full max-w-xs rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-extrabold text-slate-800">{dayDetail.slice(5).replace("-", "/")} 근무·휴가</p>
               <button onClick={() => setDayDetail(null)} className="p-1 text-slate-400" aria-label="닫기"><X size={16} /></button>
@@ -414,25 +414,21 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
               {["당직", "숙직"].map((kind) => {
                 const person = duties.find((x) => x.duty_date === dayDetail && x.kind === kind);
                 return (
-                  <div key={kind} className="flex items-center justify-between text-sm border-b border-slate-50 pb-2 last:border-0 last:pb-0">
-                    <span className={`font-bold ${kind === "당직" ? "text-emerald-700" : "text-blue-700"}`}>{kind}</span>
-                    <span className="text-slate-700 font-semibold">{person ? nameOf(person.profile_id) : "미배정"}</span>
+                  <div key={kind} className="flex items-start justify-between gap-3 text-sm border-b border-slate-50 pb-2 last:border-0 last:pb-0">
+                    <span className={`font-bold shrink-0 ${kind === "당직" ? "text-emerald-700" : "text-blue-700"}`}>{kind}</span>
+                    <span className="text-slate-700 font-bold text-right">{person ? nameOf(person.profile_id) : "미배정"}</span>
                   </div>
                 );
               })}
               {(() => {
                 const people = leaves.filter((l) => l.start_date <= dayDetail && dayDetail <= l.end_date);
-                if (!people.length) return null;
+                const label = people
+                  .map((l) => `${nameOf(l.profile_id)}${l.kind === "반차" && periodOf(l.note) ? `(${periodOf(l.note)})` : ""}`)
+                  .join(", ");
                 return (
-                  <div>
-                    <p className="text-xs font-bold text-slate-500 mb-1">휴가</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {people.map((l) => (
-                        <span key={l.id} className="text-xs font-semibold bg-amber-50 text-amber-700 rounded-full px-2.5 py-1">
-                          {nameOf(l.profile_id)}{l.kind === "반차" && periodOf(l.note) ? `(${periodOf(l.note)})` : ""}
-                        </span>
-                      ))}
-                    </div>
+                  <div className="flex items-start justify-between gap-3 text-sm">
+                    <span className="font-bold shrink-0 text-amber-700">휴가</span>
+                    <span className="text-slate-700 font-bold text-right">{label || "-"}</span>
                   </div>
                 );
               })()}
