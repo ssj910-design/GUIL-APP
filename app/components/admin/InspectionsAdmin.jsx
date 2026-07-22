@@ -11,7 +11,7 @@ import { mapInspection } from "@/lib/mappers";
 import { Badge, DDay, inputCls as mobileInputCls } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { useInspectionFailItems } from "@/app/hooks/useLiveInspections";
-import { StatusBadge, AdminTable, FilterPills, SortableTh, sortRows, inputCls, Modal, EditableDate } from "@/app/components/admin/adminShared";
+import { StatusBadge, AdminTable, FilterPills, SortableTh, sortRows, inputCls, Modal, DateTextInput } from "@/app/components/admin/adminShared";
 
 function daysLeftOf(dueDate, today) {
   return Math.ceil((new Date(dueDate) - new Date(today)) / 86400000);
@@ -41,7 +41,7 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
       </td>
       <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
         <div className="flex gap-1 items-center">
-          <EditableDate value={date} onCommit={setDate} />
+          <DateTextInput value={date} onChange={setDate} className="w-24" />
           <input type="time" className={`${mobileInputCls} w-20`} value={time} onChange={(e) => setTime(e.target.value)} />
         </div>
         {i.apiDueDate && (

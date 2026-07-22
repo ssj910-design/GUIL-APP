@@ -176,6 +176,33 @@ export function EditableDate({ value, onCommit, emptyText = "-", className = "" 
   );
 }
 
+// 일반 텍스트용 연필-수정 칸 (휴대폰·아이디(민원24) 등) — EditableDate와 동일한 방식.
+export function EditableText({ value, onCommit, placeholder = "", format, emptyText = "-", className = "" }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(value ?? "");
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        className={`${inputCls} min-w-24 ${className}`}
+        placeholder={placeholder}
+        value={text}
+        onChange={(e) => setText(format ? format(e.target.value) : e.target.value)}
+        onBlur={() => { onCommit(text); setEditing(false); }}
+        onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
+      />
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`text-slate-600 ${className}`}>{value || emptyText}</span>
+      <button type="button" onClick={() => { setText(value ?? ""); setEditing(true); }} className="text-slate-300 hover:text-slate-500 shrink-0" aria-label="수정">
+        <Pencil size={12} />
+      </button>
+    </span>
+  );
+}
+
 // 사진 그리드 — 상세보기 모달 전체 공용. 클릭하면 크게보기(좌우 이동, 낱장/전체 다운로드)가 뜬다.
 export function PhotoGrid({ urls = [], cols = 4, emptyText = "등록된 사진이 없습니다" }) {
   const [viewerIndex, setViewerIndex] = useState(null);

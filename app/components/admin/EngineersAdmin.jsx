@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { formatPhone, shortDate } from "@/lib/utils";
-import { StatusBadge, AdminTable, inputCls, DateTextInput, EditableDate } from "@/app/components/admin/adminShared";
+import { StatusBadge, AdminTable, inputCls, DateTextInput, EditableDate, EditableText } from "@/app/components/admin/adminShared";
 import ImportEngineers from "@/app/components/admin/ImportEngineers";
 import DutyAdmin from "@/app/components/admin/DutyAdmin";
 import LeavesAdmin from "@/app/components/admin/LeavesAdmin";
@@ -20,11 +20,15 @@ function EngineerRow({ p, stats, onSave, onDelete }) {
         <p className="font-bold">{p.name}</p>
         <p className="text-[10px] text-slate-400 font-semibold">{p.member_type ?? "구분 없음"}</p>
       </td>
-      <td className="px-3 py-2.5 w-36"><input className={inputCls} placeholder="연락처" value={form.phone} onChange={(e) => setForm({ ...form, phone: formatPhone(e.target.value) })} /></td>
+      <td className="px-3 py-2.5 w-36">
+        <EditableText value={form.phone} placeholder="연락처" format={formatPhone} onCommit={(v) => setForm({ ...form, phone: v })} />
+      </td>
       <td className="px-3 py-2.5 w-36">
         <EditableDate value={form.hireDate} onCommit={(v) => setForm({ ...form, hireDate: v })} />
       </td>
-      <td className="px-3 py-2.5 w-32"><input className={inputCls} placeholder="민원24 점검자 ID" value={form.minwonId} onChange={(e) => setForm({ ...form, minwonId: e.target.value })} /></td>
+      <td className="px-3 py-2.5 w-32">
+        <EditableText value={form.minwonId} placeholder="민원24 점검자 ID" onCommit={(v) => setForm({ ...form, minwonId: v })} />
+      </td>
       <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">{p.tel ?? "-"}</td>
       <td className="px-3 py-2.5 text-center">
         {p.join_status ? <StatusBadge tone={p.join_status === "승인" ? "green" : "slate"}>{p.join_status}</StatusBadge> : "-"}
