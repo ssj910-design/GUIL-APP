@@ -1116,6 +1116,55 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
 }
 
 
+// 처리현황 카드 — 상태별로 필요한 정보를 담는다:
+// 완료(초록): 증상·원인·조치·처리자·도착~완료 시각 / 진행중(파랑·초록): 현재 단계·배정자 / 미처리(빨강): 미배정·접수
+function FailureStatusCard({ f, onOpenDetail, onReassign, canReassign }) {
+  const { faultType, faultDetail } = parseErrorCode(f.errorCode);
+  const stage = failureStage(f);
+  const state = f.status === "완료"
+    ? { bar: "border-l-emerald-500", chip: "bg-emerald-100 text-emerald-700", label: f.processResult || "완료" }
+    : f.status === "진행중"
+    ? (stage === "arrived"
+        ? { bar: "border-l-emerald-400", chip: "bg-emerald-50 text-emerald-600", label: "작업중" }
+        : { bar: "border-l-blue-500", chip: "bg-blue-50 text-blue-600", label: "출동중" })
+    : { bar: "border-l-red-400", chip: "bg-red-50 text-red-600", label: "미처리" };
+  const who = f.assignee
+    ? f.status === "완료" && f.completeTime
+      ? `${f.assignee} · ${f.arrivalTime ? f.arrivalTime + " 도착 → " : ""}${f.completeTime} 완료`
+      : stage === "arrived" && f.arrivalTime ? `${f.assignee} · ${f.arrivalTime} 도착`
+      : stage === "dispatched" ? `${f.assignee} · 출동 ${f.dispatchedAt}`
+      : f.assignee
+    : `미배정 · ${f.reportedAt} 접수`;
+  return (
+    <div className={`rounded-xl border border-slate-200 border-l-4 ${state.bar} bg-white overflow-hidden`}>
+      <button type="button" onClick={() => onOpenDetail(f)} className="w-full text-left p-3.5">
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <p className="font-bold text-slate-800 text-sm truncate">{f.siteName} · {formatUnitLabel(f.elevatorNo)}</p>
+          <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${state.chip}`}>{state.label}</span>
+        </div>
+        <div className="flex items-start gap-1.5 mb-1">
+          <AlertTriangle size={13} className="text-amber-500 shrink-0 mt-0.5" />
+          <p className="text-[13px] min-w-0"><span className="font-bold text-slate-700">{faultType}</span>{faultDetail && <span className="text-slate-500"> · {faultDetail}</span>}</p>
+        </div>
+        {f.status === "완료" && (f.faultCause || f.processContent) && (
+          <div className="text-[11px] text-slate-500 space-y-0.5 mb-1.5 pl-[19px]">
+            {f.faultCause && <p className="truncate">원인 · {f.faultCause}</p>}
+            {f.processContent && <p className="truncate">조치 · {f.processContent}</p>}
+          </div>
+        )}
+        <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-1">
+          <User size={12} className="shrink-0" /><span className="truncate">{who}</span>
+        </div>
+      </button>
+      {canReassign && (
+        <div className="px-3.5 pb-3">
+          <button onClick={() => onReassign(f)} className="text-[11px] font-bold text-blue-700 border border-blue-200 rounded-lg px-2.5 py-1.5 active:bg-blue-50">재배정</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FailureStatusOverview({ failures, onReassign }) {
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
@@ -1126,7 +1175,6 @@ function FailureStatusOverview({ failures, onReassign }) {
   const allDone = failures.filter((f) => f.status === "완료").length;
   const allProcessing = failures.filter((f) => f.status === "진행중").length;
   const allUndone = failures.filter((f) => f.status === "미처리").length;
-  const statusColor = { 미처리: "bg-red-100 text-red-700", 진행중: "bg-amber-100 text-amber-700", 완료: "bg-emerald-100 text-emerald-700" };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -1153,24 +1201,8 @@ function FailureStatusOverview({ failures, onReassign }) {
           <p className="text-xs text-slate-400 text-center py-10">고장 접수 이력이 없습니다</p>
         ) : (
           failures.map((f) => (
-            <div key={f.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
-              <button onClick={() => setDetailTarget(f)} className="w-full text-left active:opacity-70">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="font-bold text-slate-800 text-sm">{f.siteName} · {formatUnitLabel(f.elevatorNo)}</p>
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${statusColor[f.status]}`}>{f.status}</span>
-                </div>
-                <p className="text-xs text-slate-500">{f.errorCode}</p>
-                <p className="text-[11px] text-slate-400 mt-1">{f.reportedAt} 접수 · {f.assignee ?? "미배정"}</p>
-              </button>
-              {role === "admin" && f.status !== "완료" && f.assignee && (
-                <button
-                  onClick={() => setReassignTarget(f)}
-                  className="mt-2 text-[11px] font-bold text-blue-700 border border-blue-200 rounded-lg px-2.5 py-1.5 active:bg-blue-50"
-                >
-                  재배정
-                </button>
-              )}
-            </div>
+            <FailureStatusCard key={f.id} f={f} onOpenDetail={setDetailTarget} onReassign={setReassignTarget}
+              canReassign={role === "admin" && f.status !== "완료" && !!f.assignee} />
           ))
         )}
       </div>
