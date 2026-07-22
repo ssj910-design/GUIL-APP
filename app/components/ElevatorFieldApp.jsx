@@ -1113,6 +1113,33 @@ export default function App() {
     setTodos((prev) => [newTodo, ...prev]);
   }
 
+  // ★ 이미 지급완료된 자재신청 수정 — 상태/지급일/사진(별도 handleAttachPhoto)은 그대로 두고
+  // 연결된 할 일(담당기사·청구금액·기한·내용)만 그 자리에서 갱신한다 (새 할 일을 만들지 않음).
+  async function handleSupplyEdit(requestId, assignee, billingPart, billingAmount, dueDate, description) {
+    const req = materialRequests.find((r) => r.id === requestId);
+    if (!req) return;
+    const todoId = "todo-" + requestId;
+    const assigneeName = assignee || req.engineer;
+    const finalDueDate = dueDate || addDays(TODAY_STR, 30);
+    const patch = {
+      assignee: assigneeName,
+      due_date: finalDueDate,
+      description: description || null,
+      ...(v2Ready ? { assignee_id: profileIdByName(profilesAll, assigneeName) } : {}),
+      ...(todoBillingReady ? { billing_part: billingPart || null, billing_amount: billingAmount || null } : {}),
+    };
+    const { error } = await supabase.from("todos").update(patch).eq("id", todoId);
+    if (error) { alert("수정 실패: " + error.message); return; }
+    setTodos((prev) => prev.map((t) => (t.id === todoId ? {
+      ...t,
+      assignee: assigneeName,
+      dueDate: finalDueDate,
+      description: description || null,
+      ...(v2Ready ? { assigneeId: patch.assignee_id } : {}),
+      ...(todoBillingReady ? { billingPart: billingPart || null, billingAmount: billingAmount || null } : {}),
+    } : t)));
+  }
+
   // ★ 기사가 비용청구에서 "상비부품에서 사용함"을 체크하고 제출하면 보충 요청이 자동 생성되고,
   // 사용한 수량만큼 그 기사의 상비부품 재고(kit_stock)가 즉시 차감됩니다 (0 아래로는 내려가지 않음).
   async function handleUseKitPart({ part, siteName, qty }) {
@@ -1692,7 +1719,7 @@ export default function App() {
                   onDeletePost={handleDeleteFeedPost}
                   onSetNotice={feedNoticeReady ? handleSetFeedNotice : null}
                 />}
-          {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onUpdateTodoDescription={handleUpdateTodoDescription} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
+          {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onUpdateTodoDescription={handleUpdateTodoDescription} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
 
           {/* 우리방 플로팅 버튼 — 어느 탭에서든 즉시 팀 채팅 (우리방 탭에서는 숨김) */}
           {tab !== "room" && (
