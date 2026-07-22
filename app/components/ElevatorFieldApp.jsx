@@ -100,7 +100,6 @@ export default function App() {
   const [pendingNight, setPendingNight] = useState(null); // 어제 마감 안 한 숙직(익일 출근 시 자동 마감 / 연차면 홈 버튼으로)
   const [dutySwaps, setDutySwaps] = useState([]);
   const [todayLeaves, setTodayLeaves] = useState([]); // 오늘 휴가 중인 사람 (배정 차단용)
-  const [rosterOpen, setRosterOpen] = useState(false);
   const [myPageOpen, setMyPageOpen] = useState(false);
   const [siteManagers, setSiteManagers] = useState([]);
   const [failures, setFailures] = useState([]);
@@ -1706,23 +1705,11 @@ export default function App() {
           <DutySwapNotice
             swaps={dutySwaps}
             schedules={dutySchedules}
-            onSeen={(w, as) => { handleSeenDutySwap(w, as); if (as === "target") setRosterOpen(true); }}
+            onSeen={(w, as) => { handleSeenDutySwap(w, as); if (as === "target") setTab("workcalendar"); }}
           />
 
           {myPageOpen && (
             <MyPage attendances={attendances} dutySchedules={dutySchedules} onClose={() => setMyPageOpen(false)} />
-          )}
-
-          {rosterOpen && (
-            <WorkCalendarSheet
-              schedules={dutySchedules}
-              swaps={dutySwaps}
-              onGenerate={handleGenerateDuty}
-              onSetPerson={handleSetDutyPerson}
-              onRequestSwap={handleRequestDutySwap}
-              onRespondSwap={handleRespondDutySwap}
-              onClose={() => setRosterOpen(false)}
-            />
           )}
 
           <PullToRefresh onRefresh={loadData}>
@@ -1734,7 +1721,7 @@ export default function App() {
               pendingNight={pendingNight}
               onCloseNight={closeNightDuty}
               onAttendance={handleAttendance}
-              onOpenRoster={() => setRosterOpen(true)}
+              onOpenRoster={() => setTab("workcalendar")}
               onSendPost={handleSendFeedPost}
               swapCount={dutySwaps.filter((w) => w.status === "대기" && w.targetId === profileIdByName(profilesAll, profile.name)).length}
               inspections={inspections}
@@ -1790,6 +1777,16 @@ export default function App() {
                   onDeletePost={handleDeleteFeedPost}
                   onSetNotice={feedNoticeReady ? handleSetFeedNotice : null}
                 />}
+          {tab === "workcalendar" && (
+            <WorkCalendarSheet
+              schedules={dutySchedules}
+              swaps={dutySwaps}
+              onGenerate={handleGenerateDuty}
+              onSetPerson={handleSetDutyPerson}
+              onRequestSwap={handleRequestDutySwap}
+              onRespondSwap={handleRespondDutySwap}
+            />
+          )}
           {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onUpdateTodoDescription={handleUpdateTodoDescription} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
           </PullToRefresh>
 
@@ -1879,12 +1876,11 @@ export default function App() {
           >
             {visibleTabs.map((t) => {
               const Icon = t.icon;
-              const active = t.id === "workcalendar" ? rosterOpen : tab === t.id;
-              const onClick = t.id === "workcalendar" ? () => setRosterOpen(true) : () => setTab(t.id);
+              const active = tab === t.id;
               return (
                 <button
                   key={t.id}
-                  onClick={onClick}
+                  onClick={() => setTab(t.id)}
                   className={`flex flex-col items-center justify-center gap-1 py-3 px-2 shrink-0 border-r border-slate-200 last:border-r-0 ${active ? "bg-blue-900" : "bg-transparent"}`}
                   style={{ minWidth: "68px" }}
                 >
