@@ -423,7 +423,7 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
               {(() => {
                 const people = leaves.filter((l) => l.start_date <= dayDetail && dayDetail <= l.end_date);
                 const label = people
-                  .map((l) => `${nameOf(l.profile_id)}${l.kind === "반차" && periodOf(l.note) ? `(${periodOf(l.note)})` : ""}`)
+                  .map((l) => `${nameOf(l.profile_id)} ${l.kind}${l.kind === "반차" && periodOf(l.note) ? `(${periodOf(l.note)})` : ""}`)
                   .join(", ");
                 return (
                   <div className="flex items-start justify-between gap-3 text-sm">
