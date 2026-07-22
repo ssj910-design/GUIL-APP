@@ -31,7 +31,7 @@ const MENU = [
   { id: "materials", label: "자재·견적 신청내역", icon: Package },
   { id: "billings", label: "부품교체·공사 내역", icon: Receipt },
   { id: "todos", label: "할 일 관리", icon: ListTodo },
-  { id: "selfChecks", label: "자체점검", icon: CalendarCheck },
+  { id: "selfChecks", label: "자체점검 현황", icon: CalendarCheck },
   { id: "room", label: "게시판", icon: MessageSquare },
   { id: "engineers", label: "인사관리", icon: Users },
   { id: "stats", label: "통계", icon: BarChart3 },
