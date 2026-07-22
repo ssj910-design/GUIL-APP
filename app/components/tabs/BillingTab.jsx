@@ -31,7 +31,8 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const selected = todos.find((t) => t.id === selectedId);
   // 견적 연동 건은 이미 견적서에 수리비가 정해져 있어, 직접 입력 대신 "견적서 참조"로 고정합니다.
   const isQuoteBilling = selected?.source === "quote";
-  const manualValid = manualForm.siteId && formatPartRows(manualForm.parts) && manualForm.replaceDate && manualForm.contactPhone.trim();
+  const materialValid = selected && (isQuoteBilling || Number(materialCost) > 0);
+  const manualValid = manualForm.siteId && formatPartRows(manualForm.parts) && manualForm.replaceDate && manualForm.contactPhone.trim() && Number(manualForm.cost) > 0;
 
   async function submitMaterial() {
     if (!selected) return;
@@ -179,20 +180,25 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                   onRemove={() => setMaterialPhotos((p) => ({ ...p, confirm: null }))}
                 />
               </Field>
-              <Field label="수리비">
+              <Field label="수리비 (필수)">
                 {isQuoteBilling ? (
                   <input type="text" className={`${inputCls} bg-slate-100 text-slate-500`} value="견적서 참조" disabled readOnly />
                 ) : (
-                  <input
-                    type="number"
-                    className={inputCls}
-                    placeholder="예: 350000"
-                    value={materialCost}
-                    onChange={(e) => setMaterialCost(e.target.value)}
-                  />
+                  <>
+                    <input
+                      type="number"
+                      className={inputCls}
+                      placeholder="예: 350000"
+                      value={materialCost}
+                      onChange={(e) => setMaterialCost(e.target.value)}
+                    />
+                    {!(Number(materialCost) > 0) && (
+                      <p className="text-[11px] text-red-500 mt-1">수리비를 입력해주세요</p>
+                    )}
+                  </>
                 )}
               </Field>
-              <PrimaryButton onClick={submitMaterial} disabled={!selected}>청구 요청 제출</PrimaryButton>
+              <PrimaryButton onClick={submitMaterial} disabled={!materialValid}>청구 요청 제출</PrimaryButton>
               {submitted && !submitted.manual && (
                 <p className="text-xs text-emerald-600 font-bold text-center mt-3 flex items-center justify-center gap-1">
                   <Check size={14} /> 제출 완료 · "{submitted.siteName} {submitted.part}" 할 일이 자동 완료되었습니다
@@ -281,7 +287,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                 onRemove={() => setManualPhotos((p) => ({ ...p, confirm: null }))}
               />
             </Field>
-            <Field label="수리비">
+            <Field label="수리비 (필수)">
               <input
                 type="number"
                 className={inputCls}
@@ -289,6 +295,9 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                 value={manualForm.cost}
                 onChange={(e) => setManualForm({ ...manualForm, cost: e.target.value })}
               />
+              {!(Number(manualForm.cost) > 0) && (
+                <p className="text-[11px] text-red-500 mt-1">수리비를 입력해주세요</p>
+              )}
             </Field>
             <PrimaryButton onClick={submitManual} disabled={!manualValid}>청구 요청 제출</PrimaryButton>
             {submitted && submitted.manual && (
