@@ -12,7 +12,18 @@ import { DutyRoster } from "@/app/components/DutyRoster";
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const ymOf = (y, m) => `${y}-${String(m + 1).padStart(2, "0")}`;
 
-// 연차·반차·병가 캘린더 — 워크캘린더의 "연차" 탭. 전체직원/내 연차 구분 보기 + 신청까지 여기서.
+// 연차 종류별 색 — 진한초록(연차)/연한초록(반차)/노랑(병가)/보라(공가). kind는 DB체크제약(031)과 동일한 4종.
+const LEAVE_STYLE = {
+  연차: "bg-emerald-600 text-white",
+  반차: "bg-emerald-100 text-emerald-700",
+  병가: "bg-yellow-100 text-yellow-700",
+  공가: "bg-violet-100 text-violet-700",
+};
+const LEAVE_DOT = { 연차: "bg-emerald-600", 반차: "bg-emerald-300", 병가: "bg-yellow-400", 공가: "bg-violet-400" };
+const LEAVE_LABEL = { 연차: "진한초록 — 연차", 반차: "연한초록 — 반차", 병가: "노랑 — 병가", 공가: "보라 — 공가" };
+
+// 연차·반차·병가·공가 캘린더 — 워크캘린더의 "연차" 탭. 당직·숙직 탭(DutyRoster)과 동일한
+// 상단 월 이동 바 + 전체보기/신청 컨트롤 바 + 캘린더 박스 레이아웃을 그대로 맞춘다.
 // 연차 신청 로직은 MyPage.jsx와 동일(반차 0.5일, 근무 겹침 시 신청 막기)하되 이 탭 전용으로 둔다.
 function LeaveCalendarTab({ schedules = [] }) {
   const { selfId, profiles = [] } = useContext(AuthContext);
@@ -21,7 +32,7 @@ function LeaveCalendarTab({ schedules = [] }) {
   const [leaves, setLeaves] = useState([]);
   const [onlyMine, setOnlyMine] = useState(false);
   const [applying, setApplying] = useState(false);
-  const [form, setForm] = useState({ kind: "연차", start: TODAY_STR, end: TODAY_STR, note: "" });
+  const [form, setForm] = useState({ kind: "연차", period: "오전", start: TODAY_STR, end: TODAY_STR, note: "" });
   const [busy, setBusy] = useState(false);
 
   const { y, m } = cursor;
@@ -48,9 +59,10 @@ function LeaveCalendarTab({ schedules = [] }) {
   async function submitLeave() {
     if (dutyConflicts.length) return;
     setBusy(true);
+    const finalNote = form.kind === "반차" ? `${form.period}${form.note ? " · " + form.note : ""}` : (form.note || null);
     const { data, error } = await supabase.from("leaves").insert({
       profile_id: selfId, start_date: form.start, end_date: form.end,
-      kind: form.kind, days: reqDays, note: form.note || null,
+      kind: form.kind, days: reqDays, note: finalNote,
       status: "신청", requested_by: selfId,
     }).select();
     setBusy(false);
@@ -59,125 +71,145 @@ function LeaveCalendarTab({ schedules = [] }) {
       setLeaves((prev) => [data[0], ...prev]);
     }
     setApplying(false);
-    setForm({ kind: "연차", start: TODAY_STR, end: TODAY_STR, note: "" });
+    setForm({ kind: "연차", period: "오전", start: TODAY_STR, end: TODAY_STR, note: "" });
   }
 
   return (
-    <div className="px-3 py-3">
-      <div className="flex items-center justify-between mb-2.5">
-        <div className="flex items-center gap-1">
-          <button onClick={() => setCursor(m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 })} className="p-1.5 text-slate-500" aria-label="이전 달">
-            <ChevronLeft size={18} />
-          </button>
-          <p className="text-sm font-extrabold text-slate-800">{y}년 {m + 1}월</p>
-          <button onClick={() => setCursor(m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 })} className="p-1.5 text-slate-500" aria-label="다음 달">
-            <ChevronRight size={18} />
-          </button>
-        </div>
+    <div className="flex flex-col">
+      <div className="shrink-0 bg-white border border-slate-200 rounded-t-xl px-4 py-2.5 flex items-center justify-between">
+        <button onClick={() => setCursor(m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 })} className="p-1.5 text-slate-500" aria-label="이전 달">
+          <ChevronLeft size={18} />
+        </button>
+        <p className="text-sm font-extrabold text-slate-800">{y}년 {m + 1}월</p>
+        <button onClick={() => setCursor(m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 })} className="p-1.5 text-slate-500" aria-label="다음 달">
+          <ChevronRight size={18} />
+        </button>
+      </div>
+
+      <div className="shrink-0 bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-2">
         <button
           onClick={() => setOnlyMine((v) => !v)}
           className={`text-[11px] font-bold rounded-lg px-3 py-1.5 border ${
             onlyMine ? "bg-blue-50 text-blue-700 border-blue-200" : "text-slate-500 border-slate-200"
           }`}
         >
-          {onlyMine ? "내 연차" : "전체직원 연차"}
+          {onlyMine ? "내 근무만" : "전체 보기"}
         </button>
-      </div>
-
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
-          {DOW.map((d, i) => (
-            <p key={d} className={`text-center text-[10px] font-bold py-1.5 ${i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-slate-500"}`}>{d}</p>
-          ))}
-        </div>
-        <div className="grid grid-cols-7">
-          {Array.from({ length: startDow }, (_, i) => <div key={`p${i}`} className="border-b border-r border-slate-100 min-h-[76px]" />)}
-          {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
-            const iso = `${ym}-${String(d).padStart(2, "0")}`;
-            const dow = (startDow + d - 1) % 7;
-            const isToday = iso === TODAY_STR;
-            const dayLeaves = leavesOf(iso);
-            return (
-              <div key={d} className={`border-b border-r border-slate-100 min-h-[76px] p-1 ${isToday ? "bg-blue-50" : ""}`}>
-                <p className={`text-[10px] font-bold text-right pr-0.5 ${dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-slate-400"}`}>{d}</p>
-                <div className="space-y-0.5">
-                  {dayLeaves.slice(0, 3).map((l) => (
-                    <p key={l.id} className="text-[9.5px] font-semibold rounded px-0.5 truncate bg-amber-50 text-amber-700">
-                      {nameOf(l.profile_id)} {l.kind}
-                    </p>
-                  ))}
-                  {dayLeaves.length > 3 && <p className="text-[9px] text-slate-400 px-0.5">+{dayLeaves.length - 3}건</p>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-1.5 mt-2.5 mb-3 px-1 text-[11px] font-semibold text-slate-500">
-        <span className="w-2 h-2 rounded-full bg-amber-400" /> 노랑 — 휴가
-      </div>
-
-      {!applying ? (
         <button
-          onClick={() => setApplying(true)}
-          className="w-full bg-blue-50 text-blue-700 text-xs font-bold py-2.5 rounded-lg flex items-center justify-center gap-1"
+          onClick={() => setApplying((v) => !v)}
+          className="ml-auto text-[11px] font-bold text-white bg-blue-700 rounded-lg px-3.5 py-1.5 flex items-center gap-1"
         >
-          <Plus size={13} /> 연차 신청
+          <Plus size={12} /> 연차 신청
         </button>
-      ) : (
-        <div className="bg-white rounded-xl border border-slate-200 p-3.5 space-y-2">
-          <div className="grid grid-cols-3 gap-1.5">
-            {["연차", "반차", "병가"].map((k) => (
-              <button
-                key={k}
-                onClick={() => setForm({ ...form, kind: k })}
-                className={`py-2 rounded-lg text-xs font-bold border ${form.kind === k ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200"}`}
-              >
-                {k}
-              </button>
+      </div>
+
+      <div className="px-0 py-3">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
+            {DOW.map((d, i) => (
+              <p key={d} className={`text-center text-[10px] font-bold py-1.5 ${i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-slate-500"}`}>{d}</p>
             ))}
           </div>
-          <div className="flex items-center gap-1.5">
-            <input
-              type="date"
-              value={form.start}
-              onChange={(e) => setForm({ ...form, start: e.target.value, end: e.target.value > form.end ? e.target.value : form.end })}
-              className="flex-1 border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-800"
-            />
-            <span className="text-[11px] text-slate-400">~</span>
-            <input
-              type="date"
-              value={form.end}
-              min={form.start}
-              disabled={form.kind === "반차"}
-              onChange={(e) => setForm({ ...form, end: e.target.value })}
-              className="flex-1 border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-800 disabled:bg-slate-50"
-            />
-          </div>
-          <input
-            value={form.note}
-            onChange={(e) => setForm({ ...form, note: e.target.value })}
-            placeholder="사유 (선택)"
-            className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-xs text-slate-800"
-          />
-          {dutyConflicts.length > 0 && (
-            <p className="text-[11px] font-bold text-red-500 leading-relaxed">
-              {dutyConflicts.map((d) => `${d.dutyDate.slice(5).replace("-", "/")} ${d.kind}`).join(", ")} 근무가 있습니다. 먼저 근무 교환을 한 뒤 신청하세요.
-            </p>
-          )}
-          <div className="flex gap-1.5">
-            <button onClick={() => setApplying(false)} className="flex-1 text-xs font-bold text-slate-500 bg-slate-100 py-2.5 rounded-lg">취소</button>
-            <button
-              onClick={submitLeave}
-              disabled={busy || dutyConflicts.length > 0}
-              className="flex-1 text-xs font-bold text-white bg-blue-700 py-2.5 rounded-lg disabled:bg-slate-200"
-            >
-              {busy ? "신청 중…" : dutyConflicts.length ? "근무일 포함" : `${reqDays}일 신청`}
-            </button>
+          <div className="grid grid-cols-7">
+            {Array.from({ length: startDow }, (_, i) => <div key={`p${i}`} className="border-b border-r border-slate-100 min-h-[76px]" />)}
+            {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
+              const iso = `${ym}-${String(d).padStart(2, "0")}`;
+              const dow = (startDow + d - 1) % 7;
+              const isToday = iso === TODAY_STR;
+              const dayLeaves = leavesOf(iso);
+              return (
+                <div key={d} className={`border-b border-r border-slate-100 min-h-[76px] p-1 ${isToday ? "bg-blue-50" : ""}`}>
+                  <p className={`text-[10px] font-bold text-right pr-0.5 ${dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-slate-400"}`}>{d}</p>
+                  <div className="space-y-0.5">
+                    {dayLeaves.slice(0, 3).map((l) => (
+                      <p key={l.id} className={`text-[9.5px] font-semibold rounded px-0.5 truncate ${LEAVE_STYLE[l.kind] ?? "bg-slate-100 text-slate-600"}`}>
+                        {nameOf(l.profile_id)} {l.kind}
+                      </p>
+                    ))}
+                    {dayLeaves.length > 3 && <p className="text-[9px] text-slate-400 px-0.5">+{dayLeaves.length - 3}건</p>}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
-      )}
+
+        <div className="flex items-center gap-3 flex-wrap mt-2.5 px-1">
+          {["연차", "반차", "병가", "공가"].map((k) => (
+            <span key={k} className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
+              <span className={`w-2 h-2 rounded-full ${LEAVE_DOT[k]}`} />
+              {LEAVE_LABEL[k]}
+            </span>
+          ))}
+        </div>
+
+        {applying && (
+          <div className="bg-white rounded-xl border border-slate-200 p-3.5 space-y-2 mt-3">
+            <div className="grid grid-cols-4 gap-1.5">
+              {["연차", "반차", "병가", "공가"].map((k) => (
+                <button
+                  key={k}
+                  onClick={() => setForm({ ...form, kind: k })}
+                  className={`py-2 rounded-lg text-xs font-bold border ${form.kind === k ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200"}`}
+                >
+                  {k}
+                </button>
+              ))}
+            </div>
+            {form.kind === "반차" && (
+              <div className="grid grid-cols-2 gap-1.5">
+                {["오전", "오후"].map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setForm({ ...form, period: p })}
+                    className={`py-2 rounded-lg text-xs font-bold border ${form.period === p ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200"}`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={form.start}
+                onChange={(e) => setForm({ ...form, start: e.target.value, end: e.target.value > form.end ? e.target.value : form.end })}
+                className="flex-1 border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-800"
+              />
+              <span className="text-[11px] text-slate-400">~</span>
+              <input
+                type="date"
+                value={form.end}
+                min={form.start}
+                disabled={form.kind === "반차"}
+                onChange={(e) => setForm({ ...form, end: e.target.value })}
+                className="flex-1 border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-800 disabled:bg-slate-50"
+              />
+            </div>
+            <input
+              value={form.note}
+              onChange={(e) => setForm({ ...form, note: e.target.value })}
+              placeholder="사유 (선택)"
+              className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-xs text-slate-800"
+            />
+            {dutyConflicts.length > 0 && (
+              <p className="text-[11px] font-bold text-red-500 leading-relaxed">
+                {dutyConflicts.map((d) => `${d.dutyDate.slice(5).replace("-", "/")} ${d.kind}`).join(", ")} 근무가 있습니다. 먼저 근무 교환을 한 뒤 신청하세요.
+              </p>
+            )}
+            <div className="flex gap-1.5">
+              <button onClick={() => setApplying(false)} className="flex-1 text-xs font-bold text-slate-500 bg-slate-100 py-2.5 rounded-lg">취소</button>
+              <button
+                onClick={submitLeave}
+                disabled={busy || dutyConflicts.length > 0}
+                className="flex-1 text-xs font-bold text-white bg-blue-700 py-2.5 rounded-lg disabled:bg-slate-200"
+              >
+                {busy ? "신청 중…" : dutyConflicts.length ? "근무일 포함" : `${reqDays}일 신청`}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
