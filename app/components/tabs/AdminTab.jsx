@@ -353,6 +353,7 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
               const billingPartText = parts
                 .map((part, i) => (amounts[i] ? `${part}(₩${Number(amounts[i]).toLocaleString()})` : part))
                 .join(", ");
+              const allAmountsFilled = parts.every((_, i) => Number(amounts[i]) > 0);
               return (
                 <div key={r.id} className="border border-amber-200 bg-amber-50 rounded-xl p-3">
                   <div className="flex items-start justify-between gap-2">
@@ -415,11 +416,15 @@ function MaterialRequestsScreen({ materialRequests, onSupplyComplete, onReproces
                     {parts.length > 1 && (
                       <p className="text-[10px] text-slate-400 text-right mt-1">합계 ₩{total.toLocaleString()}</p>
                     )}
+                    {!allAmountsFilled && (
+                      <p className="text-[10px] text-red-500 mt-1">모든 부품의 금액을 입력해주세요</p>
+                    )}
                   </div>
 
                   <button
-                    onClick={() => onSupplyComplete(r.id, assigneeMap[r.id] ?? r.engineer, billingPartText || null, total || null)}
-                    className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg bg-blue-700 text-white active:bg-blue-800"
+                    onClick={() => allAmountsFilled && onSupplyComplete(r.id, assigneeMap[r.id] ?? r.engineer, billingPartText || null, total || null)}
+                    disabled={!allAmountsFilled}
+                    className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg bg-blue-700 disabled:bg-slate-300 text-white active:bg-blue-800"
                   >
                     <PackageCheck size={14} /> 자재 지급 완료 체크
                   </button>

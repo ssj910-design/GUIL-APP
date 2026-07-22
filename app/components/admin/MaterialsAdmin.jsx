@@ -160,9 +160,8 @@ export default function MaterialsAdmin({ data, setData }) {
     }));
   }
 
-  async function handleQuoteSupplyComplete(quote, { assigneeIds, photoUrls }) {
+  async function handleQuoteSupplyComplete(quote, { assigneeIds, photoUrls, dueDate, description }) {
     const unitId = quote.unitId ?? unitIdFor(data.units, quote.siteId, quote.elevatorNo);
-    const dueDate = addDays(TODAY_STR, 30);
     const newTodos = assigneeIds.map((assigneeId, idx) => {
       const engineer = (data.profiles ?? []).find((p) => p.id === assigneeId);
       return {
@@ -180,6 +179,7 @@ export default function MaterialsAdmin({ data, setData }) {
         done: false,
         unitId,
         assigneeId,
+        description: description || null,
       };
     });
     // 할 일을 먼저 upsert(=재시도 시 같은 id로 다시 써도 안전)한 뒤 상태를 바꾼다 — 자재
@@ -189,7 +189,7 @@ export default function MaterialsAdmin({ data, setData }) {
         id: t.id, quote_request_id: t.quoteRequestId, source: t.source, title: t.title,
         site_name: t.siteName, elevator_no: t.elevatorNo, part: t.part,
         assignee: t.assignee, assigned_date: t.assignedDate, due_date: t.dueDate, done: t.done,
-        unit_id: t.unitId, assignee_id: t.assigneeId,
+        unit_id: t.unitId, assignee_id: t.assigneeId, description: t.description,
       }))
     );
     if (todoError) { alert("할 일 생성 실패: " + todoError.message); return; }
@@ -215,8 +215,9 @@ export default function MaterialsAdmin({ data, setData }) {
   }
 
   // 자재지급완료(표시상 지급완료)된 견적요청 수정 — 사진과 담당 기사 구성을 바꾼다.
-  // 담당 기사가 빠지면 그 사람 할 일은 삭제하고, 새로 추가되면 할 일을 새로 만든다.
-  async function handleQuoteEdit(quote, { assigneeIds, photoUrls }) {
+  // 담당 기사가 빠지면 그 사람 할 일은 삭제하고, 새로 추가되면 할 일을 새로 만들고,
+  // 그대로 남는 담당자는 새로 입력한 기한/내용으로 갱신한다.
+  async function handleQuoteEdit(quote, { assigneeIds, photoUrls, dueDate, description }) {
     const patch = {
       has_supply_photo: photoUrls.length > 0,
       supply_photo_urls: photoUrls.length ? photoUrls : null,
@@ -225,12 +226,21 @@ export default function MaterialsAdmin({ data, setData }) {
     if (error) { alert("수정 실패: " + error.message); return; }
 
     const existingTodos = (data.todos ?? []).filter((t) => t.quoteRequestId === quote.id);
+    const kept = existingTodos.filter((t) => assigneeIds.includes(t.assigneeId));
     const toRemove = existingTodos.filter((t) => !assigneeIds.includes(t.assigneeId));
     const toAddIds = assigneeIds.filter((id) => !existingTodos.some((t) => t.assigneeId === id));
 
     if (toRemove.length) {
       const { error: delError } = await supabase.from("todos").delete().in("id", toRemove.map((t) => t.id));
       if (delError) { alert("할 일 정리 실패: " + delError.message); return; }
+    }
+
+    if (kept.length) {
+      const { error: keepError } = await supabase
+        .from("todos")
+        .update({ due_date: dueDate, description: description || null })
+        .in("id", kept.map((t) => t.id));
+      if (keepError) { alert("할 일 수정 실패: " + keepError.message); return; }
     }
 
     const unitId = quote.unitId ?? unitIdFor(data.units, quote.siteId, quote.elevatorNo);
@@ -248,10 +258,11 @@ export default function MaterialsAdmin({ data, setData }) {
         part: quote.constructionType,
         assignee: engineer?.name ?? "",
         assignedDate: TODAY_STR,
-        dueDate: addDays(TODAY_STR, 30),
+        dueDate,
         done: false,
         unitId,
         assigneeId,
+        description: description || null,
       };
     });
     if (newTodos.length) {
@@ -260,7 +271,7 @@ export default function MaterialsAdmin({ data, setData }) {
           id: t.id, quote_request_id: t.quoteRequestId, source: t.source, title: t.title,
           site_name: t.siteName, elevator_no: t.elevatorNo, part: t.part,
           assignee: t.assignee, assigned_date: t.assignedDate, due_date: t.dueDate, done: t.done,
-          unit_id: t.unitId, assignee_id: t.assigneeId,
+          unit_id: t.unitId, assignee_id: t.assigneeId, description: t.description,
         }))
       );
       if (todoError) { alert("할 일 생성 실패: " + todoError.message); return; }
@@ -271,7 +282,12 @@ export default function MaterialsAdmin({ data, setData }) {
       quoteRequests: prev.quoteRequests.map((x) =>
         x.id === quote.id ? { ...x, hasSupplyPhoto: patch.has_supply_photo, supplyPhotoUrls: photoUrls } : x
       ),
-      todos: [...newTodos, ...prev.todos.filter((t) => !toRemove.some((r) => r.id === t.id))],
+      todos: [
+        ...newTodos,
+        ...prev.todos
+          .filter((t) => !toRemove.some((r) => r.id === t.id))
+          .map((t) => (kept.some((k) => k.id === t.id) ? { ...t, dueDate, description: description || null } : t)),
+      ],
     }));
   }
 
@@ -545,9 +561,12 @@ function MaterialSupplyModal({ request, profiles, todos, onClose, onSubmit }) {
 function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
   const isEdit = quote.status === "자재지급완료";
   const engineers = profiles.filter((p) => p.role === "engineer");
-  const existingAssigneeIds = todos.filter((t) => t.quoteRequestId === quote.id).map((t) => t.assigneeId);
+  const existingTodosForQuote = todos.filter((t) => t.quoteRequestId === quote.id);
+  const existingAssigneeIds = existingTodosForQuote.map((t) => t.assigneeId);
   const defaultId = quote.requesterId || engineers.find((p) => p.name === quote.engineer)?.id || "";
   const [assigneeIds, setAssigneeIds] = useState(existingAssigneeIds.length ? existingAssigneeIds : (defaultId ? [defaultId] : []));
+  const [dueDate, setDueDate] = useState(existingTodosForQuote[0]?.dueDate ?? addDays(TODAY_STR, 30));
+  const [description, setDescription] = useState(existingTodosForQuote[0]?.description ?? "");
   const [photos, setPhotos] = useState(quote.supplyPhotoUrls ?? []);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -574,7 +593,7 @@ function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
   async function submit() {
     if (assigneeIds.length === 0) return;
     setSaving(true);
-    await onSubmit({ assigneeIds, photoUrls: photos });
+    await onSubmit({ assigneeIds, photoUrls: photos, dueDate, description });
     setSaving(false);
   }
 
@@ -614,6 +633,22 @@ function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
             ))}
           </div>
           {assigneeIds.length === 0 && <p className="text-[10px] text-red-500 mt-1">담당 기사를 1명 이상 선택해주세요</p>}
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-slate-400 block mb-1">할 일 기한</label>
+          <input className={inputCls} type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-slate-400 block mb-1">내용</label>
+          <textarea
+            className={inputCls}
+            rows={3}
+            placeholder="담당 기사에게 전달할 내용을 입력하세요"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
         </div>
 
         <button
