@@ -640,30 +640,7 @@ function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
 function RequestDetailModal({ target, data, onClose }) {
   const { type, data: r } = target;
   const isMaterial = type === "material";
-<<<<<<< Updated upstream
   const assignee = assigneeNames(data, isMaterial ? "materialRequestId" : "quoteRequestId", r.id);
-  return (
-    <Modal title={`${locOf(data, r.unitId, r.siteName, r.elevatorNo)} — 상세내역`} onClose={onClose} wide>
-      <div className="space-y-3 text-sm">
-        <div className="grid grid-cols-2 gap-2.5">
-          <div className="bg-slate-100 rounded-xl p-3">
-            <p className="text-[11px] text-slate-500">{isMaterial ? "긴급도" : "현장 담당자 연락처"}</p>
-            <p className="font-bold text-slate-800">{isMaterial ? r.urgency : (r.contactPhone || "-")}</p>
-          </div>
-          <div className="bg-slate-100 rounded-xl p-3">
-            <p className="text-[11px] text-slate-500">신청 기사</p>
-            <p className="font-bold text-slate-800">{personOf(data, r.requesterId, r.engineer)}</p>
-          </div>
-          <div className="bg-slate-100 rounded-xl p-3">
-            <p className="text-[11px] text-slate-500">담당 기사</p>
-            <p className="font-bold text-slate-800">{assignee ?? "미배정"}</p>
-          </div>
-          <div className="bg-slate-100 rounded-xl p-3">
-            <p className="text-[11px] text-slate-500">신청일</p>
-            <p className="font-bold text-slate-800">{r.requestedDate}</p>
-          </div>
-        </div>
-=======
   const displayStatus = isMaterial
     ? r.status === "지급완료"
       ? (billingCompleteFor(data.todos ?? [], "materialRequestId", r.id) ? "교체완료" : "지급완료")
@@ -673,7 +650,6 @@ function RequestDetailModal({ target, data, onClose }) {
       : r.status;
   const tone = (isMaterial ? MATERIAL_TONE : QUOTE_TONE)[displayStatus] ?? "slate";
   const photos = [...(r.photoUrls ?? []), ...(r.supplyPhotoUrls ?? [])];
->>>>>>> Stashed changes
 
   return (
     <Modal title={isMaterial ? "자재신청 상세내역" : "견적요청 상세내역"} onClose={onClose} wide>
@@ -684,6 +660,7 @@ function RequestDetailModal({ target, data, onClose }) {
           <div><p className="text-xs font-bold text-slate-400 mb-1">{isMaterial ? "긴급도" : "현장 담당자 연락처"}</p><p className="font-semibold text-slate-800">{isMaterial ? r.urgency : (r.contactPhone || "-")}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">신청일</p><p className="font-semibold text-slate-800">{r.requestedDate}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">신청 기사</p><p className="font-semibold text-slate-800">{personOf(data, r.requesterId, r.engineer)}</p></div>
+          <div><p className="text-xs font-bold text-slate-400 mb-1">담당 기사</p><p className="font-semibold text-slate-800">{assignee ?? "미배정"}</p></div>
           <div><StatusBadge tone={tone}>{displayStatus}</StatusBadge></div>
         </div>
 
