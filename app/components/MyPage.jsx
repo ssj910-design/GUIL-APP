@@ -1,36 +1,24 @@
 import { useState, useEffect, useContext } from "react";
-import { X, LogOut, CalendarDays, Plane, Plus, Bell, BellRing } from "lucide-react";
+import { X, LogOut, CalendarDays, Bell, BellRing } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { AuthContext } from "@/app/components/context";
 import { TODAY_STR } from "@/lib/constants";
-import { annualLeaveDays, yearsOfService } from "@/lib/leave";
+import { yearsOfService } from "@/lib/leave";
 import { forRole, GROUPS, LEVELS, isEnabled, levelOf } from "@/lib/notifications";
 import { pushSupported, pushPermission, enablePush, disablePush, isSubscribed } from "@/lib/push";
 
 const KIND_TONE = { 당직: "bg-emerald-50 text-emerald-700", 숙직: "bg-blue-50 text-blue-700", 정상근무: "bg-violet-50 text-violet-500" };
 
-/** 마이페이지 — 내 근무·내 연차·내 출퇴근을 한 곳에서. 조회 중심이고 수정은 연락처만. */
+/** 마이페이지 — 내 근무·내 출퇴근을 한 곳에서. 조회 중심이고 수정은 연락처만.
+ *  연차 신청/잔여/신청내역은 워크캘린더 "연차" 탭으로 이동함(WorkCalendarSheet.jsx). */
 export function MyPage({ attendances, dutySchedules, onClose }) {
   const { name, role, selfId, profiles = [], signOut } = useContext(AuthContext);
   const me = profiles.find((p) => p.id === selfId) ?? {};
-  const [leaves, setLeaves] = useState([]);
-  const [applying, setApplying] = useState(false);
-  const [form, setForm] = useState({ kind: "연차", start: TODAY_STR, end: TODAY_STR, note: "" });
-  const [busy, setBusy] = useState(false);
   const [orgSettings, setOrgSettings] = useState({});
   const [prefs, setPrefs] = useState(me.notify_prefs ?? {});
   const [notifOpen, setNotifOpen] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
-
-  const year = TODAY_STR.slice(0, 4);
-  useEffect(() => {
-    if (!selfId) return;
-    supabase.from("leaves").select("*").eq("profile_id", selfId)
-      .gte("start_date", `${year}-01-01`).lte("start_date", `${year}-12-31`)
-      .order("start_date", { ascending: false })
-      .then(({ data }) => setLeaves(data ?? []));
-  }, [selfId, year]);
 
   // 회사에서 켜둔 알림만 개인이 조절할 수 있다
   useEffect(() => {
@@ -71,46 +59,6 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
     .filter((d) => d.profileId === selfId && d.dutyDate >= TODAY_STR)
     .sort((a, b) => a.dutyDate.localeCompare(b.dutyDate))
     .slice(0, 5);
-
-  const auto = annualLeaveDays(me.hire_date, `${year}-12-31`);
-  const grant = me.annual_leave_days ?? auto;
-  // 승인된 것만 차감한다 — 신청 중인 건을 미리 빼면 반려됐을 때 숫자가 틀어진다
-  const approved = leaves.filter((l) => (l.status ?? "승인") === "승인");
-  const waiting = leaves.filter((l) => l.status === "신청");
-  const used = approved.reduce((n, l) => n + Number(l.days), 0);
-  const left = grant == null ? null : grant - used;
-
-  // 반차는 0.5일, 그 외는 시작~종료 일수 (주말 제외는 회사 규정이 갈려 자동 계산하지 않는다)
-  const reqDays = form.kind === "반차"
-    ? 0.5
-    : Math.max(1, Math.floor((new Date(form.end) - new Date(form.start)) / 86400000) + 1);
-
-  // 신청 기간에 내 당직·숙직이 끼면 신청을 막는다 — 근무를 먼저 교환한 뒤 연차를 써야 한다.
-  const dutyConflicts = dutySchedules.filter(
-    (d) => d.profileId === selfId && d.dutyDate >= form.start && d.dutyDate <= form.end
-  );
-
-  async function submitLeave() {
-    if (dutyConflicts.length) return;
-    setBusy(true);
-    const { data, error } = await supabase.from("leaves").insert({
-      profile_id: selfId, start_date: form.start, end_date: form.end,
-      kind: form.kind, days: reqDays, note: form.note || null,
-      status: "신청", requested_by: selfId,
-    }).select();
-    setBusy(false);
-    if (error) { alert("신청 실패: " + error.message); return; }
-    setLeaves((prev) => [data[0], ...prev]);
-    setApplying(false);
-    setForm({ kind: "연차", start: TODAY_STR, end: TODAY_STR, note: "" });
-  }
-
-  async function cancelLeave(l) {
-    if (!confirm(`${l.start_date} ${l.kind} 신청을 취소할까요?`)) return;
-    await supabase.from("leaves").delete().eq("id", l.id);
-    setLeaves((prev) => prev.filter((x) => x.id !== l.id));
-  }
-
 
   const Card = ({ icon, title, children, extra }) => (
     <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -167,105 +115,6 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
               ))}
             </div>
           )}
-        </Card>
-
-        {/* 연차 */}
-        <Card
-          icon={<Plane size={13} />}
-          title={`${year}년 연차`}
-          extra={left != null && (
-            <span className="text-[11px] font-extrabold text-blue-700">잔여 {left}일</span>
-          )}
-        >
-          {grant == null ? (
-            <p className="text-xs text-slate-400 mb-2.5">
-              입사일이 등록되지 않아 연차 일수를 계산할 수 없습니다 (관리자 문의) — 신청은 가능합니다
-            </p>
-          ) : (
-            <>
-              <div className="h-2 bg-slate-100 rounded-full overflow-hidden mb-2">
-                <div className="h-full bg-blue-600" style={{ width: `${Math.min(100, (used / grant) * 100)}%` }} />
-              </div>
-              <p className="text-[11px] text-slate-500 mb-2.5">
-                부여 {grant}일 · 사용 {used}일
-                {waiting.length > 0 && <span className="text-amber-600 font-bold"> · 승인대기 {waiting.reduce((n, l) => n + Number(l.days), 0)}일</span>}
-              </p>
-            </>
-          )}
-
-              {leaves.length === 0 ? (
-                <p className="text-xs text-slate-400 mb-2">신청·사용 내역이 없습니다</p>
-              ) : (
-                <div className="space-y-1 border-t border-slate-100 pt-2 mb-2">
-                  {leaves.map((l) => {
-                    const st = l.status ?? "승인";
-                    return (
-                      <div key={l.id} className="flex items-center justify-between gap-2 text-[11px]">
-                        <span className="text-slate-600 min-w-0 truncate">
-                          {l.start_date.slice(5)}{l.end_date !== l.start_date && `~${l.end_date.slice(5)}`}
-                          <span className="ml-1.5 text-slate-400">{l.kind}</span>
-                          <span className={`ml-1.5 font-bold ${
-                            st === "신청" ? "text-amber-600" : st === "반려" ? "text-red-500" : "text-emerald-600"
-                          }`}>{st}</span>
-                        </span>
-                        <span className="flex items-center gap-1.5 shrink-0">
-                          <span className="font-bold text-slate-500">{l.days}일</span>
-                          {st === "신청" && (
-                            <button onClick={() => cancelLeave(l)} className="text-[10px] font-bold text-slate-400 underline">취소</button>
-                          )}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {!applying ? (
-                <button onClick={() => setApplying(true)}
-                  className="w-full bg-blue-50 text-blue-700 text-xs font-bold py-2.5 rounded-lg flex items-center justify-center gap-1">
-                  <Plus size={13} /> 연차 신청
-                </button>
-              ) : (
-                <div className="border-t border-slate-100 pt-3 space-y-2">
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {["연차", "반차", "병가"].map((k) => (
-                      <button key={k} onClick={() => setForm({ ...form, kind: k })}
-                        className={`py-2 rounded-lg text-xs font-bold border ${
-                          form.kind === k ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200"
-                        }`}>{k}</button>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <input type="date" value={form.start}
-                      onChange={(e) => setForm({ ...form, start: e.target.value, end: e.target.value > form.end ? e.target.value : form.end })}
-                      className="flex-1 border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-800" />
-                    <span className="text-[11px] text-slate-400">~</span>
-                    <input type="date" value={form.end} min={form.start} disabled={form.kind === "반차"}
-                      onChange={(e) => setForm({ ...form, end: e.target.value })}
-                      className="flex-1 border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-800 disabled:bg-slate-50" />
-                  </div>
-                  <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })}
-                    placeholder="사유 (선택)"
-                    className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-xs text-slate-800" />
-                  {left != null && reqDays > left && (
-                    <p className="text-[11px] font-bold text-red-500">잔여 {left}일보다 많이 신청했습니다</p>
-                  )}
-                  {dutyConflicts.length > 0 && (
-                    <p className="text-[11px] font-bold text-red-500 leading-relaxed">
-                      {dutyConflicts.map((d) => `${d.dutyDate.slice(5).replace("-", "/")} ${d.kind}`).join(", ")} 근무가 있습니다.
-                      먼저 근무 교환을 한 뒤 신청하세요.
-                    </p>
-                  )}
-                  <div className="flex gap-1.5">
-                    <button onClick={() => setApplying(false)} className="flex-1 text-xs font-bold text-slate-500 bg-slate-100 py-2.5 rounded-lg">취소</button>
-                    <button onClick={submitLeave} disabled={busy || dutyConflicts.length > 0 || (left != null && reqDays > left)}
-                      className="flex-1 text-xs font-bold text-white bg-blue-700 py-2.5 rounded-lg disabled:bg-slate-200">
-                      {busy ? "신청 중…" : dutyConflicts.length ? "근무일 포함" : `${reqDays}일 신청`}
-                    </button>
-                  </div>
-                </div>
-              )}
-
         </Card>
 
         {/* 알림 설정 — 회사가 켜둔 것 중에서 본인이 끌 수 있다 */}

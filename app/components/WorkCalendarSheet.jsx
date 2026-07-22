@@ -9,19 +9,18 @@ import { AuthContext } from "@/app/components/context";
 import { TODAY_STR } from "@/lib/constants";
 import { annualLeaveDays } from "@/lib/leave";
 import { DutyRoster } from "@/app/components/DutyRoster";
+import { Sheet } from "@/app/components/ui";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const ymOf = (y, m) => `${y}-${String(m + 1).padStart(2, "0")}`;
 
-// 연차 종류별 색 — 진한초록(연차)/연한초록(반차)/노랑(병가)/보라(공가). kind는 DB체크제약(031)과 동일한 4종.
-const LEAVE_STYLE = {
-  연차: "bg-emerald-600 text-white",
-  반차: "bg-emerald-100 text-emerald-700",
-  병가: "bg-yellow-100 text-yellow-700",
-  공가: "bg-violet-100 text-violet-700",
-};
-const LEAVE_DOT = { 연차: "bg-emerald-600", 반차: "bg-emerald-300", 병가: "bg-yellow-400", 공가: "bg-violet-400" };
-const LEAVE_LABEL = { 연차: "진한초록 — 연차", 반차: "연한초록 — 반차", 병가: "노랑 — 병가", 공가: "보라 — 공가" };
+// 캘린더에 뜨는 연차 태그 — 종류 구분 없이 전부 동일한 진한초록.
+const LEAVE_TAG_STYLE = "bg-emerald-600 text-white";
+// 반차 신청 시 note 맨 앞에 "오전"/"오후"를 적어두므로(submitLeave 참고) 캘린더 태그에 다시 꺼내 보여준다.
+function periodOf(note) {
+  const m = (note ?? "").match(/^(오전|오후)/);
+  return m ? m[1] : null;
+}
 
 // 연차·반차·병가·공가 캘린더 — 워크캘린더의 "연차" 탭. 당직·숙직 탭(DutyRoster)과 동일한
 // 상단 월 이동 바 + 전체보기/신청 컨트롤 바 + 캘린더 박스 레이아웃을 그대로 맞춘다.
@@ -76,7 +75,9 @@ function LeaveCalendarTab({ schedules = [] }) {
   }
 
   const nameOf = (id) => profiles.find((p) => p.id === id)?.name ?? "";
-  const visibleLeaves = onlyMine ? leaves.filter((l) => l.profile_id === selfId) : leaves;
+  // 승인된 연차만 캘린더에 노출 — 신청/반려 상태는 아직 확정이 아니라서 남들 눈에 보이면 안 된다.
+  const approvedOnCalendar = leaves.filter((l) => (l.status ?? "승인") === "승인");
+  const visibleLeaves = onlyMine ? approvedOnCalendar.filter((l) => l.profile_id === selfId) : approvedOnCalendar;
   const leavesOf = (iso) => visibleLeaves.filter((l) => l.start_date <= iso && iso <= l.end_date);
 
   // 반차는 0.5일, 그 외는 시작~종료 일수 (주말 제외는 회사 규정이 갈려 자동 계산하지 않는다)
@@ -127,7 +128,7 @@ function LeaveCalendarTab({ schedules = [] }) {
           {onlyMine ? "내 근무만" : "전체 보기"}
         </button>
         <button
-          onClick={() => setApplying((v) => !v)}
+          onClick={() => setApplying(true)}
           className="ml-auto text-[11px] font-bold text-white bg-blue-700 rounded-lg px-3.5 py-1.5 flex items-center gap-1"
         >
           <Plus size={12} /> 연차 신청
@@ -152,11 +153,14 @@ function LeaveCalendarTab({ schedules = [] }) {
                 <div key={d} className={`border-b border-r border-slate-100 min-h-[76px] p-1 ${isToday ? "bg-blue-50" : ""}`}>
                   <p className={`text-[10px] font-bold text-right pr-0.5 ${dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-slate-400"}`}>{d}</p>
                   <div className="space-y-0.5">
-                    {dayLeaves.slice(0, 3).map((l) => (
-                      <p key={l.id} className={`text-[9.5px] font-semibold rounded px-0.5 truncate ${LEAVE_STYLE[l.kind] ?? "bg-slate-100 text-slate-600"}`}>
-                        {nameOf(l.profile_id)} {l.kind}
-                      </p>
-                    ))}
+                    {dayLeaves.slice(0, 3).map((l) => {
+                      const period = l.kind === "반차" ? periodOf(l.note) : null;
+                      return (
+                        <p key={l.id} className={`text-[9.5px] font-semibold rounded px-0.5 truncate ${LEAVE_TAG_STYLE}`}>
+                          {nameOf(l.profile_id)} {l.kind}{period ? `(${period})` : ""}
+                        </p>
+                      );
+                    })}
                     {dayLeaves.length > 3 && <p className="text-[9px] text-slate-400 px-0.5">+{dayLeaves.length - 3}건</p>}
                   </div>
                 </div>
@@ -164,82 +168,6 @@ function LeaveCalendarTab({ schedules = [] }) {
             })}
           </div>
         </div>
-
-        <div className="flex items-center gap-3 flex-wrap mt-2.5 px-1">
-          {["연차", "반차", "병가", "공가"].map((k) => (
-            <span key={k} className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
-              <span className={`w-2 h-2 rounded-full ${LEAVE_DOT[k]}`} />
-              {LEAVE_LABEL[k]}
-            </span>
-          ))}
-        </div>
-
-        {applying && (
-          <div className="bg-white rounded-xl border border-slate-200 p-3.5 space-y-2 mt-3">
-            <div className="grid grid-cols-4 gap-1.5">
-              {["연차", "반차", "병가", "공가"].map((k) => (
-                <button
-                  key={k}
-                  onClick={() => setForm({ ...form, kind: k })}
-                  className={`py-2 rounded-lg text-xs font-bold border ${form.kind === k ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200"}`}
-                >
-                  {k}
-                </button>
-              ))}
-            </div>
-            {form.kind === "반차" && (
-              <div className="grid grid-cols-2 gap-1.5">
-                {["오전", "오후"].map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => setForm({ ...form, period: p })}
-                    className={`py-2 rounded-lg text-xs font-bold border ${form.period === p ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200"}`}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="flex items-center gap-1.5">
-              <input
-                type="date"
-                value={form.start}
-                onChange={(e) => setForm({ ...form, start: e.target.value, end: e.target.value > form.end ? e.target.value : form.end })}
-                className="flex-1 border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-800"
-              />
-              <span className="text-[11px] text-slate-400">~</span>
-              <input
-                type="date"
-                value={form.end}
-                min={form.start}
-                disabled={form.kind === "반차"}
-                onChange={(e) => setForm({ ...form, end: e.target.value })}
-                className="flex-1 border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-800 disabled:bg-slate-50"
-              />
-            </div>
-            <input
-              value={form.note}
-              onChange={(e) => setForm({ ...form, note: e.target.value })}
-              placeholder="사유 (선택)"
-              className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-xs text-slate-800"
-            />
-            {dutyConflicts.length > 0 && (
-              <p className="text-[11px] font-bold text-red-500 leading-relaxed">
-                {dutyConflicts.map((d) => `${d.dutyDate.slice(5).replace("-", "/")} ${d.kind}`).join(", ")} 근무가 있습니다. 먼저 근무 교환을 한 뒤 신청하세요.
-              </p>
-            )}
-            <div className="flex gap-1.5">
-              <button onClick={() => setApplying(false)} className="flex-1 text-xs font-bold text-slate-500 bg-slate-100 py-2.5 rounded-lg">취소</button>
-              <button
-                onClick={submitLeave}
-                disabled={busy || dutyConflicts.length > 0}
-                className="flex-1 text-xs font-bold text-white bg-blue-700 py-2.5 rounded-lg disabled:bg-slate-200"
-              >
-                {busy ? "신청 중…" : dutyConflicts.length ? "근무일 포함" : `${reqDays}일 신청`}
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* 전체보기/내근무만 토글과 무관 — 캘린더는 "이번 달 전체"고, 여기부터는 항상 "나"의 정보다 */}
         <div className="bg-white rounded-xl border border-slate-200 p-3.5 mt-3">
@@ -293,6 +221,72 @@ function LeaveCalendarTab({ schedules = [] }) {
           )}
         </div>
       </div>
+
+      {applying && (
+        <Sheet title="연차 신청" onClose={() => setApplying(false)}>
+          <div className="space-y-2">
+            <div className="grid grid-cols-4 gap-1.5">
+              {["연차", "반차", "병가", "공가"].map((k) => (
+                <button
+                  key={k}
+                  onClick={() => setForm({ ...form, kind: k })}
+                  className={`py-2 rounded-lg text-xs font-bold border ${form.kind === k ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200"}`}
+                >
+                  {k}
+                </button>
+              ))}
+            </div>
+            {form.kind === "반차" && (
+              <div className="grid grid-cols-2 gap-1.5">
+                {["오전", "오후"].map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setForm({ ...form, period: p })}
+                    className={`py-2 rounded-lg text-xs font-bold border ${form.period === p ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200"}`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={form.start}
+                onChange={(e) => setForm({ ...form, start: e.target.value, end: e.target.value > form.end ? e.target.value : form.end })}
+                className="flex-1 border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-800"
+              />
+              <span className="text-[11px] text-slate-400">~</span>
+              <input
+                type="date"
+                value={form.end}
+                min={form.start}
+                disabled={form.kind === "반차"}
+                onChange={(e) => setForm({ ...form, end: e.target.value })}
+                className="flex-1 border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-800 disabled:bg-slate-50"
+              />
+            </div>
+            <input
+              value={form.note}
+              onChange={(e) => setForm({ ...form, note: e.target.value })}
+              placeholder="사유 (선택)"
+              className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-xs text-slate-800"
+            />
+            {dutyConflicts.length > 0 && (
+              <p className="text-[11px] font-bold text-red-500 leading-relaxed">
+                {dutyConflicts.map((d) => `${d.dutyDate.slice(5).replace("-", "/")} ${d.kind}`).join(", ")} 근무가 있습니다. 먼저 근무 교환을 한 뒤 신청하세요.
+              </p>
+            )}
+            <button
+              onClick={submitLeave}
+              disabled={busy || dutyConflicts.length > 0}
+              className="w-full text-sm font-bold text-white bg-blue-700 py-2.5 rounded-lg disabled:bg-slate-200"
+            >
+              {busy ? "신청 중…" : dutyConflicts.length ? "근무일 포함" : `${reqDays}일 신청`}
+            </button>
+          </div>
+        </Sheet>
+      )}
     </div>
   );
 }
