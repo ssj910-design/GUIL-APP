@@ -3,7 +3,7 @@
 // 워크캘린더 — 홈 탭 "워크캘린더" 버튼 진입점. 정기점검 탭과 같은 구조로 위에 큰 제목,
 // 아래 서브탭(당직·숙직/연차)을 둔다(계획/처리/달력 서브탭과 동일한 패턴).
 import { useState, useEffect, useContext } from "react";
-import { X, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { AuthContext } from "@/app/components/context";
 import { TODAY_STR } from "@/lib/constants";
@@ -214,22 +214,20 @@ function LeaveCalendarTab({ schedules = [] }) {
   );
 }
 
-export function WorkCalendarSheet({ schedules, swaps, onGenerate, onSetPerson, onRequestSwap, onRespondSwap, onClose }) {
+// 다른 탭(고장접수 등)과 동일한 구조 — 상단 제목은 앱 셸의 공용 ScreenHeader가 맡고,
+// 여기서는 서브탭 바 + 내용만 그린다. 하단 네비게이터도 그대로 보이는 일반 탭이다.
+export function WorkCalendarSheet({ schedules, swaps, onGenerate, onSetPerson, onRequestSwap, onRespondSwap }) {
   const [subTab, setSubTab] = useState("당직·숙직");
+  const subTabs = ["당직·숙직", "연차"];
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-50 flex flex-col">
-      <div className="shrink-0 bg-blue-900 text-white px-4 py-3 flex items-center justify-between">
-        <p className="text-sm font-extrabold">워크캘린더</p>
-        <button onClick={onClose} className="p-1" aria-label="닫기"><X size={18} /></button>
-      </div>
-
-      <div className="flex border-b border-slate-100 shrink-0 bg-white">
-        {["당직·숙직", "연차"].map((t) => (
+    <div className="flex-1 flex flex-col overflow-hidden relative">
+      <div className="flex border-b border-slate-100 shrink-0 overflow-x-auto">
+        {subTabs.map((t) => (
           <button
             key={t}
             onClick={() => setSubTab(t)}
-            className={`flex-1 py-3 text-sm font-bold ${subTab === t ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}
+            className={`flex-1 py-3 text-xs font-bold shrink-0 px-1.5 whitespace-nowrap flex items-center justify-center gap-1 ${subTab === t ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}
           >
             {t}
           </button>
