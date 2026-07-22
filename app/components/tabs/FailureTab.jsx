@@ -381,10 +381,7 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
         </div>
         <div className="flex items-center justify-between gap-2 text-sm">
           <span className="text-slate-400 shrink-0">주소</span>
-          <span className="flex items-center gap-1.5 min-w-0">
-            <MapLinkButtons site={site} />
-            <span className="font-semibold text-slate-700 text-right truncate">{site?.address ?? "-"}</span>
-          </span>
+          <span className="font-semibold text-slate-700 text-right truncate min-w-0">{site?.address ?? "-"}</span>
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">신고자 전화번호</span>
@@ -457,39 +454,45 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
           </div>
         </div>
       )}
-      {/* 관리자는 직접 출동하지 않는다 — 미배정 건은 기사 배정, 이미 배정된 건은 재배정 */}
-      {stage === "pending" && role === "admin" ? (
-        onAssignOpen && (
-          <button
-            onClick={() => { onAssignOpen(failure); onClose(); }}
-            className="w-full bg-slate-800 text-white text-sm font-bold py-3 rounded-xl active:bg-slate-900"
-          >
-            {failure.assignee ? "재배정" : "기사 배정"}
-          </button>
-        )
-      ) : stage === "pending" && onDispatch && role !== "admin" ? (
-        <button
-          onClick={() => { onDispatch(failure); onClose(); }}
-          className="w-full bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800"
-        >
-          {failure.assignee ? "출동 응답" : "내가 출동하기"}
-        </button>
-      ) : null}
-      {stage === "dispatched" && onArrive && (
-        <button
-          onClick={() => { onArrive(failure); onClose(); }}
-          className="w-full bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800"
-        >
-          도착
-        </button>
-      )}
-      {stage === "arrived" && onOpenResult && (
-        <button
-          onClick={() => { onOpenResult(failure); onClose(); }}
-          className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl active:bg-emerald-700"
-        >
-          <Wrench size={15} strokeWidth={2.5} /> 고장처리결과 입력
-        </button>
+      {/* 티맵·카카오를 주 액션 버튼 좌측에 붙인다 (미배정 카드와 동일 레이아웃).
+          관리자는 직접 출동하지 않는다 — 미배정 건은 기사 배정, 이미 배정된 건은 재배정 */}
+      {stage !== "done" && (
+        <div className="flex items-center gap-2">
+          <MapLinkButtons site={site} />
+          {stage === "pending" && role === "admin" ? (
+            onAssignOpen && (
+              <button
+                onClick={() => { onAssignOpen(failure); onClose(); }}
+                className="flex-1 bg-slate-800 text-white text-sm font-bold py-3 rounded-xl active:bg-slate-900"
+              >
+                {failure.assignee ? "재배정" : "기사 배정"}
+              </button>
+            )
+          ) : stage === "pending" && onDispatch && role !== "admin" ? (
+            <button
+              onClick={() => { onDispatch(failure); onClose(); }}
+              className="flex-1 bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800"
+            >
+              {failure.assignee ? "출동 응답" : "내가 출동하기"}
+            </button>
+          ) : null}
+          {stage === "dispatched" && onArrive && (
+            <button
+              onClick={() => { onArrive(failure); onClose(); }}
+              className="flex-1 bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800"
+            >
+              도착
+            </button>
+          )}
+          {stage === "arrived" && onOpenResult && (
+            <button
+              onClick={() => { onOpenResult(failure); onClose(); }}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl active:bg-emerald-700"
+            >
+              <Wrench size={15} strokeWidth={2.5} /> 고장처리결과 입력
+            </button>
+          )}
+        </div>
       )}
     </Sheet>
     {photoViewer && (
