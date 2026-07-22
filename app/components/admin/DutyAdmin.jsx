@@ -120,13 +120,20 @@ export default function DutyAdmin({ data, setData }) {
     return rows;
   }
 
+  // 팝업이 열려 있는 동안 연월(genYm)이 바뀌면(팝업 안 화살표) 다시 계산해서 보여준다.
+  useEffect(() => {
+    if (!previewOpen) return;
+    let alive = true;
+    setPreviewLoading(true);
+    simulate(genYm, genMode, rosterOf(genMode)).then((rows) => {
+      if (alive) { setPreviewRows(rows); setPreviewLoading(false); }
+    });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewOpen, genYm, genMode]);
+
   async function openPreview() {
     setPreviewOpen(true);
-    setPreviewLoading(true);
-    const roster = rosterOf(genMode);
-    const rows = await simulate(genYm, genMode, roster);
-    setPreviewRows(rows);
-    setPreviewLoading(false);
   }
 
   // 미리보기 팝업의 "반영" — 순번·근무제 변경사항을 먼저 저장한 뒤, 그 순번으로 빈 칸을 채운다.
@@ -327,10 +334,16 @@ export default function DutyAdmin({ data, setData }) {
         <div className="bg-white w-full max-w-2xl max-h-[85vh] rounded-2xl p-5 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="text-sm font-extrabold text-slate-800">{gy}년 {gm}월 · {genMode} 반영 미리보기</p>
+              <p className="text-sm font-extrabold text-slate-800">{genMode} 반영 미리보기</p>
               <p className="text-[11px] text-slate-400 mt-0.5">이미 배정된 칸은 그대로, 새로 채워질 칸(파란 배경)만 새 순번으로 계산했습니다.</p>
             </div>
             <button onClick={() => setPreviewOpen(false)} className="p-1 text-slate-400 shrink-0" aria-label="닫기"><X size={16} /></button>
+          </div>
+
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <button onClick={() => shiftGenMonth(-1)} className="p-1 text-slate-400" aria-label="이전 달"><ChevronLeft size={18} /></button>
+            <span className="text-sm font-extrabold text-slate-700 w-24 text-center">{gy}년 {gm}월</span>
+            <button onClick={() => shiftGenMonth(1)} className="p-1 text-slate-400" aria-label="다음 달"><ChevronRight size={18} /></button>
           </div>
 
           {previewLoading ? (
