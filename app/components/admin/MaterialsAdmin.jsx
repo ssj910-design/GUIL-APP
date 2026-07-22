@@ -15,12 +15,76 @@ import { locOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal 
 const MATERIAL_TONE = { 승인대기: "blue", 지급완료: "green", 반려: "red" };
 const QUOTE_TONE = { 요청접수: "blue", 견적발행: "amber", 승인: "amber", 자재지급완료: "green" };
 
+// 지급완료 처리 시 만들어지는 연결 할 일(todos)의 담당자 — 요청 자체엔 담당기사 컬럼이 없고
+// todos.assignee(_id)에만 있어서(견적은 담당 기사 여러 명 가능) 여기서 조인해 이름을 뽑는다.
+function assigneeNames(data, type, id) {
+  const todos = (data.todos ?? []).filter((t) => (type === "material" ? t.materialRequestId === id : t.quoteRequestId === id));
+  if (!todos.length) return null;
+  return todos.map((t) => personOf(data, t.assigneeId, t.assignee)).join(", ");
+}
+
+function RequestDetailModal({ data, type, item, onClose }) {
+  const isMaterial = type === "material";
+  const rows = [
+    { label: "신청일", value: item.requestedDate },
+    { label: "현장 · 호기", value: locOf(data, item.unitId, item.siteName, item.elevatorNo) },
+    { label: isMaterial ? "자재" : "공사 내용", value: isMaterial ? item.part : item.constructionType },
+    ...(isMaterial ? [{ label: "긴급도", value: item.urgency }] : []),
+    { label: "신청 기사", value: personOf(data, item.requesterId, item.engineer) },
+    { label: "담당 기사", value: assigneeNames(data, type, item.id) ?? "미배정" },
+    { label: "상태", value: item.status },
+    ...(isMaterial ? [] : [
+      { label: "견적발행일", value: item.quoteIssuedDate ?? "-" },
+      { label: "승인일", value: item.approvedDate ?? "-" },
+    ]),
+    { label: "지급일", value: item.suppliedDate ?? "-" },
+  ];
+  if (item.note) rows.push({ label: "비고", value: item.note });
+  if (isMaterial && item.status === "반려" && item.rejectReason) rows.push({ label: "반려 사유", value: item.rejectReason });
+
+  return (
+    <Modal title={`${item.siteName ?? "-"} · ${isMaterial ? item.part : item.constructionType}`} onClose={onClose}>
+      <div className="space-y-2.5">
+        {rows.map((r) => (
+          <div key={r.label} className="flex justify-between gap-4 text-sm border-b border-slate-50 pb-2">
+            <span className="text-slate-400 shrink-0">{r.label}</span>
+            <span className="font-semibold text-slate-800 text-right">{r.value || "-"}</span>
+          </div>
+        ))}
+        {item.photoUrls?.length > 0 && (
+          <div>
+            <p className="text-xs font-bold text-slate-500 mt-3 mb-2">신청 사진 ({item.photoUrls.length}장)</p>
+            <div className="grid grid-cols-3 gap-2">
+              {item.photoUrls.map((url, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={i} src={url} alt="" className="w-full aspect-square rounded-lg object-cover border border-slate-200" />
+              ))}
+            </div>
+          </div>
+        )}
+        {item.supplyPhotoUrls?.length > 0 && (
+          <div>
+            <p className="text-xs font-bold text-slate-500 mt-3 mb-2">지급 사진 ({item.supplyPhotoUrls.length}장)</p>
+            <div className="grid grid-cols-3 gap-2">
+              {item.supplyPhotoUrls.map((url, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={i} src={url} alt="" className="w-full aspect-square rounded-lg object-cover border border-slate-200" />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 export default function MaterialsAdmin({ data, setData }) {
   const { materialRequests: allMaterialRequests, quoteRequests: allQuoteRequests } = data;
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
   const [payTarget, setPayTarget] = useState(null); // 지급완료 처리 중인 자재신청
   const [quoteSupplyTarget, setQuoteSupplyTarget] = useState(null); // 자재지급완료 처리 중인 견적요청
+  const [detail, setDetail] = useState(null); // { type: "material"|"quote", item }
 
   const query = search.trim();
   const materialRequests = allMaterialRequests.filter((m) =>
@@ -186,7 +250,11 @@ export default function MaterialsAdmin({ data, setData }) {
           {materialRequests.map((m) => (
             <tr key={m.id} className="border-b border-slate-50">
               <td className="pl-5 pr-3 py-2.5 text-slate-500 whitespace-nowrap">{m.requestedDate}</td>
-              <td className="px-3 py-2.5 font-semibold whitespace-nowrap">{locOf(data, m.unitId, m.siteName, m.elevatorNo)}</td>
+              <td className="px-3 py-2.5 font-semibold whitespace-nowrap">
+                <button onClick={() => setDetail({ type: "material", item: m })} className="hover:underline hover:text-blue-700 text-left">
+                  {locOf(data, m.unitId, m.siteName, m.elevatorNo)}
+                </button>
+              </td>
               <td className="px-3 py-2.5 text-slate-600">{m.part}</td>
               <td className="px-3 py-2.5">
                 {m.urgency === "긴급" ? <StatusBadge tone="red">긴급</StatusBadge> : <span className="text-slate-500 text-xs">{m.urgency}</span>}
@@ -221,7 +289,11 @@ export default function MaterialsAdmin({ data, setData }) {
           {quoteRequests.map((q) => (
             <tr key={q.id} className="border-b border-slate-50">
               <td className="pl-5 pr-3 py-2.5 text-slate-500 whitespace-nowrap">{q.requestedDate}</td>
-              <td className="px-3 py-2.5 font-semibold whitespace-nowrap">{locOf(data, q.unitId, q.siteName, q.elevatorNo)}</td>
+              <td className="px-3 py-2.5 font-semibold whitespace-nowrap">
+                <button onClick={() => setDetail({ type: "quote", item: q })} className="hover:underline hover:text-blue-700 text-left">
+                  {locOf(data, q.unitId, q.siteName, q.elevatorNo)}
+                </button>
+              </td>
               <td className="px-3 py-2.5 text-slate-600">{q.constructionType}</td>
               <td className="px-3 py-2.5 whitespace-nowrap">{personOf(data, q.requesterId, q.engineer)}</td>
               <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">
@@ -271,6 +343,10 @@ export default function MaterialsAdmin({ data, setData }) {
           onClose={() => setQuoteSupplyTarget(null)}
           onSubmit={async (input) => { await handleQuoteSupplyComplete(quoteSupplyTarget, input); setQuoteSupplyTarget(null); }}
         />
+      )}
+
+      {detail && (
+        <RequestDetailModal data={data} type={detail.type} item={detail.item} onClose={() => setDetail(null)} />
       )}
     </div>
   );
