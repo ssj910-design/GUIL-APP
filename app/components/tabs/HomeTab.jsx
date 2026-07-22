@@ -778,9 +778,10 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
       {detailTarget && (
         <FailureDetailSheet
           failure={detailTarget}
+          failures={failures}
           onClose={() => setDetailTarget(null)}
           onDispatch={setDispatchTarget}
-          onArrive={setArriveTarget}
+          onArrive={onArrive}
           onOpenResult={setResultTarget}
           onAssignOpen={setAssignTarget}
         />

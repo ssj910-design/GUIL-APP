@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle, Wrench, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, labelToSeq, formatUnitLabel, recentFailuresBySite } from "@/lib/utils";
+import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, labelToSeq, formatUnitLabel, unitHistory } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
 import { useLiveInspections } from "@/app/hooks/useLiveInspections";
 import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons } from "@/app/components/ui";
@@ -344,10 +344,11 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
 }
 
 
-export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onOpenResult, onAssignOpen }) {
+export function FailureDetailSheet({ failure, failures = [], onClose, onDispatch, onArrive, onOpenResult, onAssignOpen }) {
   const { role } = useContext(AuthContext);
   const sites = useContext(SitesContext);
   const site = sites.find((s) => s.id === failure.siteId);
+  const history = unitHistory(failures, failure);
   const stage = failureStage(failure);
   const { faultType, faultDetail } = parseErrorCode(failure.errorCode);
   const unitLabel = formatUnitLabel(failure.elevatorNo);
@@ -440,6 +441,29 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
             <span className="text-slate-400 shrink-0">비고</span>
             <span className="font-semibold text-slate-700 text-right">{failure.processNote}</span>
           </div>
+        )}
+      </div>
+      <div className="mb-4">
+        <p className="text-xs font-bold text-slate-500 mb-2 flex items-center gap-1"><Repeat size={12} strokeWidth={2.5} /> 이 호기 고장 이력 {history.length > 0 && `(${history.length})`}</p>
+        {history.length === 0 ? (
+          <p className="text-[13px] text-slate-400">이 호기의 다른 고장 이력이 없습니다.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {history.slice(0, 5).map((h) => {
+              const ec = parseErrorCode(h.errorCode);
+              const done = [h.faultCause, h.processContent].filter(Boolean).join(" → ");
+              return (
+                <li key={h.id} className="rounded-lg bg-slate-50 border border-slate-200/70 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2 text-[13px]">
+                    <span className="font-semibold text-slate-700 truncate">{fmtMD(h.createdAt)} · {ec.faultType}{ec.faultDetail && <span className="font-normal text-slate-500"> · {ec.faultDetail}</span>}</span>
+                    <span className={`shrink-0 text-[10px] font-bold ${h.status === "완료" ? "text-emerald-600" : "text-amber-600"}`}>{h.status}</span>
+                  </div>
+                  {done && <p className="text-[12px] text-slate-500 mt-0.5 truncate">{done}</p>}
+                </li>
+              );
+            })}
+            {history.length > 5 && <li className="text-[11px] text-slate-400 text-center pt-0.5">외 {history.length - 5}건</li>}
+          </ul>
         )}
       </div>
       {failure.photoUrls?.length > 0 && (
@@ -723,7 +747,7 @@ export function ArrivalResultModal({ failure, onConfirm, onClose }) {
 // 미배정 접수 카드 — 클릭 없이도 판단할 수 있게 상세를 카드에 박는다:
 // 거리(거리순 정렬)·접수시각·증상·주소·신고자·재발배지 + 카드에서 바로 출동/배정.
 // (모델·층수 같은 라이브 정보는 상세시트 유지 — 여기선 판단에 필요한 것만.)
-function FailureResponseCard({ f, dist, warnCount = 0, site, onOpenDetail, onDispatch, onAssignOpen }) {
+function FailureResponseCard({ f, dist, history = [], site, onOpenDetail, onDispatch, onAssignOpen }) {
   const stage = failureStage(f);
   const { faultType, faultDetail } = parseErrorCode(f.errorCode);
   const { role } = useContext(AuthContext);
@@ -735,7 +759,7 @@ function FailureResponseCard({ f, dist, warnCount = 0, site, onOpenDetail, onDis
         <div className="flex items-center justify-between gap-2 mb-1">
           <p className="font-bold text-slate-800 text-[15px] truncate">{f.siteName} · {unitLabel}</p>
           <span className="flex items-center gap-1 shrink-0">
-            {warnCount >= 3 && <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full" title={`최근 30일 ${warnCount}회 고장`}><Repeat size={10} strokeWidth={2.8} />{warnCount}</span>}
+            {history.length > 0 && <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${history.length >= 3 ? "text-red-600 bg-red-100" : "text-slate-500 bg-slate-100"}`} title={`이 호기 총 ${history.length}회 재발 · 직전 ${fmtMD(history[0].createdAt)}`}><Repeat size={10} strokeWidth={2.8} />{history.length} · {fmtMD(history[0].createdAt)}</span>}
             {f.escalation && <span className="text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{f.escalation}</span>}
           </span>
         </div>
@@ -869,6 +893,8 @@ function useSiteOf() {
 
 // dist: 기사 홈에서 미배정 고장까지의 거리(km). 있으면 거리 뱃지를 보여준다(없으면 생략).
 const fmtDist = (km) => (km == null ? null : km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`);
+// 이력 표시용 MM/DD (재발 배지·상세 이력 목록 공용)
+const fmtMD = (d) => { const x = new Date(d); return `${String(x.getMonth() + 1).padStart(2, "0")}/${String(x.getDate()).padStart(2, "0")}`; };
 export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispatch, onArrive, onOpenResult, onRefuse, onAssignOpen }) {
   const siteOf = useSiteOf();
   const stage = failureStage(f);
@@ -969,7 +995,6 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const selfLoc = engineers.find((e) => e.id === selfId);
   const selfCoord = selfLoc?.last_lat != null ? { lat: selfLoc.last_lat, lng: selfLoc.last_lng } : null;
-  const recentBySite = recentFailuresBySite(failures);
   const distOf = (f) => { const s = siteById.get(f.siteId); return distanceKm(selfCoord, s?.lat != null ? { lat: s.lat, lng: s.lng } : null); };
   // 미배정 미처리를 기사 위치 기준 가까운 순으로 (거리 못 구하면 뒤로)
   const list = failures.filter((f) => !f.assignee && f.status === "미처리").sort((a, b) => {
@@ -987,7 +1012,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
         ) : (
           list.map((f) => (
             <FailureResponseCard key={f.id} f={f}
-              dist={distOf(f)} warnCount={recentBySite.get(f.siteId)?.length ?? 0} site={siteById.get(f.siteId)}
+              dist={distOf(f)} history={unitHistory(failures, f)} site={siteById.get(f.siteId)}
               onOpenDetail={setDetailTarget} onDispatch={setDispatchTarget}
               onAssignOpen={role === "admin" ? setAssignTarget : null} />
           ))
@@ -997,6 +1022,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
       {detailTarget && (
         <FailureDetailSheet
           failure={detailTarget}
+          failures={failures}
           onClose={() => setDetailTarget(null)}
           onDispatch={setDispatchTarget}
           onArrive={onArrive}
@@ -1089,6 +1115,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
       {detailTarget && (
         <FailureDetailSheet
           failure={detailTarget}
+          failures={failures}
           onClose={() => setDetailTarget(null)}
           onDispatch={setDispatchTarget}
           onArrive={onArrive}
@@ -1215,7 +1242,7 @@ function FailureStatusOverview({ failures, onReassign }) {
         )}
       </div>
 
-      {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} />}
+      {detailTarget && <FailureDetailSheet failure={detailTarget} failures={failures} onClose={() => setDetailTarget(null)} />}
       {reassignTarget && (
         <AssignEngineerSheet failure={reassignTarget} failures={failures} onAssign={onReassign} attendances={attendances} todayLeaves={todayLeaves} onClose={() => setReassignTarget(null)} allowUnassign />
       )}
