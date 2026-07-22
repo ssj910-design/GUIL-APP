@@ -3,7 +3,8 @@ import { ShieldCheck, Package, Receipt, ListTodo, ChevronRight, Users, FileText,
 import { Badge, PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { SitesContext, AuthContext } from "@/app/components/context";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
-import { parsePartQty, formatPhone } from "@/lib/utils";
+import { parsePartQty, formatPhone, addDays } from "@/lib/utils";
+import { TODAY_STR } from "@/lib/constants";
 import { BillingHistoryScreen } from "@/app/components/tabs/BillingTab";
 import { TodoManageScreen } from "@/app/components/tabs/TodoTab";
 
@@ -509,6 +510,8 @@ function QuoteRequestsScreen({ quoteRequests, onAdvanceQuote, onAttachQuotePhoto
   const { engineerNames } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
   const [assigneesMap, setAssigneesMap] = useState({});
+  const [dueDateMap, setDueDateMap] = useState({});
+  const [descriptionMap, setDescriptionMap] = useState({});
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
@@ -557,6 +560,8 @@ function QuoteRequestsScreen({ quoteRequests, onAdvanceQuote, onAttachQuotePhoto
                 {q.status === "승인" && (() => {
                   const assignees = assigneesMap[q.id] ?? [q.engineer];
                   const canComplete = assignees.length > 0;
+                  const dueDate = dueDateMap[q.id] ?? addDays(TODAY_STR, 30);
+                  const description = descriptionMap[q.id] ?? "";
                   return (
                     <>
                       <div className="mb-2">
@@ -577,8 +582,27 @@ function QuoteRequestsScreen({ quoteRequests, onAdvanceQuote, onAttachQuotePhoto
                           onChange={(names) => setAssigneesMap((m) => ({ ...m, [q.id]: names }))}
                         />
                       </div>
+                      <div className="mb-2">
+                        <label className="text-[10px] font-bold text-slate-400 block mb-1">할 일 기한</label>
+                        <input
+                          type="date"
+                          className={inputCls}
+                          value={dueDate}
+                          onChange={(e) => setDueDateMap((m) => ({ ...m, [q.id]: e.target.value }))}
+                        />
+                      </div>
+                      <div className="mb-2">
+                        <label className="text-[10px] font-bold text-slate-400 block mb-1">내용</label>
+                        <textarea
+                          className={inputCls}
+                          rows={3}
+                          placeholder="담당 기사에게 전달할 내용을 입력하세요"
+                          value={description}
+                          onChange={(e) => setDescriptionMap((m) => ({ ...m, [q.id]: e.target.value }))}
+                        />
+                      </div>
                       <button
-                        onClick={() => canComplete && onCompleteQuoteSupply(q.id, assignees)}
+                        onClick={() => canComplete && onCompleteQuoteSupply(q.id, assignees, dueDate, description)}
                         disabled={!canComplete}
                         className={`w-full flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg ${
                           canComplete ? "bg-blue-700 text-white active:bg-blue-800" : "bg-slate-200 text-slate-400"
