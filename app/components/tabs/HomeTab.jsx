@@ -155,7 +155,7 @@ function AdminAttendanceCard({ attendances, engineers }) {
 
 // 출퇴근 체크 — 기사는 출근/퇴근·당직 버튼, 관리자는 오늘 출근 인원 요약.
 // 출근 시 현위치를 1회 받아 저장한다(고장 배정 시 가까운 기사 정렬용).
-function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseNight, onAttendance, onOpenRoster, swapCount = 0 }) {
+function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseNight, onAttendance }) {
   const { role, selfId, engineers } = useContext(AuthContext);
   const [checking, setChecking] = useState(false);
   const [geoModalDismissed, setGeoModalDismissed] = useState(false);
@@ -193,26 +193,10 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
     navigator.geolocation.getCurrentPosition(() => setGeoPerm("granted"), () => {}, { timeout: 8000 });
   }
 
-  const rosterBtn = onOpenRoster ? (
-    <button
-      onClick={onOpenRoster}
-      className="w-full mt-2 bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex items-center justify-between active:bg-slate-50"
-    >
-      <span className="text-xs font-bold text-slate-600">워크캘린더</span>
-      <span className="flex items-center gap-1.5">
-        {swapCount > 0 && (
-          <span className="text-[10px] font-extrabold text-white bg-red-500 rounded-full px-1.5 py-0.5">교환요청 {swapCount}</span>
-        )}
-        <span className="text-[11px] font-bold text-blue-700">보기 →</span>
-      </span>
-    </button>
-  ) : null;
-
   if (role === "admin") {
     return (
       <div className="px-5 pt-4">
         <AdminAttendanceCard attendances={attendances} engineers={engineers} />
-        {rosterBtn}
       </div>
     );
   }
@@ -326,9 +310,89 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
             {!done && <WorkEndRow onAttendance={onAttendance} dutyKind={dutyKind} />}
           </div>
         )}
-        {rosterBtn}
       </div>
     </>
+  );
+}
+
+const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+
+// 홈탭용 워크 캘린더 미리보기 — 관리자 대시보드의 WeekStrip(admin/WeekStrip.jsx)을 좁은
+// 모바일 화면에 맞게 압축한 버전. 카드 폭이 좁아 "당직 아무개" 같은 라벨은 안 들어가서
+// 색점(당직=초록/숙직=파랑/휴가=호박색)만으로 구분하고 이름만 보여준다. 오늘은 고정으로
+// 가운데 두고 앞뒤 3일씩 총 7칸을 가로 스크롤로 넘겨본다(폭이 375px 안팎이라 전부 한 화면에
+// 안 들어가는 게 정상 — 스와이프 전제).
+function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
+  const [duties, setDuties] = useState([]);
+  const [leaves, setLeaves] = useState([]);
+
+  const center = new Date(`${TODAY_STR}T00:00:00`);
+  const week = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(center);
+    d.setDate(center.getDate() + (i - 3));
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
+  const from = week[0], to = week[6];
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from("duty_schedules").select("*").gte("duty_date", from).lte("duty_date", to),
+      supabase.from("leaves").select("*").lte("start_date", to).gte("end_date", from),
+    ]).then(([d, l]) => {
+      setDuties(d.data ?? []);
+      setLeaves((l.data ?? []).filter((x) => (x.status ?? "승인") === "승인"));
+    });
+  }, [from, to]);
+
+  const nameOf = (id) => profiles.find((p) => p.id === id)?.name ?? "";
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 px-3 py-3">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-bold text-slate-600">워크 캘린더</p>
+        <span className="flex items-center gap-1.5">
+          {swapCount > 0 && (
+            <span className="text-[10px] font-extrabold text-white bg-red-500 rounded-full px-1.5 py-0.5">교환요청 {swapCount}</span>
+          )}
+          {onOpen && (
+            <button onClick={onOpen} className="text-[11px] font-bold text-blue-700">전체보기 →</button>
+          )}
+        </span>
+      </div>
+      <div className="flex gap-1.5 overflow-x-auto">
+        {week.map((d) => {
+          const dow = new Date(`${d}T00:00:00`).getDay();
+          const dutyDay = duties.filter((x) => x.duty_date === d && (x.kind === "당직" || x.kind === "숙직"));
+          const leaveDay = leaves.filter((l) => l.start_date <= d && d <= l.end_date);
+          return (
+            <div
+              key={d}
+              className={`shrink-0 w-[54px] rounded-lg border p-1.5 ${
+                d === TODAY_STR ? "border-blue-300 bg-blue-50" : "border-slate-100"
+              }`}
+            >
+              <p className={`text-[10px] font-bold text-center ${dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-slate-400"}`}>
+                {DOW[dow]} {Number(d.slice(8))}
+              </p>
+              <div className="mt-1 space-y-0.5">
+                {dutyDay.map((x) => (
+                  <p key={x.id} className="flex items-center gap-1 text-[9.5px] font-semibold text-slate-600">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${x.kind === "당직" ? "bg-emerald-500" : "bg-blue-500"}`} />
+                    <span className="truncate">{nameOf(x.profile_id)}</span>
+                  </p>
+                ))}
+                {leaveDay.map((l) => (
+                  <p key={l.id} className="flex items-center gap-1 text-[9.5px] font-semibold text-slate-600">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                    <span className="truncate">{nameOf(l.profile_id)}</span>
+                  </p>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -387,7 +451,7 @@ function WorkEndRow({ onAttendance, dutyKind }) {
 export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, onCloseNight, onAttendance, onOpenRoster, swapCount, inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, toast, todayLeaves = [] }) {
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
-  const { name: CURRENT_ENGINEER, role, selfId, engineers = [] } = useContext(AuthContext);
+  const { name: CURRENT_ENGINEER, role, selfId, engineers = [], profiles = [] } = useContext(AuthContext);
   // 기사 본인 위치 — 미배정 고장을 가까운 순으로 정렬·표시하는 기준.
   const selfLoc = engineers.find((e) => e.id === selfId);
   const selfCoord = selfLoc?.last_lat != null ? { lat: selfLoc.last_lat, lng: selfLoc.last_lng } : null;
@@ -472,7 +536,11 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
 
   return (
     <div className="flex-1 overflow-y-auto pb-4 relative">
-      {onAttendance && <AttendanceBar attendances={attendances} dutySchedules={dutySchedules} pendingNight={pendingNight} onCloseNight={onCloseNight} onAttendance={onAttendance} onOpenRoster={onOpenRoster} swapCount={swapCount} />}
+      {onAttendance && <AttendanceBar attendances={attendances} dutySchedules={dutySchedules} pendingNight={pendingNight} onCloseNight={onCloseNight} onAttendance={onAttendance} />}
+
+      <div className="px-5 pt-4">
+        <WorkCalendarMiniStrip profiles={profiles} onOpen={onOpenRoster} swapCount={swapCount} />
+      </div>
 
       {/* 고장 처리 현황 */}
       <div className="px-5 pt-4">
