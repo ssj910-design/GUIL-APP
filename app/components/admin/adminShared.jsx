@@ -1,7 +1,9 @@
 "use client";
 
 // 관리자 콘솔 공용 헬퍼 — 표기(호기·담당자)는 v2 FK 우선, 옛 라벨 fallback.
-import { X, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+import { useState } from "react";
+import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
 
 export const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
 
@@ -146,5 +148,86 @@ export function DateField({ value, onChange, fromYear = 1980, toYear = new Date(
       </div>
       <input type="date" className={`${inputCls} hidden sm:block`} value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
     </>
+  );
+}
+
+// 사진 그리드 — 상세보기 모달 전체 공용. 클릭하면 크게보기(좌우 이동, 낱장/전체 다운로드)가 뜬다.
+export function PhotoGrid({ urls = [], cols = 4, emptyText = "등록된 사진이 없습니다" }) {
+  const [viewerIndex, setViewerIndex] = useState(null);
+  if (!urls.length) return <p className="text-xs text-slate-400">{emptyText}</p>;
+  return (
+    <>
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+        {urls.map((url, i) => (
+          <img
+            key={i}
+            src={url}
+            alt=""
+            className="w-full aspect-square rounded-lg object-cover border border-slate-200 cursor-pointer hover:opacity-80 transition"
+            onClick={() => setViewerIndex(i)}
+          />
+        ))}
+      </div>
+      {viewerIndex != null && (
+        <PhotoLightbox urls={urls} index={viewerIndex} onIndexChange={setViewerIndex} onClose={() => setViewerIndex(null)} />
+      )}
+    </>
+  );
+}
+
+// 크게보기 — 좌우 화살표로 이동, 지금 보는 사진 한 장 또는 전체(zip) 다운로드.
+function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
+  const url = urls[index];
+
+  function prev() { onIndexChange((index - 1 + urls.length) % urls.length); }
+  function next() { onIndexChange((index + 1) % urls.length); }
+
+  async function downloadOne() {
+    try {
+      await downloadPhoto(url, `사진_${index + 1}.${extOf(url)}`);
+    } catch (err) {
+      alert("다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
+    }
+  }
+
+  async function downloadAll() {
+    try {
+      await downloadPhotosAsZip(urls, "사진.zip", "사진");
+    } catch (err) {
+      alert("전체 다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/85 flex flex-col" onClick={onClose}>
+      <div className="flex items-center justify-between px-4 py-3 text-white shrink-0" onClick={(e) => e.stopPropagation()}>
+        <span className="text-sm font-semibold">{index + 1} / {urls.length}</span>
+        <div className="flex items-center gap-2">
+          <button onClick={downloadOne} className="text-xs font-bold bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg">
+            이 사진 다운로드
+          </button>
+          {urls.length > 1 && (
+            <button onClick={downloadAll} className="text-xs font-bold bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg">
+              전체 다운로드
+            </button>
+          )}
+          <button onClick={onClose} className="p-1.5 text-white/80 hover:text-white"><X size={20} /></button>
+        </div>
+      </div>
+      <div className="flex-1 flex items-center justify-center relative px-4 min-h-0" onClick={(e) => e.stopPropagation()}>
+        {urls.length > 1 && (
+          <button onClick={prev} className="absolute left-2 md:left-6 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
+            <ChevronLeft size={24} />
+          </button>
+        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={url} alt="" className="max-w-full max-h-full object-contain" />
+        {urls.length > 1 && (
+          <button onClick={next} className="absolute right-2 md:right-6 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
+            <ChevronRight size={24} />
+          </button>
+        )}
+      </div>
+    </div>
   );
 }

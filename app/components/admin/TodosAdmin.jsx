@@ -10,7 +10,7 @@ import { TODAY_STR } from "@/lib/constants";
 import { addDays } from "@/lib/utils";
 import {
   locOf, personOf, StatusBadge, AdminTable, FilterPills,
-  Modal, SortableTh, sortRows, inputCls,
+  Modal, SortableTh, sortRows, inputCls, PhotoGrid,
 } from "@/app/components/admin/adminShared";
 
 const SOURCE_LABEL = { material: "자재", quote: "견적", manual: "수동" };
@@ -101,15 +101,7 @@ function TodoDetailModal({ t, data, onClose, onSave }) {
       </div>
       <div>
         <p className="text-xs font-bold text-slate-500 mb-2">지급된 자재 사진 ({t.photoUrls?.length ?? 0}장)</p>
-        {t.photoUrls?.length > 0 ? (
-          <div className="grid grid-cols-3 gap-2">
-            {t.photoUrls.map((url, i) => (
-              <img key={i} src={url} alt="" className="w-full aspect-square rounded-lg object-cover border border-slate-200" />
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-slate-400">등록된 사진이 없습니다</p>
-        )}
+        <PhotoGrid urls={t.photoUrls ?? []} />
       </div>
       <div className="flex justify-end mt-4">
         <button disabled={saving || !form.title.trim()} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">

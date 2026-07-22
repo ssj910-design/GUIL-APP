@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto } from "@/lib/photos";
 import { unitIdFor, addDays } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
-import { locOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal } from "@/app/components/admin/adminShared";
+import { locOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid } from "@/app/components/admin/adminShared";
 
 const MATERIAL_TONE = { 승인대기: "blue", 지급완료: "green", 반려: "red", 교체완료: "indigo" };
 const QUOTE_TONE = { 요청접수: "blue", 견적발행: "amber", 승인: "amber", 지급완료: "green", 교체완료: "indigo" };
@@ -714,16 +714,7 @@ function RequestDetailModal({ target, data, onClose }) {
 
       <div>
         <p className="text-xs font-bold text-slate-500 mb-2">사진 ({photos.length}장)</p>
-        {photos.length === 0 ? (
-          <p className="text-xs text-slate-400">등록된 사진이 없습니다</p>
-        ) : (
-          <div className="grid grid-cols-4 gap-2">
-            {photos.map((url, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img key={i} src={url} alt="" className="w-full aspect-square rounded-lg object-cover border border-slate-200" />
-            ))}
-          </div>
-        )}
+        <PhotoGrid urls={photos} />
       </div>
     </Modal>
   );
