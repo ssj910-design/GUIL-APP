@@ -95,8 +95,8 @@ export default function AdminApp() {
       </header>
       {navOpen && <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={() => setNavOpen(false)} />}
 
-      {/* 사이드바 — 모바일에선 드로어 */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-56 bg-blue-950 text-white flex flex-col transition-transform lg:static lg:shrink-0 lg:translate-x-0 ${navOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      {/* 사이드바 — 모바일에선 드로어, PC에선 스크롤해도 안 움직이게 고정 */}
+      <aside className={`fixed inset-y-0 left-0 z-50 w-56 bg-blue-950 text-white flex flex-col transition-transform lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${navOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="px-5 py-5 border-b border-blue-900">
           <p className="font-bold tracking-tight">구일엘리베이터(주)</p>
           <p className="text-xs text-blue-300 mt-0.5">관리자 콘솔</p>
