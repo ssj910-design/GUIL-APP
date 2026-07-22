@@ -6,7 +6,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
-import { DutyRoster, DutySwapNotice } from "@/app/components/DutyRoster";
+import { DutySwapNotice } from "@/app/components/DutyRoster";
+import { WorkCalendarSheet } from "@/app/components/WorkCalendarSheet";
 import { MyPage } from "@/app/components/MyPage";
 import { simulateSms } from "@/lib/sms";
 import { ScreenHeader } from "@/app/components/ui";
@@ -1617,7 +1618,7 @@ export default function App() {
           )}
 
           {rosterOpen && (
-            <DutyRoster
+            <WorkCalendarSheet
               schedules={dutySchedules}
               swaps={dutySwaps}
               onGenerate={handleGenerateDuty}

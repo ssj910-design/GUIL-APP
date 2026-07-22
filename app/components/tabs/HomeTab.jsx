@@ -198,7 +198,7 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
       onClick={onOpenRoster}
       className="w-full mt-2 bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex items-center justify-between active:bg-slate-50"
     >
-      <span className="text-xs font-bold text-slate-600">당직 · 숙직 근무표</span>
+      <span className="text-xs font-bold text-slate-600">워크캘린더</span>
       <span className="flex items-center gap-1.5">
         {swapCount > 0 && (
           <span className="text-[10px] font-extrabold text-white bg-red-500 rounded-full px-1.5 py-0.5">교환요청 {swapCount}</span>

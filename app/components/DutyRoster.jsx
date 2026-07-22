@@ -72,7 +72,7 @@ export function DutySwapNotice({ swaps, schedules, onSeen }) {
   );
 }
 
-export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onRequestSwap, onRespondSwap, onClose, embedded = false }) {
+export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onRequestSwap, onRespondSwap, onClose, embedded = false, showControls = !embedded }) {
   const { role, selfId, engineers } = useContext(AuthContext);
   const today = new Date(`${TODAY_STR}T00:00:00`);
   const [cursor, setCursor] = useState({ y: today.getFullYear(), m: today.getMonth() });
@@ -98,6 +98,10 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
   const monthKey = ymOf(y, m);
   const inMonth = schedules.filter((s) => s.dutyDate.startsWith(monthKey));
   const cellOf = (iso, kind) => inMonth.find((s) => s.dutyDate === iso && s.kind === kind);
+  // 정상근무(보라)는 관리자가 이 달을 주4일제로 생성했을 때만 칸이 생긴다 — 주5일제 달엔
+  // 애초에 정상근무 레코드가 없으니 그걸로 판단해 범례·칸을 통째로 숨긴다.
+  const monthHasNormalWork = inMonth.some((s) => s.kind === "정상근무");
+  const visibleKinds = monthHasNormalWork ? KINDS : KINDS.filter((k) => k !== "정상근무");
 
   // 나에게 온 교환 요청 (대기 중)
   const incoming = swaps.filter((w) => w.status === "대기" && w.targetId === selfId);
@@ -147,7 +151,7 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
         </button>
       </div>
 
-      {role !== "admin" && !embedded && (
+      {role !== "admin" && showControls && (
         <div className="shrink-0 bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-2">
           <button
             onClick={() => setOnlyMine((v) => !v)}
@@ -200,18 +204,6 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
           </div>
         )}
 
-        {/* 범례 — 무슨 색이 무슨 근무인지 */}
-        {inMonth.length > 0 && (
-          <div className="flex items-center gap-3 flex-wrap mb-2 px-1">
-            {KINDS.map((k) => (
-              <span key={k} className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
-                <span className={`w-2 h-2 rounded-full ${KIND_DOT[k]}`} />
-                {k === "당직" ? "초록 — 당직" : k === "숙직" ? "파랑 — 숙직" : "보라 — 정상근무"}
-              </span>
-            ))}
-          </div>
-        )}
-
         {inMonth.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 py-8 px-5 text-center">
             <p className="text-xs text-slate-400">{y}년 {m + 1}월 근무표가 없습니다</p>
@@ -246,9 +238,9 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
                       {HOLIDAY[iso] && <span className="float-left text-[8.5px] text-red-400 font-bold max-w-[70%] truncate">{HOLIDAY[iso]}</span>}
                       {d}
                     </p>
-                    {KINDS.map((kind) => {
+                    {visibleKinds.map((kind) => {
                       const cell = cellOf(iso, kind);
-                      // 정상근무는 배치가 없으면 기사 화면에서 숨긴다 (주5일제 표에선 늘 비어 있음)
+                      // 정상근무는 배치가 없으면 기사 화면에서 숨긴다 (해당 요일에 아직 미배정인 칸)
                       if (kind === "정상근무" && !cell?.profileId && role !== "admin") return null;
                       // '내 근무만' 켜면 남의 근무는 회색 점으로 축약해 내 일정이 눈에 띄게 한다
                       if (onlyMine && cell?.profileId && cell.profileId !== selfId) {
@@ -277,9 +269,21 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
           </div>
         )}
 
+        {/* 범례 — 무슨 색이 무슨 근무인지 (달력 아래 배치) */}
+        {inMonth.length > 0 && (
+          <div className="flex items-center gap-3 flex-wrap mt-2.5 px-1">
+            {visibleKinds.map((k) => (
+              <span key={k} className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
+                <span className={`w-2 h-2 rounded-full ${KIND_DOT[k]}`} />
+                {k === "당직" ? "초록 — 당직" : k === "숙직" ? "파랑 — 숙직" : "보라 — 정상근무"}
+              </span>
+            ))}
+          </div>
+        )}
+
         <p className="text-[10px] text-slate-400 mt-2.5 px-1 leading-relaxed">
           이름 옆 숫자는 기사 순번입니다.
-          {role === "admin" ? " 칸을 누르면 담당자를 바꿀 수 있습니다." : " 위 「근무 교환하기」로 목록에서 고르거나, 달력에서 내 근무 → 상대 근무를 눌러도 됩니다."}
+          {role === "admin" && " 칸을 누르면 담당자를 바꿀 수 있습니다."}
         </p>
         {role === "admin" && inMonth.length > 0 && (
           <button
