@@ -2,6 +2,7 @@
 
 // 관리자 콘솔 공용 헬퍼 — 표기(호기·담당자)는 v2 FK 우선, 옛 라벨 fallback.
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
 
@@ -198,7 +199,9 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
     }
   }
 
-  return (
+  // 사이드바(z-50)에 화살표가 가려지지 않도록 body에 바로 붙인다 — 이 div는 관리자 콘솔
+  // 레이아웃(사이드바·본문) 트리 밖에서 렌더링되어 항상 전체 뷰포트 기준으로 뜬다.
+  return createPortal(
     <div className="fixed inset-0 z-[70] bg-black/85 flex flex-col" onClick={onClose}>
       <div className="flex items-center justify-between px-4 py-3 text-white shrink-0" onClick={(e) => e.stopPropagation()}>
         <span className="text-sm font-semibold">{index + 1} / {urls.length}</span>
@@ -228,6 +231,7 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
           </button>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

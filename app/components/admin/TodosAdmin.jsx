@@ -6,11 +6,12 @@
 import { useState } from "react";
 import { Plus, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { uploadPhoto } from "@/lib/photos";
 import { TODAY_STR } from "@/lib/constants";
 import { addDays } from "@/lib/utils";
 import {
   locOf, personOf, StatusBadge, AdminTable, FilterPills,
-  Modal, SortableTh, sortRows, inputCls, PhotoGrid,
+  Modal, SortableTh, sortRows, inputCls,
 } from "@/app/components/admin/adminShared";
 
 const SOURCE_LABEL = { material: "자재", quote: "견적", manual: "수동" };
@@ -31,12 +32,29 @@ function TodoDetailModal({ t, data, onClose, onSave }) {
     done: t.done,
   });
   const [saving, setSaving] = useState(false);
+  const [photos, setPhotos] = useState(t.photoUrls ?? []);
+  const [uploading, setUploading] = useState(false);
   const siteUnits = units.filter((u) => u.siteId === form.siteId);
+
+  async function handleFiles(e) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const urls = await Promise.all(files.map((f) => uploadPhoto(f, `todos/${t.id}`)));
+      setPhotos((p) => [...p, ...urls]);
+    } catch (err) {
+      alert("사진 업로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  }
 
   async function save() {
     if (!form.title.trim()) return;
     setSaving(true);
-    await onSave(t, form);
+    await onSave(t, { ...form, photoUrls: photos });
     setSaving(false);
     onClose();
   }
@@ -100,8 +118,25 @@ function TodoDetailModal({ t, data, onClose, onSave }) {
         </div>
       </div>
       <div>
-        <p className="text-xs font-bold text-slate-500 mb-2">지급된 자재 사진 ({t.photoUrls?.length ?? 0}장)</p>
-        <PhotoGrid urls={t.photoUrls ?? []} />
+        <p className="text-xs font-bold text-slate-500 mb-2">사진 ({photos.length}장)</p>
+        <div className="flex flex-wrap gap-1.5 mb-1.5">
+          {photos.map((url, i) => (
+            <div key={i} className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+              <button
+                onClick={() => setPhotos((p) => p.filter((_, idx) => idx !== i))}
+                className="absolute -top-1.5 -right-1.5 bg-slate-800 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+        <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 cursor-pointer">
+          사진 추가
+          <input type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} disabled={uploading} />
+        </label>
       </div>
       <div className="flex justify-end mt-4">
         <button disabled={saving || !form.title.trim()} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
@@ -116,12 +151,30 @@ function AssignTodoModal({ data, onClose, onCreate }) {
   const { sites, units, profiles } = data;
   const engineers = profiles.filter((p) => p.role === "engineer");
   const [form, setForm] = useState({ siteId: "", unitId: "", title: "", description: "", assigneeId: "", dueDate: addDays(TODAY_STR, 7) });
+  const [photos, setPhotos] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [folderToken] = useState(() => Date.now());
   const siteUnits = units.filter((u) => u.siteId === form.siteId);
   const valid = form.siteId && form.title.trim() && form.assigneeId;
 
+  async function handleFiles(e) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const urls = await Promise.all(files.map((f) => uploadPhoto(f, `todos/assign-${folderToken}`)));
+      setPhotos((p) => [...p, ...urls]);
+    } catch (err) {
+      alert("사진 업로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  }
+
   async function submit() {
     if (!valid) return;
-    await onCreate(form);
+    await onCreate({ ...form, photoUrls: photos });
     onClose();
   }
 
@@ -163,8 +216,29 @@ function AssignTodoModal({ data, onClose, onCreate }) {
             <input className={inputCls} type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
           </div>
         </div>
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">사진 (선택)</p>
+          <div className="flex flex-wrap gap-1.5 mb-1.5">
+            {photos.map((url, i) => (
+              <div key={i} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+                <button
+                  onClick={() => setPhotos((p) => p.filter((_, idx) => idx !== i))}
+                  className="absolute -top-1.5 -right-1.5 bg-slate-800 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+          <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 cursor-pointer">
+            사진 추가
+            <input type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} disabled={uploading} />
+          </label>
+        </div>
         <div className="flex justify-end pt-2">
-          <button disabled={!valid} onClick={submit} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
+          <button disabled={!valid || uploading} onClick={submit} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
             배정하기
           </button>
         </div>
@@ -176,14 +250,16 @@ function AssignTodoModal({ data, onClose, onCreate }) {
 export default function TodosAdmin({ data, setData }) {
   const { todos, sites, units, profiles } = data;
   const [view, setView] = useState("open");
+  const [sourceFilter, setSourceFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState(null);
   const [detail, setDetail] = useState(null);
   const [assigning, setAssigning] = useState(false);
 
+  const viewFiltered = todos.filter((t) => (view === "open" ? !t.done : true));
   const q = search.trim();
-  const rows = todos
-    .filter((t) => (view === "open" ? !t.done : true))
+  const rows = viewFiltered
+    .filter((t) => sourceFilter === "all" || t.source === sourceFilter)
     .filter((t) => !q || (t.description ?? "").includes(q) || (t.title ?? "").includes(q) || locOf(data, t.unitId, t.siteName, t.elevatorNo).includes(q) || personOf(data, t.assigneeId, t.assignee).includes(q));
 
   const getVal = (t, key) => {
@@ -204,11 +280,13 @@ export default function TodosAdmin({ data, setData }) {
     const unit = units.find((u) => u.id === form.unitId);
     const site = sites.find((s) => s.id === form.siteId);
     const engineer = profiles.find((p) => p.id === form.assigneeId);
+    const photoUrls = form.photoUrls ?? [];
     const patch = {
       title: form.title.trim(), description: form.description || null,
       site_name: site?.name ?? null, elevator_no: unit?.unitNo ?? null, unit_id: form.unitId || null,
       assignee: engineer?.name ?? null, assignee_id: form.assigneeId || null,
       assigned_date: form.assignedDate || null, due_date: form.dueDate || null, done: form.done,
+      photo_count: photoUrls.length, photo_urls: photoUrls.length ? photoUrls : null,
     };
     const { error } = await supabase.from("todos").update(patch).eq("id", t.id);
     if (error) { alert("저장 실패: " + error.message); return; }
@@ -220,6 +298,7 @@ export default function TodosAdmin({ data, setData }) {
         siteName: patch.site_name, elevatorNo: patch.elevator_no, unitId: patch.unit_id,
         assignee: patch.assignee, assigneeId: patch.assignee_id,
         assignedDate: patch.assigned_date, dueDate: patch.due_date, done: patch.done,
+        photoCount: patch.photo_count, photoUrls,
       } : x)),
     }));
   }
@@ -234,11 +313,13 @@ export default function TodosAdmin({ data, setData }) {
     const site = sites.find((s) => s.id === form.siteId);
     const engineer = profiles.find((p) => p.id === form.assigneeId);
     const id = "todo-manual-" + Date.now();
+    const photoUrls = form.photoUrls ?? [];
     const row = {
       id, source: "manual", title: form.title.trim(), description: form.description || null,
       site_name: site?.name ?? null, elevator_no: unit?.unitNo ?? null, unit_id: form.unitId || null,
       assignee: engineer?.name ?? null, assignee_id: form.assigneeId || null,
       assigned_date: TODAY_STR, due_date: form.dueDate || null, done: false,
+      photo_count: photoUrls.length, photo_urls: photoUrls.length ? photoUrls : null,
     };
     const { error } = await supabase.from("todos").insert(row);
     if (error) { alert("배정 실패: " + error.message); return; }
@@ -249,7 +330,7 @@ export default function TodosAdmin({ data, setData }) {
         siteName: row.site_name, elevatorNo: row.elevator_no, unitId: row.unit_id,
         assignee: row.assignee, assigneeId: row.assignee_id,
         assignedDate: row.assigned_date, dueDate: row.due_date, done: false,
-        photoCount: 0, photoUrls: [], part: null, materialRequestId: null, quoteRequestId: null,
+        photoCount: photoUrls.length, photoUrls, part: null, materialRequestId: null, quoteRequestId: null,
       }, ...prev.todos],
     }));
   }
@@ -257,15 +338,27 @@ export default function TodosAdmin({ data, setData }) {
   return (
     <div className="max-w-6xl">
       <h1 className="text-xl font-extrabold mb-4">할 일 관리</h1>
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <FilterPills
-          value={view}
-          onChange={setView}
-          options={[
-            { value: "open", label: "미완료", count: todos.filter((t) => !t.done).length },
-            { value: "all", label: "전체", count: todos.length },
-          ]}
-        />
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <FilterPills
+            value={view}
+            onChange={setView}
+            options={[
+              { value: "open", label: "미완료", count: todos.filter((t) => !t.done).length },
+              { value: "all", label: "전체", count: todos.length },
+            ]}
+          />
+          <FilterPills
+            value={sourceFilter}
+            onChange={setSourceFilter}
+            options={[
+              { value: "all", label: "전체", count: viewFiltered.length },
+              { value: "material", label: "자재", count: viewFiltered.filter((t) => t.source === "material").length },
+              { value: "quote", label: "견적", count: viewFiltered.filter((t) => t.source === "quote").length },
+              { value: "manual", label: "수동", count: viewFiltered.filter((t) => t.source === "manual").length },
+            ]}
+          />
+        </div>
         <div className="flex items-center gap-2">
           <div className="relative">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -281,37 +374,35 @@ export default function TodosAdmin({ data, setData }) {
         <table className="w-full min-w-[52rem] text-sm">
           <thead>
             <tr className="text-xs text-slate-400 border-b border-slate-100">
-              <SortableTh label="구분" sortKey="source" sort={sort} setSort={setSort} className="pl-5" />
+              <th className="pl-5 w-8" />
+              <SortableTh label="구분" sortKey="source" sort={sort} setSort={setSort} />
               <SortableTh label="할일" sortKey="title" sort={sort} setSort={setSort} />
               <SortableTh label="현장 · 호기" sortKey="loc" sort={sort} setSort={setSort} />
               <SortableTh label="담당자" sortKey="person" sort={sort} setSort={setSort} />
               <SortableTh label="배정일" sortKey="assignedDate" sort={sort} setSort={setSort} />
               <SortableTh label="기한" sortKey="dueDate" sort={sort} setSort={setSort} />
               <SortableTh label="상태" sortKey="done" sort={sort} setSort={setSort} />
-              <th className="w-24" />
             </tr>
           </thead>
           <tbody>
             {sortedRows.map((t) => (
               <tr key={t.id} className={`border-b border-slate-50 ${t.done ? "opacity-50" : ""} cursor-pointer hover:bg-slate-50`} onClick={() => setDetail(t)}>
-                <td className="pl-5 pr-3 py-2.5"><StatusBadge tone={t.source === "manual" ? "slate" : "blue"}>{SOURCE_LABEL[t.source] ?? t.source}</StatusBadge></td>
+                <td className="pl-5 pr-2 py-2.5" onClick={(e) => e.stopPropagation()}>
+                  <input type="checkbox" checked={t.done} onChange={() => toggle(t)} className="w-4 h-4 rounded border-slate-300 cursor-pointer accent-blue-700" />
+                </td>
+                <td className="px-3 py-2.5"><StatusBadge tone={t.source === "manual" ? "slate" : "blue"}>{SOURCE_LABEL[t.source] ?? t.source}</StatusBadge></td>
                 <td className="px-3 py-2.5 font-semibold">{t.title}</td>
                 <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{locOf(data, t.unitId, t.siteName, t.elevatorNo)}</td>
                 <td className="px-3 py-2.5 whitespace-nowrap">{personOf(data, t.assigneeId, t.assignee)}</td>
                 <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{t.assignedDate}</td>
                 <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{t.dueDate ?? "-"}</td>
                 <td className="px-3 py-2.5">{t.done ? <StatusBadge tone="green">완료</StatusBadge> : <StatusBadge tone="amber">진행</StatusBadge>}</td>
-                <td className="px-3 py-2.5 text-right pr-4">
-                  <button onClick={(e) => { e.stopPropagation(); toggle(t); }} className="text-xs font-bold text-slate-500 border border-slate-200 rounded-lg px-2.5 py-1.5">
-                    {t.done ? "완료 취소" : "완료 처리"}
-                  </button>
-                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="text-[10px] text-slate-400 mt-2">* 자재·견적 할일의 정상 완료 경로는 기사 비용청구입니다. 완료 처리 버튼은 관리자 예외 처리용.</p>
+      <p className="text-[10px] text-slate-400 mt-2">* 자재·견적 할일의 정상 완료 경로는 기사 비용청구입니다. 체크박스는 관리자 예외 처리용.</p>
 
       {detail && <TodoDetailModal t={detail} data={data} onClose={() => setDetail(null)} onSave={saveTodoDetail} />}
       {assigning && <AssignTodoModal data={data} onClose={() => setAssigning(false)} onCreate={createTodo} />}
