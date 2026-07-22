@@ -506,6 +506,7 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
 }
 
 
+const ETA_OPTIONS = Array.from({ length: 12 }, (_, i) => (i + 1) * 10);
 
 
 // 관리자용 기사 배정 시트 — 기사별 현재 상태(출동중/처리중) 배지와 함께 선택
@@ -604,39 +605,23 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allo
 
 
 export function DispatchEtaModal({ failure, onConfirm, onClose }) {
-  // 자주 쓰는 6개는 원터치 그리드, 그 이상(드묾)은 직접 입력. 12개 셀렉트 스크롤을 없앤다.
-  const QUICK = [10, 20, 30, 40, 50, 60];
-  const [eta, setEta] = useState(null);
-  const [custom, setCustom] = useState("");
-  const value = custom ? parseInt(custom, 10) : eta;
-  const valid = value != null && value > 0;
+  const [eta, setEta] = useState("");
+  const valid = eta !== "";
   return (
-    <Sheet title="도착 예정 시간" onClose={onClose}>
+    <Sheet title="도착 예정 시간 입력" onClose={onClose}>
       <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {formatUnitLabel(failure.elevatorNo)}</p>
-      <label className="text-xs font-bold text-slate-600 mb-2 block">도착까지 약 *</label>
-      <div className="grid grid-cols-3 gap-2 mb-3">
-        {QUICK.map((m) => {
-          const on = eta === m && !custom;
-          return (
-            <button key={m} type="button" onClick={() => { setEta(m); setCustom(""); }}
-              className={`py-3.5 rounded-xl text-sm font-extrabold border transition-colors ${on ? "bg-blue-700 text-white border-blue-700" : "bg-white text-slate-700 border-slate-200 active:bg-slate-50"}`}>
-              {m}분
-            </button>
-          );
-        })}
-      </div>
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-xs font-bold text-slate-500 shrink-0">그 이상 직접</span>
-        <input type="text" inputMode="numeric" value={custom} placeholder="분 입력"
-          onChange={(e) => { setCustom(e.target.value.replace(/[^0-9]/g, "").slice(0, 3)); setEta(null); }}
-          className={`${inputCls} flex-1`} />
-      </div>
+      <Field label="도착 예정 시간 *">
+        <select value={eta} onChange={(e) => setEta(e.target.value)} className={inputCls}>
+          <option value="">선택해주세요</option>
+          {ETA_OPTIONS.map((m) => (
+            <option key={m} value={m}>{m}분 후</option>
+          ))}
+        </select>
+      </Field>
       <p className="text-xs font-bold text-orange-600 bg-orange-50 rounded-lg px-3 py-2.5 mb-4 leading-relaxed">
         ⚠️ 확인을 누르면 고객에게 도착 시간이 문자로 자동 발송됩니다
       </p>
-      <PrimaryButton onClick={() => valid && onConfirm(value)} disabled={!valid}>
-        {valid ? `${value}분 후 도착 · 출동 확정` : "출동 확정"}
-      </PrimaryButton>
+      <PrimaryButton onClick={() => valid && onConfirm(parseInt(eta, 10))} disabled={!valid}>출동 확정</PrimaryButton>
     </Sheet>
   );
 }
