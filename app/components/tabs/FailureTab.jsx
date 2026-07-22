@@ -772,10 +772,12 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
   const siteOf = useSiteOf();
   const { name: me, role } = useContext(AuthContext);
   const stage = failureStage(f);
+  const { faultType, faultDetail } = parseErrorCode(f.errorCode);
   const unitLabel = formatUnitLabel(f.elevatorNo);
+  const bar = stage === "arrived" ? "border-l-emerald-500" : stage === "dispatched" ? "border-l-blue-500" : f.escalation === "운행정지" ? "border-l-red-600" : "border-l-red-400";
   return (
-    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      <div className="w-full flex items-center gap-2 p-3.5">
+    <div className={`rounded-xl border border-slate-200 border-l-4 ${bar} bg-white overflow-hidden`}>
+      <div className="w-full flex items-start gap-2 p-3.5 pb-2.5">
         <button type="button" onClick={() => onOpenDetail(f)} className="flex-1 min-w-0 text-left">
           <div className="flex items-center gap-1.5 mb-1">
             <p className="font-bold text-slate-800 text-[15px] truncate">{f.siteName} · {unitLabel}</p>
@@ -783,7 +785,12 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
               <span className="shrink-0 text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{f.escalation}</span>
             )}
           </div>
-          <p className="text-sm text-slate-500">{f.reportedAt}</p>
+          <div className="flex items-start gap-1.5">
+            <AlertTriangle size={13} className="text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-[13px] min-w-0"><span className="font-bold text-slate-700">{faultType}</span>{faultDetail && <span className="text-slate-500"> · {faultDetail}</span>}</p>
+          </div>
+          {stage === "dispatched" && <p className="text-[11px] text-blue-600 font-semibold mt-1">출동 {f.dispatchedAt} · {f.etaMinutes}분 후 도착예정</p>}
+          {stage === "arrived" && <p className="text-[11px] text-emerald-600 font-semibold mt-1">{f.arrivalTime} 도착 · 작업 중</p>}
         </button>
         {stage !== "done" && <MapLinkButtons site={siteOf(f)} size={30} />}
       </div>
@@ -1065,13 +1072,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
               <p className="text-xs text-slate-400 py-3">처리완료된 고장이 없습니다</p>
             ) : (
               done.map((f) => (
-                <button key={f.id} onClick={() => setDetailTarget(f)} className="w-full text-left bg-white rounded-xl border border-slate-200 p-3.5 opacity-70">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="font-bold text-slate-800 text-sm">{f.siteName} · {formatUnitLabel(f.elevatorNo)}</p>
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">완료</span>
-                  </div>
-                  <p className="text-xs text-slate-500">{f.errorCode}</p>
-                </button>
+                <FailureStatusCard key={f.id} f={f} onOpenDetail={setDetailTarget} canReassign={false} />
               ))
             )}
           </div>
