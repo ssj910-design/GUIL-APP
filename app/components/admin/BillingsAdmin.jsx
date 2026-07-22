@@ -21,6 +21,44 @@ function shortDate(d) {
   return d ? d.slice(2).replace(/-/g, ".") : "-";
 }
 
+// "26.06.08" → "2026-06-08" (형식이 안 맞으면 null)
+function parseShortDate(text) {
+  const m = text.trim().match(/^(\d{2})\.(\d{2})\.(\d{2})$/);
+  if (!m) return null;
+  const [, yy, mm, dd] = m;
+  return `20${yy}-${mm}-${dd}`;
+}
+
+// 청구일 — 달력 대신 "26.06.08" 형식을 키보드로 직접 입력. 입력 중엔 로컬 상태로만
+// 갖고 있다가 포커스를 벗어날 때 파싱해서 저장한다(매 키입력마다 커밋하면 커서가 튄다).
+// 부모가 key={value}로 렌더링해 저장된 값이 실제로 바뀔 때만 리마운트되어 새 값을 반영한다
+// (매 렌더마다 useEffect로 동기화하면 impure-render 린트 규칙에 걸린다).
+function BillingDateCell({ value, onCommit }) {
+  const [text, setText] = useState(shortDate(value) === "-" ? "" : shortDate(value));
+
+  function commit() {
+    if (text.trim() === "") { onCommit(null); return; }
+    const parsed = parseShortDate(text);
+    if (!parsed) {
+      alert("날짜 형식이 올바르지 않습니다 (예: 26.06.08)");
+      setText(shortDate(value) === "-" ? "" : shortDate(value));
+      return;
+    }
+    onCommit(parsed);
+  }
+
+  return (
+    <input
+      className={`${inputCls} min-w-24`}
+      placeholder="26.06.08"
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
+    />
+  );
+}
+
 function BillingDetailModal({ b, data, onClose, onSave }) {
   const { profiles } = data;
   const engineers = profiles.filter((p) => p.role === "engineer");
@@ -116,7 +154,8 @@ export default function BillingsAdmin({ data, setData }) {
     (b.part ?? "").includes(q) ||
     personOf(data, b.engineerId, b.engineer).includes(q)
   );
-  const total = rows.reduce((sum, b) => sum + (Number(b.cost) || 0), 0);
+  // 무상 처리된 건은 합계에서 제외한다.
+  const total = rows.reduce((sum, b) => sum + (b.isFree ? 0 : Number(b.cost) || 0), 0);
 
   async function saveBilling(b, patch) {
     const { error } = await supabase.from("billings").update(patch).eq("id", b.id);
@@ -138,6 +177,14 @@ export default function BillingsAdmin({ data, setData }) {
     setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, [key]: value || null } : x)) }));
   }
 
+  // 무상 처리 — 이 관리자웹 화면에서만 지원(모바일 앱엔 없음). 금액은 그대로 두고 표시·합계에서만 제외.
+  async function toggleFree(b) {
+    const next = !b.isFree;
+    const { error } = await supabase.from("billings").update({ is_free: next }).eq("id", b.id);
+    if (error) { alert("저장 실패: " + error.message); return; }
+    setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, isFree: next } : x)) }));
+  }
+
   return (
     <div className="max-w-6xl">
       <div className="flex items-end justify-between mb-4">
@@ -157,7 +204,18 @@ export default function BillingsAdmin({ data, setData }) {
             <td className="px-3 py-2.5 whitespace-nowrap">{siteManagerOf(data, b.unitId, b.siteName)}</td>
             <td className="px-3 py-2.5 whitespace-nowrap">{personOf(data, b.engineerId, b.engineer)}</td>
             <td className="px-3 py-2.5 text-slate-600">{b.part}</td>
-            <td className="px-3 py-2.5 font-bold whitespace-nowrap">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</td>
+            <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-1.5">
+                {b.isFree ? (
+                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">무상</span>
+                ) : (
+                  <span className="font-bold">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</span>
+                )}
+                <button onClick={() => toggleFree(b)} className="text-[10px] text-slate-400 hover:text-emerald-600 underline whitespace-nowrap">
+                  {b.isFree ? "해제" : "무상처리"}
+                </button>
+              </div>
+            </td>
             <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(b.replaceDate)}</td>
             <td className="px-3 py-2.5">
               {b.materialRequestId || b.type === "material"
@@ -165,12 +223,7 @@ export default function BillingsAdmin({ data, setData }) {
                 : <StatusBadge tone="slate">직접 입력</StatusBadge>}
             </td>
             <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-              <input
-                type="date"
-                className={`${inputCls} min-w-32`}
-                value={b.billingDate ?? ""}
-                onChange={(e) => updateManualField(b, "billing_date", "billingDate", e.target.value)}
-              />
+              <BillingDateCell key={b.billingDate ?? "unset"} value={b.billingDate} onCommit={(v) => updateManualField(b, "billing_date", "billingDate", v)} />
             </td>
             <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
               <select
