@@ -11,6 +11,10 @@ import { TODAY_STR } from "@/lib/constants";
 import { inputCls } from "@/app/components/admin/adminShared";
 import { ChevronRight, ChevronLeft, X } from "lucide-react";
 
+// DutyRoster.jsx 달력과 동일한 색상 규칙 — 미리보기 달력도 같은 톤으로 맞춘다.
+const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+const KIND_TEXT = { 당직: "text-emerald-700", 숙직: "text-blue-700", 정상근무: "text-violet-500" };
+
 export default function DutyAdmin({ data, setData }) {
   const engineers = data.profiles.filter((p) => p.role === "engineer" && p.is_active !== false);
   const [schedules, setSchedules] = useState([]);
@@ -320,11 +324,11 @@ export default function DutyAdmin({ data, setData }) {
 
     {previewOpen && (
       <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center px-6" onClick={() => setPreviewOpen(false)}>
-        <div className="bg-white w-full max-w-lg max-h-[80vh] rounded-2xl p-5 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="bg-white w-full max-w-2xl max-h-[85vh] rounded-2xl p-5 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="text-sm font-extrabold text-slate-800">{gy}년 {gm}월 · {genMode} 반영 미리보기</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">이미 배정된 칸(회색)은 그대로, 새로 채워질 칸(파란 배지)만 새 순번으로 계산했습니다.</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">이미 배정된 칸은 그대로, 새로 채워질 칸(파란 배경)만 새 순번으로 계산했습니다.</p>
             </div>
             <button onClick={() => setPreviewOpen(false)} className="p-1 text-slate-400 shrink-0" aria-label="닫기"><X size={16} /></button>
           </div>
@@ -332,36 +336,51 @@ export default function DutyAdmin({ data, setData }) {
           {previewLoading ? (
             <p className="text-xs text-slate-400 text-center py-10">계산 중…</p>
           ) : (
-            <div className="space-y-1.5 mb-4">
-              {Object.entries(
-                (previewRows ?? []).reduce((acc, r) => {
-                  (acc[r.iso] ??= []).push(r);
-                  return acc;
-                }, {})
-              ).map(([iso, rows]) => (
-                <div key={iso} className="flex items-center justify-between gap-2 border-b border-slate-50 pb-1.5 last:border-0">
-                  <span className="text-[11px] font-bold text-slate-500 w-14 shrink-0">{iso.slice(5).replace("-", "/")}</span>
-                  <div className="flex flex-wrap gap-1.5 justify-end flex-1">
-                    {rows.map((r) => (
-                      <span
-                        key={r.kind}
-                        className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${
-                          r.name == null ? "bg-slate-50 text-slate-300"
-                            : r.isNew ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-500"
-                        }`}
-                      >
-                        {r.kind} {r.name ?? "미지정"}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-3">
+              <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
+                {DOW.map((d, i) => (
+                  <p key={d} className={`text-center text-[10px] font-bold py-1.5 ${i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-slate-500"}`}>{d}</p>
+                ))}
+              </div>
+              <div className="grid grid-cols-7">
+                {Array.from({ length: new Date(gy, gm - 1, 1).getDay() }, (_, i) => (
+                  <div key={`pad${i}`} className="border-b border-r border-slate-100 min-h-[64px]" />
+                ))}
+                {Array.from({ length: new Date(gy, gm, 0).getDate() }, (_, i) => i + 1).map((d) => {
+                  const iso = `${genYm}-${String(d).padStart(2, "0")}`;
+                  const dow = (new Date(gy, gm - 1, 1).getDay() + d - 1) % 7;
+                  const rows = (previewRows ?? []).filter((r) => r.iso === iso);
+                  const hasNew = rows.some((r) => r.isNew && r.name != null);
+                  return (
+                    <div key={d} className={`border-b border-r border-slate-100 min-h-[64px] p-1 ${hasNew ? "bg-blue-50/40" : ""}`}>
+                      <p className={`text-[10px] font-bold text-right pr-0.5 ${dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-slate-400"}`}>{d}</p>
+                      {rows.map((r) => (
+                        <p
+                          key={r.kind}
+                          className={`text-[9.5px] leading-tight rounded px-0.5 truncate font-semibold ${
+                            r.name == null ? "text-slate-300" : KIND_TEXT[r.kind]
+                          } ${r.isNew && r.name != null ? "bg-blue-100" : ""}`}
+                        >
+                          {r.name ?? "-"}
+                        </p>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
-          <div className="flex items-center gap-3 text-[11px] text-slate-400 mb-4">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-100 border border-blue-300" /> 새로 채워짐</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-200" /> 기존 배정 유지</span>
+          <div className="flex items-center gap-3 flex-wrap text-[11px] text-slate-500 mb-4">
+            {["당직", "숙직", "정상근무"].map((k) => (
+              <span key={k} className="flex items-center gap-1 font-semibold">
+                <span className={`w-2 h-2 rounded-full ${k === "당직" ? "bg-emerald-500" : k === "숙직" ? "bg-blue-500" : "bg-violet-400"}`} />
+                {k}
+              </span>
+            ))}
+            <span className="flex items-center gap-1 font-semibold ml-auto">
+              <span className="w-2.5 h-2.5 rounded bg-blue-100" /> 새로 채워짐
+            </span>
           </div>
 
           <div className="flex gap-2">
