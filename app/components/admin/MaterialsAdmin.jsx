@@ -12,8 +12,8 @@ import { unitIdFor, addDays } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { locOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal } from "@/app/components/admin/adminShared";
 
-const MATERIAL_TONE = { 승인대기: "blue", 지급완료: "green", 반려: "red" };
-const QUOTE_TONE = { 요청접수: "blue", 견적발행: "amber", 승인: "amber", 자재지급완료: "green" };
+const MATERIAL_TONE = { 승인대기: "blue", 지급완료: "green", 반려: "red", 교체완료: "green" };
+const QUOTE_TONE = { 요청접수: "blue", 견적발행: "amber", 승인: "amber", 자재지급완료: "green", 교체완료: "green" };
 
 // 자재/견적 완료 후 실제 "교체완료" 여부 — 정상 완료 경로인 기사 비용청구가 들어오면
 // 연결된 할 일(todos)의 done이 true가 된다(TodosAdmin.jsx 참고). 담당자가 여러 명인
@@ -208,11 +208,14 @@ export default function MaterialsAdmin({ data, setData }) {
               <td className="px-3 py-2.5 whitespace-nowrap">{personOf(data, m.requesterId, m.engineer)}</td>
               <td className="px-3 py-2.5 text-xs text-slate-500">{m.supplyPhotoUrls?.length ? `${m.supplyPhotoUrls.length}장` : "-"}</td>
               <td className="px-3 py-2.5">
-                <StatusBadge tone={MATERIAL_TONE[m.status] ?? "slate"}>{m.status}</StatusBadge>
+                {(() => {
+                  const displayStatus =
+                    m.status === "지급완료" && billingCompleteFor(data.todos ?? [], "materialRequestId", m.id)
+                      ? "교체완료"
+                      : m.status;
+                  return <StatusBadge tone={MATERIAL_TONE[displayStatus] ?? "slate"}>{displayStatus}</StatusBadge>;
+                })()}
                 {m.status === "반려" && m.rejectReason && <p className="text-[10px] text-red-500 mt-1">{m.rejectReason}</p>}
-                {m.status === "지급완료" && billingCompleteFor(data.todos ?? [], "materialRequestId", m.id) && (
-                  <p className="text-[10px] text-emerald-600 font-bold mt-1">교체완료</p>
-                )}
               </td>
               <td className="px-3 py-2.5 whitespace-nowrap">
                 {m.status === "승인대기" ? (
@@ -250,10 +253,13 @@ export default function MaterialsAdmin({ data, setData }) {
                 {q.quoteIssuedDate ?? "-"} / {q.approvedDate ?? "-"} / {q.suppliedDate ?? "-"}
               </td>
               <td className="px-3 py-2.5">
-                <StatusBadge tone={QUOTE_TONE[q.status] ?? "slate"}>{q.status}</StatusBadge>
-                {q.status === "자재지급완료" && billingCompleteFor(data.todos ?? [], "quoteRequestId", q.id) && (
-                  <p className="text-[10px] text-emerald-600 font-bold mt-1">교체완료</p>
-                )}
+                {(() => {
+                  const displayStatus =
+                    q.status === "자재지급완료" && billingCompleteFor(data.todos ?? [], "quoteRequestId", q.id)
+                      ? "교체완료"
+                      : q.status;
+                  return <StatusBadge tone={QUOTE_TONE[displayStatus] ?? "slate"}>{displayStatus}</StatusBadge>;
+                })()}
               </td>
               <td className="px-3 py-2.5 whitespace-nowrap">
                 {q.status === "요청접수" && (
