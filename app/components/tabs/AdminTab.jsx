@@ -1,5 +1,5 @@
 import { useState, useContext } from "react";
-import { ShieldCheck, Package, Receipt, ListTodo, ChevronRight, Users, FileText, PackageCheck, RotateCcw, PackageX, Building2 } from "lucide-react";
+import { ShieldCheck, Package, Receipt, ListTodo, ChevronRight, Users, FileText, PackageCheck, RotateCcw, PackageX, Building2, Search } from "lucide-react";
 import { Badge, PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { SitesContext, AuthContext } from "@/app/components/context";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
@@ -416,6 +416,70 @@ function SupplyEditForm({ r, existingTodo, engineerNames, onSubmit, onAttachPhot
   );
 }
 
+// 지급완료 내역 전체보기 — "나의 자재 신청 전체보기"(MaterialHistoryScreen)와 동일한 구성
+// (DrillHeader 전체화면 + 검색창 + 카드 목록). 카드 클릭 시 지급 내역 수정 폼이 열린다.
+function SupplyHistoryScreen({ supplied, todos, engineerNames, onSupplyEdit, onAttachPhoto, onRemoveSupplyPhoto, onBack }) {
+  const [query, setQuery] = useState("");
+  const [editTarget, setEditTarget] = useState(null);
+  const q = query.trim();
+  const filtered = supplied
+    .filter((r) => r.siteName.includes(q) || r.part.includes(q))
+    .sort((a, b) => new Date(b.suppliedDate) - new Date(a.suppliedDate));
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden bg-white">
+      <DrillHeader title="지급완료 내역 전체보기" onBack={onBack} onHome={onBack} />
+      <div className="px-5 pt-3 pb-2 shrink-0">
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            className={`${inputCls} pl-8`}
+            placeholder="현장명 또는 부품명으로 검색"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-2.5">
+        {filtered.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-10">해당 조건의 지급완료 내역이 없습니다</p>
+        ) : (
+          filtered.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setEditTarget(r)}
+              className="w-full text-left bg-white rounded-xl border border-slate-200 p-3"
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-slate-700">{r.siteName} · {r.part}</p>
+                <span className="text-xs font-bold px-2 py-1 rounded-full shrink-0 bg-emerald-100 text-emerald-700">지급완료</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">지급일 {r.suppliedDate} · D-30 시작</p>
+            </button>
+          ))
+        )}
+      </div>
+
+      {editTarget && (
+        <Sheet title={`${editTarget.siteName ?? "-"} · 지급 내역 수정`} onClose={() => setEditTarget(null)}>
+          <SupplyEditForm
+            r={editTarget}
+            existingTodo={todos.find((t) => t.materialRequestId === editTarget.id)}
+            engineerNames={engineerNames}
+            onAttachPhoto={onAttachPhoto}
+            onRemoveSupplyPhoto={onRemoveSupplyPhoto}
+            onSubmit={async (assignee, billingPart, billingAmount, dueDate, description) => {
+              await onSupplyEdit(editTarget.id, assignee, billingPart, billingAmount, dueDate, description);
+              setEditTarget(null);
+            }}
+          />
+        </Sheet>
+      )}
+    </div>
+  );
+}
+
 function MaterialRequestsScreen({ materialRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onBack }) {
   const { engineerNames } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
@@ -424,10 +488,23 @@ function MaterialRequestsScreen({ materialRequests, todos, onSupplyComplete, onS
   const [dueDateMap, setDueDateMap] = useState({});
   const [descriptionMap, setDescriptionMap] = useState({});
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState(null);
   const pending = materialRequests.filter((r) => r.status === "승인대기");
   const supplied = materialRequests.filter((r) => r.status === "지급완료");
   const rejected = materialRequests.filter((r) => r.status === "반려");
+
+  if (historyOpen) {
+    return (
+      <SupplyHistoryScreen
+        supplied={supplied}
+        todos={todos}
+        engineerNames={engineerNames}
+        onSupplyEdit={onSupplyEdit}
+        onAttachPhoto={onAttachPhoto}
+        onRemoveSupplyPhoto={onRemoveSupplyPhoto}
+        onBack={() => setHistoryOpen(false)}
+      />
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
@@ -576,53 +653,19 @@ function MaterialRequestsScreen({ materialRequests, todos, onSupplyComplete, onS
             {pending.length === 0 && <p className="text-xs text-slate-400 text-center py-3">지급 대기 중인 자재 신청이 없습니다</p>}
           </div>
 
-          {supplied.length > 0 && (
-            <button
-              onClick={() => setHistoryOpen(true)}
-              className="w-full mt-4 flex items-center justify-center gap-1.5 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-100 py-2.5 rounded-lg active:bg-blue-100"
-            >
-              지급완료 내역 전체보기 ({supplied.length})
-            </button>
-          )}
         </div>
-      </div>
 
-      {historyOpen && (
-        <Sheet title={`지급완료 내역 (${supplied.length})`} onClose={() => setHistoryOpen(false)}>
-          <div className="space-y-2">
-            {supplied.map((r) => (
-              <button
-                key={r.id}
-                onClick={() => setEditTarget(r)}
-                className="w-full flex items-center justify-between text-left bg-slate-50 rounded-xl p-3 active:bg-slate-100"
-              >
-                <div>
-                  <p className="text-sm font-bold text-slate-800">{r.siteName} · {r.part}</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">{r.suppliedDate} 지급 · D-30 시작</p>
-                </div>
-                <ChevronRight size={16} className="text-slate-300 shrink-0" />
+        {supplied.length > 0 && (
+          <div className="px-0.5">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-bold text-slate-800 text-sm">지급완료 내역</h3>
+              <button onClick={() => setHistoryOpen(true)} className="text-xs font-bold text-blue-600 flex items-center gap-0.5">
+                전체보기 <ChevronRight size={12} />
               </button>
-            ))}
-            {supplied.length === 0 && <p className="text-xs text-slate-400 text-center py-3">지급완료된 자재 신청이 없습니다</p>}
+            </div>
           </div>
-        </Sheet>
-      )}
-
-      {editTarget && (
-        <Sheet title={`${editTarget.siteName ?? "-"} · 지급 내역 수정`} onClose={() => setEditTarget(null)}>
-          <SupplyEditForm
-            r={editTarget}
-            existingTodo={todos.find((t) => t.materialRequestId === editTarget.id)}
-            engineerNames={engineerNames}
-            onAttachPhoto={onAttachPhoto}
-            onRemoveSupplyPhoto={onRemoveSupplyPhoto}
-            onSubmit={async (assignee, billingPart, billingAmount, dueDate, description) => {
-              await onSupplyEdit(editTarget.id, assignee, billingPart, billingAmount, dueDate, description);
-              setEditTarget(null);
-            }}
-          />
-        </Sheet>
-      )}
+        )}
+      </div>
 
       {detailTarget?.type === "material" && (
         <Sheet title="자재 신청 상세" onClose={() => setDetailTarget(null)}>
