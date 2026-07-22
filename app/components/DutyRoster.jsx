@@ -72,7 +72,7 @@ export function DutySwapNotice({ swaps, schedules, onSeen }) {
   );
 }
 
-export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onRequestSwap, onRespondSwap, onClose, embedded = false, showControls = !embedded, belowCalendar = null }) {
+export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onRequestSwap, onRespondSwap, onClose, embedded = false, showControls = !embedded, belowCalendar = null, showFillButton = true }) {
   const { role, selfId, engineers } = useContext(AuthContext);
   const today = new Date(`${TODAY_STR}T00:00:00`);
   const [cursor, setCursor] = useState({ y: today.getFullYear(), m: today.getMonth() });
@@ -207,7 +207,7 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
         {inMonth.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 py-8 px-5 text-center">
             <p className="text-xs text-slate-400">{y}년 {m + 1}월 근무표가 없습니다</p>
-            {role === "admin" && (
+            {role === "admin" && showFillButton && (
               <button
                 onClick={() => setGenMode("주5일")}
                 className="mt-3 bg-blue-700 text-white text-sm font-bold px-5 py-2.5 rounded-xl active:bg-blue-800"
@@ -288,7 +288,7 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
 
         {role === "admin" && belowCalendar && <div className="mt-3">{belowCalendar}</div>}
 
-        {role === "admin" && inMonth.length > 0 && (
+        {role === "admin" && showFillButton && inMonth.length > 0 && (
           <button
             onClick={() => setGenMode("주5일")}
             className="w-full mt-2 bg-white border border-slate-200 text-slate-600 text-xs font-bold py-2.5 rounded-xl"

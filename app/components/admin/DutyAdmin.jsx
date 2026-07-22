@@ -9,12 +9,15 @@ import { DutyRoster } from "@/app/components/DutyRoster";
 import { mapDutySchedule, mapDutySwap } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
 import { inputCls } from "@/app/components/admin/adminShared";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, ChevronLeft } from "lucide-react";
 
 export default function DutyAdmin({ data, setData }) {
   const engineers = data.profiles.filter((p) => p.role === "engineer" && p.is_active !== false);
   const [schedules, setSchedules] = useState([]);
   const [swaps, setSwaps] = useState([]);
+  const [genYm, setGenYm] = useState(TODAY_STR.slice(0, 7)); // 근무표 생성 대상 월 (YYYY-MM)
+  const [genMode, setGenMode] = useState("주5일");
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     // 지난달치까지 함께 불러온다 — 자동배정이 직전 순번을 이어받는지 눈으로 확인할 수 있게
@@ -88,9 +91,22 @@ export default function DutyAdmin({ data, setData }) {
 
   const sorted = engineers.slice().sort((a, b) => (a.duty_order ?? 999) - (b.duty_order ?? 999));
   const inMode = (mode) => sorted.filter((e) => e.duty_order != null && (e.duty_modes ?? []).includes(mode)).length;
+  const rosterOf = (mode) => sorted.filter((e) => e.duty_order != null && (e.duty_modes ?? []).includes(mode));
   const count5 = inMode("주5일");
   const count4 = inMode("주4일");
   const noOrder = sorted.filter((e) => e.duty_order == null).length;
+
+  function shiftGenMonth(delta) {
+    const [gy, gm] = genYm.split("-").map(Number);
+    const d = new Date(gy, gm - 1 + delta, 1);
+    setGenYm(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+
+  async function handleGenerate() {
+    setGenerating(true);
+    await generate(genYm, genMode);
+    setGenerating(false);
+  }
 
   // 배정 순번 — 순번을 넣으면 당직 대상, 비우면 제외. 근무제(5일·4일)별로 대상을 나눈다.
   // 거의 안 바뀌는 설정이라 접어둔다. summary에 flex를 주면 브라우저 기본 삼각형이
@@ -139,6 +155,64 @@ export default function DutyAdmin({ data, setData }) {
     </details>
   );
 
+  // 근무표 생성(빈 칸 채우기) — 예전엔 달력 아래 별도 버튼이 열던 시트였는데, 순번·근무제
+  // 바로 아래로 옮겨 한 곳에서 순번 지정 → 근무제 선택 → 생성까지 이어지게 한다.
+  const [gy, gm] = genYm.split("-").map(Number);
+  const genRoster = rosterOf(genMode);
+  const generateWidget = (
+    <div className="bg-white border border-slate-200 rounded-xl p-4 mt-3">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-extrabold text-slate-700">근무표 생성 (근무제 선택)</p>
+        <div className="flex items-center gap-1">
+          <button onClick={() => shiftGenMonth(-1)} className="p-1 text-slate-400" aria-label="이전 달"><ChevronLeft size={16} /></button>
+          <span className="text-xs font-bold text-slate-600 w-16 text-center">{gy}년 {gm}월</span>
+          <button onClick={() => shiftGenMonth(1)} className="p-1 text-slate-400" aria-label="다음 달"><ChevronRight size={16} /></button>
+        </div>
+      </div>
+      <p className="text-[11px] text-slate-400 mb-3">이미 배정된 칸은 그대로 두고 빈 칸만 채웁니다.</p>
+
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        {["주5일", "주4일"].map((mode) => (
+          <button
+            key={mode}
+            onClick={() => setGenMode(mode)}
+            className={`py-3 rounded-xl text-sm font-bold border ${
+              genMode === mode ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200 bg-white"
+            }`}
+          >
+            {mode} 근무제
+            <span className="block text-[10px] font-semibold opacity-70">{rosterOf(mode).length}명</span>
+          </button>
+        ))}
+      </div>
+
+      {genMode === "주4일" && (
+        <p className="text-[11px] text-indigo-500 font-semibold bg-indigo-50 rounded-lg px-3 py-2 mb-3">
+          금요일마다 정상근무 칸이 함께 만들어집니다 (담당자는 달력에서 직접 지정).
+        </p>
+      )}
+
+      <div className="border border-slate-100 rounded-lg p-3 mb-3">
+        <p className="text-[11px] font-bold text-slate-500 mb-1.5">배정 순서</p>
+        {genRoster.length === 0 ? (
+          <p className="text-[11px] text-red-500">{genMode} 대상자가 없습니다. 위 「당직 순번 · 근무제」에서 순번과 근무제를 지정하세요.</p>
+        ) : (
+          <p className="text-[11px] text-slate-600 leading-relaxed">
+            {genRoster.map((e) => `${e.name}(${e.duty_order})`).join(" → ")}
+          </p>
+        )}
+      </div>
+
+      <button
+        onClick={handleGenerate}
+        disabled={generating || genRoster.length === 0}
+        className="w-full bg-blue-700 text-white text-sm font-bold py-2.5 rounded-xl disabled:bg-slate-200"
+      >
+        {generating ? "배정 중…" : `${genMode} 기준으로 배정`}
+      </button>
+    </div>
+  );
+
   return (
     <AuthContext.Provider value={{ name: "관리자", role: "admin", selfId: null, engineers, engineerNames: engineers.map((e) => e.name), profiles: data.profiles }}>
       <div className="max-w-3xl">
@@ -150,7 +224,8 @@ export default function DutyAdmin({ data, setData }) {
           onSetPerson={setPerson}
           onRequestSwap={() => {}}
           onRespondSwap={() => {}}
-          belowCalendar={orderAndMode}
+          belowCalendar={<>{orderAndMode}{generateWidget}</>}
+          showFillButton={false}
         />
       </div>
     </AuthContext.Provider>
