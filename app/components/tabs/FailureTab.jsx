@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from "react";
-import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle } from "lucide-react";
+import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle, Wrench } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, labelToSeq, formatUnitLabel, recentFailuresBySite } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
@@ -486,9 +486,9 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
       {stage === "arrived" && onOpenResult && (
         <button
           onClick={() => { onOpenResult(failure); onClose(); }}
-          className="w-full bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl active:bg-emerald-700"
+          className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl active:bg-emerald-700"
         >
-          🛠️ 고장처리결과 입력
+          <Wrench size={15} strokeWidth={2.5} /> 고장처리결과 입력
         </button>
       )}
     </Sheet>
@@ -774,7 +774,7 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
   const stage = failureStage(f);
   const { faultType, faultDetail } = parseErrorCode(f.errorCode);
   const unitLabel = formatUnitLabel(f.elevatorNo);
-  const bar = stage === "arrived" ? "border-l-emerald-500" : stage === "dispatched" ? "border-l-blue-500" : f.escalation === "운행정지" ? "border-l-red-600" : "border-l-red-400";
+  const bar = stage === "arrived" ? "border-l-amber-500" : stage === "dispatched" ? "border-l-blue-500" : f.escalation === "운행정지" ? "border-l-red-600" : "border-l-red-400";
   return (
     <div className={`rounded-xl border border-slate-200 border-l-4 ${bar} bg-white overflow-hidden`}>
       <div className="w-full flex items-start gap-2 p-3.5 pb-2.5">
@@ -790,7 +790,7 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
             <p className="text-[13px] min-w-0"><span className="font-bold text-slate-700">{faultType}</span>{faultDetail && <span className="text-slate-500"> · {faultDetail}</span>}</p>
           </div>
           {stage === "dispatched" && <p className="text-[11px] text-blue-600 font-semibold mt-1">출동 {f.dispatchedAt} · {f.etaMinutes}분 후 도착예정</p>}
-          {stage === "arrived" && <p className="text-[11px] text-emerald-600 font-semibold mt-1">{f.arrivalTime} 도착 · 작업 중</p>}
+          {stage === "arrived" && <p className="text-[11px] text-amber-600 font-semibold mt-1">{f.arrivalTime} 도착 · 작업 중</p>}
         </button>
         {stage !== "done" && <MapLinkButtons site={siteOf(f)} size={30} />}
       </div>
@@ -843,9 +843,9 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
         {stage === "arrived" && (
           <button
             onClick={() => onOpenResult(f)}
-            className="w-full bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg active:bg-emerald-700"
+            className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg active:bg-emerald-700"
           >
-            🛠️ 고장처리결과 입력
+            <Wrench size={13} strokeWidth={2.5} /> 고장처리결과 입력
           </button>
         )}
       </div>
@@ -868,7 +868,7 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
   const { name: me, role } = useContext(AuthContext);
   // 상태별 컬러 — 작업중(초록)/출동중(파랑)/응답대기(노랑) 우선, 그다음 미배정을 세분:
   // 운행정지(빨강 심각) / 지원미배정=지원요청에서 넘어옴(주황) / 일반 미배정(빨강)
-  const state = stage === "arrived" ? { label: "작업중", bar: "border-l-emerald-500", chip: "bg-emerald-50 text-emerald-600" }
+  const state = stage === "arrived" ? { label: "작업중", bar: "border-l-amber-500", chip: "bg-amber-50 text-amber-600" }
     : stage === "dispatched" ? { label: "출동중", bar: "border-l-blue-500", chip: "bg-blue-50 text-blue-600" }
     : f.assignee ? { label: `${f.assignee} 응답대기`, bar: "border-l-amber-400", chip: "bg-amber-50 text-amber-600" }
     : f.escalation === "운행정지" ? { label: "운행정지", bar: "border-l-red-600", chip: "bg-red-100 text-red-700" }
@@ -942,9 +942,9 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
         <button
           type="button"
           onClick={() => onOpenResult(f)}
-          className="shrink-0 bg-emerald-600 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:bg-emerald-700"
+          className="shrink-0 inline-flex items-center gap-1 bg-emerald-600 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:bg-emerald-700"
         >
-          🛠️ 결과입력
+          <Wrench size={12} strokeWidth={2.5} /> 결과입력
         </button>
       )}
     </div>
@@ -1126,7 +1126,7 @@ function FailureStatusCard({ f, onOpenDetail, onReassign, canReassign }) {
     ? { bar: "border-l-emerald-500", chip: "bg-emerald-100 text-emerald-700", label: f.processResult || "완료" }
     : f.status === "진행중"
     ? (stage === "arrived"
-        ? { bar: "border-l-emerald-400", chip: "bg-emerald-50 text-emerald-600", label: "작업중" }
+        ? { bar: "border-l-amber-500", chip: "bg-amber-50 text-amber-600", label: "작업중" }
         : { bar: "border-l-blue-500", chip: "bg-blue-50 text-blue-600", label: "출동중" })
     : { bar: "border-l-red-400", chip: "bg-red-50 text-red-600", label: "미처리" };
   const who = f.assignee
