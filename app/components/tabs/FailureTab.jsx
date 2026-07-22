@@ -755,12 +755,12 @@ function FailureResponseCard({ f, dist, warnCount = 0, site, onOpenDetail, onDis
       </button>
       {stage === "pending" && (
         <div className="flex items-center gap-2 px-3.5 pb-3.5">
+          <MapLinkButtons site={site} size={38} />
           {role === "admin" && onAssignOpen ? (
             <button onClick={() => onAssignOpen(f)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800">기사 배정</button>
           ) : (
             <button onClick={() => onDispatch(f)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800">내가 출동하기</button>
           )}
-          <MapLinkButtons site={site} size={38} />
         </div>
       )}
     </div>
