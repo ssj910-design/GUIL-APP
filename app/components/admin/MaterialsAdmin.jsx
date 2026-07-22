@@ -324,16 +324,13 @@ export default function MaterialsAdmin({ data, setData }) {
               </td>
               <td className="px-3 py-2.5 whitespace-nowrap">
                 {m.status === "승인대기" ? (
-                  <button onClick={(e) => { e.stopPropagation(); setPayTarget(m); }} className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-lg">
-                    지급완료 처리
+                  <button onClick={(e) => { e.stopPropagation(); setPayTarget(m); }} className="text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors px-2.5 py-1.5 rounded-lg">
+                    지급하기
                   </button>
                 ) : m.status === "지급완료" ? (
-                  <div>
-                    <button onClick={(e) => { e.stopPropagation(); setPayTarget(m); }} className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-lg">
-                      수정
-                    </button>
-                    <p className="text-[10px] text-emerald-600 font-semibold mt-1">✓ 할 일 자동 생성됨</p>
-                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); setPayTarget(m); }} className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors px-2.5 py-1.5 rounded-lg">
+                    수정
+                  </button>
                 ) : (
                   <span className="text-xs text-slate-300">-</span>
                 )}
@@ -382,17 +379,14 @@ export default function MaterialsAdmin({ data, setData }) {
                   </button>
                 )}
                 {q.status === "승인" && (
-                  <button onClick={(e) => { e.stopPropagation(); setQuoteSupplyTarget(q); }} className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-lg">
-                    지급완료 처리
+                  <button onClick={(e) => { e.stopPropagation(); setQuoteSupplyTarget(q); }} className="text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors px-2.5 py-1.5 rounded-lg">
+                    지급하기
                   </button>
                 )}
                 {q.status === "자재지급완료" && (
-                  <div>
-                    <button onClick={(e) => { e.stopPropagation(); setQuoteSupplyTarget(q); }} className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-lg">
-                      수정
-                    </button>
-                    <p className="text-[10px] text-emerald-600 font-semibold mt-1">✓ 할 일 자동 생성됨</p>
-                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); setQuoteSupplyTarget(q); }} className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors px-2.5 py-1.5 rounded-lg">
+                    수정
+                  </button>
                 )}
               </td>
             </tr>
