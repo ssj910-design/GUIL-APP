@@ -755,7 +755,7 @@ export default function App() {
       .update({ assignee: engineerName, ...(v2Ready ? { assignee_id: profileIdByName(profilesAll, engineerName) } : {}) })
       .eq("id", failure.id).eq("status", "미처리").is("assignee", null)
       .select();
-    if (!ok?.length) { alert("이미 배정되었거나 진행 중인 건입니다."); return; }
+    if (!ok?.length) { notifyFailure("이미 배정되었거나 진행 중인 건이에요"); return; }
     setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, assignee: engineerName } : x)));
     sendPush("failure_assigned", [assignedId], {
       title: "고장이 배정되었습니다",
@@ -777,7 +777,7 @@ export default function App() {
       })
       .eq("id", failure.id).neq("status", "완료")
       .select();
-    if (!ok?.length) { alert("이미 완료된 건은 재배정할 수 없습니다."); return; }
+    if (!ok?.length) { notifyFailure("이미 완료된 건은 재배정할 수 없어요"); return; }
     setFailures((prev) => prev.map((x) => (x.id === failure.id
       ? { ...x, assignee: engineerName || null, dispatchedAt: null, etaMinutes: null, arrivalTime: null, status: "미처리" }
       : x)));
@@ -819,7 +819,7 @@ export default function App() {
       })
       .eq("id", failure.id).neq("status", "완료")
       .select();
-    if (!ok?.length) { alert("이미 완료 처리된 건입니다."); return; }
+    if (!ok?.length) { notifyFailure("이미 완료 처리된 건이에요"); return; }
     setFailures((prev) => prev.map((x) => (x.id === failure.id
       ? { ...x, assignee: null, dispatchedAt: null, etaMinutes: null, arrivalTime: null, status: "미처리" }
       : x)));
@@ -855,7 +855,8 @@ export default function App() {
     if (!claimed?.length) {
       const { data: fresh } = await supabase.from("failures").select("*").eq("id", failure.id).single();
       if (fresh) setFailures((prev) => prev.map((x) => (x.id === failure.id ? mapFailure(fresh) : x)));
-      alert(`이미 ${fresh?.assignee ?? "다른 기사"}님이 먼저 출동한 건입니다.`);
+      // 오류가 아니라 정상 안내(선착순) — 브라우저 alert 대신 부드러운 토스트로.
+      notifyFailure(`${fresh?.assignee ?? "다른 기사"}님이 먼저 출동했어요 · 목록을 갱신했습니다`);
       return;
     }
     setFailures((prev) =>
