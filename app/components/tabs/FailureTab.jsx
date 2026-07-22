@@ -744,9 +744,10 @@ function FailureResponseCard({ f, dist, warnCount = 0, site, onOpenDetail, onDis
           <AlertTriangle size={15} className="text-amber-500 shrink-0" />
           <p className="text-[13px]"><span className="font-bold text-slate-800">{faultType}</span>{faultDetail && <span className="text-slate-500"> · {faultDetail}</span>}</p>
         </div>
-        {(site?.address || f.reporterPhone) && (
+        {(site?.address || f.reporterPhone || site?.elevatorModel) && (
           <div className="text-[12px] text-slate-500 space-y-1">
             {site?.address && <p className="flex items-center gap-1 min-w-0"><MapPin size={12} className="shrink-0 text-slate-400" /><span className="truncate">{site.address}</span></p>}
+            {site?.elevatorModel && <p className="flex items-center gap-1 min-w-0"><Settings size={12} className="shrink-0 text-slate-400" /><span className="truncate">{site.elevatorModel}</span></p>}
             {f.reporterPhone && <p className="flex items-center gap-1"><PhoneCall size={12} className="shrink-0 text-slate-400" />신고자 {formatPhone(f.reporterPhone)}</p>}
           </div>
         )}
