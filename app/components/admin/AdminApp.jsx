@@ -29,7 +29,7 @@ const MENU = [
   { id: "failures", label: "고장관리", icon: AlertTriangle },
   { id: "inspections", label: "검사관리", icon: ShieldCheck },
   { id: "materials", label: "자재·견적 신청내역", icon: Package },
-  { id: "billings", label: "청구내역", icon: Receipt },
+  { id: "billings", label: "부품교체·공사 내역", icon: Receipt },
   { id: "todos", label: "할 일 관리", icon: ListTodo },
   { id: "selfChecks", label: "자체점검", icon: CalendarCheck },
   { id: "room", label: "게시판", icon: MessageSquare },

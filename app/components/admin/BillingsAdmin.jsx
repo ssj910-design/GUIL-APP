@@ -1,11 +1,25 @@
 "use client";
 
-// 청구내역 — 청구 건 조회 + 합계. 각 건 클릭 시 상세보기(사진 포함)에서
+// 부품교체·공사 내역 — 청구 건 조회 + 합계. 각 건 클릭 시 상세보기(사진 포함)에서
 // 내용(관리자 메모) 추가, 담당자 변경, 기한(교체일자) 수정이 가능하다.
 import { useState } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls } from "@/app/components/admin/adminShared";
+
+const BILLING_METHODS = ["계좌이체", "CMS", "지로"];
+
+// 현장 담당자(현장 측 연락 담당) — 청구는 unitId(v2)만 있고 siteId가 없어 units를 거쳐 찾는다.
+function siteManagerOf(data, unitId, fallbackSiteName) {
+  const unit = data.units.find((u) => u.id === unitId);
+  const site = unit ? data.sites.find((s) => s.id === unit.siteId) : data.sites.find((s) => s.name === fallbackSiteName);
+  return site?.manager || "-";
+}
+
+// "2026-05-20" → "26.05.20"
+function shortDate(d) {
+  return d ? d.slice(2).replace(/-/g, ".") : "-";
+}
 
 function BillingDetailModal({ b, data, onClose, onSave }) {
   const { profiles } = data;
@@ -125,10 +139,17 @@ export default function BillingsAdmin({ data, setData }) {
     }));
   }
 
+  // 청구일·청구방식 — 목록에서 바로 수기입력하는 필드라 저장도 즉시 처리한다.
+  async function updateManualField(b, column, key, value) {
+    const { error } = await supabase.from("billings").update({ [column]: value || null }).eq("id", b.id);
+    if (error) { alert("저장 실패: " + error.message); return; }
+    setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, [key]: value || null } : x)) }));
+  }
+
   return (
     <div className="max-w-6xl">
       <div className="flex items-end justify-between mb-4">
-        <h1 className="text-xl font-extrabold">청구내역</h1>
+        <h1 className="text-xl font-extrabold">부품교체·공사 내역</h1>
         <p className="text-sm text-slate-500">
           {q && `검색결과 ${rows.length}건 / `}총 {billings.length}건 · <span className="font-extrabold text-slate-900">{total.toLocaleString()}원</span>
         </p>
@@ -137,22 +158,37 @@ export default function BillingsAdmin({ data, setData }) {
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input className={`${inputCls} pl-8`} placeholder="현장·부품·기사명 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
-      <AdminTable head={["제출", "현장 · 호기", "교체내역", "교체일", "금액", "기사", "근거", "사진"]}>
+      <AdminTable head={["현장 · 호기", "담당자", "작업자", "교체내역", "금액", "교체일", "근거", "청구일", "청구방식"]}>
         {rows.map((b) => (
           <tr key={b.id} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setDetail(b)}>
-            <td className="pl-5 pr-3 py-2.5 text-slate-500 whitespace-nowrap">{b.submittedAt}</td>
-            <td className="px-3 py-2.5 font-semibold whitespace-nowrap">{locOf(data, b.unitId, b.siteName, b.elevatorNo)}</td>
-            <td className="px-3 py-2.5 text-slate-600">{b.part}</td>
-            <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{b.replaceDate ?? "-"}</td>
-            <td className="px-3 py-2.5 font-bold whitespace-nowrap">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</td>
+            <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{locOf(data, b.unitId, b.siteName, b.elevatorNo)}</td>
+            <td className="px-3 py-2.5 whitespace-nowrap">{siteManagerOf(data, b.unitId, b.siteName)}</td>
             <td className="px-3 py-2.5 whitespace-nowrap">{personOf(data, b.engineerId, b.engineer)}</td>
+            <td className="px-3 py-2.5 text-slate-600">{b.part}</td>
+            <td className="px-3 py-2.5 font-bold whitespace-nowrap">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</td>
+            <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(b.replaceDate)}</td>
             <td className="px-3 py-2.5">
               {b.materialRequestId || b.type === "material"
                 ? <StatusBadge tone="blue">자재 지급건</StatusBadge>
                 : <StatusBadge tone="slate">직접 입력</StatusBadge>}
             </td>
-            <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">
-              전 {b.beforePhotoUrls?.length ?? 0} · 후 {b.afterPhotoUrls?.length ?? 0} · 확인서 {b.confirmPhotoUrl ? 1 : 0}
+            <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+              <input
+                type="date"
+                className={`${inputCls} min-w-32`}
+                value={b.billingDate ?? ""}
+                onChange={(e) => updateManualField(b, "billing_date", "billingDate", e.target.value)}
+              />
+            </td>
+            <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+              <select
+                className={`${inputCls} min-w-24`}
+                value={b.billingMethod ?? ""}
+                onChange={(e) => updateManualField(b, "billing_method", "billingMethod", e.target.value)}
+              >
+                <option value="">선택</option>
+                {BILLING_METHODS.map((m) => <option key={m}>{m}</option>)}
+              </select>
             </td>
           </tr>
         ))}
