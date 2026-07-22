@@ -39,7 +39,11 @@ export default function WeekStrip({ data, onOpenCalendar }) {
     Promise.all([
       supabase.from("duty_schedules").select("*").gte("duty_date", from).lte("duty_date", to),
       supabase.from("leaves").select("*").lte("start_date", to).gte("end_date", from),
-    ]).then(([d, l]) => { setDuties(d.data ?? []); setLeaves(l.data ?? []); });
+    ]).then(([d, l]) => {
+      setDuties(d.data ?? []);
+      // 승인된 휴가만 노출 — 신청·반려는 아직 확정이 아니라 남들 눈에 보이면 안 된다.
+      setLeaves((l.data ?? []).filter((x) => (x.status ?? "승인") === "승인"));
+    });
   }, [from, to]);
 
   const nameOf = (id) => data.profiles.find((p) => p.id === id)?.name ?? "";
