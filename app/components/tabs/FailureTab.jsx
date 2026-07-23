@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle, Wrench, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, labelToSeq, formatUnitLabel, unitHistory } from "@/lib/utils";
+import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, labelToSeq, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
 import { useLiveInspections } from "@/app/hooks/useLiveInspections";
 import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons } from "@/app/components/ui";
@@ -710,7 +710,7 @@ const FAILURE_RESULT_BTN_CLS = {
 };
 
 
-export function ArrivalResultModal({ failure, onConfirm, onClose }) {
+export function ArrivalResultModal({ failure, failures = [], errorCodes = [], onConfirm, onClose }) {
   const [result, setResult] = useState("처리완료");
   const [symptom, setSymptom] = useState("");
   const [errorCode, setErrorCode] = useState("");
@@ -718,6 +718,11 @@ export function ArrivalResultModal({ failure, onConfirm, onClose }) {
   const [processContent, setProcessContent] = useState("");
   const [note, setNote] = useState("");
   const [photos, setPhotos] = useState([]);
+  const units = useContext(UnitsContext);
+  const model = units.find((u) => u.id === failure.unitId)?.model;
+  const codeOptions = model ? errorCodes.filter((e) => e.model === model) : [];
+  const matched = model ? findErrorCode(errorCodes, model, errorCode) : null;
+  const matchedHistory = matched ? errorCodeHistory(failures, units, model, errorCode) : [];
 
   return (
     <Sheet title="고장처리결과 입력" onClose={onClose}>
@@ -737,7 +742,31 @@ export function ArrivalResultModal({ failure, onConfirm, onClose }) {
         </div>
         <div>
           <label className="text-xs font-bold text-slate-600 mb-1 block">에러코드 <span className="text-red-500">*</span></label>
-          <input className={inputCls} value={errorCode} onChange={(e) => setErrorCode(e.target.value)} placeholder="예: E-32" />
+          <input className={inputCls} list="error-code-options" value={errorCode} onChange={(e) => setErrorCode(e.target.value)} placeholder="예: E-32" />
+          {codeOptions.length > 0 && (
+            <datalist id="error-code-options">
+              {codeOptions.map((e) => <option key={e.id} value={e.code} />)}
+            </datalist>
+          )}
+          {matched && (
+            <div className="bg-blue-50 rounded-xl p-3 mt-2">
+              <p className="text-sm font-bold text-blue-800">{matched.meaning || "의미 미등록"}</p>
+              {matched.commonCause && <p className="text-xs text-blue-600 mt-1">흔한 원인: {matched.commonCause}</p>}
+              {matched.standardAction && <p className="text-xs text-blue-600 mt-0.5">표준 조치: {matched.standardAction}</p>}
+              <p className="text-xs font-bold text-blue-700 mt-2">과거 처리사례 {matchedHistory.length}건</p>
+              {matchedHistory.length === 0 ? (
+                <p className="text-xs text-blue-500 mt-1">아직 처리된 사례가 없습니다.</p>
+              ) : (
+                <ul className="space-y-1 mt-1.5">
+                  {matchedHistory.slice(0, 3).map((h) => (
+                    <li key={h.id} className="text-xs text-blue-700">
+                      {h.siteName} — {[h.faultCause, h.processContent].filter(Boolean).join(" → ") || "내용 없음"}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
         <div>
           <label className="text-xs font-bold text-slate-600 mb-1 block">발생원인 <span className="text-red-500">*</span></label>
@@ -987,7 +1016,7 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
 }
 
 
-function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves }) {
+function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves, errorCodes }) {
   const [assignTarget, setAssignTarget] = useState(null);
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
@@ -1048,6 +1077,8 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
       {resultTarget && (
         <ArrivalResultModal
           failure={resultTarget}
+          failures={failures}
+          errorCodes={errorCodes}
           onClose={() => setResultTarget(null)}
           onConfirm={(result) => {
             onResult(resultTarget, result);
@@ -1060,7 +1091,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
 }
 
 
-function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves }) {
+function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves, errorCodes }) {
   const [assignTarget, setAssignTarget] = useState(null);
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [showDone, setShowDone] = useState(false);
@@ -1141,6 +1172,8 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
       {resultTarget && (
         <ArrivalResultModal
           failure={resultTarget}
+          failures={failures}
+          errorCodes={errorCodes}
           onClose={() => setResultTarget(null)}
           onConfirm={(result) => {
             onResult(resultTarget, result);
@@ -1273,7 +1306,7 @@ function FailureStatusOverview({ failures, onReassign }) {
 }
 
 
-export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [], onReported }) {
+export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [], errorCodes = [], onReported }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
   // 홈 "모두 보기" 등 외부에서 특정 서브탭으로 진입 (SiteTab focusSiteId와 같은 패턴)
@@ -1305,10 +1338,10 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
       </div>
       {subTab === "접수등록" && <FailureRegisterForm onReported={onReported} failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />}
       {subTab === "미배정" && (
-        <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} />
+        <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />
       )}
       {subTab === "처리등록" && (
-        <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} />
+        <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />
       )}
       {subTab === "처리현황" && <FailureStatusOverview failures={failures} onReassign={onReassign} />}
       <SmsToast message={toast} />
