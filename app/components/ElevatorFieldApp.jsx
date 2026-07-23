@@ -21,7 +21,7 @@ import { CheckupTab } from "@/app/components/tabs/CheckupTab";
 import { InspectionTab } from "@/app/components/tabs/InspectionTab";
 import { MaterialTab } from "@/app/components/tabs/MaterialTab";
 import { BillingTab } from "@/app/components/tabs/BillingTab";
-import { TodoTab, TodoDetailSheet, getRequesterName, getCoAssignees, getSupplyPhotos } from "@/app/components/tabs/TodoTab";
+import { TodoTab, TodoDetailSheet, getRequesterName, getCoAssignees, getSupplyPhotos, getTodoSiteAddress } from "@/app/components/tabs/TodoTab";
 import { AdminTab } from "@/app/components/tabs/AdminTab";
 import { RoomTab, PostDetailOverlay } from "@/app/components/tabs/RoomTab";
 
@@ -1848,6 +1848,7 @@ export default function App() {
                 requester={getRequesterName(t, materialRequests, quoteRequests)}
                 coAssignees={getCoAssignees(t, todos)}
                 supplyPhotoUrls={getSupplyPhotos(t, materialRequests, quoteRequests)}
+                siteAddress={getTodoSiteAddress(t, materialRequests, quoteRequests, sites)}
                 onToggle={t.source === "manual" && !t.done ? handleAdminToggleTodo : null}
                 onReassign={handleReassignTodo}
                 engineerNames={engineerNames}

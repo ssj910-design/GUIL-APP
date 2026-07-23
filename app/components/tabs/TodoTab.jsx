@@ -46,6 +46,16 @@ export function getSupplyPhotos(todo, materialRequests, quoteRequests) {
   return [];
 }
 
+// 자재/견적 연동 할 일은 제목에 이미 현장명이 들어있어("OO빌딩 부품 교체 및..." 등) 상세에서는
+// 현장명 대신 주소를 보여준다. 관리자 부여 할 일은 제목에 현장명이 없으므로 그대로 현장명을 쓴다.
+export function getTodoSiteAddress(todo, materialRequests, quoteRequests, sites) {
+  if (todo.source === "manual") return null;
+  const req = todo.source === "material"
+    ? materialRequests?.find((r) => r.id === todo.materialRequestId)
+    : quoteRequests?.find((q) => q.id === todo.quoteRequestId);
+  return sites?.find((s) => s.id === req?.siteId)?.address ?? null;
+}
+
 function TodoCheckbox({ done, locked, onClick }) {
   if (done) {
     return <CheckCircle2 size={20} className="text-emerald-500 shrink-0" />;
@@ -62,6 +72,7 @@ function TodoCheckbox({ done, locked, onClick }) {
 
 export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescription, materialRequests, quoteRequests }) {
   const { name: CURRENT_ENGINEER, engineerNames, role } = useContext(AuthContext);
+  const sites = useContext(SitesContext);
   const [showDone, setShowDone] = useState(false);
   const [detailTarget, setDetailTarget] = useState(null);
   const mine = todos.filter((t) => t.assignee === CURRENT_ENGINEER);
@@ -130,6 +141,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
           requester={getRequesterName(detailTodo, materialRequests, quoteRequests)}
           coAssignees={getCoAssignees(detailTodo, todos)}
           supplyPhotoUrls={getSupplyPhotos(detailTodo, materialRequests, quoteRequests)}
+          siteAddress={getTodoSiteAddress(detailTodo, materialRequests, quoteRequests, sites)}
           onToggle={detailTodo.source === "manual" && !detailTodo.done ? completeManualTodo : null}
           onReassign={onReassignTodo}
           engineerNames={engineerNames}
@@ -165,7 +177,7 @@ function TodoRow({ t, onToggle, onOpenDetail }) {
 }
 
 
-export function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhotoUrls = [], onToggle, onReassign, engineerNames, onUpdateDescription, onClose }) {
+export function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhotoUrls = [], siteAddress, onToggle, onReassign, engineerNames, onUpdateDescription, onClose }) {
   const [descDraft, setDescDraft] = useState(todo.description ?? "");
   const [editingDesc, setEditingDesc] = useState(false);
   const sourceLabel = todo.source === "manual" ? "관리자 부여" : todo.source === "quote" ? "견적 연동" : "자재 연동";
@@ -280,9 +292,9 @@ export function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhoto
             </span>
           </div>
         )}
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-400">현장</span>
-          <span className="font-semibold text-slate-700">{todo.siteName}</span>
+        <div className="flex items-center justify-between text-sm gap-3">
+          <span className="text-slate-400 shrink-0">현장</span>
+          <span className="font-semibold text-slate-700 text-right">{siteAddress || todo.siteName}</span>
         </div>
         {todo.billingAmount != null && (
           <div className="flex items-center justify-between text-sm gap-3">
@@ -443,6 +455,7 @@ function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
 
 
 export function TodoManageScreen({ todos, onToggle, onAssignTodo, onReassignTodo, onUpdateTodoDescription, materialRequests, quoteRequests, engineerNames, onBack }) {
+  const sites = useContext(SitesContext);
   const [query, setQuery] = useState("");
   const [source, setSource] = useState("전체");
   const [assignOpen, setAssignOpen] = useState(false);
@@ -530,6 +543,7 @@ export function TodoManageScreen({ todos, onToggle, onAssignTodo, onReassignTodo
             requester={getRequesterName(t, materialRequests, quoteRequests)}
             coAssignees={getCoAssignees(t, todos)}
             supplyPhotoUrls={getSupplyPhotos(t, materialRequests, quoteRequests)}
+            siteAddress={getTodoSiteAddress(t, materialRequests, quoteRequests, sites)}
             onToggle={onToggle}
             onReassign={onReassignTodo}
             engineerNames={engineerNames}
