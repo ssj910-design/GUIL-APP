@@ -648,7 +648,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
         <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-2">
             <AlertOctagon size={18} className="text-red-600" />
-            <h3 className="font-extrabold text-red-700 text-sm whitespace-nowrap">집중관리현장(갇힘·고장다발·지원요청·운행정지)</h3>
+            <h3 className="font-extrabold text-red-700 text-sm whitespace-nowrap">집중관리현장(갇힘·운행정지·고장다발·지원요청)</h3>
           </div>
           {criticalSites.length === 0 ? (
             <p className="text-xs text-red-500">현재 집중 관리 대상 현장이 없습니다.</p>
@@ -666,7 +666,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
                   <button
                     key={s.id}
                     onClick={() => setHistorySite(s)}
-                    className={`w-full flex items-center justify-between bg-white rounded-xl px-3 py-2.5 border text-left active:bg-red-50 ${stopped ? "border-red-300" : "border-red-100"}`}
+                    className={`w-full flex items-center justify-between bg-white rounded-xl px-3 py-2.5 text-left active:bg-red-50 ${stopped ? "border-2 border-red-400" : "border border-red-100"}`}
                   >
                     <div>
                       <p className="font-bold text-slate-800 text-sm">{s.name}{unitLabel ? ` · ${unitLabel}` : ""}</p>

@@ -239,7 +239,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
 
       {/* 집중 관리현장 */}
       <section className="bg-red-50 border border-red-200 rounded-xl p-5 mb-6">
-        <h2 className="text-sm font-extrabold text-red-700 mb-3">집중관리현장(갇힘·고장다발·지원요청·운행정지)</h2>
+        <h2 className="text-sm font-extrabold text-red-700 mb-3">집중관리현장(갇힘·운행정지·고장다발·지원요청)</h2>
         {criticalSites.length === 0 ? (
           <p className="text-xs text-red-500">현재 집중 관리 대상 현장이 없습니다.</p>
         ) : (
@@ -256,7 +256,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
                 <button
                   key={s.id}
                   onClick={() => setHistorySite(s)}
-                  className={`flex items-center justify-between bg-white rounded-lg px-3.5 py-2.5 border text-left ${stopped ? "border-red-300" : "border-red-100"}`}
+                  className={`flex items-center justify-between bg-white rounded-lg px-3.5 py-2.5 text-left ${stopped ? "border-2 border-red-400" : "border border-red-100"}`}
                 >
                   <div className="min-w-0">
                     <p className="font-bold text-slate-800 text-sm truncate">{s.name}{unitText ? ` · ${unitText}` : ""}</p>
