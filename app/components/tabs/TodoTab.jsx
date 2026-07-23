@@ -140,17 +140,18 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
           완료된 항목 보기
         </label>
       </div>
-      <div className="px-5 divide-y divide-slate-100">
+      <div className="px-3 pt-2 space-y-0.5">
         {visible.length === 0 && (
           <p className="text-xs text-slate-400 text-center py-10">완료되지 않은 할 일이 없습니다</p>
         )}
-        {visible.map((t) => {
+        {visible.map((t, i) => {
           const isManual = t.source === "manual";
           const overdue = !t.done && new Date(t.dueDate) < new Date(TODAY_STR);
           const requester = getRequesterName(t, materialRequests, quoteRequests);
           const expanded = expandedId === t.id;
+          // 지브라 스트라이프 — 짝수줄만 살짝 톤(bg-slate-50), 펼친 행은 파란 톤
           return (
-            <div key={t.id} className="py-1">
+            <div key={t.id} className={`rounded-xl px-2 ${expanded ? "bg-blue-50/50" : i % 2 === 1 ? "bg-slate-50" : ""}`}>
               <div className="flex items-start gap-2.5 py-2">
                 <div className="pt-0.5">
                   <TodoCheckbox
