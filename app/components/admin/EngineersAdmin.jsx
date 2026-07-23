@@ -22,14 +22,17 @@ function EngineerRow({ p, unitCount, onSave, onDelete, onOpenContract, dragProps
     || form.hireDate !== (p.hire_date ?? "") || form.address !== (p.address ?? "") || form.vehicleNo !== (p.vehicle_no ?? "");
   return (
     <tr
-      draggable
-      onDragStart={dragProps.onDragStart}
       onDragOver={dragProps.onDragOver}
       onDrop={dragProps.onDrop}
-      onDragEnd={dragProps.onDragEnd}
       className={`border-b border-slate-50 ${dragProps.isDragging ? "opacity-30" : ""} ${dragProps.isOver ? "bg-blue-50" : ""}`}
     >
-      <td className="pl-5 pr-1 py-2.5 text-slate-300 cursor-grab active:cursor-grabbing" title="드래그해서 순서 변경">
+      <td
+        draggable
+        onDragStart={dragProps.onDragStart}
+        onDragEnd={dragProps.onDragEnd}
+        className="pl-5 pr-1 py-2.5 text-slate-300 cursor-grab active:cursor-grabbing"
+        title="드래그해서 순서 변경"
+      >
         <GripVertical size={15} />
       </td>
       <td className="pr-3 py-2.5 whitespace-nowrap">
