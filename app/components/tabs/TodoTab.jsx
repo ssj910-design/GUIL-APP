@@ -13,26 +13,6 @@ import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets
 /* TODO (할일관리)                                                       */
 /* ------------------------------------------------------------------ */
 
-// 완료 처리/취소는 되돌리기 번거로운 동작이라, 실행 전에 한 번 더 확인을 받습니다.
-function confirmToggle(done) {
-  return window.confirm(done ? "완료를 취소하시겠습니까?" : "완료 처리하시겠습니까?");
-}
-
-// 네이티브 confirm()은 일부 모바일 웹뷰에서 "취소"를 눌러도 그대로 진행되는 경우가 있어,
-// 관리자 완료 처리/취소처럼 되돌리기 번거로운 동작은 앱 안에서 직접 그리는 확인 팝업을 쓴다.
-function ConfirmPopup({ message, onConfirm, onCancel }) {
-  return (
-    <div className="fixed inset-0 z-[80] bg-black/40 flex items-center justify-center px-8" onClick={onCancel}>
-      <div className="bg-white rounded-2xl w-full max-w-xs p-5 text-center" onClick={(e) => e.stopPropagation()}>
-        <p className="text-sm font-bold text-slate-800 mb-4">{message}</p>
-        <div className="flex gap-2">
-          <button type="button" onClick={onCancel} className="flex-1 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl py-2.5 active:bg-slate-200">취소</button>
-          <button type="button" onClick={onConfirm} className="flex-1 text-sm font-bold text-white bg-blue-700 rounded-xl py-2.5 active:bg-blue-800">확인</button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // 자재/견적 신청 시점의 신청자 이름을 찾아옵니다. 지급완료 시 실제 담당자를 신청자와
 // 다르게 지정할 수 있어(★ 담당자 재배정 기능), 요청자와 담당자가 다를 수 있습니다.
@@ -98,15 +78,15 @@ function TodoCheckbox({ done, locked, onClick }) {
   return <button type="button" onClick={onClick} className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />;
 }
 
-export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescription, onAssignTodo, onAdminToggle, materialRequests, quoteRequests }) {
+export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescription, onUpdateTodoDueDate, onExtendTodoDueDate, onAssignTodo, onAdminToggle, materialRequests, quoteRequests }) {
   const { name: CURRENT_ENGINEER, engineerNames, role } = useContext(AuthContext);
   const sites = useContext(SitesContext);
   const [showDone, setShowDone] = useState(false);
   const [detailTarget, setDetailTarget] = useState(null);
   const [search, setSearch] = useState("");
   const [assignOpen, setAssignOpen] = useState(false);
-  const [confirmTodo, setConfirmTodo] = useState(null); // 관리자 전용 체크박스 완료처리/취소 확인 팝업 대상
-  const mine = todos.filter((t) => t.assignee === CURRENT_ENGINEER);
+  // 관리자는 본인 담당 할일이 아니라 전체 기사의 할일을 본다.
+  const mine = role === "admin" ? todos : todos.filter((t) => t.assignee === CURRENT_ENGINEER);
 
   async function completeManualTodo(id) {
     await supabase.from("todos").update({ done: true }).eq("id", id);
@@ -175,9 +155,9 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
                   locked={!isManual && role !== "admin"}
                   onClick={
                     role === "admin"
-                      ? () => setConfirmTodo(t)
+                      ? () => onAdminToggle(t.id)
                       : isManual
-                        ? () => confirmToggle(false) && completeManualTodo(t.id)
+                        ? () => completeManualTodo(t.id)
                         : undefined
                   }
                 />
@@ -189,7 +169,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
                 </div>
                 <div className="flex items-center justify-between gap-2 mt-0.5">
                   <p className="text-[11px] text-slate-400 truncate">
-                    기한: {formatShortDate(t.dueDate)}{requester ? ` · 요청자: ${requester}` : ""}
+                    {role === "admin" ? `담당: ${t.assignee} · ` : ""}기한: {formatShortDate(t.dueDate)}{requester ? ` · 요청자: ${requester}` : ""}
                   </p>
                   {!isManual && !t.done && <p className="text-[10px] text-slate-300 shrink-0 whitespace-nowrap">비용청구 시 자동완료</p>}
                 </div>
@@ -203,14 +183,6 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
         <TodoAssignSheet engineerNames={engineerNames} onSubmit={onAssignTodo} onClose={() => setAssignOpen(false)} />
       )}
 
-      {confirmTodo && (
-        <ConfirmPopup
-          message={confirmTodo.done ? "완료를 취소하시겠습니까?" : "완료 처리하시겠습니까?"}
-          onConfirm={() => { onAdminToggle(confirmTodo.id); setConfirmTodo(null); }}
-          onCancel={() => setConfirmTodo(null)}
-        />
-      )}
-
       {detailTodo && (
         <TodoDetailSheet
           todo={detailTodo}
@@ -222,6 +194,8 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
           onReassign={onReassignTodo}
           engineerNames={engineerNames}
           onUpdateDescription={role === "admin" ? onUpdateTodoDescription : null}
+          onUpdateDueDate={role === "admin" ? onUpdateTodoDueDate : null}
+          onExtendDueDate={role !== "admin" ? onExtendTodoDueDate : null}
           onClose={() => setDetailTarget(null)}
         />
       )}
@@ -243,7 +217,7 @@ function TodoRow({ t, onToggle, onOpenDetail }) {
         {!t.done && <DDay dueDate={t.dueDate} />}
       </button>
       <button
-        onClick={() => confirmToggle(t.done) && onToggle(t.id)}
+        onClick={() => onToggle(t.id)}
         className={`w-full mt-2.5 text-xs font-bold py-2 rounded-lg ${t.done ? "bg-slate-100 text-slate-500 active:bg-slate-200" : "bg-blue-700 text-white active:bg-blue-800"}`}
       >
         {t.done ? "완료 취소" : "완료 처리"}
@@ -253,10 +227,12 @@ function TodoRow({ t, onToggle, onOpenDetail }) {
 }
 
 
-export function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhotoUrls = [], siteAddress, onToggle, onReassign, engineerNames, onUpdateDescription, onClose }) {
+export function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhotoUrls = [], siteAddress, onToggle, onReassign, engineerNames, onUpdateDescription, onUpdateDueDate, onExtendDueDate, onClose }) {
   const [descDraft, setDescDraft] = useState(todo.description ?? "");
   const [editingDesc, setEditingDesc] = useState(false);
-  const [confirmingToggle, setConfirmingToggle] = useState(false);
+  const [extending, setExtending] = useState(false);
+  const [extendDate, setExtendDate] = useState(todo.dueDate ?? "");
+  const [extendReason, setExtendReason] = useState("");
   const sourceLabel = todo.source === "manual" ? "관리자 부여" : todo.source === "quote" ? "견적 연동" : "자재 연동";
   const allAssignees = [todo.assignee, ...coAssignees];
 
@@ -391,7 +367,27 @@ export function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhoto
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">마감일</span>
-          <span className="font-semibold text-slate-700">{formatYyMmDd(todo.dueDate)}</span>
+          {onUpdateDueDate ? (
+            <input
+              type="date"
+              className="text-sm font-semibold text-slate-700 border border-slate-200 rounded-lg px-2 py-1"
+              value={todo.dueDate ?? ""}
+              onChange={(e) => { if (e.target.value) onUpdateDueDate(todo.id, e.target.value); }}
+            />
+          ) : (
+            <span className="flex items-center gap-2">
+              <span className="font-semibold text-slate-700">{formatYyMmDd(todo.dueDate)}</span>
+              {onExtendDueDate && (
+                <button
+                  type="button"
+                  onClick={() => { setExtendDate(todo.dueDate ?? ""); setExtendReason(""); setExtending(true); }}
+                  className="text-[11px] font-bold text-blue-600"
+                >
+                  연장
+                </button>
+              )}
+            </span>
+          )}
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">상태</span>
@@ -430,7 +426,7 @@ export function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhoto
         </div>
       )}
       {onToggle ? (
-        <PrimaryButton onClick={() => setConfirmingToggle(true)}>
+        <PrimaryButton onClick={() => { onToggle(todo.id); onClose(); }}>
           {todo.done ? "완료 취소" : "완료 처리"}
         </PrimaryButton>
       ) : todo.done ? (
@@ -442,12 +438,38 @@ export function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhoto
           <Lock size={12} /> 비용청구 시 자동완료
         </div>
       )}
-      {confirmingToggle && (
-        <ConfirmPopup
-          message={todo.done ? "완료를 취소하시겠습니까?" : "완료 처리하시겠습니까?"}
-          onConfirm={() => { onToggle(todo.id); setConfirmingToggle(false); onClose(); }}
-          onCancel={() => setConfirmingToggle(false)}
-        />
+      {extending && (
+        <div className="fixed inset-0 z-[80] bg-black/40 flex items-center justify-center px-8" onClick={() => setExtending(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-xs p-5" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm font-bold text-slate-800 mb-3">마감일 연장</p>
+            <input
+              type="date"
+              className={`${inputCls} mb-2`}
+              value={extendDate}
+              onChange={(e) => setExtendDate(e.target.value)}
+            />
+            <textarea
+              className={inputCls}
+              rows={2}
+              placeholder="연장 사유를 입력하세요"
+              value={extendReason}
+              onChange={(e) => setExtendReason(e.target.value)}
+            />
+            <div className="flex gap-2 mt-3">
+              <button type="button" onClick={() => setExtending(false)} className="flex-1 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl py-2.5 active:bg-slate-200">
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={!extendDate || !extendReason.trim()}
+                onClick={() => { onExtendDueDate(todo.id, extendDate, extendReason.trim()); setExtending(false); }}
+                className="flex-1 text-sm font-bold text-white bg-blue-700 rounded-xl py-2.5 active:bg-blue-800 disabled:bg-slate-300"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </Sheet>
   );
@@ -532,7 +554,7 @@ function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
 }
 
 
-export function TodoManageScreen({ todos, onToggle, onAssignTodo, onReassignTodo, onUpdateTodoDescription, materialRequests, quoteRequests, engineerNames, onBack }) {
+export function TodoManageScreen({ todos, onToggle, onAssignTodo, onReassignTodo, onUpdateTodoDescription, onUpdateTodoDueDate, materialRequests, quoteRequests, engineerNames, onBack }) {
   const sites = useContext(SitesContext);
   const [query, setQuery] = useState("");
   const [source, setSource] = useState("전체");
@@ -626,6 +648,7 @@ export function TodoManageScreen({ todos, onToggle, onAssignTodo, onReassignTodo
             onReassign={onReassignTodo}
             engineerNames={engineerNames}
             onUpdateDescription={onUpdateTodoDescription}
+            onUpdateDueDate={onUpdateTodoDueDate}
             onClose={() => setDetailTarget(null)}
           />
         );

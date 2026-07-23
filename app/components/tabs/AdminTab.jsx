@@ -1131,7 +1131,7 @@ function RestockScreen({ restockRequests, onAttachRestockPhoto, onRemoveRestockS
 }
 
 
-export function AdminTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAdminToggleTodo, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onUpdateTodoDescription, onAddSite, onUpdateSite, onDeleteSite, siteManagers, onAddSiteManager, onUpdateSiteManager, onDeleteSiteManager, onUpdateEngineerContact }) {
+export function AdminTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAdminToggleTodo, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onUpdateTodoDescription, onUpdateTodoDueDate, onAddSite, onUpdateSite, onDeleteSite, siteManagers, onAddSiteManager, onUpdateSiteManager, onDeleteSiteManager, onUpdateEngineerContact }) {
   const sites = useContext(SitesContext);
   const { engineerNames, engineers } = useContext(AuthContext);
   const [billingViewOpen, setBillingViewOpen] = useState(false);
@@ -1152,6 +1152,7 @@ export function AdminTab({ inspections, materialRequests, billings, quoteRequest
         onAssignTodo={onAssignTodo}
         onReassignTodo={onReassignTodo}
         onUpdateTodoDescription={onUpdateTodoDescription}
+        onUpdateTodoDueDate={onUpdateTodoDueDate}
         materialRequests={materialRequests}
         quoteRequests={quoteRequests}
         engineerNames={engineerNames}

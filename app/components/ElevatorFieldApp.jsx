@@ -1433,6 +1433,23 @@ export default function App() {
     setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, description } : t)));
   }
 
+  // ★ 관리자가 마감일을 직접 수정합니다 (사유 기록 없이 바로 반영).
+  async function handleUpdateTodoDueDate(todoId, dueDate) {
+    await supabase.from("todos").update({ due_date: dueDate }).eq("id", todoId);
+    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, dueDate } : t)));
+  }
+
+  // ★ 기사의 마감일 연장 — 승인 절차 없이 바로 반영하되, 언제·왜 늦춰졌는지 나중에 볼 수 있도록
+  // 연장 일자와 사유를 할 일 내용(description)에 함께 남긴다.
+  async function handleExtendTodoDueDate(todoId, dueDate, reason) {
+    const current = todos.find((t) => t.id === todoId);
+    if (!current) return;
+    const logLine = `[기한연장] ${current.dueDate} → ${dueDate} · 사유: ${reason}`;
+    const description = current.description ? `${current.description}\n${logLine}` : logLine;
+    await supabase.from("todos").update({ due_date: dueDate, description }).eq("id", todoId);
+    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, dueDate, description } : t)));
+  }
+
   // ★ 기사 반려: 잘못된 자재가 지급된 경우. 연결된 할 일은 취소되고 담당자에게 재지급 알림이 전달됩니다.
   async function handleReject(requestId, reason) {
     await supabase
@@ -1735,6 +1752,8 @@ export default function App() {
               setTodos={setTodos}
               onReassignTodo={handleReassignTodo}
               onUpdateTodoDescription={handleUpdateTodoDescription}
+              onUpdateTodoDueDate={handleUpdateTodoDueDate}
+              onExtendTodoDueDate={handleExtendTodoDueDate}
               onAssignTodo={handleAssignTodo}
               onAdminToggle={handleAdminToggleTodo}
               materialRequests={materialRequests}
@@ -1760,7 +1779,7 @@ export default function App() {
               onEngineersChange={setEngineers}
             />
           )}
-          {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onUpdateTodoDescription={handleUpdateTodoDescription} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
+          {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onUpdateTodoDescription={handleUpdateTodoDescription} onUpdateTodoDueDate={handleUpdateTodoDueDate} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
           </PullToRefresh>
 
           {/* 우리방 플로팅 버튼 — 어느 탭에서든 즉시 게시판으로 이동 (우리방 탭에서는 숨김) */}
@@ -1822,10 +1841,12 @@ export default function App() {
                 coAssignees={getCoAssignees(t, todos)}
                 supplyPhotoUrls={getSupplyPhotos(t, materialRequests, quoteRequests)}
                 siteAddress={getTodoSiteAddress(t, materialRequests, quoteRequests, sites)}
-                onToggle={t.source === "manual" && !t.done ? handleAdminToggleTodo : null}
+                onToggle={profile.role === "admin" ? handleAdminToggleTodo : (t.source === "manual" && !t.done ? handleAdminToggleTodo : null)}
                 onReassign={handleReassignTodo}
                 engineerNames={engineerNames}
                 onUpdateDescription={profile.role === "admin" ? handleUpdateTodoDescription : null}
+                onUpdateDueDate={profile.role === "admin" ? handleUpdateTodoDueDate : null}
+                onExtendDueDate={profile.role !== "admin" ? handleExtendTodoDueDate : null}
                 onClose={() => setOpenTodoId(null)}
               />
             );
