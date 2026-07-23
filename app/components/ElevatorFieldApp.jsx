@@ -1281,8 +1281,21 @@ export default function App() {
   // ★ 할 일 담당자 재지정 — 신청자와 실제 교체 기사가 지급 시점엔 다르게 정해졌거나
   // 나중에 배차가 바뀐 경우의 안전망입니다. 관리자 화면과 기사 본인 화면 양쪽에서 호출됩니다.
   async function handleReassignTodo(todoId, newAssignee) {
-    await supabase.from("todos").update({ assignee: newAssignee }).eq("id", todoId);
-    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, assignee: newAssignee } : t)));
+    // 재배정하면 걸려 있던 재배정 요청도 함께 해제한다.
+    await supabase.from("todos").update({ assignee: newAssignee, reassign_requested: false, reassign_reason: null, reassign_to: null }).eq("id", todoId);
+    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, assignee: newAssignee, reassignRequested: false, reassignReason: null, reassignTo: null } : t)));
+  }
+
+  // ★ 기사가 자기 할일을 다른 사람에게 넘겨달라고 관리자에게 요청 (사유·희망담당자 선택).
+  async function handleRequestReassignTodo(todoId, reason, to) {
+    await supabase.from("todos").update({ reassign_requested: true, reassign_reason: reason || null, reassign_to: to || null }).eq("id", todoId);
+    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, reassignRequested: true, reassignReason: reason || null, reassignTo: to || null } : t)));
+  }
+
+  // ★ 재배정 요청 해제 — 관리자가 반려하거나 기사가 요청 취소.
+  async function handleClearReassignRequest(todoId) {
+    await supabase.from("todos").update({ reassign_requested: false, reassign_reason: null, reassign_to: null }).eq("id", todoId);
+    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, reassignRequested: false, reassignReason: null, reassignTo: null } : t)));
   }
 
   // ★ 관리자가 할 일에 설명(내용)을 추가/수정합니다.
@@ -1613,6 +1626,8 @@ export default function App() {
               onUpdateTodoDescription={handleUpdateTodoDescription}
               onUpdateTodoDueDate={handleUpdateTodoDueDate}
               onExtendTodoDueDate={handleExtendTodoDueDate}
+              onRequestReassignTodo={handleRequestReassignTodo}
+              onClearReassignRequest={handleClearReassignRequest}
               onAssignTodo={handleAssignTodo}
               onAdminToggle={handleAdminToggleTodo}
               materialRequests={materialRequests}
