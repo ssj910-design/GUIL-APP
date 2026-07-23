@@ -25,26 +25,27 @@ function DueSoonCard({ insp, address, govElevatorNo, onOpenFail, site }) {
         govElevatorNo,
         startDate: govDateToDashed(detailRecord.inspctDe),
       }) : undefined}
-      className={`bg-white rounded-xl border border-slate-200 px-2.5 py-1.5 touch-manipulation ${clickable ? "cursor-pointer active:bg-slate-50" : ""}`}
+      className={`bg-white rounded-xl border border-slate-200 border-l-4 border-l-blue-500 overflow-hidden touch-manipulation ${clickable ? "cursor-pointer active:bg-slate-50" : ""}`}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="font-bold text-slate-800 text-sm">{insp.siteName} · {insp.elevatorNo}</p>
-          <p className="text-[11px] text-slate-400 truncate">{address}</p>
-          {site && <div className="mt-1.5"><MapLinkButtons site={site} /></div>}
+      <div className="p-3.5">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <p className="font-bold text-slate-800 text-[15px] truncate min-w-0">{insp.siteName} · {insp.elevatorNo}</p>
+          <span className="shrink-0 flex items-center gap-1.5">
+            <span className="text-[11px] font-bold text-slate-500">{insp.type}</span>
+            <span className="text-xs font-extrabold text-blue-700 whitespace-nowrap">
+              {insp.dueDate ? formatMonthDay(insp.dueDate) : "-"}{insp.dueTime ? ` ${insp.dueTime}` : ""}
+            </span>
+            <DDay dueDate={insp.dueDate} />
+          </span>
         </div>
-        <div className="shrink-0 flex flex-col items-end gap-0.5">
+        <p className="text-[12px] text-slate-400 truncate mb-2">{address}</p>
+        <div className="flex items-center gap-2">
+          {site && <MapLinkButtons site={site} />}
           {latest && (
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-300">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-300">
               직전검사 {latest.dispWords}
             </span>
           )}
-          <span className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500">{insp.type}</span>
-            <span className="text-xs font-bold text-blue-700 whitespace-nowrap">
-              {insp.dueDate ? formatMonthDay(insp.dueDate) : "-"}{insp.dueTime ? ` ${insp.dueTime}` : ""}
-            </span>
-          </span>
         </div>
       </div>
     </div>
@@ -59,6 +60,7 @@ export function InspectionTab({ inspections }) {
   const mySiteIds = new Set(mySites.map((s) => s.id));
   const [subTab, setSubTab] = useState("검사도래현장");
   const [inspectionFailTarget, setInspectionFailTarget] = useState(null);
+  const [flagSort, setFlagSort] = useState("imminent"); // 조건부/불합격 정렬: imminent(재검 임박순) | severity(불합격순)
 
   // 검사유효기간은 units의 DB 캐시를 쓴다 (전 호기 실시간 API 호출 금지 — 트래픽 한도).
   // 조건부/불합격 현장은 담당현장만(관리자는 전체) — 도래현장 탭은 기존대로 전체 유지.
@@ -76,12 +78,19 @@ export function InspectionTab({ inspections }) {
       .sort((a, b) => a.daysLeft - b.daysLeft)
   );
   // 보완기한이 61일 이상 남은 건 아직 급하지 않으니 목록에서 뺀다(60일은 노출) — 기한 미정은 계속 노출.
+  // 기한 미정(dueDate 없음)은 Infinity로 취급해 맨 아래로 — 임박순 정렬이 뒤집히지 않게.
+  const flagCmp = flagSort === "severity"
+    ? (a, b) => {
+        const sev = (a.result === "fail" ? 0 : 1) - (b.result === "fail" ? 0 : 1);
+        if (sev !== 0) return sev;
+        return (a.dueDate ? +new Date(a.dueDate) : Infinity) - (b.dueDate ? +new Date(b.dueDate) : Infinity);
+      }
+    : (a, b) => (a.dueDate ? +new Date(a.dueDate) : Infinity) - (b.dueDate ? +new Date(b.dueDate) : Infinity);
   const flagged = groupBySite(
     combined
       .filter((i) => i.result === "conditional" || i.result === "fail")
       .filter((i) => !i.dueDate || Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) <= 60)
-      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-  );
+  ).sort(flagCmp);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -104,6 +113,20 @@ export function InspectionTab({ inspections }) {
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> 조건부/불합격 {flagged.length}</span>
         </div>
       </div>
+
+      {subTab === "조건부/불합격 현장" && (
+        <div className="px-5 pb-2 shrink-0 flex gap-1.5">
+          {[{ k: "imminent", label: "재검 임박순" }, { k: "severity", label: "불합격순" }].map((s) => (
+            <button
+              key={s.k}
+              onClick={() => setFlagSort(s.k)}
+              className={`px-3 py-1.5 rounded-full text-[11px] font-bold border ${flagSort === s.k ? "bg-blue-700 text-white border-blue-700" : "bg-white text-slate-500 border-slate-200"}`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-2.5">
         {subTab === "검사도래현장" ? (
@@ -129,29 +152,31 @@ export function InspectionTab({ inspections }) {
         ) : (
           flagged.map((insp) => {
             const isLive = insp.id?.startsWith("unit-");
+            // 불합격=빨강(심각) / 조건부합격=주황(주의) — 고장카드처럼 왼쪽 색바로 구분
+            const bar = insp.result === "fail" ? "border-l-red-500" : "border-l-amber-400";
             return (
               <div
                 key={insp.id}
                 onClick={isLive ? () => setInspectionFailTarget(insp) : undefined}
-                className={`bg-white rounded-xl border border-red-100 p-2.5 touch-manipulation ${isLive ? "active:bg-slate-50 cursor-pointer" : ""}`}
+                className={`bg-white rounded-xl border border-slate-200 border-l-4 ${bar} overflow-hidden touch-manipulation ${isLive ? "active:bg-slate-50 cursor-pointer" : ""}`}
               >
-                <div className="space-y-0.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-bold text-slate-800 text-sm truncate min-w-0">{insp.siteName} · {insp.elevatorNo}</p>
-                    <div className="shrink-0 flex items-center gap-1.5">
-                      <span className="text-xs text-slate-500">{insp.type}</span>
+                <div className="p-3.5">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <p className="font-bold text-slate-800 text-[15px] truncate min-w-0">{insp.siteName} · {insp.elevatorNo}</p>
+                    <span className="shrink-0 flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-slate-500">{insp.type}</span>
                       <Badge result={insp.result} />
-                    </div>
+                    </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-[11px] text-slate-400 truncate min-w-0">{stripCityPrefix(siteById.get(insp.siteId)?.address)}</p>
-                    <div className="shrink-0 flex items-center gap-1">
-                      {insp.dueDate && <span className="text-xs font-bold text-blue-700">{formatMonthDay(insp.dueDate)}</span>}
+                    <p className="text-[12px] text-slate-400 truncate min-w-0">{stripCityPrefix(siteById.get(insp.siteId)?.address)}</p>
+                    <span className="shrink-0 flex items-center gap-1.5">
+                      {insp.dueDate && <span className="text-xs font-extrabold text-blue-700 whitespace-nowrap">{formatMonthDay(insp.dueDate)}</span>}
                       <DDay dueDate={insp.dueDate} />
-                    </div>
+                    </span>
                   </div>
                   {insp.notes && (
-                    <p className="text-[11px] text-red-600 leading-relaxed">지적사항: {insp.notes}</p>
+                    <p className="text-[11px] text-red-600 leading-relaxed bg-red-50 rounded-lg px-2.5 py-1.5 mt-2">지적사항: {insp.notes}</p>
                   )}
                 </div>
               </div>
