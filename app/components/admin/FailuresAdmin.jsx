@@ -167,7 +167,7 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
           </div>
         ) : (
           <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">고장상세내역 *</p>
+            <p className="text-xs font-bold text-slate-500 mb-1">신고내용 *</p>
             <input className={inputCls} placeholder="예: 3층에서 문이 안 닫힘" value={form.detail} onChange={(e) => setForm({ ...form, detail: e.target.value })} />
           </div>
         )}

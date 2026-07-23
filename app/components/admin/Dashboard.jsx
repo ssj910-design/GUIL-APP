@@ -43,16 +43,16 @@ export function FailureDetailContent({ f, units, sites, profiles = [] }) {
     { label: "접수자", value: reporter },
     { label: "담당 기사", value: loc.siteObj?.assignedEngineer || "미배정" },
     { label: "배정 기사", value: f.assignee || "미배정" },
-    { label: "출동/도착시간", value: `${f.dispatchedAt || "-"} / ${f.arrivalTime || "-"}` },
+    { label: "출동 / 도착시간", value: `${f.dispatchedAt || "-"} / ${f.arrivalTime || "-"}` },
     { label: "처리완료시간", value: f.completeTime || "-" },
+    { label: "고장분류", value: faultType || "-" },
+    { label: "신고내용", value: faultDetail || "-" },
   ];
   const textRows = [];
-  textRows.push({ label: "고장분류", value: faultType || "-" });
-  if (faultDetail) textRows.push({ label: "고장상세내역", value: faultDetail });
   if (f.faultSymptom) textRows.push({ label: "증상", value: f.faultSymptom });
   if (f.faultCause) textRows.push({ label: "원인", value: f.faultCause });
-  if (f.processContent) textRows.push({ label: "처리내용", value: f.processContent });
   if (f.faultErrorCode) textRows.push({ label: "에러코드", value: f.faultErrorCode });
+  if (f.processContent) textRows.push({ label: "처리내용", value: f.processContent });
   if (f.processNote) textRows.push({ label: "비고", value: f.processNote });
   if (f.notFault) textRows.push({ label: "구분", value: "고장 아님" });
 
