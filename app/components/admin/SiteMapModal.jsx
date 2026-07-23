@@ -23,13 +23,17 @@ function colorForEngineer(name) {
 }
 
 // Google 지도류의 물방울 핀 모양 — 기본 원형 마커보다 배경 지도 위에서 훨씬 잘 보인다.
+// 안쪽 .site-pin에만 hover 확대를 걸어서, Leaflet이 바깥 div에 직접 쓰는
+// translate3d(위치 이동) 트랜스폼과 충돌하지 않게 한다.
 function pinIcon(L, color) {
   return L.divIcon({
     className: "",
-    html: `<svg width="26" height="36" viewBox="0 0 26 36" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))">
-      <path d="M13 0C5.8 0 0 5.8 0 13c0 9.5 13 23 13 23s13-13.5 13-23C26 5.8 20.2 0 13 0z" fill="${color}" stroke="#fff" stroke-width="1.5"/>
-      <circle cx="13" cy="13" r="5" fill="#fff"/>
-    </svg>`,
+    html: `<div class="site-pin" style="width:26px;height:36px;transform-origin:13px 36px;transition:transform .15s ease;">
+      <svg width="26" height="36" viewBox="0 0 26 36" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))">
+        <path d="M13 0C5.8 0 0 5.8 0 13c0 9.5 13 23 13 23s13-13.5 13-23C26 5.8 20.2 0 13 0z" fill="${color}" stroke="#fff" stroke-width="1.5"/>
+        <circle cx="13" cy="13" r="5" fill="#fff"/>
+      </svg>
+    </div>`,
     iconSize: [26, 36],
     iconAnchor: [13, 36],
     popupAnchor: [0, -32],
@@ -60,7 +64,7 @@ export function SiteMapModal({ sites, units = [], onClose }) {
         const kinds = [...new Set(siteUnits.map((u) => u.kind || u.unitType).filter(Boolean))].join(", ") || "-";
         const models = [...new Set(siteUnits.map((u) => u.model).filter(Boolean))].join(", ") || "-";
         const color = colorForEngineer(s.assignedEngineer);
-        L.marker([s.lat, s.lng], { icon: pinIcon(L, color) })
+        const marker = L.marker([s.lat, s.lng], { icon: pinIcon(L, color) })
           .addTo(map)
           .bindPopup(
             `<div style="font-size:12px;line-height:1.7;min-width:170px">
@@ -72,9 +76,20 @@ export function SiteMapModal({ sites, units = [], onClose }) {
               <div>담당자: ${s.assignedEngineer || "미배정"}</div>
             </div>`
           );
+        // 커서를 올리면 핀이 커지면서 맨 앞으로 — 선택 대상임을 바로 알 수 있게.
+        marker.on("mouseover", function () {
+          this.setZIndexOffset(2000);
+          const pin = this.getElement()?.querySelector(".site-pin");
+          if (pin) pin.style.transform = "scale(1.35)";
+        });
+        marker.on("mouseout", function () {
+          this.setZIndexOffset(0);
+          const pin = this.getElement()?.querySelector(".site-pin");
+          if (pin) pin.style.transform = "scale(1)";
+        });
       });
 
-      // 구/군 이름표 — 해당 구에 속한 현장들의 중심 좌표에 텍스트만 표시 (클릭 불가, 마커 뒤에 깔림).
+      // 구/군 이름표 — 해당 구에 속한 현장들의 중심 좌표에 텍스트만 표시 (클릭 불가, 마커보다 위에 표시).
       const guGroups = new Map();
       withCoords.forEach((s) => {
         const gu = guOf(s.address);
@@ -92,7 +107,7 @@ export function SiteMapModal({ sites, units = [], onClose }) {
             iconSize: [0, 0],
           }),
           interactive: false,
-          zIndexOffset: -1000,
+          zIndexOffset: 10000,
         }).addTo(map);
       });
 
