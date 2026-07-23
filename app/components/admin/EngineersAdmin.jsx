@@ -2,7 +2,7 @@
 
 // 기사 관리 — 프로필(연락처·담당지역) 편집 + 배정 현장·업무량 한눈에.
 import { useState, useRef } from "react";
-import { GripVertical, Paperclip } from "lucide-react";
+import { GripVertical, Paperclip, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto } from "@/lib/photos";
 import { formatPhone, shortDate } from "@/lib/utils";
@@ -213,19 +213,30 @@ function ContractModal({ p, onClose, onSave }) {
   );
 }
 
-// 지급대장 — 이 기사에게 지급완료된 자재·견적 목록을 보여주고, 지급대장 PDF 사본을 첨부한다.
-function LedgerModal({ p, materialRequests, quoteRequests, onClose, onSave }) {
+// 지급대장 — 상비부품 지급내역만 자동 연동하고, 그 외 지급 품목은 수기입력한다.
+// 지급대장 PDF 사본도 여기서 첨부한다.
+function LedgerModal({ p, restockRequests, onClose, onSaveFile, onSaveItems }) {
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
+  const [newItem, setNewItem] = useState({ label: "", date: "", note: "" });
 
-  const items = [
-    ...materialRequests
-      .filter((m) => m.engineer === p.name && m.status === "지급완료")
-      .map((m) => ({ id: `m-${m.id}`, label: m.part, loc: [m.siteName, m.elevatorNo].filter(Boolean).join(" · "), date: m.suppliedDate })),
-    ...quoteRequests
-      .filter((q) => q.engineer === p.name && q.status === "자재지급완료")
-      .map((q) => ({ id: `q-${q.id}`, label: q.constructionType, loc: [q.siteName, q.elevatorNo].filter(Boolean).join(" · "), date: q.suppliedDate })),
-  ].sort((a, b) => String(b.date ?? "").localeCompare(String(a.date ?? "")));
+  const autoItems = restockRequests
+    .filter((r) => r.engineer === p.name && r.status === "완료")
+    .map((r) => ({ id: `r-${r.id}`, label: `${r.part}${r.quantity ? ` ${r.quantity}개` : ""}`, date: r.suppliedDate }))
+    .sort((a, b) => String(b.date ?? "").localeCompare(String(a.date ?? "")));
+
+  const manualItems = p.manual_ledger_items ?? [];
+
+  function addManualItem() {
+    const label = newItem.label.trim();
+    if (!label) return;
+    onSaveItems(p, [...manualItems, { label, date: newItem.date || null, note: newItem.note.trim() || null }]);
+    setNewItem({ label: "", date: "", note: "" });
+  }
+
+  function removeManualItem(idx) {
+    onSaveItems(p, manualItems.filter((_, i) => i !== idx));
+  }
 
   async function handleFile(e) {
     const file = e.target.files?.[0];
@@ -234,7 +245,7 @@ function LedgerModal({ p, materialRequests, quoteRequests, onClose, onSave }) {
     setUploading(true);
     try {
       const url = await uploadPhoto(file, `ledgers/${p.id}`);
-      await onSave(p, url);
+      await onSaveFile(p, url);
     } catch (err) {
       alert("업로드 실패: " + (err.message ?? "알 수 없는 오류"));
     }
@@ -244,22 +255,49 @@ function LedgerModal({ p, materialRequests, quoteRequests, onClose, onSave }) {
   return (
     <Modal title={`${p.name} 지급대장`} onClose={onClose}>
       <div className="mb-4">
-        <p className="text-xs font-bold text-slate-500 mb-2">지급목록 ({items.length}건)</p>
-        {items.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-6 bg-slate-50 rounded-lg">지급 완료된 자재·견적 내역이 없습니다</p>
+        <p className="text-xs font-bold text-slate-500 mb-2">상비부품 지급내역 ({autoItems.length}건)</p>
+        {autoItems.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-4 bg-slate-50 rounded-lg">지급완료된 상비부품이 없습니다</p>
         ) : (
-          <div className="space-y-1.5 max-h-52 overflow-y-auto">
-            {items.map((it) => (
+          <div className="space-y-1.5 max-h-40 overflow-y-auto">
+            {autoItems.map((it) => (
               <div key={it.id} className="flex items-center justify-between gap-2 text-xs border border-slate-100 rounded-lg px-3 py-2">
-                <div className="min-w-0">
-                  <p className="font-bold text-slate-700 truncate">{it.label}</p>
-                  <p className="text-slate-400 truncate">{it.loc || "-"}</p>
-                </div>
+                <span className="font-bold text-slate-700">{it.label}</span>
                 <span className="shrink-0 text-slate-400">{it.date ?? "-"}</span>
               </div>
             ))}
           </div>
         )}
+      </div>
+
+      <div className="mb-4 pt-3 border-t border-slate-100">
+        <p className="text-xs font-bold text-slate-500 mb-2">그 외 지급목록 (수기입력)</p>
+        {manualItems.length > 0 && (
+          <div className="space-y-1.5 mb-2 max-h-40 overflow-y-auto">
+            {manualItems.map((it, idx) => (
+              <div key={idx} className="flex items-center justify-between gap-2 text-xs border border-slate-100 rounded-lg px-3 py-2">
+                <div className="min-w-0">
+                  <p className="font-bold text-slate-700 truncate">{it.label}</p>
+                  {it.note && <p className="text-slate-400 truncate">{it.note}</p>}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-slate-400">{it.date || "-"}</span>
+                  <button onClick={() => removeManualItem(idx)} className="text-slate-300 hover:text-red-500" aria-label="삭제">
+                    <X size={13} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-1.5">
+          <input className={`${inputCls} flex-1`} placeholder="품목 (예: 업무용 콘솔 1대)" value={newItem.label} onChange={(e) => setNewItem({ ...newItem, label: e.target.value })} />
+          <input type="date" className={`${inputCls} w-36`} value={newItem.date} onChange={(e) => setNewItem({ ...newItem, date: e.target.value })} />
+          <button onClick={addManualItem} disabled={!newItem.label.trim()}
+            className="shrink-0 text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-3">
+            추가
+          </button>
+        </div>
       </div>
 
       <div className="pt-3 border-t border-slate-100">
@@ -269,7 +307,7 @@ function LedgerModal({ p, materialRequests, quoteRequests, onClose, onSave }) {
             <a href={p.ledger_url} target="_blank" rel="noreferrer" className="block text-sm font-bold text-blue-700 underline">
               첨부된 지급대장 보기
             </a>
-            <button onClick={() => onSave(p, null)}
+            <button onClick={() => onSaveFile(p, null)}
               className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">
               첨부 삭제
             </button>
@@ -294,7 +332,7 @@ function LedgerModal({ p, materialRequests, quoteRequests, onClose, onSave }) {
 }
 
 export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
-  const { profiles, sites, units, materialRequests, quoteRequests } = data;
+  const { profiles, sites, units, restockRequests } = data;
   // 표시 순서(staff_order)대로 정렬 — 순서 없는 사람은 뒤로. 당직 순번(duty_order)과는
   // 별개 컬럼이라 여기서 드래그로 바꿔도 당직 근무표 로직에 영향이 없다.
   const engineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false)
@@ -382,10 +420,16 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
     setContractTarget((t) => (t && t.id === p.id ? { ...t, contract_url: url } : t));
   }
 
-  async function saveLedger(p, url) {
+  async function saveLedgerFile(p, url) {
     await supabase.from("profiles").update({ ledger_url: url }).eq("id", p.id);
     setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, ledger_url: url } : x)) }));
     setLedgerTarget((t) => (t && t.id === p.id ? { ...t, ledger_url: url } : t));
+  }
+
+  async function saveManualLedgerItems(p, items) {
+    await supabase.from("profiles").update({ manual_ledger_items: items }).eq("id", p.id);
+    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, manual_ledger_items: items } : x)) }));
+    setLedgerTarget((t) => (t && t.id === p.id ? { ...t, manual_ledger_items: items } : t));
   }
 
   return (
@@ -480,10 +524,10 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
       {ledgerTarget && (
         <LedgerModal
           p={ledgerTarget}
-          materialRequests={materialRequests}
-          quoteRequests={quoteRequests}
+          restockRequests={restockRequests}
           onClose={() => setLedgerTarget(null)}
-          onSave={saveLedger}
+          onSaveFile={saveLedgerFile}
+          onSaveItems={saveManualLedgerItems}
         />
       )}
 

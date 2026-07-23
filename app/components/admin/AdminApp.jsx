@@ -8,7 +8,7 @@ import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, Cale
 import { supabase } from "@/lib/supabaseClient";
 import {
   mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest,
-  mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck, mapFeedPost,
+  mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck, mapFeedPost, mapRestockRequest,
 } from "@/lib/mappers";
 import Dashboard from "@/app/components/admin/Dashboard";
 import SitesAdmin from "@/app/components/admin/SitesAdmin";
@@ -45,13 +45,13 @@ export default function AdminApp() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
     sites: [], units: [], siteManagers: [], failures: [], inspections: [],
-    materialRequests: [], quoteRequests: [], todos: [], billings: [],
+    materialRequests: [], quoteRequests: [], restockRequests: [], todos: [], billings: [],
     selfChecks: [], profiles: [], feed: [],
   });
 
   useEffect(() => {
     async function load() {
-      const [sites, units, siteManagers, failures, inspections, materials, quotes, todos, billings, selfChecks, profiles, feed] =
+      const [sites, units, siteManagers, failures, inspections, materials, quotes, restock, todos, billings, selfChecks, profiles, feed] =
         await Promise.all([
           supabase.from("sites").select("*").order("name"),
           supabase.from("units").select("*").order("seq"),
@@ -60,6 +60,7 @@ export default function AdminApp() {
           supabase.from("inspections").select("*").order("due_date"),
           supabase.from("material_requests").select("*").order("created_at", { ascending: false }),
           supabase.from("quote_requests").select("*").order("created_at", { ascending: false }),
+          supabase.from("restock_requests").select("*").order("created_at", { ascending: false }),
           supabase.from("todos").select("*").order("created_at", { ascending: false }),
           supabase.from("billings").select("*").order("created_at", { ascending: false }),
           supabase.from("self_checks").select("*"),
@@ -74,6 +75,7 @@ export default function AdminApp() {
         inspections: (inspections.data ?? []).map(mapInspection),
         materialRequests: (materials.data ?? []).map(mapMaterialRequest),
         quoteRequests: (quotes.data ?? []).map(mapQuoteRequest),
+        restockRequests: (restock.data ?? []).map(mapRestockRequest),
         todos: (todos.data ?? []).map(mapTodo),
         billings: (billings.data ?? []).map(mapBilling),
         selfChecks: (selfChecks.data ?? []).map(mapSelfCheck),
