@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto } from "@/lib/photos";
 import { unitIdFor, addDays, shortDate } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
-import { locOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid, DateTextInput } from "@/app/components/admin/adminShared";
+import { locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid, DateTextInput } from "@/app/components/admin/adminShared";
 
 const MATERIAL_TONE = { 승인대기: "blue", 지급완료: "green", 반려: "red", 교체완료: "indigo" };
 const QUOTE_TONE = { 요청접수: "blue", 견적발행: "amber", 승인: "amber", 지급완료: "green", 교체완료: "indigo" };
@@ -685,6 +685,7 @@ function RequestDetailModal({ target, data, onClose }) {
       <div className="space-y-3 mb-4">
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div><p className="text-xs font-bold text-slate-400 mb-1">현장 · 호기</p><p className="font-semibold text-slate-800">{locOf(data, r.unitId, r.siteName, r.elevatorNo)}</p></div>
+          <div><p className="text-xs font-bold text-slate-400 mb-1">현장 주소</p><p className="font-semibold text-slate-800">{addressOf(data, r.unitId, r.siteName)}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">{isMaterial ? "부품 내역" : "공사 내용"}</p><p className="font-semibold text-slate-800">{isMaterial ? r.part : r.constructionType}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">{isMaterial ? "긴급도" : "현장 담당자 연락처"}</p><p className="font-semibold text-slate-800">{isMaterial ? r.urgency : (r.contactPhone || "-")}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">신청일</p><p className="font-semibold text-slate-800">{shortDate(r.requestedDate)}</p></div>

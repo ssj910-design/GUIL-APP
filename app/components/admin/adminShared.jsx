@@ -5,7 +5,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil } from "lucide-react";
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
-import { shortDate, parseShortDate, autoFormatShortDate } from "@/lib/utils";
+import { shortDate, parseShortDate, autoFormatShortDate, formatUnitLabel } from "@/lib/utils";
 
 export const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
 
@@ -15,6 +15,27 @@ export function locOf(data, unitId, fallbackSiteName, fallbackLabel) {
   if (!u) return [fallbackSiteName, fallbackLabel].filter(Boolean).join(" · ") || "-";
   const s = data.sites.find((x) => x.id === u.siteId);
   return `${s?.name ?? fallbackSiteName ?? "-"} · ${u.unitNo}`;
+}
+
+// 현장명만: unitId → 현장명, 없으면 옛 텍스트
+export function siteOf(data, unitId, fallbackSiteName) {
+  const u = data.units.find((x) => x.id === unitId);
+  if (!u) return fallbackSiteName ?? "-";
+  return data.sites.find((x) => x.id === u.siteId)?.name ?? fallbackSiteName ?? "-";
+}
+
+// 호기만: unitId → 호기명, 없으면 옛 텍스트(N호기로 정규화)
+export function unitOf(data, unitId, fallbackLabel) {
+  const u = data.units.find((x) => x.id === unitId);
+  if (u) return u.unitNo;
+  return fallbackLabel ? formatUnitLabel(fallbackLabel) : "-";
+}
+
+// 현장 주소: unitId로 site를 찾고, 없으면 옛 현장명 텍스트로 매칭
+export function addressOf(data, unitId, fallbackSiteName) {
+  const u = data.units.find((x) => x.id === unitId);
+  const s = u ? data.sites.find((x) => x.id === u.siteId) : data.sites.find((x) => x.name === fallbackSiteName);
+  return s?.address || "-";
 }
 
 // 담당자 표기: profileId → 이름, 없으면 옛 이름 텍스트
