@@ -16,7 +16,21 @@ function colorForEngineer(name) {
   return `hsl(${hash}, 70%, 45%)`;
 }
 
-export function SiteMapModal({ sites, onClose }) {
+// Google 지도류의 물방울 핀 모양 — 기본 원형 마커보다 배경 지도 위에서 훨씬 잘 보인다.
+function pinIcon(L, color) {
+  return L.divIcon({
+    className: "",
+    html: `<svg width="26" height="36" viewBox="0 0 26 36" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))">
+      <path d="M13 0C5.8 0 0 5.8 0 13c0 9.5 13 23 13 23s13-13.5 13-23C26 5.8 20.2 0 13 0z" fill="${color}" stroke="#fff" stroke-width="1.5"/>
+      <circle cx="13" cy="13" r="5" fill="#fff"/>
+    </svg>`,
+    iconSize: [26, 36],
+    iconAnchor: [13, 36],
+    popupAnchor: [0, -32],
+  });
+}
+
+export function SiteMapModal({ sites, units = [], onClose }) {
   const containerRef = useRef(null);
   const mapObjRef = useRef(null);
   const [loading, setLoading] = useState(true);
@@ -28,22 +42,28 @@ export function SiteMapModal({ sites, onClose }) {
       const withCoords = sites.filter((s) => s.lat != null && s.lng != null);
 
       const map = L.map(containerRef.current).setView([37.5665, 126.978], 11);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors",
-        maxZoom: 19,
+      // CARTO Voyager — Google 지도처럼 옅고 깔끔해서 컬러 마커가 두드러진다 (키 발급 불필요).
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+        attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+        maxZoom: 20,
+        subdomains: "abcd",
       }).addTo(map);
 
       withCoords.forEach((s) => {
+        const siteUnits = units.filter((u) => u.siteId === s.id && u.isActive !== false);
+        const kinds = [...new Set(siteUnits.map((u) => u.unitType).filter(Boolean))].join(", ") || "-";
         const color = colorForEngineer(s.assignedEngineer);
-        L.circleMarker([s.lat, s.lng], {
-          radius: 6,
-          color,
-          weight: 1,
-          fillColor: color,
-          fillOpacity: 0.85,
-        })
+        L.marker([s.lat, s.lng], { icon: pinIcon(L, color) })
           .addTo(map)
-          .bindPopup(`<b>${s.name}</b><br/>담당: ${s.assignedEngineer || "미배정"}`);
+          .bindPopup(
+            `<div style="font-size:12px;line-height:1.7;min-width:170px">
+              <div style="font-weight:700;font-size:13px;margin-bottom:2px">${s.name}</div>
+              <div>${s.address || "-"}</div>
+              <div>기종: ${kinds}</div>
+              <div>댓수: ${siteUnits.length}대</div>
+              <div>담당자: ${s.assignedEngineer || "미배정"}</div>
+            </div>`
+          );
       });
 
       if (withCoords.length > 0) {

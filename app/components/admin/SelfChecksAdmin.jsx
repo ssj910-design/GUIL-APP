@@ -235,7 +235,7 @@ export default function SelfChecksAdmin({ data, setData }) {
       </p>
 
       {detail && <EngineerDetailModal name={detail.name} rows={detail.rows} onClose={() => setEngineerKey(null)} />}
-      {mapOpen && <SiteMapModal sites={data.sites} onClose={() => setMapOpen(false)} />}
+      {mapOpen && <SiteMapModal sites={data.sites} units={data.units} onClose={() => setMapOpen(false)} />}
     </div>
   );
 }
