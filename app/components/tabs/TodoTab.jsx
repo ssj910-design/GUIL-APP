@@ -1,5 +1,5 @@
 import { useState, useContext } from "react";
-import { ListTodo, Check, CheckCircle2, Search, Lock, Image as ImageIcon, Download } from "lucide-react";
+import { ListTodo, Check, CheckCircle2, Search, Lock, Image as ImageIcon, Download, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { addDays, formatShortDate, formatYyMmDd } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
@@ -70,11 +70,13 @@ function TodoCheckbox({ done, locked, onClick }) {
   return <button type="button" onClick={onClick} className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />;
 }
 
-export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescription, materialRequests, quoteRequests }) {
+export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescription, onAssignTodo, materialRequests, quoteRequests }) {
   const { name: CURRENT_ENGINEER, engineerNames, role } = useContext(AuthContext);
   const sites = useContext(SitesContext);
   const [showDone, setShowDone] = useState(false);
   const [detailTarget, setDetailTarget] = useState(null);
+  const [search, setSearch] = useState("");
+  const [assignOpen, setAssignOpen] = useState(false);
   const mine = todos.filter((t) => t.assignee === CURRENT_ENGINEER);
 
   async function completeManualTodo(id) {
@@ -82,7 +84,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
     setTodos((prev) => prev.map((x) => (x.id === id ? { ...x, done: true } : x)));
   }
 
-  if (mine.length === 0) {
+  if (mine.length === 0 && role !== "admin") {
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
         <ListTodo size={32} className="text-slate-300 mb-3" />
@@ -92,8 +94,10 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
     );
   }
 
+  const q = search.trim();
   const visible = mine
     .filter((t) => showDone || !t.done)
+    .filter((t) => !q || t.title.includes(q) || (t.siteName ?? "").includes(q))
     .slice()
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
@@ -101,11 +105,32 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
 
   return (
     <div className="flex-1 overflow-y-auto pb-4">
-      <label className="flex items-center gap-1.5 px-5 pt-4 text-xs font-bold text-slate-500">
-        <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} className="w-3.5 h-3.5" />
-        완료된 항목 보기
-      </label>
-      <div className="px-5 pt-2.5 space-y-2.5">
+      <div className="flex items-center gap-2 px-5 pt-4">
+        {role === "admin" && (
+          <button
+            type="button"
+            onClick={() => setAssignOpen(true)}
+            aria-label="할 일 추가"
+            className="shrink-0 w-7 h-7 rounded-full bg-blue-700 text-white flex items-center justify-center active:bg-blue-800"
+          >
+            <Plus size={15} />
+          </button>
+        )}
+        <label className="flex items-center gap-1 text-xs font-bold text-slate-500 shrink-0 whitespace-nowrap">
+          <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} className="w-3.5 h-3.5" />
+          완료된 항목 보기
+        </label>
+        <div className="relative flex-1 min-w-0">
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            className="w-full pl-7 pr-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white"
+            placeholder="검색"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
+      <div className="px-5 divide-y divide-slate-100">
         {visible.length === 0 && (
           <p className="text-xs text-slate-400 text-center py-10">완료되지 않은 할 일이 없습니다</p>
         )}
@@ -114,26 +139,30 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
           const overdue = !t.done && new Date(t.dueDate) < new Date(TODAY_STR);
           const requester = getRequesterName(t, materialRequests, quoteRequests);
           return (
-            <div key={t.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
-              <div className="flex items-start gap-2.5">
-                <div className="pt-0.5">
-                  <TodoCheckbox done={t.done} locked={!isManual} onClick={() => confirmToggle(false) && completeManualTodo(t.id)} />
+            <div key={t.id} className="flex items-start gap-2.5 py-3">
+              <div className="pt-0.5">
+                <TodoCheckbox done={t.done} locked={!isManual} onClick={() => confirmToggle(false) && completeManualTodo(t.id)} />
+              </div>
+              <button type="button" onClick={() => setDetailTarget(t)} className="flex-1 min-w-0 text-left">
+                <div className="flex items-center gap-1.5">
+                  {overdue && <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />}
+                  <p className={`text-sm font-bold ${t.done ? "line-through text-slate-400" : "text-slate-800"}`}>{t.title}</p>
                 </div>
-                <button type="button" onClick={() => setDetailTarget(t)} className="flex-1 text-left">
-                  <div className="flex items-center gap-1.5">
-                    {overdue && <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />}
-                    <p className={`text-sm font-bold ${t.done ? "line-through text-slate-400" : "text-slate-800"}`}>{t.title}</p>
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
+                <div className="flex items-center justify-between gap-2 mt-0.5">
+                  <p className="text-[11px] text-slate-400 truncate">
                     기한: {formatShortDate(t.dueDate)}{requester ? ` · 요청자: ${requester}` : ""}
                   </p>
-                  {!isManual && !t.done && <p className="text-[10px] text-slate-300 mt-0.5">비용청구 시 자동완료</p>}
-                </button>
-              </div>
+                  {!isManual && !t.done && <p className="text-[10px] text-slate-300 shrink-0 whitespace-nowrap">비용청구 시 자동완료</p>}
+                </div>
+              </button>
             </div>
           );
         })}
       </div>
+
+      {assignOpen && (
+        <TodoAssignSheet engineerNames={engineerNames} onSubmit={onAssignTodo} onClose={() => setAssignOpen(false)} />
+      )}
 
       {detailTodo && (
         <TodoDetailSheet

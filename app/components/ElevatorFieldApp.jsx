@@ -1735,6 +1735,7 @@ export default function App() {
               setTodos={setTodos}
               onReassignTodo={handleReassignTodo}
               onUpdateTodoDescription={handleUpdateTodoDescription}
+              onAssignTodo={handleAssignTodo}
               materialRequests={materialRequests}
               quoteRequests={quoteRequests}
             />
