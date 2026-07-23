@@ -344,7 +344,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
 }
 
 
-export function FailureDetailSheet({ failure, failures = [], onClose, onDispatch, onArrive, onOpenResult, onAssignOpen }) {
+export function FailureDetailSheet({ failure, failures = [], nested = false, onClose, onDispatch, onArrive, onOpenResult, onAssignOpen }) {
   const { role } = useContext(AuthContext);
   const sites = useContext(SitesContext);
   const site = sites.find((s) => s.id === failure.siteId);
@@ -359,9 +359,10 @@ export function FailureDetailSheet({ failure, failures = [], onClose, onDispatch
   );
   const liveInfo = liveInspections[0];
   const [photoViewer, setPhotoViewer] = useState(null);
+  const [histTarget, setHistTarget] = useState(null); // 이력 행 클릭 → 그 고장 상세를 위에 얹어 보여준다
   return (
     <>
-    <Sheet title="고장신고 상세" onClose={onClose}>
+    <Sheet title={nested ? "지난 고장 상세" : "고장신고 상세"} onClose={onClose}>
       <div className="bg-slate-100 rounded-xl p-3 mb-3 text-center">
         <p className="font-bold text-slate-800">{failure.siteName} · {unitLabel}</p>
         <p className="text-sm text-blue-700 font-semibold mt-1">{faultType}</p>
@@ -443,6 +444,7 @@ export function FailureDetailSheet({ failure, failures = [], onClose, onDispatch
           </div>
         )}
       </div>
+      {!nested && (
       <div className="mb-4">
         <p className="text-xs font-bold text-slate-500 mb-2 flex items-center gap-1"><Repeat size={12} strokeWidth={2.5} /> 이 호기 고장 이력 {history.length > 0 && `(${history.length})`}</p>
         {history.length === 0 ? (
@@ -453,18 +455,23 @@ export function FailureDetailSheet({ failure, failures = [], onClose, onDispatch
               const ec = parseErrorCode(h.errorCode);
               const done = [h.faultCause, h.processContent].filter(Boolean).join(" → ");
               return (
-                <li key={h.id} className="rounded-lg bg-slate-50 border border-slate-200/70 px-3 py-2">
-                  <div className="flex items-center justify-between gap-2 text-[13px]">
-                    <span className="font-semibold text-slate-700 truncate">{fmtMD(h.createdAt)} · {ec.faultType}{ec.faultDetail && <span className="font-normal text-slate-500"> · {ec.faultDetail}</span>}</span>
-                    <span className={`shrink-0 text-[10px] font-bold ${h.status === "완료" ? "text-emerald-600" : "text-amber-600"}`}>{h.status}</span>
-                  </div>
-                  {(h.assignee || done) && (
-                    <p className="text-[12px] text-slate-500 mt-0.5 truncate">
-                      {h.assignee && <span className="font-medium text-slate-600">{h.assignee}</span>}
-                      {h.assignee && done && " · "}
-                      {done}
-                    </p>
-                  )}
+                <li key={h.id}>
+                  <button type="button" onClick={() => setHistTarget(h)} className="w-full text-left rounded-lg bg-slate-50 border border-slate-200/70 px-3 py-2 active:bg-slate-100">
+                    <div className="flex items-center justify-between gap-2 text-[13px]">
+                      <span className="font-semibold text-slate-700 truncate">{fmtMD(h.createdAt)} · {ec.faultType}{ec.faultDetail && <span className="font-normal text-slate-500"> · {ec.faultDetail}</span>}</span>
+                      <span className="shrink-0 flex items-center gap-1">
+                        <span className={`text-[10px] font-bold ${h.status === "완료" ? "text-emerald-600" : "text-amber-600"}`}>{h.status}</span>
+                        <ChevronRight size={13} className="text-slate-300" />
+                      </span>
+                    </div>
+                    {(h.assignee || done) && (
+                      <p className="text-[12px] text-slate-500 mt-0.5 truncate">
+                        {h.assignee && <span className="font-medium text-slate-600">{h.assignee}</span>}
+                        {h.assignee && done && " · "}
+                        {done}
+                      </p>
+                    )}
+                  </button>
                 </li>
               );
             })}
@@ -472,6 +479,7 @@ export function FailureDetailSheet({ failure, failures = [], onClose, onDispatch
           </ul>
         )}
       </div>
+      )}
       {failure.photoUrls?.length > 0 && (
         <div className="mb-4">
           <p className="text-xs font-bold text-slate-500 mb-2">처리 사진 ({failure.photoUrls.length}장)</p>
@@ -485,8 +493,9 @@ export function FailureDetailSheet({ failure, failures = [], onClose, onDispatch
         </div>
       )}
       {/* 티맵·카카오를 주 액션 버튼 좌측에 붙인다 (미배정 카드와 동일 레이아웃).
-          관리자는 직접 출동하지 않는다 — 미배정 건은 기사 배정, 이미 배정된 건은 재배정 */}
-      {stage !== "done" && (
+          관리자는 직접 출동하지 않는다 — 미배정 건은 기사 배정, 이미 배정된 건은 재배정.
+          읽기전용(nested)일 땐 액션 없이 상세만 본다 */}
+      {!nested && stage !== "done" && (
         <div className="flex items-center gap-2">
           {/* 길안내는 아직 이동이 필요한 단계(배정/출동중)에만 — 도착(작업중) 후엔 이미 현장이라 숨긴다 */}
           {(stage === "pending" || stage === "dispatched") && <MapLinkButtons site={site} />}
@@ -534,6 +543,10 @@ export function FailureDetailSheet({ failure, failures = [], onClose, onDispatch
         date={failure.reportedAt ?? ""}
         onClose={() => setPhotoViewer(null)}
       />
+    )}
+    {/* 이력 행 클릭 시 그 고장 상세를 읽기전용으로 위에 얹는다 (닫으면 이 시트로 복귀) */}
+    {histTarget && (
+      <FailureDetailSheet failure={histTarget} failures={failures} nested onClose={() => setHistTarget(null)} />
     )}
     </>
   );
