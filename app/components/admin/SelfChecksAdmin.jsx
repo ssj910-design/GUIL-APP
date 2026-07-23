@@ -4,12 +4,13 @@
 // 매월 1일 generate_self_checks(ym) 호출로 활성 호기 전체에 줄이 생기고,
 // 기사가 완료 처리하면 남은 줄이 곧 누락 후보다. (DESIGN-v2 §7-3)
 import { useEffect, useState } from "react";
-import { Search } from "lucide-react";
+import { Search, Map as MapIcon } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapSelfCheck, mapSelfCheckItem } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
 import { shortDate } from "@/lib/utils";
 import { locOf, personOf, StatusBadge, AdminTable, Modal, PhotoGrid, inputCls } from "@/app/components/admin/adminShared";
+import { SiteMapModal } from "@/app/components/admin/SiteMapModal";
 import SELF_CHECK_ITEM_CODES from "@/lib/data/selfCheckItemCodes.json";
 
 const RESULT_LABEL = { A: "양호", B: "주의관찰", C: "긴급수리", E: "없음" };
@@ -138,6 +139,7 @@ export default function SelfChecksAdmin({ data, setData }) {
   const [ym, setYm] = useState(TODAY_STR.slice(0, 7));
   const [busy, setBusy] = useState(false);
   const [engineerKey, setEngineerKey] = useState(null);
+  const [mapOpen, setMapOpen] = useState(false);
 
   const rows = selfChecks
     .filter((c) => c.ym === ym)
@@ -186,6 +188,9 @@ export default function SelfChecksAdmin({ data, setData }) {
           <h1 className="text-xl font-extrabold">자체점검 현황</h1>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => setMapOpen(true)} className="flex items-center gap-1.5 text-sm font-bold text-blue-700 bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-2">
+            <MapIcon size={15} /> 지도보기
+          </button>
           <input type="month" className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white" value={ym} onChange={(e) => setYm(e.target.value)} />
           {rows.length === 0 && (
             <button onClick={generate} disabled={busy} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2">
@@ -230,6 +235,7 @@ export default function SelfChecksAdmin({ data, setData }) {
       </p>
 
       {detail && <EngineerDetailModal name={detail.name} rows={detail.rows} onClose={() => setEngineerKey(null)} />}
+      {mapOpen && <SiteMapModal sites={data.sites} onClose={() => setMapOpen(false)} />}
     </div>
   );
 }
