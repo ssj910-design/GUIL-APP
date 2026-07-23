@@ -1,5 +1,5 @@
 import { Fragment, useState, useContext } from "react";
-import { ChevronRight, X, Plus, Search, PackageCheck, PackageX, AlertTriangle } from "lucide-react";
+import { ChevronRight, X, Plus, Search, PackageCheck, PackageX, AlertTriangle, Check } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnits, unitIdFor, profileIdByName, formatPhone } from "@/lib/utils";
 import { TODAY_STR, QUOTE_STAGES, KIT_PARTS } from "@/lib/constants";
@@ -610,8 +610,8 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
   const [quoteForm, setQuoteForm] = useState({ siteId: "", units: [], parts: [emptyPartRow(), emptyPartRow(), emptyPartRow()], contactPhone: "", photos: [], note: "" });
   const [matStep, setMatStep] = useState(0);
   const [quoteStep, setQuoteStep] = useState(0);
-  const [formToast, setFormToast] = useState(""); // 필수 미입력 안내 토스트
-  function toastForm(msg) { setFormToast(msg); setTimeout(() => setFormToast(""), 2500); }
+  const [formToast, setFormToast] = useState(null); // { msg, ok } — 경고(기본)/성공(ok)
+  function toastForm(msg, ok = false) { setFormToast({ msg, ok }); setTimeout(() => setFormToast(null), 2500); }
   const [rejectTarget, setRejectTarget] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
   const [photoViewer, setPhotoViewer] = useState(null);
@@ -666,6 +666,7 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
     setRequests((prev) => [...newRequests, ...prev]);
     setForm({ siteId: "", units: [], parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
     setMatStep(0);
+    toastForm(newRequests.length > 1 ? `자재 신청 ${newRequests.length}건이 접수되었습니다` : "자재 신청이 접수되었습니다", true);
   }
 
   function submitReject() {
@@ -760,6 +761,7 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
     setQuoteRequests((prev) => [...newQuotes, ...prev]);
     setQuoteForm({ siteId: "", units: [], parts: [emptyPartRow(), emptyPartRow(), emptyPartRow()], contactPhone: "", photos: [], note: "" });
     setQuoteStep(0);
+    toastForm(newQuotes.length > 1 ? `견적 요청 ${newQuotes.length}건이 접수되었습니다` : "견적 요청이 접수되었습니다", true);
   }
 
   if (showMaterialHistory) {
@@ -1168,10 +1170,11 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
         />
       )}
 
-      {/* 필수 미입력 안내 토스트 (자재·견적 공용) */}
+      {/* 자재·견적 공용 토스트 — 성공(초록)/필수 미입력 경고(어두움) */}
       {formToast && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-1.5 max-w-[85%]">
-          <AlertTriangle size={14} className="text-amber-400 shrink-0" /> {formToast}
+        <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-50 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-1.5 max-w-[85%] ${formToast.ok ? "bg-emerald-600" : "bg-slate-900"}`}>
+          {formToast.ok ? <Check size={14} className="shrink-0" /> : <AlertTriangle size={14} className="text-amber-400 shrink-0" />}
+          {formToast.msg}
         </div>
       )}
     </div>
