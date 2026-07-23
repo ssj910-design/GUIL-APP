@@ -348,7 +348,29 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
             onDelete={remove}
             onOpenContract={setContractTarget}
             dragProps={{
-              onDragStart: () => setDragIndex(i),
+              onDragStart: (e) => {
+                setDragIndex(i);
+                // 실제 브라우저 기본 고스트(작은 손잡이 셀만) 대신, 행 전체를 반투명
+                // 복제해서 커서를 따라다니게 — 카드를 통째로 드래그하는 느낌을 준다.
+                const tr = e.currentTarget.closest("tr");
+                const rect = tr.getBoundingClientRect();
+                const clone = tr.cloneNode(true);
+                Array.from(tr.children).forEach((cell, idx) => {
+                  clone.children[idx].style.width = `${cell.getBoundingClientRect().width}px`;
+                });
+                const wrapper = document.createElement("div");
+                wrapper.style.cssText = "position:fixed;top:-9999px;left:-9999px;opacity:.6;pointer-events:none;box-shadow:0 12px 28px rgba(0,0,0,.25);border-radius:12px;overflow:hidden;";
+                const table = document.createElement("table");
+                table.style.cssText = `width:${rect.width}px;background:#fff;border-collapse:collapse;`;
+                const tbody = document.createElement("tbody");
+                tbody.appendChild(clone);
+                table.appendChild(tbody);
+                wrapper.appendChild(table);
+                document.body.appendChild(wrapper);
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setDragImage(wrapper, 24, 24);
+                setTimeout(() => wrapper.remove(), 0);
+              },
               onDragOver: (e) => { e.preventDefault(); setOverIndex(i); },
               onDrop: () => handleDrop(i),
               onDragEnd: () => { setDragIndex(null); setOverIndex(null); },
