@@ -615,20 +615,21 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
                 placeholder="항목명·번호로 검색"
                 className={inputCls}
               />
-              <div className="mt-2 max-h-72 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+              {/* 박스 안 스크롤을 없애고 시트 전체가 스크롤되게(중첩 스크롤 제거). 버튼은 44px 터치 표준. */}
+              <div className="mt-2 border border-slate-200 rounded-lg divide-y divide-slate-100">
                 {filteredItemCodes.map((item) => {
                   const current = itemExceptions[item.code]?.result ?? "A";
                   return (
-                    <div key={item.code} className="px-2.5 py-1.5">
-                      <p className="text-[11px] text-slate-600 mb-1 truncate">{item.no} {item.name}</p>
-                      <div className="flex gap-1">
+                    <div key={item.code} className="px-3 py-2.5">
+                      <p className="text-xs text-slate-600 mb-1.5">{item.no} {item.name}</p>
+                      <div className="flex gap-2">
                         {RESULT_OPTIONS.map((o) => (
                           <button
                             key={o.v}
                             type="button"
                             title={o.label}
                             onClick={() => setItemResult(item.code, o.v)}
-                            className={`${o.v === "D" || o.v === "E" ? "px-2 h-7" : "w-7 h-7"} shrink-0 rounded-full text-[11px] font-bold border ${current === o.v ? "bg-blue-700 text-white border-blue-700" : "bg-slate-50 text-slate-400 border-slate-200"}`}
+                            className={`${o.v === "D" || o.v === "E" ? "px-4 h-11" : "w-11 h-11"} shrink-0 rounded-full text-[13px] font-bold border ${current === o.v ? "bg-blue-700 text-white border-blue-700" : "bg-slate-50 text-slate-400 border-slate-200"}`}
                           >
                             {o.v === "D" || o.v === "E" ? o.label : o.v}
                           </button>
