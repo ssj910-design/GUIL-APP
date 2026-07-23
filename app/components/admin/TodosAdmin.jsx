@@ -10,14 +10,14 @@ import { uploadPhoto } from "@/lib/photos";
 import { TODAY_STR } from "@/lib/constants";
 import { addDays, shortDate, formatUnitLabel } from "@/lib/utils";
 import {
-  locOf, siteOf, unitOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills,
+  locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills,
   Modal, SortableTh, sortRows, inputCls, DateTextInput,
 } from "@/app/components/admin/adminShared";
 
 const SOURCE_LABEL = { material: "자재", quote: "견적", manual: "수동" };
 
 // 자재/견적 연동 할일은 title이 "현장명[ 호기] ..." 형태로 저장되는데, 목록에는 이미
-// 별도 "현장"·"호기" 열이 있으니 중복을 피하려고 그 앞부분을 잘라서 보여준다.
+// "현장·호기" 열이 있으니 중복을 피하려고 그 앞부분을 잘라서 보여준다.
 // (호기 라벨이 없던 옛 형식 데이터도 함께 매칭한다. 수동 할일은 제목에 현장명이 없어 그대로 둔다.)
 function displayTitle(t) {
   if (t.source === "manual" || !t.siteName || !t.title) return t.title;
@@ -283,8 +283,7 @@ export default function TodosAdmin({ data, setData }) {
     switch (key) {
       case "source": return SOURCE_LABEL[t.source] ?? t.source ?? "";
       case "title": return displayTitle(t) ?? "";
-      case "site": return siteOf(data, t.unitId, t.siteName);
-      case "unit": return unitOf(data, t.unitId, t.elevatorNo);
+      case "loc": return locOf(data, t.unitId, t.siteName, t.elevatorNo);
       case "person": return personOf(data, t.assigneeId, t.assignee);
       case "assignedDate": return t.assignedDate ?? "";
       case "dueDate": return t.dueDate ?? "";
@@ -389,14 +388,13 @@ export default function TodosAdmin({ data, setData }) {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-        <table className="w-full min-w-[56rem] text-sm">
+        <table className="w-full min-w-[52rem] text-sm">
           <thead>
             <tr className="text-xs text-slate-400 border-b border-slate-100">
               <th className="pl-5 w-8" />
               <SortableTh label="구분" sortKey="source" sort={sort} setSort={setSort} />
+              <SortableTh label="현장 · 호기" sortKey="loc" sort={sort} setSort={setSort} />
               <SortableTh label="할일" sortKey="title" sort={sort} setSort={setSort} />
-              <SortableTh label="현장" sortKey="site" sort={sort} setSort={setSort} />
-              <SortableTh label="호기" sortKey="unit" sort={sort} setSort={setSort} />
               <SortableTh label="담당자" sortKey="person" sort={sort} setSort={setSort} />
               <SortableTh label="배정일" sortKey="assignedDate" sort={sort} setSort={setSort} />
               <SortableTh label="기한" sortKey="dueDate" sort={sort} setSort={setSort} />
@@ -410,9 +408,8 @@ export default function TodosAdmin({ data, setData }) {
                   <input type="checkbox" checked={t.done} onChange={() => toggle(t)} className="w-4 h-4 rounded border-slate-300 cursor-pointer accent-blue-700" />
                 </td>
                 <td className="px-3 py-2.5"><StatusBadge tone={t.source === "manual" ? "slate" : "blue"}>{SOURCE_LABEL[t.source] ?? t.source}</StatusBadge></td>
+                <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{locOf(data, t.unitId, t.siteName, t.elevatorNo)}</td>
                 <td className="px-3 py-2.5 font-semibold">{displayTitle(t)}</td>
-                <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{siteOf(data, t.unitId, t.siteName)}</td>
-                <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{unitOf(data, t.unitId, t.elevatorNo)}</td>
                 <td className="px-3 py-2.5 whitespace-nowrap">{personOf(data, t.assigneeId, t.assignee)}</td>
                 <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(t.assignedDate)}</td>
                 <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(t.dueDate)}</td>
