@@ -1,5 +1,5 @@
 import { Fragment, useState, useContext } from "react";
-import { ChevronRight, X, Plus, Search, PackageCheck, PackageX } from "lucide-react";
+import { ChevronRight, X, Plus, Search, PackageCheck, PackageX, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnits, unitIdFor, profileIdByName, formatPhone } from "@/lib/utils";
 import { TODAY_STR, QUOTE_STAGES, KIT_PARTS } from "@/lib/constants";
@@ -569,6 +569,36 @@ export function PartsRowsInput({ rows, setRows, nameOptions, namePlaceholder = "
 }
 
 
+// 현장의 호기를 그리드로 고르는 공용 위젯 (고장접수와 동일 — 1대면 자동선택, 여러 대 멀티선택).
+function UnitPickGrid({ site, selected, onToggle }) {
+  const us = site ? siteUnits(site) : [];
+  return (
+    <div className="mb-4">
+      <p className="text-xs font-bold text-slate-500 mb-1.5">
+        호기{us.length === 1 ? <span className="text-blue-600 font-semibold"> — 1대 현장, 자동 선택됨</span> : <span className="text-slate-400 font-semibold"> (여러 대면 모두 선택)</span>}
+      </p>
+      <div className="grid grid-cols-3 gap-2">
+        {us.map((u) => (
+          <button
+            key={u}
+            type="button"
+            onClick={() => onToggle(u)}
+            className={`py-3 rounded-xl text-sm font-bold border ${selected.includes(u) ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200 bg-white"}`}
+          >
+            {u}
+          </button>
+        ))}
+      </div>
+      {selected.length > 1 && (
+        <p className="text-[11px] text-blue-600 font-semibold mt-1.5">선택 {selected.length}대 — 호기별로 {selected.length}건이 각각 생성됩니다</p>
+      )}
+    </div>
+  );
+}
+
+const MAT_STEP_TITLES = ["현장·호기·긴급도", "부품·사진·의견"];
+const QUOTE_STEP_TITLES = ["현장·호기·담당자", "견적·사진·의견"];
+
 export function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, setQuoteRequests, restockRequests, kitStock = [], onReceiveRestock }) {
   const sites = useContext(SitesContext);
   const { name: CURRENT_ENGINEER, selfId } = useContext(AuthContext);
@@ -576,8 +606,12 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
   const v2Ready = units.length > 0;
   const [uploadSession] = useState(() => Date.now());
   const [sub, setSub] = useState("material");
-  const [form, setForm] = useState({ siteId: "", unit: "", parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
-  const [quoteForm, setQuoteForm] = useState({ siteId: "", unit: "", parts: [emptyPartRow()], contactPhone: "", photos: [], note: "" });
+  const [form, setForm] = useState({ siteId: "", units: [], parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
+  const [quoteForm, setQuoteForm] = useState({ siteId: "", units: [], parts: [emptyPartRow(), emptyPartRow(), emptyPartRow()], contactPhone: "", photos: [], note: "" });
+  const [matStep, setMatStep] = useState(0);
+  const [quoteStep, setQuoteStep] = useState(0);
+  const [formToast, setFormToast] = useState(""); // 필수 미입력 안내 토스트
+  function toastForm(msg) { setFormToast(msg); setTimeout(() => setFormToast(""), 2500); }
   const [rejectTarget, setRejectTarget] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
   const [photoViewer, setPhotoViewer] = useState(null);
@@ -591,11 +625,15 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
   async function addRequest() {
     if (!form.siteId || !formPartText || form.photos.length === 0) return;
     const site = sites.find((s) => s.id === form.siteId);
-    const newRequest = {
-      id: "m" + Date.now(),
+    if (!site) return;
+    // 선택한 호기마다 신청 1건씩 생성 (지급·비용청구가 호기 단위라 데이터도 호기별로 쪼갠다)
+    const targets = form.units.length ? form.units : [null];
+    const stamp = Date.now();
+    const newRequests = targets.map((u, i) => ({
+      id: "m" + (stamp + i),
       siteId: form.siteId,
       siteName: site.name,
-      elevatorNo: form.unit || null,
+      elevatorNo: u,
       part: formPartText,
       urgency: form.urgency,
       note: form.note,
@@ -606,27 +644,28 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
       status: "승인대기",
       suppliedDate: null,
       rejectReason: null,
-    };
-    await supabase.from("material_requests").insert({
-      id: newRequest.id,
-      site_id: newRequest.siteId,
-      site_name: newRequest.siteName,
-      elevator_no: newRequest.elevatorNo,
-      part: newRequest.part,
-      urgency: newRequest.urgency,
-      note: newRequest.note,
-      photo_count: newRequest.photoCount,
-      photo_urls: newRequest.photoUrls,
-      engineer: newRequest.engineer,
-      requested_date: newRequest.requestedDate,
-      status: newRequest.status,
+    }));
+    await supabase.from("material_requests").insert(newRequests.map((r) => ({
+      id: r.id,
+      site_id: r.siteId,
+      site_name: r.siteName,
+      elevator_no: r.elevatorNo,
+      part: r.part,
+      urgency: r.urgency,
+      note: r.note,
+      photo_count: r.photoCount,
+      photo_urls: r.photoUrls,
+      engineer: r.engineer,
+      requested_date: r.requestedDate,
+      status: r.status,
       ...(v2Ready ? {
-        unit_id: unitIdFor(units, newRequest.siteId, newRequest.elevatorNo),
+        unit_id: unitIdFor(units, r.siteId, r.elevatorNo),
         requester_id: selfId,
       } : {}),
-    });
-    setRequests((prev) => [newRequest, ...prev]);
-    setForm({ siteId: "", unit: "", parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
+    })));
+    setRequests((prev) => [...newRequests, ...prev]);
+    setForm({ siteId: "", units: [], parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
+    setMatStep(0);
   }
 
   function submitReject() {
@@ -651,14 +690,42 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
   const quoteFormText = formatPartRows(quoteForm.parts);
   const quoteValid = quoteForm.siteId && quoteFormText && quoteForm.contactPhone && quoteForm.photos.length > 0;
 
+  // 스텝별 필수 검증 — 미입력이면 안내 문구 반환(다음/제출 막힘), 없으면 null.
+  function matStepError(step) {
+    if (step === 0) {
+      if (!form.siteId) return "현장을 선택해주세요";
+      if (form.units.length === 0) return "호기를 선택해주세요";
+    }
+    if (step === 1) {
+      if (!formPartText) return "부품 내역을 1개 이상 입력해주세요";
+      if (form.photos.length === 0) return "부품 규격 사진을 최소 1장 등록해주세요";
+    }
+    return null;
+  }
+  function quoteStepError(step) {
+    if (step === 0) {
+      if (!quoteForm.siteId) return "현장을 선택해주세요";
+      if (quoteForm.units.length === 0) return "호기를 선택해주세요";
+      if (!quoteForm.contactPhone.trim()) return "현장 견적 담당자 전화번호를 입력해주세요";
+    }
+    if (step === 1) {
+      if (!quoteFormText) return "견적 내역을 1개 이상 입력해주세요";
+      if (quoteForm.photos.length === 0) return "현장 상태 사진을 최소 1장 등록해주세요";
+    }
+    return null;
+  }
+
   async function submitQuote() {
     if (!quoteValid) return;
     const site = sites.find((s) => s.id === quoteForm.siteId);
-    const newQuote = {
-      id: "q" + Date.now(),
+    if (!site) return;
+    const targets = quoteForm.units.length ? quoteForm.units : [null];
+    const stamp = Date.now();
+    const newQuotes = targets.map((u, i) => ({
+      id: "q" + (stamp + i),
       siteId: quoteForm.siteId,
       siteName: site.name,
-      elevatorNo: quoteForm.unit || null,
+      elevatorNo: u,
       constructionType: quoteFormText,
       contactPhone: quoteForm.contactPhone,
       note: quoteForm.note,
@@ -671,27 +738,28 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
       approvedDate: null,
       suppliedDate: null,
       hasSupplyPhoto: false,
-    };
-    await supabase.from("quote_requests").insert({
-      id: newQuote.id,
-      site_id: newQuote.siteId,
-      site_name: newQuote.siteName,
-      elevator_no: newQuote.elevatorNo,
-      construction_type: newQuote.constructionType,
-      contact_phone: newQuote.contactPhone,
-      note: newQuote.note,
-      photo_count: newQuote.photoCount,
-      photo_urls: newQuote.photoUrls,
-      engineer: newQuote.engineer,
-      requested_date: newQuote.requestedDate,
-      status: newQuote.status,
+    }));
+    await supabase.from("quote_requests").insert(newQuotes.map((q) => ({
+      id: q.id,
+      site_id: q.siteId,
+      site_name: q.siteName,
+      elevator_no: q.elevatorNo,
+      construction_type: q.constructionType,
+      contact_phone: q.contactPhone,
+      note: q.note,
+      photo_count: q.photoCount,
+      photo_urls: q.photoUrls,
+      engineer: q.engineer,
+      requested_date: q.requestedDate,
+      status: q.status,
       ...(v2Ready ? {
-        unit_id: unitIdFor(units, newQuote.siteId, newQuote.elevatorNo),
+        unit_id: unitIdFor(units, q.siteId, q.elevatorNo),
         requester_id: selfId,
       } : {}),
-    });
-    setQuoteRequests((prev) => [newQuote, ...prev]);
-    setQuoteForm({ siteId: "", unit: "", parts: [emptyPartRow()], contactPhone: "", photos: [], note: "" });
+    })));
+    setQuoteRequests((prev) => [...newQuotes, ...prev]);
+    setQuoteForm({ siteId: "", units: [], parts: [emptyPartRow(), emptyPartRow(), emptyPartRow()], contactPhone: "", photos: [], note: "" });
+    setQuoteStep(0);
   }
 
   if (showMaterialHistory) {
@@ -741,51 +809,82 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
         <>
           <div className="px-5 pt-4">
             <div className="bg-white rounded-2xl border border-slate-200 p-4 overflow-visible">
-              <Field label="현장 선택">
-                <SiteSearchSelect value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unit: "" })} />
-              </Field>
-              <Field label="호기 선택">
-                <select className={inputCls} value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} disabled={!form.siteId}>
-                  <option value="">호기를 선택해주세요</option>
-                  {form.siteId && siteUnits(sites.find((s) => s.id === form.siteId)).map((u) => <option key={u} value={u}>{u}</option>)}
-                </select>
-              </Field>
-              <Field label="부품 내역">
-                <PartsRowsInput
-                  rows={form.parts}
-                  setRows={(rows) => setForm({ ...form, parts: rows })}
-                  namePlaceholder="예: 1층 승장도어 스위치"
-                  nameLabel="부품명 (해당 층까지 기재)"
-                />
-              </Field>
-              <Field label="긴급도">
-                <div className="flex gap-2">
-                  {["일반", "긴급"].map((u) => (
-                    <button key={u} onClick={() => setForm({ ...form, urgency: u })} className={`flex-1 py-2 rounded-lg text-xs font-bold border ${form.urgency === u ? "bg-blue-700 text-white border-blue-700" : "bg-white border-slate-300 text-slate-500"}`}>
-                      {u}
-                    </button>
-                  ))}
-                </div>
-              </Field>
-              <Field label="부품 규격 사진">
-                <MultiPhotoUpload
-                  photos={form.photos}
-                  uploadFolder={`materials/${uploadSession}`}
-                  onUploaded={(url) => setForm((f) => ({ ...f, photos: [...f.photos, { url }] }))}
-                  onRemove={(idx) => setForm((f) => ({ ...f, photos: f.photos.filter((_, i) => i !== idx) }))}
-                  label="교체할 부품 규격/모델명이 보이도록 촬영"
-                />
-              </Field>
-              <Field label="기사 의견 (교체 사유 및 특이사항)">
-                <textarea
-                  className={inputCls}
-                  rows={3}
-                  placeholder="예: 도어 롤러 마모로 소음 발생, 조속 교체 필요"
-                  value={form.note}
-                  onChange={(e) => setForm({ ...form, note: e.target.value })}
-                />
-              </Field>
-              <PrimaryButton onClick={addRequest} disabled={!form.siteId || !formPartText || form.photos.length === 0}>신청하기</PrimaryButton>
+              {/* 진행바 + 스텝 제목 (고장접수·자체점검과 동일 패턴) */}
+              <div className="flex gap-1 mb-2">
+                {MAT_STEP_TITLES.map((t, i) => <div key={t} className={`flex-1 h-1 rounded-full ${i <= matStep ? "bg-blue-600" : "bg-slate-200"}`} />)}
+              </div>
+              <p className="text-sm font-extrabold text-slate-800 mb-3">{matStep + 1}. {MAT_STEP_TITLES[matStep]}</p>
+
+              {matStep === 0 && (
+                <>
+                  <Field label="현장 선택">
+                    <SiteSearchSelect value={form.siteId} onChange={(id) => {
+                      const s = sites.find((x) => x.id === id);
+                      const us = s ? siteUnits(s) : [];
+                      setForm({ ...form, siteId: id, units: us.length === 1 ? [us[0]] : [] });
+                    }} />
+                  </Field>
+                  {form.siteId && (
+                    <UnitPickGrid
+                      site={sites.find((s) => s.id === form.siteId)}
+                      selected={form.units}
+                      onToggle={(u) => setForm({ ...form, units: form.units.includes(u) ? form.units.filter((x) => x !== u) : [...form.units, u] })}
+                    />
+                  )}
+                  <Field label="긴급도">
+                    <div className="flex gap-2">
+                      {["일반", "긴급"].map((u) => (
+                        <button key={u} type="button" onClick={() => setForm({ ...form, urgency: u })} className={`flex-1 py-2 rounded-lg text-xs font-bold border ${form.urgency === u ? "bg-blue-700 text-white border-blue-700" : "bg-white border-slate-300 text-slate-500"}`}>
+                          {u}
+                        </button>
+                      ))}
+                    </div>
+                  </Field>
+                </>
+              )}
+
+              {matStep === 1 && (
+                <>
+                  <Field label="부품 내역">
+                    <PartsRowsInput
+                      rows={form.parts}
+                      setRows={(rows) => setForm({ ...form, parts: rows })}
+                      namePlaceholder="예: 1층 승장도어 스위치"
+                      nameLabel="부품명 (해당 층까지 기재)"
+                    />
+                  </Field>
+                  <Field label="부품 규격 사진">
+                    <MultiPhotoUpload
+                      photos={form.photos}
+                      uploadFolder={`materials/${uploadSession}`}
+                      onUploaded={(url) => setForm((f) => ({ ...f, photos: [...f.photos, { url }] }))}
+                      onRemove={(idx) => setForm((f) => ({ ...f, photos: f.photos.filter((_, i) => i !== idx) }))}
+                      label="교체할 부품 규격/모델명이 보이도록 촬영"
+                    />
+                  </Field>
+                  <Field label="기사 의견 (교체 사유 및 특이사항)">
+                    <textarea
+                      className={inputCls}
+                      rows={3}
+                      placeholder="예: 도어 롤러 마모로 소음 발생, 조속 교체 필요"
+                      value={form.note}
+                      onChange={(e) => setForm({ ...form, note: e.target.value })}
+                    />
+                  </Field>
+                </>
+              )}
+
+              {/* 하단 이전/다음/신청 — 다음·신청은 필수 미입력이면 막고 토스트 */}
+              <div className="flex gap-2 mt-2">
+                {matStep > 0 && (
+                  <button type="button" onClick={() => setMatStep(0)} className="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200">이전</button>
+                )}
+                {matStep < 1 ? (
+                  <button type="button" onClick={() => { const err = matStepError(0); if (err) { toastForm(err); return; } setMatStep(1); }} className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 active:bg-blue-800">다음</button>
+                ) : (
+                  <div className="flex-1"><PrimaryButton onClick={() => { const err = matStepError(1); if (err) { toastForm(err); return; } addRequest(); }}>신청하기{form.units.length > 1 ? ` (${form.units.length}건)` : ""}</PrimaryButton></div>
+                )}
+              </div>
               <p className="text-[11px] text-slate-400 text-center mt-2">신청 후 자재 담당자의 지급 완료 처리 시 할 일이 자동 생성됩니다</p>
             </div>
           </div>
@@ -936,50 +1035,79 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
       ) : (
         <div className="px-5 pt-4">
           <div className="bg-white rounded-2xl border border-slate-200 p-4 overflow-visible">
-            <Field label="현장 선택">
-              <SiteSearchSelect value={quoteForm.siteId} onChange={(id) => setQuoteForm({ ...quoteForm, siteId: id, unit: "" })} />
-            </Field>
-            <Field label="호기 선택">
-              <select className={inputCls} value={quoteForm.unit} onChange={(e) => setQuoteForm({ ...quoteForm, unit: e.target.value })} disabled={!quoteForm.siteId}>
-                <option value="">호기를 선택해주세요</option>
-                {quoteForm.siteId && siteUnits(sites.find((s) => s.id === quoteForm.siteId)).map((u) => <option key={u} value={u}>{u}</option>)}
-              </select>
-            </Field>
-            <Field label="견적 내역">
-              <PartsRowsInput
-                rows={quoteForm.parts}
-                setRows={(rows) => setQuoteForm({ ...quoteForm, parts: rows })}
-                namePlaceholder="예: 1층 승장도어 스위치"
-                nameLabel="부품명 (해당 층까지 기재)"
-              />
-            </Field>
-            <Field label="현장 견적 담당자 전화번호">
-              <input
-                className={inputCls}
-                placeholder="예: 010-1234-5678"
-                value={quoteForm.contactPhone}
-                onChange={(e) => setQuoteForm({ ...quoteForm, contactPhone: formatPhone(e.target.value) })}
-              />
-            </Field>
-            <Field label="현장 상태 사진">
-              <MultiPhotoUpload
-                photos={quoteForm.photos}
-                uploadFolder={`quotes/${uploadSession}`}
-                onUploaded={(url) => setQuoteForm((f) => ({ ...f, photos: [...f.photos, { url }] }))}
-                onRemove={(idx) => setQuoteForm((f) => ({ ...f, photos: f.photos.filter((_, i) => i !== idx) }))}
-                label="견적이 필요한 현장 상태 촬영"
-              />
-            </Field>
-            <Field label="기사 의견 (견적 사유 및 특이사항)">
-              <textarea
-                className={inputCls}
-                rows={3}
-                placeholder="현장 상태 및 견적 필요 사유를 적어주세요"
-                value={quoteForm.note}
-                onChange={(e) => setQuoteForm({ ...quoteForm, note: e.target.value })}
-              />
-            </Field>
-            <PrimaryButton onClick={submitQuote} disabled={!quoteValid}>견적 요청하기</PrimaryButton>
+            <div className="flex gap-1 mb-2">
+              {QUOTE_STEP_TITLES.map((t, i) => <div key={t} className={`flex-1 h-1 rounded-full ${i <= quoteStep ? "bg-blue-600" : "bg-slate-200"}`} />)}
+            </div>
+            <p className="text-sm font-extrabold text-slate-800 mb-3">{quoteStep + 1}. {QUOTE_STEP_TITLES[quoteStep]}</p>
+
+            {quoteStep === 0 && (
+              <>
+                <Field label="현장 선택">
+                  <SiteSearchSelect value={quoteForm.siteId} onChange={(id) => {
+                    const s = sites.find((x) => x.id === id);
+                    const us = s ? siteUnits(s) : [];
+                    setQuoteForm({ ...quoteForm, siteId: id, units: us.length === 1 ? [us[0]] : [] });
+                  }} />
+                </Field>
+                {quoteForm.siteId && (
+                  <UnitPickGrid
+                    site={sites.find((s) => s.id === quoteForm.siteId)}
+                    selected={quoteForm.units}
+                    onToggle={(u) => setQuoteForm({ ...quoteForm, units: quoteForm.units.includes(u) ? quoteForm.units.filter((x) => x !== u) : [...quoteForm.units, u] })}
+                  />
+                )}
+                <Field label="현장 견적 담당자 전화번호">
+                  <input
+                    className={inputCls}
+                    placeholder="예: 010-1234-5678"
+                    value={quoteForm.contactPhone}
+                    onChange={(e) => setQuoteForm({ ...quoteForm, contactPhone: formatPhone(e.target.value) })}
+                  />
+                </Field>
+              </>
+            )}
+
+            {quoteStep === 1 && (
+              <>
+                <Field label="견적 내역">
+                  <PartsRowsInput
+                    rows={quoteForm.parts}
+                    setRows={(rows) => setQuoteForm({ ...quoteForm, parts: rows })}
+                    namePlaceholder="예: 1층 승장도어 스위치"
+                    nameLabel="부품명 (해당 층까지 기재)"
+                  />
+                </Field>
+                <Field label="현장 상태 사진">
+                  <MultiPhotoUpload
+                    photos={quoteForm.photos}
+                    uploadFolder={`quotes/${uploadSession}`}
+                    onUploaded={(url) => setQuoteForm((f) => ({ ...f, photos: [...f.photos, { url }] }))}
+                    onRemove={(idx) => setQuoteForm((f) => ({ ...f, photos: f.photos.filter((_, i) => i !== idx) }))}
+                    label="견적이 필요한 현장 상태 촬영"
+                  />
+                </Field>
+                <Field label="기사 의견 (견적 사유 및 특이사항)">
+                  <textarea
+                    className={inputCls}
+                    rows={3}
+                    placeholder="현장 상태 및 견적 필요 사유를 적어주세요"
+                    value={quoteForm.note}
+                    onChange={(e) => setQuoteForm({ ...quoteForm, note: e.target.value })}
+                  />
+                </Field>
+              </>
+            )}
+
+            <div className="flex gap-2 mt-2">
+              {quoteStep > 0 && (
+                <button type="button" onClick={() => setQuoteStep(0)} className="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200">이전</button>
+              )}
+              {quoteStep < 1 ? (
+                <button type="button" onClick={() => { const err = quoteStepError(0); if (err) { toastForm(err); return; } setQuoteStep(1); }} className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 active:bg-blue-800">다음</button>
+              ) : (
+                <div className="flex-1"><PrimaryButton onClick={() => { const err = quoteStepError(1); if (err) { toastForm(err); return; } submitQuote(); }}>견적 요청하기{quoteForm.units.length > 1 ? ` (${quoteForm.units.length}건)` : ""}</PrimaryButton></div>
+              )}
+            </div>
           </div>
 
           <div className="pt-4">
@@ -1031,6 +1159,13 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
           date={photoViewer.date ?? ""}
           onClose={() => setPhotoViewer(null)}
         />
+      )}
+
+      {/* 필수 미입력 안내 토스트 (자재·견적 공용) */}
+      {formToast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-1.5 max-w-[85%]">
+          <AlertTriangle size={14} className="text-amber-400 shrink-0" /> {formToast}
+        </div>
       )}
     </div>
   );
