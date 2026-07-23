@@ -6,14 +6,15 @@ import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
 import { DDay, PrimaryButton, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { SitesContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload, SinglePhotoUpload } from "@/app/components/formWidgets";
-import { emptyPartRow, formatPartRows, PartsRowsInput } from "@/app/components/tabs/MaterialTab";
+import { emptyPartRow, formatPartRows, PartsRowsInput, UnitPickGrid } from "@/app/components/tabs/MaterialTab";
 
 
 /* ------------------------------------------------------------------ */
 /* BILLING (비용청구)                                                    */
 /* ------------------------------------------------------------------ */
 
-const BILL_STEP_TITLES = ["청구 정보", "증빙 사진"];
+const BILL_STEP_TITLES = ["청구 정보", "증빙 사진"]; // 자재 지급건(2-step)
+const MAN_BILL_TITLES = ["현장·호기", "교체 내역·비용", "증빙 사진"]; // 직접 입력(3-step)
 
 export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const sites = useContext(SitesContext);
@@ -26,7 +27,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const [materialCost, setMaterialCost] = useState("");
   const [materialReplaceDate, setMaterialReplaceDate] = useState(TODAY_STR);
   const [submitted, setSubmitted] = useState(null);
-  const [manualForm, setManualForm] = useState({ siteId: "", unit: "", parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
+  const [manualForm, setManualForm] = useState({ siteId: "", units: [], parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
   const [materialPhotos, setMaterialPhotos] = useState({ before: [], after: [], confirm: null });
   const [manualPhotos, setManualPhotos] = useState({ before: [], after: [], confirm: null });
   const [billStep, setBillStep] = useState(0); // 0 정보 · 1 증빙사진
@@ -40,7 +41,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const materialPhotosOk = materialPhotos.before.length > 0 && materialPhotos.after.length > 0 && !!materialPhotos.confirm;
   const manualPhotosOk = manualPhotos.before.length > 0 && manualPhotos.after.length > 0 && !!manualPhotos.confirm;
   const materialValid = selected && (isQuoteBilling || Number(materialCost) > 0) && materialPhotosOk;
-  const manualValid = manualForm.siteId && formatPartRows(manualForm.parts) && manualForm.replaceDate && manualForm.contactPhone.trim() && Number(manualForm.cost) > 0 && manualPhotosOk;
+  const manualValid = manualForm.siteId && manualForm.units.length > 0 && formatPartRows(manualForm.parts) && manualForm.replaceDate && manualForm.contactPhone.trim() && Number(manualForm.cost) > 0 && manualPhotosOk;
 
   // 스텝별 필수 검증 — 미입력이면 안내 문구 반환(다음/제출 막힘), 없으면 null.
   function matStepError(step) {
@@ -55,14 +56,18 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     }
     return null;
   }
+  // 직접입력은 3-step: 0 현장·호기 / 1 교체내역·비용 / 2 증빙사진
   function manStepError(step) {
     if (step === 0) {
       if (!manualForm.siteId) return "현장을 선택해주세요";
+      if (manualForm.units.length === 0) return "호기를 선택해주세요";
+    }
+    if (step === 1) {
       if (!formatPartRows(manualForm.parts)) return "교체내역을 1개 이상 입력해주세요";
       if (!manualForm.contactPhone.trim()) return "현장담당자 연락처를 입력해주세요";
       if (!(Number(manualForm.cost) > 0)) return "수리비를 입력해주세요";
     }
-    if (step === 1) {
+    if (step === 2) {
       if (manualPhotos.before.length === 0) return "교체 전 사진을 등록해주세요";
       if (manualPhotos.after.length === 0) return "교체 후 사진을 등록해주세요";
       if (!manualPhotos.confirm) return "교체확인서를 등록해주세요";
@@ -116,18 +121,22 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     if (!manualValid) return;
     const site = sites.find((s) => s.id === manualForm.siteId);
     const partText = formatPartRows(manualForm.parts);
-    onSubmitBilling({
-      type: "manual",
-      siteName: site.name,
-      elevatorNo: manualForm.unit,
-      siteId: site.id,
-      part: partText,
-      cost: manualForm.cost,
-      beforePhotoUrls: manualPhotos.before.map((p) => p.url),
-      afterPhotoUrls: manualPhotos.after.map((p) => p.url),
-      confirmPhotoUrl: manualPhotos.confirm,
-      replaceDate: manualForm.replaceDate,
-      contactPhone: manualForm.contactPhone,
+    // 선택한 호기마다 청구 1건씩 생성 (호기 단위 정합 — 자재/견적과 동일)
+    const targets = manualForm.units.length ? manualForm.units : [null];
+    targets.forEach((u) => {
+      onSubmitBilling({
+        type: "manual",
+        siteName: site.name,
+        elevatorNo: u,
+        siteId: site.id,
+        part: partText,
+        cost: manualForm.cost,
+        beforePhotoUrls: manualPhotos.before.map((p) => p.url),
+        afterPhotoUrls: manualPhotos.after.map((p) => p.url),
+        confirmPhotoUrl: manualPhotos.confirm,
+        replaceDate: manualForm.replaceDate,
+        contactPhone: manualForm.contactPhone,
+      });
     });
     if (manualForm.fromKit) {
       manualForm.parts
@@ -135,7 +144,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
         .forEach((r) => onUseKitPart({ part: r.name.trim(), siteName: site.name, qty: Number(r.qty) }));
     }
     setSubmitted({ siteName: site.name, part: partText, manual: true, fromKit: manualForm.fromKit });
-    setManualForm({ siteId: "", unit: "", parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
+    setManualForm({ siteId: "", units: [], parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
     setManualPhotos({ before: [], after: [], confirm: null });
     setBillStep(0);
     setTimeout(() => setSubmitted(null), 2600);
@@ -272,21 +281,31 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
           <p className="text-[11px] text-slate-400 mb-3 px-1">자재 신청 없이 현장에서 바로 교체한 부품(예비 재고 사용 등)을 직접 입력해 청구합니다.</p>
           <div className="bg-white rounded-2xl border border-slate-200 p-4 overflow-visible">
             <div className="flex gap-1 mb-2">
-              {BILL_STEP_TITLES.map((t, i) => <div key={t} className={`flex-1 h-1 rounded-full ${i <= billStep ? "bg-blue-600" : "bg-slate-200"}`} />)}
+              {MAN_BILL_TITLES.map((t, i) => <div key={t} className={`flex-1 h-1 rounded-full ${i <= billStep ? "bg-blue-600" : "bg-slate-200"}`} />)}
             </div>
-            <p className="text-sm font-extrabold text-slate-800 mb-3">{billStep + 1}. {BILL_STEP_TITLES[billStep]}</p>
+            <p className="text-sm font-extrabold text-slate-800 mb-3">{billStep + 1}. {MAN_BILL_TITLES[billStep]}</p>
 
             {billStep === 0 && (
               <>
                 <Field label="현장 선택">
-                  <SiteSearchSelect value={manualForm.siteId} onChange={(id) => setManualForm({ ...manualForm, siteId: id, unit: "" })} />
+                  <SiteSearchSelect value={manualForm.siteId} onChange={(id) => {
+                    const s = sites.find((x) => x.id === id);
+                    const us = s ? siteUnits(s) : [];
+                    setManualForm({ ...manualForm, siteId: id, units: us.length === 1 ? [us[0]] : [] });
+                  }} />
                 </Field>
-                <Field label="호기 선택">
-                  <select className={inputCls} value={manualForm.unit} onChange={(e) => setManualForm({ ...manualForm, unit: e.target.value })} disabled={!manualForm.siteId}>
-                    <option value="">호기를 선택해주세요</option>
-                    {manualForm.siteId && siteUnits(sites.find((s) => s.id === manualForm.siteId)).map((u) => <option key={u} value={u}>{u}</option>)}
-                  </select>
-                </Field>
+                {manualForm.siteId && (
+                  <UnitPickGrid
+                    site={sites.find((s) => s.id === manualForm.siteId)}
+                    selected={manualForm.units}
+                    onToggle={(u) => setManualForm({ ...manualForm, units: manualForm.units.includes(u) ? manualForm.units.filter((x) => x !== u) : [...manualForm.units, u] })}
+                  />
+                )}
+              </>
+            )}
+
+            {billStep === 1 && (
+              <>
                 <button
                   type="button"
                   onClick={() => setManualForm({ ...manualForm, fromKit: !manualForm.fromKit, parts: [emptyPartRow()] })}
@@ -340,7 +359,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
               </>
             )}
 
-            {billStep === 1 && (
+            {billStep === 2 && (
               <>
                 <Field label="교체 전 사진 (필수)">
                   <MultiPhotoUpload
@@ -374,12 +393,12 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
 
             <div className="flex gap-2 mt-2">
               {billStep > 0 && (
-                <button type="button" onClick={() => setBillStep(0)} className="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200">이전</button>
+                <button type="button" onClick={() => setBillStep((s) => s - 1)} className="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200">이전</button>
               )}
-              {billStep < 1 ? (
-                <button type="button" onClick={() => { const err = manStepError(0); if (err) { toastBill(err); return; } setBillStep(1); }} className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 active:bg-blue-800">다음</button>
+              {billStep < 2 ? (
+                <button type="button" onClick={() => { const err = manStepError(billStep); if (err) { toastBill(err); return; } setBillStep((s) => s + 1); }} className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 active:bg-blue-800">다음</button>
               ) : (
-                <div className="flex-1"><PrimaryButton onClick={() => { const err = manStepError(1); if (err) { toastBill(err); return; } submitManual(); }}>청구 요청 제출</PrimaryButton></div>
+                <div className="flex-1"><PrimaryButton onClick={() => { const err = manStepError(2); if (err) { toastBill(err); return; } submitManual(); }}>청구 요청 제출</PrimaryButton></div>
               )}
             </div>
             {submitted && submitted.manual && (

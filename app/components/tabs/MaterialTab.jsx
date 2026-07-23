@@ -577,7 +577,7 @@ export function PartsRowsInput({ rows, setRows, nameOptions, namePlaceholder = "
 
 
 // 현장의 호기를 그리드로 고르는 공용 위젯 (고장접수와 동일 — 1대면 자동선택, 여러 대 멀티선택).
-function UnitPickGrid({ site, selected, onToggle }) {
+export function UnitPickGrid({ site, selected, onToggle }) {
   const us = site ? siteUnits(site) : [];
   return (
     <div className="mb-4">
