@@ -1158,13 +1158,20 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
 function FailureStatusCard({ f, onOpenDetail, onReassign, canReassign }) {
   const { faultType, faultDetail } = parseErrorCode(f.errorCode);
   const stage = failureStage(f);
+  // 미처리는 그냥 '미처리'로 뭉치지 않고 운행정지·지원미배정·응답대기·미배정으로 구분해 보여준다.
   const state = f.status === "완료"
     ? { bar: "border-l-emerald-500", chip: "bg-emerald-100 text-emerald-700", label: f.processResult || "완료" }
     : f.status === "진행중"
     ? (stage === "arrived"
         ? { bar: "border-l-amber-500", chip: "bg-amber-50 text-amber-600", label: "작업중" }
         : { bar: "border-l-blue-500", chip: "bg-blue-50 text-blue-600", label: "출동중" })
-    : { bar: "border-l-red-400", chip: "bg-red-50 text-red-600", label: "미처리" };
+    : f.escalation === "운행정지"
+    ? { bar: "border-l-red-600", chip: "bg-red-100 text-red-700", label: "운행정지" }
+    : f.escalation === "지원요청"
+    ? { bar: "border-l-amber-500", chip: "bg-amber-100 text-amber-700", label: "지원미배정" }
+    : f.assignee
+    ? { bar: "border-l-amber-400", chip: "bg-amber-50 text-amber-600", label: "응답대기" }
+    : { bar: "border-l-red-400", chip: "bg-red-50 text-red-600", label: "미배정" };
   const who = f.assignee
     ? f.status === "완료" && f.completeTime
       ? `${f.assignee} · ${f.arrivalTime ? f.arrivalTime + " 도착 → " : ""}${f.completeTime} 완료`
@@ -1206,38 +1213,51 @@ function FailureStatusOverview({ failures, onReassign }) {
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
   const [reassignTarget, setReassignTarget] = useState(null);
+  const [filter, setFilter] = useState("all"); // all · 미처리(미배정) · 진행중 · 완료
   const mine = failures.filter((f) => f.assignee === CURRENT_ENGINEER);
   const myDone = mine.filter((f) => f.status === "완료").length;
   const myUndone = mine.filter((f) => f.status !== "완료").length;
   const allDone = failures.filter((f) => f.status === "완료").length;
   const allProcessing = failures.filter((f) => f.status === "진행중").length;
   const allUndone = failures.filter((f) => f.status === "미처리").length;
+  // 필터 칩 = 상태별. '미배정' 칩은 status 미처리(미배정·지원미배정·운행정지·응답대기 포함).
+  const FILTERS = [
+    { key: "all", label: "전체", count: failures.length },
+    { key: "미처리", label: "미배정", count: allUndone },
+    { key: "진행중", label: "진행중", count: allProcessing },
+    { key: "완료", label: "완료", count: allDone },
+  ];
+  const shown = filter === "all" ? failures : failures.filter((f) => f.status === filter);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="px-5 py-4 flex items-start shrink-0">
-        <div className="flex-1">
-          <p className="text-sm font-bold text-blue-700 mb-1.5">내 진행상황</p>
-          <div className="flex items-center gap-3 text-xs text-slate-500">
+      <div className="px-5 py-4 shrink-0">
+        {mine.length > 0 && (
+          <div className="flex items-center gap-3 text-xs text-slate-500 mb-3">
+            <span className="text-[13px] font-bold text-blue-700">내 진행</span>
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> 처리 {myDone}</span>
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> 미처리 {myUndone}</span>
           </div>
-        </div>
-        <div className="w-px self-stretch bg-slate-200 mx-3" />
-        <div className="flex-1">
-          <p className="text-sm font-bold text-blue-700 mb-1.5">전체 진행상황</p>
-          <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> 처리 {allDone}</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> 처리중 {allProcessing}</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> 미처리 {allUndone}</span>
-          </div>
+        )}
+        <div className="flex gap-1.5">
+          {FILTERS.map((flt) => (
+            <button
+              key={flt.key}
+              onClick={() => setFilter(flt.key)}
+              className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
+                filter === flt.key ? "bg-blue-700 text-white border-blue-700" : "bg-white text-slate-600 border-slate-200 active:bg-slate-50"
+              }`}
+            >
+              {flt.label} {flt.count}
+            </button>
+          ))}
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-5 pt-4 pb-24 space-y-2.5">
-        {failures.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-10">고장 접수 이력이 없습니다</p>
+        {shown.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-10">{filter === "all" ? "고장 접수 이력이 없습니다" : "해당 상태의 고장이 없습니다"}</p>
         ) : (
-          failures.map((f) => (
+          shown.map((f) => (
             <FailureStatusCard key={f.id} f={f} onOpenDetail={setDetailTarget} onReassign={setReassignTarget}
               canReassign={role === "admin" && f.status !== "완료" && !!f.assignee} />
           ))
