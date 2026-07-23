@@ -11,7 +11,7 @@ import { SitesContext, UnitsContext, AuthContext } from "@/app/components/contex
 import SELF_CHECK_ITEM_CODES from "@/lib/data/selfCheckItemCodes.json";
 
 /* ------------------------------------------------------------------ */
-/* CHECKUP (정기점검) — self_checks(자체점검 출석부) 실데이터 연동             */
+/* CHECKUP (자체점검) — self_checks(자체점검 출석부) 실데이터 연동             */
 /* 일정 등록 = 이번 달 출석부 행의 planned_date.                            */
 /* 자체점검 등록 = 승강기민원24 실제 웹 등록화면을 참고해 한 화면에서          */
 /* 완료 처리(사내 기록) + 승강기민원24(RegistInspectionService) 제출까지      */
@@ -96,6 +96,12 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   const q = query.trim();
   const checksThisMonth = selfChecks.filter((c) => c.ym === ym && visibleUnitIds.has(c.unitId));
 
+  // 상단 진행률은 "모든 현장보기" 토글과 무관하게 항상 내 담당현장 기준으로만 본다.
+  const myUnitIds = new Set(units.filter((u) => sites.some((s) => s.id === u.siteId && s.assignedEngineer === CURRENT_ENGINEER)).map((u) => u.id));
+  const myChecksThisMonth = selfChecks.filter((c) => c.ym === ym && myUnitIds.has(c.unitId));
+  const myDoneChecks = myChecksThisMonth.filter((c) => c.status === "완료");
+  const myGovSubmittedChecks = myChecksThisMonth.filter((c) => c.govResultCode === "000");
+
   // 이 현장 이번 달 점검 예정일(가장 빠른 것) — 일정 등록된 현장만 값이 있다. 없으면 null(미정).
   const plannedDateOf = (s) => {
     const uids = siteUnitList(s, units).filter((u) => u.id).map((u) => u.id);
@@ -133,7 +139,6 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
       return da - db;
     });
 
-  const plannedChecks = checksThisMonth.filter((c) => c.status === "예정");
   const doneChecks = checksThisMonth
     .filter((c) => c.status === "완료")
     .sort((a, b) => (b.doneDate ?? "").localeCompare(a.doneDate ?? ""));
@@ -370,11 +375,18 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
         ))}
       </div>
 
-      <div className="px-5 pt-4 pb-2 shrink-0 flex items-center justify-between">
-        <p className="text-sm font-bold text-blue-700">진행상황</p>
-        <div className="flex items-center gap-3 text-xs text-slate-500">
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> 계획 {plannedChecks.length}</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-sky-400 inline-block" /> 처리 {doneChecks.length}</span>
+      <div className="px-5 pt-4 pb-2 shrink-0">
+        <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
+          <div className="flex items-center justify-between text-xs mb-1.5">
+            <span className="font-bold text-blue-700">{ym} 내 진행률</span>
+            <span className="text-slate-500">완료 {myDoneChecks.length} / {myChecksThisMonth.length} · 공단 제출 {myGovSubmittedChecks.length}</span>
+          </div>
+          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-blue-600 rounded-full"
+              style={{ width: `${myChecksThisMonth.length ? (myDoneChecks.length / myChecksThisMonth.length) * 100 : 0}%` }}
+            />
+          </div>
         </div>
       </div>
 

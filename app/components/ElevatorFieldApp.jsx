@@ -30,7 +30,7 @@ const TABS = [
   { id: "home", label: "홈", icon: Home },
   { id: "sites", label: "현장정보", icon: Building2 },
   { id: "failure", label: "고장접수", icon: AlertTriangle },
-  { id: "checkup", label: "정기점검", icon: CalendarCheck },
+  { id: "checkup", label: "자체점검", icon: CalendarCheck },
   { id: "inspection", label: "검사관리", icon: ShieldCheck },
   { id: "material", label: "자재·견적", icon: Package },
   { id: "billing", label: "비용청구", icon: Receipt },

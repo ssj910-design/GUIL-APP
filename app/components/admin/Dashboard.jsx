@@ -6,7 +6,7 @@ import { useState } from "react";
 import WeekStrip from "@/app/components/admin/WeekStrip";
 import { AlertOctagon, Plus } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, shortDate, sortEngineersByDistance } from "@/lib/utils";
+import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, shortDate, sortEngineersByDistance, parseErrorCode } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -32,24 +32,27 @@ function Kpi({ label, value, tone = "text-slate-900" }) {
 // 고장상세내역 — 대시보드 집중관리현장 -> 고장내역 -> 이 고장 클릭 시. (FailuresAdmin에서도 재사용)
 // 청구내역(BillingsAdmin.jsx의 BillingDetailModal)과 동일한 구성 — 짧은 항목은
 // 라벨/값 2열 그리드, 긴 텍스트(증상·처리내용 등)는 전체너비 블록, 사진은 PhotoGrid.
-export function FailureDetailContent({ f, units, sites }) {
+export function FailureDetailContent({ f, units, sites, profiles = [] }) {
   const loc = unitLabel(units, sites, f.unitId, f.siteName, f.elevatorNo);
+  const { faultType, faultDetail } = parseErrorCode(f.errorCode);
+  const reporter = profiles.find((p) => p.id === f.createdBy)?.name ?? "-";
   const gridRows = [
     { label: "현장 · 호기", value: `${loc.site} · ${loc.unit}` },
-    { label: "접수번호", value: f.errorCode },
+    { label: "현장 주소", value: loc.siteObj?.address ?? "-" },
     { label: "접수일시", value: f.reportedAt },
-    { label: "신고자 연락처", value: f.reporterPhone || "-" },
+    { label: "접수자", value: reporter },
     { label: "담당 기사", value: loc.siteObj?.assignedEngineer || "미배정" },
     { label: "배정 기사", value: f.assignee || "미배정" },
-    { label: "상태", value: f.escalation ? `${f.status} (${f.escalation})` : f.status },
+    { label: "출동/도착시간", value: `${f.dispatchedAt || "-"} / ${f.arrivalTime || "-"}` },
+    { label: "처리완료시간", value: f.completeTime || "-" },
   ];
   const textRows = [];
+  textRows.push({ label: "고장분류", value: faultType || "-" });
+  if (faultDetail) textRows.push({ label: "고장상세내역", value: faultDetail });
   if (f.faultSymptom) textRows.push({ label: "증상", value: f.faultSymptom });
-  if (f.faultErrorCode) textRows.push({ label: "에러코드", value: f.faultErrorCode });
   if (f.faultCause) textRows.push({ label: "원인", value: f.faultCause });
-  if (f.dispatchedAt) textRows.push({ label: "출동", value: `${f.dispatchedAt}${f.etaMinutes ? ` (${f.etaMinutes}분 소요예정)` : ""}` });
-  if (f.arrivalTime) textRows.push({ label: "도착", value: f.arrivalTime });
   if (f.processContent) textRows.push({ label: "처리내용", value: f.processContent });
+  if (f.faultErrorCode) textRows.push({ label: "에러코드", value: f.faultErrorCode });
   if (f.processNote) textRows.push({ label: "비고", value: f.processNote });
   if (f.notFault) textRows.push({ label: "구분", value: "고장 아님" });
 
@@ -466,7 +469,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
       {/* 고장상세내역 */}
       {failureDetail && (
         <Modal title="고장상세내역" onClose={() => setFailureDetail(null)}>
-          <FailureDetailContent f={failureDetail} units={units} sites={sites} />
+          <FailureDetailContent f={failureDetail} units={units} sites={sites} profiles={profiles} />
         </Modal>
       )}
 

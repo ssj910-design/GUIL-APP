@@ -343,7 +343,7 @@ export default function FailuresAdmin({ data, setData }) {
 
       {detail && (
         <Modal title="고장상세보기" onClose={() => setDetail(null)}>
-          <FailureDetailContent f={detail} units={units} sites={sites} />
+          <FailureDetailContent f={detail} units={units} sites={sites} profiles={profiles} />
         </Modal>
       )}
 
