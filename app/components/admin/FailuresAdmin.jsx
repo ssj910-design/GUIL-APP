@@ -9,6 +9,9 @@ import { TODAY_STR, FAULT_TYPES } from "@/lib/constants";
 import { formatPhone, sortEngineersByDistance } from "@/lib/utils";
 import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls } from "@/app/components/admin/adminShared";
 import { FailureDetailContent } from "@/app/components/admin/Dashboard";
+import { useHolidays } from "@/app/hooks/useHolidays";
+
+const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
 // 대시보드 KPI 카드와 같은 스타일이되, 클릭하면 상태 필터로도 쓰인다.
 function StatBox({ label, value, tone = "text-slate-900", active, onClick, sub }) {
@@ -38,6 +41,7 @@ function FailureTrendChart({ failures }) {
   const [granularity, setGranularity] = useState("month"); // year | month | day
   const [year, setYear] = useState(Number(TODAY_STR.slice(0, 4)));
   const [month, setMonth] = useState(Number(TODAY_STR.slice(5, 7))); // 1~12
+  const { days: HOLIDAY } = useHolidays(year);
 
   const dateStrs = failures.map((f) => kstDateStr(f.createdAt)).filter(Boolean);
 
@@ -64,7 +68,11 @@ function FailureTrendChart({ failures }) {
       if (d.slice(0, 4) !== String(year) || Number(d.slice(5, 7)) !== month) return;
       counts[Number(d.slice(8, 10)) - 1] += 1;
     });
-    bars = counts.map((c, i) => ({ label: `${i + 1}`, count: c }));
+    bars = counts.map((c, i) => {
+      const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
+      const dow = new Date(`${dateStr}T00:00:00`).getDay();
+      return { label: `${i + 1}`, count: c, dow, holidayName: HOLIDAY[dateStr] };
+    });
     periodLabel = `${year}년 ${month}월`;
   }
 
@@ -108,16 +116,21 @@ function FailureTrendChart({ failures }) {
         <p className="text-xs text-slate-400 text-center py-10">표시할 데이터가 없습니다</p>
       ) : (
         <div className="flex items-end gap-1 h-40">
-          {bars.map((b) => (
-            <div key={b.label} className="flex-1 flex flex-col items-center justify-end h-full min-w-0">
-              {b.count > 0 && <span className="text-[10px] font-bold text-slate-500 mb-0.5">{b.count}</span>}
-              <div
-                className="w-full bg-blue-500 rounded-t"
-                style={{ height: `${(b.count / max) * 100}%`, minHeight: b.count > 0 ? "2px" : 0 }}
-              />
-              <span className="text-[10px] text-slate-400 mt-1 truncate">{b.label}</span>
-            </div>
-          ))}
+          {bars.map((b) => {
+            const isSunOrHoliday = b.holidayName || b.dow === 0;
+            const dowColor = isSunOrHoliday ? "text-red-500" : b.dow === 6 ? "text-blue-500" : "text-slate-400";
+            return (
+              <div key={b.label} className="flex-1 flex flex-col items-center justify-end h-full min-w-0" title={b.holidayName || ""}>
+                {b.count > 0 && <span className="text-[10px] font-bold text-slate-500 mb-0.5">{b.count}</span>}
+                <div
+                  className={`w-full rounded-t ${isSunOrHoliday ? "bg-red-400" : "bg-blue-500"}`}
+                  style={{ height: `${(b.count / max) * 100}%`, minHeight: b.count > 0 ? "2px" : 0 }}
+                />
+                <span className={`text-[10px] mt-1 truncate font-semibold ${granularity === "day" ? dowColor : "text-slate-400"}`}>{b.label}</span>
+                {granularity === "day" && <span className={`text-[9px] truncate ${dowColor}`}>{DOW[b.dow]}</span>}
+              </div>
+            );
+          })}
         </div>
       )}
       <p className="text-[11px] text-slate-400 mt-2">{granularity === "year" ? "전체" : periodLabel} 합계 {total}건</p>
