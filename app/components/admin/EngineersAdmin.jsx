@@ -13,7 +13,7 @@ import LeavesAdmin from "@/app/components/admin/LeavesAdmin";
 import WorkCalendar from "@/app/components/admin/WorkCalendar";
 import AttendanceAdmin from "@/app/components/admin/AttendanceAdmin";
 
-function EngineerRow({ p, unitCount, onSave, onDelete, onOpenContract, dragProps }) {
+function EngineerRow({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContract, dragProps }) {
   const [form, setForm] = useState({
     phone: p.phone ?? "", minwonId: p.minwon_id ?? "", hireDate: p.hire_date ?? "",
     address: p.address ?? "", vehicleNo: p.vehicle_no ?? "",
@@ -59,8 +59,12 @@ function EngineerRow({ p, unitCount, onSave, onDelete, onOpenContract, dragProps
         {p.auth_user_id ? <StatusBadge tone="green">계정 연결됨</StatusBadge> : <StatusBadge tone="slate">계정 없음</StatusBadge>}
       </td>
       <td className="px-3 py-2.5 text-right pr-4 whitespace-nowrap">
-        <button onClick={() => onOpenContract(p)}
+        <button onClick={() => onOpenLedger(p)}
           className="text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5">
+          지급대장
+        </button>
+        <button onClick={() => onOpenContract(p)}
+          className="ml-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5">
           근로계약서
         </button>
         <button disabled={!dirty} onClick={() => onSave(p, form)}
@@ -78,7 +82,7 @@ function EngineerRow({ p, unitCount, onSave, onDelete, onOpenContract, dragProps
 
 
 // 모바일용 인사기록카드 — 12칸짜리 표를 가로로 미는 대신 한 사람을 한 장에 담는다.
-function EngineerCard({ p, unitCount, onSave, onDelete, onOpenContract }) {
+function EngineerCard({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContract }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     phone: p.phone ?? "", minwonId: p.minwon_id ?? "", hireDate: p.hire_date ?? "",
@@ -148,6 +152,8 @@ function EngineerCard({ p, unitCount, onSave, onDelete, onOpenContract }) {
           <button disabled={!dirty} onClick={() => { onSave(p, form); setOpen(false); }}
             className="flex-1 text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg py-2.5">저장</button>
         )}
+        <button onClick={() => onOpenLedger(p)}
+          className="text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-2.5">지급대장</button>
         <button onClick={() => onOpenContract(p)}
           className="text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-2.5">근로계약서</button>
         <button onClick={() => onDelete(p)}
@@ -207,8 +213,88 @@ function ContractModal({ p, onClose, onSave }) {
   );
 }
 
+// 지급대장 — 이 기사에게 지급완료된 자재·견적 목록을 보여주고, 지급대장 PDF 사본을 첨부한다.
+function LedgerModal({ p, materialRequests, quoteRequests, onClose, onSave }) {
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+
+  const items = [
+    ...materialRequests
+      .filter((m) => m.engineer === p.name && m.status === "지급완료")
+      .map((m) => ({ id: `m-${m.id}`, label: m.part, loc: [m.siteName, m.elevatorNo].filter(Boolean).join(" · "), date: m.suppliedDate })),
+    ...quoteRequests
+      .filter((q) => q.engineer === p.name && q.status === "자재지급완료")
+      .map((q) => ({ id: `q-${q.id}`, label: q.constructionType, loc: [q.siteName, q.elevatorNo].filter(Boolean).join(" · "), date: q.suppliedDate })),
+  ].sort((a, b) => String(b.date ?? "").localeCompare(String(a.date ?? "")));
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadPhoto(file, `ledgers/${p.id}`);
+      await onSave(p, url);
+    } catch (err) {
+      alert("업로드 실패: " + (err.message ?? "알 수 없는 오류"));
+    }
+    setUploading(false);
+  }
+
+  return (
+    <Modal title={`${p.name} 지급대장`} onClose={onClose}>
+      <div className="mb-4">
+        <p className="text-xs font-bold text-slate-500 mb-2">지급목록 ({items.length}건)</p>
+        {items.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-6 bg-slate-50 rounded-lg">지급 완료된 자재·견적 내역이 없습니다</p>
+        ) : (
+          <div className="space-y-1.5 max-h-52 overflow-y-auto">
+            {items.map((it) => (
+              <div key={it.id} className="flex items-center justify-between gap-2 text-xs border border-slate-100 rounded-lg px-3 py-2">
+                <div className="min-w-0">
+                  <p className="font-bold text-slate-700 truncate">{it.label}</p>
+                  <p className="text-slate-400 truncate">{it.loc || "-"}</p>
+                </div>
+                <span className="shrink-0 text-slate-400">{it.date ?? "-"}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="pt-3 border-t border-slate-100">
+        <p className="text-xs font-bold text-slate-500 mb-2">지급대장 PDF</p>
+        {p.ledger_url ? (
+          <div className="space-y-2">
+            <a href={p.ledger_url} target="_blank" rel="noreferrer" className="block text-sm font-bold text-blue-700 underline">
+              첨부된 지급대장 보기
+            </a>
+            <button onClick={() => onSave(p, null)}
+              className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">
+              첨부 삭제
+            </button>
+          </div>
+        ) : (
+          <>
+            <input ref={fileInputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={handleFile} />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="w-full border-2 border-dashed border-slate-300 rounded-xl py-6 flex flex-col items-center gap-1.5 text-slate-500 disabled:opacity-50"
+            >
+              <Paperclip size={20} />
+              <span className="text-xs font-semibold">{uploading ? "업로드 중..." : "지급대장 PDF 첨부"}</span>
+            </button>
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
-  const { profiles, sites, units } = data;
+  const { profiles, sites, units, materialRequests, quoteRequests } = data;
   // 표시 순서(staff_order)대로 정렬 — 순서 없는 사람은 뒤로. 당직 순번(duty_order)과는
   // 별개 컬럼이라 여기서 드래그로 바꿔도 당직 근무표 로직에 영향이 없다.
   const engineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false)
@@ -217,6 +303,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
   const [contractTarget, setContractTarget] = useState(null);
+  const [ledgerTarget, setLedgerTarget] = useState(null);
   const [dragIndex, setDragIndex] = useState(null);
   const [overIndex, setOverIndex] = useState(null);
   const archived = profiles.filter((p) => p.is_active === false)
@@ -295,6 +382,12 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
     setContractTarget((t) => (t && t.id === p.id ? { ...t, contract_url: url } : t));
   }
 
+  async function saveLedger(p, url) {
+    await supabase.from("profiles").update({ ledger_url: url }).eq("id", p.id);
+    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, ledger_url: url } : x)) }));
+    setLedgerTarget((t) => (t && t.id === p.id ? { ...t, ledger_url: url } : t));
+  }
+
   return (
     <div className="max-w-[100rem] mx-auto">
       <h1 className="text-xl font-extrabold mb-3">인사관리</h1>
@@ -334,7 +427,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
       {importing && <ImportEngineers data={data} setData={setData} onClose={() => setImporting(false)} />}
       <div className="lg:hidden space-y-2.5">
         {engineers.map((p) => (
-          <EngineerCard key={p.id} p={p} unitCount={unitCountOf(p)} onSave={save} onDelete={remove} onOpenContract={setContractTarget} />
+          <EngineerCard key={p.id} p={p} unitCount={unitCountOf(p)} onSave={save} onDelete={remove} onOpenLedger={setLedgerTarget} onOpenContract={setContractTarget} />
         ))}
       </div>
       <div className="hidden lg:block">
@@ -346,6 +439,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
             unitCount={unitCountOf(p)}
             onSave={save}
             onDelete={remove}
+            onOpenLedger={setLedgerTarget}
             onOpenContract={setContractTarget}
             dragProps={{
               onDragStart: (e) => {
@@ -383,6 +477,15 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
       </div>
 
       {contractTarget && <ContractModal p={contractTarget} onClose={() => setContractTarget(null)} onSave={saveContract} />}
+      {ledgerTarget && (
+        <LedgerModal
+          p={ledgerTarget}
+          materialRequests={materialRequests}
+          quoteRequests={quoteRequests}
+          onClose={() => setLedgerTarget(null)}
+          onSave={saveLedger}
+        />
+      )}
 
       {archived.length > 0 && (
         <details className="mt-5 bg-white border border-slate-200 rounded-xl px-4 py-3">
