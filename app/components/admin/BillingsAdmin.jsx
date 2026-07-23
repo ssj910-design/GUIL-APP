@@ -17,7 +17,7 @@ function siteManagerOf(data, unitId, fallbackSiteName) {
   return site?.manager || "-";
 }
 
-function BillingDetailModal({ b, data, onClose, onSave, onToggleFree }) {
+function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPrice }) {
   const { profiles } = data;
   const engineers = profiles.filter((p) => p.role === "engineer");
   const notesReady = data.billings.some((x) => x.notes !== undefined);
@@ -53,6 +53,16 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree }) {
     const reason = prompt("무상 처리 사유를 입력해주세요 (부품 하자 A/S, 서비스 차원 등)");
     if (reason === null) return; // 취소
     await onToggleFree(b, reason.trim() || null);
+    onClose();
+  }
+
+  // 가격 조정 — 청구 금액을 직접 다시 입력한다.
+  async function handleAdjustPrice() {
+    const input = prompt("새 가격을 입력해주세요 (원)", b.cost ?? "");
+    if (input === null) return; // 취소
+    const value = Number(input.replace(/[^0-9.-]/g, ""));
+    if (!input.trim() || Number.isNaN(value)) { alert("올바른 숫자를 입력해주세요"); return; }
+    await onAdjustPrice(b, value);
     onClose();
   }
 
@@ -113,9 +123,14 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree }) {
       </div>
 
       <div className="flex justify-between mt-4">
-        <button onClick={handleToggleFree} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-5 py-2.5">
-          {b.isFree ? "무상 해제하기" : "무상 처리하기"}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={handleToggleFree} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-5 py-2.5">
+            {b.isFree ? "무상 해제하기" : "무상 처리"}
+          </button>
+          <button onClick={handleAdjustPrice} className="text-sm font-bold text-blue-700 bg-white border border-blue-200 rounded-xl px-5 py-2.5">
+            가격 조정
+          </button>
+        </div>
         <button disabled={saving} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
           저장
         </button>
@@ -176,6 +191,13 @@ export default function BillingsAdmin({ data, setData }) {
     }));
   }
 
+  // 가격 조정 — 청구 상세내역에서 금액을 다시 입력했을 때 반영한다.
+  async function adjustPrice(b, cost) {
+    const { error } = await supabase.from("billings").update({ cost }).eq("id", b.id);
+    if (error) { alert("저장 실패: " + error.message); return; }
+    setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, cost } : x)) }));
+  }
+
   return (
     <div className="max-w-6xl">
       <div className="flex items-end justify-between mb-4">
@@ -225,7 +247,7 @@ export default function BillingsAdmin({ data, setData }) {
         ))}
       </AdminTable>
 
-      {detail && <BillingDetailModal b={detail} data={data} onClose={() => setDetail(null)} onSave={saveBilling} onToggleFree={toggleFree} />}
+      {detail && <BillingDetailModal b={detail} data={data} onClose={() => setDetail(null)} onSave={saveBilling} onToggleFree={toggleFree} onAdjustPrice={adjustPrice} />}
     </div>
   );
 }
