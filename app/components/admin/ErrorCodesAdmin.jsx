@@ -65,22 +65,42 @@ function RegisterErrorCodeModal({ models, onClose, onCreate }) {
   );
 }
 
-function ErrorCodeDetailModal({ entry, failures, units, onClose, onSave }) {
+function ErrorCodeDetailModal({ entry, failures, units, onClose, onSave, onDelete }) {
+  const [model, setModel] = useState(entry.model ?? "");
+  const [code, setCode] = useState(entry.code ?? "");
   const [meaning, setMeaning] = useState(entry.meaning ?? "");
   const [commonCause, setCommonCause] = useState(entry.commonCause ?? "");
   const [standardAction, setStandardAction] = useState(entry.standardAction ?? "");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const history = errorCodeHistory(failures, units, entry.model, entry.code);
 
   async function save() {
     setSaving(true);
-    await onSave(entry, { meaning, commonCause, standardAction });
+    await onSave(entry, { model, code, meaning, commonCause, standardAction });
     setSaving(false);
+  }
+
+  async function remove() {
+    if (!confirm(`${entry.model} · ${entry.code} 항목을 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    setDeleting(true);
+    await onDelete(entry);
+    setDeleting(false);
   }
 
   return (
     <Modal title={`${entry.model} · ${entry.code}`} onClose={onClose}>
       <div className="space-y-3 mb-5">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">기종</p>
+            <input className={inputCls} value={model} onChange={(e) => setModel(e.target.value)} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">코드</p>
+            <input className={inputCls} value={code} onChange={(e) => setCode(e.target.value)} />
+          </div>
+        </div>
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">의미</p>
           <input className={inputCls} value={meaning} onChange={(e) => setMeaning(e.target.value)} placeholder="미등록" />
@@ -93,8 +113,11 @@ function ErrorCodeDetailModal({ entry, failures, units, onClose, onSave }) {
           <p className="text-xs font-bold text-slate-500 mb-1">표준 조치법</p>
           <input className={inputCls} value={standardAction} onChange={(e) => setStandardAction(e.target.value)} />
         </div>
-        <div className="flex justify-end">
-          <button disabled={saving} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2">
+        <div className="flex justify-between items-center">
+          <button disabled={deleting} onClick={remove} className="text-sm font-bold text-red-600 bg-red-50 border border-red-100 disabled:opacity-50 rounded-xl px-4 py-2">
+            {deleting ? "삭제 중..." : "삭제"}
+          </button>
+          <button disabled={saving || !model.trim() || !code.trim()} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2">
             {saving ? "저장 중..." : "저장"}
           </button>
         </div>
@@ -154,7 +177,13 @@ export default function ErrorCodesAdmin({ data, setData }) {
   async function saveDetail(entry, patch) {
     const { data: updated, error } = await supabase
       .from("error_codes")
-      .update({ meaning: patch.meaning.trim() || null, common_cause: patch.commonCause.trim() || null, standard_action: patch.standardAction.trim() || null })
+      .update({
+        model: patch.model.trim(),
+        code: patch.code.trim(),
+        meaning: patch.meaning.trim() || null,
+        common_cause: patch.commonCause.trim() || null,
+        standard_action: patch.standardAction.trim() || null,
+      })
       .eq("id", entry.id)
       .select()
       .maybeSingle();
@@ -162,6 +191,13 @@ export default function ErrorCodesAdmin({ data, setData }) {
     const mapped = mapErrorCode(updated);
     setData((prev) => ({ ...prev, errorCodes: prev.errorCodes.map((e) => (e.id === mapped.id ? mapped : e)) }));
     setDetail(mapped);
+  }
+
+  async function deleteErrorCode(entry) {
+    const { error } = await supabase.from("error_codes").delete().eq("id", entry.id);
+    if (error) { alert("삭제 실패: " + error.message); return; }
+    setData((prev) => ({ ...prev, errorCodes: prev.errorCodes.filter((e) => e.id !== entry.id) }));
+    setDetail(null);
   }
 
   return (
@@ -197,7 +233,7 @@ export default function ErrorCodesAdmin({ data, setData }) {
         <RegisterErrorCodeModal models={models} onClose={() => setRegistering(false)} onCreate={createErrorCode} />
       )}
       {detail && (
-        <ErrorCodeDetailModal entry={detail} failures={failures} units={units} onClose={() => setDetail(null)} onSave={saveDetail} />
+        <ErrorCodeDetailModal entry={detail} failures={failures} units={units} onClose={() => setDetail(null)} onSave={saveDetail} onDelete={deleteErrorCode} />
       )}
     </div>
   );
