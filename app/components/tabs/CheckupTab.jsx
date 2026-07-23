@@ -615,13 +615,13 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
                 placeholder="항목명·번호로 검색"
                 className={inputCls}
               />
-              {/* 박스 안 스크롤을 없애고 시트 전체가 스크롤되게(중첩 스크롤 제거). 버튼은 44px 터치 표준. */}
-              <div className="mt-2 border border-slate-200 rounded-lg divide-y divide-slate-100">
+              {/* 바깥 보더 없이 항목별 연회색 카드로 구분. 글씨 크게(16px)·진하게(어르신 가독성). 시트 전체 스크롤. */}
+              <div className="mt-2 space-y-2">
                 {filteredItemCodes.map((item) => {
                   const current = itemExceptions[item.code]?.result ?? "A";
                   return (
-                    <div key={item.code} className="px-3 py-2.5">
-                      <p className="text-xs text-slate-600 mb-1.5">{item.no} {item.name}</p>
+                    <div key={item.code} className="bg-slate-50 rounded-xl px-3.5 py-3">
+                      <p className="text-base font-medium text-slate-800 mb-2 leading-snug">{item.no} {item.name}</p>
                       <div className="flex gap-2">
                         {RESULT_OPTIONS.map((o) => (
                           <button
@@ -629,7 +629,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
                             type="button"
                             title={o.label}
                             onClick={() => setItemResult(item.code, o.v)}
-                            className={`${o.v === "D" || o.v === "E" ? "px-4 h-11" : "w-11 h-11"} shrink-0 rounded-full text-[13px] font-bold border ${current === o.v ? "bg-blue-700 text-white border-blue-700" : "bg-slate-50 text-slate-400 border-slate-200"}`}
+                            className={`${o.v === "D" || o.v === "E" ? "px-4 h-11" : "w-11 h-11"} shrink-0 rounded-full text-[13px] font-bold border ${current === o.v ? "bg-blue-700 text-white border-blue-700" : "bg-white text-slate-400 border-slate-200"}`}
                           >
                             {o.v === "D" || o.v === "E" ? o.label : o.v}
                           </button>
@@ -638,7 +638,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
                     </div>
                   );
                 })}
-                {filteredItemCodes.length === 0 && <p className="text-xs text-slate-400 text-center py-4">검색 결과가 없습니다</p>}
+                {filteredItemCodes.length === 0 && <p className="text-sm text-slate-400 text-center py-4">검색 결과가 없습니다</p>}
               </div>
               {Object.keys(itemExceptions).length > 0 && (
                 <p className="text-[10px] text-amber-600 mt-1">예외 항목(B/C)이 있으면 다음 단계 특이사항에 사유를 함께 적어주세요 — 공단 제출 시 필수입니다.</p>
