@@ -152,12 +152,12 @@ function MaterialHistoryScreen({ requests, todos, isBilled, onBack }) {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <div className="flex gap-2 overflow-x-auto">
+        <div className="flex flex-wrap gap-2">
           {stages.map((s) => (
             <button
               key={s}
               onClick={() => setStage(s)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold shrink-0 ${stage === s ? "bg-blue-700 text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold ${stage === s ? "bg-blue-700 text-white" : "bg-white text-slate-500 border border-slate-200"}`}
             >
               {s}
             </button>
@@ -170,15 +170,16 @@ function MaterialHistoryScreen({ requests, todos, isBilled, onBack }) {
         ) : (
           filtered.map((r) => {
             const linkedTodo = todos?.find((t) => t.materialRequestId === r.id);
+            const bar = r.displayStage === "비용청구완료" ? "border-l-slate-400" : r.displayStage === "지급완료" ? "border-l-emerald-500" : r.displayStage === "반려" ? "border-l-red-500" : "border-l-amber-400";
             return (
               <button
                 key={r.id}
                 type="button"
                 onClick={() => setDetailTarget({ type: "material", data: r })}
-                className={`w-full text-left bg-white rounded-xl border p-3 ${r.status === "반려" ? "border-red-200" : "border-slate-200"}`}
+                className={`w-full text-left bg-white rounded-xl border border-slate-200 border-l-4 ${bar} p-3.5`}
               >
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-slate-700">{r.siteName} · {r.part}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[15px] font-bold text-slate-800 truncate min-w-0">{r.siteName} · {r.part}</p>
                   <span
                     className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
                       r.displayStage === "비용청구완료" ? "bg-slate-100 text-slate-500" :
@@ -250,12 +251,12 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack }) {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <div className="flex gap-2 overflow-x-auto">
+        <div className="flex flex-wrap gap-2">
           {stages.map((s) => (
             <button
               key={s}
               onClick={() => setStage(s)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold shrink-0 ${stage === s ? "bg-blue-700 text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold ${stage === s ? "bg-blue-700 text-white" : "bg-white text-slate-500 border border-slate-200"}`}
             >
               {s}
             </button>
@@ -266,22 +267,24 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack }) {
         {filtered.length === 0 ? (
           <p className="text-xs text-slate-400 text-center py-10">해당 조건의 견적 요청 내역이 없습니다</p>
         ) : (
-          filtered.map((q) => (
+          filtered.map((q) => {
+            const bar = q.displayStage === "비용청구완료" ? "border-l-slate-400" : q.displayStage === "자재지급완료" ? "border-l-emerald-500" : q.displayStage === "승인" ? "border-l-indigo-500" : q.displayStage === "견적발행" ? "border-l-blue-500" : "border-l-amber-400";
+            return (
             <button
               key={q.id}
               type="button"
               onClick={() => setDetailTarget({ type: "quote", data: q })}
-              className="w-full text-left bg-white rounded-xl border border-slate-200 p-3"
+              className={`w-full text-left bg-white rounded-xl border border-slate-200 border-l-4 ${bar} p-3.5`}
             >
               <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0">
                   {q.photoUrls?.length > 0 ? (
-                    <img src={q.photoUrls[0]} alt="" className="w-11 h-11 rounded-lg object-cover border border-slate-200 shrink-0" />
+                    <img src={q.photoUrls[0]} alt="" className="w-12 h-12 rounded-lg object-cover border border-slate-200 shrink-0" />
                   ) : (
-                    <div className="w-11 h-11 rounded-lg bg-slate-100 border border-slate-200 shrink-0" />
+                    <div className="w-12 h-12 rounded-lg bg-slate-100 border border-slate-200 shrink-0" />
                   )}
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-700 truncate">{q.siteName} · {q.constructionType}</p>
+                    <p className="text-[15px] font-bold text-slate-800 truncate">{q.siteName} · {q.constructionType}</p>
                     <p className="text-[11px] text-slate-400">신청일 {q.requestedDate} · 사진 {q.photoCount}장</p>
                   </div>
                 </div>
@@ -317,7 +320,8 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack }) {
                 })}
               </div>
             </button>
-          ))
+            );
+          })
         )}
       </div>
 
@@ -380,12 +384,12 @@ function RestockHistoryScreen({ restockRequests, kitStock, onBack, onReceiveRest
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <div className="flex gap-2 overflow-x-auto">
+        <div className="flex flex-wrap gap-2">
           {stages.map((s) => (
             <button
               key={s}
               onClick={() => setStage(s)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold shrink-0 ${stage === s ? "bg-blue-700 text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold ${stage === s ? "bg-blue-700 text-white" : "bg-white text-slate-500 border border-slate-200"}`}
             >
               {s}
             </button>
@@ -396,15 +400,17 @@ function RestockHistoryScreen({ restockRequests, kitStock, onBack, onReceiveRest
         {filtered.length === 0 ? (
           <p className="text-xs text-slate-400 text-center py-10">해당 조건의 보충 내역이 없습니다</p>
         ) : (
-          filtered.map((r) => (
+          filtered.map((r) => {
+            const bar = r.status === "완료" ? "border-l-emerald-500" : "border-l-amber-400";
+            return (
             <button
               key={r.id}
               type="button"
               onClick={() => setDetailTarget({ type: "restock", data: r })}
-              className="w-full text-left bg-white rounded-xl border border-slate-200 p-3"
+              className={`w-full text-left bg-white rounded-xl border border-slate-200 border-l-4 ${bar} p-3.5`}
             >
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-slate-700">{r.part}</p>
+                <p className="text-[15px] font-bold text-slate-800">{r.part}</p>
                 <span
                   className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
                     r.status === "완료" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
@@ -445,7 +451,8 @@ function RestockHistoryScreen({ restockRequests, kitStock, onBack, onReceiveRest
                 <p className="text-[10px] text-slate-400 mt-1.5 text-center">수령 완료 · {r.receivedAt.slice(0, 10)}</p>
               )}
             </button>
-          ))
+            );
+          })
         )}
       </div>
 
