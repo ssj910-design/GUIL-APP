@@ -326,9 +326,9 @@ function periodOf(note) {
 
 // 홈탭용 워크 캘린더 미리보기 — 관리자 대시보드의 WeekStrip(admin/WeekStrip.jsx)을 좁은
 // 모바일 화면에 맞게 압축한 버전. 카드 폭이 좁아 "당직 아무개" 같은 라벨은 안 들어가서
-// 색점(당직=초록/숙직=파랑/휴가=호박색)만으로 구분하고 이름만 보여준다. 오늘은 고정으로
-// 가운데 두고 앞뒤 3일씩 총 7칸을 가로 스크롤로 넘겨본다(폭이 375px 안팎이라 전부 한 화면에
-// 안 들어가는 게 정상 — 스와이프 전제).
+// 색점(당직=초록/숙직=파랑/휴가=호박색)만으로 구분하고 이름만 보여준다. 오늘을 맨 첫 칸에
+// 고정하고 앞으로 6일치를 이어서 총 7칸을 가로 스크롤로 넘겨본다(폭이 375px 안팎이라 전부
+// 한 화면에 안 들어가는 게 정상 — 스와이프 전제).
 function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
   const [duties, setDuties] = useState([]);
   const [leaves, setLeaves] = useState([]);
@@ -337,7 +337,7 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
   const center = new Date(`${TODAY_STR}T00:00:00`);
   const week = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(center);
-    d.setDate(center.getDate() + (i - 3));
+    d.setDate(center.getDate() + i);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   });
   const from = week[0], to = week[6];
