@@ -26,6 +26,105 @@ function StatBox({ label, value, tone = "text-slate-900", active, onClick, sub }
   );
 }
 
+// KST 기준 "YYYY-MM-DD" — created_at(실제 등록 시각, UTC)을 연/월/일로 집계할 때 이 문자열만 자른다.
+function kstDateStr(iso) {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
+}
+
+// 고장 발생 추이 — 연도별/월별/일별로 끊어보는 막대그래프. 새 차트 라이브러리 없이
+// div 높이(%)만으로 그린다 (SelfChecksAdmin 진행률 바와 같은 방식).
+function FailureTrendChart({ failures }) {
+  const [granularity, setGranularity] = useState("month"); // year | month | day
+  const [year, setYear] = useState(Number(TODAY_STR.slice(0, 4)));
+  const [month, setMonth] = useState(Number(TODAY_STR.slice(5, 7))); // 1~12
+
+  const dateStrs = failures.map((f) => kstDateStr(f.createdAt)).filter(Boolean);
+
+  let bars = [];
+  let periodLabel = "";
+
+  if (granularity === "year") {
+    const counts = new Map();
+    dateStrs.forEach((d) => counts.set(d.slice(0, 4), (counts.get(d.slice(0, 4)) ?? 0) + 1));
+    bars = [...counts.keys()].sort().map((y) => ({ label: y, count: counts.get(y) }));
+    periodLabel = "전체 기간";
+  } else if (granularity === "month") {
+    const counts = new Array(12).fill(0);
+    dateStrs.forEach((d) => {
+      if (d.slice(0, 4) !== String(year)) return;
+      counts[Number(d.slice(5, 7)) - 1] += 1;
+    });
+    bars = counts.map((c, i) => ({ label: `${i + 1}월`, count: c }));
+    periodLabel = `${year}년`;
+  } else {
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const counts = new Array(daysInMonth).fill(0);
+    dateStrs.forEach((d) => {
+      if (d.slice(0, 4) !== String(year) || Number(d.slice(5, 7)) !== month) return;
+      counts[Number(d.slice(8, 10)) - 1] += 1;
+    });
+    bars = counts.map((c, i) => ({ label: `${i + 1}`, count: c }));
+    periodLabel = `${year}년 ${month}월`;
+  }
+
+  const max = Math.max(1, ...bars.map((b) => b.count));
+  const total = bars.reduce((s, b) => s + b.count, 0);
+
+  function shiftYear(delta) { setYear((y) => y + delta); }
+  function shiftMonth(delta) {
+    let m = month + delta, y = year;
+    if (m < 1) { m = 12; y -= 1; }
+    if (m > 12) { m = 1; y += 1; }
+    setMonth(m); setYear(y);
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-4 mb-3">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-bold text-slate-700">고장 발생 추이</h3>
+          <div className="flex gap-1">
+            {[["year", "연도별"], ["month", "월별"], ["day", "일별"]].map(([v, label]) => (
+              <button
+                key={v}
+                onClick={() => setGranularity(v)}
+                className={`text-xs font-bold rounded-lg px-2.5 py-1.5 border ${granularity === v ? "bg-blue-700 text-white border-blue-700" : "text-slate-500 border-slate-200"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {granularity !== "year" && (
+          <div className="flex items-center gap-2">
+            <button onClick={() => (granularity === "month" ? shiftYear(-1) : shiftMonth(-1))} className="text-slate-400 hover:text-slate-700 px-1 text-lg leading-none">‹</button>
+            <span className="text-xs font-bold text-slate-600 min-w-[5.5rem] text-center">{periodLabel}</span>
+            <button onClick={() => (granularity === "month" ? shiftYear(1) : shiftMonth(1))} className="text-slate-400 hover:text-slate-700 px-1 text-lg leading-none">›</button>
+          </div>
+        )}
+      </div>
+      {bars.length === 0 ? (
+        <p className="text-xs text-slate-400 text-center py-10">표시할 데이터가 없습니다</p>
+      ) : (
+        <div className="flex items-end gap-1 h-40">
+          {bars.map((b) => (
+            <div key={b.label} className="flex-1 flex flex-col items-center justify-end h-full min-w-0">
+              {b.count > 0 && <span className="text-[10px] font-bold text-slate-500 mb-0.5">{b.count}</span>}
+              <div
+                className="w-full bg-blue-500 rounded-t"
+                style={{ height: `${(b.count / max) * 100}%`, minHeight: b.count > 0 ? "2px" : 0 }}
+              />
+              <span className="text-[10px] text-slate-400 mt-1 truncate">{b.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[11px] text-slate-400 mt-2">{granularity === "year" ? "전체" : periodLabel} 합계 {total}건</p>
+    </div>
+  );
+}
+
 // 현장 검색·자동완성 — 드롭다운 대신 이름/주소로 찾아서 고른다.
 function SiteAutocomplete({ sites, value, onChange }) {
   const [query, setQuery] = useState("");
@@ -297,6 +396,8 @@ export default function FailuresAdmin({ data, setData }) {
         />
         <StatBox label="완료" value={count("완료")} tone="text-emerald-600" active={status === "완료"} onClick={() => setStatus("완료")} />
       </div>
+
+      <FailureTrendChart failures={failures} />
 
       <input
         className={`${inputCls} w-full mb-3`}
