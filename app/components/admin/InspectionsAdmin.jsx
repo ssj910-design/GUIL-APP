@@ -189,8 +189,9 @@ export default function InspectionsAdmin({ data, setData }) {
     }
   };
 
+  // 불합격은 정렬 기준(보완기한 등)과 무관하게 항상 맨 위 — 조건부합격보다 시급하다.
   const rows = view === "flagged"
-    ? sortRows(filteredRows, sort, getFlaggedVal)
+    ? sortRows(filteredRows, sort, getFlaggedVal).sort((a, b) => (a.result === "fail" ? 0 : 1) - (b.result === "fail" ? 0 : 1))
     : filteredRows.sort((a, b) => (a.dueDate ? a.daysLeft : Infinity) - (b.dueDate ? b.daysLeft : Infinity));
 
   // manualId가 있으면 기존 수기입력 행을 갱신하고, 없으면(실시간 연동 현장에 수기입력 기한이 처음 등록되는 경우) 새로 만든다.
