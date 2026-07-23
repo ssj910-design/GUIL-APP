@@ -75,7 +75,7 @@ function EngineerOptions({ engineers, site }) {
   ));
 }
 
-function RegisterFailureModal({ data, onClose, onCreate }) {
+export function RegisterFailureModal({ data, onClose, onCreate }) {
   const { sites, units, profiles } = data;
   const engineers = profiles.filter((p) => p.role === "engineer");
   const [form, setForm] = useState({

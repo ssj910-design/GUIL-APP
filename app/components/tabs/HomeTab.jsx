@@ -2,7 +2,7 @@ import { useState, useContext, useEffect } from "react";
 import { ShieldCheck, AlertOctagon, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, formatUnitLabel, distanceKm } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, distanceKm } from "@/lib/utils";
 import { Badge, DDay, SmsToast, Sheet } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -511,8 +511,12 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
   const escalatedSiteIds = new Set([...supportSiteIds, ...stoppedSiteIds]);
   // 최근 30일 고장 목록은 실시간 계산 — 처리완료 여부와 무관하게 누적. 3회↑ 재발 배지·집중관리 판정에 쓴다.
   const recentFailuresBySiteId = recentFailuresBySite(failures);
-  // 집중관리현장: 3회 이상 고장 또는 지원요청/운행정지 걸린 현장 (담당 무관 — 기사도 회사 전체 위험 현장을 봄).
-  const criticalSites = sites.filter((s) => (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || escalatedSiteIds.has(s.id));
+  // 갇힘사고는 재발 횟수와 무관하게 최근 30일 내 1건만 있어도 집중관리 대상 — 30일 지나면 자동으로 빠진다.
+  const entrapmentSiteIds = entrapmentSitesRecent(failures);
+  // 집중관리현장: 3회 이상 고장, 갇힘사고, 지원요청/운행정지 걸린 현장 (담당 무관 — 기사도 회사 전체 위험 현장을 봄).
+  const criticalSites = sites.filter((s) =>
+    (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || escalatedSiteIds.has(s.id) || entrapmentSiteIds.has(s.id)
+  );
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [assignTarget, setAssignTarget] = useState(null);
@@ -644,7 +648,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
         <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-2">
             <AlertOctagon size={18} className="text-red-600" />
-            <h3 className="font-extrabold text-red-700 text-sm whitespace-nowrap">집중 관리현장(고장 3회 이상 · 지원요청/운행정지)</h3>
+            <h3 className="font-extrabold text-red-700 text-sm whitespace-nowrap">집중관리현장(갇힘·고장다발·지원요청·운행정지)</h3>
           </div>
           {criticalSites.length === 0 ? (
             <p className="text-xs text-red-500">현재 집중 관리 대상 현장이 없습니다.</p>
@@ -653,6 +657,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
               {criticalSites.map((s) => {
                 const stopped = stoppedSiteIds.has(s.id);
                 const support = supportSiteIds.has(s.id);
+                const trapped = entrapmentSiteIds.has(s.id);
                 const recent = recentFailuresBySiteId.get(s.id) ?? [];
                 const count30d = recent.length;
                 const units = [...new Set(recent.map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean))];
@@ -668,6 +673,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
                       <p className="text-[11px] text-slate-400">{s.address}</p>
                     </div>
                     <span className="flex gap-1 shrink-0">
+                      {trapped && <span className="text-xs font-extrabold text-white bg-red-600 px-2 py-1 rounded-full">갇힘</span>}
                       {support && <span className="text-xs font-extrabold text-amber-600 bg-amber-100 px-2 py-1 rounded-full">지원요청</span>}
                       {stopped && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">운행정지</span>}
                       {count30d > 0 && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">{count30d}회 고장</span>}
