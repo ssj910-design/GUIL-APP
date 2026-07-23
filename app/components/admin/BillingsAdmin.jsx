@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { shortDate } from "@/lib/utils";
-import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate } from "@/app/components/admin/adminShared";
+import { locOf, addressOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate } from "@/app/components/admin/adminShared";
 
 const BILLING_METHODS = ["계좌이체", "CMS", "지로"];
 
@@ -57,10 +57,11 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree }) {
   }
 
   return (
-    <Modal title="청구 상세내역" onClose={onClose} wide>
+    <Modal title="상세내역" onClose={onClose} wide>
       <div className="space-y-3 mb-4">
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div><p className="text-xs font-bold text-slate-400 mb-1">현장 · 호기</p><p className="font-semibold text-slate-800">{locOf(data, b.unitId, b.siteName, b.elevatorNo)}</p></div>
+          <div><p className="text-xs font-bold text-slate-400 mb-1">현장 주소</p><p className="font-semibold text-slate-800">{addressOf(data, b.unitId, b.siteName)}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">교체내역</p><p className="font-semibold text-slate-800">{b.part}</p></div>
           <div>
             <p className="text-xs font-bold text-slate-400 mb-1">금액</p>
