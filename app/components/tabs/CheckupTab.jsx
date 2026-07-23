@@ -1,5 +1,5 @@
 import { useState, useContext } from "react";
-import { Search, MapPin } from "lucide-react";
+import { Search, MapPin, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { useHolidays } from "@/app/hooks/useHolidays";
@@ -47,6 +47,7 @@ function formatDateTime(iso) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+const CHECKUP_STEP_TITLES = ["점검 정보", "점검 항목", "특이사항·제출"];
 const fmtMD = (d) => (d ? `${d.slice(5, 7)}/${d.slice(8, 10)}` : ""); // "2026-07-25" → "07/25"
 const fmtDist = (km) => (km == null ? null : km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`);
 
@@ -79,6 +80,8 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   const [checkupAgree, setCheckupAgree] = useState(false);
   const [savingCheckup, setSavingCheckup] = useState(false);
   const [checkupResult, setCheckupResult] = useState(null);
+  const [checkupStep, setCheckupStep] = useState(0); // 자체점검 등록 스텝(0~2)
+  const [checkupToast, setCheckupToast] = useState(""); // 필수 미입력 안내 토스트
 
   const [dayPopup, setDayPopup] = useState(null); // 클릭한 날짜(iso)
 
@@ -199,6 +202,8 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     setCheckupSubProfileId("");
     setCheckupAgree(false);
     setCheckupResult(null);
+    setCheckupStep(0);
+    setCheckupToast("");
 
     const manager = siteManagers.find((m) => m.siteId === s?.id && m.isPrimary) ?? siteManagers.find((m) => m.siteId === s?.id);
     setCheckupCnfirm(manager?.name ?? "");
@@ -219,6 +224,22 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     const map = {};
     (data ?? []).map(mapSelfCheckItem).forEach((it) => { map[it.itemCd] = { result: it.result, remark: it.remark ?? "" }; });
     setItemExceptions(map);
+  }
+
+  function toastCheckup(msg) {
+    setCheckupToast(msg);
+    setTimeout(() => setCheckupToast(""), 2500);
+  }
+  // 스텝별 필수 입력 검증 — 미입력이면 안내 문구를 돌려주고(다음 막힘), 없으면 null.
+  function checkupStepError(step) {
+    if (step === 0) {
+      if (!checkupDate) return "점검일을 선택해주세요";
+      if (!checkupStartTime || !checkupEndTime) return "점검 시작·완료시각을 입력해주세요";
+      if (!checkupSubProfileId) return "부점검자를 선택해주세요";
+      if (checkupPhotos.length === 0) return "점검 사진을 최소 1장 등록해주세요";
+    }
+    // step 1(점검항목)은 기본값 '양호'라 필수 없음
+    return null;
   }
 
   function openCheckup(s) {
@@ -529,7 +550,8 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
 
       {checkupTarget && (
         <Sheet title={`${checkupTarget.name} 자체점검 등록`} onClose={() => setCheckupTarget(null)}>
-          <p className="text-[11px] text-slate-400 mb-1">승강기민원24(RegistInspectionService)에 실제로 제출됩니다. 내용을 확인한 뒤 등록해주세요.</p>
+          {/* 안내문 = 고정(스텝과 무관). 영문 코드(RegistInspectionService)는 제거 */}
+          <p className="text-[11px] text-slate-400 mb-2">승강기민원24에 실제로 제출됩니다. 내용을 확인한 뒤 등록해주세요.</p>
           {siteUnitList(checkupTarget, units).filter((u) => u.id).length > 1 && (
             <Field label="호기">
               <select className={inputCls} value={checkupUnitId ?? ""} onChange={(e) => loadCheckupForUnit(e.target.value, checkupTarget)}>
@@ -540,111 +562,147 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
             </Field>
           )}
 
-          <Field label="점검일">
-            <input type="date" className={inputCls} value={checkupDate} onChange={(e) => setCheckupDate(e.target.value)} />
-          </Field>
-          <div className="grid grid-cols-2 gap-2">
-            <Field label="점검 시작시각">
-              <input type="time" className={inputCls} value={checkupStartTime} onChange={(e) => setCheckupStartTime(e.target.value)} />
-            </Field>
-            <Field label="점검 완료시각">
-              <input type="time" className={inputCls} value={checkupEndTime} onChange={(e) => setCheckupEndTime(e.target.value)} />
-            </Field>
+          {/* 진행바 + 스텝 제목 (고장접수 접수등록과 동일 패턴) */}
+          <div className="flex gap-1 mb-2">
+            {CHECKUP_STEP_TITLES.map((t, i) => (
+              <div key={t} className={`flex-1 h-1 rounded-full ${i <= checkupStep ? "bg-blue-600" : "bg-slate-200"}`} />
+            ))}
           </div>
+          <p className="text-sm font-extrabold text-slate-800 mb-3">{checkupStep + 1}. {CHECKUP_STEP_TITLES[checkupStep]}</p>
 
-          <Field label="주점검자">
-            <p className="text-sm text-slate-700 bg-slate-50 rounded-lg px-3 py-2.5">
-              {CURRENT_ENGINEER} {selfProfile?.minwon_id ? `(${selfProfile.minwon_id})` : "— 민원24 ID 미등록"}
-            </p>
-          </Field>
-          <Field label="부점검자 (민원24 ID 등록된 인원 중 선택 — 자체점검자 2명 이상 입력 필수)">
-            <select className={inputCls} value={checkupSubProfileId} onChange={(e) => setCheckupSubProfileId(e.target.value)}>
-              <option value="">부점검자를 선택하세요</option>
-              {profilesAll.filter((p) => p.id !== selfId && p.minwon_id).map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="점검 사진 (사내 기록용 — 공단 제출과 무관)">
-            <MultiPhotoUpload
-              photos={checkupPhotos}
-              uploadFolder={`self-checks/${checkupUnitId ?? "unknown"}/${ym}`}
-              onUploaded={(url) => setCheckupPhotos((p) => [...p, { url }])}
-              onRemove={(idx) => setCheckupPhotos((p) => p.filter((_, i) => i !== idx))}
-            />
-          </Field>
-
-          <Field label={`이번 달 점검항목 (기본 양호 · 예외 ${Object.keys(itemExceptions).length}건)`}>
-            <input
-              value={itemQuery}
-              onChange={(e) => setItemQuery(e.target.value)}
-              placeholder="항목명·번호로 검색"
-              className={inputCls}
-            />
-            <div className="mt-2 max-h-56 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
-              {filteredItemCodes.map((item) => {
-                const current = itemExceptions[item.code]?.result ?? "A";
-                return (
-                  <div key={item.code} className="px-2.5 py-1.5">
-                    <p className="text-[11px] text-slate-600 mb-1 truncate">{item.no} {item.name}</p>
-                    <div className="flex gap-1">
-                      {RESULT_OPTIONS.map((o) => (
-                        <button
-                          key={o.v}
-                          type="button"
-                          title={o.label}
-                          onClick={() => setItemResult(item.code, o.v)}
-                          className={`${o.v === "D" || o.v === "E" ? "px-2 h-7" : "w-7 h-7"} shrink-0 rounded-full text-[11px] font-bold border ${current === o.v ? "bg-blue-700 text-white border-blue-700" : "bg-slate-50 text-slate-400 border-slate-200"}`}
-                        >
-                          {o.v === "D" || o.v === "E" ? o.label : o.v}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-              {filteredItemCodes.length === 0 && <p className="text-xs text-slate-400 text-center py-4">검색 결과가 없습니다</p>}
-            </div>
-            {Object.keys(itemExceptions).length > 0 && (
-              <p className="text-[10px] text-amber-600 mt-1">예외 항목(B/C)이 있으면 아래 특이사항에 사유를 함께 적어주세요 — 공단 제출 시 필수입니다.</p>
-            )}
-          </Field>
-
-          <Field label="특이사항">
-            <textarea
-              className={inputCls}
-              rows={3}
-              placeholder="예: 로프 장력 미세 저하, 다음 점검 시 재확인 필요"
-              value={checkupNotes}
-              onChange={(e) => setCheckupNotes(e.target.value)}
-            />
-          </Field>
-
-          <label className="flex items-start gap-2 text-[11px] text-slate-500 mb-3">
-            <input type="checkbox" className="mt-0.5" checked={checkupAgree} onChange={(e) => setCheckupAgree(e.target.checked)} />
-            본인은 자체점검 자격자이며, 자체점검 실시 후 거짓 없이 결과를 입력하였음에 동의합니다.
-          </label>
-
-          {checkupResult && (
-            <div className="mb-2">
-              <p className={`text-xs font-bold ${checkupResult.resultCode === "000" ? "text-emerald-600" : "text-red-600"}`}>
-                {checkupResult.error ? checkupResult.error : `${checkupResult.resultCode} ${checkupResult.resultMsg}`}
-              </p>
-              {checkupResult.resultCode === "999" && (
-                <p className="text-[10px] text-slate-400 mt-1">
-                  이 승강기고유번호가 공단(민원24) 쪽에 우리 회사 유지관리 계약으로 아직 연결(이관)되지 않았을 가능성이 높습니다 — 다른 승강기는 정상 제출되는데 특정 승강기만 이 오류가 반복되면 공단에 해당 고유번호의 계약 연결 상태를 문의해주세요.
+          {checkupStep === 0 && (
+            <>
+              <Field label="점검일">
+                <input type="date" className={inputCls} value={checkupDate} onChange={(e) => setCheckupDate(e.target.value)} />
+              </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="점검 시작시각">
+                  <input type="time" className={inputCls} value={checkupStartTime} onChange={(e) => setCheckupStartTime(e.target.value)} />
+                </Field>
+                <Field label="점검 완료시각">
+                  <input type="time" className={inputCls} value={checkupEndTime} onChange={(e) => setCheckupEndTime(e.target.value)} />
+                </Field>
+              </div>
+              <Field label="주점검자">
+                <p className="text-sm text-slate-700 bg-slate-50 rounded-lg px-3 py-2.5">
+                  {CURRENT_ENGINEER} {selfProfile?.minwon_id ? `(${selfProfile.minwon_id})` : "— 민원24 ID 미등록"}
                 </p>
-              )}
-              {checkupResult.raw && (
-                <p className="text-[10px] text-slate-400 mt-1 break-all">HTTP {checkupResult.httpStatus} · {checkupResult.raw}</p>
-              )}
-            </div>
+              </Field>
+              <Field label="부점검자 (민원24 ID 등록된 인원 중 선택 — 자체점검자 2명 이상 입력 필수)">
+                <select className={inputCls} value={checkupSubProfileId} onChange={(e) => setCheckupSubProfileId(e.target.value)}>
+                  <option value="">부점검자를 선택하세요</option>
+                  {profilesAll.filter((p) => p.id !== selfId && p.minwon_id).map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="점검 사진 (사내 기록용 — 공단 제출과 무관)">
+                <MultiPhotoUpload
+                  photos={checkupPhotos}
+                  uploadFolder={`self-checks/${checkupUnitId ?? "unknown"}/${ym}`}
+                  onUploaded={(url) => setCheckupPhotos((p) => [...p, { url }])}
+                  onRemove={(idx) => setCheckupPhotos((p) => p.filter((_, i) => i !== idx))}
+                />
+              </Field>
+            </>
           )}
 
-          <PrimaryButton disabled={savingCheckup} onClick={registerAndSubmit}>
-            {savingCheckup ? "제출 중..." : "점검등록"}
-          </PrimaryButton>
+          {checkupStep === 1 && (
+            <Field label={`이번 달 점검항목 (기본 양호 · 예외 ${Object.keys(itemExceptions).length}건)`}>
+              <input
+                value={itemQuery}
+                onChange={(e) => setItemQuery(e.target.value)}
+                placeholder="항목명·번호로 검색"
+                className={inputCls}
+              />
+              <div className="mt-2 max-h-72 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+                {filteredItemCodes.map((item) => {
+                  const current = itemExceptions[item.code]?.result ?? "A";
+                  return (
+                    <div key={item.code} className="px-2.5 py-1.5">
+                      <p className="text-[11px] text-slate-600 mb-1 truncate">{item.no} {item.name}</p>
+                      <div className="flex gap-1">
+                        {RESULT_OPTIONS.map((o) => (
+                          <button
+                            key={o.v}
+                            type="button"
+                            title={o.label}
+                            onClick={() => setItemResult(item.code, o.v)}
+                            className={`${o.v === "D" || o.v === "E" ? "px-2 h-7" : "w-7 h-7"} shrink-0 rounded-full text-[11px] font-bold border ${current === o.v ? "bg-blue-700 text-white border-blue-700" : "bg-slate-50 text-slate-400 border-slate-200"}`}
+                          >
+                            {o.v === "D" || o.v === "E" ? o.label : o.v}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                {filteredItemCodes.length === 0 && <p className="text-xs text-slate-400 text-center py-4">검색 결과가 없습니다</p>}
+              </div>
+              {Object.keys(itemExceptions).length > 0 && (
+                <p className="text-[10px] text-amber-600 mt-1">예외 항목(B/C)이 있으면 다음 단계 특이사항에 사유를 함께 적어주세요 — 공단 제출 시 필수입니다.</p>
+              )}
+            </Field>
+          )}
+
+          {checkupStep === 2 && (
+            <>
+              <Field label="특이사항">
+                <textarea
+                  className={inputCls}
+                  rows={3}
+                  placeholder="예: 로프 장력 미세 저하, 다음 점검 시 재확인 필요"
+                  value={checkupNotes}
+                  onChange={(e) => setCheckupNotes(e.target.value)}
+                />
+              </Field>
+              <label className="flex items-start gap-2 text-[11px] text-slate-500 mb-3">
+                <input type="checkbox" className="mt-0.5" checked={checkupAgree} onChange={(e) => setCheckupAgree(e.target.checked)} />
+                본인은 자체점검 자격자이며, 자체점검 실시 후 거짓 없이 결과를 입력하였음에 동의합니다.
+              </label>
+              {checkupResult && (
+                <div className="mb-2">
+                  <p className={`text-xs font-bold ${checkupResult.resultCode === "000" ? "text-emerald-600" : "text-red-600"}`}>
+                    {checkupResult.error ? checkupResult.error : `${checkupResult.resultCode} ${checkupResult.resultMsg}`}
+                  </p>
+                  {checkupResult.resultCode === "999" && (
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      이 승강기고유번호가 공단(민원24) 쪽에 우리 회사 유지관리 계약으로 아직 연결(이관)되지 않았을 가능성이 높습니다 — 다른 승강기는 정상 제출되는데 특정 승강기만 이 오류가 반복되면 공단에 해당 고유번호의 계약 연결 상태를 문의해주세요.
+                    </p>
+                  )}
+                  {checkupResult.raw && (
+                    <p className="text-[10px] text-slate-400 mt-1 break-all">HTTP {checkupResult.httpStatus} · {checkupResult.raw}</p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* 하단 이전/다음/등록 — 다음은 필수 미입력이면 막고 토스트로 안내 */}
+          <div className="flex gap-2 mt-4">
+            {checkupStep > 0 && (
+              <button onClick={() => setCheckupStep((s) => s - 1)} className="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200">
+                이전
+              </button>
+            )}
+            {checkupStep < 2 ? (
+              <button
+                onClick={() => { const err = checkupStepError(checkupStep); if (err) { toastCheckup(err); return; } setCheckupStep((s) => s + 1); }}
+                className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 active:bg-blue-800"
+              >
+                다음
+              </button>
+            ) : (
+              <div className="flex-1"><PrimaryButton disabled={savingCheckup} onClick={registerAndSubmit}>{savingCheckup ? "제출 중..." : "점검등록"}</PrimaryButton></div>
+            )}
+          </div>
+
+          {/* 필수 미입력 안내 토스트 */}
+          {checkupToast && (
+            <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-1.5 max-w-[85%]">
+              <AlertTriangle size={14} className="text-amber-400 shrink-0" /> {checkupToast}
+            </div>
+          )}
         </Sheet>
       )}
 
