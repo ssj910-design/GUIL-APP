@@ -516,7 +516,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
             const commentCount = commentsOf(p.id).length;
             const canManage = isAdmin || p.author === CURRENT_ENGINEER;
             return (
-              <div key={p.id} onClick={() => editingId !== p.id && goToPost(p.id)} className="py-3 cursor-pointer">
+              <div key={p.id} onClick={() => editingId !== p.id && goToPost(p.id)} className="py-5 cursor-pointer">
                 <PostHeader
                   p={p} canManage={canManage} canNotice={!!onSetNotice}
                   menuOpen={menuFor === p.id}
