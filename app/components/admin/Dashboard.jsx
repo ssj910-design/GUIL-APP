@@ -6,7 +6,7 @@ import { useState } from "react";
 import WeekStrip from "@/app/components/admin/WeekStrip";
 import { AlertOctagon } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, formatUnitLabel, shortDate } from "@/lib/utils";
+import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, formatUnitLabel, shortDate, sortEngineersByDistance } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -266,7 +266,11 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
                         onChange={(e) => assign(f, e.target.value)}
                       >
                         <option value="">미배정</option>
-                        {engineers.map((p) => <option key={p.id}>{p.name}</option>)}
+                        {sortEngineersByDistance(engineers, loc.siteObj).map(({ engineer: p, km }) => (
+                          <option key={p.id} value={p.name}>
+                            {p.name}{km != null ? ` (${km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`})` : ""}
+                          </option>
+                        ))}
                       </select>
                     </td>
                     <td className="px-2 py-2.5 whitespace-nowrap text-slate-500">{f.dispatchedAt || "-"}</td>
