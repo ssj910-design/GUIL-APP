@@ -568,6 +568,9 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allo
     const pid = engineers.find((e) => e.name === name)?.id;
     return todayLeaves.find((l) => l.profile_id === pid) ?? null;
   };
+  // 이 건물(site)에서 그 기사가 예전에 처리 완료한 고장 수 — 건물 사정 아는 기사를 관리자가 알아보게.
+  const visitsOf = (name) =>
+    failures.filter((f) => f.siteId === failure.siteId && f.id !== failure.id && f.assignee === name && f.status === "완료").length;
 
   const rows = engineerNames
     .map((name) => ({ name, km: distanceKm(hereOf(name), site?.lat != null ? { lat: site.lat, lng: site.lng } : null) }))
@@ -599,6 +602,7 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allo
         {rows.map(({ name, km }, i) => {
           const st = statusOf(name);
           const leave = leaveOf(name);
+          const visits = visitsOf(name);
           const pick = () => {
             if (st && !confirm(`${name}님은 지금 ${st}입니다.\n그래도 이 건을 배정할까요?`)) return;
             onAssign(failure, name);
@@ -629,6 +633,11 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allo
                   </>
                 )}
               </span>
+              {!leave && visits > 0 && (
+                <span className="flex items-center justify-center gap-0.5 text-[9px] font-extrabold text-blue-600 mt-0.5">
+                  <Wrench size={9} strokeWidth={2.8} /> 이 건물 {visits}회
+                </span>
+              )}
             </button>
           );
         })}
