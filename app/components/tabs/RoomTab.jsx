@@ -43,16 +43,16 @@ function PostMenu({ post, canManage, canNotice, onClose, onNotice, onEdit, onDel
 
 function CommentRow({ c, onLike, liked, likeCount }) {
   return (
-    <div className="flex gap-2 py-1">
+    <div className="flex gap-2 py-2">
       <span className="w-6 h-6 rounded-full bg-slate-200 text-slate-600 text-[10px] font-bold flex items-center justify-center shrink-0">
         {(c.author || "?")[0]}
       </span>
       <div className="flex-1 min-w-0">
-        <div className="bg-slate-100 rounded-2xl px-3 py-1.5 inline-block max-w-full">
-          <span className="text-xs font-bold text-slate-700 mr-1.5">{c.author}</span>
-          <span className="text-xs text-slate-700">{renderText(c.text)}</span>
-        </div>
-        <div className="flex items-center gap-2 mt-0.5 px-1">
+        <p className="text-xs text-slate-700 leading-relaxed">
+          <span className="font-bold text-slate-800 mr-1.5">{c.author}</span>
+          {renderText(c.text)}
+        </p>
+        <div className="flex items-center gap-2 mt-0.5">
           <span className="text-[10px] text-slate-400">{formatDateTime(c.createdAt)}</span>
           <button onClick={onLike} className={`text-[10px] font-bold ${liked ? "text-blue-600" : "text-slate-400"}`}>
             좋아요{likeCount > 0 ? ` ${likeCount}` : ""}
@@ -181,7 +181,7 @@ export function PostDetailOverlay({ feed, postId, onSendChat, onToggleLike, onUp
               <MessageCircle size={14} /> 댓글 {comments.length}
             </span>
           </div>
-          <div className="pt-2 space-y-0.5">
+          <div className="pt-1 divide-y divide-slate-100">
             {comments.length === 0
               ? <p className="text-xs text-slate-400 text-center py-6">첫 댓글을 남겨보세요</p>
               : comments.map((c) => {
@@ -192,7 +192,7 @@ export function PostDetailOverlay({ feed, postId, onSendChat, onToggleLike, onUp
         </div>
         <div className="shrink-0 border-t border-slate-100 bg-white px-4 py-3 flex items-center gap-2">
           <input
-            className="flex-1 bg-slate-100 rounded-full px-3.5 py-2.5 text-sm focus:outline-none"
+            className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
             placeholder="댓글을 입력하세요"
             value={commentDraft}
             onChange={(e) => setCommentDraft(e.target.value)}
@@ -388,7 +388,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
               <MessageCircle size={14} /> 댓글 {comments.length}
             </span>
           </div>
-          <div className="pt-2 space-y-0.5">
+          <div className="pt-1 divide-y divide-slate-100">
             {comments.length === 0
               ? <p className="text-xs text-slate-400 text-center py-6">첫 댓글을 남겨보세요</p>
               : comments.map((c) => {
@@ -399,7 +399,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
         </div>
         <div className="shrink-0 border-t border-slate-100 bg-white px-4 py-3 flex items-center gap-2">
           <input
-            className="flex-1 bg-slate-100 rounded-full px-3.5 py-2.5 text-sm focus:outline-none"
+            className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
             placeholder="댓글을 입력하세요"
             value={commentDrafts[openPost.id] ?? ""}
             onChange={(e) => setCommentDrafts((d) => ({ ...d, [openPost.id]: e.target.value }))}
@@ -427,12 +427,12 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-slate-100">
-      <div className="px-4 pt-4 shrink-0">
+    <div className="flex-1 flex flex-col overflow-hidden bg-white">
+      <div className="px-4 pt-3 pb-2 shrink-0 border-b border-slate-100">
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
-            className="w-full bg-white border border-slate-200 rounded-full pl-8 pr-3 py-2 text-sm focus:outline-none"
+            className="w-full border border-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none"
             placeholder="게시자·글내용·댓글로 검색"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -440,11 +440,11 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+      <div className="flex-1 overflow-y-auto">
         {/* 글쓰기 */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-3.5">
+        <div className="px-4 py-3 border-b border-slate-100">
           {!composing ? (
-            <button onClick={() => setComposing(true)} className="w-full text-left text-sm text-slate-400 bg-slate-50 rounded-xl px-3.5 py-2.5">
+            <button onClick={() => setComposing(true)} className="w-full text-left text-sm text-slate-400">
               무슨 소식을 나눠볼까요?
             </button>
           ) : (
@@ -508,39 +508,37 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
           )}
         </div>
 
-        {/* 게시글 목록 — 카드를 누르면 상세화면(첨부파일처럼)으로 진입 */}
-        {visiblePosts.map((p) => {
-          const likes = p.reactions?.["👍"] ?? [];
-          const liked = likes.includes(CURRENT_ENGINEER);
-          const commentCount = commentsOf(p.id).length;
-          const canManage = isAdmin || p.author === CURRENT_ENGINEER;
-          return (
-            <div
-              key={p.id}
-              onClick={() => editingId !== p.id && goToPost(p.id)}
-              className={`bg-white rounded-2xl border p-3.5 cursor-pointer ${p.isNotice ? "border-amber-300" : "border-slate-200"}`}
-            >
-              <PostHeader
-                p={p} canManage={canManage} canNotice={!!onSetNotice}
-                menuOpen={menuFor === p.id}
-                onToggleMenu={() => setMenuFor(menuFor === p.id ? null : p.id)}
-                onCloseMenu={() => setMenuFor(null)}
-                onNotice={() => onSetNotice?.(p.id, !p.isNotice)}
-                onEdit={() => startEdit(p)}
-                onDelete={() => deletePost(p)}
-              />
-              <PostBody p={p} />
-              <div className="flex items-center gap-4 pt-2 border-t border-slate-100" onClick={(e) => e.stopPropagation()}>
-                <button onClick={() => onToggleLike?.(p.id)} className={`flex items-center gap-1 text-xs font-bold ${liked ? "text-blue-600" : "text-slate-500"}`}>
-                  <ThumbsUp size={14} className={liked ? "fill-blue-600" : ""} /> 좋아요{likes.length > 0 ? ` ${likes.length}` : ""}
-                </button>
-                <button onClick={() => goToPost(p.id)} className="flex items-center gap-1 text-xs font-bold text-slate-500">
-                  <MessageCircle size={14} /> 댓글{commentCount > 0 ? ` ${commentCount}` : ""}
-                </button>
+        {/* 게시글 목록 — 누르면 상세화면(첨부파일처럼)으로 진입 */}
+        <div className="px-4 divide-y divide-slate-100">
+          {visiblePosts.map((p) => {
+            const likes = p.reactions?.["👍"] ?? [];
+            const liked = likes.includes(CURRENT_ENGINEER);
+            const commentCount = commentsOf(p.id).length;
+            const canManage = isAdmin || p.author === CURRENT_ENGINEER;
+            return (
+              <div key={p.id} onClick={() => editingId !== p.id && goToPost(p.id)} className="py-3 cursor-pointer">
+                <PostHeader
+                  p={p} canManage={canManage} canNotice={!!onSetNotice}
+                  menuOpen={menuFor === p.id}
+                  onToggleMenu={() => setMenuFor(menuFor === p.id ? null : p.id)}
+                  onCloseMenu={() => setMenuFor(null)}
+                  onNotice={() => onSetNotice?.(p.id, !p.isNotice)}
+                  onEdit={() => startEdit(p)}
+                  onDelete={() => deletePost(p)}
+                />
+                <PostBody p={p} />
+                <div className="flex items-center gap-4 pt-2" onClick={(e) => e.stopPropagation()}>
+                  <button onClick={() => onToggleLike?.(p.id)} className={`flex items-center gap-1 text-xs font-bold ${liked ? "text-blue-600" : "text-slate-500"}`}>
+                    <ThumbsUp size={14} className={liked ? "fill-blue-600" : ""} /> 좋아요{likes.length > 0 ? ` ${likes.length}` : ""}
+                  </button>
+                  <button onClick={() => goToPost(p.id)} className="flex items-center gap-1 text-xs font-bold text-slate-500">
+                    <MessageCircle size={14} /> 댓글{commentCount > 0 ? ` ${commentCount}` : ""}
+                  </button>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
         {posts.length === 0 && <p className="text-xs text-slate-400 text-center py-10">아직 게시글이 없습니다. 첫 소식을 올려보세요!</p>}
         {posts.length > 0 && visiblePosts.length === 0 && <p className="text-xs text-slate-400 text-center py-10">검색 결과가 없습니다</p>}
       </div>
