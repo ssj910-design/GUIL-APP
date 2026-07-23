@@ -18,6 +18,22 @@ function confirmToggle(done) {
   return window.confirm(done ? "완료를 취소하시겠습니까?" : "완료 처리하시겠습니까?");
 }
 
+// 네이티브 confirm()은 일부 모바일 웹뷰에서 "취소"를 눌러도 그대로 진행되는 경우가 있어,
+// 관리자 완료 처리/취소처럼 되돌리기 번거로운 동작은 앱 안에서 직접 그리는 확인 팝업을 쓴다.
+function ConfirmPopup({ message, onConfirm, onCancel }) {
+  return (
+    <div className="fixed inset-0 z-[80] bg-black/40 flex items-center justify-center px-8" onClick={onCancel}>
+      <div className="bg-white rounded-2xl w-full max-w-xs p-5 text-center" onClick={(e) => e.stopPropagation()}>
+        <p className="text-sm font-bold text-slate-800 mb-4">{message}</p>
+        <div className="flex gap-2">
+          <button type="button" onClick={onCancel} className="flex-1 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl py-2.5 active:bg-slate-200">취소</button>
+          <button type="button" onClick={onConfirm} className="flex-1 text-sm font-bold text-white bg-blue-700 rounded-xl py-2.5 active:bg-blue-800">확인</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // 자재/견적 신청 시점의 신청자 이름을 찾아옵니다. 지급완료 시 실제 담당자를 신청자와
 // 다르게 지정할 수 있어(★ 담당자 재배정 기능), 요청자와 담당자가 다를 수 있습니다.
 export function getRequesterName(todo, materialRequests, quoteRequests) {
@@ -89,6 +105,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
   const [detailTarget, setDetailTarget] = useState(null);
   const [search, setSearch] = useState("");
   const [assignOpen, setAssignOpen] = useState(false);
+  const [confirmTodo, setConfirmTodo] = useState(null); // 관리자 전용 체크박스 완료처리/취소 확인 팝업 대상
   const mine = todos.filter((t) => t.assignee === CURRENT_ENGINEER);
 
   async function completeManualTodo(id) {
@@ -158,7 +175,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
                   locked={!isManual && role !== "admin"}
                   onClick={
                     role === "admin"
-                      ? () => confirmToggle(t.done) && onAdminToggle(t.id)
+                      ? () => setConfirmTodo(t)
                       : isManual
                         ? () => confirmToggle(false) && completeManualTodo(t.id)
                         : undefined
@@ -184,6 +201,14 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
 
       {assignOpen && (
         <TodoAssignSheet engineerNames={engineerNames} onSubmit={onAssignTodo} onClose={() => setAssignOpen(false)} />
+      )}
+
+      {confirmTodo && (
+        <ConfirmPopup
+          message={confirmTodo.done ? "완료를 취소하시겠습니까?" : "완료 처리하시겠습니까?"}
+          onConfirm={() => { onAdminToggle(confirmTodo.id); setConfirmTodo(null); }}
+          onCancel={() => setConfirmTodo(null)}
+        />
       )}
 
       {detailTodo && (
@@ -231,6 +256,7 @@ function TodoRow({ t, onToggle, onOpenDetail }) {
 export function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhotoUrls = [], siteAddress, onToggle, onReassign, engineerNames, onUpdateDescription, onClose }) {
   const [descDraft, setDescDraft] = useState(todo.description ?? "");
   const [editingDesc, setEditingDesc] = useState(false);
+  const [confirmingToggle, setConfirmingToggle] = useState(false);
   const sourceLabel = todo.source === "manual" ? "관리자 부여" : todo.source === "quote" ? "견적 연동" : "자재 연동";
   const allAssignees = [todo.assignee, ...coAssignees];
 
@@ -404,13 +430,7 @@ export function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhoto
         </div>
       )}
       {onToggle ? (
-        <PrimaryButton
-          onClick={() => {
-            if (!confirmToggle(todo.done)) return;
-            onToggle(todo.id);
-            onClose();
-          }}
-        >
+        <PrimaryButton onClick={() => setConfirmingToggle(true)}>
           {todo.done ? "완료 취소" : "완료 처리"}
         </PrimaryButton>
       ) : todo.done ? (
@@ -421,6 +441,13 @@ export function TodoDetailSheet({ todo, requester, coAssignees = [], supplyPhoto
         <div className="text-[11px] font-bold px-3 py-2.5 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center gap-1">
           <Lock size={12} /> 비용청구 시 자동완료
         </div>
+      )}
+      {confirmingToggle && (
+        <ConfirmPopup
+          message={todo.done ? "완료를 취소하시겠습니까?" : "완료 처리하시겠습니까?"}
+          onConfirm={() => { onToggle(todo.id); setConfirmingToggle(false); onClose(); }}
+          onCancel={() => setConfirmingToggle(false)}
+        />
       )}
     </Sheet>
   );
