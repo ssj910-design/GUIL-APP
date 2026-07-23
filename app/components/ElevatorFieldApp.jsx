@@ -1754,6 +1754,8 @@ export default function App() {
               onSetPerson={handleSetDutyPerson}
               onRequestSwap={handleRequestDutySwap}
               onRespondSwap={handleRespondDutySwap}
+              onSchedulesChange={setDutySchedules}
+              onEngineersChange={setEngineers}
             />
           )}
           {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onUpdateTodoDescription={handleUpdateTodoDescription} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
