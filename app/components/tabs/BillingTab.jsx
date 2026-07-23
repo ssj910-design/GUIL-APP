@@ -1,5 +1,5 @@
 import { useState, useContext } from "react";
-import { Receipt, Check, Search } from "lucide-react";
+import { Receipt, Check, Search, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnits, formatPhone } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
@@ -12,6 +12,8 @@ import { emptyPartRow, formatPartRows, PartsRowsInput } from "@/app/components/t
 /* ------------------------------------------------------------------ */
 /* BILLING (비용청구)                                                    */
 /* ------------------------------------------------------------------ */
+
+const BILL_STEP_TITLES = ["청구 정보", "증빙 사진"];
 
 export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const sites = useContext(SitesContext);
@@ -27,12 +29,46 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const [manualForm, setManualForm] = useState({ siteId: "", unit: "", parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
   const [materialPhotos, setMaterialPhotos] = useState({ before: [], after: [], confirm: null });
   const [manualPhotos, setManualPhotos] = useState({ before: [], after: [], confirm: null });
+  const [billStep, setBillStep] = useState(0); // 0 정보 · 1 증빙사진
+  const [billToast, setBillToast] = useState(null); // { msg, ok }
+  function toastBill(msg, ok = false) { setBillToast({ msg, ok }); setTimeout(() => setBillToast(null), 2500); }
 
   const selected = todos.find((t) => t.id === selectedId);
   // 견적 연동 건은 이미 견적서에 수리비가 정해져 있어, 직접 입력 대신 "견적서 참조"로 고정합니다.
   const isQuoteBilling = selected?.source === "quote";
-  const materialValid = selected && (isQuoteBilling || Number(materialCost) > 0);
-  const manualValid = manualForm.siteId && formatPartRows(manualForm.parts) && manualForm.replaceDate && manualForm.contactPhone.trim() && Number(manualForm.cost) > 0;
+  // 증빙 사진(교체 전·후·확인서)은 청구 필수 — 이게 없으면 제출을 막는다.
+  const materialPhotosOk = materialPhotos.before.length > 0 && materialPhotos.after.length > 0 && !!materialPhotos.confirm;
+  const manualPhotosOk = manualPhotos.before.length > 0 && manualPhotos.after.length > 0 && !!manualPhotos.confirm;
+  const materialValid = selected && (isQuoteBilling || Number(materialCost) > 0) && materialPhotosOk;
+  const manualValid = manualForm.siteId && formatPartRows(manualForm.parts) && manualForm.replaceDate && manualForm.contactPhone.trim() && Number(manualForm.cost) > 0 && manualPhotosOk;
+
+  // 스텝별 필수 검증 — 미입력이면 안내 문구 반환(다음/제출 막힘), 없으면 null.
+  function matStepError(step) {
+    if (step === 0) {
+      if (!selected) return "청구 대상 건을 선택해주세요";
+      if (!isQuoteBilling && !(Number(materialCost) > 0)) return "수리비를 입력해주세요";
+    }
+    if (step === 1) {
+      if (materialPhotos.before.length === 0) return "교체 전 사진을 등록해주세요";
+      if (materialPhotos.after.length === 0) return "교체 후 사진을 등록해주세요";
+      if (!materialPhotos.confirm) return "교체확인서를 등록해주세요";
+    }
+    return null;
+  }
+  function manStepError(step) {
+    if (step === 0) {
+      if (!manualForm.siteId) return "현장을 선택해주세요";
+      if (!formatPartRows(manualForm.parts)) return "교체내역을 1개 이상 입력해주세요";
+      if (!manualForm.contactPhone.trim()) return "현장담당자 연락처를 입력해주세요";
+      if (!(Number(manualForm.cost) > 0)) return "수리비를 입력해주세요";
+    }
+    if (step === 1) {
+      if (manualPhotos.before.length === 0) return "교체 전 사진을 등록해주세요";
+      if (manualPhotos.after.length === 0) return "교체 후 사진을 등록해주세요";
+      if (!manualPhotos.confirm) return "교체확인서를 등록해주세요";
+    }
+    return null;
+  }
 
   async function submitMaterial() {
     if (!selected) return;
@@ -72,6 +108,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     setMaterialCost("");
     setMaterialReplaceDate(TODAY_STR);
     setMaterialPhotos({ before: [], after: [], confirm: null });
+    setBillStep(0);
     setTimeout(() => setSubmitted(null), 2600);
   }
 
@@ -100,6 +137,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     setSubmitted({ siteName: site.name, part: partText, manual: true, fromKit: manualForm.fromKit });
     setManualForm({ siteId: "", unit: "", parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
     setManualPhotos({ before: [], after: [], confirm: null });
+    setBillStep(0);
     setTimeout(() => setSubmitted(null), 2600);
   }
 
@@ -107,13 +145,13 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     <div className="flex-1 overflow-y-auto pb-4">
       <div className="flex border-b border-slate-100 shrink-0">
         <button
-          onClick={() => setMode("material")}
+          onClick={() => { setMode("material"); setBillStep(0); setBillToast(null); }}
           className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${mode === "material" ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}
         >
           자재 지급건
         </button>
         <button
-          onClick={() => setMode("manual")}
+          onClick={() => { setMode("manual"); setBillStep(0); setBillToast(null); }}
           className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${mode === "manual" ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}
         >
           직접 입력
@@ -130,75 +168,97 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
         ) : (
           <div className="px-5 pt-4">
             <div className="bg-white rounded-2xl border border-slate-200 p-4">
-              <Field label="청구 대상 건 (지급완료된 자재)">
-                <select className={inputCls} value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
-                  {openTodos.map((t) => (
-                    <option key={t.id} value={t.id}>{t.siteName}{t.elevatorNo ? ` · ${t.elevatorNo}` : ""} · {t.part ?? t.title}</option>
-                  ))}
-                </select>
-              </Field>
-              {selected && (
-                <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5 mb-4 flex items-center justify-between">
-                  <span className="text-xs text-blue-700 font-semibold">지급일 {selected.assignedDate} 기준</span>
-                  <DDay dueDate={selected.dueDate} />
-                </div>
-              )}
-              <Field label="교체일자">
-                <input
-                  type="date"
-                  className={inputCls}
-                  value={materialReplaceDate}
-                  onChange={(e) => setMaterialReplaceDate(e.target.value)}
-                />
-              </Field>
-              <Field label="교체 전 사진">
-                <MultiPhotoUpload
-                  photos={materialPhotos.before}
-                  uploadFolder={`billings/${uploadSession}/before`}
-                  onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, before: [...p.before, { url }] }))}
-                  onRemove={(idx) => setMaterialPhotos((p) => ({ ...p, before: p.before.filter((_, i) => i !== idx) }))}
-                  label="교체 전 표준 화질 사진 등록"
-                  required={false}
-                />
-              </Field>
-              <Field label="교체 후 사진">
-                <MultiPhotoUpload
-                  photos={materialPhotos.after}
-                  uploadFolder={`billings/${uploadSession}/after`}
-                  onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, after: [...p.after, { url }] }))}
-                  onRemove={(idx) => setMaterialPhotos((p) => ({ ...p, after: p.after.filter((_, i) => i !== idx) }))}
-                  label="교체 후 표준 화질 사진 등록"
-                  required={false}
-                />
-              </Field>
-              <Field label="교체확인서">
-                <SinglePhotoUpload
-                  label="교체확인서 종이 사진 등록"
-                  url={materialPhotos.confirm}
-                  uploadFolder={`billings/${uploadSession}`}
-                  onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, confirm: url }))}
-                  onRemove={() => setMaterialPhotos((p) => ({ ...p, confirm: null }))}
-                />
-              </Field>
-              <Field label="수리비 (필수)">
-                {isQuoteBilling ? (
-                  <input type="text" className={`${inputCls} bg-slate-100 text-slate-500`} value="견적서 참조" disabled readOnly />
-                ) : (
-                  <>
+              <div className="flex gap-1 mb-2">
+                {BILL_STEP_TITLES.map((t, i) => <div key={t} className={`flex-1 h-1 rounded-full ${i <= billStep ? "bg-blue-600" : "bg-slate-200"}`} />)}
+              </div>
+              <p className="text-sm font-extrabold text-slate-800 mb-3">{billStep + 1}. {BILL_STEP_TITLES[billStep]}</p>
+
+              {billStep === 0 && (
+                <>
+                  <Field label="청구 대상 건 (지급완료된 자재)">
+                    <select className={inputCls} value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
+                      {openTodos.map((t) => (
+                        <option key={t.id} value={t.id}>{t.siteName}{t.elevatorNo ? ` · ${t.elevatorNo}` : ""} · {t.part ?? t.title}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  {selected && (
+                    <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5 mb-4 flex items-center justify-between">
+                      <span className="text-xs text-blue-700 font-semibold">지급일 {selected.assignedDate} 기준</span>
+                      <DDay dueDate={selected.dueDate} />
+                    </div>
+                  )}
+                  <Field label="교체일자">
                     <input
-                      type="number"
+                      type="date"
                       className={inputCls}
-                      placeholder="예: 350000"
-                      value={materialCost}
-                      onChange={(e) => setMaterialCost(e.target.value)}
+                      value={materialReplaceDate}
+                      onChange={(e) => setMaterialReplaceDate(e.target.value)}
                     />
-                    {!(Number(materialCost) > 0) && (
-                      <p className="text-[11px] text-red-500 mt-1">수리비를 입력해주세요</p>
+                  </Field>
+                  <Field label="수리비 (필수)">
+                    {isQuoteBilling ? (
+                      <input type="text" className={`${inputCls} bg-slate-100 text-slate-500`} value="견적서 참조" disabled readOnly />
+                    ) : (
+                      <>
+                        <input
+                          type="number"
+                          className={inputCls}
+                          placeholder="예: 350000"
+                          value={materialCost}
+                          onChange={(e) => setMaterialCost(e.target.value)}
+                        />
+                        {!(Number(materialCost) > 0) && (
+                          <p className="text-[11px] text-red-500 mt-1">수리비를 입력해주세요</p>
+                        )}
+                      </>
                     )}
-                  </>
+                  </Field>
+                </>
+              )}
+
+              {billStep === 1 && (
+                <>
+                  <Field label="교체 전 사진 (필수)">
+                    <MultiPhotoUpload
+                      photos={materialPhotos.before}
+                      uploadFolder={`billings/${uploadSession}/before`}
+                      onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, before: [...p.before, { url }] }))}
+                      onRemove={(idx) => setMaterialPhotos((p) => ({ ...p, before: p.before.filter((_, i) => i !== idx) }))}
+                      label="교체 전 표준 화질 사진 등록"
+                    />
+                  </Field>
+                  <Field label="교체 후 사진 (필수)">
+                    <MultiPhotoUpload
+                      photos={materialPhotos.after}
+                      uploadFolder={`billings/${uploadSession}/after`}
+                      onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, after: [...p.after, { url }] }))}
+                      onRemove={(idx) => setMaterialPhotos((p) => ({ ...p, after: p.after.filter((_, i) => i !== idx) }))}
+                      label="교체 후 표준 화질 사진 등록"
+                    />
+                  </Field>
+                  <Field label="교체확인서 (필수)">
+                    <SinglePhotoUpload
+                      label="교체확인서 종이 사진 등록"
+                      url={materialPhotos.confirm}
+                      uploadFolder={`billings/${uploadSession}`}
+                      onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, confirm: url }))}
+                      onRemove={() => setMaterialPhotos((p) => ({ ...p, confirm: null }))}
+                    />
+                  </Field>
+                </>
+              )}
+
+              <div className="flex gap-2 mt-2">
+                {billStep > 0 && (
+                  <button type="button" onClick={() => setBillStep(0)} className="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200">이전</button>
                 )}
-              </Field>
-              <PrimaryButton onClick={submitMaterial} disabled={!materialValid}>청구 요청 제출</PrimaryButton>
+                {billStep < 1 ? (
+                  <button type="button" onClick={() => { const err = matStepError(0); if (err) { toastBill(err); return; } setBillStep(1); }} className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 active:bg-blue-800">다음</button>
+                ) : (
+                  <div className="flex-1"><PrimaryButton onClick={() => { const err = matStepError(1); if (err) { toastBill(err); return; } submitMaterial(); }}>청구 요청 제출</PrimaryButton></div>
+                )}
+              </div>
               {submitted && !submitted.manual && (
                 <p className="text-xs text-emerald-600 font-bold text-center mt-3 flex items-center justify-center gap-1">
                   <Check size={14} /> 제출 완료 · "{submitted.siteName} {submitted.part}" 할 일이 자동 완료되었습니다
@@ -211,95 +271,117 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
         <div className="px-5 pt-4">
           <p className="text-[11px] text-slate-400 mb-3 px-1">자재 신청 없이 현장에서 바로 교체한 부품(예비 재고 사용 등)을 직접 입력해 청구합니다.</p>
           <div className="bg-white rounded-2xl border border-slate-200 p-4 overflow-visible">
-            <Field label="현장 선택">
-              <SiteSearchSelect value={manualForm.siteId} onChange={(id) => setManualForm({ ...manualForm, siteId: id, unit: "" })} />
-            </Field>
-            <Field label="호기 선택">
-              <select className={inputCls} value={manualForm.unit} onChange={(e) => setManualForm({ ...manualForm, unit: e.target.value })} disabled={!manualForm.siteId}>
-                <option value="">호기를 선택해주세요</option>
-                {manualForm.siteId && siteUnits(sites.find((s) => s.id === manualForm.siteId)).map((u) => <option key={u} value={u}>{u}</option>)}
-              </select>
-            </Field>
-            <button
-              type="button"
-              onClick={() => setManualForm({ ...manualForm, fromKit: !manualForm.fromKit, parts: [emptyPartRow()] })}
-              className={`w-full flex items-center gap-2.5 border rounded-xl px-3.5 py-3 mb-4 text-left ${manualForm.fromKit ? "border-blue-400 bg-blue-50" : "border-slate-200 bg-white"}`}
-            >
-              <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${manualForm.fromKit ? "bg-blue-600 border-blue-600" : "border-slate-300"}`}>
-                {manualForm.fromKit && <Check size={13} className="text-white" />}
-              </div>
-              <div>
-                <p className="text-sm font-bold text-slate-700">상비부품에서 사용함</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">체크하면 자재 담당자에게 보충 요청이 자동으로 전달됩니다</p>
-              </div>
-            </button>
-            <Field label="교체내역">
-              <PartsRowsInput
-                rows={manualForm.parts}
-                setRows={(rows) => setManualForm({ ...manualForm, parts: rows })}
-                nameOptions={manualForm.fromKit ? KIT_PARTS : undefined}
-                namePlaceholder={manualForm.fromKit ? "상비부품 목록에서 선택하세요" : "예: 1층 승장도어 스위치"}
-                nameLabel="부품명 (해당 층까지 기재)"
-              />
-            </Field>
-            <Field label="교체일자">
-              <input
-                type="date"
-                className={inputCls}
-                value={manualForm.replaceDate}
-                onChange={(e) => setManualForm({ ...manualForm, replaceDate: e.target.value })}
-              />
-            </Field>
-            <Field label="교체확인서 받은 현장담당자 연락처">
-              <input
-                className={inputCls}
-                placeholder="예: 010-1234-5678"
-                value={manualForm.contactPhone}
-                onChange={(e) => setManualForm({ ...manualForm, contactPhone: formatPhone(e.target.value) })}
-              />
-            </Field>
-            <Field label="교체 전 사진">
-              <MultiPhotoUpload
-                photos={manualPhotos.before}
-                uploadFolder={`billings/${uploadSession}/before`}
-                onUploaded={(url) => setManualPhotos((p) => ({ ...p, before: [...p.before, { url }] }))}
-                onRemove={(idx) => setManualPhotos((p) => ({ ...p, before: p.before.filter((_, i) => i !== idx) }))}
-                label="교체 전 표준 화질 사진 등록"
-                required={false}
-              />
-            </Field>
-            <Field label="교체 후 사진">
-              <MultiPhotoUpload
-                photos={manualPhotos.after}
-                uploadFolder={`billings/${uploadSession}/after`}
-                onUploaded={(url) => setManualPhotos((p) => ({ ...p, after: [...p.after, { url }] }))}
-                onRemove={(idx) => setManualPhotos((p) => ({ ...p, after: p.after.filter((_, i) => i !== idx) }))}
-                label="교체 후 표준 화질 사진 등록"
-                required={false}
-              />
-            </Field>
-            <Field label="교체확인서">
-              <SinglePhotoUpload
-                label="교체확인서 종이 사진 등록"
-                url={manualPhotos.confirm}
-                uploadFolder={`billings/${uploadSession}`}
-                onUploaded={(url) => setManualPhotos((p) => ({ ...p, confirm: url }))}
-                onRemove={() => setManualPhotos((p) => ({ ...p, confirm: null }))}
-              />
-            </Field>
-            <Field label="수리비 (필수)">
-              <input
-                type="number"
-                className={inputCls}
-                placeholder="예: 150000"
-                value={manualForm.cost}
-                onChange={(e) => setManualForm({ ...manualForm, cost: e.target.value })}
-              />
-              {!(Number(manualForm.cost) > 0) && (
-                <p className="text-[11px] text-red-500 mt-1">수리비를 입력해주세요</p>
+            <div className="flex gap-1 mb-2">
+              {BILL_STEP_TITLES.map((t, i) => <div key={t} className={`flex-1 h-1 rounded-full ${i <= billStep ? "bg-blue-600" : "bg-slate-200"}`} />)}
+            </div>
+            <p className="text-sm font-extrabold text-slate-800 mb-3">{billStep + 1}. {BILL_STEP_TITLES[billStep]}</p>
+
+            {billStep === 0 && (
+              <>
+                <Field label="현장 선택">
+                  <SiteSearchSelect value={manualForm.siteId} onChange={(id) => setManualForm({ ...manualForm, siteId: id, unit: "" })} />
+                </Field>
+                <Field label="호기 선택">
+                  <select className={inputCls} value={manualForm.unit} onChange={(e) => setManualForm({ ...manualForm, unit: e.target.value })} disabled={!manualForm.siteId}>
+                    <option value="">호기를 선택해주세요</option>
+                    {manualForm.siteId && siteUnits(sites.find((s) => s.id === manualForm.siteId)).map((u) => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </Field>
+                <button
+                  type="button"
+                  onClick={() => setManualForm({ ...manualForm, fromKit: !manualForm.fromKit, parts: [emptyPartRow()] })}
+                  className={`w-full flex items-center gap-2.5 border rounded-xl px-3.5 py-3 mb-4 text-left ${manualForm.fromKit ? "border-blue-400 bg-blue-50" : "border-slate-200 bg-white"}`}
+                >
+                  <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${manualForm.fromKit ? "bg-blue-600 border-blue-600" : "border-slate-300"}`}>
+                    {manualForm.fromKit && <Check size={13} className="text-white" />}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-700">상비부품에서 사용함</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">체크하면 자재 담당자에게 보충 요청이 자동으로 전달됩니다</p>
+                  </div>
+                </button>
+                <Field label="교체내역">
+                  <PartsRowsInput
+                    rows={manualForm.parts}
+                    setRows={(rows) => setManualForm({ ...manualForm, parts: rows })}
+                    nameOptions={manualForm.fromKit ? KIT_PARTS : undefined}
+                    namePlaceholder={manualForm.fromKit ? "상비부품 목록에서 선택하세요" : "예: 1층 승장도어 스위치"}
+                    nameLabel="부품명 (해당 층까지 기재)"
+                  />
+                </Field>
+                <Field label="교체일자">
+                  <input
+                    type="date"
+                    className={inputCls}
+                    value={manualForm.replaceDate}
+                    onChange={(e) => setManualForm({ ...manualForm, replaceDate: e.target.value })}
+                  />
+                </Field>
+                <Field label="교체확인서 받은 현장담당자 연락처">
+                  <input
+                    className={inputCls}
+                    placeholder="예: 010-1234-5678"
+                    value={manualForm.contactPhone}
+                    onChange={(e) => setManualForm({ ...manualForm, contactPhone: formatPhone(e.target.value) })}
+                  />
+                </Field>
+                <Field label="수리비 (필수)">
+                  <input
+                    type="number"
+                    className={inputCls}
+                    placeholder="예: 150000"
+                    value={manualForm.cost}
+                    onChange={(e) => setManualForm({ ...manualForm, cost: e.target.value })}
+                  />
+                  {!(Number(manualForm.cost) > 0) && (
+                    <p className="text-[11px] text-red-500 mt-1">수리비를 입력해주세요</p>
+                  )}
+                </Field>
+              </>
+            )}
+
+            {billStep === 1 && (
+              <>
+                <Field label="교체 전 사진 (필수)">
+                  <MultiPhotoUpload
+                    photos={manualPhotos.before}
+                    uploadFolder={`billings/${uploadSession}/before`}
+                    onUploaded={(url) => setManualPhotos((p) => ({ ...p, before: [...p.before, { url }] }))}
+                    onRemove={(idx) => setManualPhotos((p) => ({ ...p, before: p.before.filter((_, i) => i !== idx) }))}
+                    label="교체 전 표준 화질 사진 등록"
+                  />
+                </Field>
+                <Field label="교체 후 사진 (필수)">
+                  <MultiPhotoUpload
+                    photos={manualPhotos.after}
+                    uploadFolder={`billings/${uploadSession}/after`}
+                    onUploaded={(url) => setManualPhotos((p) => ({ ...p, after: [...p.after, { url }] }))}
+                    onRemove={(idx) => setManualPhotos((p) => ({ ...p, after: p.after.filter((_, i) => i !== idx) }))}
+                    label="교체 후 표준 화질 사진 등록"
+                  />
+                </Field>
+                <Field label="교체확인서 (필수)">
+                  <SinglePhotoUpload
+                    label="교체확인서 종이 사진 등록"
+                    url={manualPhotos.confirm}
+                    uploadFolder={`billings/${uploadSession}`}
+                    onUploaded={(url) => setManualPhotos((p) => ({ ...p, confirm: url }))}
+                    onRemove={() => setManualPhotos((p) => ({ ...p, confirm: null }))}
+                  />
+                </Field>
+              </>
+            )}
+
+            <div className="flex gap-2 mt-2">
+              {billStep > 0 && (
+                <button type="button" onClick={() => setBillStep(0)} className="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200">이전</button>
               )}
-            </Field>
-            <PrimaryButton onClick={submitManual} disabled={!manualValid}>청구 요청 제출</PrimaryButton>
+              {billStep < 1 ? (
+                <button type="button" onClick={() => { const err = manStepError(0); if (err) { toastBill(err); return; } setBillStep(1); }} className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 active:bg-blue-800">다음</button>
+              ) : (
+                <div className="flex-1"><PrimaryButton onClick={() => { const err = manStepError(1); if (err) { toastBill(err); return; } submitManual(); }}>청구 요청 제출</PrimaryButton></div>
+              )}
+            </div>
             {submitted && submitted.manual && (
               <p className="text-xs text-emerald-600 font-bold text-center mt-3 flex items-center justify-center gap-1">
                 <Check size={14} />
@@ -308,6 +390,14 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
               </p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* 필수 미입력 안내 토스트 (자재·견적과 동일 패턴) */}
+      {billToast && (
+        <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-50 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-1.5 max-w-[85%] ${billToast.ok ? "bg-emerald-600" : "bg-slate-900"}`}>
+          {billToast.ok ? <Check size={14} className="shrink-0" /> : <AlertTriangle size={14} className="text-amber-400 shrink-0" />}
+          {billToast.msg}
         </div>
       )}
     </div>
