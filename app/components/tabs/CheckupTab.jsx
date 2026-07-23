@@ -1,9 +1,9 @@
 import { useState, useContext } from "react";
-import { Search } from "lucide-react";
+import { Search, MapPin } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { useHolidays } from "@/app/hooks/useHolidays";
-import { siteUnitList } from "@/lib/utils";
+import { siteUnitList, distanceKm } from "@/lib/utils";
 import { mapSelfCheck, mapSelfCheckItem, mapSelfCheckItemState } from "@/lib/mappers";
 import { PrimaryButton, Sheet, Field, inputCls, MapLinkButtons } from "@/app/components/ui";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
@@ -47,10 +47,13 @@ function formatDateTime(iso) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+const fmtMD = (d) => (d ? `${d.slice(5, 7)}/${d.slice(8, 10)}` : ""); // "2026-07-25" → "07/25"
+const fmtDist = (km) => (km == null ? null : km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`);
+
 export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profilesAll = [] }) {
   const sites = useContext(SitesContext);
   const units = useContext(UnitsContext);
-  const { name: CURRENT_ENGINEER, selfId } = useContext(AuthContext);
+  const { name: CURRENT_ENGINEER, selfId, engineers = [] } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("계획");
   const [showAll, setShowAll] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
@@ -90,6 +93,19 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   const q = query.trim();
   const checksThisMonth = selfChecks.filter((c) => c.ym === ym && visibleUnitIds.has(c.unitId));
 
+  // 이 현장 이번 달 점검 예정일(가장 빠른 것) — 일정 등록된 현장만 값이 있다. 없으면 null(미정).
+  const plannedDateOf = (s) => {
+    const uids = siteUnitList(s, units).filter((u) => u.id).map((u) => u.id);
+    const dates = checksThisMonth
+      .filter((c) => uids.includes(c.unitId) && c.status === "예정" && c.plannedDate)
+      .map((c) => c.plannedDate);
+    return dates.length ? dates.slice().sort()[0] : null;
+  };
+  // 기사 마지막 확인 위치 기준 현장까지 직선거리(km)
+  const selfLoc = engineers.find((e) => e.id === selfId);
+  const selfCoord = selfLoc?.last_lat != null ? { lat: selfLoc.last_lat, lng: selfLoc.last_lng } : null;
+  const distOf = (s) => distanceKm(selfCoord, s.lat != null ? { lat: s.lat, lng: s.lng } : null);
+
   // 월 1회 점검이라 이번 달에 이미 등록 완료한 현장은 계획 목록에서 기본적으로 숨긴다
   // (다음 달이 되면 ym이 바뀌어 자동으로 다시 나타남). 월 2회 이상 도는 현장도 있어서
   // "점검완료현장 보기" 체크로 다시 볼 수 있게 해둔다.
@@ -100,7 +116,19 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   }
   const planSites = scopedSites
     .filter((s) => !q || s.name.includes(q) || (s.address ?? "").includes(q))
-    .filter((s) => showCompleted || !isSiteDoneThisMonth(s));
+    .filter((s) => showCompleted || !isSiteDoneThisMonth(s))
+    .sort((a, b) => {
+      // 예정일 잡힌 현장을 빠른 날짜순으로 위에, 미정인 현장은 거리 가까운 순으로 뒤에
+      const pa = plannedDateOf(a), pb = plannedDateOf(b);
+      if (pa && pb) return pa.localeCompare(pb);
+      if (pa) return -1;
+      if (pb) return 1;
+      const da = distOf(a), db = distOf(b);
+      if (da == null && db == null) return 0;
+      if (da == null) return 1;
+      if (db == null) return -1;
+      return da - db;
+    });
 
   const plannedChecks = checksThisMonth.filter((c) => c.status === "예정");
   const doneChecks = checksThisMonth
@@ -354,31 +382,43 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
             <div className="space-y-2.5">
               {planSites.map((s) => {
                 const hasUnits = siteUnitList(s, units).filter((u) => u.id).length > 0;
+                const planned = plannedDateOf(s);
+                const dist = distOf(s);
                 return (
-                  <div key={s.id} className="bg-white rounded-xl border border-slate-200 p-3.5 flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-bold text-slate-800 text-sm">{s.name} · {siteUnitList(s, units).length}대</p>
-                      <p className="text-[11px] text-slate-400 truncate">{s.address}</p>
+                  <div key={s.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                    {/* 윗줄: 현장명·대수 + 예정일 배지 / 거리·주소 — 개요라 정보 먼저 */}
+                    <div className="p-3.5 pb-2.5">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <p className="font-bold text-slate-800 text-sm truncate">{s.name} · {siteUnitList(s, units).length}대</p>
+                        {planned
+                          ? <span className="shrink-0 text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">예정 {fmtMD(planned)}</span>
+                          : <span className="shrink-0 text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">미정</span>}
+                      </div>
+                      <p className="text-[11px] text-slate-400 flex items-center gap-1 min-w-0">
+                        {dist != null && <span className="inline-flex items-center gap-0.5 font-bold text-blue-600 shrink-0"><MapPin size={11} strokeWidth={2.5} />{fmtDist(dist)} ·</span>}
+                        <span className="truncate">{s.address}</span>
+                      </p>
                     </div>
-                    <div className="shrink-0 flex items-center gap-1.5">
+                    {/* 아랫줄: 지도 + 액션 버튼(풀폭) */}
+                    <div className="flex items-center gap-2 px-3.5 pb-3">
                       <MapLinkButtons site={s} />
                       {hasUnits ? (
                         <>
                           <button
                             onClick={() => { setScheduleTarget(s); setScheduleDate(TODAY_STR); }}
-                            className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg"
+                            className="flex-1 text-xs font-bold text-blue-700 bg-blue-50 py-2 rounded-lg active:bg-blue-100"
                           >
                             일정 등록
                           </button>
                           <button
                             onClick={() => openCheckup(s)}
-                            className="text-xs font-bold text-white bg-blue-700 px-3 py-1.5 rounded-lg"
+                            className="flex-1 text-xs font-bold text-white bg-blue-700 py-2 rounded-lg active:bg-blue-800"
                           >
                             자체점검 등록
                           </button>
                         </>
                       ) : (
-                        <span className="text-[10px] text-slate-400">호기 미등록</span>
+                        <span className="flex-1 text-center text-[10px] text-slate-400">호기 미등록</span>
                       )}
                     </div>
                   </div>
