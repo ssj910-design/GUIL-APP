@@ -116,10 +116,6 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
             <Plus size={15} />
           </button>
         )}
-        <label className="flex items-center gap-1 text-xs font-bold text-slate-500 shrink-0 whitespace-nowrap">
-          <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} className="w-3.5 h-3.5" />
-          완료된 항목 보기
-        </label>
         <div className="relative flex-1 min-w-0">
           <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -129,6 +125,10 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <label className="flex items-center gap-1 text-xs font-bold text-slate-500 shrink-0 whitespace-nowrap">
+          <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} className="w-3.5 h-3.5" />
+          완료된 항목 보기
+        </label>
       </div>
       <div className="px-5 divide-y divide-slate-100">
         {visible.length === 0 && (
