@@ -918,77 +918,42 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
     : f.escalation === "지원요청" ? { label: "지원미배정", bar: "border-l-amber-500", chip: "bg-amber-100 text-amber-700" }
     : { label: "미배정", bar: "border-l-red-500", chip: "bg-red-50 text-red-600" };
   return (
-    <div className={`w-full flex items-center justify-between gap-2 rounded-xl border border-slate-200 border-l-4 ${state.bar} bg-white px-3.5 py-3`}>
-      <button type="button" onClick={() => onOpenDetail(f)} className="min-w-0 flex-1 text-left">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <p className="font-bold text-slate-800 text-sm truncate">{f.siteName} · {formatUnitLabel(f.elevatorNo)}</p>
+    <div className={`w-full rounded-xl border border-slate-200 border-l-4 ${state.bar} bg-white overflow-hidden`}>
+      {/* 개요 카드 — 현장명을 윗줄에 통째로 두고, 지도·버튼은 아랫줄로 내려 이름이 눌리지 않게 한다 */}
+      <button type="button" onClick={() => onOpenDetail(f)} className="w-full text-left px-3.5 pt-3 pb-2">
+        <div className="flex items-center gap-1.5">
+          <p className="font-bold text-slate-800 text-sm truncate flex-1 min-w-0">{f.siteName}{formatUnitLabel(f.elevatorNo) ? ` · ${formatUnitLabel(f.elevatorNo)}` : ""}</p>
           <span className={`shrink-0 text-[10px] font-bold rounded-full px-1.5 py-0.5 ${state.chip}`}>{state.label}</span>
           {warnCount >= 3 && <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold rounded-full px-1.5 py-0.5 bg-red-100 text-red-600" title={`최근 30일 ${warnCount}회 고장`}><Repeat size={10} strokeWidth={2.8} />{warnCount}</span>}
         </div>
-        <p className="text-[11px] text-slate-400 truncate flex items-center gap-0.5">
+        <p className="text-[11px] text-slate-400 truncate flex items-center gap-0.5 mt-0.5">
           {dist != null && <span className="inline-flex items-center gap-0.5 font-bold text-blue-600"><MapPin size={11} strokeWidth={2.5} />{fmtDist(dist)} ·</span>}
           <span className="truncate">{f.errorCode}</span>
         </p>
       </button>
-      {(stage === "pending" || stage === "dispatched") && <MapLinkButtons site={siteOf(f)} />}
-      {stage === "pending" && (
-        <span className="shrink-0 flex gap-1.5">
-          {role === "admin" && onAssignOpen ? (
-            <button
-              type="button"
-              onClick={() => onAssignOpen(f)}
-              className="bg-blue-700 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:bg-blue-800"
-            >
-              {f.assignee ? "재배정" : "기사 배정"}
-            </button>
-          ) : (
-          <button
-            type="button"
-            onClick={() => onDispatch(f)}
-            className="bg-blue-700 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:bg-blue-800"
-          >
-            {f.assignee ? "출동 응답" : "내가 출동하기"}
-          </button>
+      {stage !== "done" && (
+        <div className="flex items-center gap-2 px-3.5 pb-3">
+          {(stage === "pending" || stage === "dispatched") && <MapLinkButtons site={siteOf(f)} />}
+          {stage === "pending" && (
+            role === "admin" && onAssignOpen ? (
+              <button type="button" onClick={() => onAssignOpen(f)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2 rounded-lg active:bg-blue-800">{f.assignee ? "재배정" : "기사 배정"}</button>
+            ) : (
+              <>
+                <button type="button" onClick={() => onDispatch(f)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2 rounded-lg active:bg-blue-800">{f.assignee ? "출동 응답" : "내가 출동하기"}</button>
+                {onRefuse && f.assignee === me && <button type="button" onClick={() => onRefuse(f)} className="shrink-0 text-xs font-bold text-red-500 border border-red-200 px-3 py-2 rounded-lg active:bg-red-50">거부</button>}
+              </>
+            )
           )}
-          {onRefuse && f.assignee === me && (
-            <button
-              type="button"
-              onClick={() => onRefuse(f)}
-              className="text-[11px] font-bold text-red-500 border border-red-200 px-2 py-1.5 rounded-lg active:bg-red-50"
-            >
-              거부
-            </button>
+          {stage === "dispatched" && (
+            <>
+              <button type="button" onClick={() => onArrive(f)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2 rounded-lg active:bg-blue-800">도착 ({f.etaMinutes}분)</button>
+              {onRefuse && f.assignee === me && <button type="button" onClick={() => onRefuse(f)} className="shrink-0 text-xs font-bold text-red-500 border border-red-200 px-3 py-2 rounded-lg active:bg-red-50">취소</button>}
+            </>
           )}
-        </span>
-      )}
-      {stage === "dispatched" && (
-        <span className="shrink-0 flex gap-1.5">
-        <button
-          type="button"
-          onClick={() => onArrive(f)}
-          className="bg-blue-700 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:bg-blue-800"
-        >
-          도착 ({f.etaMinutes}분)
-        </button>
-        {onRefuse && f.assignee === me && (
-          <button
-            type="button"
-            onClick={() => onRefuse(f)}
-            className="text-[11px] font-bold text-red-500 border border-red-200 px-2 py-1.5 rounded-lg active:bg-red-50"
-          >
-            취소
-          </button>
-        )}
-        </span>
-      )}
-      {stage === "arrived" && (
-        <button
-          type="button"
-          onClick={() => onOpenResult(f)}
-          className="shrink-0 inline-flex items-center gap-1 bg-emerald-600 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:bg-emerald-700"
-        >
-          <Wrench size={12} strokeWidth={2.5} /> 결과입력
-        </button>
+          {stage === "arrived" && (
+            <button type="button" onClick={() => onOpenResult(f)} className="flex-1 inline-flex items-center justify-center gap-1 bg-emerald-600 text-white text-xs font-bold py-2 rounded-lg active:bg-emerald-700"><Wrench size={13} strokeWidth={2.5} /> 결과입력</button>
+          )}
+        </div>
       )}
     </div>
   );
