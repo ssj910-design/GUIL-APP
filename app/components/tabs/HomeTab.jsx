@@ -1,8 +1,8 @@
 import { useState, useContext, useEffect } from "react";
-import { ShieldCheck, AlertOctagon } from "lucide-react";
+import { ShieldCheck, AlertOctagon, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, formatUnitLabel, distanceKm } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, distanceKm } from "@/lib/utils";
 import { Badge, DDay, SmsToast, Sheet } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -155,7 +155,7 @@ function AdminAttendanceCard({ attendances, engineers }) {
 
 // 출퇴근 체크 — 기사는 출근/퇴근·당직 버튼, 관리자는 오늘 출근 인원 요약.
 // 출근 시 현위치를 1회 받아 저장한다(고장 배정 시 가까운 기사 정렬용).
-function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseNight, onAttendance, onOpenRoster, swapCount = 0 }) {
+function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseNight, onAttendance }) {
   const { role, selfId, engineers } = useContext(AuthContext);
   const [checking, setChecking] = useState(false);
   const [geoModalDismissed, setGeoModalDismissed] = useState(false);
@@ -193,26 +193,10 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
     navigator.geolocation.getCurrentPosition(() => setGeoPerm("granted"), () => {}, { timeout: 8000 });
   }
 
-  const rosterBtn = onOpenRoster ? (
-    <button
-      onClick={onOpenRoster}
-      className="w-full mt-2 bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex items-center justify-between active:bg-slate-50"
-    >
-      <span className="text-xs font-bold text-slate-600">워크캘린더</span>
-      <span className="flex items-center gap-1.5">
-        {swapCount > 0 && (
-          <span className="text-[10px] font-extrabold text-white bg-red-500 rounded-full px-1.5 py-0.5">교환요청 {swapCount}</span>
-        )}
-        <span className="text-[11px] font-bold text-blue-700">보기 →</span>
-      </span>
-    </button>
-  ) : null;
-
   if (role === "admin") {
     return (
       <div className="px-5 pt-4">
         <AdminAttendanceCard attendances={attendances} engineers={engineers} />
-        {rosterBtn}
       </div>
     );
   }
@@ -326,9 +310,133 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
             {!done && <WorkEndRow onAttendance={onAttendance} dutyKind={dutyKind} />}
           </div>
         )}
-        {rosterBtn}
       </div>
     </>
+  );
+}
+
+const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+
+// 반차 신청 시 note 맨 앞에 "오전"/"오후"를 적어두므로(WorkCalendarSheet.jsx의 submitLeave 참고)
+// 날짜 상세 팝업에도 그대로 꺼내 보여준다.
+function periodOf(note) {
+  const m = (note ?? "").match(/^(오전|오후)/);
+  return m ? m[1] : null;
+}
+
+// 홈탭용 워크 캘린더 미리보기 — 관리자 대시보드의 WeekStrip(admin/WeekStrip.jsx)을 좁은
+// 모바일 화면에 맞게 압축한 버전. 카드 폭이 좁아 "당직 아무개" 같은 라벨은 안 들어가서
+// 색점(당직=초록/숙직=파랑/휴가=호박색)만으로 구분하고 이름만 보여준다. 오늘을 맨 첫 칸에
+// 고정하고 앞으로 6일치를 이어서 총 7칸을 가로 스크롤로 넘겨본다(폭이 375px 안팎이라 전부
+// 한 화면에 안 들어가는 게 정상 — 스와이프 전제).
+function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
+  const [duties, setDuties] = useState([]);
+  const [leaves, setLeaves] = useState([]);
+  const [dayDetail, setDayDetail] = useState(null); // 날짜 카드 클릭 시 당직·숙직·휴가 인원 모아보기
+
+  const center = new Date(`${TODAY_STR}T00:00:00`);
+  const week = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(center);
+    d.setDate(center.getDate() + i);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
+  const from = week[0], to = week[6];
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from("duty_schedules").select("*").gte("duty_date", from).lte("duty_date", to),
+      supabase.from("leaves").select("*").lte("start_date", to).gte("end_date", from),
+    ]).then(([d, l]) => {
+      setDuties(d.data ?? []);
+      setLeaves((l.data ?? []).filter((x) => (x.status ?? "승인") === "승인"));
+    });
+  }, [from, to]);
+
+  const nameOf = (id) => profiles.find((p) => p.id === id)?.name ?? "";
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 px-3 py-3">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-bold text-slate-600">워크 캘린더</p>
+        <span className="flex items-center gap-1.5">
+          {swapCount > 0 && (
+            <span className="text-[10px] font-extrabold text-white bg-red-500 rounded-full px-1.5 py-0.5">교환요청 {swapCount}</span>
+          )}
+          {onOpen && (
+            <button onClick={onOpen} className="text-[11px] font-bold text-blue-700">전체보기 →</button>
+          )}
+        </span>
+      </div>
+      <div className="flex gap-1.5 overflow-x-auto">
+        {week.map((d) => {
+          const dow = new Date(`${d}T00:00:00`).getDay();
+          const dutyDay = duties.filter((x) => x.duty_date === d && (x.kind === "당직" || x.kind === "숙직"));
+          const leaveDay = leaves.filter((l) => l.start_date <= d && d <= l.end_date);
+          return (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setDayDetail(d)}
+              className={`shrink-0 w-[54px] text-left rounded-lg border p-1.5 ${
+                d === TODAY_STR ? "border-blue-300 bg-blue-50" : "border-slate-100"
+              }`}
+            >
+              <p className={`text-[10px] font-bold text-center ${dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-slate-400"}`}>
+                {DOW[dow]} {Number(d.slice(8))}
+              </p>
+              <div className="mt-1 space-y-0.5">
+                {dutyDay.map((x) => (
+                  <p key={x.id} className="flex items-center gap-1 text-[9.5px] font-semibold text-slate-600">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${x.kind === "당직" ? "bg-emerald-500" : "bg-blue-500"}`} />
+                    <span className="truncate">{nameOf(x.profile_id)}</span>
+                  </p>
+                ))}
+                {leaveDay.map((l) => (
+                  <p key={l.id} className="flex items-center gap-1 text-[9.5px] font-semibold text-slate-600">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                    <span className="truncate">{nameOf(l.profile_id)}</span>
+                  </p>
+                ))}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {dayDetail && (
+        <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center px-6" onClick={() => setDayDetail(null)}>
+          <div className="bg-white w-full max-w-xs rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-extrabold text-slate-800">{dayDetail.slice(5).replace("-", "/")} 근무·휴가</p>
+              <button onClick={() => setDayDetail(null)} className="p-1 text-slate-400" aria-label="닫기"><X size={16} /></button>
+            </div>
+            <div className="space-y-2.5">
+              {["당직", "숙직"].map((kind) => {
+                const person = duties.find((x) => x.duty_date === dayDetail && x.kind === kind);
+                return (
+                  <div key={kind} className="flex items-start justify-between gap-3 text-sm border-b border-slate-50 pb-2 last:border-0 last:pb-0">
+                    <span className={`font-bold shrink-0 ${kind === "당직" ? "text-emerald-700" : "text-blue-700"}`}>{kind}</span>
+                    <span className="text-slate-700 font-bold text-right">{person ? nameOf(person.profile_id) : "미배정"}</span>
+                  </div>
+                );
+              })}
+              {(() => {
+                const people = leaves.filter((l) => l.start_date <= dayDetail && dayDetail <= l.end_date);
+                const label = people
+                  .map((l) => `${nameOf(l.profile_id)} ${l.kind}${l.kind === "반차" && periodOf(l.note) ? `(${periodOf(l.note)})` : ""}`)
+                  .join(", ");
+                return (
+                  <div className="flex items-start justify-between gap-3 text-sm">
+                    <span className="font-bold shrink-0 text-amber-700">휴가</span>
+                    <span className="text-slate-700 font-bold text-right">{label || "-"}</span>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -387,7 +495,7 @@ function WorkEndRow({ onAttendance, dutyKind }) {
 export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, onCloseNight, onAttendance, onOpenRoster, swapCount, inspections, failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, toast, todayLeaves = [] }) {
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
-  const { name: CURRENT_ENGINEER, role, selfId, engineers = [] } = useContext(AuthContext);
+  const { name: CURRENT_ENGINEER, role, selfId, engineers = [], profiles = [] } = useContext(AuthContext);
   // 기사 본인 위치 — 미배정 고장을 가까운 순으로 정렬·표시하는 기준.
   const selfLoc = engineers.find((e) => e.id === selfId);
   const selfCoord = selfLoc?.last_lat != null ? { lat: selfLoc.last_lat, lng: selfLoc.last_lng } : null;
@@ -403,8 +511,12 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
   const escalatedSiteIds = new Set([...supportSiteIds, ...stoppedSiteIds]);
   // 최근 30일 고장 목록은 실시간 계산 — 처리완료 여부와 무관하게 누적. 3회↑ 재발 배지·집중관리 판정에 쓴다.
   const recentFailuresBySiteId = recentFailuresBySite(failures);
-  // 집중관리현장: 3회 이상 고장 또는 지원요청/운행정지 걸린 현장 (담당 무관 — 기사도 회사 전체 위험 현장을 봄).
-  const criticalSites = sites.filter((s) => (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || escalatedSiteIds.has(s.id));
+  // 갇힘사고는 재발 횟수와 무관하게 최근 30일 내 1건만 있어도 집중관리 대상 — 30일 지나면 자동으로 빠진다.
+  const entrapmentSiteIds = entrapmentSitesRecent(failures);
+  // 집중관리현장: 3회 이상 고장, 갇힘사고, 지원요청/운행정지 걸린 현장 (담당 무관 — 기사도 회사 전체 위험 현장을 봄).
+  const criticalSites = sites.filter((s) =>
+    (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || escalatedSiteIds.has(s.id) || entrapmentSiteIds.has(s.id)
+  );
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [assignTarget, setAssignTarget] = useState(null);
@@ -472,22 +584,30 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
 
   return (
     <div className="flex-1 overflow-y-auto pb-4 relative">
-      {onAttendance && <AttendanceBar attendances={attendances} dutySchedules={dutySchedules} pendingNight={pendingNight} onCloseNight={onCloseNight} onAttendance={onAttendance} onOpenRoster={onOpenRoster} swapCount={swapCount} />}
+      {onAttendance && <AttendanceBar attendances={attendances} dutySchedules={dutySchedules} pendingNight={pendingNight} onCloseNight={onCloseNight} onAttendance={onAttendance} />}
+
+      <div className="px-5 pt-4">
+        <WorkCalendarMiniStrip profiles={profiles} onOpen={onOpenRoster} swapCount={swapCount} />
+      </div>
 
       {/* 고장 처리 현황 */}
       <div className="px-5 pt-4">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="font-bold text-slate-800 text-sm">
-            고장 처리 현황
+        <div className="flex items-start justify-between mb-2 gap-2">
+          <div className="min-w-0">
+            <h3 className="font-bold text-slate-800 text-sm">고장 처리 현황</h3>
             {role === "admin" && (
-              <span className="ml-1.5 font-medium text-[11px] text-slate-500">
-                미배정 {listSource.filter((f) => !f.assignee).length} · 응답대기 {listSource.filter((f) => f.assignee).length}
-              </span>
+              <p className="font-medium text-[11px] text-slate-500 mt-0.5">
+                미배정 {listSource.filter((f) => !f.assignee && f.escalation !== "지원요청").length}
+                {listSource.some((f) => !f.assignee && f.escalation === "지원요청") && (
+                  <span className="text-amber-600 font-bold"> · 지원미배정 {listSource.filter((f) => !f.assignee && f.escalation === "지원요청").length}</span>
+                )}
+                {" · 응답대기 "}{listSource.filter((f) => f.assignee).length}
+              </p>
             )}
-          </h3>
+          </div>
           {role === "admin" && onShowAllFailures && (
-            <button onClick={onShowAllFailures} className="text-[11px] font-bold text-blue-700">
-              모두 보기 (출동·작업·완료 포함) →
+            <button onClick={onShowAllFailures} className="shrink-0 text-[11px] font-bold text-blue-700 mt-0.5">
+              모두보기
             </button>
           )}
         </div>
@@ -528,7 +648,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
         <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-2">
             <AlertOctagon size={18} className="text-red-600" />
-            <h3 className="font-extrabold text-red-700 text-sm whitespace-nowrap">집중 관리현장(고장 3회 이상 · 지원요청/운행정지)</h3>
+            <h3 className="font-extrabold text-red-700 text-sm whitespace-nowrap">집중관리현장(갇힘·운행정지·고장다발·지원요청)</h3>
           </div>
           {criticalSites.length === 0 ? (
             <p className="text-xs text-red-500">현재 집중 관리 대상 현장이 없습니다.</p>
@@ -537,6 +657,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
               {criticalSites.map((s) => {
                 const stopped = stoppedSiteIds.has(s.id);
                 const support = supportSiteIds.has(s.id);
+                const trapped = entrapmentSiteIds.has(s.id);
                 const recent = recentFailuresBySiteId.get(s.id) ?? [];
                 const count30d = recent.length;
                 const units = [...new Set(recent.map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean))];
@@ -545,13 +666,14 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
                   <button
                     key={s.id}
                     onClick={() => setHistorySite(s)}
-                    className={`w-full flex items-center justify-between bg-white rounded-xl px-3 py-2.5 border text-left active:bg-red-50 ${stopped ? "border-red-300" : "border-red-100"}`}
+                    className={`w-full flex items-center justify-between bg-white rounded-xl px-3 py-2.5 text-left active:bg-red-50 ${stopped ? "border-2 border-red-400" : "border border-red-100"}`}
                   >
                     <div>
                       <p className="font-bold text-slate-800 text-sm">{s.name}{unitLabel ? ` · ${unitLabel}` : ""}</p>
                       <p className="text-[11px] text-slate-400">{s.address}</p>
                     </div>
                     <span className="flex gap-1 shrink-0">
+                      {trapped && <span className="text-xs font-extrabold text-white bg-red-600 px-2 py-1 rounded-full">갇힘</span>}
                       {support && <span className="text-xs font-extrabold text-amber-600 bg-amber-100 px-2 py-1 rounded-full">지원요청</span>}
                       {stopped && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">운행정지</span>}
                       {count30d > 0 && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">{count30d}회 고장</span>}
@@ -666,9 +788,10 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
       {detailTarget && (
         <FailureDetailSheet
           failure={detailTarget}
+          failures={failures}
           onClose={() => setDetailTarget(null)}
           onDispatch={setDispatchTarget}
-          onArrive={setArriveTarget}
+          onArrive={onArrive}
           onOpenResult={setResultTarget}
           onAssignOpen={setAssignTarget}
         />

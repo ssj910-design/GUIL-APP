@@ -39,7 +39,11 @@ export default function WorkCalendar({ data }) {
       supabase.from("duty_schedules").select("*").gte("duty_date", `${ym}-01`).lte("duty_date", last),
       // 기간 휴가가 이 달에 걸치기만 해도 가져온다
       supabase.from("leaves").select("*").lte("start_date", last).gte("end_date", `${ym}-01`),
-    ]).then(([d, l]) => { setDuties(d.data ?? []); setLeaves(l.data ?? []); });
+    ]).then(([d, l]) => {
+      setDuties(d.data ?? []);
+      // 승인된 휴가만 노출 — 신청·반려는 아직 확정이 아니라 남들 눈에 보이면 안 된다.
+      setLeaves((l.data ?? []).filter((x) => (x.status ?? "승인") === "승인"));
+    });
   }, [ym, last]);
 
   const nameOf = (id) => data.profiles.find((p) => p.id === id)?.name ?? "";

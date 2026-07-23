@@ -4,10 +4,12 @@
 // 매월 1일 generate_self_checks(ym) 호출로 활성 호기 전체에 줄이 생기고,
 // 기사가 완료 처리하면 남은 줄이 곧 누락 후보다. (DESIGN-v2 §7-3)
 import { useEffect, useState } from "react";
+import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapSelfCheck, mapSelfCheckItem } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
-import { locOf, personOf, StatusBadge, AdminTable, Modal, PhotoGrid } from "@/app/components/admin/adminShared";
+import { shortDate } from "@/lib/utils";
+import { locOf, personOf, StatusBadge, AdminTable, Modal, PhotoGrid, inputCls } from "@/app/components/admin/adminShared";
 import SELF_CHECK_ITEM_CODES from "@/lib/data/selfCheckItemCodes.json";
 
 const RESULT_LABEL = { A: "양호", B: "주의관찰", C: "긴급수리", E: "없음" };
@@ -94,22 +96,37 @@ function SelfCheckLogModal({ c, onClose }) {
 }
 
 // 담당자 한 명의 담당 현장 목록 — 카드 클릭 시 자체점검일지(항목결과·특이사항·사진)를 연다.
+// 특이사항이 입력된 호기는 정렬 기준과 무관하게 항상 맨 위 — 확인이 더 급하다.
 function EngineerDetailModal({ name, rows, onClose }) {
   const [logRow, setLogRow] = useState(null);
+  const [search, setSearch] = useState("");
+  const q = search.trim();
+  const filtered = rows.filter((r) => !q || r.loc.includes(q) || (r.address ?? "").includes(q));
+  const sorted = [...filtered].sort((a, b) => (a.notes ? 0 : 1) - (b.notes ? 0 : 1));
   return (
     <>
       <Modal title={`${name} · 담당 현장 (${rows.length}건)`} onClose={onClose} wide="xl">
-        <AdminTable head={["현장 · 호기", "주소", "점검완료일", "공단 제출일자", "공단 제출"]}>
-          {rows.map((r) => (
-            <tr key={r.id} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setLogRow(r)}>
-              <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{r.loc}</td>
-              <td className="px-3 py-2.5 text-slate-500">{r.address ?? "-"}</td>
-              <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{r.doneDate ?? "-"}</td>
-              <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{r.govSubmittedAt ? r.govSubmittedAt.slice(0, 10) : "-"}</td>
-              <td className="px-3 py-2.5"><GovBadge code={r.govResultCode} msg={r.govResultMsg} /></td>
-            </tr>
-          ))}
-        </AdminTable>
+        {/* 검색으로 행 수가 줄어도 팝업 크기가 흔들리지 않도록 높이를 고정한다 */}
+        <div className="min-h-[65vh]">
+          <div className="relative mb-3 max-w-72">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input className={`${inputCls} pl-8`} placeholder="현장명·주소로 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <AdminTable head={["현장 · 호기", "주소", "점검완료일", "공단 제출일자", "공단 제출"]}>
+            {sorted.map((r) => (
+              <tr key={r.id} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setLogRow(r)}>
+                <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">
+                  {r.loc}
+                  {r.notes && <span className="ml-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">특이사항</span>}
+                </td>
+                <td className="px-3 py-2.5 text-slate-500">{r.address ?? "-"}</td>
+                <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(r.doneDate)}</td>
+                <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{r.govSubmittedAt ? shortDate(r.govSubmittedAt.slice(0, 10)) : "-"}</td>
+                <td className="px-3 py-2.5"><GovBadge code={r.govResultCode} msg={r.govResultMsg} /></td>
+              </tr>
+            ))}
+          </AdminTable>
+        </div>
       </Modal>
       {logRow && <SelfCheckLogModal c={logRow} onClose={() => setLogRow(null)} />}
     </>
@@ -146,6 +163,7 @@ export default function SelfChecksAdmin({ data, setData }) {
       total: list.length,
       doneCount: list.filter((r) => r.status === "완료").length,
       overdueCount: list.filter((r) => r.doneDate && r.govSubmittedAt && daysBetween(r.doneDate, r.govSubmittedAt.slice(0, 10)) > OVERDUE_DAYS).length,
+      notesCount: list.filter((r) => (r.notes ?? "").trim()).length,
       rows: list,
     }))
     .sort((a, b) => (a.key === "__unassigned" ? 1 : b.key === "__unassigned" ? -1 : a.name.localeCompare(b.name, "ko")));
@@ -194,7 +212,7 @@ export default function SelfChecksAdmin({ data, setData }) {
           {ym} 출석부가 아직 없습니다 — 위 버튼으로 생성하세요 (활성 호기 전체에 1줄씩)
         </div>
       ) : (
-        <AdminTable head={["담당자", "담당 지역", "담당대수", "점검완료", `입력기한초과 (${OVERDUE_DAYS}일)`]}>
+        <AdminTable head={["담당자", "담당 지역", "담당대수", "점검완료", `입력기한초과 (${OVERDUE_DAYS}일)`, "특이사항 입력"]}>
           {summaryRows.map((g) => (
             <tr key={g.key} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setEngineerKey(g.key)}>
               <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{g.name}</td>
@@ -202,6 +220,7 @@ export default function SelfChecksAdmin({ data, setData }) {
               <td className="px-3 py-2.5">{g.total}</td>
               <td className="px-3 py-2.5">{g.doneCount}</td>
               <td className="px-3 py-2.5">{g.overdueCount > 0 ? <StatusBadge tone="red">{g.overdueCount}</StatusBadge> : g.overdueCount}</td>
+              <td className="px-3 py-2.5">{g.notesCount > 0 ? <StatusBadge tone="amber">{g.notesCount}</StatusBadge> : g.notesCount}</td>
             </tr>
           ))}
         </AdminTable>

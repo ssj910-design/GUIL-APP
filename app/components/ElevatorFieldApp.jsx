@@ -21,7 +21,7 @@ import { CheckupTab } from "@/app/components/tabs/CheckupTab";
 import { InspectionTab } from "@/app/components/tabs/InspectionTab";
 import { MaterialTab } from "@/app/components/tabs/MaterialTab";
 import { BillingTab } from "@/app/components/tabs/BillingTab";
-import { TodoTab, TodoDetailSheet, getRequesterName, getCoAssignees, getSupplyPhotos } from "@/app/components/tabs/TodoTab";
+import { TodoTab, TodoDetailSheet, getRequesterName, getCoAssignees, getSupplyPhotos, getTodoSiteAddress } from "@/app/components/tabs/TodoTab";
 import { AdminTab } from "@/app/components/tabs/AdminTab";
 import { RoomTab, PostDetailOverlay } from "@/app/components/tabs/RoomTab";
 
@@ -30,7 +30,7 @@ const TABS = [
   { id: "home", label: "홈", icon: Home },
   { id: "sites", label: "현장정보", icon: Building2 },
   { id: "failure", label: "고장접수", icon: AlertTriangle },
-  { id: "checkup", label: "정기점검", icon: CalendarCheck },
+  { id: "checkup", label: "자체점검", icon: CalendarCheck },
   { id: "inspection", label: "검사관리", icon: ShieldCheck },
   { id: "material", label: "자재·견적", icon: Package },
   { id: "billing", label: "비용청구", icon: Receipt },
@@ -89,9 +89,7 @@ export default function App() {
   const engineerNames = engineers.map((e) => e.name);
 
   const [tab, setTab] = useState("home");
-  const [focusSiteId, setFocusSiteId] = useState(null);
   const [failureFocusTab, setFailureFocusTab] = useState(null); // 고장접수 탭 진입 시 열 서브탭 (홈 "모두 보기" 등)
-  const [focusUnit, setFocusUnit] = useState(null);
   const [sites, setSites] = useState([]);
   const [units, setUnits] = useState([]); // v2: 호기 목록 (마이그레이션 전 DB에서는 빈 배열)
   const [profilesAll, setProfilesAll] = useState([]); // v2: 전 직원 프로필 (이름→id 매핑용)
@@ -126,6 +124,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [feedReadAt, setFeedReadAt] = useState(null); // 이번 세션에서 우리방을 마지막으로 읽은 시각
   const [notifOpen, setNotifOpen] = useState(false); // 우측상단 알림(종) 드롭다운
+  const notifRef = useRef(null);
   const [openFailureId, setOpenFailureId] = useState(null); // 알림에서 특정 고장 건을 눌러 상세를 바로 연다 (탭 이동 없이 현재 화면 위에 띄움)
   const [openTodoId, setOpenTodoId] = useState(null); // 알림에서 특정 할일을 눌러 상세를 바로 연다
   const [openFeedPostId, setOpenFeedPostId] = useState(null); // 알림에서 특정 게시글을 눌러 그 글만 팝업으로 연다 (게시판 전체를 열어 안읽음을 한번에 지우지 않도록)
@@ -138,6 +137,22 @@ export default function App() {
     setForceAuth(new URLSearchParams(window.location.search).has("auth"));
   }, []);
   const skipLogin = SKIP_LOGIN && !forceAuth;
+
+  // 알림 드롭다운 바깥을 누르면 닫는다 — 예전엔 화면 전체를 덮는 배경막을 썼는데,
+  // 그 배경막이 뒤쪽 화면의 스크롤 제스처까지 가로막아서 알림이 열려있는 동안
+  // 기존 화면을 스크롤할 수 없었다. 배경막 없이 바깥 클릭만 감지하면 뒤쪽 스크롤이 그대로 된다.
+  useEffect(() => {
+    if (!notifOpen) return;
+    const handleOutside = (e) => {
+      if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("touchstart", handleOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("touchstart", handleOutside);
+    };
+  }, [notifOpen]);
 
   // 로그인 상태를 확인하고, 로그인/로그아웃이 일어날 때마다 알림을 받습니다.
   useEffect(() => {
@@ -353,47 +368,6 @@ export default function App() {
   }
 
   // ---------- 당직·숙직 근무표 ----------
-  // 자동 배정: 기사 순번(profiles.duty_order)을 하루 2칸(숙직→당직)씩 끊어 순환한다.
-  // 직전 배정이 있으면 그 순번 다음부터 이어받아 달이 바뀌어도 순환이 끊기지 않는다.
-  async function handleGenerateDuty(ym, mode = "주5일") {
-    // 선택한 근무제(주5일·주4일)에 속하면서 순번이 있는 사람만 순환에 넣는다 — 인사관리에서 관리
-    const roster = engineers
-      .filter((e) => e.duty_order != null && (e.duty_modes ?? []).includes(mode))
-      .sort((a, b) => a.duty_order - b.duty_order);
-    if (!roster.length) { alert(`${mode} 근무제 대상자가 없습니다. 관리자 콘솔 → 인사관리에서 순번과 근무제를 지정하세요.`); return; }
-    const [y, m] = ym.split("-").map(Number);
-    const days = new Date(y, m, 0).getDate();
-    const first = `${ym}-01`;
-
-    // 이 달 직전에 배정된 마지막 칸의 순번 위치를 찾아 이어붙인다.
-    const { data: prevRows } = await supabase
-      .from("duty_schedules").select("*").lt("duty_date", first)
-      .order("duty_date", { ascending: false }).order("kind").limit(1);
-    const prevPid = prevRows?.[0]?.profile_id;
-    let cursor = prevPid ? roster.findIndex((e) => e.id === prevPid) : -1;
-    const next = () => { cursor = (cursor + 1) % roster.length; return roster[cursor].id; };
-
-    const existing = new Set(dutySchedules.filter((d) => d.dutyDate.startsWith(ym)).map((d) => `${d.dutyDate}|${d.kind}`));
-    const rows = [];
-    for (let d = 1; d <= days; d++) {
-      const iso = `${ym}-${String(d).padStart(2, "0")}`;
-      for (const kind of ["숙직", "당직"]) {
-        const pid = next(); // 빈 칸만 채우더라도 순번은 계속 돌려 배열을 유지한다
-        if (existing.has(`${iso}|${kind}`)) continue;
-        rows.push({ duty_date: iso, kind, profile_id: pid });
-      }
-      // 주4일 근무제는 금요일에 정상근무 칸을 하나 더 만든다. 순번 순환과 무관한 자리라
-      // 담당자는 비워두고 관리자가 달력에서 지정한다 (실제 표에서도 순번 없는 직원이 들어감).
-      if (mode === "주4일" && new Date(`${iso}T00:00:00`).getDay() === 5 && !existing.has(`${iso}|정상근무`)) {
-        rows.push({ duty_date: iso, kind: "정상근무", profile_id: null });
-      }
-    }
-    if (!rows.length) return;
-    const { data } = await supabase.from("duty_schedules").upsert(rows, { onConflict: "duty_date,kind" }).select();
-    const mapped = (data ?? []).map(mapDutySchedule);
-    setDutySchedules((prev) => [...prev.filter((p) => !mapped.some((n) => n.id === p.id)), ...mapped].sort((a, b) => a.dutyDate.localeCompare(b.dutyDate)));
-  }
-
   async function handleSetDutyPerson(iso, kind, profileId) {
     const { data } = await supabase
       .from("duty_schedules").upsert({ duty_date: iso, kind, profile_id: profileId }, { onConflict: "duty_date,kind" }).select();
@@ -871,9 +845,6 @@ export default function App() {
     }
     simulateSms(failure.reporterPhone, `구일엘리베이터입니다. 담당 기사가 약 ${etaMinutes}분 후 도착 예정입니다.`);
     notifyFailure(`문자 발송 완료 · ${failure.reporterPhone || "신고자"}에게 도착예정시간 안내`);
-    setFocusSiteId(failure.siteId);
-    setFocusUnit(failure.elevatorNo || null);
-    setTab("sites");
   }
 
   // 도착 = 원터치. 버튼을 누른 그 순간을 도착 시각으로 기록한다.
@@ -1084,7 +1055,7 @@ export default function App() {
       id: "todo-" + requestId,
       materialRequestId: requestId,
       source: "material",
-      title: `${req.siteName} ${req.part} 교체 및 확인서 제출`,
+      title: `${req.siteName}${formatUnitLabel(req.elevatorNo) ? ` ${formatUnitLabel(req.elevatorNo)}` : ""} ${req.part} 교체 및 확인서 제출`,
       siteName: req.siteName,
       elevatorNo: req.elevatorNo,
       part: req.part,
@@ -1310,7 +1281,7 @@ export default function App() {
       materialRequestId: null,
       quoteRequestId: quoteId,
       source: "quote",
-      title: `${q.siteName} ${q.constructionType} 시공 확인 및 서류 제출`,
+      title: `${q.siteName}${formatUnitLabel(q.elevatorNo) ? ` ${formatUnitLabel(q.elevatorNo)}` : ""} ${q.constructionType} 시공 확인 및 서류 제출`,
       siteName: q.siteName,
       elevatorNo: q.elevatorNo,
       part: q.constructionType,
@@ -1374,7 +1345,7 @@ export default function App() {
       materialRequestId: null,
       quoteRequestId: quoteId,
       source: "quote",
-      title: `${q.siteName} ${q.constructionType} 시공 확인 및 서류 제출`,
+      title: `${q.siteName}${formatUnitLabel(q.elevatorNo) ? ` ${formatUnitLabel(q.elevatorNo)}` : ""} ${q.constructionType} 시공 확인 및 서류 제출`,
       siteName: q.siteName,
       elevatorNo: q.elevatorNo,
       part: q.constructionType,
@@ -1460,6 +1431,23 @@ export default function App() {
   async function handleUpdateTodoDescription(todoId, description) {
     await supabase.from("todos").update({ description }).eq("id", todoId);
     setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, description } : t)));
+  }
+
+  // ★ 관리자가 마감일을 직접 수정합니다 (사유 기록 없이 바로 반영).
+  async function handleUpdateTodoDueDate(todoId, dueDate) {
+    await supabase.from("todos").update({ due_date: dueDate }).eq("id", todoId);
+    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, dueDate } : t)));
+  }
+
+  // ★ 기사의 마감일 연장 — 승인 절차 없이 바로 반영하되, 언제·왜 늦춰졌는지 나중에 볼 수 있도록
+  // 연장 일자와 사유를 할 일 내용(description)에 함께 남긴다.
+  async function handleExtendTodoDueDate(todoId, dueDate, reason) {
+    const current = todos.find((t) => t.id === todoId);
+    if (!current) return;
+    const logLine = `[기한연장] ${current.dueDate} → ${dueDate} · 사유: ${reason}`;
+    const description = current.description ? `${current.description}\n${logLine}` : logLine;
+    await supabase.from("todos").update({ due_date: dueDate, description }).eq("id", todoId);
+    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, dueDate, description } : t)));
   }
 
   // ★ 기사 반려: 잘못된 자재가 지급된 경우. 연결된 할 일은 취소되고 담당자에게 재지급 알림이 전달됩니다.
@@ -1569,6 +1557,7 @@ export default function App() {
                 <button onClick={() => setMyPageOpen(true)} className="p-1.5 bg-blue-900 rounded-full" aria-label="마이페이지">
                   <UserRound size={16} />
                 </button>
+                <div ref={notifRef} className="relative">
                 <button onClick={() => setNotifOpen((v) => !v)} className="relative p-1.5 bg-blue-900 rounded-full" aria-label="알림">
                   <Bell size={16} />
                   {totalNotifCnt > 0 && (
@@ -1578,8 +1567,6 @@ export default function App() {
                   )}
                 </button>
                 {notifOpen && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={() => setNotifOpen(false)} />
                     <div className="absolute right-0 top-10 z-40 w-72 max-h-96 overflow-y-auto bg-white rounded-2xl shadow-2xl border border-slate-200">
                       <div className="px-4 py-3 border-b border-slate-100">
                         <p className="text-sm font-bold text-slate-800">알림</p>
@@ -1696,8 +1683,8 @@ export default function App() {
                         </>
                       )}
                     </div>
-                  </>
                 )}
+                </div>
               </div>
             }
           />
@@ -1736,7 +1723,7 @@ export default function App() {
               toast={failureToast}
             />
           )}
-          {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} siteManagers={siteManagers} onUpdateSiteNotes={handleUpdateSiteNotes} focusSiteId={focusSiteId} focusUnit={focusUnit} onFocusSiteHandled={() => { setFocusSiteId(null); setFocusUnit(null); }} />}
+          {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} siteManagers={siteManagers} onUpdateSiteNotes={handleUpdateSiteNotes} />}
           {tab === "failure" && (
             <FailureTab
               onReported={handleFailureReported}
@@ -1765,6 +1752,10 @@ export default function App() {
               setTodos={setTodos}
               onReassignTodo={handleReassignTodo}
               onUpdateTodoDescription={handleUpdateTodoDescription}
+              onUpdateTodoDueDate={handleUpdateTodoDueDate}
+              onExtendTodoDueDate={handleExtendTodoDueDate}
+              onAssignTodo={handleAssignTodo}
+              onAdminToggle={handleAdminToggleTodo}
               materialRequests={materialRequests}
               quoteRequests={quoteRequests}
             />
@@ -1781,13 +1772,14 @@ export default function App() {
             <WorkCalendarSheet
               schedules={dutySchedules}
               swaps={dutySwaps}
-              onGenerate={handleGenerateDuty}
               onSetPerson={handleSetDutyPerson}
               onRequestSwap={handleRequestDutySwap}
               onRespondSwap={handleRespondDutySwap}
+              onSchedulesChange={setDutySchedules}
+              onEngineersChange={setEngineers}
             />
           )}
-          {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onUpdateTodoDescription={handleUpdateTodoDescription} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
+          {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onUpdateTodoDescription={handleUpdateTodoDescription} onUpdateTodoDueDate={handleUpdateTodoDueDate} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
           </PullToRefresh>
 
           {/* 우리방 플로팅 버튼 — 어느 탭에서든 즉시 게시판으로 이동 (우리방 탭에서는 숨김) */}
@@ -1848,10 +1840,13 @@ export default function App() {
                 requester={getRequesterName(t, materialRequests, quoteRequests)}
                 coAssignees={getCoAssignees(t, todos)}
                 supplyPhotoUrls={getSupplyPhotos(t, materialRequests, quoteRequests)}
-                onToggle={t.source === "manual" && !t.done ? handleAdminToggleTodo : null}
+                siteAddress={getTodoSiteAddress(t, materialRequests, quoteRequests, sites)}
+                onToggle={profile.role === "admin" ? handleAdminToggleTodo : (t.source === "manual" && !t.done ? handleAdminToggleTodo : null)}
                 onReassign={handleReassignTodo}
                 engineerNames={engineerNames}
                 onUpdateDescription={profile.role === "admin" ? handleUpdateTodoDescription : null}
+                onUpdateDueDate={profile.role === "admin" ? handleUpdateTodoDueDate : null}
+                onExtendDueDate={profile.role !== "admin" ? handleExtendTodoDueDate : null}
                 onClose={() => setOpenTodoId(null)}
               />
             );

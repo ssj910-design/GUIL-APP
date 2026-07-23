@@ -8,13 +8,26 @@ import { Plus, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto } from "@/lib/photos";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays } from "@/lib/utils";
+import { addDays, shortDate, formatUnitLabel } from "@/lib/utils";
 import {
-  locOf, personOf, StatusBadge, AdminTable, FilterPills,
-  Modal, SortableTh, sortRows, inputCls,
+  locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills,
+  Modal, SortableTh, sortRows, inputCls, DateTextInput,
 } from "@/app/components/admin/adminShared";
 
 const SOURCE_LABEL = { material: "자재", quote: "견적", manual: "수동" };
+
+// 자재/견적 연동 할일은 title이 "현장명[ 호기] ..." 형태로 저장되는데, 목록에는 이미
+// "현장·호기" 열이 있으니 중복을 피하려고 그 앞부분을 잘라서 보여준다.
+// (호기 라벨이 없던 옛 형식 데이터도 함께 매칭한다. 수동 할일은 제목에 현장명이 없어 그대로 둔다.)
+function displayTitle(t) {
+  if (t.source === "manual" || !t.siteName || !t.title) return t.title;
+  const unitLabel = formatUnitLabel(t.elevatorNo);
+  const withUnit = `${t.siteName}${unitLabel ? ` ${unitLabel}` : ""} `;
+  const withoutUnit = `${t.siteName} `;
+  if (t.title.startsWith(withUnit)) return t.title.slice(withUnit.length);
+  if (t.title.startsWith(withoutUnit)) return t.title.slice(withoutUnit.length);
+  return t.title;
+}
 
 function TodoDetailModal({ t, data, onClose, onSave }) {
   const { sites, units, profiles } = data;
@@ -87,6 +100,10 @@ function TodoDetailModal({ t, data, onClose, onSave }) {
           </div>
         </div>
         <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">현장 주소</p>
+          <p className="text-sm font-semibold text-slate-700">{sites.find((s) => s.id === form.siteId)?.address || "-"}</p>
+        </div>
+        <div>
           <p className="text-xs font-bold text-slate-500 mb-1">내용</p>
           <textarea className={inputCls} rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </div>
@@ -109,11 +126,11 @@ function TodoDetailModal({ t, data, onClose, onSave }) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <p className="text-xs font-bold text-slate-500 mb-1">배정일</p>
-            <input className={inputCls} type="date" value={form.assignedDate} onChange={(e) => setForm({ ...form, assignedDate: e.target.value })} />
+            <DateTextInput key={form.assignedDate} value={form.assignedDate} onChange={(v) => setForm({ ...form, assignedDate: v })} />
           </div>
           <div>
             <p className="text-xs font-bold text-slate-500 mb-1">기한</p>
-            <input className={inputCls} type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
+            <DateTextInput key={form.dueDate} value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
           </div>
         </div>
       </div>
@@ -213,7 +230,7 @@ function AssignTodoModal({ data, onClose, onCreate }) {
           </div>
           <div>
             <p className="text-xs font-bold text-slate-500 mb-1">기한</p>
-            <input className={inputCls} type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
+            <DateTextInput key={form.dueDate} value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
           </div>
         </div>
         <div>
@@ -265,7 +282,7 @@ export default function TodosAdmin({ data, setData }) {
   const getVal = (t, key) => {
     switch (key) {
       case "source": return SOURCE_LABEL[t.source] ?? t.source ?? "";
-      case "title": return t.title ?? "";
+      case "title": return displayTitle(t) ?? "";
       case "loc": return locOf(data, t.unitId, t.siteName, t.elevatorNo);
       case "person": return personOf(data, t.assigneeId, t.assignee);
       case "assignedDate": return t.assignedDate ?? "";
@@ -339,25 +356,31 @@ export default function TodosAdmin({ data, setData }) {
     <div className="max-w-6xl">
       <h1 className="text-xl font-extrabold mb-4">할 일 관리</h1>
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
-          <FilterPills
-            value={view}
-            onChange={setView}
-            options={[
-              { value: "open", label: "미완료", count: todos.filter((t) => !t.done).length },
-              { value: "all", label: "전체", count: todos.length },
-            ]}
-          />
-          <FilterPills
-            value={sourceFilter}
-            onChange={setSourceFilter}
-            options={[
-              { value: "all", label: "전체", count: viewFiltered.length },
-              { value: "material", label: "자재", count: viewFiltered.filter((t) => t.source === "material").length },
-              { value: "quote", label: "견적", count: viewFiltered.filter((t) => t.source === "quote").length },
-              { value: "manual", label: "수동", count: viewFiltered.filter((t) => t.source === "manual").length },
-            ]}
-          />
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-400">상태</span>
+            <FilterPills
+              value={view}
+              onChange={setView}
+              options={[
+                { value: "open", label: "미완료", count: todos.filter((t) => !t.done).length },
+                { value: "all", label: "전체", count: todos.length },
+              ]}
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-400">구분</span>
+            <FilterPills
+              value={sourceFilter}
+              onChange={setSourceFilter}
+              options={[
+                { value: "all", label: "전체", count: viewFiltered.length },
+                { value: "material", label: "자재", count: viewFiltered.filter((t) => t.source === "material").length },
+                { value: "quote", label: "견적", count: viewFiltered.filter((t) => t.source === "quote").length },
+                { value: "manual", label: "수동", count: viewFiltered.filter((t) => t.source === "manual").length },
+              ]}
+            />
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">
@@ -376,8 +399,8 @@ export default function TodosAdmin({ data, setData }) {
             <tr className="text-xs text-slate-400 border-b border-slate-100">
               <th className="pl-5 w-8" />
               <SortableTh label="구분" sortKey="source" sort={sort} setSort={setSort} />
-              <SortableTh label="할일" sortKey="title" sort={sort} setSort={setSort} />
               <SortableTh label="현장 · 호기" sortKey="loc" sort={sort} setSort={setSort} />
+              <SortableTh label="할일" sortKey="title" sort={sort} setSort={setSort} />
               <SortableTh label="담당자" sortKey="person" sort={sort} setSort={setSort} />
               <SortableTh label="배정일" sortKey="assignedDate" sort={sort} setSort={setSort} />
               <SortableTh label="기한" sortKey="dueDate" sort={sort} setSort={setSort} />
@@ -391,11 +414,11 @@ export default function TodosAdmin({ data, setData }) {
                   <input type="checkbox" checked={t.done} onChange={() => toggle(t)} className="w-4 h-4 rounded border-slate-300 cursor-pointer accent-blue-700" />
                 </td>
                 <td className="px-3 py-2.5"><StatusBadge tone={t.source === "manual" ? "slate" : "blue"}>{SOURCE_LABEL[t.source] ?? t.source}</StatusBadge></td>
-                <td className="px-3 py-2.5 font-semibold">{t.title}</td>
                 <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{locOf(data, t.unitId, t.siteName, t.elevatorNo)}</td>
+                <td className="px-3 py-2.5 font-semibold">{displayTitle(t)}</td>
                 <td className="px-3 py-2.5 whitespace-nowrap">{personOf(data, t.assigneeId, t.assignee)}</td>
-                <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{t.assignedDate}</td>
-                <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{t.dueDate ?? "-"}</td>
+                <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(t.assignedDate)}</td>
+                <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(t.dueDate)}</td>
                 <td className="px-3 py-2.5">{t.done ? <StatusBadge tone="green">완료</StatusBadge> : <StatusBadge tone="amber">진행</StatusBadge>}</td>
               </tr>
             ))}

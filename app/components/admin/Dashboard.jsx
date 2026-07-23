@@ -4,13 +4,14 @@
 // 호기·담당자 표기는 v2 FK(unitId/assigneeId)를 우선 쓰고, 옛 라벨은 fallback.
 import { useState } from "react";
 import WeekStrip from "@/app/components/admin/WeekStrip";
-import { AlertOctagon } from "lucide-react";
+import { AlertOctagon, Plus } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, formatUnitLabel } from "@/lib/utils";
+import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, shortDate, sortEngineersByDistance, parseErrorCode } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { Modal, StatusBadge, inputCls, PhotoGrid } from "@/app/components/admin/adminShared";
+import { RegisterFailureModal } from "@/app/components/admin/FailuresAdmin";
 
 function unitLabel(units, sites, unitId, fallbackSiteName, fallbackLabel) {
   const u = units.find((x) => x.id === unitId);
@@ -31,24 +32,27 @@ function Kpi({ label, value, tone = "text-slate-900" }) {
 // 고장상세내역 — 대시보드 집중관리현장 -> 고장내역 -> 이 고장 클릭 시. (FailuresAdmin에서도 재사용)
 // 청구내역(BillingsAdmin.jsx의 BillingDetailModal)과 동일한 구성 — 짧은 항목은
 // 라벨/값 2열 그리드, 긴 텍스트(증상·처리내용 등)는 전체너비 블록, 사진은 PhotoGrid.
-export function FailureDetailContent({ f, units, sites }) {
+export function FailureDetailContent({ f, units, sites, profiles = [] }) {
   const loc = unitLabel(units, sites, f.unitId, f.siteName, f.elevatorNo);
+  const { faultType, faultDetail } = parseErrorCode(f.errorCode);
+  const reporter = profiles.find((p) => p.id === f.createdBy)?.name ?? "-";
   const gridRows = [
     { label: "현장 · 호기", value: `${loc.site} · ${loc.unit}` },
-    { label: "접수번호", value: f.errorCode },
+    { label: "현장 주소", value: loc.siteObj?.address ?? "-" },
     { label: "접수일시", value: f.reportedAt },
-    { label: "신고자 연락처", value: f.reporterPhone || "-" },
+    { label: "접수자", value: reporter },
     { label: "담당 기사", value: loc.siteObj?.assignedEngineer || "미배정" },
     { label: "배정 기사", value: f.assignee || "미배정" },
-    { label: "상태", value: f.escalation ? `${f.status} (${f.escalation})` : f.status },
+    { label: "출동/도착시간", value: `${f.dispatchedAt || "-"} / ${f.arrivalTime || "-"}` },
+    { label: "처리완료시간", value: f.completeTime || "-" },
   ];
   const textRows = [];
+  textRows.push({ label: "고장분류", value: faultType || "-" });
+  if (faultDetail) textRows.push({ label: "고장상세내역", value: faultDetail });
   if (f.faultSymptom) textRows.push({ label: "증상", value: f.faultSymptom });
-  if (f.faultErrorCode) textRows.push({ label: "에러코드", value: f.faultErrorCode });
   if (f.faultCause) textRows.push({ label: "원인", value: f.faultCause });
-  if (f.dispatchedAt) textRows.push({ label: "출동", value: `${f.dispatchedAt}${f.etaMinutes ? ` (${f.etaMinutes}분 소요예정)` : ""}` });
-  if (f.arrivalTime) textRows.push({ label: "도착", value: f.arrivalTime });
   if (f.processContent) textRows.push({ label: "처리내용", value: f.processContent });
+  if (f.faultErrorCode) textRows.push({ label: "에러코드", value: f.faultErrorCode });
   if (f.processNote) textRows.push({ label: "비고", value: f.processNote });
   if (f.notFault) textRows.push({ label: "구분", value: "고장 아님" });
 
@@ -85,6 +89,39 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
   const [historySite, setHistorySite] = useState(null);
   const [failureDetail, setFailureDetail] = useState(null);
   const [failTarget, setFailTarget] = useState(null);
+  const [registering, setRegistering] = useState(false);
+
+  // 고장관리(FailuresAdmin.jsx)의 접수 로직과 동일 — 여기서도 같은 위치에 고장접수 버튼을 두므로 그대로 둔다.
+  async function createFailure(form) {
+    const site = sites.find((s) => s.id === form.siteId);
+    if (!site) return;
+    const stamp = Date.now();
+    const assigneeProfile = profiles.find((p) => p.name === form.assignee);
+    const detailOf = (id) => (form.unitIds.length > 1 ? (form.details[id] ?? "").trim() : form.detail.trim());
+    const reportedAt = TODAY_STR.slice(5).replace("-", "/") + " " + new Date().toTimeString().slice(0, 5);
+    const rows = form.unitIds.map((unitId, i) => {
+      const u = units.find((x) => x.id === unitId);
+      const detail = detailOf(unitId);
+      return {
+        id: "f" + (stamp + i),
+        siteId: site.id, siteName: site.name, elevatorNo: u?.unitNo ?? null, unitId,
+        errorCode: form.faultType + (detail ? ` (${detail})` : ""),
+        status: "미처리", reportedAt,
+        assignee: form.assignee || null, assigneeId: assigneeProfile?.id ?? null,
+        notFault: form.notFault, reporterPhone: form.reporterPhone.trim(),
+      };
+    });
+    const { error } = await supabase.from("failures").insert(rows.map((f) => ({
+      id: f.id, site_id: f.siteId, site_name: f.siteName, elevator_no: f.elevatorNo, unit_id: f.unitId,
+      error_code: f.errorCode, status: f.status, reported_at: f.reportedAt,
+      assignee: f.assignee, assignee_id: f.assigneeId, not_fault: f.notFault, reporter_phone: f.reporterPhone,
+    })));
+    if (error) { alert("접수 실패: " + error.message); return; }
+    setData((prev) => ({
+      ...prev,
+      failures: [...rows.map((f) => ({ ...f, createdAt: new Date().toISOString() })), ...prev.failures],
+    }));
+  }
 
   async function assign(f, name) {
     const p = profiles.find((x) => x.name === name);
@@ -153,7 +190,11 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
   // 최근 30일 고장 목록은 실시간 계산 — 처리완료 여부와 무관하게 누적되어야 하므로
   // 현장에 수동 저장된 failures30d 대신 실제 failures 레코드에서 직접 센다.
   const recentFailuresBySiteId = recentFailuresBySite(failures);
-  const criticalSites = sites.filter((s) => (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || escalatedSiteIds.has(s.id));
+  // 갇힘사고는 재발 횟수와 무관하게 최근 30일 내 1건만 있어도 집중관리 대상 — 30일이 지나면 자동으로 빠진다.
+  const entrapmentSiteIds = entrapmentSitesRecent(failures);
+  const criticalSites = sites.filter((s) =>
+    (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || escalatedSiteIds.has(s.id) || entrapmentSiteIds.has(s.id)
+  );
 
   const engineerName = (id, fallback) => profiles.find((p) => p.id === id)?.name ?? fallback ?? "미배정";
 
@@ -161,7 +202,12 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
 
   return (
     <div className="max-w-6xl">
-      <h1 className="text-xl font-extrabold mb-1">대시보드</h1>
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="text-xl font-extrabold">대시보드</h1>
+        <button onClick={() => setRegistering(true)} className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
+          <Plus size={15} /> 고장접수
+        </button>
+      </div>
       <p className="text-xs text-slate-500 mb-6">
         현장 {sites.length} · 호기 {units.length}대 · 기사 {profiles.filter((p) => p.role === "engineer").length}명 · 기준일 {TODAY_STR}
       </p>
@@ -196,7 +242,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
 
       {/* 집중 관리현장 */}
       <section className="bg-red-50 border border-red-200 rounded-xl p-5 mb-6">
-        <h2 className="text-sm font-extrabold text-red-700 mb-3">집중 관리현장 (고장 3회 이상 · 지원요청/운행정지)</h2>
+        <h2 className="text-sm font-extrabold text-red-700 mb-3">집중관리현장(갇힘·운행정지·고장다발·지원요청)</h2>
         {criticalSites.length === 0 ? (
           <p className="text-xs text-red-500">현재 집중 관리 대상 현장이 없습니다.</p>
         ) : (
@@ -204,6 +250,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
             {criticalSites.map((s) => {
               const stopped = stoppedSiteIds.has(s.id);
               const support = supportSiteIds.has(s.id);
+              const trapped = entrapmentSiteIds.has(s.id);
               const recent = recentFailuresBySiteId.get(s.id) ?? [];
               const count30d = recent.length;
               const units = [...new Set(recent.map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean))];
@@ -212,13 +259,14 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
                 <button
                   key={s.id}
                   onClick={() => setHistorySite(s)}
-                  className={`flex items-center justify-between bg-white rounded-lg px-3.5 py-2.5 border text-left ${stopped ? "border-red-300" : "border-red-100"}`}
+                  className={`flex items-center justify-between bg-white rounded-lg px-3.5 py-2.5 text-left ${stopped ? "border-2 border-red-400" : "border border-red-100"}`}
                 >
                   <div className="min-w-0">
                     <p className="font-bold text-slate-800 text-sm truncate">{s.name}{unitText ? ` · ${unitText}` : ""}</p>
                     <p className="text-[11px] text-slate-400 truncate">{s.address}</p>
                   </div>
                   <span className="flex gap-1 shrink-0 ml-2">
+                    {trapped && <span className="text-xs font-extrabold text-white bg-red-600 px-2 py-1 rounded-full">갇힘</span>}
                     {support && <span className="text-xs font-extrabold text-amber-600 bg-amber-100 px-2 py-1 rounded-full">지원요청</span>}
                     {stopped && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">운행정지</span>}
                     {count30d > 0 && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">{count30d}회 고장</span>}
@@ -266,7 +314,11 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
                         onChange={(e) => assign(f, e.target.value)}
                       >
                         <option value="">미배정</option>
-                        {engineers.map((p) => <option key={p.id}>{p.name}</option>)}
+                        {sortEngineersByDistance(engineers, loc.siteObj).map(({ engineer: p, km }) => (
+                          <option key={p.id} value={p.name}>
+                            {p.name}{km != null ? ` (${km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`})` : ""}
+                          </option>
+                        ))}
                       </select>
                     </td>
                     <td className="px-2 py-2.5 whitespace-nowrap text-slate-500">{f.dispatchedAt || "-"}</td>
@@ -334,7 +386,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
                 </div>
                 <span className="flex items-center gap-1.5 shrink-0">
                   <span className="text-xs text-slate-400">{i.type}</span>
-                  <span className="text-xs font-bold text-blue-700 whitespace-nowrap">{i.dueTime || i.dueDate}</span>
+                  <span className="text-xs font-bold text-blue-700 whitespace-nowrap">{i.dueTime || shortDate(i.dueDate)}</span>
                 </span>
               </li>
             ))}
@@ -368,7 +420,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-[11px] text-slate-400 truncate min-w-0">{stripCityPrefix(siteById.get(i.siteId)?.address)}</p>
-                    <span className="shrink-0 text-xs font-bold text-blue-700">보완기한 {i.dueDate || "미정"}</span>
+                    <span className="shrink-0 text-xs font-bold text-blue-700">보완기한 {i.dueDate ? shortDate(i.dueDate) : "미정"}</span>
                   </div>
                   {(i.notes || i.scheduleTime) && (
                     <div className="flex items-start justify-between gap-2">
@@ -417,11 +469,13 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
       {/* 고장상세내역 */}
       {failureDetail && (
         <Modal title="고장상세내역" onClose={() => setFailureDetail(null)}>
-          <FailureDetailContent f={failureDetail} units={units} sites={sites} />
+          <FailureDetailContent f={failureDetail} units={units} sites={sites} profiles={profiles} />
         </Modal>
       )}
 
       {failTarget && <InspectionFailDetailSheet inspection={failTarget} onClose={() => setFailTarget(null)} Container={Modal} />}
+
+      {registering && <RegisterFailureModal data={data} onClose={() => setRegistering(false)} onCreate={createFailure} />}
     </div>
   );
 }

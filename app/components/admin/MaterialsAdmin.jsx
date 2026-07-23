@@ -8,9 +8,9 @@ import { useState } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto } from "@/lib/photos";
-import { unitIdFor, addDays } from "@/lib/utils";
+import { unitIdFor, addDays, shortDate } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
-import { locOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid } from "@/app/components/admin/adminShared";
+import { locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid, DateTextInput } from "@/app/components/admin/adminShared";
 
 const MATERIAL_TONE = { 승인대기: "blue", 지급완료: "green", 반려: "red", 교체완료: "indigo" };
 const QUOTE_TONE = { 요청접수: "blue", 견적발행: "amber", 승인: "amber", 지급완료: "green", 교체완료: "indigo" };
@@ -320,7 +320,7 @@ export default function MaterialsAdmin({ data, setData }) {
               className="border-b border-slate-50 cursor-pointer hover:bg-slate-50"
               onClick={() => setDetailTarget({ type: "material", data: m })}
             >
-              <td className="pl-5 pr-3 py-2.5 text-slate-500 whitespace-nowrap">{m.requestedDate}</td>
+              <td className="pl-5 pr-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(m.requestedDate)}</td>
               <td className="px-3 py-2.5 font-semibold whitespace-nowrap">{locOf(data, m.unitId, m.siteName, m.elevatorNo)}</td>
               <td className="px-3 py-2.5 text-slate-600">{m.part}</td>
               <td className="px-3 py-2.5">
@@ -367,12 +367,12 @@ export default function MaterialsAdmin({ data, setData }) {
               className="border-b border-slate-50 cursor-pointer hover:bg-slate-50"
               onClick={() => setDetailTarget({ type: "quote", data: q })}
             >
-              <td className="pl-5 pr-3 py-2.5 text-slate-500 whitespace-nowrap">{q.requestedDate}</td>
+              <td className="pl-5 pr-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(q.requestedDate)}</td>
               <td className="px-3 py-2.5 font-semibold whitespace-nowrap">{locOf(data, q.unitId, q.siteName, q.elevatorNo)}</td>
               <td className="px-3 py-2.5 text-slate-600">{q.constructionType}</td>
               <td className="px-3 py-2.5 whitespace-nowrap">{personOf(data, q.requesterId, q.engineer)}</td>
               <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">
-                {q.quoteIssuedDate ?? "-"} / {q.approvedDate ?? "-"} / {q.suppliedDate ?? "-"}
+                {shortDate(q.quoteIssuedDate)} / {shortDate(q.approvedDate)} / {shortDate(q.suppliedDate)}
               </td>
               <td className="px-3 py-2.5">
                 {(() => {
@@ -637,7 +637,7 @@ function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
 
         <div>
           <label className="text-xs font-bold text-slate-400 block mb-1">할 일 기한</label>
-          <input className={inputCls} type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          <DateTextInput key={dueDate} value={dueDate} onChange={setDueDate} />
         </div>
 
         <div>
@@ -685,16 +685,17 @@ function RequestDetailModal({ target, data, onClose }) {
       <div className="space-y-3 mb-4">
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div><p className="text-xs font-bold text-slate-400 mb-1">현장 · 호기</p><p className="font-semibold text-slate-800">{locOf(data, r.unitId, r.siteName, r.elevatorNo)}</p></div>
+          <div><p className="text-xs font-bold text-slate-400 mb-1">현장 주소</p><p className="font-semibold text-slate-800">{addressOf(data, r.unitId, r.siteName)}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">{isMaterial ? "부품 내역" : "공사 내용"}</p><p className="font-semibold text-slate-800">{isMaterial ? r.part : r.constructionType}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">{isMaterial ? "긴급도" : "현장 담당자 연락처"}</p><p className="font-semibold text-slate-800">{isMaterial ? r.urgency : (r.contactPhone || "-")}</p></div>
-          <div><p className="text-xs font-bold text-slate-400 mb-1">신청일</p><p className="font-semibold text-slate-800">{r.requestedDate}</p></div>
+          <div><p className="text-xs font-bold text-slate-400 mb-1">신청일</p><p className="font-semibold text-slate-800">{shortDate(r.requestedDate)}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">신청 기사</p><p className="font-semibold text-slate-800">{personOf(data, r.requesterId, r.engineer)}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">담당 기사</p><p className="font-semibold text-slate-800">{assignee ?? "미배정"}</p></div>
           <div><StatusBadge tone={tone}>{displayStatus}</StatusBadge></div>
         </div>
 
         {!isMaterial && (
-          <div><p className="text-xs font-bold text-slate-400 mb-1">발행일 / 승인일 / 지급일</p><p className="font-semibold text-slate-800">{r.quoteIssuedDate ?? "-"} / {r.approvedDate ?? "-"} / {r.suppliedDate ?? "-"}</p></div>
+          <div><p className="text-xs font-bold text-slate-400 mb-1">발행일 / 승인일 / 지급일</p><p className="font-semibold text-slate-800">{shortDate(r.quoteIssuedDate)} / {shortDate(r.approvedDate)} / {shortDate(r.suppliedDate)}</p></div>
         )}
 
         {r.note && (

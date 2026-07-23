@@ -75,7 +75,7 @@ function EngineerOptions({ engineers, site }) {
   ));
 }
 
-function RegisterFailureModal({ data, onClose, onCreate }) {
+export function RegisterFailureModal({ data, onClose, onCreate }) {
   const { sites, units, profiles } = data;
   const engineers = profiles.filter((p) => p.role === "engineer");
   const [form, setForm] = useState({
@@ -343,7 +343,7 @@ export default function FailuresAdmin({ data, setData }) {
 
       {detail && (
         <Modal title="고장상세보기" onClose={() => setDetail(null)}>
-          <FailureDetailContent f={detail} units={units} sites={sites} />
+          <FailureDetailContent f={detail} units={units} sites={sites} profiles={profiles} />
         </Modal>
       )}
 

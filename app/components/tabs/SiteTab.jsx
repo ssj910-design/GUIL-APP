@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from "react";
+import React, { useState, useContext, useRef } from "react";
 import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Flame, Download } from "lucide-react";
 import { siteUnits, addDays, labelToSeq, govDateToDashed, formatShortDate, recentFailuresBySite, siteMatchesQuery } from "@/lib/utils";
 import { RESULT_LABEL } from "@/lib/constants";
@@ -500,7 +500,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
 }
 
 
-export function SiteTab({ inspections, failures, billings, siteManagers, onUpdateSiteNotes, focusSiteId, focusUnit, onFocusSiteHandled }) {
+export function SiteTab({ inspections, failures, billings, siteManagers, onUpdateSiteNotes }) {
   const allSites = useContext(SitesContext);
   const allUnits = useContext(UnitsContext);
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
@@ -512,23 +512,6 @@ export function SiteTab({ inspections, failures, billings, siteManagers, onUpdat
   const [selectedSite, setSelectedSite] = useState(null);
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [elevatorSubTab, setElevatorSubTab] = useState("정보");
-
-  // ★ 고장 출동 확정 후 해당 현장(호기)의 상세 화면으로 자동 이동
-  useEffect(() => {
-    if (!focusSiteId) return;
-    const site = allSites.find((s) => s.id === focusSiteId);
-    if (site) {
-      setSelectedSite(site);
-      if (focusUnit && siteUnits(site).includes(focusUnit)) {
-        setSelectedUnit(focusUnit);
-        setElevatorSubTab("정보");
-        setView("elevator");
-      } else {
-        setView("site");
-      }
-    }
-    onFocusSiteHandled();
-  }, [focusSiteId]);
 
   const list = sites
     .filter((s) => siteMatchesQuery(s, query, { units: allUnits, siteManagers }))

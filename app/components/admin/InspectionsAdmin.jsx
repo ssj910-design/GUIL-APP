@@ -6,12 +6,12 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections } from "@/lib/utils";
+import { unitsToInspections, shortDate } from "@/lib/utils";
 import { mapInspection } from "@/lib/mappers";
 import { Badge, DDay, inputCls as mobileInputCls } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { useInspectionFailItems } from "@/app/hooks/useLiveInspections";
-import { StatusBadge, AdminTable, FilterPills, SortableTh, sortRows, inputCls, Modal } from "@/app/components/admin/adminShared";
+import { StatusBadge, AdminTable, FilterPills, SortableTh, sortRows, inputCls, Modal, DateTextInput } from "@/app/components/admin/adminShared";
 
 function daysLeftOf(dueDate, today) {
   return Math.ceil((new Date(dueDate) - new Date(today)) / 86400000);
@@ -40,13 +40,13 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
         </select>
       </td>
       <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-        <div className="flex gap-1">
-          <input type="date" className={`${mobileInputCls} w-32`} value={date} onChange={(e) => setDate(e.target.value)} />
+        <div className="flex gap-1 items-center">
+          <DateTextInput value={date} onChange={setDate} className="w-24" />
           <input type="time" className={`${mobileInputCls} w-20`} value={time} onChange={(e) => setTime(e.target.value)} />
         </div>
         {i.apiDueDate && (
           <p className="text-[9px] text-emerald-600 mt-0.5 whitespace-nowrap">
-            {isFlagged ? "보완기한 " : "API 유효 "}~{i.apiDueDate}
+            {isFlagged ? "보완기한 " : "API 유효 "}~{shortDate(i.apiDueDate)}
           </p>
         )}
       </td>
@@ -91,7 +91,7 @@ function FlaggedRow({ i, site, isLive }) {
         {i.result === "fail" ? (
           <span className="text-red-600 font-bold">불합격</span>
         ) : (
-          <span className="text-slate-700">{i.apiDueDate || i.dueDate || "-"}</span>
+          <span className="text-slate-700">{shortDate(i.apiDueDate || i.dueDate)}</span>
         )}
       </td>
       <td className="px-3 py-2.5 text-xs max-w-md">
@@ -189,8 +189,9 @@ export default function InspectionsAdmin({ data, setData }) {
     }
   };
 
+  // 불합격은 정렬 기준(보완기한 등)과 무관하게 항상 맨 위 — 조건부합격보다 시급하다.
   const rows = view === "flagged"
-    ? sortRows(filteredRows, sort, getFlaggedVal)
+    ? sortRows(filteredRows, sort, getFlaggedVal).sort((a, b) => (a.result === "fail" ? 0 : 1) - (b.result === "fail" ? 0 : 1))
     : filteredRows.sort((a, b) => (a.dueDate ? a.daysLeft : Infinity) - (b.dueDate ? b.daysLeft : Infinity));
 
   // manualId가 있으면 기존 수기입력 행을 갱신하고, 없으면(실시간 연동 현장에 수기입력 기한이 처음 등록되는 경우) 새로 만든다.

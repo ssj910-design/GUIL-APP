@@ -72,23 +72,23 @@ export function DutySwapNotice({ swaps, schedules, onSeen }) {
   );
 }
 
-export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onRequestSwap, onRespondSwap, onClose, embedded = false, showControls = !embedded, belowCalendar = null, showFillButton = true }) {
+export function DutyRoster({ schedules, swaps, onSetPerson, onRequestSwap, onRespondSwap, onClose, embedded = false, showControls = !embedded, belowCalendar = null }) {
   const { role, selfId, engineers } = useContext(AuthContext);
   const today = new Date(`${TODAY_STR}T00:00:00`);
   const [cursor, setCursor] = useState({ y: today.getFullYear(), m: today.getMonth() });
   const [picking, setPicking] = useState(null); // 관리자: 담당자 지정할 칸
   const [swapFrom, setSwapFrom] = useState(null); // 기사: 교환 요청 출발 칸
   const [busy, setBusy] = useState(false);
-  const [genMode, setGenMode] = useState(null); // 근무제 선택 시트 (주5일 | 주4일)
   const { days: HOLIDAY } = useHolidays();
   const [swapOpen, setSwapOpen] = useState(false);
   const [onlyMine, setOnlyMine] = useState(false); // 기사: 내 근무만 보기
+  // 근무표 생성(근무제 선택)은 관리자웹페이지(인사관리 → 근무표 생성)에서만 한다 — belowCalendar가
+  // 있으면 그 관리자 콘솔 화면이므로 안내문구를 또 띄우지 않는다. 모바일앱에서만 안내문구를 보여준다.
+  const isMobileAdmin = role === "admin" && !belowCalendar;
 
   // 이름 조회용은 전원, 담당자 선택은 당직 대상자 우선 정렬
   const roster = engineers.slice().sort((a, b) => (a.duty_order ?? 999) - (b.duty_order ?? 999));
   const dutyRoster = roster.filter((e) => e.duty_order != null);
-  // 근무제별 대상자 — 인사관리에서 지정한 duty_modes로 거른다
-  const rosterOf = (mode) => dutyRoster.filter((e) => (e.duty_modes ?? []).includes(mode));
   const nameOf = (pid) => roster.find((e) => e.id === pid)?.name ?? "";
   const orderOf = (pid) => roster.find((e) => e.id === pid)?.duty_order ?? null;
 
@@ -162,7 +162,7 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
             {onlyMine ? "내 근무만" : "전체 보기"}
           </button>
           <button
-            onClick={() => setSwapOpen(true)}
+            onClick={() => { alert("근무 조정 시 당사자간 충분한 협의 후 조정바랍니다."); setSwapOpen(true); }}
             className="ml-auto text-[11px] font-bold text-white bg-blue-700 rounded-lg px-3.5 py-1.5 flex items-center gap-1"
           >
             <ArrowLeftRight size={12} /> 근무 조정
@@ -207,13 +207,10 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
         {inMonth.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 py-8 px-5 text-center">
             <p className="text-xs text-slate-400">{y}년 {m + 1}월 근무표가 없습니다</p>
-            {role === "admin" && showFillButton && (
-              <button
-                onClick={() => setGenMode("주5일")}
-                className="mt-3 bg-blue-700 text-white text-sm font-bold px-5 py-2.5 rounded-xl active:bg-blue-800"
-              >
-                근무표 생성
-              </button>
+            {isMobileAdmin && (
+              <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
+                관리자웹페이지 인사관리 → 근무표 생성(근무제 선택)에서<br />배정해주세요
+              </p>
             )}
           </div>
         ) : (
@@ -282,72 +279,13 @@ export function DutyRoster({ schedules, swaps, onGenerate, onSetPerson, onReques
         )}
 
         <p className="text-[10px] text-slate-400 mt-2.5 px-1 leading-relaxed">
-          이름 옆 숫자는 기사 순번입니다.
+          이름 옆 숫자는 근무 순번임.
           {role === "admin" && " 칸을 누르면 담당자를 바꿀 수 있습니다."}
+          {isMobileAdmin && inMonth.length > 0 && " 근무표 생성(근무제 선택)은 관리자웹페이지 인사관리에서 할 수 있습니다."}
         </p>
 
         {role === "admin" && belowCalendar && <div className="mt-3">{belowCalendar}</div>}
-
-        {role === "admin" && showFillButton && inMonth.length > 0 && (
-          <button
-            onClick={() => setGenMode("주5일")}
-            className="w-full mt-2 bg-white border border-slate-200 text-slate-600 text-xs font-bold py-2.5 rounded-xl"
-          >
-            빈 칸 채우기 (근무제 선택)
-          </button>
-        )}
       </div>
-
-      {genMode && (
-        <div className="fixed inset-0 z-[60] bg-black/40 flex items-end" onClick={() => setGenMode(null)}>
-          <div className="bg-white w-full rounded-t-2xl p-5 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <p className="text-sm font-extrabold text-slate-800">{y}년 {m + 1}월 근무표 생성</p>
-            <p className="text-[11px] text-slate-400 mt-1 mb-3">이미 배정된 칸은 그대로 두고 빈 칸만 채웁니다.</p>
-
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              {["주5일", "주4일"].map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setGenMode(mode)}
-                  className={`py-3 rounded-xl text-sm font-bold border ${
-                    genMode === mode ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200 bg-white"
-                  }`}
-                >
-                  {mode} 근무제
-                  <span className="block text-[10px] font-semibold opacity-70">{rosterOf(mode).length}명</span>
-                </button>
-              ))}
-            </div>
-
-            {genMode === "주4일" && (
-              <p className="text-[11px] text-indigo-500 font-semibold bg-indigo-50 rounded-lg px-3 py-2 mb-3">
-                금요일마다 정상근무 칸이 함께 만들어집니다 (담당자는 달력에서 직접 지정).
-              </p>
-            )}
-
-            <div className="border border-slate-100 rounded-lg p-3 mb-4">
-              <p className="text-[11px] font-bold text-slate-500 mb-1.5">배정 순서</p>
-              {rosterOf(genMode).length === 0 ? (
-                <p className="text-[11px] text-red-500">
-                  {genMode} 대상자가 없습니다. 관리자 콘솔 → 인사관리에서 순번과 근무제를 지정하세요.
-                </p>
-              ) : (
-                <p className="text-[11px] text-slate-600 leading-relaxed">
-                  {rosterOf(genMode).map((e) => `${e.name}(${e.duty_order})`).join(" → ")}
-                </p>
-              )}
-            </div>
-
-            <button
-              onClick={async () => { setBusy(true); await onGenerate(monthKey, genMode); setBusy(false); setGenMode(null); }}
-              disabled={busy || rosterOf(genMode).length === 0}
-              className="w-full bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800 disabled:bg-slate-200"
-            >
-              {busy ? "배정 중…" : `${genMode} 기준으로 배정`}
-            </button>
-          </div>
-        </div>
-      )}
 
       {swapOpen && (
         <DutySwapSheet

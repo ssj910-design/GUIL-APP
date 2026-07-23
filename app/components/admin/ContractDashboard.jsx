@@ -8,6 +8,7 @@
 // 비어 있으면 '미입력'으로 표시하고, 채워진 현장만 대당 단가를 보여준다.
 import { useState } from "react";
 import { TODAY_STR } from "@/lib/constants";
+import { shortDate } from "@/lib/utils";
 
 const MONTHS = 12;
 const won = (n) => `${Math.round(n).toLocaleString()}원`;
@@ -144,7 +145,7 @@ export default function ContractDashboard({ data }) {
                     <p className="font-bold whitespace-nowrap">{s.name}</p>
                     <p className="text-[10px] text-slate-400">{s.contractType ?? "계약구분 없음"} · {s.assignedEngineer ?? "담당 미지정"}</p>
                   </td>
-                  <td className="px-3 py-2.5 text-right whitespace-nowrap text-slate-500 text-[11px]">{s.contractEnd}</td>
+                  <td className="px-3 py-2.5 text-right whitespace-nowrap text-slate-500 text-[11px]">{shortDate(s.contractEnd)}</td>
                   <td className="px-3 py-2.5 text-right whitespace-nowrap">
                     <span className={`text-[11px] font-extrabold rounded-full px-2 py-1 ${ddayTone(d)}`}>
                       {d < 0 ? `만료 ${-d}일` : `D-${d}`}

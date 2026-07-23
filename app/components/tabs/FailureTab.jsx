@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from "react";
-import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle } from "lucide-react";
+import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle, Wrench, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, labelToSeq, formatUnitLabel, recentFailuresBySite } from "@/lib/utils";
+import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, labelToSeq, formatUnitLabel, unitHistory } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
 import { useLiveInspections } from "@/app/hooks/useLiveInspections";
 import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons } from "@/app/components/ui";
@@ -107,7 +107,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
         <p className="text-sm font-extrabold text-slate-800 mt-2.5">{step + 1}. {STEP_TITLES[step]}</p>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto px-5 pt-4 pb-24 space-y-4">
         {step === 0 && (
           <>
             <div>
@@ -344,10 +344,11 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
 }
 
 
-export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onOpenResult, onAssignOpen }) {
+export function FailureDetailSheet({ failure, failures = [], nested = false, onClose, onDispatch, onArrive, onOpenResult, onAssignOpen }) {
   const { role } = useContext(AuthContext);
   const sites = useContext(SitesContext);
   const site = sites.find((s) => s.id === failure.siteId);
+  const history = unitHistory(failures, failure);
   const stage = failureStage(failure);
   const { faultType, faultDetail } = parseErrorCode(failure.errorCode);
   const unitLabel = formatUnitLabel(failure.elevatorNo);
@@ -358,9 +359,10 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
   );
   const liveInfo = liveInspections[0];
   const [photoViewer, setPhotoViewer] = useState(null);
+  const [histTarget, setHistTarget] = useState(null); // 이력 행 클릭 → 그 고장 상세를 위에 얹어 보여준다
   return (
     <>
-    <Sheet title="고장신고 상세" onClose={onClose}>
+    <Sheet title={nested ? "지난 고장 상세" : "고장신고 상세"} onClose={onClose}>
       <div className="bg-slate-100 rounded-xl p-3 mb-3 text-center">
         <p className="font-bold text-slate-800">{failure.siteName} · {unitLabel}</p>
         <p className="text-sm text-blue-700 font-semibold mt-1">{faultType}</p>
@@ -381,10 +383,7 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
         </div>
         <div className="flex items-center justify-between gap-2 text-sm">
           <span className="text-slate-400 shrink-0">주소</span>
-          <span className="flex items-center gap-1.5 min-w-0">
-            <MapLinkButtons site={site} />
-            <span className="font-semibold text-slate-700 text-right truncate">{site?.address ?? "-"}</span>
-          </span>
+          <span className="font-semibold text-slate-700 text-right truncate min-w-0">{site?.address ?? "-"}</span>
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">신고자 전화번호</span>
@@ -445,6 +444,42 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
           </div>
         )}
       </div>
+      {!nested && (
+      <div className="mb-4">
+        <p className="text-xs font-bold text-slate-500 mb-2 flex items-center gap-1"><Repeat size={12} strokeWidth={2.5} /> 이 호기 고장 이력 {history.length > 0 && `(${history.length})`}</p>
+        {history.length === 0 ? (
+          <p className="text-[13px] text-slate-400">이 호기의 다른 고장 이력이 없습니다.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {history.slice(0, 5).map((h) => {
+              const ec = parseErrorCode(h.errorCode);
+              const done = [h.faultCause, h.processContent].filter(Boolean).join(" → ");
+              return (
+                <li key={h.id}>
+                  <button type="button" onClick={() => setHistTarget(h)} className="w-full text-left rounded-lg bg-slate-50 border border-slate-200/70 px-3 py-2 active:bg-slate-100">
+                    <div className="flex items-center justify-between gap-2 text-[13px]">
+                      <span className="font-semibold text-slate-700 truncate">{fmtMD(h.createdAt)} · {ec.faultType}{ec.faultDetail && <span className="font-normal text-slate-500"> · {ec.faultDetail}</span>}</span>
+                      <span className="shrink-0 flex items-center gap-1">
+                        <span className={`text-[10px] font-bold ${h.status === "완료" ? "text-emerald-600" : "text-amber-600"}`}>{h.status}</span>
+                        <ChevronRight size={13} className="text-slate-300" />
+                      </span>
+                    </div>
+                    {(h.assignee || done) && (
+                      <p className="text-[12px] text-slate-500 mt-0.5 truncate">
+                        {h.assignee && <span className="font-medium text-slate-600">{h.assignee}</span>}
+                        {h.assignee && done && " · "}
+                        {done}
+                      </p>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+            {history.length > 5 && <li className="text-[11px] text-slate-400 text-center pt-0.5">외 {history.length - 5}건</li>}
+          </ul>
+        )}
+      </div>
+      )}
       {failure.photoUrls?.length > 0 && (
         <div className="mb-4">
           <p className="text-xs font-bold text-slate-500 mb-2">처리 사진 ({failure.photoUrls.length}장)</p>
@@ -457,39 +492,47 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
           </div>
         </div>
       )}
-      {/* 관리자는 직접 출동하지 않는다 — 미배정 건은 기사 배정, 이미 배정된 건은 재배정 */}
-      {stage === "pending" && role === "admin" ? (
-        onAssignOpen && (
-          <button
-            onClick={() => { onAssignOpen(failure); onClose(); }}
-            className="w-full bg-slate-800 text-white text-sm font-bold py-3 rounded-xl active:bg-slate-900"
-          >
-            {failure.assignee ? "재배정" : "기사 배정"}
-          </button>
-        )
-      ) : stage === "pending" && onDispatch && role !== "admin" ? (
-        <button
-          onClick={() => { onDispatch(failure); onClose(); }}
-          className="w-full bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800"
-        >
-          {failure.assignee ? "출동 응답" : "내가 출동하기"}
-        </button>
-      ) : null}
-      {stage === "dispatched" && onArrive && (
-        <button
-          onClick={() => { onArrive(failure); onClose(); }}
-          className="w-full bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800"
-        >
-          도착
-        </button>
-      )}
-      {stage === "arrived" && onOpenResult && (
-        <button
-          onClick={() => { onOpenResult(failure); onClose(); }}
-          className="w-full bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl active:bg-emerald-700"
-        >
-          🛠️ 고장처리결과 입력
-        </button>
+      {/* 티맵·카카오를 주 액션 버튼 좌측에 붙인다 (미배정 카드와 동일 레이아웃).
+          관리자는 직접 출동하지 않는다 — 미배정 건은 기사 배정, 이미 배정된 건은 재배정.
+          읽기전용(nested)일 땐 액션 없이 상세만 본다 */}
+      {!nested && stage !== "done" && (
+        <div className="flex items-center gap-2">
+          {/* 길안내는 아직 이동이 필요한 단계(배정/출동중)에만 — 도착(작업중) 후엔 이미 현장이라 숨긴다 */}
+          {(stage === "pending" || stage === "dispatched") && <MapLinkButtons site={site} />}
+          {stage === "pending" && role === "admin" ? (
+            onAssignOpen && (
+              <button
+                onClick={() => { onAssignOpen(failure); onClose(); }}
+                className="flex-1 bg-slate-800 text-white text-sm font-bold py-3 rounded-xl active:bg-slate-900"
+              >
+                {failure.assignee ? "재배정" : "기사 배정"}
+              </button>
+            )
+          ) : stage === "pending" && onDispatch && role !== "admin" ? (
+            <button
+              onClick={() => { onDispatch(failure); onClose(); }}
+              className="flex-1 bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800"
+            >
+              {failure.assignee ? "출동 응답" : "내가 출동하기"}
+            </button>
+          ) : null}
+          {stage === "dispatched" && onArrive && (
+            <button
+              onClick={() => { onArrive(failure); onClose(); }}
+              className="flex-1 bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800"
+            >
+              도착
+            </button>
+          )}
+          {stage === "arrived" && onOpenResult && (
+            <button
+              onClick={() => { onOpenResult(failure); onClose(); }}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl active:bg-emerald-700"
+            >
+              <Wrench size={15} strokeWidth={2.5} /> 고장처리결과 입력
+            </button>
+          )}
+        </div>
       )}
     </Sheet>
     {photoViewer && (
@@ -500,6 +543,10 @@ export function FailureDetailSheet({ failure, onClose, onDispatch, onArrive, onO
         date={failure.reportedAt ?? ""}
         onClose={() => setPhotoViewer(null)}
       />
+    )}
+    {/* 이력 행 클릭 시 그 고장 상세를 읽기전용으로 위에 얹는다 (닫으면 이 시트로 복귀) */}
+    {histTarget && (
+      <FailureDetailSheet failure={histTarget} failures={failures} nested onClose={() => setHistTarget(null)} />
     )}
     </>
   );
@@ -534,6 +581,14 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allo
     const pid = engineers.find((e) => e.name === name)?.id;
     return todayLeaves.find((l) => l.profile_id === pid) ?? null;
   };
+  // 이 건물(site)에서 그 기사가 '최근 2주' 내 접수된 고장에 대응한 수 — 지금 건물 사정 아는 기사를 관리자가 알아보게.
+  const RECENT_DAYS = 14;
+  const recentCutoff = Date.now() - RECENT_DAYS * 24 * 60 * 60 * 1000;
+  const visitsOf = (name) =>
+    failures.filter((f) =>
+      f.siteId === failure.siteId && f.id !== failure.id && f.assignee === name &&
+      f.createdAt && new Date(f.createdAt).getTime() >= recentCutoff
+    ).length;
 
   const rows = engineerNames
     .map((name) => ({ name, km: distanceKm(hereOf(name), site?.lat != null ? { lat: site.lat, lng: site.lng } : null) }))
@@ -565,6 +620,7 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allo
         {rows.map(({ name, km }, i) => {
           const st = statusOf(name);
           const leave = leaveOf(name);
+          const visits = visitsOf(name);
           const pick = () => {
             if (st && !confirm(`${name}님은 지금 ${st}입니다.\n그래도 이 건을 배정할까요?`)) return;
             onAssign(failure, name);
@@ -595,6 +651,11 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allo
                   </>
                 )}
               </span>
+              {!leave && visits > 0 && (
+                <span className="flex items-center justify-center gap-0.5 text-[9px] font-extrabold text-blue-600 mt-0.5">
+                  <Wrench size={9} strokeWidth={2.8} /> 최근 고장대응 {visits}회
+                </span>
+              )}
             </button>
           );
         })}
@@ -720,7 +781,7 @@ export function ArrivalResultModal({ failure, onConfirm, onClose }) {
 // 미배정 접수 카드 — 클릭 없이도 판단할 수 있게 상세를 카드에 박는다:
 // 거리(거리순 정렬)·접수시각·증상·주소·신고자·재발배지 + 카드에서 바로 출동/배정.
 // (모델·층수 같은 라이브 정보는 상세시트 유지 — 여기선 판단에 필요한 것만.)
-function FailureResponseCard({ f, dist, warnCount = 0, site, onOpenDetail, onDispatch, onAssignOpen }) {
+function FailureResponseCard({ f, dist, history = [], site, onOpenDetail, onDispatch, onAssignOpen }) {
   const stage = failureStage(f);
   const { faultType, faultDetail } = parseErrorCode(f.errorCode);
   const { role } = useContext(AuthContext);
@@ -728,13 +789,10 @@ function FailureResponseCard({ f, dist, warnCount = 0, site, onOpenDetail, onDis
   const fmtDist = (km) => (km == null ? null : km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`);
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      <button type="button" onClick={() => onOpenDetail(f)} className="w-full text-left p-3.5">
+      <div className="p-3.5 pb-2.5">
         <div className="flex items-center justify-between gap-2 mb-1">
           <p className="font-bold text-slate-800 text-[15px] truncate">{f.siteName} · {unitLabel}</p>
-          <span className="flex items-center gap-1 shrink-0">
-            {warnCount >= 3 && <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full" title={`최근 30일 ${warnCount}회 고장`}><Repeat size={10} strokeWidth={2.8} />{warnCount}</span>}
-            {f.escalation && <span className="text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{f.escalation}</span>}
-          </span>
+          {f.escalation && <span className="shrink-0 text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{f.escalation}</span>}
         </div>
         <p className="text-[13px] text-slate-500 mb-2 flex items-center gap-1">
           {dist != null && <span className="inline-flex items-center gap-0.5 font-bold text-blue-600"><MapPin size={12} strokeWidth={2.5} />{fmtDist(dist)} ·</span>}
@@ -744,18 +802,25 @@ function FailureResponseCard({ f, dist, warnCount = 0, site, onOpenDetail, onDis
           <AlertTriangle size={15} className="text-amber-500 shrink-0" />
           <p className="text-[13px]"><span className="font-bold text-slate-800">{faultType}</span>{faultDetail && <span className="text-slate-500"> · {faultDetail}</span>}</p>
         </div>
-        {(site?.address || f.reporterPhone) && (
+        {history.length > 0 && (
+          <p className={`text-[12px] font-semibold mb-2 flex items-center gap-1 ${history.length >= 3 ? "text-red-600" : "text-slate-500"}`}>
+            <Repeat size={12} strokeWidth={2.5} className="shrink-0" />
+            <span className="truncate">고장 {history.length}회 · 최근 {fmtMD(history[0].createdAt)}{history[0].assignee ? ` · ${history[0].assignee}` : ""}</span>
+          </p>
+        )}
+        {(site?.address || f.reporterPhone || site?.elevatorModel) && (
           <div className="text-[12px] text-slate-500 space-y-1">
             {site?.address && <p className="flex items-center gap-1 min-w-0"><MapPin size={12} className="shrink-0 text-slate-400" /><span className="truncate">{site.address}</span></p>}
+            {site?.elevatorModel && <p className="flex items-center gap-1 min-w-0"><Settings size={12} className="shrink-0 text-slate-400" /><span className="truncate">{site.elevatorModel}</span></p>}
             {f.reporterPhone && <p className="flex items-center gap-1"><PhoneCall size={12} className="shrink-0 text-slate-400" />신고자 {formatPhone(f.reporterPhone)}</p>}
           </div>
         )}
         {stage === "dispatched" && <p className="text-xs font-semibold text-blue-700 mt-2 text-center">출동 {f.dispatchedAt} · {f.etaMinutes}분 후 도착예정</p>}
         {stage === "arrived" && <p className="text-xs font-semibold text-emerald-700 mt-2 text-center">도착 {f.arrivalTime}</p>}
-      </button>
+      </div>
       {stage === "pending" && (
-        <div className="flex items-center gap-2 px-3.5 pb-3.5">
-          <MapLinkButtons site={site} size={38} />
+        <div className="flex items-center gap-2 px-3.5 pb-2">
+          <MapLinkButtons site={site} />
           {role === "admin" && onAssignOpen ? (
             <button onClick={() => onAssignOpen(f)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800">기사 배정</button>
           ) : (
@@ -763,6 +828,9 @@ function FailureResponseCard({ f, dist, warnCount = 0, site, onOpenDetail, onDis
           )}
         </div>
       )}
+      <button type="button" onClick={() => onOpenDetail(f)} className="w-full border-t border-slate-100 py-2.5 text-[11px] font-bold text-slate-500 inline-flex items-center justify-center gap-0.5 active:bg-slate-50">
+        상세보기 <ChevronRight size={12} />
+      </button>
     </div>
   );
 }
@@ -772,10 +840,12 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
   const siteOf = useSiteOf();
   const { name: me, role } = useContext(AuthContext);
   const stage = failureStage(f);
+  const { faultType, faultDetail } = parseErrorCode(f.errorCode);
   const unitLabel = formatUnitLabel(f.elevatorNo);
+  const bar = stage === "arrived" ? "border-l-amber-500" : stage === "dispatched" ? "border-l-blue-500" : f.escalation === "운행정지" ? "border-l-red-600" : "border-l-red-400";
   return (
-    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      <div className="w-full flex items-center gap-2 p-3.5">
+    <div className={`rounded-xl border border-slate-200 border-l-4 ${bar} bg-white overflow-hidden`}>
+      <div className="w-full flex items-start gap-2 p-3.5 pb-2.5">
         <button type="button" onClick={() => onOpenDetail(f)} className="flex-1 min-w-0 text-left">
           <div className="flex items-center gap-1.5 mb-1">
             <p className="font-bold text-slate-800 text-[15px] truncate">{f.siteName} · {unitLabel}</p>
@@ -783,9 +853,14 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
               <span className="shrink-0 text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{f.escalation}</span>
             )}
           </div>
-          <p className="text-sm text-slate-500">{f.reportedAt}</p>
+          <div className="flex items-start gap-1.5">
+            <AlertTriangle size={13} className="text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-[13px] min-w-0"><span className="font-bold text-slate-700">{faultType}</span>{faultDetail && <span className="text-slate-500"> · {faultDetail}</span>}</p>
+          </div>
+          {stage === "dispatched" && <p className="text-[11px] text-blue-600 font-semibold mt-1">출동 {f.dispatchedAt} · {f.etaMinutes}분 후 도착예정</p>}
+          {stage === "arrived" && <p className="text-[11px] text-amber-600 font-semibold mt-1">{f.arrivalTime} 도착 · 작업 중</p>}
         </button>
-        {stage !== "done" && <MapLinkButtons site={siteOf(f)} size={30} />}
+        {(stage === "pending" || stage === "dispatched") && <MapLinkButtons site={siteOf(f)} />}
       </div>
       <div className="px-3.5 pb-3.5">
         {stage === "pending" && (
@@ -836,9 +911,9 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
         {stage === "arrived" && (
           <button
             onClick={() => onOpenResult(f)}
-            className="w-full bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg active:bg-emerald-700"
+            className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg active:bg-emerald-700"
           >
-            🛠️ 고장처리결과 입력
+            <Wrench size={13} strokeWidth={2.5} /> 고장처리결과 입력
           </button>
         )}
       </div>
@@ -855,90 +930,57 @@ function useSiteOf() {
 
 // dist: 기사 홈에서 미배정 고장까지의 거리(km). 있으면 거리 뱃지를 보여준다(없으면 생략).
 const fmtDist = (km) => (km == null ? null : km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`);
+// 이력 표시용 MM/DD (재발 배지·상세 이력 목록 공용)
+const fmtMD = (d) => { const x = new Date(d); return `${String(x.getMonth() + 1).padStart(2, "0")}/${String(x.getDate()).padStart(2, "0")}`; };
 export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispatch, onArrive, onOpenResult, onRefuse, onAssignOpen }) {
   const siteOf = useSiteOf();
   const stage = failureStage(f);
   const { name: me, role } = useContext(AuthContext);
   // 상태별 컬러 — 작업중(초록)/출동중(파랑)/응답대기(노랑) 우선, 그다음 미배정을 세분:
   // 운행정지(빨강 심각) / 지원미배정=지원요청에서 넘어옴(주황) / 일반 미배정(빨강)
-  const state = stage === "arrived" ? { label: "작업중", bar: "border-l-emerald-500", chip: "bg-emerald-50 text-emerald-600" }
+  const state = stage === "arrived" ? { label: "작업중", bar: "border-l-amber-500", chip: "bg-amber-50 text-amber-600" }
     : stage === "dispatched" ? { label: "출동중", bar: "border-l-blue-500", chip: "bg-blue-50 text-blue-600" }
     : f.assignee ? { label: `${f.assignee} 응답대기`, bar: "border-l-amber-400", chip: "bg-amber-50 text-amber-600" }
     : f.escalation === "운행정지" ? { label: "운행정지", bar: "border-l-red-600", chip: "bg-red-100 text-red-700" }
     : f.escalation === "지원요청" ? { label: "지원미배정", bar: "border-l-amber-500", chip: "bg-amber-100 text-amber-700" }
     : { label: "미배정", bar: "border-l-red-500", chip: "bg-red-50 text-red-600" };
   return (
-    <div className={`w-full flex items-center justify-between gap-2 rounded-xl border border-slate-200 border-l-4 ${state.bar} bg-white px-3.5 py-3`}>
-      <button type="button" onClick={() => onOpenDetail(f)} className="min-w-0 flex-1 text-left">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <p className="font-bold text-slate-800 text-sm truncate">{f.siteName} · {formatUnitLabel(f.elevatorNo)}</p>
+    <div className={`w-full rounded-xl border border-slate-200 border-l-4 ${state.bar} bg-white overflow-hidden`}>
+      {/* 개요 카드 — 현장명을 윗줄에 통째로 두고, 지도·버튼은 아랫줄로 내려 이름이 눌리지 않게 한다 */}
+      <button type="button" onClick={() => onOpenDetail(f)} className="w-full text-left px-3.5 pt-3 pb-2">
+        <div className="flex items-center gap-1.5">
+          <p className="font-bold text-slate-800 text-sm truncate flex-1 min-w-0">{f.siteName}{formatUnitLabel(f.elevatorNo) ? ` · ${formatUnitLabel(f.elevatorNo)}` : ""}</p>
           <span className={`shrink-0 text-[10px] font-bold rounded-full px-1.5 py-0.5 ${state.chip}`}>{state.label}</span>
           {warnCount >= 3 && <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold rounded-full px-1.5 py-0.5 bg-red-100 text-red-600" title={`최근 30일 ${warnCount}회 고장`}><Repeat size={10} strokeWidth={2.8} />{warnCount}</span>}
         </div>
-        <p className="text-[11px] text-slate-400 truncate flex items-center gap-0.5">
+        <p className="text-[11px] text-slate-400 truncate flex items-center gap-0.5 mt-0.5">
           {dist != null && <span className="inline-flex items-center gap-0.5 font-bold text-blue-600"><MapPin size={11} strokeWidth={2.5} />{fmtDist(dist)} ·</span>}
           <span className="truncate">{f.errorCode}</span>
         </p>
       </button>
-      {stage !== "done" && <MapLinkButtons site={siteOf(f)} />}
-      {stage === "pending" && (
-        <span className="shrink-0 flex gap-1.5">
-          {role === "admin" && onAssignOpen ? (
-            <button
-              type="button"
-              onClick={() => onAssignOpen(f)}
-              className="bg-blue-700 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:bg-blue-800"
-            >
-              {f.assignee ? "재배정" : "기사 배정"}
-            </button>
-          ) : (
-          <button
-            type="button"
-            onClick={() => onDispatch(f)}
-            className="bg-blue-700 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:bg-blue-800"
-          >
-            {f.assignee ? "출동 응답" : "내가 출동하기"}
-          </button>
+      {stage !== "done" && (
+        <div className="flex items-center gap-2 px-3.5 pb-3">
+          {(stage === "pending" || stage === "dispatched") && <MapLinkButtons site={siteOf(f)} />}
+          {stage === "pending" && (
+            role === "admin" && onAssignOpen ? (
+              <button type="button" onClick={() => onAssignOpen(f)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2 rounded-lg active:bg-blue-800">{f.assignee ? "재배정" : "기사 배정"}</button>
+            ) : (
+              <>
+                <button type="button" onClick={() => onDispatch(f)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2 rounded-lg active:bg-blue-800">{f.assignee ? "출동 응답" : "내가 출동하기"}</button>
+                {onRefuse && f.assignee === me && <button type="button" onClick={() => onRefuse(f)} className="shrink-0 text-xs font-bold text-red-500 border border-red-200 px-3 py-2 rounded-lg active:bg-red-50">거부</button>}
+              </>
+            )
           )}
-          {onRefuse && f.assignee === me && (
-            <button
-              type="button"
-              onClick={() => onRefuse(f)}
-              className="text-[11px] font-bold text-red-500 border border-red-200 px-2 py-1.5 rounded-lg active:bg-red-50"
-            >
-              거부
-            </button>
+          {stage === "dispatched" && (
+            <>
+              <button type="button" onClick={() => onArrive(f)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2 rounded-lg active:bg-blue-800">도착 ({f.etaMinutes}분)</button>
+              {onRefuse && f.assignee === me && <button type="button" onClick={() => onRefuse(f)} className="shrink-0 text-xs font-bold text-red-500 border border-red-200 px-3 py-2 rounded-lg active:bg-red-50">취소</button>}
+            </>
           )}
-        </span>
-      )}
-      {stage === "dispatched" && (
-        <span className="shrink-0 flex gap-1.5">
-        <button
-          type="button"
-          onClick={() => onArrive(f)}
-          className="bg-blue-700 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:bg-blue-800"
-        >
-          도착 ({f.etaMinutes}분)
-        </button>
-        {onRefuse && f.assignee === me && (
-          <button
-            type="button"
-            onClick={() => onRefuse(f)}
-            className="text-[11px] font-bold text-red-500 border border-red-200 px-2 py-1.5 rounded-lg active:bg-red-50"
-          >
-            취소
-          </button>
-        )}
-        </span>
-      )}
-      {stage === "arrived" && (
-        <button
-          type="button"
-          onClick={() => onOpenResult(f)}
-          className="shrink-0 bg-emerald-600 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:bg-emerald-700"
-        >
-          🛠️ 결과입력
-        </button>
+          {stage === "arrived" && (
+            <button type="button" onClick={() => onOpenResult(f)} className="flex-1 inline-flex items-center justify-center gap-1 bg-emerald-600 text-white text-xs font-bold py-2 rounded-lg active:bg-emerald-700"><Wrench size={13} strokeWidth={2.5} /> 결과입력</button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -955,7 +997,6 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const selfLoc = engineers.find((e) => e.id === selfId);
   const selfCoord = selfLoc?.last_lat != null ? { lat: selfLoc.last_lat, lng: selfLoc.last_lng } : null;
-  const recentBySite = recentFailuresBySite(failures);
   const distOf = (f) => { const s = siteById.get(f.siteId); return distanceKm(selfCoord, s?.lat != null ? { lat: s.lat, lng: s.lng } : null); };
   // 미배정 미처리를 기사 위치 기준 가까운 순으로 (거리 못 구하면 뒤로)
   const list = failures.filter((f) => !f.assignee && f.status === "미처리").sort((a, b) => {
@@ -967,13 +1008,13 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+      <div className="flex-1 overflow-y-auto px-5 pt-4 pb-24 space-y-3">
         {list.length === 0 ? (
           <p className="text-xs text-slate-400 text-center py-10">미배정 고장이 없습니다</p>
         ) : (
           list.map((f) => (
             <FailureResponseCard key={f.id} f={f}
-              dist={distOf(f)} warnCount={recentBySite.get(f.siteId)?.length ?? 0} site={siteById.get(f.siteId)}
+              dist={distOf(f)} history={unitHistory(failures, f)} site={siteById.get(f.siteId)}
               onOpenDetail={setDetailTarget} onDispatch={setDispatchTarget}
               onAssignOpen={role === "admin" ? setAssignTarget : null} />
           ))
@@ -983,6 +1024,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
       {detailTarget && (
         <FailureDetailSheet
           failure={detailTarget}
+          failures={failures}
           onClose={() => setDetailTarget(null)}
           onDispatch={setDispatchTarget}
           onArrive={onArrive}
@@ -1031,7 +1073,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex-1 overflow-y-auto px-5 py-4">
+      <div className="flex-1 overflow-y-auto px-5 pt-4 pb-24">
         <p className="text-sm font-bold text-slate-700 mb-2">처리중인 고장</p>
         <div className="space-y-2.5 mb-5">
           {active.length === 0 ? (
@@ -1065,13 +1107,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
               <p className="text-xs text-slate-400 py-3">처리완료된 고장이 없습니다</p>
             ) : (
               done.map((f) => (
-                <button key={f.id} onClick={() => setDetailTarget(f)} className="w-full text-left bg-white rounded-xl border border-slate-200 p-3.5 opacity-70">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="font-bold text-slate-800 text-sm">{f.siteName} · {formatUnitLabel(f.elevatorNo)}</p>
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">완료</span>
-                  </div>
-                  <p className="text-xs text-slate-500">{f.errorCode}</p>
-                </button>
+                <FailureStatusCard key={f.id} f={f} onOpenDetail={setDetailTarget} canReassign={false} />
               ))
             )}
           </div>
@@ -1081,6 +1117,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
       {detailTarget && (
         <FailureDetailSheet
           failure={detailTarget}
+          failures={failures}
           onClose={() => setDetailTarget(null)}
           onDispatch={setDispatchTarget}
           onArrive={onArrive}
@@ -1116,66 +1153,118 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
 }
 
 
+// 처리현황 카드 — 상태별로 필요한 정보를 담는다:
+// 완료(초록): 증상·원인·조치·처리자·도착~완료 시각 / 진행중(파랑·초록): 현재 단계·배정자 / 미처리(빨강): 미배정·접수
+function FailureStatusCard({ f, onOpenDetail, onReassign, canReassign }) {
+  const { faultType, faultDetail } = parseErrorCode(f.errorCode);
+  const stage = failureStage(f);
+  // 미처리는 그냥 '미처리'로 뭉치지 않고 운행정지·지원미배정·응답대기·미배정으로 구분해 보여준다.
+  const state = f.status === "완료"
+    ? { bar: "border-l-emerald-500", chip: "bg-emerald-100 text-emerald-700", label: f.processResult || "완료" }
+    : f.status === "진행중"
+    ? (stage === "arrived"
+        ? { bar: "border-l-amber-500", chip: "bg-amber-50 text-amber-600", label: "작업중" }
+        : { bar: "border-l-blue-500", chip: "bg-blue-50 text-blue-600", label: "출동중" })
+    : f.escalation === "운행정지"
+    ? { bar: "border-l-red-600", chip: "bg-red-100 text-red-700", label: "운행정지" }
+    : f.escalation === "지원요청"
+    ? { bar: "border-l-amber-500", chip: "bg-amber-100 text-amber-700", label: "지원미배정" }
+    : f.assignee
+    ? { bar: "border-l-amber-400", chip: "bg-amber-50 text-amber-600", label: "응답대기" }
+    : { bar: "border-l-red-400", chip: "bg-red-50 text-red-600", label: "미배정" };
+  const who = f.assignee
+    ? f.status === "완료" && f.completeTime
+      ? `${f.assignee} · ${f.arrivalTime ? f.arrivalTime + " 도착 → " : ""}${f.completeTime} 완료`
+      : stage === "arrived" && f.arrivalTime ? `${f.assignee} · ${f.arrivalTime} 도착`
+      : stage === "dispatched" ? `${f.assignee} · 출동 ${f.dispatchedAt}`
+      : f.assignee
+    : `미배정 · ${f.reportedAt} 접수`;
+  return (
+    <div className={`rounded-xl border border-slate-200 border-l-4 ${state.bar} bg-white overflow-hidden`}>
+      <button type="button" onClick={() => onOpenDetail(f)} className="w-full text-left p-3.5">
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <p className="font-bold text-slate-800 text-sm truncate">{f.siteName} · {formatUnitLabel(f.elevatorNo)}</p>
+          <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${state.chip}`}>{state.label}</span>
+        </div>
+        <div className="flex items-start gap-1.5 mb-1">
+          <AlertTriangle size={13} className="text-amber-500 shrink-0 mt-0.5" />
+          <p className="text-[13px] min-w-0"><span className="font-bold text-slate-700">{faultType}</span>{faultDetail && <span className="text-slate-500"> · {faultDetail}</span>}</p>
+        </div>
+        {f.status === "완료" && (f.faultCause || f.processContent) && (
+          <div className="text-[11px] text-slate-500 space-y-0.5 mb-1.5 pl-[19px]">
+            {f.faultCause && <p className="truncate">원인 · {f.faultCause}</p>}
+            {f.processContent && <p className="truncate">조치 · {f.processContent}</p>}
+          </div>
+        )}
+        <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-1">
+          <User size={12} className="shrink-0" /><span className="truncate">{who}</span>
+        </div>
+      </button>
+      {canReassign && (
+        <div className="px-3.5 pb-3">
+          <button onClick={() => onReassign(f)} className="text-[11px] font-bold text-blue-700 border border-blue-200 rounded-lg px-2.5 py-1.5 active:bg-blue-50">재배정</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FailureStatusOverview({ failures, onReassign }) {
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
   const [reassignTarget, setReassignTarget] = useState(null);
+  const [filter, setFilter] = useState("all"); // all · 미처리(미배정) · 진행중 · 완료
   const mine = failures.filter((f) => f.assignee === CURRENT_ENGINEER);
   const myDone = mine.filter((f) => f.status === "완료").length;
   const myUndone = mine.filter((f) => f.status !== "완료").length;
   const allDone = failures.filter((f) => f.status === "완료").length;
   const allProcessing = failures.filter((f) => f.status === "진행중").length;
   const allUndone = failures.filter((f) => f.status === "미처리").length;
-  const statusColor = { 미처리: "bg-red-100 text-red-700", 진행중: "bg-amber-100 text-amber-700", 완료: "bg-emerald-100 text-emerald-700" };
+  // 필터 칩 = 상태별. '미배정' 칩은 status 미처리(미배정·지원미배정·운행정지·응답대기 포함).
+  const FILTERS = [
+    { key: "all", label: "전체", count: failures.length },
+    { key: "미처리", label: "미배정", count: allUndone },
+    { key: "진행중", label: "진행중", count: allProcessing },
+    { key: "완료", label: "완료", count: allDone },
+  ];
+  const shown = filter === "all" ? failures : failures.filter((f) => f.status === filter);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="px-5 py-4 flex items-start shrink-0">
-        <div className="flex-1">
-          <p className="text-sm font-bold text-blue-700 mb-1.5">내 진행상황</p>
-          <div className="flex items-center gap-3 text-xs text-slate-500">
+      <div className="px-5 py-4 shrink-0">
+        {mine.length > 0 && (
+          <div className="flex items-center gap-3 text-xs text-slate-500 mb-3">
+            <span className="text-[13px] font-bold text-blue-700">내 진행</span>
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> 처리 {myDone}</span>
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> 미처리 {myUndone}</span>
           </div>
-        </div>
-        <div className="w-px self-stretch bg-slate-200 mx-3" />
-        <div className="flex-1">
-          <p className="text-sm font-bold text-blue-700 mb-1.5">전체 진행상황</p>
-          <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> 처리 {allDone}</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> 처리중 {allProcessing}</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> 미처리 {allUndone}</span>
-          </div>
+        )}
+        <div className="flex gap-1.5">
+          {FILTERS.map((flt) => (
+            <button
+              key={flt.key}
+              onClick={() => setFilter(flt.key)}
+              className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
+                filter === flt.key ? "bg-blue-700 text-white border-blue-700" : "bg-white text-slate-600 border-slate-200 active:bg-slate-50"
+              }`}
+            >
+              {flt.label} {flt.count}
+            </button>
+          ))}
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2.5">
-        {failures.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-10">고장 접수 이력이 없습니다</p>
+      <div className="flex-1 overflow-y-auto px-5 pt-4 pb-24 space-y-2.5">
+        {shown.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-10">{filter === "all" ? "고장 접수 이력이 없습니다" : "해당 상태의 고장이 없습니다"}</p>
         ) : (
-          failures.map((f) => (
-            <div key={f.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
-              <button onClick={() => setDetailTarget(f)} className="w-full text-left active:opacity-70">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="font-bold text-slate-800 text-sm">{f.siteName} · {formatUnitLabel(f.elevatorNo)}</p>
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${statusColor[f.status]}`}>{f.status}</span>
-                </div>
-                <p className="text-xs text-slate-500">{f.errorCode}</p>
-                <p className="text-[11px] text-slate-400 mt-1">{f.reportedAt} 접수 · {f.assignee ?? "미배정"}</p>
-              </button>
-              {role === "admin" && f.status !== "완료" && f.assignee && (
-                <button
-                  onClick={() => setReassignTarget(f)}
-                  className="mt-2 text-[11px] font-bold text-blue-700 border border-blue-200 rounded-lg px-2.5 py-1.5 active:bg-blue-50"
-                >
-                  재배정
-                </button>
-              )}
-            </div>
+          shown.map((f) => (
+            <FailureStatusCard key={f.id} f={f} onOpenDetail={setDetailTarget} onReassign={setReassignTarget}
+              canReassign={role === "admin" && f.status !== "완료" && !!f.assignee} />
           ))
         )}
       </div>
 
-      {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} />}
+      {detailTarget && <FailureDetailSheet failure={detailTarget} failures={failures} onClose={() => setDetailTarget(null)} />}
       {reassignTarget && (
         <AssignEngineerSheet failure={reassignTarget} failures={failures} onAssign={onReassign} attendances={attendances} todayLeaves={todayLeaves} onClose={() => setReassignTarget(null)} allowUnassign />
       )}
