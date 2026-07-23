@@ -488,7 +488,8 @@ export function FailureDetailSheet({ failure, failures = [], onClose, onDispatch
           관리자는 직접 출동하지 않는다 — 미배정 건은 기사 배정, 이미 배정된 건은 재배정 */}
       {stage !== "done" && (
         <div className="flex items-center gap-2">
-          <MapLinkButtons site={site} />
+          {/* 길안내는 아직 이동이 필요한 단계(배정/출동중)에만 — 도착(작업중) 후엔 이미 현장이라 숨긴다 */}
+          {(stage === "pending" || stage === "dispatched") && <MapLinkButtons site={site} />}
           {stage === "pending" && role === "admin" ? (
             onAssignOpen && (
               <button
@@ -832,7 +833,7 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
           {stage === "dispatched" && <p className="text-[11px] text-blue-600 font-semibold mt-1">출동 {f.dispatchedAt} · {f.etaMinutes}분 후 도착예정</p>}
           {stage === "arrived" && <p className="text-[11px] text-amber-600 font-semibold mt-1">{f.arrivalTime} 도착 · 작업 중</p>}
         </button>
-        {stage !== "done" && <MapLinkButtons site={siteOf(f)} />}
+        {(stage === "pending" || stage === "dispatched") && <MapLinkButtons site={siteOf(f)} />}
       </div>
       <div className="px-3.5 pb-3.5">
         {stage === "pending" && (
@@ -929,7 +930,7 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
           <span className="truncate">{f.errorCode}</span>
         </p>
       </button>
-      {stage !== "done" && <MapLinkButtons site={siteOf(f)} />}
+      {(stage === "pending" || stage === "dispatched") && <MapLinkButtons site={siteOf(f)} />}
       {stage === "pending" && (
         <span className="shrink-0 flex gap-1.5">
           {role === "admin" && onAssignOpen ? (
