@@ -588,18 +588,22 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
 
       {/* 고장 처리 현황 */}
       <div className="px-5 pt-4">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="font-bold text-slate-800 text-sm">
-            고장 처리 현황
+        <div className="flex items-start justify-between mb-2 gap-2">
+          <div className="min-w-0">
+            <h3 className="font-bold text-slate-800 text-sm">고장 처리 현황</h3>
             {role === "admin" && (
-              <span className="ml-1.5 font-medium text-[11px] text-slate-500">
-                미배정 {listSource.filter((f) => !f.assignee).length} · 응답대기 {listSource.filter((f) => f.assignee).length}
-              </span>
+              <p className="font-medium text-[11px] text-slate-500 mt-0.5">
+                미배정 {listSource.filter((f) => !f.assignee && f.escalation !== "지원요청").length}
+                {listSource.some((f) => !f.assignee && f.escalation === "지원요청") && (
+                  <span className="text-amber-600 font-bold"> · 지원미배정 {listSource.filter((f) => !f.assignee && f.escalation === "지원요청").length}</span>
+                )}
+                {" · 응답대기 "}{listSource.filter((f) => f.assignee).length}
+              </p>
             )}
-          </h3>
+          </div>
           {role === "admin" && onShowAllFailures && (
-            <button onClick={onShowAllFailures} className="text-[11px] font-bold text-blue-700">
-              모두 보기 (출동·작업·완료 포함) →
+            <button onClick={onShowAllFailures} className="shrink-0 text-[11px] font-bold text-blue-700 mt-0.5">
+              모두보기
             </button>
           )}
         </div>
