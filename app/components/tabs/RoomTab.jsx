@@ -155,8 +155,8 @@ export function PostDetailOverlay({ feed, postId, onSendChat, onToggleLike, onUp
             <div className="mb-2">
               <textarea className="w-full text-sm border border-slate-200 rounded-xl p-2.5 resize-none focus:outline-none" rows={3} value={editText} onChange={(e) => setEditText(e.target.value)} />
               <div className="flex justify-end gap-2 mt-1.5">
-                <button onClick={() => setEditing(false)} className="text-xs font-bold text-slate-400 px-2.5 py-1.5">취소</button>
                 <button onClick={saveEdit} className="text-xs font-bold text-white bg-blue-700 rounded-full px-3.5 py-1.5">저장</button>
+                <button onClick={() => setEditing(false)} className="text-xs font-bold text-slate-400 px-2.5 py-1.5">취소</button>
               </div>
             </div>
           ) : (
@@ -320,8 +320,8 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
         <div className="mb-2">
           <textarea className="w-full text-sm border border-slate-200 rounded-xl p-2.5 resize-none focus:outline-none" rows={3} value={editText} onChange={(e) => setEditText(e.target.value)} />
           <div className="flex justify-end gap-2 mt-1.5">
-            <button onClick={() => setEditingId(null)} className="text-xs font-bold text-slate-400 px-2.5 py-1.5">취소</button>
             <button onClick={saveEdit} className="text-xs font-bold text-white bg-blue-700 rounded-full px-3.5 py-1.5">저장</button>
+            <button onClick={() => setEditingId(null)} className="text-xs font-bold text-slate-400 px-2.5 py-1.5">취소</button>
           </div>
         </div>
       );
@@ -498,10 +498,10 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
                   <Plus size={16} />
                 </button>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => { setComposing(false); setPostInput(""); setPendingPhotos([]); setPostIsNotice(false); }} className="text-xs font-bold text-slate-400 px-3 py-2">취소</button>
                   <button onClick={submitPost} disabled={(!postInput.trim() && pendingPhotos.length === 0) || uploading} className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-full px-4 py-2">
                     {uploading ? "업로드 중..." : "게시"}
                   </button>
+                  <button onClick={() => { setComposing(false); setPostInput(""); setPendingPhotos([]); setPostIsNotice(false); }} className="text-xs font-bold text-slate-400 px-3 py-2">취소</button>
                 </div>
               </div>
             </div>

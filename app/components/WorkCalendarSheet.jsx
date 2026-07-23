@@ -198,7 +198,6 @@ function LeaveCalendarTab({ schedules = [] }) {
               </p>
             )}
             <div className="flex gap-1.5">
-              <button onClick={() => setApplying(false)} className="flex-1 text-xs font-bold text-slate-500 bg-slate-100 py-2.5 rounded-lg">취소</button>
               <button
                 onClick={submitLeave}
                 disabled={busy || dutyConflicts.length > 0}
@@ -206,6 +205,7 @@ function LeaveCalendarTab({ schedules = [] }) {
               >
                 {busy ? "신청 중…" : dutyConflicts.length ? "근무일 포함" : `${reqDays}일 신청`}
               </button>
+              <button onClick={() => setApplying(false)} className="flex-1 text-xs font-bold text-slate-500 bg-slate-100 py-2.5 rounded-lg">취소</button>
             </div>
           </div>
         )}
