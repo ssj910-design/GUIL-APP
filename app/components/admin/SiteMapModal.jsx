@@ -8,6 +8,12 @@ import { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import { Modal } from "@/app/components/admin/adminShared";
 
+// 주소에서 "구/군"만 추출 — 예: "서울특별시 강남구 학동로 120" -> "강남구".
+function guOf(address) {
+  const m = (address ?? "").trim().match(/^\S+\s+(\S+?[구군])(\s|$)/);
+  return m ? m[1] : null;
+}
+
 // 담당자 이름을 해시로 돌려 고유한 색을 뽑는다 — 사람 수가 늘어도 팔레트를 따로 관리할 필요가 없다.
 function colorForEngineer(name) {
   if (!name) return "#94a3b8"; // 미배정 = 회색
@@ -52,6 +58,7 @@ export function SiteMapModal({ sites, units = [], onClose }) {
       withCoords.forEach((s) => {
         const siteUnits = units.filter((u) => u.siteId === s.id && u.isActive !== false);
         const kinds = [...new Set(siteUnits.map((u) => u.unitType).filter(Boolean))].join(", ") || "-";
+        const models = [...new Set(siteUnits.map((u) => u.model).filter(Boolean))].join(", ") || "-";
         const color = colorForEngineer(s.assignedEngineer);
         L.marker([s.lat, s.lng], { icon: pinIcon(L, color) })
           .addTo(map)
@@ -59,11 +66,34 @@ export function SiteMapModal({ sites, units = [], onClose }) {
             `<div style="font-size:12px;line-height:1.7;min-width:170px">
               <div style="font-weight:700;font-size:13px;margin-bottom:2px">${s.name}</div>
               <div>${s.address || "-"}</div>
-              <div>기종: ${kinds}</div>
-              <div>댓수: ${siteUnits.length}대</div>
+              <div>종류: ${kinds}</div>
+              <div>모델: ${models}</div>
+              <div>대수: ${siteUnits.length}대</div>
               <div>담당자: ${s.assignedEngineer || "미배정"}</div>
             </div>`
           );
+      });
+
+      // 구/군 이름표 — 해당 구에 속한 현장들의 중심 좌표에 텍스트만 표시 (클릭 불가, 마커 뒤에 깔림).
+      const guGroups = new Map();
+      withCoords.forEach((s) => {
+        const gu = guOf(s.address);
+        if (!gu) return;
+        if (!guGroups.has(gu)) guGroups.set(gu, []);
+        guGroups.get(gu).push(s);
+      });
+      guGroups.forEach((guSites, gu) => {
+        const lat = guSites.reduce((sum, s) => sum + s.lat, 0) / guSites.length;
+        const lng = guSites.reduce((sum, s) => sum + s.lng, 0) / guSites.length;
+        L.marker([lat, lng], {
+          icon: L.divIcon({
+            className: "",
+            html: `<div style="font-size:13px;font-weight:800;color:#334155;white-space:nowrap;pointer-events:none;text-shadow:0 1px 3px #fff,0 -1px 3px #fff,1px 0 3px #fff,-1px 0 3px #fff">${gu}</div>`,
+            iconSize: [0, 0],
+          }),
+          interactive: false,
+          zIndexOffset: -1000,
+        }).addTo(map);
       });
 
       if (withCoords.length > 0) {
@@ -87,6 +117,14 @@ export function SiteMapModal({ sites, units = [], onClose }) {
   const withCoordsCount = sites.filter((s) => s.lat != null && s.lng != null).length;
   const engineerNames = [...new Set(sites.map((s) => s.assignedEngineer).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko"));
 
+  // 담당자별 관리 대수 — 배정 현장의 활성 호기 수를 합산.
+  const unitCountByEngineer = new Map();
+  sites.forEach((s) => {
+    const key = s.assignedEngineer || null;
+    const cnt = units.filter((u) => u.siteId === s.id && u.isActive !== false).length;
+    unitCountByEngineer.set(key, (unitCountByEngineer.get(key) ?? 0) + cnt);
+  });
+
   return (
     <Modal title={`현장 지도 (담당자별 색상 · ${withCoordsCount}곳)`} onClose={onClose} wide="xl">
       <div className="relative w-full h-[65vh] rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
@@ -97,12 +135,12 @@ export function SiteMapModal({ sites, units = [], onClose }) {
         {engineerNames.map((name) => (
           <span key={name} className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-200 rounded-full px-2.5 py-1">
             <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colorForEngineer(name) }} />
-            {name}
+            {name} ({unitCountByEngineer.get(name) ?? 0}대)
           </span>
         ))}
         <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-200 rounded-full px-2.5 py-1">
           <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colorForEngineer(null) }} />
-          미배정
+          미배정 ({unitCountByEngineer.get(null) ?? 0}대)
         </span>
       </div>
     </Modal>
