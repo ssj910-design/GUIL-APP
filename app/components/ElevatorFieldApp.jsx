@@ -89,9 +89,7 @@ export default function App() {
   const engineerNames = engineers.map((e) => e.name);
 
   const [tab, setTab] = useState("home");
-  const [focusSiteId, setFocusSiteId] = useState(null);
   const [failureFocusTab, setFailureFocusTab] = useState(null); // 고장접수 탭 진입 시 열 서브탭 (홈 "모두 보기" 등)
-  const [focusUnit, setFocusUnit] = useState(null);
   const [sites, setSites] = useState([]);
   const [units, setUnits] = useState([]); // v2: 호기 목록 (마이그레이션 전 DB에서는 빈 배열)
   const [profilesAll, setProfilesAll] = useState([]); // v2: 전 직원 프로필 (이름→id 매핑용)
@@ -126,6 +124,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [feedReadAt, setFeedReadAt] = useState(null); // 이번 세션에서 우리방을 마지막으로 읽은 시각
   const [notifOpen, setNotifOpen] = useState(false); // 우측상단 알림(종) 드롭다운
+  const notifRef = useRef(null);
   const [openFailureId, setOpenFailureId] = useState(null); // 알림에서 특정 고장 건을 눌러 상세를 바로 연다 (탭 이동 없이 현재 화면 위에 띄움)
   const [openTodoId, setOpenTodoId] = useState(null); // 알림에서 특정 할일을 눌러 상세를 바로 연다
   const [openFeedPostId, setOpenFeedPostId] = useState(null); // 알림에서 특정 게시글을 눌러 그 글만 팝업으로 연다 (게시판 전체를 열어 안읽음을 한번에 지우지 않도록)
@@ -138,6 +137,22 @@ export default function App() {
     setForceAuth(new URLSearchParams(window.location.search).has("auth"));
   }, []);
   const skipLogin = SKIP_LOGIN && !forceAuth;
+
+  // 알림 드롭다운 바깥을 누르면 닫는다 — 예전엔 화면 전체를 덮는 배경막을 썼는데,
+  // 그 배경막이 뒤쪽 화면의 스크롤 제스처까지 가로막아서 알림이 열려있는 동안
+  // 기존 화면을 스크롤할 수 없었다. 배경막 없이 바깥 클릭만 감지하면 뒤쪽 스크롤이 그대로 된다.
+  useEffect(() => {
+    if (!notifOpen) return;
+    const handleOutside = (e) => {
+      if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("touchstart", handleOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("touchstart", handleOutside);
+    };
+  }, [notifOpen]);
 
   // 로그인 상태를 확인하고, 로그인/로그아웃이 일어날 때마다 알림을 받습니다.
   useEffect(() => {
@@ -871,9 +886,6 @@ export default function App() {
     }
     simulateSms(failure.reporterPhone, `구일엘리베이터입니다. 담당 기사가 약 ${etaMinutes}분 후 도착 예정입니다.`);
     notifyFailure(`문자 발송 완료 · ${failure.reporterPhone || "신고자"}에게 도착예정시간 안내`);
-    setFocusSiteId(failure.siteId);
-    setFocusUnit(failure.elevatorNo || null);
-    setTab("sites");
   }
 
   // 도착 = 원터치. 버튼을 누른 그 순간을 도착 시각으로 기록한다.
@@ -1569,6 +1581,7 @@ export default function App() {
                 <button onClick={() => setMyPageOpen(true)} className="p-1.5 bg-blue-900 rounded-full" aria-label="마이페이지">
                   <UserRound size={16} />
                 </button>
+                <div ref={notifRef} className="relative">
                 <button onClick={() => setNotifOpen((v) => !v)} className="relative p-1.5 bg-blue-900 rounded-full" aria-label="알림">
                   <Bell size={16} />
                   {totalNotifCnt > 0 && (
@@ -1578,8 +1591,6 @@ export default function App() {
                   )}
                 </button>
                 {notifOpen && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={() => setNotifOpen(false)} />
                     <div className="absolute right-0 top-10 z-40 w-72 max-h-96 overflow-y-auto bg-white rounded-2xl shadow-2xl border border-slate-200">
                       <div className="px-4 py-3 border-b border-slate-100">
                         <p className="text-sm font-bold text-slate-800">알림</p>
@@ -1696,8 +1707,8 @@ export default function App() {
                         </>
                       )}
                     </div>
-                  </>
                 )}
+                </div>
               </div>
             }
           />
@@ -1736,7 +1747,7 @@ export default function App() {
               toast={failureToast}
             />
           )}
-          {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} siteManagers={siteManagers} onUpdateSiteNotes={handleUpdateSiteNotes} focusSiteId={focusSiteId} focusUnit={focusUnit} onFocusSiteHandled={() => { setFocusSiteId(null); setFocusUnit(null); }} />}
+          {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} siteManagers={siteManagers} onUpdateSiteNotes={handleUpdateSiteNotes} />}
           {tab === "failure" && (
             <FailureTab
               onReported={handleFailureReported}
