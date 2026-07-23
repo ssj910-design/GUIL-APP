@@ -253,7 +253,7 @@ function LedgerModal({ p, restockRequests, onClose, onSaveFile, onSaveItems }) {
   }
 
   return (
-    <Modal title={`${p.name} 지급대장`} onClose={onClose}>
+    <Modal title={`${p.name} 지급대장`} onClose={onClose} wide>
       <div className="mb-4">
         <p className="text-xs font-bold text-slate-500 mb-2">상비부품 지급내역 ({autoItems.length}건)</p>
         {autoItems.length === 0 ? (
@@ -290,13 +290,21 @@ function LedgerModal({ p, restockRequests, onClose, onSaveFile, onSaveItems }) {
             ))}
           </div>
         )}
-        <div className="flex gap-1.5">
-          <input className={`${inputCls} flex-1`} placeholder="품목 (예: 업무용 콘솔 1대)" value={newItem.label} onChange={(e) => setNewItem({ ...newItem, label: e.target.value })} />
-          <input type="date" className={`${inputCls} w-36`} value={newItem.date} onChange={(e) => setNewItem({ ...newItem, date: e.target.value })} />
-          <button onClick={addManualItem} disabled={!newItem.label.trim()}
-            className="shrink-0 text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-3">
-            추가
-          </button>
+        <div className="space-y-1.5">
+          <textarea
+            className={`${inputCls} min-h-20 resize-y`}
+            placeholder="품목 (예: 업무용 콘솔 1대 — 여러 개면 줄바꿈이나 쉼표로 구분해서 적고, 따로따로 관리하려면 추가를 여러 번 눌러주세요)"
+            value={newItem.label}
+            onChange={(e) => setNewItem({ ...newItem, label: e.target.value })}
+          />
+          <div className="flex gap-1.5">
+            <input type="date" className={`${inputCls} w-36`} value={newItem.date} onChange={(e) => setNewItem({ ...newItem, date: e.target.value })} />
+            <input className={`${inputCls} flex-1`} placeholder="비고" value={newItem.note} onChange={(e) => setNewItem({ ...newItem, note: e.target.value })} />
+            <button onClick={addManualItem} disabled={!newItem.label.trim()}
+              className="shrink-0 text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-4">
+              추가
+            </button>
+          </div>
         </div>
       </div>
 
