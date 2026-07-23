@@ -1736,6 +1736,7 @@ export default function App() {
               onReassignTodo={handleReassignTodo}
               onUpdateTodoDescription={handleUpdateTodoDescription}
               onAssignTodo={handleAssignTodo}
+              onAdminToggle={handleAdminToggleTodo}
               materialRequests={materialRequests}
               quoteRequests={quoteRequests}
             />

@@ -58,19 +58,31 @@ export function getTodoSiteAddress(todo, materialRequests, quoteRequests, sites)
 
 function TodoCheckbox({ done, locked, onClick }) {
   if (done) {
-    return <CheckCircle2 size={20} className="text-emerald-500 shrink-0" />;
+    if (!onClick) return <CheckCircle2 size={20} className="text-emerald-500 shrink-0" />;
+    return (
+      <button type="button" onClick={onClick} className="shrink-0">
+        <CheckCircle2 size={20} className="text-emerald-500" />
+      </button>
+    );
   }
   if (locked) {
+    if (!onClick) {
+      return (
+        <div className="w-5 h-5 rounded-full border-2 border-slate-200 flex items-center justify-center shrink-0 text-slate-300">
+          <Lock size={10} />
+        </div>
+      );
+    }
     return (
-      <div className="w-5 h-5 rounded-full border-2 border-slate-200 flex items-center justify-center shrink-0 text-slate-300">
+      <button type="button" onClick={onClick} className="w-5 h-5 rounded-full border-2 border-slate-200 flex items-center justify-center shrink-0 text-slate-300">
         <Lock size={10} />
-      </div>
+      </button>
     );
   }
   return <button type="button" onClick={onClick} className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />;
 }
 
-export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescription, onAssignTodo, materialRequests, quoteRequests }) {
+export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescription, onAssignTodo, onAdminToggle, materialRequests, quoteRequests }) {
   const { name: CURRENT_ENGINEER, engineerNames, role } = useContext(AuthContext);
   const sites = useContext(SitesContext);
   const [showDone, setShowDone] = useState(false);
@@ -141,7 +153,17 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
           return (
             <div key={t.id} className="flex items-start gap-2.5 py-3">
               <div className="pt-0.5">
-                <TodoCheckbox done={t.done} locked={!isManual} onClick={() => confirmToggle(false) && completeManualTodo(t.id)} />
+                <TodoCheckbox
+                  done={t.done}
+                  locked={!isManual && role !== "admin"}
+                  onClick={
+                    role === "admin"
+                      ? () => confirmToggle(t.done) && onAdminToggle(t.id)
+                      : isManual
+                        ? () => confirmToggle(false) && completeManualTodo(t.id)
+                        : undefined
+                  }
+                />
               </div>
               <button type="button" onClick={() => setDetailTarget(t)} className="flex-1 min-w-0 text-left">
                 <div className="flex items-center gap-1.5">
@@ -171,7 +193,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
           coAssignees={getCoAssignees(detailTodo, todos)}
           supplyPhotoUrls={getSupplyPhotos(detailTodo, materialRequests, quoteRequests)}
           siteAddress={getTodoSiteAddress(detailTodo, materialRequests, quoteRequests, sites)}
-          onToggle={detailTodo.source === "manual" && !detailTodo.done ? completeManualTodo : null}
+          onToggle={role === "admin" ? onAdminToggle : detailTodo.source === "manual" && !detailTodo.done ? completeManualTodo : null}
           onReassign={onReassignTodo}
           engineerNames={engineerNames}
           onUpdateDescription={role === "admin" ? onUpdateTodoDescription : null}
