@@ -31,14 +31,15 @@ function DueSoonCard({ insp, address, govElevatorNo, onOpenFail, site }) {
         <div className="flex items-center justify-between gap-2 mb-1">
           <p className="font-bold text-slate-800 text-[15px] truncate min-w-0">{insp.siteName} · {insp.elevatorNo}</p>
           <span className="shrink-0 flex items-center gap-1.5">
-            <span className="text-[11px] font-bold text-slate-500">{insp.type}</span>
             <span className="text-xs font-extrabold text-blue-700 whitespace-nowrap">
               {insp.dueDate ? formatMonthDay(insp.dueDate) : "-"}{insp.dueTime ? ` ${insp.dueTime}` : ""}
             </span>
             <DDay dueDate={insp.dueDate} />
           </span>
         </div>
-        <p className="text-[12px] text-slate-400 truncate mb-2">{address}</p>
+        <p className="text-[12px] text-slate-400 truncate mb-2">
+          <span className="font-medium text-slate-500">{insp.type}</span>{address ? ` · ${address}` : ""}
+        </p>
         <div className="flex items-center gap-2">
           {site && <MapLinkButtons site={site} />}
           {latest && (
@@ -161,15 +162,16 @@ export function InspectionTab({ inspections }) {
                 className={`bg-white rounded-xl border border-slate-200 border-l-4 ${bar} overflow-hidden touch-manipulation ${isLive ? "active:bg-slate-50 cursor-pointer" : ""}`}
               >
                 <div className="p-3.5">
+                  {/* 우측엔 결과 배지 1개만 — 정기검사는 아래 주소 앞으로 빼서 우측 혼잡 해소 */}
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <p className="font-bold text-slate-800 text-[15px] truncate min-w-0">{insp.siteName} · {insp.elevatorNo}</p>
-                    <span className="shrink-0 flex items-center gap-1.5">
-                      <span className="text-[11px] font-bold text-slate-500">{insp.type}</span>
-                      <Badge result={insp.result} />
-                    </span>
+                    <Badge result={insp.result} />
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-[12px] text-slate-400 truncate min-w-0">{stripCityPrefix(siteById.get(insp.siteId)?.address)}</p>
+                    <p className="text-[12px] text-slate-400 truncate min-w-0">
+                      <span className="font-medium text-slate-500">{insp.type}</span>
+                      {stripCityPrefix(siteById.get(insp.siteId)?.address) ? ` · ${stripCityPrefix(siteById.get(insp.siteId)?.address)}` : ""}
+                    </p>
                     <span className="shrink-0 flex items-center gap-1.5">
                       {insp.dueDate && <span className="text-xs font-extrabold text-blue-700 whitespace-nowrap">{formatMonthDay(insp.dueDate)}</span>}
                       <DDay dueDate={insp.dueDate} />
