@@ -356,25 +356,31 @@ export default function TodosAdmin({ data, setData }) {
     <div className="max-w-6xl">
       <h1 className="text-xl font-extrabold mb-4">할 일 관리</h1>
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
-          <FilterPills
-            value={view}
-            onChange={setView}
-            options={[
-              { value: "open", label: "미완료", count: todos.filter((t) => !t.done).length },
-              { value: "all", label: "전체", count: todos.length },
-            ]}
-          />
-          <FilterPills
-            value={sourceFilter}
-            onChange={setSourceFilter}
-            options={[
-              { value: "all", label: "전체", count: viewFiltered.length },
-              { value: "material", label: "자재", count: viewFiltered.filter((t) => t.source === "material").length },
-              { value: "quote", label: "견적", count: viewFiltered.filter((t) => t.source === "quote").length },
-              { value: "manual", label: "수동", count: viewFiltered.filter((t) => t.source === "manual").length },
-            ]}
-          />
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-400">상태</span>
+            <FilterPills
+              value={view}
+              onChange={setView}
+              options={[
+                { value: "open", label: "미완료", count: todos.filter((t) => !t.done).length },
+                { value: "all", label: "전체", count: todos.length },
+              ]}
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-400">구분</span>
+            <FilterPills
+              value={sourceFilter}
+              onChange={setSourceFilter}
+              options={[
+                { value: "all", label: "전체", count: viewFiltered.length },
+                { value: "material", label: "자재", count: viewFiltered.filter((t) => t.source === "material").length },
+                { value: "quote", label: "견적", count: viewFiltered.filter((t) => t.source === "quote").length },
+                { value: "manual", label: "수동", count: viewFiltered.filter((t) => t.source === "manual").length },
+              ]}
+            />
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">

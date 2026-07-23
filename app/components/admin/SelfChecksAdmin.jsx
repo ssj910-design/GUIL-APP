@@ -106,24 +106,27 @@ function EngineerDetailModal({ name, rows, onClose }) {
   return (
     <>
       <Modal title={`${name} · 담당 현장 (${rows.length}건)`} onClose={onClose} wide="xl">
-        <div className="relative mb-3 max-w-72">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input className={`${inputCls} pl-8`} placeholder="현장명·주소로 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+        {/* 검색으로 행 수가 줄어도 팝업 크기가 흔들리지 않도록 높이를 고정한다 */}
+        <div className="min-h-[65vh]">
+          <div className="relative mb-3 max-w-72">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input className={`${inputCls} pl-8`} placeholder="현장명·주소로 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <AdminTable head={["현장 · 호기", "주소", "점검완료일", "공단 제출일자", "공단 제출"]}>
+            {sorted.map((r) => (
+              <tr key={r.id} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setLogRow(r)}>
+                <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">
+                  {r.loc}
+                  {r.notes && <span className="ml-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">특이사항</span>}
+                </td>
+                <td className="px-3 py-2.5 text-slate-500">{r.address ?? "-"}</td>
+                <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(r.doneDate)}</td>
+                <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{r.govSubmittedAt ? shortDate(r.govSubmittedAt.slice(0, 10)) : "-"}</td>
+                <td className="px-3 py-2.5"><GovBadge code={r.govResultCode} msg={r.govResultMsg} /></td>
+              </tr>
+            ))}
+          </AdminTable>
         </div>
-        <AdminTable head={["현장 · 호기", "주소", "점검완료일", "공단 제출일자", "공단 제출"]}>
-          {sorted.map((r) => (
-            <tr key={r.id} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setLogRow(r)}>
-              <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">
-                {r.loc}
-                {r.notes && <span className="ml-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">특이사항</span>}
-              </td>
-              <td className="px-3 py-2.5 text-slate-500">{r.address ?? "-"}</td>
-              <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(r.doneDate)}</td>
-              <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{r.govSubmittedAt ? shortDate(r.govSubmittedAt.slice(0, 10)) : "-"}</td>
-              <td className="px-3 py-2.5"><GovBadge code={r.govResultCode} msg={r.govResultMsg} /></td>
-            </tr>
-          ))}
-        </AdminTable>
       </Modal>
       {logRow && <SelfCheckLogModal c={logRow} onClose={() => setLogRow(null)} />}
     </>
