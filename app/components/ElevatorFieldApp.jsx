@@ -368,47 +368,6 @@ export default function App() {
   }
 
   // ---------- 당직·숙직 근무표 ----------
-  // 자동 배정: 기사 순번(profiles.duty_order)을 하루 2칸(숙직→당직)씩 끊어 순환한다.
-  // 직전 배정이 있으면 그 순번 다음부터 이어받아 달이 바뀌어도 순환이 끊기지 않는다.
-  async function handleGenerateDuty(ym, mode = "주5일") {
-    // 선택한 근무제(주5일·주4일)에 속하면서 순번이 있는 사람만 순환에 넣는다 — 인사관리에서 관리
-    const roster = engineers
-      .filter((e) => e.duty_order != null && (e.duty_modes ?? []).includes(mode))
-      .sort((a, b) => a.duty_order - b.duty_order);
-    if (!roster.length) { alert(`${mode} 근무제 대상자가 없습니다. 관리자 콘솔 → 인사관리에서 순번과 근무제를 지정하세요.`); return; }
-    const [y, m] = ym.split("-").map(Number);
-    const days = new Date(y, m, 0).getDate();
-    const first = `${ym}-01`;
-
-    // 이 달 직전에 배정된 마지막 칸의 순번 위치를 찾아 이어붙인다.
-    const { data: prevRows } = await supabase
-      .from("duty_schedules").select("*").lt("duty_date", first)
-      .order("duty_date", { ascending: false }).order("kind").limit(1);
-    const prevPid = prevRows?.[0]?.profile_id;
-    let cursor = prevPid ? roster.findIndex((e) => e.id === prevPid) : -1;
-    const next = () => { cursor = (cursor + 1) % roster.length; return roster[cursor].id; };
-
-    const existing = new Set(dutySchedules.filter((d) => d.dutyDate.startsWith(ym)).map((d) => `${d.dutyDate}|${d.kind}`));
-    const rows = [];
-    for (let d = 1; d <= days; d++) {
-      const iso = `${ym}-${String(d).padStart(2, "0")}`;
-      for (const kind of ["숙직", "당직"]) {
-        const pid = next(); // 빈 칸만 채우더라도 순번은 계속 돌려 배열을 유지한다
-        if (existing.has(`${iso}|${kind}`)) continue;
-        rows.push({ duty_date: iso, kind, profile_id: pid });
-      }
-      // 주4일 근무제는 금요일에 정상근무 칸을 하나 더 만든다. 순번 순환과 무관한 자리라
-      // 담당자는 비워두고 관리자가 달력에서 지정한다 (실제 표에서도 순번 없는 직원이 들어감).
-      if (mode === "주4일" && new Date(`${iso}T00:00:00`).getDay() === 5 && !existing.has(`${iso}|정상근무`)) {
-        rows.push({ duty_date: iso, kind: "정상근무", profile_id: null });
-      }
-    }
-    if (!rows.length) return;
-    const { data } = await supabase.from("duty_schedules").upsert(rows, { onConflict: "duty_date,kind" }).select();
-    const mapped = (data ?? []).map(mapDutySchedule);
-    setDutySchedules((prev) => [...prev.filter((p) => !mapped.some((n) => n.id === p.id)), ...mapped].sort((a, b) => a.dutyDate.localeCompare(b.dutyDate)));
-  }
-
   async function handleSetDutyPerson(iso, kind, profileId) {
     const { data } = await supabase
       .from("duty_schedules").upsert({ duty_date: iso, kind, profile_id: profileId }, { onConflict: "duty_date,kind" }).select();
@@ -1792,7 +1751,6 @@ export default function App() {
             <WorkCalendarSheet
               schedules={dutySchedules}
               swaps={dutySwaps}
-              onGenerate={handleGenerateDuty}
               onSetPerson={handleSetDutyPerson}
               onRequestSwap={handleRequestDutySwap}
               onRespondSwap={handleRespondDutySwap}

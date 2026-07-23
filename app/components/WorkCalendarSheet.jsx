@@ -301,7 +301,7 @@ function LeaveCalendarTab({ schedules = [] }) {
 
 // 다른 탭(고장접수 등)과 동일한 구조 — 상단 제목은 앱 셸의 공용 ScreenHeader가 맡고,
 // 여기서는 서브탭 바 + 내용만 그린다. 하단 네비게이터도 그대로 보이는 일반 탭이다.
-export function WorkCalendarSheet({ schedules, swaps, onGenerate, onSetPerson, onRequestSwap, onRespondSwap }) {
+export function WorkCalendarSheet({ schedules, swaps, onSetPerson, onRequestSwap, onRespondSwap }) {
   const [subTab, setSubTab] = useState("당직·숙직");
   const subTabs = ["당직·숙직", "연차"];
 
@@ -324,7 +324,6 @@ export function WorkCalendarSheet({ schedules, swaps, onGenerate, onSetPerson, o
           <DutyRoster
             schedules={schedules}
             swaps={swaps}
-            onGenerate={onGenerate}
             onSetPerson={onSetPerson}
             onRequestSwap={onRequestSwap}
             onRespondSwap={onRespondSwap}

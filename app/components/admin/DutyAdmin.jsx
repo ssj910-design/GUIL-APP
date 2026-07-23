@@ -439,12 +439,10 @@ export default function DutyAdmin({ data, setData }) {
           embedded
           schedules={schedules}
           swaps={swaps}
-          onGenerate={generate}
           onSetPerson={setPerson}
           onRequestSwap={() => {}}
           onRespondSwap={() => {}}
           belowCalendar={generateWidget}
-          showFillButton={false}
         />
       </div>
     </AuthContext.Provider>
