@@ -1,12 +1,11 @@
 import { useState, useContext } from "react";
-import { ShieldCheck, Package, Receipt, ListTodo, ChevronRight, Users, FileText, PackageCheck, RotateCcw, PackageX, Building2, Search } from "lucide-react";
+import { Package, Receipt, ChevronRight, FileText, PackageCheck, RotateCcw, PackageX, Search } from "lucide-react";
 import { Badge, PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
-import { SitesContext, AuthContext } from "@/app/components/context";
+import { AuthContext } from "@/app/components/context";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
 import { parsePartQty, formatPhone, addDays } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { BillingHistoryScreen } from "@/app/components/tabs/BillingTab";
-import { TodoManageScreen } from "@/app/components/tabs/TodoTab";
 
 
 function AdminMenuRow({ icon: Icon, label, badge, onClick }) {
@@ -23,247 +22,6 @@ function AdminMenuRow({ icon: Icon, label, badge, onClick }) {
         <ChevronRight size={16} className="text-slate-300" />
       </div>
     </button>
-  );
-}
-
-
-const emptySiteForm = {
-  name: "", siteCode: "", elevatorNo: "", region: "", address: "",
-  contractType: "", phone: "", elevatorModel: "", unitCount: "1",
-  manager: "", managerPhone: "", assignedEngineer: "", govElevatorNos: [""],
-};
-
-
-function ManagerRow({ manager, onSave, onDelete }) {
-  const [draft, setDraft] = useState({ name: manager.name ?? "", phone: manager.phone ?? "", email: manager.email ?? "", fax: manager.fax ?? "" });
-  return (
-    <div className="border border-slate-200 rounded-lg p-3 mb-2.5 space-y-2">
-      <input className={inputCls} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="담당자 이름" />
-      <input className={inputCls} value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: formatPhone(e.target.value) })} placeholder="전화번호" />
-      <input className={inputCls} value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="메일주소" />
-      <input className={inputCls} value={draft.fax} onChange={(e) => setDraft({ ...draft, fax: formatPhone(e.target.value) })} placeholder="FAX" />
-      <div className="flex gap-2">
-        <button type="button" onClick={() => onSave(draft)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2 rounded-lg active:bg-blue-800">저장</button>
-        <button type="button" onClick={onDelete} className="flex-1 bg-red-50 text-red-600 text-xs font-bold py-2 rounded-lg active:bg-red-100">삭제</button>
-      </div>
-    </div>
-  );
-}
-
-
-function SiteEditorSheet({ initial, engineerNames, siteId, managers, onAddManager, onUpdateManager, onDeleteManager, onSave, onClose }) {
-  const [form, setForm] = useState(initial);
-  const canSave = form.name.trim().length > 0;
-  const unitN = Number(form.unitCount) || 1;
-
-  function setGovNo(idx, value) {
-    setForm((f) => {
-      const arr = [...(f.govElevatorNos ?? [])];
-      arr[idx] = value.replace(/[^0-9]/g, "");
-      return { ...f, govElevatorNos: arr };
-    });
-  }
-
-  return (
-    <Sheet title={initial === emptySiteForm ? "새 현장 등록" : "현장 정보 수정"} onClose={onClose}>
-      <Field label="현장명"><input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="예: 대박빌딩" /></Field>
-      <Field label="승강기 번호"><input className={inputCls} value={form.elevatorNo} onChange={(e) => setForm({ ...form, elevatorNo: e.target.value })} placeholder="예: 1호기" /></Field>
-      <Field label="대수"><input type="number" min={1} className={inputCls} value={form.unitCount} onChange={(e) => setForm({ ...form, unitCount: e.target.value })} /></Field>
-      <Field label="주소"><input className={inputCls} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
-      <Field label="계약구분">
-        <select
-          className={`${inputCls} ${form.contractType === "FM(종합계약)" ? "text-red-600 font-bold" : ""}`}
-          value={form.contractType}
-          onChange={(e) => setForm({ ...form, contractType: e.target.value })}
-        >
-          <option value="">선택해주세요</option>
-          <option value="POG(일반계약)">POG(일반계약)</option>
-          <option value="FM(종합계약)">FM(종합계약)</option>
-        </select>
-      </Field>
-      <Field label="승강기 모델"><input className={inputCls} value={form.elevatorModel} onChange={(e) => setForm({ ...form, elevatorModel: e.target.value })} /></Field>
-      <Field label="승강기고유번호 (국가승강기정보센터, 호기별)">
-        <div className="space-y-2">
-          {Array.from({ length: unitN }, (_, i) => (
-            <input
-              key={i}
-              className={inputCls}
-              value={(form.govElevatorNos ?? [])[i] ?? ""}
-              onChange={(e) => setGovNo(i, e.target.value)}
-              placeholder={`${i + 1}호기 고유번호 (예: 0075681)`}
-            />
-          ))}
-        </div>
-      </Field>
-      <Field label="담당 기사 배정">
-        <select className={inputCls} value={form.assignedEngineer} onChange={(e) => setForm({ ...form, assignedEngineer: e.target.value })}>
-          <option value="">미배정</option>
-          {engineerNames.map((e) => <option key={e} value={e}>{e}</option>)}
-        </select>
-      </Field>
-      <PrimaryButton onClick={() => onSave(form)} disabled={!canSave}>저장</PrimaryButton>
-
-      {siteId && (
-        <div className="mt-6 pt-5 border-t border-slate-100">
-          <p className="text-xs font-bold text-slate-500 mb-2.5">담당자 관리 (여러 명 등록 가능)</p>
-          {managers.map((m) => (
-            <ManagerRow
-              key={m.id}
-              manager={m}
-              onSave={(draft) => onUpdateManager(m.id, draft)}
-              onDelete={() => onDeleteManager(m.id)}
-            />
-          ))}
-          <button
-            type="button"
-            onClick={() => onAddManager(siteId, { name: "", phone: "", email: "", fax: "" })}
-            className="w-full border-2 border-dashed border-slate-300 rounded-lg py-2.5 text-xs font-bold text-slate-500 active:bg-slate-50"
-          >
-            + 담당자 추가
-          </button>
-        </div>
-      )}
-    </Sheet>
-  );
-}
-
-
-function SiteManagementScreen({ sites, engineerNames, onAddSite, onUpdateSite, onDeleteSite, siteManagers, onAddSiteManager, onUpdateSiteManager, onDeleteSiteManager, onBack }) {
-  const [editingSite, setEditingSite] = useState(null); // null | "new" | site object
-  const [deleteTarget, setDeleteTarget] = useState(null);
-
-  function siteToForm(s) {
-    return {
-      name: s.name ?? "", siteCode: s.siteCode ?? "", elevatorNo: s.elevatorNo ?? "",
-      region: s.region ?? "", address: s.address ?? "", contractType: s.contractType ?? "",
-      phone: s.phone ?? "", elevatorModel: s.elevatorModel ?? "", unitCount: String(s.unitCount ?? 1),
-      manager: s.manager ?? "", managerPhone: s.managerPhone ?? "", assignedEngineer: s.assignedEngineer ?? "",
-      govElevatorNos: Array.from({ length: Number(s.unitCount) || 1 }, (_, i) => s.govElevatorNos?.[i] ?? ""),
-    };
-  }
-
-  async function handleSave(form) {
-    if (editingSite === "new") {
-      await onAddSite(form);
-    } else {
-      await onUpdateSite(editingSite.id, form);
-    }
-    setEditingSite(null);
-  }
-
-  return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-white">
-      <DrillHeader title="현장정보" onBack={onBack} onHome={onBack} />
-      <div className="flex-1 overflow-y-auto px-5 py-4">
-        <PrimaryButton onClick={() => setEditingSite("new")} className="mb-4">
-          + 새 현장 등록
-        </PrimaryButton>
-        <div className="space-y-2.5">
-          {sites.map((s) => (
-            <div key={s.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
-              <div className="flex items-center justify-between mb-1">
-                <p className="font-bold text-slate-800 text-sm">{s.name} · {s.elevatorNo}</p>
-                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">{s.region || "-"}</span>
-              </div>
-              <p className="text-[11px] text-slate-400 mb-2">{s.address || "주소 미등록"}</p>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-500">
-                  담당 기사: <span className="font-semibold text-slate-700">{s.assignedEngineer || "미배정"}</span>
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setEditingSite(s)}
-                    className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1.5 rounded-lg"
-                  >
-                    수정
-                  </button>
-                  <button
-                    onClick={() => setDeleteTarget(s)}
-                    className="text-[11px] font-bold text-red-600 bg-red-50 px-2.5 py-1.5 rounded-lg"
-                  >
-                    삭제
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-          {sites.length === 0 && <p className="text-xs text-slate-400 text-center py-10">등록된 현장이 없습니다</p>}
-        </div>
-      </div>
-
-      {editingSite && (
-        <SiteEditorSheet
-          initial={editingSite === "new" ? emptySiteForm : siteToForm(editingSite)}
-          engineerNames={engineerNames}
-          siteId={editingSite === "new" ? null : editingSite.id}
-          managers={editingSite === "new" ? [] : siteManagers.filter((m) => m.siteId === editingSite.id)}
-          onAddManager={onAddSiteManager}
-          onUpdateManager={onUpdateSiteManager}
-          onDeleteManager={onDeleteSiteManager}
-          onSave={handleSave}
-          onClose={() => setEditingSite(null)}
-        />
-      )}
-
-      {deleteTarget && (
-        <Sheet title="현장 삭제" onClose={() => setDeleteTarget(null)}>
-          <p className="text-sm text-slate-700 mb-1">
-            <span className="font-bold">{deleteTarget.name}</span> 현장을 삭제하시겠습니까?
-          </p>
-          <p className="text-[11px] text-slate-400 mb-4">
-            이 현장과 연결된 고장·검사·자재 이력은 남아있지만, 더 이상 이 현장을 참조하지 않게 됩니다.
-          </p>
-          <PrimaryButton
-            tone="red"
-            onClick={async () => {
-              await onDeleteSite(deleteTarget.id);
-              setDeleteTarget(null);
-            }}
-          >
-            삭제
-          </PrimaryButton>
-        </Sheet>
-      )}
-    </div>
-  );
-}
-
-
-function EngineerContactRow({ engineer, onSave }) {
-  const [draft, setDraft] = useState({ phone: engineer.phone ?? "", email: engineer.email ?? "" });
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-3.5 mb-2.5">
-      <p className="font-bold text-slate-800 text-sm mb-2">{engineer.name}</p>
-      <div className="space-y-2">
-        <input className={inputCls} value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: formatPhone(e.target.value) })} placeholder="전화번호" />
-        <input className={inputCls} value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="메일주소" />
-      </div>
-      <button
-        type="button"
-        onClick={() => onSave(draft)}
-        className="w-full mt-2.5 bg-blue-700 text-white text-xs font-bold py-2 rounded-lg active:bg-blue-800"
-      >
-        저장
-      </button>
-    </div>
-  );
-}
-
-
-function EngineerManageScreen({ engineers, onUpdateEngineerContact, onBack }) {
-  return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-white">
-      <DrillHeader title="기사관리" onBack={onBack} onHome={onBack} />
-      <div className="flex-1 overflow-y-auto px-5 py-4">
-        {engineers.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-10">등록된 기사 계정이 없습니다</p>
-        ) : (
-          engineers.map((e) => (
-            <EngineerContactRow key={e.id} engineer={e} onSave={(draft) => onUpdateEngineerContact(e.id, draft)} />
-          ))
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -1048,28 +806,6 @@ function QuoteRequestsScreen({ quoteRequests, todos, onAdvanceQuote, onAttachQuo
 }
 
 
-function InspectionMonitorScreen({ inspections, onBack }) {
-  return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-white">
-      <DrillHeader title="검사결과 및 합격증 모니터링" onBack={onBack} onHome={onBack} />
-      <div className="flex-1 overflow-y-auto px-5 py-4">
-        <div className="bg-white rounded-2xl border border-slate-200 p-4">
-          <div className="space-y-3">
-            {inspections.map((i) => (
-              <div key={i.id} className="flex items-center justify-between">
-                <span className="text-sm text-slate-600">{i.siteName} · {i.type}</span>
-                {i.result ? <Badge result={i.result} /> : <span className="text-[11px] text-slate-400">미등록</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-
 function RestockScreen({ restockRequests, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onBack }) {
   const pending = restockRequests.filter((r) => r.status === "대기");
   const done = restockRequests.filter((r) => r.status === "완료");
@@ -1131,61 +867,14 @@ function RestockScreen({ restockRequests, onAttachRestockPhoto, onRemoveRestockS
 }
 
 
-export function AdminTab({ inspections, materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAssignTodo, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAdminToggleTodo, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onUpdateTodoDescription, onUpdateTodoDueDate, onAddSite, onUpdateSite, onDeleteSite, siteManagers, onAddSiteManager, onUpdateSiteManager, onDeleteSiteManager, onUpdateEngineerContact }) {
-  const sites = useContext(SitesContext);
-  const { engineerNames, engineers } = useContext(AuthContext);
+export function AdminTab({ materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock }) {
   const [billingViewOpen, setBillingViewOpen] = useState(false);
-  const [todoViewOpen, setTodoViewOpen] = useState(false);
-  const [adminScreen, setAdminScreen] = useState(null); // null | "sites" | "materials" | "quotes" | "inspections" | "restock"
+  const [adminScreen, setAdminScreen] = useState(null); // null | "materials" | "quotes" | "restock"
   const pendingCount = materialRequests.filter((r) => r.status === "승인대기").length;
   const quoteActiveCount = quoteRequests.filter((q) => q.status !== "자재지급완료").length;
 
   if (billingViewOpen) {
     return <BillingHistoryScreen billings={billings} onBack={() => setBillingViewOpen(false)} />;
-  }
-
-  if (todoViewOpen) {
-    return (
-      <TodoManageScreen
-        todos={todos}
-        onToggle={onAdminToggleTodo}
-        onAssignTodo={onAssignTodo}
-        onReassignTodo={onReassignTodo}
-        onUpdateTodoDescription={onUpdateTodoDescription}
-        onUpdateTodoDueDate={onUpdateTodoDueDate}
-        materialRequests={materialRequests}
-        quoteRequests={quoteRequests}
-        engineerNames={engineerNames}
-        onBack={() => setTodoViewOpen(false)}
-      />
-    );
-  }
-
-  if (adminScreen === "sites") {
-    return (
-      <SiteManagementScreen
-        sites={sites}
-        engineerNames={engineerNames}
-        onAddSite={onAddSite}
-        onUpdateSite={onUpdateSite}
-        onDeleteSite={onDeleteSite}
-        siteManagers={siteManagers}
-        onAddSiteManager={onAddSiteManager}
-        onUpdateSiteManager={onUpdateSiteManager}
-        onDeleteSiteManager={onDeleteSiteManager}
-        onBack={() => setAdminScreen(null)}
-      />
-    );
-  }
-
-  if (adminScreen === "engineers") {
-    return (
-      <EngineerManageScreen
-        engineers={engineers}
-        onUpdateEngineerContact={onUpdateEngineerContact}
-        onBack={() => setAdminScreen(null)}
-      />
-    );
   }
 
   if (adminScreen === "materials") {
@@ -1218,10 +907,6 @@ export function AdminTab({ inspections, materialRequests, billings, quoteRequest
     );
   }
 
-  if (adminScreen === "inspections") {
-    return <InspectionMonitorScreen inspections={inspections} onBack={() => setAdminScreen(null)} />;
-  }
-
   if (adminScreen === "restock") {
     return (
       <RestockScreen
@@ -1238,14 +923,10 @@ export function AdminTab({ inspections, materialRequests, billings, quoteRequest
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto px-5 pt-4 pb-4">
         <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
-          <AdminMenuRow icon={Building2} label="현장정보" badge={sites.length} onClick={() => setAdminScreen("sites")} />
-          <AdminMenuRow icon={Users} label="기사관리" badge={engineers.length} onClick={() => setAdminScreen("engineers")} />
           <AdminMenuRow icon={PackageCheck} label="자재출하관리" badge={pendingCount} onClick={() => setAdminScreen("materials")} />
           <AdminMenuRow icon={Package} label="상비부품 보충" badge={restockRequests.filter((r) => r.status === "대기").length} onClick={() => setAdminScreen("restock")} />
           <AdminMenuRow icon={FileText} label="견적 요청 관리" badge={quoteActiveCount} onClick={() => setAdminScreen("quotes")} />
-          <AdminMenuRow icon={ListTodo} label="할 일 관리" badge={todos.filter((t) => !t.done).length} onClick={() => setTodoViewOpen(true)} />
           <AdminMenuRow icon={Receipt} label="비용청구 내역" badge={billings.length} onClick={() => setBillingViewOpen(true)} />
-          <AdminMenuRow icon={ShieldCheck} label="검사결과 및 합격증 모니터링" onClick={() => setAdminScreen("inspections")} />
         </div>
       </div>
     </div>

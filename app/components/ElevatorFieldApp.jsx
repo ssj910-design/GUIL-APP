@@ -553,168 +553,10 @@ export default function App() {
   // 마이그레이션 전 DB에 새 컬럼을 보내면 insert 전체가 실패하므로 반드시 이 가드를 통과해야 한다.
   const v2Ready = units.length > 0;
 
-  // ★ 관리자가 현장관리 메뉴에서 현장을 새로 등록
-  async function handleAddSite(form) {
-    const newSite = {
-      id: "site-" + Date.now(),
-      siteCode: form.siteCode,
-      name: form.name,
-      elevatorNo: form.elevatorNo,
-      address: form.address,
-      region: form.region,
-      contractType: form.contractType,
-      phone: form.phone,
-      elevatorModel: form.elevatorModel,
-      unitCount: Number(form.unitCount) || 1,
-      manager: form.manager,
-      managerPhone: form.managerPhone,
-      overdueLong: 0,
-      overdueTotal: 0,
-      failures30d: 0,
-      assignedEngineer: form.assignedEngineer || null,
-      notes: null,
-      govElevatorNos: (form.govElevatorNos ?? []).map((v) => v || null),
-    };
-    await supabase.from("sites").insert({
-      id: newSite.id,
-      site_code: newSite.siteCode || null,
-      name: newSite.name,
-      elevator_no: newSite.elevatorNo,
-      address: newSite.address,
-      region: newSite.region,
-      contract_type: newSite.contractType,
-      phone: newSite.phone,
-      elevator_model: newSite.elevatorModel,
-      unit_count: newSite.unitCount,
-      manager: newSite.manager,
-      manager_phone: newSite.managerPhone,
-      assigned_engineer: newSite.assignedEngineer,
-      gov_elevator_nos: newSite.govElevatorNos,
-    });
-    setSites((prev) => [...prev, newSite]);
-    // v2 듀얼라이트: 호기(units) 생성 + 담당기사 배정 (마이그레이션 전 DB에서는 조용히 무시됨)
-    const unitRows = Array.from({ length: newSite.unitCount }, (_, i) => ({
-      site_id: newSite.id,
-      seq: i + 1,
-      unit_no: `${i + 1}호기`,
-      model: newSite.elevatorModel || null,
-      gov_no: newSite.govElevatorNos[i] || null,
-    }));
-    const { data: createdUnits } = await supabase.from("units").insert(unitRows).select();
-    if (createdUnits) setUnits((prev) => [...prev, ...createdUnits.map(mapUnit)]);
-    const leadId = profileIdByName(profilesAll, newSite.assignedEngineer);
-    if (leadId) await supabase.from("site_assignments").insert({ site_id: newSite.id, tech_id: leadId, is_lead: true });
-  }
-
-  // ★ 관리자가 현장관리 메뉴에서 현장 정보(담당 기사 배정 포함)를 수정
-  async function handleUpdateSite(siteId, form) {
-    await supabase
-      .from("sites")
-      .update({
-        site_code: form.siteCode || null,
-        name: form.name,
-        elevator_no: form.elevatorNo,
-        address: form.address,
-        region: form.region,
-        contract_type: form.contractType,
-        phone: form.phone,
-        elevator_model: form.elevatorModel,
-        unit_count: Number(form.unitCount) || 1,
-        manager: form.manager,
-        manager_phone: form.managerPhone,
-        assigned_engineer: form.assignedEngineer || null,
-        gov_elevator_nos: (form.govElevatorNos ?? []).map((v) => v || null),
-      })
-      .eq("id", siteId);
-    setSites((prev) =>
-      prev.map((s) =>
-        s.id === siteId
-          ? {
-              ...s,
-              siteCode: form.siteCode,
-              name: form.name,
-              elevatorNo: form.elevatorNo,
-              address: form.address,
-              region: form.region,
-              contractType: form.contractType,
-              phone: form.phone,
-              elevatorModel: form.elevatorModel,
-              unitCount: Number(form.unitCount) || 1,
-              manager: form.manager,
-              managerPhone: form.managerPhone,
-              assignedEngineer: form.assignedEngineer || null,
-              govElevatorNos: (form.govElevatorNos ?? []).map((v) => v || null),
-            }
-          : s
-      )
-    );
-    // v2 듀얼라이트: units 동기화 — 없는 호기 생성, gov_no 갱신, 초과분 비활성.
-    // 호기별 모델은 여기서 덮어쓰지 않는다 (신규 생성 시에만 현장 공통 모델을 시드).
-    const count = Number(form.unitCount) || 1;
-    const govNos = (form.govElevatorNos ?? []).map((v) => v || null);
-    await supabase.from("units").upsert(
-      Array.from({ length: count }, (_, i) => ({
-        site_id: siteId, seq: i + 1, unit_no: `${i + 1}호기`,
-        model: form.elevatorModel || null, gov_no: govNos[i],
-      })),
-      { onConflict: "site_id,seq", ignoreDuplicates: true }
-    );
-    for (let i = 0; i < count; i++) {
-      await supabase.from("units").update({ gov_no: govNos[i], is_active: true }).eq("site_id", siteId).eq("seq", i + 1);
-    }
-    await supabase.from("units").update({ is_active: false }).eq("site_id", siteId).gt("seq", count);
-    const { data: freshUnits } = await supabase.from("units").select("*").eq("site_id", siteId).order("seq");
-    if (freshUnits) setUnits((prev) => [...prev.filter((u) => u.siteId !== siteId), ...freshUnits.map(mapUnit)]);
-    await supabase.from("site_assignments").delete().eq("site_id", siteId);
-    const leadId = profileIdByName(profilesAll, form.assignedEngineer);
-    if (leadId) await supabase.from("site_assignments").insert({ site_id: siteId, tech_id: leadId, is_lead: true });
-  }
-
-  // ★ 관리자가 현장관리 메뉴에서 현장을 삭제
-  async function handleDeleteSite(siteId) {
-    await supabase.from("sites").delete().eq("id", siteId);
-    setSites((prev) => prev.filter((s) => s.id !== siteId));
-  }
-
   // ★ 기사·관리자 누구나 현장정보의 "비고(전달사항)"을 수정
   async function handleUpdateSiteNotes(siteId, notes) {
     await supabase.from("sites").update({ notes }).eq("id", siteId);
     setSites((prev) => prev.map((s) => (s.id === siteId ? { ...s, notes } : s)));
-  }
-
-  // ★ 관리자가 현장구성에서 담당자(보수업체 담당자)를 추가
-  async function handleAddSiteManager(siteId, form) {
-    const newManager = { id: "sm-" + Date.now(), siteId, name: form.name, phone: form.phone, email: form.email, fax: form.fax };
-    await supabase.from("site_managers").insert({
-      id: newManager.id,
-      site_id: siteId,
-      name: newManager.name,
-      phone: newManager.phone,
-      email: newManager.email,
-      fax: newManager.fax,
-    });
-    setSiteManagers((prev) => [...prev, newManager]);
-  }
-
-  // ★ 관리자가 현장구성에서 담당자 정보를 수정
-  async function handleUpdateSiteManager(managerId, form) {
-    await supabase
-      .from("site_managers")
-      .update({ name: form.name, phone: form.phone, email: form.email, fax: form.fax })
-      .eq("id", managerId);
-    setSiteManagers((prev) => prev.map((m) => (m.id === managerId ? { ...m, ...form } : m)));
-  }
-
-  // ★ 관리자가 현장구성에서 담당자를 삭제
-  async function handleDeleteSiteManager(managerId) {
-    await supabase.from("site_managers").delete().eq("id", managerId);
-    setSiteManagers((prev) => prev.filter((m) => m.id !== managerId));
-  }
-
-  // ★ 관리자가 기사관리에서 기사 개인의 전화번호/메일주소를 입력
-  async function handleUpdateEngineerContact(engineerId, { phone, email }) {
-    await supabase.from("profiles").update({ phone, email }).eq("id", engineerId);
-    setEngineers((prev) => prev.map((e) => (e.id === engineerId ? { ...e, phone, email } : e)));
   }
 
   // ★ 고장 출동 응답/내가 출동하기 → ETA 확정 (홈, 고장접수 탭 공용)
@@ -1779,7 +1621,7 @@ export default function App() {
               onEngineersChange={setEngineers}
             />
           )}
-          {tab === "admin" && profile.role === "admin" && <AdminTab inspections={inspections} materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAssignTodo={handleAssignTodo} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAdminToggleTodo={handleAdminToggleTodo} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onUpdateTodoDescription={handleUpdateTodoDescription} onUpdateTodoDueDate={handleUpdateTodoDueDate} onAddSite={handleAddSite} onUpdateSite={handleUpdateSite} onDeleteSite={handleDeleteSite} siteManagers={siteManagers} onAddSiteManager={handleAddSiteManager} onUpdateSiteManager={handleUpdateSiteManager} onDeleteSiteManager={handleDeleteSiteManager} onUpdateEngineerContact={handleUpdateEngineerContact} />}
+          {tab === "admin" && profile.role === "admin" && <AdminTab materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} />}
           </PullToRefresh>
 
           {/* 우리방 플로팅 버튼 — 어느 탭에서든 즉시 게시판으로 이동 (우리방 탭에서는 숨김) */}
