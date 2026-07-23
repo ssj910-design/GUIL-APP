@@ -896,18 +896,21 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
               </button>
             </div>
             <div className="space-y-2">
-              {myRequests.map((r) => (
-                <div key={r.id} className={`bg-white rounded-xl border p-3 ${r.status === "반려" ? "border-red-200" : "border-slate-200"}`}>
+              {myRequests.map((r) => {
+                // 우리 리스트 디자인 — 상태별 왼쪽 색바(지급완료=초록/반려=빨강/승인대기=주황)
+                const bar = r.status === "지급완료" ? "border-l-emerald-500" : r.status === "반려" ? "border-l-red-500" : "border-l-amber-400";
+                return (
+                <div key={r.id} className={`bg-white rounded-xl border border-slate-200 border-l-4 ${bar} p-3.5`}>
                   <div className="flex items-center justify-between gap-2">
-                    <button type="button" onClick={() => setReqDetailTarget({ type: "material", data: r })} className="flex items-center gap-2 min-w-0 text-left">
+                    <button type="button" onClick={() => setReqDetailTarget({ type: "material", data: r })} className="flex items-center gap-2.5 min-w-0 text-left">
                       {r.photoUrls?.length > 0 ? (
-                        <img src={r.photoUrls[0]} alt="" className="w-11 h-11 rounded-lg object-cover border border-slate-200 shrink-0" />
+                        <img src={r.photoUrls[0]} alt="" className="w-12 h-12 rounded-lg object-cover border border-slate-200 shrink-0" />
                       ) : (
-                        <div className="w-11 h-11 rounded-lg bg-slate-100 border border-slate-200 shrink-0" />
+                        <div className="w-12 h-12 rounded-lg bg-slate-100 border border-slate-200 shrink-0" />
                       )}
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-700 truncate">{r.siteName} · {r.part}</p>
-                        <p className="text-[11px] text-slate-400">{r.urgency} · 신청일 {r.requestedDate} · 사진 {r.photoCount ?? 1}장</p>
+                        <p className="text-[15px] font-bold text-slate-800 truncate">{r.siteName} · {r.part}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{r.urgency} · 신청일 {r.requestedDate} · 사진 {r.photoCount ?? 1}장</p>
                       </div>
                     </button>
                     <span
@@ -965,7 +968,8 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
               {myRequests.length === 0 && (
                 <p className="text-xs text-slate-400 text-center py-4">신청 내역이 없습니다</p>
               )}
@@ -991,10 +995,12 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
                 if (preview.length === 0) {
                   return <p className="text-xs text-slate-400 text-center py-4">보충 요청 내역이 없습니다</p>;
                 }
-                return preview.map((r) => (
-                  <div key={r.id} className="bg-white rounded-xl border border-slate-200 p-3">
+                return preview.map((r) => {
+                  const bar = r.status === "완료" ? "border-l-emerald-500" : "border-l-amber-400";
+                  return (
+                  <div key={r.id} className={`bg-white rounded-xl border border-slate-200 border-l-4 ${bar} p-3.5`}>
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-slate-700">{r.part}</p>
+                      <p className="text-[15px] font-bold text-slate-800">{r.part}</p>
                       <span
                         className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
                           r.status === "완료" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
@@ -1027,7 +1033,8 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
                       </button>
                     )}
                   </div>
-                ));
+                  );
+                });
               })()}
             </div>
           </div>
