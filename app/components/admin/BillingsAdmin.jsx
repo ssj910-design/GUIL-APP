@@ -199,7 +199,7 @@ export default function BillingsAdmin({ data, setData }) {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-[100rem] mx-auto">
       <div className="flex items-end justify-between mb-4">
         <h1 className="text-xl font-extrabold">부품교체·공사 내역</h1>
         <p className="text-sm text-slate-500">

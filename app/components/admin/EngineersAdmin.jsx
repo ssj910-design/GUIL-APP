@@ -201,7 +201,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
   }
 
   return (
-    <div>
+    <div className="max-w-[100rem] mx-auto">
       <h1 className="text-xl font-extrabold mb-3">인사관리</h1>
       <div className="flex gap-1 mb-4 border-b border-slate-200">
         {["직원", "당직 근무표", "출근부", "연차관리", "워크 캘린더"].map((s) => (

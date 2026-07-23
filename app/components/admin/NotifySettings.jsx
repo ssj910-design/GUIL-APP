@@ -37,7 +37,7 @@ export default function NotifySettings() {
   };
 
   return (
-    <div className="max-w-5xl">
+    <div className="max-w-[100rem] mx-auto">
       <h1 className="text-xl font-extrabold mb-1">알림 설정</h1>
       <p className="text-xs text-slate-500 mb-4">
         회사 기본값입니다. 여기서 끈 알림은 아무에게도 가지 않습니다.

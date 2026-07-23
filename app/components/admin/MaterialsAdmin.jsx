@@ -292,7 +292,7 @@ export default function MaterialsAdmin({ data, setData }) {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-[100rem] mx-auto">
       <h1 className="text-xl font-extrabold mb-4">자재·견적 신청내역</h1>
       <div className="flex items-center justify-between gap-3 mb-3">
         <FilterPills

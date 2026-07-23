@@ -227,7 +227,7 @@ export default function InspectionsAdmin({ data, setData }) {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-[100rem] mx-auto">
       <h1 className="text-xl font-extrabold mb-1">검사관리</h1>
       <p className="text-xs text-slate-500 mb-4">
         검사예정일(기한)은 이 화면에서 수기입력한 값이 기준입니다. 승강기고유번호가 등록된 실시간 연동 현장은 API 유효기간을 참고로 함께 보여주되, 기한은 별도로 입력해야 도래현장·금일검사현장에 반영됩니다.

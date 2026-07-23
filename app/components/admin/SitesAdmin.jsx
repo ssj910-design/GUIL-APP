@@ -491,7 +491,7 @@ export default function SitesAdmin({ data, setData }) {
   }
 
   return (
-    <div className="max-w-[100rem]">
+    <div className="max-w-[100rem] mx-auto">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
           <h1 className="text-xl font-extrabold">현장정보</h1>
@@ -520,7 +520,7 @@ export default function SitesAdmin({ data, setData }) {
 
       <div className="grid grid-cols-1 xl:grid-cols-7 gap-5 items-stretch">
         {/* 현장 목록 */}
-        <div className="xl:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col h-[28rem] xl:h-[40rem]">
+        <div className="xl:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col h-[28rem] xl:h-[calc(100vh-13rem)]">
           <div className="p-3 border-b border-slate-100 shrink-0 space-y-2">
             <input className={inputCls} placeholder="현장정보·현장담당자정보·승강기정보 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
             {/* 계약 상태 필터 — 종료 계약 모아보기 */}
@@ -607,7 +607,7 @@ export default function SitesAdmin({ data, setData }) {
         </div>
 
         {/* 상세 */}
-        <div className="xl:col-span-5 xl:h-[40rem] xl:overflow-y-auto space-y-4 pr-0.5">
+        <div className="xl:col-span-5 xl:h-[calc(100vh-13rem)] xl:overflow-y-auto space-y-4 pr-0.5">
           {!site ? (
             <div className="bg-white rounded-xl border border-slate-200 h-40 xl:h-full flex items-center justify-center text-sm text-slate-400">
               목록에서 현장을 선택하세요

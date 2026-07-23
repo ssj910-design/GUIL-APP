@@ -182,7 +182,7 @@ export default function SelfChecksAdmin({ data, setData }) {
   const detail = summaryRows.find((g) => g.key === engineerKey);
 
   return (
-    <div className="max-w-5xl">
+    <div className="max-w-[100rem] mx-auto">
       <div className="flex items-end justify-between mb-4">
         <div>
           <h1 className="text-xl font-extrabold">자체점검 현황</h1>

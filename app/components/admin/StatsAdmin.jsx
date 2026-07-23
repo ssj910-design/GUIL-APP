@@ -104,7 +104,7 @@ export default function StatsAdmin({ data }) {
   ];
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-[100rem] mx-auto">
       <h1 className="text-xl font-extrabold mb-3">통계</h1>
       <div className="flex gap-1 mb-4 border-b border-slate-200">
         {["현황", "자산 분석", "계약 만료"].map((t) => (

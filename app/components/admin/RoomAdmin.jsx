@@ -202,7 +202,7 @@ export default function RoomAdmin({ data, setData }) {
   const detailPost = detailId ? feed.find((p) => p.id === detailId) : null;
 
   return (
-    <div className="max-w-6xl space-y-4">
+    <div className="max-w-[100rem] mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-800">게시판</h1>
         <div className="relative w-64">

@@ -201,7 +201,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
   const historyFailures = historySite ? failures.filter((f) => f.siteId === historySite.id).sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt)) : [];
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-[100rem] mx-auto">
       <div className="flex items-center justify-between mb-1">
         <h1 className="text-xl font-extrabold">대시보드</h1>
         <button onClick={() => setRegistering(true)} className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
