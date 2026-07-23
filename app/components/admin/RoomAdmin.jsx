@@ -239,7 +239,11 @@ export default function RoomAdmin({ data, setData }) {
             const likes = p.reactions?.["👍"] ?? [];
             const liked = likes.includes(ADMIN_NAME);
             return (
-              <div key={p.id} className={`bg-white rounded-2xl border p-4 ${p.isNotice ? "border-amber-300 bg-amber-50/40" : "border-slate-200"}`}>
+              <div
+                key={p.id}
+                onClick={() => setDetailId(p.id)}
+                className={`bg-white rounded-2xl border p-4 cursor-pointer ${p.isNotice ? "border-amber-300 bg-amber-50/40" : "border-slate-200"}`}
+              >
                 <div className="flex items-start gap-3">
                   <Avatar name={p.author} />
                   <div className="flex-1 min-w-0">
@@ -253,12 +257,12 @@ export default function RoomAdmin({ data, setData }) {
                         )}
                         <span className="text-[11px] text-slate-400 shrink-0">{timeOf(p.createdAt)}</span>
                       </div>
-                      <div className="relative shrink-0">
+                      <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
                         <button onClick={() => setMenuFor(menuFor === p.id ? null : p.id)} className="p-1 text-slate-300 hover:text-slate-500" aria-label="더보기">
                           <MoreVertical size={16} />
                         </button>
                         {menuFor === p.id && (
-                          <div className="absolute right-0 top-7 z-10 bg-white rounded-xl border border-slate-200 shadow-lg py-1 w-36" onClick={(e) => e.stopPropagation()}>
+                          <div className="absolute right-0 top-7 z-10 bg-white rounded-xl border border-slate-200 shadow-lg py-1 w-36">
                             <button onClick={() => { setNotice(p.id, !p.isNotice); setMenuFor(null); }} className="w-full text-left px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
                               {p.isNotice ? "공지 해제" : "공지로 등록"}
                             </button>
@@ -269,7 +273,7 @@ export default function RoomAdmin({ data, setData }) {
                         )}
                       </div>
                     </div>
-                    <p onClick={() => setDetailId(p.id)} className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap mt-1.5 cursor-pointer">
+                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap mt-1.5">
                       {p.text}
                     </p>
                     {p.photoUrls?.length > 0 && (
@@ -277,7 +281,7 @@ export default function RoomAdmin({ data, setData }) {
                         <PhotoGrid urls={p.photoUrls} onOpen={(urls, index) => setPhotoViewer({ urls, index })} compact />
                       </div>
                     )}
-                    <div className="flex items-center gap-4 mt-3 pt-2.5 border-t border-slate-50">
+                    <div className="flex items-center gap-4 mt-3 pt-2.5 border-t border-slate-50" onClick={(e) => e.stopPropagation()}>
                       <button onClick={() => toggleLike(p.id)} className={`flex items-center gap-1.5 text-xs font-bold ${liked ? "text-blue-600" : "text-slate-500"}`}>
                         <ThumbsUp size={15} fill={liked ? "currentColor" : "none"} /> {likes.length > 0 ? likes.length : "좋아요"}
                       </button>
