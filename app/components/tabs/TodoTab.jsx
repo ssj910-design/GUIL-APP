@@ -88,9 +88,12 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
   // 관리자는 본인 담당 할일이 아니라 전체 기사의 할일을 본다.
   const mine = role === "admin" ? todos : todos.filter((t) => t.assignee === CURRENT_ENGINEER);
 
-  async function completeManualTodo(id) {
-    await supabase.from("todos").update({ done: true }).eq("id", id);
-    setTodos((prev) => prev.map((x) => (x.id === id ? { ...x, done: true } : x)));
+  async function toggleManualTodo(id) {
+    const current = todos.find((x) => x.id === id);
+    if (!current) return;
+    const done = !current.done;
+    await supabase.from("todos").update({ done }).eq("id", id);
+    setTodos((prev) => prev.map((x) => (x.id === id ? { ...x, done } : x)));
   }
 
   if (mine.length === 0 && role !== "admin") {
@@ -157,7 +160,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
                     role === "admin"
                       ? () => onAdminToggle(t.id)
                       : isManual
-                        ? () => completeManualTodo(t.id)
+                        ? () => toggleManualTodo(t.id)
                         : undefined
                   }
                 />
@@ -190,7 +193,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
           coAssignees={getCoAssignees(detailTodo, todos)}
           supplyPhotoUrls={getSupplyPhotos(detailTodo, materialRequests, quoteRequests)}
           siteAddress={getTodoSiteAddress(detailTodo, materialRequests, quoteRequests, sites)}
-          onToggle={role === "admin" ? onAdminToggle : detailTodo.source === "manual" && !detailTodo.done ? completeManualTodo : null}
+          onToggle={role === "admin" ? onAdminToggle : detailTodo.source === "manual" ? toggleManualTodo : null}
           onReassign={onReassignTodo}
           engineerNames={engineerNames}
           onUpdateDescription={role === "admin" ? onUpdateTodoDescription : null}
