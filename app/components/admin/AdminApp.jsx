@@ -4,11 +4,11 @@
 // v2 스키마(units, *_id FK)를 기본으로 사용한다. 데이터는 이 셸이 한 번에 로드해
 // 각 섹션에 props로 내린다 (모바일 App 셸과 같은 관례).
 import { useState, useEffect } from "react";
-import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, CalendarCheck, Users, LayoutDashboard, BarChart3, Menu , Bell, MessageSquare } from "lucide-react";
+import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, CalendarCheck, Users, LayoutDashboard, BarChart3, Menu , Bell, MessageSquare, BookOpen } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import {
   mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest,
-  mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck, mapFeedPost, mapRestockRequest,
+  mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck, mapFeedPost, mapRestockRequest, mapErrorCode,
 } from "@/lib/mappers";
 import Dashboard from "@/app/components/admin/Dashboard";
 import SitesAdmin from "@/app/components/admin/SitesAdmin";
@@ -22,11 +22,13 @@ import EngineersAdmin from "@/app/components/admin/EngineersAdmin";
 import StatsAdmin from "@/app/components/admin/StatsAdmin";
 import NotifySettings from "@/app/components/admin/NotifySettings";
 import RoomAdmin from "@/app/components/admin/RoomAdmin";
+import ErrorCodesAdmin from "@/app/components/admin/ErrorCodesAdmin";
 
 const MENU = [
   { id: "dashboard", label: "대시보드", icon: LayoutDashboard },
   { id: "sites", label: "현장정보", icon: Building2 },
   { id: "failures", label: "고장관리", icon: AlertTriangle },
+  { id: "errorCodes", label: "에러코드집", icon: BookOpen },
   { id: "inspections", label: "검사관리", icon: ShieldCheck },
   { id: "materials", label: "자재·견적 신청내역", icon: Package },
   { id: "billings", label: "부품교체·공사 내역", icon: Receipt },
@@ -46,12 +48,12 @@ export default function AdminApp() {
   const [data, setData] = useState({
     sites: [], units: [], siteManagers: [], failures: [], inspections: [],
     materialRequests: [], quoteRequests: [], restockRequests: [], todos: [], billings: [],
-    selfChecks: [], profiles: [], feed: [],
+    selfChecks: [], profiles: [], feed: [], errorCodes: [],
   });
 
   useEffect(() => {
     async function load() {
-      const [sites, units, siteManagers, failures, inspections, materials, quotes, restock, todos, billings, selfChecks, profiles, feed] =
+      const [sites, units, siteManagers, failures, inspections, materials, quotes, restock, todos, billings, selfChecks, profiles, feed, errorCodes] =
         await Promise.all([
           supabase.from("sites").select("*").order("name"),
           supabase.from("units").select("*").order("seq"),
@@ -66,6 +68,7 @@ export default function AdminApp() {
           supabase.from("self_checks").select("*"),
           supabase.from("profiles").select("*").order("name"),
           supabase.from("feed_posts").select("*").order("created_at", { ascending: true }),
+          supabase.from("error_codes").select("*"),
         ]);
       setData({
         sites: (sites.data ?? []).map(mapSite),
@@ -81,6 +84,7 @@ export default function AdminApp() {
         selfChecks: (selfChecks.data ?? []).map(mapSelfCheck),
         profiles: profiles.data ?? [],
         feed: (feed.data ?? []).map(mapFeedPost),
+        errorCodes: (errorCodes.data ?? []).map(mapErrorCode),
       });
       setLoading(false);
     }
@@ -150,6 +154,8 @@ export default function AdminApp() {
           <NotifySettings />
         ) : menu === "stats" ? (
           <StatsAdmin data={data} />
+        ) : menu === "errorCodes" ? (
+          <ErrorCodesAdmin data={data} setData={setData} />
         ) : (
           <div className="pt-20 text-center text-slate-400">
             <p className="font-bold text-slate-500">{MENU.find((m) => m.id === menu)?.label}</p>
