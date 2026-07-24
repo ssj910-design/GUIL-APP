@@ -255,7 +255,7 @@ export function PrimaryButton({ children, onClick, disabled, tone = "blue", clas
 }
 
 
-export function Sheet({ title, onClose, children }) {
+export function Sheet({ title, onClose, children, bg = "bg-slate-50" }) {
   // body Portal로 렌더 — 탭 콘텐츠(PullToRefresh)의 transform이 fixed를 가두는 걸 피해,
   // 플로팅 버튼(게시판 퀵) 등 다른 요소가 시트 위로 겹치지 않게 한다.
   const [mounted, setMounted] = useState(false);
@@ -264,7 +264,7 @@ export function Sheet({ title, onClose, children }) {
     <div className="fixed inset-0 z-30 flex flex-col bg-black/40" onClick={onClose}>
       <div className="mt-auto" />
       <div
-        className="bg-slate-50 rounded-t-3xl max-h-[88%] flex flex-col shadow-2xl"
+        className={`${bg} rounded-t-3xl max-h-[88%] flex flex-col shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-white rounded-t-3xl shrink-0">

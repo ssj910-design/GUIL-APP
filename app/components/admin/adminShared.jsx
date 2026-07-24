@@ -5,7 +5,8 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil } from "lucide-react";
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
-import { shortDate, parseShortDate, autoFormatShortDate, formatUnitLabel } from "@/lib/utils";
+import { shortDate, parseShortDate, autoFormatShortDate, formatUnitLabel, sortEngineersByDistance, busyStatusOf } from "@/lib/utils";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 
 export const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
 
@@ -104,6 +105,46 @@ export function Modal({ title, onClose, children, wide }) {
         <div className="overflow-y-auto px-5 py-4">{children}</div>
       </div>
     </div>
+  );
+}
+
+// 재배정 팝업 — 배정 기사 select를 누르면 바로 바뀌던 것 대신, 버튼을 눌러야 여는 확인 단계.
+// 모바일 AssignEngineerSheet와 같은 기준(바쁜 기사 경고, 미배정 알림 문구)으로 확인 팝업을 띄운다.
+// 대시보드 실시간 고장 현황·고장관리 표 양쪽에서 공유.
+export function ReassignModal({ failure, siteObj, engineers, engineerJobs, failures, onAssign, onClose }) {
+  const rows = sortEngineersByDistance(engineers, siteObj);
+  async function pick(name) {
+    const st = name ? busyStatusOf(failures, name) : null;
+    const msg = !name
+      ? "미배정 하시겠습니까?\n모든 직원에게 알림이 갑니다."
+      : st
+        ? `${name}님은 지금 ${st}입니다.\n그래도 이 건을 배정할까요?`
+        : `${name}으로 배정하시겠습니까?`;
+    if (!(await confirmAsync(msg))) return;
+    onAssign(failure, name);
+    onClose();
+  }
+  return (
+    <Modal title={`재배정 — ${failure.siteName}${failure.elevatorNo ? ` · ${formatUnitLabel(failure.elevatorNo)}` : ""}`} onClose={onClose}>
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={() => pick(null)} className="py-3 rounded-xl text-sm font-bold border text-red-500 border-red-200 bg-white hover:bg-red-50">
+          미배정으로
+        </button>
+        {rows.map(({ engineer: p, km }) => {
+          const job = engineerJobs.get(p.name);
+          return (
+            <button
+              key={p.id}
+              onClick={() => pick(p.name)}
+              className="py-3 rounded-xl text-sm font-bold border text-slate-700 border-slate-200 bg-white hover:bg-blue-50"
+            >
+              {p.name}{km != null ? ` (${km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`})` : ""}
+              {job && <span className="block text-[10px] font-normal text-slate-400 mt-0.5">{job.siteName} · {job.label}</span>}
+            </button>
+          );
+        })}
+      </div>
+    </Modal>
   );
 }
 

@@ -1,12 +1,11 @@
 import { useState, useContext, useRef } from "react";
-import { Package, Receipt, ChevronRight, ChevronLeft, ChevronDown, FileText, PackageCheck, RotateCcw, PackageX, Search, Repeat, ClipboardList } from "lucide-react";
+import { Package, Receipt, ChevronRight, ChevronLeft, ChevronDown, FileText, PackageCheck, RotateCcw, PackageX, Search, Repeat } from "lucide-react";
 import { Badge, PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { AuthContext } from "@/app/components/context";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
 import { parsePartQty, formatPhone, addDays } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { BillingHistoryScreen } from "@/app/components/tabs/BillingTab";
-import { TodoAssignSheet } from "@/app/components/tabs/TodoTab";
 
 
 function AdminMenuRow({ icon: Icon, label, badge, onClick }) {
@@ -868,11 +867,10 @@ function DashStat({ label, n, tone }) {
 }
 
 
-export function AdminTab({ materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onClearReassignRequest, onAssignTodo }) {
+export function AdminTab({ materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onClearReassignRequest }) {
   const { engineerNames } = useContext(AuthContext);
   const [page, setPage] = useState(null); // null | "billing" | "materialHistory" | "quoteHistory"
   const [expanded, setExpanded] = useState(null); // "materials" | "restock" | "quotes" | "reassign" | null
-  const [assignOpen, setAssignOpen] = useState(false);
 
   const materialPending = materialRequests.filter((r) => r.status === "승인대기");
   const materialRejected = materialRequests.filter((r) => r.status === "반려");
@@ -975,12 +973,9 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
             />
           </AccordionRow>
 
-          <AdminMenuRow icon={ClipboardList} label="직원 할일 부여" onClick={() => setAssignOpen(true)} />
           <AdminMenuRow icon={Receipt} label="비용청구 내역" badge={billings.length} onClick={() => setPage("billing")} />
         </div>
       </div>
-
-      {assignOpen && <TodoAssignSheet engineerNames={engineerNames} onSubmit={onAssignTodo} onClose={() => setAssignOpen(false)} />}
     </div>
   );
 }

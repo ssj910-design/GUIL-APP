@@ -184,7 +184,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
                 </button>
               </div>
               {expanded && (
-                <div className="pl-8 pr-0.5 pb-3 pt-1">
+                <div className="pl-8 pr-0.5 pb-3 pt-1 bg-white rounded-lg">
                   <TodoDetailBody
                     todo={t}
                     requester={requester}
@@ -243,7 +243,7 @@ function TodoRow({ t, onToggle, onOpenDetail }) {
 // 바텀시트 래퍼 — 다른 화면(관리자 콘솔 등)에서 시트로 열 때 사용. TodoTab은 본문을 인라인 아코디언으로 쓴다.
 export function TodoDetailSheet(props) {
   return (
-    <Sheet title="할 일 상세" onClose={props.onClose}>
+    <Sheet title="할 일 상세" onClose={props.onClose} bg="bg-white">
       <TodoDetailBody {...props} />
     </Sheet>
   );

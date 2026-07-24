@@ -6,13 +6,12 @@ import { useState, useMemo } from "react";
 import WeekStrip from "@/app/components/admin/WeekStrip";
 import { AlertOctagon, Plus } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, shortDate, sortEngineersByDistance, parseErrorCode, engineerJobsByName, busyStatusOf } from "@/lib/utils";
+import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, shortDate, parseErrorCode, engineerJobsByName } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
-import { Modal, StatusBadge, inputCls, PhotoGrid } from "@/app/components/admin/adminShared";
+import { Modal, StatusBadge, inputCls, PhotoGrid, ReassignModal } from "@/app/components/admin/adminShared";
 import { RegisterFailureModal } from "@/app/components/admin/FailuresAdmin";
-import { confirmAsync } from "@/app/components/ConfirmHost";
 
 function unitLabel(units, sites, unitId, fallbackSiteName, fallbackLabel) {
   const u = units.find((x) => x.id === unitId);
@@ -27,45 +26,6 @@ function Kpi({ label, value, tone = "text-slate-900" }) {
       <p className="text-xs text-slate-500">{label}</p>
       <p className={`text-2xl font-extrabold mt-1 ${tone}`}>{value}</p>
     </div>
-  );
-}
-
-// 재배정 팝업 — 배정 기사 select를 누르면 바로 바뀌던 것 대신, 버튼을 눌러야 여는 확인 단계.
-// 모바일 AssignEngineerSheet와 같은 기준(바쁜 기사 경고, 미배정 알림 문구)으로 확인 팝업을 띄운다.
-function ReassignModal({ failure, siteObj, engineers, engineerJobs, failures, onAssign, onClose }) {
-  const rows = sortEngineersByDistance(engineers, siteObj);
-  async function pick(name) {
-    const st = name ? busyStatusOf(failures, name) : null;
-    const msg = !name
-      ? "미배정 하시겠습니까?\n모든 직원에게 알림이 갑니다."
-      : st
-        ? `${name}님은 지금 ${st}입니다.\n그래도 이 건을 배정할까요?`
-        : `${name}으로 배정하시겠습니까?`;
-    if (!(await confirmAsync(msg))) return;
-    onAssign(failure, name);
-    onClose();
-  }
-  return (
-    <Modal title={`재배정 — ${failure.siteName}${failure.elevatorNo ? ` · ${formatUnitLabel(failure.elevatorNo)}` : ""}`} onClose={onClose}>
-      <div className="grid grid-cols-2 gap-2">
-        <button onClick={() => pick(null)} className="py-3 rounded-xl text-sm font-bold border text-red-500 border-red-200 bg-white hover:bg-red-50">
-          미배정으로
-        </button>
-        {rows.map(({ engineer: p, km }) => {
-          const job = engineerJobs.get(p.name);
-          return (
-            <button
-              key={p.id}
-              onClick={() => pick(p.name)}
-              className="py-3 rounded-xl text-sm font-bold border text-slate-700 border-slate-200 bg-white hover:bg-blue-50"
-            >
-              {p.name}{km != null ? ` (${km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`})` : ""}
-              {job && <span className="block text-[10px] font-normal text-slate-400 mt-0.5">{job.siteName} · {job.label}</span>}
-            </button>
-          );
-        })}
-      </div>
-    </Modal>
   );
 }
 

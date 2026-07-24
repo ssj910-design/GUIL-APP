@@ -7,11 +7,10 @@ import { Plus, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR, FAULT_TYPES } from "@/lib/constants";
 import { formatPhone, sortEngineersByDistance, engineerJobsByName } from "@/lib/utils";
-import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls } from "@/app/components/admin/adminShared";
+import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls, ReassignModal } from "@/app/components/admin/adminShared";
 import { FailureDetailContent } from "@/app/components/admin/Dashboard";
 import { EngineerLocationMap } from "@/app/components/admin/EngineerLocationMap";
 import { useHolidays } from "@/app/hooks/useHolidays";
-import { confirmAsync } from "@/app/components/ConfirmHost";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -347,6 +346,7 @@ export default function FailuresAdmin({ data, setData }) {
   const [registering, setRegistering] = useState(false);
   const engineers = profiles.filter((p) => p.role === "engineer");
   const engineerJobs = useMemo(() => engineerJobsByName(failures), [failures]);
+  const [reassignTarget, setReassignTarget] = useState(null);
 
   const rows = failures.filter((f) => {
     if (status !== "all" && f.status !== status) return false;
@@ -457,26 +457,19 @@ export default function FailuresAdmin({ data, setData }) {
               <td className="px-3 py-2.5 text-slate-600">{f.errorCode}{f.notFault ? " (고장아님)" : ""}</td>
               <td className="px-3 py-2.5 text-slate-600">{f.processContent || "-"}</td>
               <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{f.reporterPhone ?? "-"}</td>
-              <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+              <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                 {f.status === "완료" ? (
                   <span className="text-slate-600">{personOf(data, f.assigneeId, f.assignee)}</span>
                 ) : (
-                  <select
-                    className={`${inputCls} min-w-28`}
-                    value={personOf(data, f.assigneeId, f.assignee) === "-" ? "" : personOf(data, f.assigneeId, f.assignee)}
-                    onChange={async (e) => {
-                      const target = e.target;
-                      const name = target.value;
-                      const ok = await confirmAsync(
-                        name ? `${name}으로 배정하시겠습니까?` : "미배정 하시겠습니까?\n모든 직원에게 알림이 갑니다."
-                      );
-                      if (!ok) { target.value = personOf(data, f.assigneeId, f.assignee) === "-" ? "" : personOf(data, f.assigneeId, f.assignee); return; }
-                      assign(f, name);
-                    }}
-                  >
-                    <option value="">미배정</option>
-                    <EngineerOptions engineers={engineers} site={sites.find((s) => s.id === f.siteId)} engineerJobs={engineerJobs} />
-                  </select>
+                  <>
+                    <span className="text-slate-700 font-semibold mr-2">{personOf(data, f.assigneeId, f.assignee)}</span>
+                    <button
+                      onClick={() => setReassignTarget({ failure: f, siteObj: sites.find((s) => s.id === f.siteId) })}
+                      className="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-2 py-1 hover:bg-blue-50"
+                    >
+                      재배정
+                    </button>
+                  </>
                 )}
               </td>
               <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">
@@ -499,6 +492,18 @@ export default function FailuresAdmin({ data, setData }) {
 
       {registering && (
         <RegisterFailureModal data={data} onClose={() => setRegistering(false)} onCreate={createFailure} />
+      )}
+
+      {reassignTarget && (
+        <ReassignModal
+          failure={reassignTarget.failure}
+          siteObj={reassignTarget.siteObj}
+          engineers={engineers}
+          engineerJobs={engineerJobs}
+          failures={failures}
+          onAssign={assign}
+          onClose={() => setReassignTarget(null)}
+        />
       )}
     </div>
   );
