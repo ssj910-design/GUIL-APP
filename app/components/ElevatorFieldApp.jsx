@@ -1684,7 +1684,7 @@ export default function App() {
           <button
             onClick={() => setTab("admin")}
             aria-label="관리자 모드 열기"
-            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-slate-800 text-white shadow-lg flex items-center justify-center active:scale-95 ${tab === "failure" ? "bottom-52" : tab === "room" ? "bottom-20" : "bottom-36"}`}
+            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-slate-800 text-white shadow-lg flex items-center justify-center active:scale-95 ${tab === "failure" ? "bottom-52" : tab === "room" ? "bottom-40" : "bottom-36"}`}
           >
             <Settings size={22} />
           </button>
