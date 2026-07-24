@@ -323,7 +323,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-xs font-bold text-slate-500">도착 예정 시간 *</p>
                   {driveMin != null && (
-                    <span className="text-xs font-bold text-red-600">지금 출발 시 예상 소요시간 {driveMin}분(T MAP연동)</span>
+                    <span className="text-xs font-bold text-red-600">T맵 예상 {driveMin}분</span>
                   )}
                 </div>
                 <select
@@ -770,7 +770,7 @@ export function DispatchEtaModal({ failure, onConfirm, onClose }) {
       <Field
         label="도착 예정 시간 *"
         right={driveMin != null && (
-          <span className="text-xs font-bold text-red-600">지금 출발 시 예상 소요시간 {driveMin}분(T MAP연동)</span>
+          <span className="text-xs font-bold text-red-600">T맵 예상 {driveMin}분</span>
         )}
       >
         <select value={eta} onChange={(e) => setEta(e.target.value)} className={inputCls}>
