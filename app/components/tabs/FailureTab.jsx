@@ -18,7 +18,7 @@ import { confirmAsync } from "@/app/components/ConfirmHost";
 function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported, onDispatch }) {
   const sites = useContext(SitesContext);
   const units = useContext(UnitsContext);
-  const { engineerNames, profiles: allProfiles, selfId, name: myName, role } = useContext(AuthContext);
+  const { engineerNames, profiles: allProfiles, selfId, name: myName, role, engineers = [] } = useContext(AuthContext);
   const v2Ready = units.length > 0;
   // 기사 본인이 접수하면 기본 배정 = 본인, 단 지금 처리 중(진행중 건 보유)이면 미배정으로
   const isBusy = (name) => failures.some((f) => f.assignee === name && f.status === "진행중");
@@ -27,6 +27,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
     siteId: "", units: [], faultType: "", faultDetail: "", details: {}, notFault: false, assignee: defaultAssignee(), eta: "", reporterPhone: "", sendSms: false, reportNote: "",
   });
   const [step, setStep] = useState(0); // 스텝형 접수 (0~3)
+  const [driveMin, setDriveMin] = useState(null); // T맵 예상 소요시간(분) — 출동응답과 동일하게 여기서도 보여준다
   const site = sites.find((s) => s.id === form.siteId);
   const nowLabel = TODAY_STR + " " + new Date().toTimeString().slice(0, 5);
   const detailFilled = form.units.length > 1
@@ -35,6 +36,25 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
   // 기사가 본인 배정으로 접수하면 도착예정시간을 여기서 같이 받아 출동응답 단계를 건너뛴다 — 그때는 필수.
   const selfDispatching = role === "engineer" && form.assignee === myName;
   const canSubmit = !!site && !!form.faultType && detailFilled && form.reporterPhone.trim().length > 0 && (!selfDispatching || form.eta !== "");
+  const selfLoc = engineers.find((e) => e.id === selfId);
+
+  useEffect(() => {
+    if (!selfDispatching || selfLoc?.last_lat == null || site?.lat == null) { setDriveMin(null); return; }
+    let cancelled = false;
+    fetch("/api/tmap-route", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        startLat: selfLoc.last_lat, startLng: selfLoc.last_lng,
+        endLat: site.lat, endLng: site.lng,
+        startName: "출발", endName: site.name,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => { if (!cancelled && data.ok) setDriveMin(Math.round(data.totalTimeSec / 60)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [selfDispatching, selfLoc?.last_lat, selfLoc?.last_lng, site?.lat, site?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function submit() {
     if (!canSubmit) return;
@@ -295,7 +315,12 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
             {/* 본인 배정이면 접수와 동시에 출동 처리 — 나중에 "출동 응답"을 따로 누를 필요가 없게 여기서 도착예정시간을 받는다. */}
             {selfDispatching && (
               <div>
-                <p className="text-xs font-bold text-slate-500 mb-1.5">도착 예정 시간 *</p>
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-xs font-bold text-slate-500">도착 예정 시간 *</p>
+                  {driveMin != null && (
+                    <span className="text-xs font-bold text-red-600">지금 출발 시 예상 소요시간 {driveMin}분(T MAP연동)</span>
+                  )}
+                </div>
                 <select
                   value={form.eta}
                   onChange={(e) => setForm({ ...form, eta: e.target.value })}
