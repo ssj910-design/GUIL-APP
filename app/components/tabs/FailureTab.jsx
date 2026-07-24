@@ -1266,17 +1266,19 @@ function FailureStatusOverview({ failures, onReassign, attendances = [], todayLe
   const mine = failures.filter((f) => f.assignee === CURRENT_ENGINEER);
   const myDone = mine.filter((f) => f.status === "완료").length;
   const myUndone = mine.filter((f) => f.status !== "완료").length;
-  const allDone = failures.filter((f) => f.status === "완료").length;
-  const allProcessing = failures.filter((f) => f.status === "진행중").length;
-  const allUndone = failures.filter((f) => f.status === "미처리").length;
+  // 기사는 본인 배정 건만, 관리자만 전사 — 처리현황이 역할 무관 전체를 보여주던 누수 차단 (P2-1)
+  const base = role === "admin" ? failures : mine;
+  const allDone = base.filter((f) => f.status === "완료").length;
+  const allProcessing = base.filter((f) => f.status === "진행중").length;
+  const allUndone = base.filter((f) => f.status === "미처리").length;
   // 필터 칩 = 상태별. '미배정' 칩은 status 미처리(미배정·지원미배정·운행정지·응답대기 포함).
   const FILTERS = [
-    { key: "all", label: "전체", count: failures.length },
+    { key: "all", label: "전체", count: base.length },
     { key: "미처리", label: "미배정", count: allUndone },
     { key: "진행중", label: "진행중", count: allProcessing },
     { key: "완료", label: "완료", count: allDone },
   ];
-  const shown = filter === "all" ? failures : failures.filter((f) => f.status === filter);
+  const shown = filter === "all" ? base : base.filter((f) => f.status === filter);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">

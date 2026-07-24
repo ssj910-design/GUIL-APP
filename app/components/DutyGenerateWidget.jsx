@@ -146,7 +146,7 @@ export function DutyGenerateWidget({ schedules, onSchedulesChange, onEngineersCh
       const rows0 = [];
       for (let d = 1; d <= days0; d++) {
         const iso = `${ym}-${String(d).padStart(2, "0")}`;
-        for (const kind of ["당직", "숙직"]) {
+        for (const kind of ["숙직", "당직"]) {
           const found = existing.get(`${iso}|${kind}`);
           rows0.push(found ? { iso, kind, name: nameOfAny(found.profileId), isNew: false } : { iso, kind, name: null, isNew: false });
         }
@@ -162,7 +162,8 @@ export function DutyGenerateWidget({ schedules, onSchedulesChange, onEngineersCh
     for (let d = 1; d <= days; d++) {
       const iso = `${ym}-${String(d).padStart(2, "0")}`;
       const g = dayGroup(mode, new Date(`${iso}T00:00:00`).getDay());
-      for (const kind of ["당직", "숙직"]) {
+      // ★ generate()와 동일하게 숙직→당직 순으로 커서 소비해야 미리보기=실제. 반대면 당직↔숙직이 뒤바뀜 (P1-4)
+      for (const kind of ["숙직", "당직"]) {
         const key = `${iso}|${kind}`;
         const found = existing.get(key);
         if (found) { rows.push({ iso, kind, name: nameOfAny(found.profileId), isNew: false }); continue; }

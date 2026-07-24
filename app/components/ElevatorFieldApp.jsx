@@ -1030,6 +1030,7 @@ export default function App() {
   async function handleReceiveRestock(restockId) {
     const restock = restockRequests.find((r) => r.id === restockId);
     if (!restock) return;
+    if (restock.receivedAt) return; // 이미 수령한 건은 무시 — 더블탭 시 재고 이중 증가 방지 (P2-5)
     const receivedAt = new Date().toISOString();
     await supabase.from("restock_requests").update({ received_at: receivedAt }).eq("id", restockId);
     setRestockRequests((prev) => prev.map((r) => (r.id === restockId ? { ...r, receivedAt } : r)));

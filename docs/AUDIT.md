@@ -32,15 +32,15 @@
   `PostBody`가 RoomTab 렌더 함수 내부에 정의돼 매 렌더 새 컴포넌트 → 수정 textarea 커서 이탈, 상태변경마다 이미지/영상 리셋.
   → 수정: PostBody(및 PostCard)를 모듈 최상위로 추출하고 편집 state를 props로 전달. (분리 제안과 동일 작업)
 
-- [ ] **P1-4 `[확인]` 당직표 실시간 미리보기와 실제 배정의 당직/숙직 순서 뒤바뀜** — [DutyGenerateWidget.jsx:75 vs 165](../app/components/DutyGenerateWidget.jsx#L75)
+- [x] **P1-4 `[확인]` 당직표 실시간 미리보기와 실제 배정의 당직/숙직 순서 뒤바뀜** — (수정 2026-07-24: simulate를 숙직→당직 순으로 통일) — [DutyGenerateWidget.jsx:75 vs 165](../app/components/DutyGenerateWidget.jsx#L75)
   `generate()`는 `["숙직","당직"]`, `simulate()`는 `["당직","숙직"]` 순으로 커서 소비 → 미리보기가 실제와 반대. 관리자가 잘못된 근무표 확정.
   → 수정: 두 함수 kind 순서 통일. 근본: 배정계산 순수함수 하나로 공유.
 
-- [ ] **P1-5 `[확인]` 견적 담당자 반복 수정 시 할일 id 충돌로 기존 할일 덮어씀** — [MaterialsAdmin.jsx:247](../app/components/admin/MaterialsAdmin.jsx#L247) (관리자 콘솔)
+- [x] **P1-5 `[확인]` 견적 담당자 반복 수정 시 할일 id 충돌로 기존 할일 덮어씀** — (수정 2026-07-24: handleQuoteEdit UUID) — [MaterialsAdmin.jsx:247](../app/components/admin/MaterialsAdmin.jsx#L247) (관리자 콘솔)
   `todo-quote-${quote.id}-${existingTodos.length+i}` 위치인덱스 id → 담당자 add/remove 반복 시 살아있는 할일 suffix와 충돌 → upsert가 조용히 덮어씀(담당자·done·청구연결 유실).
   → 수정: UUID/타임스탬프 id. 초기 생성(163)도 통일.
 
-- [ ] **P1-6 `[확인]` 관리자 콘솔이 옛 컬럼 `sites.manager` 신규 참조(v2 규칙 위반)** — [BillingsAdmin.jsx:14,217](../app/components/admin/BillingsAdmin.jsx#L14)
+- [x] **P1-6 `[확인]` 관리자 콘솔이 옛 컬럼 `sites.manager` 신규 참조(v2 규칙 위반)** — (수정 2026-07-24: site_managers 대표 담당자 우선) — [BillingsAdmin.jsx:14,217](../app/components/admin/BillingsAdmin.jsx#L14)
   콘솔은 `sites.manager`를 갱신하지 않고 담당자는 `site_managers`(isPrimary)로만 편집 → 청구 "담당자" 항상 stale.
   → 수정: `site_managers`의 대표 담당자로 교체.
 
@@ -56,14 +56,14 @@
 
 ## P2 — 엣지케이스 / 정합성 / 역할 누수 / 동시성
 
-- [ ] **P2-1 `[확인]` 처리현황에서 기사에게 전사 고장 노출** — [FailureTab.jsx:1264](../app/components/tabs/FailureTab.jsx#L1264) — 역할 필터 없이 `failures` 전체 표시(설계상 기사=본인 배정만). → engineer면 `mine` 스코프.
+- [x] **P2-1 `[확인]` 처리현황에서 기사에게 전사 고장 노출** — (수정·검증 2026-07-24: 관리자 18 vs 기사 본인만) — [FailureTab.jsx:1264](../app/components/tabs/FailureTab.jsx#L1264) — 역할 필터 없이 `failures` 전체 표시(설계상 기사=본인 배정만). → engineer면 `mine` 스코프.
 - [ ] **P2-2 `[확인]` 부담당 기사가 자기 현장을 못 봄 (site_assignments N:M 미로딩)** — 앱 전역이 단일 `assignedEngineer` 이름 기준(HomeTab:537, InspectionTab:60, CheckupTab:94, SiteTab:516). 부담당은 집중관리·검사도래·자체점검에 자기 현장 누락. → site_assignments 로드해 멤버십 스코프(또는 007 전까지 lead 기준 명시).
 - [x] **P2-3 `[확인]` (내 코드) AdminTab SwipeCarousel 아이템 축소 시 idx/scroll 보정 누락** — (수정 2026-07-24) — [AdminTab.jsx:51](../app/components/tabs/AdminTab.jsx#L51) — 처리로 카드 줄면 화살표 disabled 판정·n/N 카운터가 실제 스크롤과 어긋남. → `useEffect([items.length])`로 idx 클램프.
 - [ ] **P2-4 `[확인]` 콘솔 전역 is_active 필터 누락** — 제외 기사가 배정 드롭다운·대시보드 카운트에 계속 노출(SitesAdmin:307, FailuresAdmin:200/338, Dashboard:89/214, MaterialsAdmin:453/563, TodosAdmin:34/169, BillingsAdmin:22). → 배정용 목록 전부 `&& p.is_active !== false`.
-- [ ] **P2-5 `[확인]` 상비부품 재수령 가드 없음 + 재고 read-modify-write** — [ElevatorFieldApp.jsx:1023](../app/components/ElevatorFieldApp.jsx#L1023) — 더블탭 시 재고 2회 증가, 실패 무롤백. → `if(restock.receivedAt) return` 가드 + error 검사·원복.
+- [x] **P2-5 `[확인]` 상비부품 재수령 가드 없음 + 재고 read-modify-write** — (수정 2026-07-24: receivedAt 가드. 무롤백 error검사는 P1-7 래퍼에서) — [ElevatorFieldApp.jsx:1023](../app/components/ElevatorFieldApp.jsx#L1023) — 더블탭 시 재고 2회 증가, 실패 무롤백. → `if(restock.receivedAt) return` 가드 + error 검사·원복.
 - [ ] **P2-6 `[확인]` 반려→재처리 시 지급사진 ref 미초기화 → 과거 사진 재노출** — [ElevatorFieldApp.jsx:1343](../app/components/ElevatorFieldApp.jsx#L1343)(handleReprocess)/875 — supplyPhotoUrlsRef·supply_photo_urls 함께 초기화.
 - [ ] **P2-7 `[확인]` 지원요청/운행정지로 미배정 복귀 시 알림 없음** — [ElevatorFieldApp.jsx:706](../app/components/ElevatorFieldApp.jsx#L706) — 접수 때와 달리 failure_unassigned 푸시 미발송 → 지원 필요 건을 아무도 모름.
-- [ ] **P2-8 `[확인]` 비용청구 selectedId stale 초기화** — [BillingTab.jsx:26](../app/components/tabs/BillingTab.jsx#L26) — `useState(openTodos[0]?.id)` 최초 1회만 → todos 늦게 오면 제출 불가. → `useEffect([openTodos])` 재설정.
+- [x] **P2-8 `[확인]` 비용청구 selectedId stale 초기화** — (수정 2026-07-24: openTodos 동기화 effect) — [BillingTab.jsx:26](../app/components/tabs/BillingTab.jsx#L26) — `useState(openTodos[0]?.id)` 최초 1회만 → todos 늦게 오면 제출 불가. → `useEffect([openTodos])` 재설정.
 - [ ] **P2-9 `[확인]` 검사관리 도래현장 카드마다 실시간 API 호출(한도 위험)** — [InspectionTab.jsx:16](../app/components/tabs/InspectionTab.jsx#L16) DueSoonCard — "전 호기 실시간 호출 금지" 정책과 충돌. → units DB 캐시/결과 캐싱.
 - [ ] **P2-10 `[확인]` 관리자 수동완료가 청구 없이 루프 완료 위장** — handleAdminToggleTodo(1275) + isBilled(MaterialTab:687) — 관리자가 자재/견적 할일 임의 done → 반려차단 + 원가 미기록 + 로스리포트 false-closed. → 청구 존재와 done 분리 판정.
 - [ ] **P2-11 `[확인]` 낙관적 배정에 assignee_id 누락 + guard 실패 시 refetch 없음** — handleAssignFailure:581/handleReassign/handleRefuse — 로컬 assigneeId stale(현재 이름 fallback으로 가려짐, Phase2에서 깨짐), 동시배정 guard 0행 때 stale "미배정" 유지. → setState에 assigneeId 포함 + guard 실패 refetch.

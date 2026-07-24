@@ -14,7 +14,11 @@ const BILLING_METHODS = ["계좌이체", "CMS", "지로"];
 function siteManagerOf(data, unitId, fallbackSiteName) {
   const unit = data.units.find((u) => u.id === unitId);
   const site = unit ? data.sites.find((s) => s.id === unit.siteId) : data.sites.find((s) => s.name === fallbackSiteName);
-  return site?.manager || "-";
+  if (!site) return "-";
+  // 콘솔은 옛 컬럼 sites.manager를 갱신하지 않아 늘 stale → v2 site_managers 대표 담당자 우선 (P1-6)
+  const mgrs = (data.siteManagers ?? []).filter((m) => m.siteId === site.id);
+  const primary = mgrs.find((m) => m.isPrimary) ?? mgrs[0];
+  return primary?.name || site.manager || "-";
 }
 
 function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPrice }) {

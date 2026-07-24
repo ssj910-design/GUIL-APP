@@ -244,11 +244,11 @@ export default function MaterialsAdmin({ data, setData }) {
     }
 
     const unitId = quote.unitId ?? unitIdFor(data.units, quote.siteId, quote.elevatorNo);
-    const startIdx = existingTodos.length;
-    const newTodos = toAddIds.map((assigneeId, i) => {
+    const newTodos = toAddIds.map((assigneeId) => {
       const engineer = (data.profiles ?? []).find((p) => p.id === assigneeId);
       return {
-        id: `todo-quote-${quote.id}-${startIdx + i}`,
+        // 위치인덱스(existingTodos.length) id는 담당자 add/remove 반복 시 살아있는 할일과 충돌해 덮어썼다 → 고유 id (P1-5)
+        id: `todo-quote-${quote.id}-${crypto.randomUUID()}`,
         quoteRequestId: quote.id,
         materialRequestId: null,
         source: "quote",
