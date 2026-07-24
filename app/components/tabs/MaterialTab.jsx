@@ -980,7 +980,12 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
                 );
               })}
               {myRequests.length === 0 && (
-                <p className="text-xs text-slate-400 text-center py-4">신청 내역이 없습니다</p>
+                <div className="text-center py-4">
+                  <p className="text-xs text-slate-400">신청 내역이 없습니다</p>
+                  <button onClick={() => setShowMaterialHistory(true)} className="mt-2 inline-flex items-center gap-0.5 text-xs font-bold text-blue-600">
+                    지난 신청 내역 전체보기 <ChevronRight size={12} />
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -1002,7 +1007,14 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
                   .slice(0, 3);
                 const preview = [...pending, ...recentDone];
                 if (preview.length === 0) {
-                  return <p className="text-xs text-slate-400 text-center py-4">보충 요청 내역이 없습니다</p>;
+                  return (
+                    <div className="text-center py-4">
+                      <p className="text-xs text-slate-400">보충 요청 내역이 없습니다</p>
+                      <button onClick={() => setShowRestockHistory(true)} className="mt-2 inline-flex items-center gap-0.5 text-xs font-bold text-blue-600">
+                        지난 보충 내역 전체보기 <ChevronRight size={12} />
+                      </button>
+                    </div>
+                  );
                 }
                 return preview.map((r) => {
                   const bar = r.status === "완료" ? "border-l-emerald-500" : "border-l-amber-400";
