@@ -1679,6 +1679,17 @@ export default function App() {
           </button>
           )}
 
+          {/* 관리자 퀵버튼 — 관리자는 어느 탭에서든 관리자 모드로 바로 이동 (관리자 모드 탭에서는 숨김) */}
+          {profile.role === "admin" && tab !== "admin" && (
+          <button
+            onClick={() => setTab("admin")}
+            aria-label="관리자 모드 열기"
+            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-slate-800 text-white shadow-lg flex items-center justify-center active:scale-95 ${tab === "failure" ? "bottom-52" : tab === "room" ? "bottom-20" : "bottom-36"}`}
+          >
+            <Settings size={22} />
+          </button>
+          )}
+
           {/* 알림(종)에서 특정 건을 눌렀을 때 — 탭 이동 없이 지금 화면 위에 상세만 띄운다 */}
           {openFailureId && (() => {
             const f = failures.find((x) => x.id === openFailureId);
