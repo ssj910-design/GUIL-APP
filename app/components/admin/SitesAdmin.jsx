@@ -4,8 +4,8 @@
 // v2 기본: 호기(units)를 직접 편집한다. 단 007(옛 컬럼 정리) 전까지는
 // 모바일 앱이 아직 참조하는 sites의 옛 컬럼(unit_count, gov_elevator_nos,
 // elevator_model)도 함께 동기화한다(듀얼라이트).
-import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useState, useRef } from "react";
+import { Plus, Trash2, Paperclip } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapUnit } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
@@ -16,11 +16,98 @@ import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetail
 import { Modal, StatusBadge, DateTextInput, EditableDate } from "@/app/components/admin/adminShared";
 import ImportSites from "@/app/components/admin/ImportSites";
 import { confirmAsync } from "@/app/components/ConfirmHost";
+import { uploadPhoto } from "@/lib/photos";
 
 const CONTRACT_TYPES = ["POG(일반계약)", "FM(종합계약)"];
 const CONTACT_ROLES = ["대표", "담당자", "관리소장", "건물주", "경비실", "입주민 대표", "기타"];
 const UNIT_TYPES = ["엘리베이터", "에스컬레이터", "휠체어리프트", "카리프트"];
 const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
+const TERMINATION_BASIS = ["중지공문", "구두통보", "기타"];
+
+// 현장 계약서 사본 첨부 — 인사관리 근로계약서(profiles.contract_url)와 같은 방식.
+function SiteContractModal({ site, onClose, onSave }) {
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadPhoto(file, `contracts/${site.id}`);
+      await onSave(url);
+    } catch (err) {
+      alert("업로드 실패: " + (err.message ?? "알 수 없는 오류"));
+    }
+    setUploading(false);
+  }
+
+  return (
+    <Modal title={`${site.name} 계약서`} onClose={onClose}>
+      {site.contractUrl ? (
+        <div className="space-y-3">
+          <a href={site.contractUrl} target="_blank" rel="noreferrer" className="block text-sm font-bold text-blue-700 underline">
+            첨부된 계약서 사본 보기
+          </a>
+          <button onClick={() => onSave(null)} className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">
+            첨부 삭제
+          </button>
+        </div>
+      ) : (
+        <>
+          <input ref={fileInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleFile} />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="w-full border-2 border-dashed border-slate-300 rounded-xl py-8 flex flex-col items-center gap-1.5 text-slate-500 disabled:opacity-50"
+          >
+            <Paperclip size={22} />
+            <span className="text-xs font-semibold">{uploading ? "업로드 중..." : "계약서 사본 첨부 (사진/PDF)"}</span>
+          </button>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+// 계약종료 — 언제·무슨 근거로·왜 종료했는지 남긴다 (soft delete와 함께 기록).
+function TerminationModal({ site, onClose, onConfirm }) {
+  const [date, setDate] = useState(TODAY_STR);
+  const [basis, setBasis] = useState(TERMINATION_BASIS[0]);
+  const [reason, setReason] = useState("");
+
+  return (
+    <Modal title={`${site.name} 계약종료`} onClose={onClose}>
+      <div className="space-y-3">
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">종료일자</p>
+          <DateTextInput value={date} onChange={setDate} />
+        </div>
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">근거</p>
+          <select className={inputCls} value={basis} onChange={(e) => setBasis(e.target.value)}>
+            {TERMINATION_BASIS.map((b) => <option key={b}>{b}</option>)}
+          </select>
+        </div>
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">종료사유</p>
+          <textarea className={inputCls} rows={3} placeholder="예: 건물 리모델링으로 인한 계약 해지" value={reason} onChange={(e) => setReason(e.target.value)} />
+        </div>
+        <div className="flex gap-2 justify-end pt-1">
+          <button onClick={onClose} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5">취소</button>
+          <button
+            onClick={() => onConfirm({ date, basis, reason: reason.trim() })}
+            className="text-sm font-bold text-white bg-red-600 rounded-xl px-4 py-2.5"
+          >
+            계약종료 확정
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
 
 // units 배열로 sites 옛 컬럼 동기화 값 계산
 function legacySiteFields(siteUnits) {
@@ -281,6 +368,8 @@ export default function SitesAdmin({ data, setData }) {
   const [editingUnits, setEditingUnits] = useState(false);
   const [importing, setImporting] = useState(false); // 공단 엑셀 일괄 등록
   const [unitDetail, setUnitDetail] = useState(null);
+  const [contractOpen, setContractOpen] = useState(false);
+  const [terminating, setTerminating] = useState(false);
 
   const site = sites.find((s) => s.id === selectedId);
   const siteUnits = units.filter((u) => u.siteId === selectedId).sort((a, b) => a.seq - b.seq);
@@ -484,11 +573,35 @@ export default function SitesAdmin({ data, setData }) {
     setData((prev) => ({ ...prev, siteManagers: prev.siteManagers.map((m) => (m.siteId === c.siteId ? { ...m, isPrimary: m.id === c.id } : m)) }));
   }
 
-  // 계약종료/복구 (soft delete — 설계 원칙 4)
+  // 계약종료/복구 (soft delete — 설계 원칙 4). 종료는 일자·근거·사유를 받아야 해서 모달을 연다.
   async function toggleSiteActive() {
-    const next = !(site.isActive !== false);
-    await supabase.from("sites").update({ is_active: next }).eq("id", selectedId);
-    setData((prev) => ({ ...prev, sites: prev.sites.map((x) => (x.id === selectedId ? { ...x, isActive: next } : x)) }));
+    if (site.isActive === false) {
+      await supabase.from("sites").update({
+        is_active: true, terminated_date: null, termination_basis: null, termination_reason: null,
+      }).eq("id", selectedId);
+      setData((prev) => ({
+        ...prev,
+        sites: prev.sites.map((x) => (x.id === selectedId ? { ...x, isActive: true, terminatedDate: null, terminationBasis: null, terminationReason: null } : x)),
+      }));
+    } else {
+      setTerminating(true);
+    }
+  }
+
+  async function confirmTermination({ date, basis, reason }) {
+    await supabase.from("sites").update({
+      is_active: false, terminated_date: date || null, termination_basis: basis, termination_reason: reason || null,
+    }).eq("id", selectedId);
+    setData((prev) => ({
+      ...prev,
+      sites: prev.sites.map((x) => (x.id === selectedId ? { ...x, isActive: false, terminatedDate: date, terminationBasis: basis, terminationReason: reason } : x)),
+    }));
+    setTerminating(false);
+  }
+
+  async function saveSiteContract(url) {
+    await supabase.from("sites").update({ contract_url: url }).eq("id", selectedId);
+    setData((prev) => ({ ...prev, sites: prev.sites.map((x) => (x.id === selectedId ? { ...x, contractUrl: url } : x)) }));
   }
 
   return (
@@ -618,6 +731,14 @@ export default function SitesAdmin({ data, setData }) {
               <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
                 {!editingInfo ? (
                   <>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setContractOpen(true)} className="flex items-center gap-1 text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 whitespace-nowrap">
+                        <Paperclip size={13} /> 계약서
+                      </button>
+                      <button onClick={() => setEditingInfo(true)} className="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 whitespace-nowrap">
+                        수정하기
+                      </button>
+                    </div>
                     <div className="flex items-start justify-between">
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 flex-1 text-sm">
                         <div><p className="text-xs font-bold text-slate-400 mb-1">현장명</p><p className="font-semibold text-slate-800">{site.name}</p></div>
@@ -650,9 +771,6 @@ export default function SitesAdmin({ data, setData }) {
                         <div><p className="text-xs font-bold text-slate-400 mb-1">이메일</p><p className="font-semibold text-slate-800">{site.email || "-"}</p></div>
                         <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(전달사항)</p><p className="text-slate-700">{site.notes || "-"}</p></div>
                       </div>
-                      <button onClick={() => setEditingInfo(true)} className="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 whitespace-nowrap ml-3">
-                        수정하기
-                      </button>
                     </div>
                     {/* 재계약 안내 — 계약종료 상태이거나 종료일이 임박/지난 현장에만 표시 */}
                     {(site.isActive === false || isExpired(site.contractEnd) || in30(site.contractEnd)) && (
@@ -668,6 +786,13 @@ export default function SitesAdmin({ data, setData }) {
                         <p className="text-[11px] text-amber-600 mt-0.5">
                           별도 통보 없이 지나가면 관행상 묵시적 갱신될 수 있어요 — 조건 변경·해지는 만료 전에 통보해야 합니다
                         </p>
+                        {site.isActive === false && (site.terminatedDate || site.terminationBasis || site.terminationReason) && (
+                          <p className="text-xs text-amber-700 mt-1.5">
+                            {site.terminatedDate && `종료일자 ${shortDate(site.terminatedDate)}`}
+                            {site.terminationBasis && ` · 근거 ${site.terminationBasis}`}
+                            {site.terminationReason && ` · 사유 ${site.terminationReason}`}
+                          </p>
+                        )}
                         {!renew ? (
                           <button
                             onClick={() => {
@@ -691,7 +816,7 @@ export default function SitesAdmin({ data, setData }) {
                       </div>
                     )}
                     <div className="flex justify-end">
-                      <button onClick={toggleSiteActive} className="text-sm font-bold text-slate-400 border border-slate-200 rounded-xl px-3 py-2 whitespace-nowrap">
+                      <button onClick={toggleSiteActive} className="text-xs font-bold text-slate-500 border border-slate-200 rounded-lg px-3 py-1.5 whitespace-nowrap">
                         {site.isActive === false ? "계약 복구" : "계약종료"}
                       </button>
                     </div>
@@ -897,6 +1022,14 @@ export default function SitesAdmin({ data, setData }) {
           billings={billings}
           onClose={() => setUnitDetail(null)}
         />
+      )}
+
+      {contractOpen && site && (
+        <SiteContractModal site={site} onClose={() => setContractOpen(false)} onSave={saveSiteContract} />
+      )}
+
+      {terminating && site && (
+        <TerminationModal site={site} onClose={() => setTerminating(false)} onConfirm={confirmTermination} />
       )}
     </div>
   );
