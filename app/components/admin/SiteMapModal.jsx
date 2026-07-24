@@ -9,7 +9,7 @@ import "leaflet/dist/leaflet.css";
 import { Modal } from "@/app/components/admin/adminShared";
 
 // 주소에서 "구/군"만 추출 — 예: "서울특별시 강남구 학동로 120" -> "강남구".
-export function guOf(address) {
+function guOf(address) {
   const m = (address ?? "").trim().match(/^\S+\s+(\S+?[구군])(\s|$)/);
   return m ? m[1] : null;
 }

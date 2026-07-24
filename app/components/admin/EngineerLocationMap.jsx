@@ -4,7 +4,7 @@
 // 마커 모양(물방울 핀)·타일은 SiteMapModal(자체점검현황 현장지도)과 동일하게 맞춘다.
 import { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
-import { pinIcon, guOf } from "@/app/components/admin/SiteMapModal";
+import { pinIcon } from "@/app/components/admin/SiteMapModal";
 
 const ENGINEER_COLOR = "#2563eb"; // 파랑 — 기사 위치
 const SITE_COLOR = "#dc2626";     // 빨강 — 고장 현장 위치
@@ -55,10 +55,10 @@ export function EngineerLocationMap({ engineers, site }) {
     import("leaflet").then((Lmod) => {
       if (cancelled || !containerRef.current) return;
       const map = Lmod.map(containerRef.current).setView([37.5665, 126.978], 11);
-      Lmod.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-        attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
-        maxZoom: 20,
-        subdomains: "abcd",
+      Lmod.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 19,
+        subdomains: "abc",
       }).addTo(map);
       mapObjRef.current = map;
       setL(Lmod);
@@ -154,22 +154,6 @@ export function EngineerLocationMap({ engineers, site }) {
       siteMarker.on("popupclose", () => { sitePinned = false; });
       markersRef.current.push(siteMarker);
 
-      // 구/시 이름표 — 타일 지도가 저배율에서 도시명을 로마자로 표시해도, 우리 DB의 주소(한글)에서
-      // 뽑은 구/시 이름을 마커 위에 직접 얹어 항상 한글로 보이게 한다 (자체점검현황 지도와 동일한 방식).
-      const gu = guOf(site.address);
-      if (gu) {
-        const guLabel = L.marker([site.lat, site.lng], {
-          icon: L.divIcon({
-            className: "",
-            html: `<div style="font-size:13px;font-weight:800;color:#334155;white-space:nowrap;pointer-events:none;text-shadow:0 1px 3px #fff,0 -1px 3px #fff,1px 0 3px #fff,-1px 0 3px #fff;transform:translateY(-30px)">${gu}</div>`,
-            iconSize: [0, 0],
-          }),
-          interactive: false,
-          zIndexOffset: 10000,
-        }).addTo(map);
-        markersRef.current.push(guLabel);
-      }
-
       const width = containerRef.current?.clientWidth || 460;
       // animate:false — 애니메이션 줌이 진행 중에 취소되면서 원래 줌으로 되돌아가는 문제가 있어 끈다.
       map.setView([site.lat, site.lng], zoomForRadius(site.lat, RADIUS_KM, width), { animate: false });
@@ -182,7 +166,7 @@ export function EngineerLocationMap({ engineers, site }) {
   }, [L, engineers, site]);
 
   return (
-    <div className="relative w-full h-[600px] rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+    <div className="relative w-full h-[760px] rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
       {loading && <p className="absolute inset-0 flex items-center justify-center text-xs text-slate-400">지도 불러오는 중...</p>}
       <div ref={containerRef} className="w-full h-full" />
       <div className="absolute bottom-2 left-2 bg-white/90 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 flex items-center gap-3 shadow">
