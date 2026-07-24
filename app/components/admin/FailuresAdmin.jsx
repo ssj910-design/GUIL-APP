@@ -2,7 +2,7 @@
 
 // 고장관리 — 전체 고장 테이블 + 기사 배정(듀얼라이트) + 고장접수(신규 등록).
 // 출동/도착/처리결과 입력은 현장 기사의 모바일 앱 몫이므로 여기서는 하지 않는다.
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Plus, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR, FAULT_TYPES } from "@/lib/constants";
@@ -190,7 +190,9 @@ function EngineerOptions({ engineers, site }) {
 
 export function RegisterFailureModal({ data, onClose, onCreate }) {
   const { sites, units, profiles } = data;
-  const engineers = profiles.filter((p) => p.role === "engineer");
+  // useMemo로 참조를 고정 — 매번 새 배열이면 지도 마커를 그리는 effect가 리렌더마다
+  // (다른 입력칸 타이핑 등) 재실행돼 그려둔 경로선이 사라진다.
+  const engineers = useMemo(() => profiles.filter((p) => p.role === "engineer"), [profiles]);
   const [form, setForm] = useState({
     siteId: "", unitIds: [], faultType: "", detail: "", details: {}, assignee: "", reporterPhone: "", notFault: false,
   });
@@ -218,7 +220,7 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
     <Modal title="고장접수" onClose={onClose} wide="2xl">
       <div className="flex gap-4 items-start flex-wrap lg:flex-nowrap">
       <div className="w-full lg:w-[620px] shrink-0">
-        <EngineerLocationMap engineers={engineers} site={site} />
+        <EngineerLocationMap engineers={engineers} site={site} onEngineerClick={(name) => setForm((f) => ({ ...f, assignee: name }))} />
       </div>
       <div className="space-y-3 flex-1 min-w-0">
         <div>

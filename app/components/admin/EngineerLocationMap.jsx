@@ -4,7 +4,7 @@
 // 마커 모양(물방울 핀)·타일은 SiteMapModal(자체점검현황 현장지도)과 동일하게 맞춘다.
 import { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
-import { pinIcon } from "@/app/components/admin/SiteMapModal";
+import { pinIcon, guOf } from "@/app/components/admin/SiteMapModal";
 
 const ENGINEER_COLOR = "#2563eb"; // 파랑 — 기사 위치
 const SITE_COLOR = "#dc2626";     // 빨강 — 고장 현장 위치
@@ -42,7 +42,7 @@ const fmtDuration = (sec) => {
 };
 const fmtDistance = (m) => (m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(1)}km`);
 
-export function EngineerLocationMap({ engineers, site }) {
+export function EngineerLocationMap({ engineers, site, onEngineerClick }) {
   const containerRef = useRef(null);
   const mapObjRef = useRef(null);
   const markersRef = useRef([]);
@@ -102,6 +102,7 @@ export function EngineerLocationMap({ engineers, site }) {
       });
       marker.on("click", async function () {
         pinned = true;
+        onEngineerClick?.(e.name);
         this.setPopupContent(namePopup(e.name, site ? "경로 계산 중..." : undefined));
         this.openPopup();
         if (!site?.lat || !site?.lng) return;
@@ -124,10 +125,10 @@ export function EngineerLocationMap({ engineers, site }) {
           this.setPopupContent(namePopup(e.name, "경로 조회 실패"));
         }
       });
-      marker.on("popupclose", () => {
-        pinned = false;
-        if (routeLineRef.current) { map.removeLayer(routeLineRef.current); routeLineRef.current = null; }
-      });
+      // 경로선은 여기서 지우지 않는다 — 다른 기사에 커서만 올려도 popupclose가 발생해
+      // (Leaflet 팝업 autoClose) 경로가 사라지던 문제가 있었다. 경로는 다른 기사를
+      // "클릭"할 때만(위 click 핸들러에서) 새로 그리며 지운다.
+      marker.on("popupclose", () => { pinned = false; });
       markersRef.current.push(marker);
     });
 
@@ -153,6 +154,22 @@ export function EngineerLocationMap({ engineers, site }) {
       siteMarker.on("click", function () { sitePinned = true; this.openPopup(); });
       siteMarker.on("popupclose", () => { sitePinned = false; });
       markersRef.current.push(siteMarker);
+
+      // 구/시 이름표 — 타일 지도가 저배율·라벨 혼잡으로 구 이름을 안 띄우는 경우가 있어,
+      // 우리 DB 주소(한글)에서 뽑은 구/군 이름을 마커 위에 직접 얹어 항상 보이게 한다.
+      const gu = guOf(site.address);
+      if (gu) {
+        const guLabel = L.marker([site.lat, site.lng], {
+          icon: L.divIcon({
+            className: "",
+            html: `<div style="font-size:13px;font-weight:800;color:#334155;white-space:nowrap;pointer-events:none;text-shadow:0 1px 3px #fff,0 -1px 3px #fff,1px 0 3px #fff,-1px 0 3px #fff;transform:translateY(-30px)">${gu}</div>`,
+            iconSize: [0, 0],
+          }),
+          interactive: false,
+          zIndexOffset: 10000,
+        }).addTo(map);
+        markersRef.current.push(guLabel);
+      }
 
       const width = containerRef.current?.clientWidth || 460;
       // animate:false — 애니메이션 줌이 진행 중에 취소되면서 원래 줌으로 되돌아가는 문제가 있어 끈다.
