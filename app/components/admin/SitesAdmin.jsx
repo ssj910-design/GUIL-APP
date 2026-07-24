@@ -24,10 +24,14 @@ const UNIT_TYPES = ["엘리베이터", "에스컬레이터", "휠체어리프트
 const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
 const TERMINATION_BASIS = ["중지공문", "구두통보", "기타"];
 
-// 현장 계약서 사본 첨부 — 인사관리 근로계약서(profiles.contract_url)와 같은 방식.
+// 현장 계약서 사본 첨부 — 클릭해서 열지 않아도 바로 보이게, 2장 이상이면 좌우로 넘긴다.
 function SiteContractModal({ site, onClose, onSave }) {
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
+  const [idx, setIdx] = useState(0);
+  const urls = site.contractUrls ?? [];
+  const current = urls[idx];
+  const isPdf = (current ?? "").toLowerCase().includes(".pdf");
 
   async function handleFile(e) {
     const file = e.target.files?.[0];
@@ -36,25 +40,36 @@ function SiteContractModal({ site, onClose, onSave }) {
     setUploading(true);
     try {
       const url = await uploadPhoto(file, `contracts/${site.id}`);
-      await onSave(url);
+      const next = [...urls, url];
+      await onSave(next);
+      setIdx(next.length - 1);
     } catch (err) {
       alert("업로드 실패: " + (err.message ?? "알 수 없는 오류"));
     }
     setUploading(false);
   }
 
+  async function removeCurrent() {
+    if (!(await confirmAsync("이 계약서 페이지를 삭제할까요?"))) return;
+    const next = urls.filter((_, i) => i !== idx);
+    await onSave(next);
+    setIdx((i) => Math.max(0, Math.min(i, next.length - 1)));
+  }
+
+  function download() {
+    const a = document.createElement("a");
+    a.href = current;
+    a.download = "";
+    a.target = "_blank";
+    a.rel = "noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
   return (
-    <Modal title={`${site.name} 계약서`} onClose={onClose}>
-      {site.contractUrl ? (
-        <div className="space-y-3">
-          <a href={site.contractUrl} target="_blank" rel="noreferrer" className="block text-sm font-bold text-blue-700 underline">
-            첨부된 계약서 사본 보기
-          </a>
-          <button onClick={() => onSave(null)} className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">
-            첨부 삭제
-          </button>
-        </div>
-      ) : (
+    <Modal title={`${site.name} 계약서${urls.length > 1 ? ` (${idx + 1}/${urls.length})` : ""}`} onClose={onClose}>
+      {urls.length === 0 ? (
         <>
           <input ref={fileInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleFile} />
           <button
@@ -67,6 +82,47 @@ function SiteContractModal({ site, onClose, onSave }) {
             <span className="text-xs font-semibold">{uploading ? "업로드 중..." : "계약서 사본 첨부 (사진/PDF)"}</span>
           </button>
         </>
+      ) : (
+        <div className="space-y-3">
+          <div className="relative bg-slate-50 border border-slate-200 rounded-xl overflow-hidden h-[60vh] flex items-center justify-center">
+            {isPdf ? (
+              <iframe src={current} className="w-full h-full" title="계약서 PDF" />
+            ) : (
+              <img src={current} alt="계약서" className="max-w-full max-h-full object-contain" />
+            )}
+            {urls.length > 1 && (
+              <>
+                <button
+                  onClick={() => setIdx((i) => (i - 1 + urls.length) % urls.length)}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-lg font-bold text-slate-600 bg-white/90 border border-slate-200 rounded-full shadow"
+                >
+                  ‹
+                </button>
+                <button
+                  onClick={() => setIdx((i) => (i + 1) % urls.length)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-lg font-bold text-slate-600 bg-white/90 border border-slate-200 rounded-full shadow"
+                >
+                  ›
+                </button>
+              </>
+            )}
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex gap-2">
+              <button onClick={download} className="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5">다운로드</button>
+              <button onClick={removeCurrent} className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">삭제</button>
+            </div>
+            <input ref={fileInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleFile} />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="flex items-center gap-1 text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 disabled:opacity-50"
+            >
+              <Paperclip size={13} /> {uploading ? "업로드 중..." : "추가"}
+            </button>
+          </div>
+        </div>
       )}
     </Modal>
   );
@@ -599,9 +655,9 @@ export default function SitesAdmin({ data, setData }) {
     setTerminating(false);
   }
 
-  async function saveSiteContract(url) {
-    await supabase.from("sites").update({ contract_url: url }).eq("id", selectedId);
-    setData((prev) => ({ ...prev, sites: prev.sites.map((x) => (x.id === selectedId ? { ...x, contractUrl: url } : x)) }));
+  async function saveSiteContract(urls) {
+    await supabase.from("sites").update({ contract_urls: urls }).eq("id", selectedId);
+    setData((prev) => ({ ...prev, sites: prev.sites.map((x) => (x.id === selectedId ? { ...x, contractUrls: urls } : x)) }));
   }
 
   return (

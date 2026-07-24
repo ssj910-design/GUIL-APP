@@ -17,6 +17,14 @@ const KINDS = ["연차", "반차", "병가", "공가", "기타"];
 // 반차는 0.5일. 그 외는 시작~종료 일수 그대로 (주말 제외는 회사 규정이 갈려 자동 계산하지 않는다)
 const daysBetween = (a, b) => Math.floor((new Date(b) - new Date(a)) / 86400000) + 1;
 
+// 연차차감제 정산주기 — 31일 급여(당월 지급)는 전월 26일~당월 25일 근무분이라, 그 기간을 기준으로 본다.
+function payCycleFor(monthStr) {
+  const [y, m] = monthStr.split("-").map(Number);
+  const prevY = m === 1 ? y - 1 : y;
+  const prevM = m === 1 ? 12 : m - 1;
+  return { start: `${prevY}-${String(prevM).padStart(2, "0")}-26`, end: `${monthStr}-25` };
+}
+
 export default function LeavesAdmin({ data, setData }) {
   const { profiles } = data;
   const staff = profiles.filter((p) => p.is_active !== false && p.role !== "system");
@@ -24,12 +32,19 @@ export default function LeavesAdmin({ data, setData }) {
   const [year, setYear] = useState(Number(TODAY_STR.slice(0, 4)));
   const [form, setForm] = useState({ profileId: "", start: TODAY_STR, end: TODAY_STR, kind: "연차", note: "" });
   const [busy, setBusy] = useState(false);
+  const [cycleLeaves, setCycleLeaves] = useState([]);
+  const { start: cycleStart, end: cycleEnd } = payCycleFor(TODAY_STR.slice(0, 7));
 
   useEffect(() => {
     supabase.from("leaves").select("*").gte("start_date", `${year}-01-01`).lte("start_date", `${year}-12-31`)
       .order("start_date", { ascending: false })
       .then(({ data: rows }) => setLeaves(rows ?? []));
   }, [year]);
+
+  useEffect(() => {
+    supabase.from("leaves").select("*").gte("start_date", cycleStart).lte("start_date", cycleEnd)
+      .then(({ data: rows }) => setCycleLeaves(rows ?? []));
+  }, [cycleStart, cycleEnd]);
 
   // 잔여는 '승인'된 것만 뺀다 — 신청 중인 건을 미리 빼면 반려됐을 때 숫자가 틀어진다. 병가·공가는 연차와 별개라 차감 대상에서 뺀다.
   const st = (l) => l.status ?? "승인";
@@ -57,6 +72,28 @@ export default function LeavesAdmin({ data, setData }) {
   }
   const nameOf = (id) => staff.find((p) => p.id === id)?.name ?? "(퇴사)";
   const autoDays = form.kind === "반차" ? 0.5 : Math.max(1, daysBetween(form.start, form.end));
+
+  async function toggleDeduction(p) {
+    const patch = { leave_deduction_enabled: !p.leave_deduction_enabled };
+    await supabase.from("profiles").update(patch).eq("id", p.id);
+    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, ...patch } : x)) }));
+  }
+
+  // 이번 정산주기 안에 연차·반차·기타(=연차 잔여를 까먹는 종류) 사용 기록이 있으면 "사용함"으로 본다.
+  const usedInCycle = (id) =>
+    cycleLeaves.some((l) => l.profile_id === id && (l.status ?? "승인") === "승인" && l.kind !== "병가" && l.kind !== "공가");
+  const deductionCandidates = staff.filter((p) => p.leave_deduction_enabled && !usedInCycle(p.id));
+
+  async function processDeduction(p) {
+    if (!(await confirmAsync(`${p.name}님 이번 정산주기(${shortDate(cycleStart)} ~ ${shortDate(cycleEnd)}) 연차 미사용으로 1일을 차감할까요?\n(31일 급여에 연차보상비 1일치를 지급하는 대신 연차에서 차감합니다)`))) return;
+    const { data: rows, error } = await supabase.from("leaves").insert({
+      profile_id: p.id, start_date: cycleEnd, end_date: cycleEnd, kind: "연차", days: 1,
+      note: `연차미사용 자동차감 (정산주기 ${cycleStart}~${cycleEnd})`, status: "승인",
+    }).select();
+    if (error) { alert("처리 실패: " + error.message); return; }
+    setCycleLeaves((prev) => [...prev, rows[0]]);
+    if (cycleEnd.slice(0, 4) === String(year)) setLeaves((prev) => [rows[0], ...prev]);
+  }
 
   async function add() {
     if (!form.profileId) return;
@@ -170,13 +207,31 @@ export default function LeavesAdmin({ data, setData }) {
         </div>
       )}
 
+      {/* 연차차감제 대상자 — 이번 정산주기(전월26일~당월25일) 연차 미사용, 31일 급여 처리 전 확인 */}
+      {deductionCandidates.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-5">
+          <p className="text-xs font-extrabold text-blue-800 mb-1">
+            연차차감제 대상자 · 이번 정산주기({shortDate(cycleStart)} ~ {shortDate(cycleEnd)}) 연차 미사용 {deductionCandidates.length}명
+          </p>
+          <p className="text-[11px] text-blue-600 mb-2.5">31일 급여에 연차보상비 1일치를 지급하는 대신 연차 1일을 차감합니다. 확인 후 처리하세요.</p>
+          <div className="space-y-2">
+            {deductionCandidates.map((p) => (
+              <div key={p.id} className="flex items-center justify-between gap-2 bg-white rounded-lg px-3 py-2.5">
+                <p className="text-xs font-bold text-slate-800">{p.name}</p>
+                <button onClick={() => processDeduction(p)} className="text-xs font-bold text-white bg-blue-700 rounded-lg px-3 py-1.5">1일 차감 처리</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 사람별 잔여 */}
       <h2 className="text-sm font-extrabold text-slate-700 mb-1">{year}년 연차 현황</h2>
       <p className="text-[11px] text-slate-400 mb-2 leading-relaxed">
         연차 일수는 입사일에서 자동 계산됩니다 (1년 미만 개근 개월당 1일·최대 11일 / 1년 이상 15일 / 3년부터 2년마다 +1일·상한 25일).
       </p>
       <div className="mb-6">
-        <AdminTable head={["이름", "입사일 · 근속", "연차", "사용", "잔여", ""]} minWidth="44rem">
+        <AdminTable head={["이름", "입사일 · 근속", "연차", "사용", "잔여", "연차차감제"]} minWidth="44rem">
           {staff.map((p) => {
             const used = usedBy(p.id);
             // 해당 연도 말일 기준 — 그 해에 발생하는 연차를 보여준다
@@ -200,7 +255,13 @@ export default function LeavesAdmin({ data, setData }) {
                   {left == null ? <span className="text-slate-300">-</span>
                     : <StatusBadge tone={left <= 0 ? "slate" : left <= 3 ? "amber" : "green"}>{left}일</StatusBadge>}
                 </td>
-                <td />
+                <td className="px-3 py-2.5">
+                  <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+                    <input type="checkbox" checked={!!p.leave_deduction_enabled} onChange={() => toggleDeduction(p)}
+                      className="w-4 h-4 rounded border-slate-300 cursor-pointer accent-blue-700" />
+                    <span className="text-[11px] text-slate-500">사용</span>
+                  </label>
+                </td>
               </tr>
             );
           })}
