@@ -9,6 +9,7 @@ import { TODAY_STR, FAULT_TYPES } from "@/lib/constants";
 import { formatPhone, sortEngineersByDistance } from "@/lib/utils";
 import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls } from "@/app/components/admin/adminShared";
 import { FailureDetailContent } from "@/app/components/admin/Dashboard";
+import { EngineerLocationMap } from "@/app/components/admin/EngineerLocationMap";
 import { useHolidays } from "@/app/hooks/useHolidays";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
@@ -214,8 +215,12 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
   }
 
   return (
-    <Modal title="고장접수" onClose={onClose}>
-      <div className="space-y-3">
+    <Modal title="고장접수" onClose={onClose} wide="xl">
+      <div className="flex gap-4 items-start flex-wrap lg:flex-nowrap">
+      <div className="w-full lg:w-80 shrink-0">
+        <EngineerLocationMap engineers={engineers} site={site} />
+      </div>
+      <div className="space-y-3 flex-1 min-w-0">
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">현장 *</p>
           <SiteAutocomplete
@@ -309,6 +314,7 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
             {saving ? "접수 중..." : "접수하기"}
           </button>
         </div>
+      </div>
       </div>
     </Modal>
   );

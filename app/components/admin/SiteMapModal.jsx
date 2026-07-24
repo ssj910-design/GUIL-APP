@@ -25,7 +25,7 @@ function colorForEngineer(name) {
 // Google 지도류의 물방울 핀 모양 — 기본 원형 마커보다 배경 지도 위에서 훨씬 잘 보인다.
 // 안쪽 .site-pin에만 hover 확대를 걸어서, Leaflet이 바깥 div에 직접 쓰는
 // translate3d(위치 이동) 트랜스폼과 충돌하지 않게 한다.
-function pinIcon(L, color) {
+export function pinIcon(L, color) {
   return L.divIcon({
     className: "",
     html: `<div class="site-pin" style="width:26px;height:36px;transform-origin:13px 36px;transition:transform .15s ease;">
