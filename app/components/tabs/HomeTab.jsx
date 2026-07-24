@@ -144,7 +144,7 @@ function AdminAttendanceCard({ attendances, engineers, todayLeaves = [] }) {
           <span className="text-xs font-bold text-slate-500 whitespace-nowrap">오늘 출근</span>
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="text-sm font-bold text-slate-800 whitespace-nowrap">{leaveStats}</span>
+          <span className="text-[11px] font-bold text-slate-400 whitespace-nowrap">{leaveStats}</span>
           {staleRows.length > 0 && <span className="text-[10px] font-extrabold text-white bg-red-500 rounded-full px-1.5 py-0.5">2시간+ 미확인 {staleRows.length}</span>}
           {geoOff.length > 0 && <span className="text-[10px] font-extrabold text-white bg-amber-500 rounded-full px-1.5 py-0.5">위치 미설정 {geoOff.length}</span>}
           <span className="text-[11px] font-bold text-blue-700">{open ? "접기" : "명단"}</span>
