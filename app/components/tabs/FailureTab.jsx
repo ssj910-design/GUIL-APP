@@ -306,9 +306,6 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                     <option key={m} value={m}>{m}분 후</option>
                   ))}
                 </select>
-                <p className="text-[11px] text-orange-600 font-semibold mt-1.5 leading-relaxed">
-                  접수완료 시 바로 출동 처리되어 신고자에게 도착예정시간이 문자로 발송됩니다 — 출동 응답을 따로 누르지 않아도 됩니다
-                </p>
               </div>
             )}
             <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
