@@ -2,16 +2,17 @@
 
 // 관리자 대시보드 — 오늘 처리해야 할 일이 한눈에 보이는 화면.
 // 호기·담당자 표기는 v2 FK(unitId/assigneeId)를 우선 쓰고, 옛 라벨은 fallback.
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import WeekStrip from "@/app/components/admin/WeekStrip";
 import { AlertOctagon, Plus } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, shortDate, sortEngineersByDistance, parseErrorCode } from "@/lib/utils";
+import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, shortDate, sortEngineersByDistance, parseErrorCode, engineerJobsByName } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { Modal, StatusBadge, inputCls, PhotoGrid } from "@/app/components/admin/adminShared";
 import { RegisterFailureModal } from "@/app/components/admin/FailuresAdmin";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 
 function unitLabel(units, sites, unitId, fallbackSiteName, fallbackLabel) {
   const u = units.find((x) => x.id === unitId);
@@ -86,6 +87,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
   const { sites, units, failures, inspections, materialRequests, quoteRequests, todos, billings, selfChecks, profiles } = data;
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const engineers = profiles.filter((p) => p.role === "engineer");
+  const engineerJobs = useMemo(() => engineerJobsByName(failures), [failures]);
   const [historySite, setHistorySite] = useState(null);
   const [failureDetail, setFailureDetail] = useState(null);
   const [failTarget, setFailTarget] = useState(null);
@@ -311,14 +313,23 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
                       <select
                         className={`${inputCls} min-w-24`}
                         value={engineerName(f.assigneeId, f.assignee) === "미배정" ? "" : engineerName(f.assigneeId, f.assignee)}
-                        onChange={(e) => assign(f, e.target.value)}
+                        onChange={async (e) => {
+                          const target = e.target;
+                          const name = target.value;
+                          const ok = await confirmAsync(`${name || "미배정"}으로 배정하시겠습니까?`);
+                          if (!ok) { target.value = engineerName(f.assigneeId, f.assignee) === "미배정" ? "" : engineerName(f.assigneeId, f.assignee); return; }
+                          assign(f, name);
+                        }}
                       >
                         <option value="">미배정</option>
-                        {sortEngineersByDistance(engineers, loc.siteObj).map(({ engineer: p, km }) => (
-                          <option key={p.id} value={p.name}>
-                            {p.name}{km != null ? ` (${km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`})` : ""}
-                          </option>
-                        ))}
+                        {sortEngineersByDistance(engineers, loc.siteObj).map(({ engineer: p, km }) => {
+                          const job = engineerJobs.get(p.name);
+                          return (
+                            <option key={p.id} value={p.name}>
+                              {p.name}{km != null ? ` (${km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`})` : ""}{job ? ` — ${job.siteName} · ${job.label}` : ""}
+                            </option>
+                          );
+                        })}
                       </select>
                     </td>
                     <td className="px-2 py-2.5 whitespace-nowrap text-slate-500">{f.dispatchedAt || "-"}</td>

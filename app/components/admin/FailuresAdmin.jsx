@@ -6,11 +6,12 @@ import { useState, useMemo } from "react";
 import { Plus, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR, FAULT_TYPES } from "@/lib/constants";
-import { formatPhone, sortEngineersByDistance, failureStage } from "@/lib/utils";
+import { formatPhone, sortEngineersByDistance, engineerJobsByName } from "@/lib/utils";
 import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls } from "@/app/components/admin/adminShared";
 import { FailureDetailContent } from "@/app/components/admin/Dashboard";
 import { EngineerLocationMap } from "@/app/components/admin/EngineerLocationMap";
 import { useHolidays } from "@/app/hooks/useHolidays";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -179,24 +180,17 @@ function SiteAutocomplete({ sites, value, onChange }) {
   );
 }
 
-// 기사위치지도 호버 팝업용 — FailureMiniCard와 같은 기준으로 진행 상태 라벨을 뽑는다.
-function jobLabel(f) {
-  const stage = failureStage(f);
-  if (stage === "arrived") return "작업중";
-  if (stage === "dispatched") return "출동중";
-  if (f.assignee) return "응답대기";
-  if (f.escalation === "운행정지") return "운행정지";
-  if (f.escalation === "지원요청") return "지원미배정";
-  return "미배정";
-}
-
 // 배정 기사 <select> 공통 옵션 — 현장과 가까운 순으로 정렬하고 거리를 함께 표시한다.
-function EngineerOptions({ engineers, site }) {
-  return sortEngineersByDistance(engineers, site).map(({ engineer: p, km }) => (
-    <option key={p.id} value={p.name}>
-      {p.name}{km != null ? ` (${km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`})` : ""}
-    </option>
-  ));
+// engineerJobs가 있으면 이름(거리) 우측에 "현재 현장 · 상태"도 함께 보여준다.
+function EngineerOptions({ engineers, site, engineerJobs }) {
+  return sortEngineersByDistance(engineers, site).map(({ engineer: p, km }) => {
+    const job = engineerJobs?.get(p.name);
+    return (
+      <option key={p.id} value={p.name}>
+        {p.name}{km != null ? ` (${km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`})` : ""}{job ? ` — ${job.siteName} · ${job.label}` : ""}
+      </option>
+    );
+  });
 }
 
 export function RegisterFailureModal({ data, onClose, onCreate }) {
@@ -204,15 +198,8 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
   // useMemo로 참조를 고정 — 매번 새 배열이면 지도 마커를 그리는 effect가 리렌더마다
   // (다른 입력칸 타이핑 등) 재실행돼 그려둔 경로선이 사라진다.
   const engineers = useMemo(() => profiles.filter((p) => p.role === "engineer"), [profiles]);
-  // 기사별 현재 진행 중인 고장 1건(완료 제외, 먼저 나온 것 우선) — 지도 마커 호버에 표시.
-  const engineerJobs = useMemo(() => {
-    const map = new Map();
-    for (const f of failures) {
-      if (f.status === "완료" || !f.assignee || map.has(f.assignee)) continue;
-      map.set(f.assignee, { siteName: f.siteName, label: jobLabel(f) });
-    }
-    return map;
-  }, [failures]);
+  // 기사별 현재 진행 중인 고장 1건 — 지도 마커 호버·배정 기사 선택란에 표시.
+  const engineerJobs = useMemo(() => engineerJobsByName(failures), [failures]);
   const [form, setForm] = useState({
     siteId: "", unitIds: [], faultType: "", detail: "", details: {}, assignee: "", reporterPhone: "", notFault: false,
   });
@@ -319,7 +306,7 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
             <p className="text-xs font-bold text-slate-500 mb-1">배정 기사{site && <span className="text-slate-400 font-normal"> — 가까운 순</span>}</p>
             <select className={inputCls} value={form.assignee} onChange={(e) => setForm({ ...form, assignee: e.target.value })}>
               <option value="">미배정</option>
-              <EngineerOptions engineers={engineers} site={site} />
+              <EngineerOptions engineers={engineers} site={site} engineerJobs={engineerJobs} />
             </select>
           </div>
         </div>
@@ -349,6 +336,7 @@ export default function FailuresAdmin({ data, setData }) {
   const [detail, setDetail] = useState(null);
   const [registering, setRegistering] = useState(false);
   const engineers = profiles.filter((p) => p.role === "engineer");
+  const engineerJobs = useMemo(() => engineerJobsByName(failures), [failures]);
 
   const rows = failures.filter((f) => {
     if (status !== "all" && f.status !== status) return false;
@@ -464,10 +452,16 @@ export default function FailuresAdmin({ data, setData }) {
                   <select
                     className={`${inputCls} min-w-28`}
                     value={personOf(data, f.assigneeId, f.assignee) === "-" ? "" : personOf(data, f.assigneeId, f.assignee)}
-                    onChange={(e) => assign(f, e.target.value)}
+                    onChange={async (e) => {
+                      const target = e.target;
+                      const name = target.value;
+                      const ok = await confirmAsync(`${name || "미배정"}으로 배정하시겠습니까?`);
+                      if (!ok) { target.value = personOf(data, f.assigneeId, f.assignee) === "-" ? "" : personOf(data, f.assigneeId, f.assignee); return; }
+                      assign(f, name);
+                    }}
                   >
                     <option value="">미배정</option>
-                    <EngineerOptions engineers={engineers} site={sites.find((s) => s.id === f.siteId)} />
+                    <EngineerOptions engineers={engineers} site={sites.find((s) => s.id === f.siteId)} engineerJobs={engineerJobs} />
                   </select>
                 )}
               </td>
