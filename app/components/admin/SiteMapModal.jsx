@@ -76,16 +76,30 @@ export function SiteMapModal({ sites, units = [], onClose }) {
               <div>담당자: ${s.assignedEngineer || "미배정"}</div>
             </div>`
           );
-        // 커서를 올리면 핀이 커지면서 맨 앞으로 — 선택 대상임을 바로 알 수 있게.
+        // 기본 클릭-토글 동작을 떼고, 아래에서 호버=미리보기 / 클릭=고정 동작으로 새로 붙인다.
+        marker.off("click");
+        let pinned = false;
+        // 커서를 올리면 핀이 커지면서 맨 앞으로, 현장정보 미리보기도 뜬다.
         marker.on("mouseover", function () {
           this.setZIndexOffset(2000);
           const pin = this.getElement()?.querySelector(".site-pin");
           if (pin) pin.style.transform = "scale(1.35)";
+          this.openPopup();
         });
+        // 커서를 옮기면 사라진다 — 단, 클릭으로 고정해둔 상태라면 유지.
         marker.on("mouseout", function () {
           this.setZIndexOffset(0);
           const pin = this.getElement()?.querySelector(".site-pin");
           if (pin) pin.style.transform = "scale(1)";
+          if (!pinned) this.closePopup();
+        });
+        // 클릭하면 현장정보가 고정되어 뜬다 (커서를 옮겨도 유지, × 버튼이나 지도 빈 곳 클릭으로 닫기 전까지).
+        marker.on("click", function () {
+          pinned = true;
+          this.openPopup();
+        });
+        marker.on("popupclose", function () {
+          pinned = false;
         });
       });
 
