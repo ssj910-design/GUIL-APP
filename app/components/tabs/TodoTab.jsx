@@ -549,7 +549,7 @@ export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoU
 }
 
 
-function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
+export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
   const sites = useContext(SitesContext);
   const [uploadSession] = useState(() => Date.now());
   const [form, setForm] = useState({ assignees: [], siteId: "", title: "", dueDate: addDays(TODAY_STR, 7), photos: [] });
