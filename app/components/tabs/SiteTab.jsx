@@ -441,7 +441,6 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
         <p className="px-5 pt-5 pb-2 text-xs font-bold text-slate-400">담당기사 정보</p>
         <div className="bg-white">
           <TimelineRow icon={User} label="이름" value={site.assignedEngineer || "미배정"} />
-          <TimelineRow icon={Mail} label="메일주소" value={assignedEngineerProfile?.email || "-"} />
           <TimelineRow icon={PhoneCall} label="휴대폰번호" value={assignedEngineerProfile?.phone || "-"} valueColor="text-blue-600" last />
         </div>
 
