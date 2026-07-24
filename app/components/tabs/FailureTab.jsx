@@ -612,7 +612,11 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allo
       <div className="grid grid-cols-2 gap-2 pb-2">
         {allowUnassign && (
           <button
-            onClick={() => { onAssign(failure, null); onClose(); }}
+            onClick={async () => {
+              if (!(await confirmAsync("미배정 하시겠습니까?\n모든 직원에게 알림이 갑니다."))) return;
+              onAssign(failure, null);
+              onClose();
+            }}
             className="py-3 rounded-xl text-sm font-bold border text-red-500 border-red-200 bg-white active:bg-red-50"
           >
             미배정으로
@@ -623,7 +627,10 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allo
           const leave = leaveOf(name);
           const visits = visitsOf(name);
           const pick = async () => {
-            if (st && !(await confirmAsync(`${name}님은 지금 ${st}입니다.\n그래도 이 건을 배정할까요?`))) return;
+            const msg = st
+              ? `${name}님은 지금 ${st}입니다.\n그래도 이 건을 배정할까요?`
+              : `${name}으로 배정하시겠습니까?`;
+            if (!(await confirmAsync(msg))) return;
             onAssign(failure, name);
             onClose();
           };
