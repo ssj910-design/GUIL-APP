@@ -34,7 +34,7 @@
 | 공용 UI (Sheet·버튼·카드·타임라인) | ui.jsx |
 | 현장검색·사진업로드 폼 위젯 | formWidgets.jsx |
 | 로그인 화면 | LoginScreen.jsx |
-| 최상위 state·CRUD 핸들러·탭 라우팅 | ElevatorFieldApp.jsx (App, 839줄) |
+| 최상위 state·CRUD 핸들러·탭 라우팅 | ElevatorFieldApp.jsx (App, 약 1,800줄 — 상태 → 핸들러 40여 개(★ 주석) → 탭 라우팅 순) |
 | DB컬럼↔화면필드 변환 | lib/mappers.js — **컬럼 추가 시 여기부터** |
 | 사진 업로드/다운로드/zip | lib/photos.js |
 | 상수(오늘날짜·고장구분·부품목록) | lib/constants.js |
