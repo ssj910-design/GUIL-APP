@@ -48,11 +48,14 @@ function FailureTrendChart({ failures }) {
 
   let bars = [];
   let periodLabel = "";
+  const curYear = Number(TODAY_STR.slice(0, 4));
+  const curMonth = Number(TODAY_STR.slice(5, 7));
+  const curDay = Number(TODAY_STR.slice(8, 10));
 
   if (granularity === "year") {
     const counts = new Map();
     dateStrs.forEach((d) => counts.set(d.slice(0, 4), (counts.get(d.slice(0, 4)) ?? 0) + 1));
-    bars = [...counts.keys()].sort().map((y) => ({ label: y, count: counts.get(y) }));
+    bars = [...counts.keys()].sort().map((y) => ({ label: y, count: counts.get(y), isCurrent: Number(y) === curYear }));
     periodLabel = "전체 기간";
   } else if (granularity === "month") {
     const counts = new Array(12).fill(0);
@@ -60,7 +63,7 @@ function FailureTrendChart({ failures }) {
       if (d.slice(0, 4) !== String(year)) return;
       counts[Number(d.slice(5, 7)) - 1] += 1;
     });
-    bars = counts.map((c, i) => ({ label: `${i + 1}월`, count: c }));
+    bars = counts.map((c, i) => ({ label: `${i + 1}월`, count: c, isCurrent: year === curYear && i + 1 === curMonth }));
     periodLabel = `${year}년`;
   } else {
     const daysInMonth = new Date(year, month, 0).getDate();
@@ -72,7 +75,7 @@ function FailureTrendChart({ failures }) {
     bars = counts.map((c, i) => {
       const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
       const dow = new Date(`${dateStr}T00:00:00`).getDay();
-      return { label: `${i + 1}`, count: c, dow, holidayName: HOLIDAY[dateStr] };
+      return { label: `${i + 1}`, count: c, dow, holidayName: HOLIDAY[dateStr], isCurrent: year === curYear && month === curMonth && i + 1 === curDay };
     });
     periodLabel = `${year}년 ${month}월`;
   }
@@ -121,14 +124,18 @@ function FailureTrendChart({ failures }) {
             const isSunOrHoliday = b.holidayName || b.dow === 0;
             const dowColor = isSunOrHoliday ? "text-red-500" : b.dow === 6 ? "text-blue-500" : "text-slate-400";
             return (
-              <div key={b.label} className="flex-1 flex flex-col items-center justify-end h-full min-w-0" title={b.holidayName || ""}>
-                {b.count > 0 && <span className="text-[10px] font-bold text-slate-500 mb-0.5">{b.count}</span>}
-                <div
-                  className={`w-full rounded-t ${isSunOrHoliday ? "bg-red-400" : "bg-blue-500"}`}
-                  style={{ height: `${(b.count / max) * 100}%`, minHeight: b.count > 0 ? "2px" : 0 }}
-                />
-                <span className={`text-[10px] mt-1 truncate font-semibold ${granularity === "day" ? dowColor : "text-slate-400"}`}>{b.label}</span>
-                {granularity === "day" && <span className={`text-[9px] truncate ${dowColor}`}>{DOW[b.dow]}</span>}
+              <div key={b.label} className="flex-1 flex flex-col items-center h-full min-w-0" title={b.holidayName || ""}>
+                {/* 막대는 별도 flex-1 영역 안에서만 커지게 해서, 100%짜리 막대가 아래 라벨 자리를 침범해
+                    라벨이 찌그러지는(수평이 안 맞는) 일이 없게 한다. */}
+                <div className="flex-1 w-full min-h-0 flex flex-col justify-end items-center">
+                  <span className={`text-[10px] font-bold text-slate-500 mb-0.5 ${b.count > 0 ? "" : "invisible"}`}>{b.count || 0}</span>
+                  <div
+                    className="w-full rounded-t bg-red-500"
+                    style={{ height: `${(b.count / max) * 100}%`, minHeight: b.count > 0 ? "2px" : 0 }}
+                  />
+                </div>
+                <span className={`text-[10px] mt-1 truncate font-semibold px-1 rounded shrink-0 ${granularity === "day" ? dowColor : "text-slate-400"} ${b.isCurrent ? "bg-blue-50 border border-blue-200" : ""}`}>{b.label}</span>
+                {granularity === "day" && <span className={`text-[9px] truncate shrink-0 ${dowColor}`}>{DOW[b.dow]}</span>}
               </div>
             );
           })}

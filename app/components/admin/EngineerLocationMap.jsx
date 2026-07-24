@@ -94,13 +94,13 @@ const fmtDuration = (sec) => {
 };
 const fmtDistance = (m) => (m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(1)}km`);
 
-// 위치정보가 언제 갱신됐는지 — 1시간 미만이면 "54분 전", 그 이상이면 "2시간15분 전". 값이 없으면 null.
+// 위치정보가 언제 갱신됐는지 — 1시간 미만이면 "54분 전", 그 이상이면 "2시간 15분 전". 값이 없으면 null.
 function timeSinceLabel(isoString) {
   if (!isoString) return null;
   const diffMin = Math.max(0, Math.floor((Date.now() - new Date(isoString).getTime()) / 60000));
   const h = Math.floor(diffMin / 60);
   const m = diffMin % 60;
-  return h > 0 ? `${h}시간${String(m).padStart(2, "0")}분 전` : `${m}분 전`;
+  return h > 0 ? `${h}시간 ${m}분 전` : `${m}분 전`;
 }
 
 export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerClick, selectedEngineer, heightClass = "h-[760px]", alwaysShowLabels = false }) {

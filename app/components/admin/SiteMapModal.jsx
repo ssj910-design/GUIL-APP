@@ -9,9 +9,13 @@ import "leaflet/dist/leaflet.css";
 import { Modal } from "@/app/components/admin/adminShared";
 
 // 주소에서 "구/군"만 추출 — 예: "서울특별시 강남구 학동로 120" -> "강남구".
+// 경기도는 도-시-구 3단 구조라 "안양시 만안구"처럼 구가 세 번째 토큰에 온다 — 두 번째·세 번째를 모두 확인한다.
 function guOf(address) {
-  const m = (address ?? "").trim().match(/^\S+\s+(\S+?[구군])(\s|$)/);
-  return m ? m[1] : null;
+  const tokens = (address ?? "").trim().split(/\s+/);
+  for (let i = 1; i <= 2 && i < tokens.length; i++) {
+    if (/[구군]$/.test(tokens[i])) return tokens[i];
+  }
+  return null;
 }
 
 // 담당자 이름을 해시로 돌려 고유한 색을 뽑는다 — 사람 수가 늘어도 팔레트를 따로 관리할 필요가 없다.
@@ -156,21 +160,25 @@ export function SiteMapModal({ sites, units = [], onClose }) {
 
   return (
     <Modal title={`현장 지도 (담당자별 색상 · ${withCoordsCount}곳)`} onClose={onClose} wide="2xl">
-      <div className="relative w-full h-[78vh] rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
-        {loading && <p className="absolute inset-0 flex items-center justify-center text-xs text-slate-400">지도 불러오는 중...</p>}
-        <div ref={containerRef} className="w-full h-full" />
-      </div>
-      <div className="flex flex-wrap gap-1.5 mt-3 max-h-20 overflow-y-auto">
-        {engineerNames.map((name) => (
-          <span key={name} className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-200 rounded-full px-2.5 py-1">
-            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colorForEngineer(name) }} />
-            {name} ({unitCountByEngineer.get(name) ?? 0}대)
+      {/* 모달 자체가 max-h-85vh인데 헤더+패딩(~89px)을 안 빼면 담당기사 목록이 모달 밖으로
+          밀려 스크롤해야 보인다 — 그 여백만큼 뺀 높이를 써서 스크롤 없이 다 보이게 한다. */}
+      <div className="h-[calc(85vh-6.5rem)] flex flex-col">
+        <div className="relative w-full flex-1 min-h-0 rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+          {loading && <p className="absolute inset-0 flex items-center justify-center text-xs text-slate-400">지도 불러오는 중...</p>}
+          <div ref={containerRef} className="w-full h-full" />
+        </div>
+        <div className="flex flex-wrap gap-1.5 mt-3 shrink-0">
+          {engineerNames.map((name) => (
+            <span key={name} className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-200 rounded-full px-2.5 py-1">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colorForEngineer(name) }} />
+              {name} ({unitCountByEngineer.get(name) ?? 0}대)
+            </span>
+          ))}
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-200 rounded-full px-2.5 py-1">
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colorForEngineer(null) }} />
+            미배정 ({unitCountByEngineer.get(null) ?? 0}대)
           </span>
-        ))}
-        <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-200 rounded-full px-2.5 py-1">
-          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colorForEngineer(null) }} />
-          미배정 ({unitCountByEngineer.get(null) ?? 0}대)
-        </span>
+        </div>
       </div>
     </Modal>
   );
