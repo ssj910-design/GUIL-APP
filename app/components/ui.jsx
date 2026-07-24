@@ -281,10 +281,13 @@ export function Sheet({ title, onClose, children, bg = "bg-slate-50" }) {
 }
 
 
-export function Field({ label, children }) {
+export function Field({ label, right, children }) {
   return (
     <div className="mb-4">
-      <label className="block text-xs font-bold text-slate-500 mb-1.5">{label}</label>
+      <div className="flex items-center justify-between mb-1.5">
+        <label className="block text-xs font-bold text-slate-500">{label}</label>
+        {right}
+      </div>
       {children}
     </div>
   );

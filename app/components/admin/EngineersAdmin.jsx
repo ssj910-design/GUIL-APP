@@ -1,12 +1,12 @@
 "use client";
 
 // 기사 관리 — 프로필(연락처·담당지역) 편집 + 배정 현장·업무량 한눈에.
-import { useState, useRef } from "react";
-import { GripVertical, Paperclip, X } from "lucide-react";
+import { useState } from "react";
+import { GripVertical, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto } from "@/lib/photos";
 import { formatPhone, shortDate } from "@/lib/utils";
-import { StatusBadge, AdminTable, inputCls, DateTextInput, EditableDate, EditableText, Modal } from "@/app/components/admin/adminShared";
+import { StatusBadge, AdminTable, inputCls, DateTextInput, EditableDate, EditableText, Modal, FileCarousel } from "@/app/components/admin/adminShared";
 import ImportEngineers from "@/app/components/admin/ImportEngineers";
 import DutyAdmin from "@/app/components/admin/DutyAdmin";
 import LeavesAdmin from "@/app/components/admin/LeavesAdmin";
@@ -166,49 +166,15 @@ function EngineerCard({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenCont
 
 // 근로계약서 사본 첨부 — 사진/PDF 아무거나 photos 버킷에 올리고 URL만 저장한다.
 function ContractModal({ p, onClose, onSave }) {
-  const fileInputRef = useRef(null);
-  const [uploading, setUploading] = useState(false);
-
-  async function handleFile(e) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setUploading(true);
-    try {
-      const url = await uploadPhoto(file, `contracts/${p.id}`);
-      await onSave(p, url);
-    } catch (err) {
-      alert("업로드 실패: " + (err.message ?? "알 수 없는 오류"));
-    }
-    setUploading(false);
-  }
-
   return (
-    <Modal title={`${p.name} 근로계약서`} onClose={onClose}>
-      {p.contract_url ? (
-        <div className="space-y-3">
-          <a href={p.contract_url} target="_blank" rel="noreferrer" className="block text-sm font-bold text-blue-700 underline">
-            첨부된 계약서 사본 보기
-          </a>
-          <button onClick={() => onSave(p, null)}
-            className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">
-            첨부 삭제
-          </button>
-        </div>
-      ) : (
-        <>
-          <input ref={fileInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleFile} />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="w-full border-2 border-dashed border-slate-300 rounded-xl py-8 flex flex-col items-center gap-1.5 text-slate-500 disabled:opacity-50"
-          >
-            <Paperclip size={22} />
-            <span className="text-xs font-semibold">{uploading ? "업로드 중..." : "계약서 사본 첨부 (사진/PDF)"}</span>
-          </button>
-        </>
-      )}
+    <Modal title={`${p.name} 근로계약서`} onClose={onClose} wide="xl">
+      <FileCarousel
+        urls={p.contract_urls ?? []}
+        uploadLabel="계약서 사본 첨부 (사진/PDF)"
+        height="h-[calc(85vh-9rem)]"
+        onUpload={(file) => uploadPhoto(file, `contracts/${p.id}`)}
+        onSave={(urls) => onSave(p, urls)}
+      />
     </Modal>
   );
 }
@@ -216,8 +182,6 @@ function ContractModal({ p, onClose, onSave }) {
 // 지급대장 — 상비부품 지급내역만 자동 연동하고, 그 외 지급 품목은 수기입력한다.
 // 지급대장 PDF 사본도 여기서 첨부한다.
 function LedgerModal({ p, restockRequests, onClose, onSaveFile, onSaveItems }) {
-  const fileInputRef = useRef(null);
-  const [uploading, setUploading] = useState(false);
   const [newItem, setNewItem] = useState({ label: "", date: "", note: "" });
 
   const autoItems = restockRequests
@@ -236,20 +200,6 @@ function LedgerModal({ p, restockRequests, onClose, onSaveFile, onSaveItems }) {
 
   function removeManualItem(idx) {
     onSaveItems(p, manualItems.filter((_, i) => i !== idx));
-  }
-
-  async function handleFile(e) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setUploading(true);
-    try {
-      const url = await uploadPhoto(file, `ledgers/${p.id}`);
-      await onSaveFile(p, url);
-    } catch (err) {
-      alert("업로드 실패: " + (err.message ?? "알 수 없는 오류"));
-    }
-    setUploading(false);
   }
 
   return (
@@ -310,30 +260,14 @@ function LedgerModal({ p, restockRequests, onClose, onSaveFile, onSaveItems }) {
 
       <div className="pt-3 border-t border-slate-100">
         <p className="text-xs font-bold text-slate-500 mb-2">지급대장 PDF</p>
-        {p.ledger_url ? (
-          <div className="space-y-2">
-            <a href={p.ledger_url} target="_blank" rel="noreferrer" className="block text-sm font-bold text-blue-700 underline">
-              첨부된 지급대장 보기
-            </a>
-            <button onClick={() => onSaveFile(p, null)}
-              className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">
-              첨부 삭제
-            </button>
-          </div>
-        ) : (
-          <>
-            <input ref={fileInputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={handleFile} />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="w-full border-2 border-dashed border-slate-300 rounded-xl py-6 flex flex-col items-center gap-1.5 text-slate-500 disabled:opacity-50"
-            >
-              <Paperclip size={20} />
-              <span className="text-xs font-semibold">{uploading ? "업로드 중..." : "지급대장 PDF 첨부"}</span>
-            </button>
-          </>
-        )}
+        <FileCarousel
+          urls={p.ledger_urls ?? []}
+          accept="application/pdf,.pdf"
+          uploadLabel="지급대장 PDF 첨부"
+          height="h-[50vh]"
+          onUpload={(file) => uploadPhoto(file, `ledgers/${p.id}`)}
+          onSave={(urls) => onSaveFile(p, urls)}
+        />
       </div>
     </Modal>
   );
@@ -422,16 +356,16 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
     setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, ...patch } : x)) }));
   }
 
-  async function saveContract(p, url) {
-    await supabase.from("profiles").update({ contract_url: url }).eq("id", p.id);
-    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, contract_url: url } : x)) }));
-    setContractTarget((t) => (t && t.id === p.id ? { ...t, contract_url: url } : t));
+  async function saveContract(p, urls) {
+    await supabase.from("profiles").update({ contract_urls: urls }).eq("id", p.id);
+    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, contract_urls: urls } : x)) }));
+    setContractTarget((t) => (t && t.id === p.id ? { ...t, contract_urls: urls } : t));
   }
 
-  async function saveLedgerFile(p, url) {
-    await supabase.from("profiles").update({ ledger_url: url }).eq("id", p.id);
-    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, ledger_url: url } : x)) }));
-    setLedgerTarget((t) => (t && t.id === p.id ? { ...t, ledger_url: url } : t));
+  async function saveLedgerFile(p, urls) {
+    await supabase.from("profiles").update({ ledger_urls: urls }).eq("id", p.id);
+    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, ledger_urls: urls } : x)) }));
+    setLedgerTarget((t) => (t && t.id === p.id ? { ...t, ledger_urls: urls } : t));
   }
 
   async function saveManualLedgerItems(p, items) {

@@ -306,6 +306,9 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                     <option key={m} value={m}>{m}분 후</option>
                   ))}
                 </select>
+                <p className="text-[11px] text-orange-600 font-semibold mt-1.5 leading-relaxed">
+                  고객에게 도착 시간이 문자로 자동 발송됩니다
+                </p>
               </div>
             )}
             <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
@@ -706,11 +709,40 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allo
 
 export function DispatchEtaModal({ failure, onConfirm, onClose }) {
   const [eta, setEta] = useState("");
+  const [driveMin, setDriveMin] = useState(null); // T맵 예상 소요시간(분) — 실패·키 미설정 시 null로 조용히 숨김
   const valid = eta !== "";
+  const sites = useContext(SitesContext);
+  const { selfId, engineers = [] } = useContext(AuthContext);
+  const site = sites.find((s) => s.id === failure.siteId);
+  const selfLoc = engineers.find((e) => e.id === selfId);
+
+  useEffect(() => {
+    if (selfLoc?.last_lat == null || site?.lat == null) return;
+    let cancelled = false;
+    fetch("/api/tmap-route", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        startLat: selfLoc.last_lat, startLng: selfLoc.last_lng,
+        endLat: site.lat, endLng: site.lng,
+        startName: "출발", endName: site.name,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => { if (!cancelled && data.ok) setDriveMin(Math.round(data.totalTimeSec / 60)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [selfLoc?.last_lat, selfLoc?.last_lng, site?.lat, site?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <Sheet title="도착 예정 시간 입력" onClose={onClose}>
       <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {formatUnitLabel(failure.elevatorNo)}</p>
-      <Field label="도착 예정 시간 *">
+      <Field
+        label="도착 예정 시간 *"
+        right={driveMin != null && (
+          <span className="text-xs font-bold text-red-600">지금 출발 시 예상 소요시간 {driveMin}분(T MAP연동)</span>
+        )}
+      >
         <select value={eta} onChange={(e) => setEta(e.target.value)} className={inputCls}>
           <option value="">선택해주세요</option>
           {ETA_OPTIONS.map((m) => (

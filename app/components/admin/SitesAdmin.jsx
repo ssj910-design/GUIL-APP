@@ -4,7 +4,7 @@
 // v2 기본: 호기(units)를 직접 편집한다. 단 007(옛 컬럼 정리) 전까지는
 // 모바일 앱이 아직 참조하는 sites의 옛 컬럼(unit_count, gov_elevator_nos,
 // elevator_model)도 함께 동기화한다(듀얼라이트).
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Plus, Trash2, Paperclip } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapUnit } from "@/lib/mappers";
@@ -13,7 +13,7 @@ import { addDays, govDateToDashed, siteMatchesQuery, formatPhone, shortDate } fr
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
-import { Modal, StatusBadge, DateTextInput, EditableDate } from "@/app/components/admin/adminShared";
+import { Modal, StatusBadge, DateTextInput, EditableDate, FileCarousel } from "@/app/components/admin/adminShared";
 import ImportSites from "@/app/components/admin/ImportSites";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { uploadPhoto } from "@/lib/photos";
@@ -26,104 +26,16 @@ const TERMINATION_BASIS = ["중지공문", "구두통보", "기타"];
 
 // 현장 계약서 사본 첨부 — 클릭해서 열지 않아도 바로 보이게, 2장 이상이면 좌우로 넘긴다.
 function SiteContractModal({ site, onClose, onSave }) {
-  const fileInputRef = useRef(null);
-  const [uploading, setUploading] = useState(false);
-  const [idx, setIdx] = useState(0);
   const urls = site.contractUrls ?? [];
-  const current = urls[idx];
-  const isPdf = (current ?? "").toLowerCase().includes(".pdf");
-
-  async function handleFile(e) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setUploading(true);
-    try {
-      const url = await uploadPhoto(file, `contracts/${site.id}`);
-      const next = [...urls, url];
-      await onSave(next);
-      setIdx(next.length - 1);
-    } catch (err) {
-      alert("업로드 실패: " + (err.message ?? "알 수 없는 오류"));
-    }
-    setUploading(false);
-  }
-
-  async function removeCurrent() {
-    if (!(await confirmAsync("이 계약서 페이지를 삭제할까요?"))) return;
-    const next = urls.filter((_, i) => i !== idx);
-    await onSave(next);
-    setIdx((i) => Math.max(0, Math.min(i, next.length - 1)));
-  }
-
-  function download() {
-    const a = document.createElement("a");
-    a.href = current;
-    a.download = "";
-    a.target = "_blank";
-    a.rel = "noreferrer";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  }
-
   return (
-    <Modal title={`${site.name} 계약서${urls.length > 1 ? ` (${idx + 1}/${urls.length})` : ""}`} onClose={onClose} wide="xl">
-      {urls.length === 0 ? (
-        <>
-          <input ref={fileInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleFile} />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="w-full border-2 border-dashed border-slate-300 rounded-xl py-8 flex flex-col items-center gap-1.5 text-slate-500 disabled:opacity-50"
-          >
-            <Paperclip size={22} />
-            <span className="text-xs font-semibold">{uploading ? "업로드 중..." : "계약서 사본 첨부 (사진/PDF)"}</span>
-          </button>
-        </>
-      ) : (
-        <div className="space-y-3">
-          <div className="relative bg-slate-50 border border-slate-200 rounded-xl overflow-hidden h-[calc(85vh-9rem)] flex items-center justify-center">
-            {isPdf ? (
-              <iframe src={current} className="w-full h-full" title="계약서 PDF" />
-            ) : (
-              <img src={current} alt="계약서" className="max-w-full max-h-full object-contain" />
-            )}
-            {urls.length > 1 && (
-              <>
-                <button
-                  onClick={() => setIdx((i) => (i - 1 + urls.length) % urls.length)}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-lg font-bold text-slate-600 bg-white/90 border border-slate-200 rounded-full shadow"
-                >
-                  ‹
-                </button>
-                <button
-                  onClick={() => setIdx((i) => (i + 1) % urls.length)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-lg font-bold text-slate-600 bg-white/90 border border-slate-200 rounded-full shadow"
-                >
-                  ›
-                </button>
-              </>
-            )}
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="flex gap-2">
-              <button onClick={download} className="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5">다운로드</button>
-              <button onClick={removeCurrent} className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">삭제</button>
-            </div>
-            <input ref={fileInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleFile} />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="flex items-center gap-1 text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 disabled:opacity-50"
-            >
-              <Paperclip size={13} /> {uploading ? "업로드 중..." : "추가"}
-            </button>
-          </div>
-        </div>
-      )}
+    <Modal title={`${site.name} 계약서`} onClose={onClose} wide="xl">
+      <FileCarousel
+        urls={urls}
+        uploadLabel="계약서 사본 첨부 (사진/PDF)"
+        height="h-[calc(85vh-9rem)]"
+        onUpload={(file) => uploadPhoto(file, `contracts/${site.id}`)}
+        onSave={onSave}
+      />
     </Modal>
   );
 }
@@ -1044,10 +956,12 @@ export default function SitesAdmin({ data, setData }) {
                       {siteUnits.map((u) => {
                         const live = liveOf(u.id);
                         return (
-                          <tr key={u.id} className={`border-b border-slate-50 ${u.isActive === false ? "opacity-40" : ""}`}>
-                            <td className="px-4 py-2 font-bold whitespace-nowrap">
-                              <button onClick={() => setUnitDetail(u)} className="text-blue-700 hover:underline">{u.unitNo}</button>
-                            </td>
+                          <tr
+                            key={u.id}
+                            onClick={() => setUnitDetail(u)}
+                            className={`border-b border-slate-50 cursor-pointer hover:bg-slate-50 ${u.isActive === false ? "opacity-40" : ""}`}
+                          >
+                            <td className="px-4 py-2 font-bold whitespace-nowrap text-blue-700">{u.unitNo}</td>
                             <td className="px-2 py-2 whitespace-nowrap">{u.govNo || "미등록"}</td>
                             <td className="px-2 py-2 truncate" title={live?.kindNm || u.kind || u.unitType}>{live?.kindNm || u.kind || u.unitType}</td>
                             <td className="px-2 py-2 truncate" title={u.model ?? ""}>{u.model || "-"}</td>

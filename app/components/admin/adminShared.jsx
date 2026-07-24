@@ -1,9 +1,9 @@
 "use client";
 
 // 관리자 콘솔 공용 헬퍼 — 표기(호기·담당자)는 v2 FK 우선, 옛 라벨 fallback.
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { createPortal } from "react-dom";
-import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil } from "lucide-react";
+import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil, Paperclip } from "lucide-react";
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
 import { shortDate, parseShortDate, autoFormatShortDate, formatUnitLabel, sortEngineersByDistance, busyStatusOf } from "@/lib/utils";
 import { confirmAsync } from "@/app/components/ConfirmHost";
@@ -103,6 +103,106 @@ export function Modal({ title, onClose, children, wide }) {
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-700"><X size={18} /></button>
         </div>
         <div className="overflow-y-auto px-5 py-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// 계약서·지급대장 등 첨부파일 뷰어 — 클릭해서 새 탭을 열 필요 없이 바로 보여주고,
+// 여러 장이면 좌우로 넘기고, 다운로드·삭제·추가까지 한 곳에서 한다 (현장정보 계약서와 인사관리 첨부 공통 사용).
+export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파일 첨부 (사진/PDF)", height = "h-[60vh]", onUpload, onSave }) {
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [idx, setIdx] = useState(0);
+  const current = urls[Math.min(idx, urls.length - 1)];
+  const isPdf = (current ?? "").toLowerCase().includes(".pdf");
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await onUpload(file);
+      const next = [...urls, url];
+      await onSave(next);
+      setIdx(next.length - 1);
+    } catch (err) {
+      alert("업로드 실패: " + (err.message ?? "알 수 없는 오류"));
+    }
+    setUploading(false);
+  }
+
+  async function removeCurrent() {
+    if (!(await confirmAsync("이 파일을 삭제할까요?"))) return;
+    const next = urls.filter((_, i) => i !== idx);
+    await onSave(next);
+    setIdx((i) => Math.max(0, Math.min(i, next.length - 1)));
+  }
+
+  if (urls.length === 0) {
+    return (
+      <>
+        <input ref={fileInputRef} type="file" accept={accept} className="hidden" onChange={handleFile} />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="w-full border-2 border-dashed border-slate-300 rounded-xl py-8 flex flex-col items-center gap-1.5 text-slate-500 disabled:opacity-50"
+        >
+          <Paperclip size={22} />
+          <span className="text-xs font-semibold">{uploading ? "업로드 중..." : uploadLabel}</span>
+        </button>
+      </>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className={`relative bg-slate-50 border border-slate-200 rounded-xl overflow-hidden ${height} flex items-center justify-center`}>
+        {urls.length > 1 && (
+          <span className="absolute top-2 right-2 z-10 text-[11px] font-bold text-white bg-black/50 rounded-full px-2 py-0.5">{idx + 1}/{urls.length}</span>
+        )}
+        {isPdf ? (
+          <iframe src={current} className="w-full h-full" title="첨부파일" />
+        ) : (
+          <img src={current} alt="첨부파일" className="max-w-full max-h-full object-contain" />
+        )}
+        {urls.length > 1 && (
+          <>
+            <button
+              onClick={() => setIdx((i) => (i - 1 + urls.length) % urls.length)}
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-lg font-bold text-slate-600 bg-white/90 border border-slate-200 rounded-full shadow"
+            >
+              ‹
+            </button>
+            <button
+              onClick={() => setIdx((i) => (i + 1) % urls.length)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-lg font-bold text-slate-600 bg-white/90 border border-slate-200 rounded-full shadow"
+            >
+              ›
+            </button>
+          </>
+        )}
+      </div>
+      <div className="flex items-center justify-between">
+        <div className="flex gap-2">
+          <button onClick={() => downloadPhoto(current, `attachment-${idx + 1}.${extOf(current)}`)} className="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5">
+            다운로드
+          </button>
+          <button onClick={removeCurrent} className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">
+            삭제
+          </button>
+        </div>
+        <input ref={fileInputRef} type="file" accept={accept} className="hidden" onChange={handleFile} />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="flex items-center gap-1 text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 disabled:opacity-50"
+        >
+          <Paperclip size={13} /> {uploading ? "업로드 중..." : "추가"}
+        </button>
       </div>
     </div>
   );
