@@ -34,11 +34,22 @@ export default function LeavesAdmin({ data, setData }) {
   const st = (l) => l.status ?? "승인";
   const usedBy = (id) => leaves.filter((l) => l.profile_id === id && st(l) === "승인").reduce((n, l) => n + Number(l.days), 0);
   const pending = leaves.filter((l) => st(l) === "신청").sort((a, b) => a.start_date.localeCompare(b.start_date));
+  const cancelPending = leaves.filter((l) => l.cancel_requested).sort((a, b) => a.start_date.localeCompare(b.start_date));
 
   async function decide(l, decision) {
     const reason = decision === "반려" ? prompt(`${nameOf(l.profile_id)}님의 ${shortDate(l.start_date)} ${l.kind} 신청을 반려합니다.\n사유 (선택):`) : null;
     if (decision === "반려" && reason === null) return;
     const patch = { status: decision, decided_at: new Date().toISOString(), reject_reason: reason?.trim() || null };
+    const { error } = await supabase.from("leaves").update(patch).eq("id", l.id);
+    if (error) { alert("처리 실패: " + error.message); return; }
+    setLeaves((prev) => prev.map((x) => (x.id === l.id ? { ...x, ...patch } : x)));
+  }
+
+  // 취소 요청 승인 = 실제 취소 확정(status: 취소). 반려 = 요청만 해제, 승인 상태 유지.
+  async function decideCancel(l, decision) {
+    const patch = decision === "승인"
+      ? { status: "취소", cancel_requested: false, decided_at: new Date().toISOString() }
+      : { cancel_requested: false, cancel_reason: null };
     const { error } = await supabase.from("leaves").update(patch).eq("id", l.id);
     if (error) { alert("처리 실패: " + error.message); return; }
     setLeaves((prev) => prev.map((x) => (x.id === l.id ? { ...x, ...patch } : x)));
@@ -133,6 +144,31 @@ export default function LeavesAdmin({ data, setData }) {
         </div>
       )}
 
+      {/* 취소 요청 — 이미 승인된 연차를 기사가 취소해달라고 요청한 건 */}
+      {cancelPending.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-5">
+          <p className="text-xs font-extrabold text-red-800 mb-2.5">취소 요청 {cancelPending.length}건</p>
+          <div className="space-y-2">
+            {cancelPending.map((l) => (
+              <div key={l.id} className="flex items-center justify-between gap-2 bg-white rounded-lg px-3 py-2.5">
+                <p className="text-xs text-slate-600 min-w-0">
+                  <b className="text-slate-800">{nameOf(l.profile_id)}</b> · {l.kind} {l.days}일
+                  <br />
+                  <span className="text-[11px] text-slate-400">
+                    {shortDate(l.start_date)}{l.end_date !== l.start_date && ` ~ ${shortDate(l.end_date)}`}
+                    {l.cancel_reason && ` · 사유: ${l.cancel_reason}`}
+                  </span>
+                </p>
+                <div className="flex gap-1.5 shrink-0">
+                  <button onClick={() => decideCancel(l, "승인")} className="text-xs font-bold text-white bg-red-600 rounded-lg px-3 py-1.5">취소 승인</button>
+                  <button onClick={() => decideCancel(l, "반려")} className="text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5">반려</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 사람별 잔여 */}
       <h2 className="text-sm font-extrabold text-slate-700 mb-1">{year}년 연차 현황</h2>
       <p className="text-[11px] text-slate-400 mb-2 leading-relaxed">
@@ -185,6 +221,7 @@ export default function LeavesAdmin({ data, setData }) {
             <td className="px-3 py-2.5">{l.days}일</td>
             <td className="px-3 py-2.5">
               <StatusBadge tone={st(l) === "승인" ? "green" : st(l) === "신청" ? "amber" : "slate"}>{st(l)}</StatusBadge>
+              {l.cancel_requested && <span className="ml-1.5 text-[10px] font-bold text-red-500 whitespace-nowrap">취소요청중</span>}
             </td>
             <td className="px-3 py-2.5 text-slate-500">{l.note ?? l.reject_reason ?? "-"}</td>
             <td className="px-3 py-2.5 text-right pr-4">

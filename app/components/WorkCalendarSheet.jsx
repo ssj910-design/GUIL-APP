@@ -75,6 +75,24 @@ function LeaveCalendarTab({ schedules = [] }) {
     setLeaves((prev) => prev.filter((x) => x.id !== l.id));
   }
 
+  // 이미 승인된 연차는 그날 전까지만 취소를 "요청"할 수 있다 (바로 취소되지 않고 관리자 승인 필요).
+  async function requestCancelLeave(l) {
+    const reason = prompt(`${l.start_date} ${l.kind} 취소를 요청합니다.\n사유:`);
+    if (reason === null) return;
+    if (!reason.trim()) { alert("취소 사유를 입력해주세요."); return; }
+    const patch = { cancel_requested: true, cancel_reason: reason.trim() };
+    const { error } = await supabase.from("leaves").update(patch).eq("id", l.id);
+    if (error) { alert("요청 실패: " + error.message); return; }
+    setMyLeaves((prev) => prev.map((x) => (x.id === l.id ? { ...x, ...patch } : x)));
+  }
+
+  async function withdrawCancelRequest(l) {
+    const patch = { cancel_requested: false, cancel_reason: null };
+    const { error } = await supabase.from("leaves").update(patch).eq("id", l.id);
+    if (error) { alert("처리 실패: " + error.message); return; }
+    setMyLeaves((prev) => prev.map((x) => (x.id === l.id ? { ...x, ...patch } : x)));
+  }
+
   const nameOf = (id) => profiles.find((p) => p.id === id)?.name ?? "";
   // 승인된 연차만 캘린더에 노출 — 신청/반려 상태는 아직 확정이 아니라서 남들 눈에 보이면 안 된다.
   const approvedOnCalendar = leaves.filter((l) => (l.status ?? "승인") === "승인");
@@ -206,13 +224,20 @@ function LeaveCalendarTab({ schedules = [] }) {
                     <span className="text-slate-600 min-w-0 truncate">
                       {l.start_date.slice(5)}{l.end_date !== l.start_date && `~${l.end_date.slice(5)}`}
                       <span className="ml-1.5 text-slate-400">{l.kind}</span>
-                      <span className={`ml-1.5 font-bold ${st === "신청" ? "text-amber-600" : st === "반려" ? "text-red-500" : "text-emerald-600"}`}>{st}</span>
+                      <span className={`ml-1.5 font-bold ${st === "신청" ? "text-amber-600" : st === "반려" || st === "취소" ? "text-red-500" : "text-emerald-600"}`}>{st}</span>
                       {st === "반려" && l.reject_reason && <span className="ml-1.5 text-red-400">({l.reject_reason})</span>}
+                      {st === "승인" && l.cancel_requested && <span className="ml-1.5 font-bold text-amber-600">(취소 요청중)</span>}
                     </span>
                     <span className="flex items-center gap-1.5 shrink-0">
                       <span className="font-bold text-slate-500">{l.days}일</span>
                       {st === "신청" && (
                         <button onClick={() => cancelLeave(l)} className="text-[10px] font-bold text-slate-400 underline">취소</button>
+                      )}
+                      {st === "승인" && !l.cancel_requested && l.start_date > TODAY_STR && (
+                        <button onClick={() => requestCancelLeave(l)} className="text-[10px] font-bold text-red-500 underline">취소 신청</button>
+                      )}
+                      {st === "승인" && l.cancel_requested && (
+                        <button onClick={() => withdrawCancelRequest(l)} className="text-[10px] font-bold text-slate-400 underline">요청 취소</button>
                       )}
                     </span>
                   </div>
