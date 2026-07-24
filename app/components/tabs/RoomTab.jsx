@@ -428,7 +428,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-white">
+    <div className="flex-1 flex flex-col overflow-hidden bg-white relative">
       <div className="px-4 pt-3 pb-2 shrink-0 border-b border-slate-100">
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -545,6 +545,17 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
         {posts.length === 0 && <p className="text-xs text-slate-400 text-center py-10">아직 게시글이 없습니다. 첫 소식을 올려보세요!</p>}
         {posts.length > 0 && visiblePosts.length === 0 && <p className="text-xs text-slate-400 text-center py-10">검색 결과가 없습니다</p>}
       </div>
+
+      {/* 새 글 쓰기 플로팅 — 스크롤 중에도 바로 작성 (컴포즈 열려 있으면 숨김) */}
+      {!composing && (
+        <button
+          onClick={() => setComposing(true)}
+          aria-label="새 글 쓰기"
+          className="absolute right-4 bottom-4 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95"
+        >
+          <Pencil size={19} />
+        </button>
+      )}
 
       {/* 이미지 확대보기 — 저장/닫기 */}
       {viewerUrl && (
