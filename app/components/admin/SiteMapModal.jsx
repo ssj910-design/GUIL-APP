@@ -155,8 +155,8 @@ export function SiteMapModal({ sites, units = [], onClose }) {
   });
 
   return (
-    <Modal title={`현장 지도 (담당자별 색상 · ${withCoordsCount}곳)`} onClose={onClose} wide="xl">
-      <div className="relative w-full h-[65vh] rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+    <Modal title={`현장 지도 (담당자별 색상 · ${withCoordsCount}곳)`} onClose={onClose} wide="2xl">
+      <div className="relative w-full h-[78vh] rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
         {loading && <p className="absolute inset-0 flex items-center justify-center text-xs text-slate-400">지도 불러오는 중...</p>}
         <div ref={containerRef} className="w-full h-full" />
       </div>

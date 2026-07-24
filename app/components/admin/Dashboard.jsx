@@ -496,8 +496,8 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
       )}
 
       {staffMapOpen && (
-        <Modal title="지도" onClose={() => setStaffMapOpen(false)} wide="xl">
-          <EngineerLocationMap engineers={engineers} engineerJobs={engineerJobs} heightClass="h-[65vh]" alwaysShowLabels />
+        <Modal title="지도" onClose={() => setStaffMapOpen(false)} wide="2xl">
+          <EngineerLocationMap engineers={engineers} engineerJobs={engineerJobs} heightClass="h-[78vh]" alwaysShowLabels />
         </Modal>
       )}
     </div>

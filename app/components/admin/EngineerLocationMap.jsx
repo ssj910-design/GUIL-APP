@@ -94,6 +94,15 @@ const fmtDuration = (sec) => {
 };
 const fmtDistance = (m) => (m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(1)}km`);
 
+// 위치정보가 언제 갱신됐는지 — "0시간00분 전" 형태. 값이 없으면 null.
+function timeSinceLabel(isoString) {
+  if (!isoString) return null;
+  const diffMin = Math.max(0, Math.floor((Date.now() - new Date(isoString).getTime()) / 60000));
+  const h = Math.floor(diffMin / 60);
+  const m = diffMin % 60;
+  return `${h}시간${String(m).padStart(2, "0")}분 전`;
+}
+
 export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerClick, selectedEngineer, heightClass = "h-[760px]", alwaysShowLabels = false }) {
   const containerRef = useRef(null);
   const mapObjRef = useRef(null);
@@ -138,20 +147,25 @@ export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerC
     const engPoints = engineers.filter((e) => e.last_lat != null && e.last_lng != null);
     let autoSelectFn = null;
     engPoints.forEach((e) => {
-      let pinned = false;
       const job = engineerJobs?.get(e.name);
+
+      // 전 직원 위치 지도 — 호버·클릭 없이 이름·현장·상태·위치갱신시각을 항상 라벨로 보여준다.
+      if (alwaysShowLabels) {
+        const marker = L.marker([e.last_lat, e.last_lng], { icon: engineerIcon(L) }).addTo(map);
+        const labelParts = job ? [e.name, job.siteName, job.label] : [e.name];
+        const timeLabel = timeSinceLabel(e.last_loc_at);
+        let html = `<span>${labelParts.join(" · ")}</span>`;
+        if (timeLabel) html += ` · <span style="color:#dc2626;font-weight:700">${timeLabel}</span>`;
+        marker.bindTooltip(html, { permanent: true, direction: "top", offset: [0, -34], className: "engineer-label-tooltip" });
+        markersRef.current.push(marker);
+        return;
+      }
+
+      let pinned = false;
       const sideText = job ? `${job.siteName} · ${job.label}` : undefined;
       const marker = L.marker([e.last_lat, e.last_lng], { icon: engineerIcon(L) })
         .addTo(map)
         .bindPopup(namePopup(e.name, sideText));
-      if (alwaysShowLabels) {
-        marker.bindTooltip(job ? `${e.name} · ${job.label}` : e.name, {
-          permanent: true,
-          direction: "top",
-          offset: [0, -34],
-          className: "engineer-label-tooltip",
-        });
-      }
       marker.off("click");
       marker.on("mouseover", function () {
         this.setZIndexOffset(2000);
