@@ -20,17 +20,33 @@ function zoomForRadius(lat, km, widthPx) {
   return Math.max(1, Math.min(18, Math.round(raw)));
 }
 
-function nameOnlyPopup(name) {
+function namePopup(name, statusText) {
   const el = document.createElement("div");
-  el.style.cssText = "font-size:12px;font-weight:700";
-  el.textContent = name;
+  el.style.cssText = "font-size:12px;min-width:100px";
+  const nameEl = document.createElement("div");
+  nameEl.style.fontWeight = "700";
+  nameEl.textContent = name;
+  el.appendChild(nameEl);
+  if (statusText) {
+    const statusEl = document.createElement("div");
+    statusEl.style.cssText = "color:#64748b;margin-top:2px";
+    statusEl.textContent = statusText;
+    el.appendChild(statusEl);
+  }
   return el;
 }
+
+const fmtDuration = (sec) => {
+  const min = Math.round(sec / 60);
+  return min < 60 ? `${min}분` : `${Math.floor(min / 60)}시간 ${min % 60}분`;
+};
+const fmtDistance = (m) => (m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(1)}km`);
 
 export function EngineerLocationMap({ engineers, site }) {
   const containerRef = useRef(null);
   const mapObjRef = useRef(null);
   const markersRef = useRef([]);
+  const routeLineRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [L, setL] = useState(null);
 
@@ -61,6 +77,7 @@ export function EngineerLocationMap({ engineers, site }) {
     const map = mapObjRef.current;
     markersRef.current.forEach((m) => map.removeLayer(m));
     markersRef.current = [];
+    if (routeLineRef.current) { map.removeLayer(routeLineRef.current); routeLineRef.current = null; }
 
     // 기사 마커 — 호버하면 이름이 뜨고 커서를 옮기면 사라진다. 클릭하면 고정(터치 기기 대응).
     const engPoints = engineers.filter((e) => e.last_lat != null && e.last_lng != null);
@@ -68,12 +85,13 @@ export function EngineerLocationMap({ engineers, site }) {
       let pinned = false;
       const marker = L.marker([e.last_lat, e.last_lng], { icon: pinIcon(L, ENGINEER_COLOR) })
         .addTo(map)
-        .bindPopup(nameOnlyPopup(e.name));
+        .bindPopup(namePopup(e.name));
       marker.off("click");
       marker.on("mouseover", function () {
         this.setZIndexOffset(2000);
         const pin = this.getElement()?.querySelector(".site-pin");
         if (pin) pin.style.transform = "scale(1.35)";
+        if (!pinned) this.setPopupContent(namePopup(e.name));
         this.openPopup();
       });
       marker.on("mouseout", function () {
@@ -82,8 +100,34 @@ export function EngineerLocationMap({ engineers, site }) {
         if (pin) pin.style.transform = "scale(1)";
         if (!pinned) this.closePopup();
       });
-      marker.on("click", function () { pinned = true; this.openPopup(); });
-      marker.on("popupclose", () => { pinned = false; });
+      marker.on("click", async function () {
+        pinned = true;
+        this.setPopupContent(namePopup(e.name, site ? "경로 계산 중..." : undefined));
+        this.openPopup();
+        if (!site?.lat || !site?.lng) return;
+        if (routeLineRef.current) { map.removeLayer(routeLineRef.current); routeLineRef.current = null; }
+        try {
+          const res = await fetch("/api/tmap-route", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              startLat: e.last_lat, startLng: e.last_lng,
+              endLat: site.lat, endLng: site.lng,
+              startName: e.name, endName: site.name,
+            }),
+          });
+          const data = await res.json();
+          if (!data.ok) { this.setPopupContent(namePopup(e.name, data.reason || "경로를 찾을 수 없습니다")); return; }
+          routeLineRef.current = L.polyline(data.coords, { color: ENGINEER_COLOR, weight: 4, opacity: 0.8 }).addTo(map);
+          this.setPopupContent(namePopup(e.name, `예상 ${fmtDuration(data.totalTimeSec)} · ${fmtDistance(data.totalDistanceM)}`));
+        } catch {
+          this.setPopupContent(namePopup(e.name, "경로 조회 실패"));
+        }
+      });
+      marker.on("popupclose", () => {
+        pinned = false;
+        if (routeLineRef.current) { map.removeLayer(routeLineRef.current); routeLineRef.current = null; }
+      });
       markersRef.current.push(marker);
     });
 
