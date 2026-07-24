@@ -94,7 +94,7 @@ const fmtDuration = (sec) => {
 };
 const fmtDistance = (m) => (m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(1)}km`);
 
-export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerClick, selectedEngineer, heightClass = "h-[760px]" }) {
+export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerClick, selectedEngineer, heightClass = "h-[760px]", alwaysShowLabels = false }) {
   const containerRef = useRef(null);
   const mapObjRef = useRef(null);
   const markersRef = useRef([]);
@@ -144,6 +144,14 @@ export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerC
       const marker = L.marker([e.last_lat, e.last_lng], { icon: engineerIcon(L) })
         .addTo(map)
         .bindPopup(namePopup(e.name, sideText));
+      if (alwaysShowLabels) {
+        marker.bindTooltip(job ? `${e.name} · ${job.label}` : e.name, {
+          permanent: true,
+          direction: "top",
+          offset: [0, -34],
+          className: "engineer-label-tooltip",
+        });
+      }
       marker.off("click");
       marker.on("mouseover", function () {
         this.setZIndexOffset(2000);
