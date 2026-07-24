@@ -91,8 +91,17 @@ const GEO_HELP =
   "· 안드로이드 크롬: 주소창 왼쪽 자물쇠 → 권한 → 위치 → 허용\n" +
   "· 아이폰: 설정 → Safari(또는 홈 화면 추가한 앱) → 위치 → 허용, 그리고 설정 → 개인정보 보호 → 위치 서비스 ON";
 
+function leaveLabel(l) {
+  if (!l) return null;
+  if (l.kind === "반차") {
+    const period = periodOf(l.note);
+    return period ? `반차(${period})` : "반차";
+  }
+  return l.kind; // 연차 | 병가 | 공가
+}
+
 // 관리자 출근 현황 — 요약을 누르면 출근·미출근 명단과 위치 권한 상태를 펼친다.
-function AdminAttendanceCard({ attendances, engineers }) {
+function AdminAttendanceCard({ attendances, engineers, todayLeaves = [] }) {
   const [open, setOpen] = useState(false);
   const attByPid = new Map(attendances.map((a) => [a.profileId, a]));
   const rows = engineers.map((e) => ({ e, a: attByPid.get(e.id) }));
@@ -100,6 +109,23 @@ function AdminAttendanceCard({ attendances, engineers }) {
   // 위치 권한을 안 켠 사람(거부·미결정) — 보고된 값 기준. granted가 아니면 안내 대상.
   const geoOff = rows.filter((r) => r.e.geo_perm && r.e.geo_perm !== "granted");
   const hhmm = (iso) => (iso ? new Date(iso).toTimeString().slice(0, 5) : "");
+
+  // 오늘 휴가 현황 — 연차/병가/공가는 하루 종일 쉬므로 "정상근무" 대상에서 뺀다(반차는 절반만 쉬므로 포함).
+  const leaveByProfile = new Map(todayLeaves.map((l) => [l.profile_id, l]));
+  const annualCount = todayLeaves.filter((l) => l.kind === "연차").length;
+  const halfAmCount = todayLeaves.filter((l) => l.kind === "반차" && periodOf(l.note) === "오전").length;
+  const halfPmCount = todayLeaves.filter((l) => l.kind === "반차" && periodOf(l.note) === "오후").length;
+  const sickCount = todayLeaves.filter((l) => l.kind === "병가").length;
+  const publicCount = todayLeaves.filter((l) => l.kind === "공가").length;
+  const normalTotal = engineers.length - annualCount - sickCount - publicCount;
+  const leaveStats = [
+    annualCount > 0 && `연차 ${annualCount}명`,
+    halfAmCount > 0 && `반차(오전) ${halfAmCount}명`,
+    halfPmCount > 0 && `반차(오후) ${halfPmCount}명`,
+    sickCount > 0 && `병가 ${sickCount}명`,
+    publicCount > 0 && `공가 ${publicCount}명`,
+    `정상근무 ${inCount}/${normalTotal}명`,
+  ].filter(Boolean).join(" · ");
 
   // 근무 중(출근O·마감X)인데 앱을 2시간 넘게 안 본 사람 — '연락 두절'이 아니라 '확인해볼 사람'.
   // 미출근·퇴근자는 앱 안 봐도 정상이라 제외. 관리자만 본다(기사에겐 안 보임).
@@ -113,8 +139,11 @@ function AdminAttendanceCard({ attendances, engineers }) {
 
   return (
     <div className="bg-white rounded-xl border border-slate-200">
-      <button onClick={() => setOpen((v) => !v)} className="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50 rounded-xl">
-        <span className="text-xs font-bold text-slate-500">오늘 출근</span>
+      <button onClick={() => setOpen((v) => !v)} className="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50 rounded-xl flex-wrap gap-y-1">
+        <span className="flex items-center gap-1.5 flex-wrap min-w-0">
+          <span className="text-[11px] font-bold text-slate-400 whitespace-nowrap">{leaveStats}</span>
+          <span className="text-xs font-bold text-slate-500 whitespace-nowrap">오늘 출근</span>
+        </span>
         <span className="flex items-center gap-1.5">
           <span className="text-sm font-bold text-slate-800">{inCount} / {engineers.length}명</span>
           {staleRows.length > 0 && <span className="text-[10px] font-extrabold text-white bg-red-500 rounded-full px-1.5 py-0.5">2시간+ 미확인 {staleRows.length}</span>}
@@ -133,6 +162,7 @@ function AdminAttendanceCard({ attendances, engineers }) {
           <div className="space-y-1.5">
             {rows.map(({ e, a }) => {
               const stale = isWorking(a) && hoursAgo(e.last_seen_at) >= 2;
+              const leave = leaveByProfile.get(e.id);
               return (
                 <div key={e.id} className="flex items-center justify-between gap-2 text-xs">
                   <span className="font-bold text-slate-700 min-w-0 truncate">{e.name}</span>
@@ -140,7 +170,9 @@ function AdminAttendanceCard({ attendances, engineers }) {
                     {stale && <span className="text-[10px] font-bold text-red-500">{Math.floor(hoursAgo(e.last_seen_at))}시간째 미확인</span>}
                     {a?.checkedInAt
                       ? <span className="text-slate-500">{hhmm(a.checkedInAt)} 출근{a.checkedOutAt && ` · ${a.status} ${hhmm(a.checkedOutAt)}`}</span>
-                      : <span className="text-slate-300">미출근</span>}
+                      : leave
+                        ? <span className="text-emerald-600 font-bold">{leaveLabel(leave)}</span>
+                        : <span className="text-slate-300">미출근</span>}
                     <span className={`font-bold ${permTone(e.geo_perm)}`}>{permLabel(e.geo_perm)}</span>
                   </span>
                 </div>
@@ -155,7 +187,7 @@ function AdminAttendanceCard({ attendances, engineers }) {
 
 // 출퇴근 체크 — 기사는 출근/퇴근·당직 버튼, 관리자는 오늘 출근 인원 요약.
 // 출근 시 현위치를 1회 받아 저장한다(고장 배정 시 가까운 기사 정렬용).
-function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseNight, onAttendance }) {
+function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseNight, onAttendance, todayLeaves = [] }) {
   const { role, selfId, engineers } = useContext(AuthContext);
   const [checking, setChecking] = useState(false);
   const [geoModalDismissed, setGeoModalDismissed] = useState(false);
@@ -196,7 +228,7 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
   if (role === "admin") {
     return (
       <div className="px-5 pt-4">
-        <AdminAttendanceCard attendances={attendances} engineers={engineers} />
+        <AdminAttendanceCard attendances={attendances} engineers={engineers} todayLeaves={todayLeaves} />
       </div>
     );
   }
@@ -584,7 +616,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
 
   return (
     <div className="flex-1 overflow-y-auto pb-4 relative">
-      {onAttendance && <AttendanceBar attendances={attendances} dutySchedules={dutySchedules} pendingNight={pendingNight} onCloseNight={onCloseNight} onAttendance={onAttendance} />}
+      {onAttendance && <AttendanceBar attendances={attendances} dutySchedules={dutySchedules} pendingNight={pendingNight} onCloseNight={onCloseNight} onAttendance={onAttendance} todayLeaves={todayLeaves} />}
 
       <div className="px-5 pt-4">
         <WorkCalendarMiniStrip profiles={profiles} onOpen={onOpenRoster} swapCount={swapCount} />
