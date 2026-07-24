@@ -78,7 +78,15 @@
 - [x] **P2-7 `[확인]` 지원요청/운행정지로 미배정 복귀 시 알림 없음** — (수정 2026-07-24: failure_unassigned 푸시) — [ElevatorFieldApp.jsx:706](../app/components/ElevatorFieldApp.jsx#L706) — 접수 때와 달리 failure_unassigned 푸시 미발송 → 지원 필요 건을 아무도 모름.
 - [x] **P2-8 `[확인]` 비용청구 selectedId stale 초기화** — (수정 2026-07-24: openTodos 동기화 effect) — [BillingTab.jsx:26](../app/components/tabs/BillingTab.jsx#L26) — `useState(openTodos[0]?.id)` 최초 1회만 → todos 늦게 오면 제출 불가. → `useEffect([openTodos])` 재설정.
 - [ ] **P2-9 `[확인]` 검사관리 도래현장 카드마다 실시간 API 호출(한도 위험)** — [InspectionTab.jsx:16](../app/components/tabs/InspectionTab.jsx#L16) DueSoonCard — "전 호기 실시간 호출 금지" 정책과 충돌. → units DB 캐시/결과 캐싱.
-- [ ] **P2-10 `[확인]` 관리자 수동완료가 청구 없이 루프 완료 위장** — handleAdminToggleTodo(1275) + isBilled(MaterialTab:687) — 관리자가 자재/견적 할일 임의 done → 반려차단 + 원가 미기록 + 로스리포트 false-closed. → 청구 존재와 done 분리 판정.
+- [ ] **P2-10 → 친구 담당 (관리자 페이지에서 처리 예정, 2026-07-24). 우리는 손대지 말 것.**
+  배경: 관리자 수동완료는 버그가 아니라 **자재 반납**(교체 불필요해서 자재를 돌려받은 경우) 처리용으로 일부러 만든 것.
+  다만 정상 청구완료와 구분이 안 돼 기록이 안 남는 문제가 있어 친구가 관리자 페이지 쪽에서 정리한다.
+  **우리 쪽 연계 확인만 필요**: 친구 변경이 들어오면 모바일의 `isBilled`(MaterialTab)가 `todo.done=true`를 곧 "청구완료"로 보고
+  기사의 "자재가 잘못 나왔어요·반려" 버튼을 막는 부분이 반납 건에도 걸리는지 점검할 것.
+  <details><summary>원래 감사 내용</summary>
+
+  **P2-10 `[확인]` 관리자 수동완료가 청구 없이 루프 완료 위장** — handleAdminToggleTodo(1275) + isBilled(MaterialTab:687) — 관리자가 자재/견적 할일 임의 done → 반려차단 + 원가 미기록 + 로스리포트 false-closed. → 청구 존재와 done 분리 판정.
+  </details>
 - [ ] **P2-11 `[확인]` 낙관적 배정에 assignee_id 누락 + guard 실패 시 refetch 없음** — handleAssignFailure:581/handleReassign/handleRefuse — 로컬 assigneeId stale(현재 이름 fallback으로 가려짐, Phase2에서 깨짐), 동시배정 guard 0행 때 stale "미배정" 유지. → setState에 assigneeId 포함 + guard 실패 refetch.
 - [ ] **P2-12 `[추정]` elevator_no 빈/비정형 라벨이 집계 병합** — [utils.js:315,354](../lib/utils.js#L315) recentFailuresBySite/unitHistory — `""`이면 키 `siteId|`로 뭉쳐 다른 호기가 한 덩어리(집중관리 오탐). findUnitForInspection(216)은 라벨 불일치 시 1호기 오배정. → 데이터 정리 + 빈 키 집계 제외.
 - [ ] **P2-13 `[확인]` 인증 없는 크론/프록시** — geocode-sites, sync-holidays에 CRON_SECRET 없음(sync-inspection-cache만 검사). geocode는 TMAP 한도 소진+sites 대량 write 가능. → CRON_SECRET 가드.
