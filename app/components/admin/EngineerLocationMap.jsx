@@ -63,18 +63,27 @@ function zoomForRadius(lat, km, widthPx) {
   return Math.max(1, Math.min(18, Math.round(raw)));
 }
 
-function namePopup(name, statusText) {
+// name = 기사 이름(굵게), sideText = 이름 우측에 붙는 "현장 · 상태"(있으면), extraLine = 그 아래 줄(경로 계산 상태 등).
+function namePopup(name, sideText, extraLine) {
   const el = document.createElement("div");
   el.style.cssText = "font-size:12px;min-width:100px";
-  const nameEl = document.createElement("div");
-  nameEl.style.fontWeight = "700";
+  const row = document.createElement("div");
+  row.style.whiteSpace = "nowrap";
+  const nameEl = document.createElement("b");
   nameEl.textContent = name;
-  el.appendChild(nameEl);
-  if (statusText) {
-    const statusEl = document.createElement("div");
-    statusEl.style.cssText = "color:#64748b;margin-top:2px";
-    statusEl.textContent = statusText;
-    el.appendChild(statusEl);
+  row.appendChild(nameEl);
+  if (sideText) {
+    const sideEl = document.createElement("span");
+    sideEl.style.cssText = "color:#64748b;margin-left:6px";
+    sideEl.textContent = sideText;
+    row.appendChild(sideEl);
+  }
+  el.appendChild(row);
+  if (extraLine) {
+    const extraEl = document.createElement("div");
+    extraEl.style.cssText = "color:#64748b;margin-top:2px";
+    extraEl.textContent = extraLine;
+    el.appendChild(extraEl);
   }
   return el;
 }
@@ -85,7 +94,7 @@ const fmtDuration = (sec) => {
 };
 const fmtDistance = (m) => (m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(1)}km`);
 
-export function EngineerLocationMap({ engineers, site, onEngineerClick }) {
+export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerClick }) {
   const containerRef = useRef(null);
   const mapObjRef = useRef(null);
   const markersRef = useRef([]);
@@ -126,15 +135,17 @@ export function EngineerLocationMap({ engineers, site, onEngineerClick }) {
     const engPoints = engineers.filter((e) => e.last_lat != null && e.last_lng != null);
     engPoints.forEach((e) => {
       let pinned = false;
+      const job = engineerJobs?.get(e.name);
+      const sideText = job ? `${job.siteName} · ${job.label}` : undefined;
       const marker = L.marker([e.last_lat, e.last_lng], { icon: engineerIcon(L) })
         .addTo(map)
-        .bindPopup(namePopup(e.name));
+        .bindPopup(namePopup(e.name, sideText));
       marker.off("click");
       marker.on("mouseover", function () {
         this.setZIndexOffset(2000);
         const pin = this.getElement()?.querySelector(".site-pin");
         if (pin) pin.style.transform = "scale(1.35)";
-        if (!pinned) this.setPopupContent(namePopup(e.name));
+        if (!pinned) this.setPopupContent(namePopup(e.name, sideText));
         this.openPopup();
       });
       marker.on("mouseout", function () {
@@ -146,7 +157,7 @@ export function EngineerLocationMap({ engineers, site, onEngineerClick }) {
       marker.on("click", async function () {
         pinned = true;
         onEngineerClick?.(e.name);
-        this.setPopupContent(namePopup(e.name, site ? "경로 계산 중..." : undefined));
+        this.setPopupContent(namePopup(e.name, sideText, site ? "경로 계산 중..." : undefined));
         this.openPopup();
         if (!site?.lat || !site?.lng) return;
         if (routeLineRef.current) { map.removeLayer(routeLineRef.current); routeLineRef.current = null; }
@@ -161,11 +172,11 @@ export function EngineerLocationMap({ engineers, site, onEngineerClick }) {
             }),
           });
           const data = await res.json();
-          if (!data.ok) { this.setPopupContent(namePopup(e.name, data.reason || "경로를 찾을 수 없습니다")); return; }
+          if (!data.ok) { this.setPopupContent(namePopup(e.name, sideText, data.reason || "경로를 찾을 수 없습니다")); return; }
           routeLineRef.current = L.polyline(data.coords, { color: ENGINEER_COLOR, weight: 4, opacity: 0.8 }).addTo(map);
-          this.setPopupContent(namePopup(e.name, `예상 ${fmtDuration(data.totalTimeSec)} · ${fmtDistance(data.totalDistanceM)}`));
+          this.setPopupContent(namePopup(e.name, sideText, `예상 ${fmtDuration(data.totalTimeSec)} · ${fmtDistance(data.totalDistanceM)}`));
         } catch {
-          this.setPopupContent(namePopup(e.name, "경로 조회 실패"));
+          this.setPopupContent(namePopup(e.name, sideText, "경로 조회 실패"));
         }
       });
       // 경로선은 여기서 지우지 않는다 — 다른 기사에 커서만 올려도 popupclose가 발생해

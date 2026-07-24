@@ -6,7 +6,7 @@ import { useState, useMemo } from "react";
 import { Plus, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR, FAULT_TYPES } from "@/lib/constants";
-import { formatPhone, sortEngineersByDistance } from "@/lib/utils";
+import { formatPhone, sortEngineersByDistance, failureStage } from "@/lib/utils";
 import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls } from "@/app/components/admin/adminShared";
 import { FailureDetailContent } from "@/app/components/admin/Dashboard";
 import { EngineerLocationMap } from "@/app/components/admin/EngineerLocationMap";
@@ -179,6 +179,17 @@ function SiteAutocomplete({ sites, value, onChange }) {
   );
 }
 
+// 기사위치지도 호버 팝업용 — FailureMiniCard와 같은 기준으로 진행 상태 라벨을 뽑는다.
+function jobLabel(f) {
+  const stage = failureStage(f);
+  if (stage === "arrived") return "작업중";
+  if (stage === "dispatched") return "출동중";
+  if (f.assignee) return "응답대기";
+  if (f.escalation === "운행정지") return "운행정지";
+  if (f.escalation === "지원요청") return "지원미배정";
+  return "미배정";
+}
+
 // 배정 기사 <select> 공통 옵션 — 현장과 가까운 순으로 정렬하고 거리를 함께 표시한다.
 function EngineerOptions({ engineers, site }) {
   return sortEngineersByDistance(engineers, site).map(({ engineer: p, km }) => (
@@ -189,10 +200,19 @@ function EngineerOptions({ engineers, site }) {
 }
 
 export function RegisterFailureModal({ data, onClose, onCreate }) {
-  const { sites, units, profiles } = data;
+  const { sites, units, profiles, failures } = data;
   // useMemo로 참조를 고정 — 매번 새 배열이면 지도 마커를 그리는 effect가 리렌더마다
   // (다른 입력칸 타이핑 등) 재실행돼 그려둔 경로선이 사라진다.
   const engineers = useMemo(() => profiles.filter((p) => p.role === "engineer"), [profiles]);
+  // 기사별 현재 진행 중인 고장 1건(완료 제외, 먼저 나온 것 우선) — 지도 마커 호버에 표시.
+  const engineerJobs = useMemo(() => {
+    const map = new Map();
+    for (const f of failures) {
+      if (f.status === "완료" || !f.assignee || map.has(f.assignee)) continue;
+      map.set(f.assignee, { siteName: f.siteName, label: jobLabel(f) });
+    }
+    return map;
+  }, [failures]);
   const [form, setForm] = useState({
     siteId: "", unitIds: [], faultType: "", detail: "", details: {}, assignee: "", reporterPhone: "", notFault: false,
   });
@@ -220,7 +240,7 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
     <Modal title="고장접수" onClose={onClose} wide="2xl">
       <div className="flex gap-4 items-start flex-wrap lg:flex-nowrap">
       <div className="w-full lg:w-[620px] shrink-0">
-        <EngineerLocationMap engineers={engineers} site={site} onEngineerClick={(name) => setForm((f) => ({ ...f, assignee: name }))} />
+        <EngineerLocationMap engineers={engineers} site={site} engineerJobs={engineerJobs} onEngineerClick={(name) => setForm((f) => ({ ...f, assignee: name }))} />
       </div>
       <div className="space-y-3 flex-1 min-w-0">
         <div>
