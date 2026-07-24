@@ -15,6 +15,16 @@ import { confirmAsync } from "@/app/components/ConfirmHost";
 /* FAILURE (고장접수)                                                   */
 /* ------------------------------------------------------------------ */
 
+// T맵 소요시간 로딩 표시용 점 애니메이션 — · → ·· → ··· 를 반복한다.
+function LoadingDots() {
+  const [n, setN] = useState(1);
+  useEffect(() => {
+    const id = setInterval(() => setN((v) => (v % 3) + 1), 400);
+    return () => clearInterval(id);
+  }, []);
+  return <span>{"·".repeat(n)}</span>;
+}
+
 function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported, onDispatch }) {
   const sites = useContext(SitesContext);
   const units = useContext(UnitsContext);
@@ -325,7 +335,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                 <div className="flex items-center gap-2 mb-1.5">
                   <p className="text-xs font-bold text-slate-500">도착 예정 시간 *</p>
                   {driveLoading ? (
-                    <span className="text-xs font-bold text-red-600">T맵 예상시간 불러오는 중…</span>
+                    <span className="text-xs font-bold text-red-600">T맵 예상시간 불러오는 중 <LoadingDots /></span>
                   ) : driveMin != null && (
                     <span className="text-xs font-bold text-red-600">T맵 예상 {driveMin}분</span>
                   )}
@@ -776,7 +786,7 @@ export function DispatchEtaModal({ failure, onConfirm, onClose }) {
       <Field
         label="도착 예정 시간 *"
         right={driveLoading ? (
-          <span className="text-xs font-bold text-red-600">T맵 예상시간 불러오는 중…</span>
+          <span className="text-xs font-bold text-red-600">T맵 예상시간 불러오는 중 <LoadingDots /></span>
         ) : driveMin != null && (
           <span className="text-xs font-bold text-red-600">T맵 예상 {driveMin}분</span>
         )}
