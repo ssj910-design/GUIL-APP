@@ -203,7 +203,7 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
   const { sites, units, profiles, failures } = data;
   // useMemo로 참조를 고정 — 매번 새 배열이면 지도 마커를 그리는 effect가 리렌더마다
   // (다른 입력칸 타이핑 등) 재실행돼 그려둔 경로선이 사라진다.
-  const engineers = useMemo(() => profiles.filter((p) => p.role === "engineer"), [profiles]);
+  const engineers = useMemo(() => profiles.filter((p) => p.role === "engineer" && p.is_active !== false), [profiles]); // 제외된 기사 제외
   // 기사별 현재 진행 중인 고장 1건 — 지도 마커 호버·배정 기사 선택란에 표시.
   const engineerJobs = useMemo(() => engineerJobsByName(failures), [failures]);
   const [form, setForm] = useState({
@@ -351,7 +351,7 @@ export default function FailuresAdmin({ data, setData }) {
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState(null);
   const [registering, setRegistering] = useState(false);
-  const engineers = profiles.filter((p) => p.role === "engineer");
+  const engineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
   const engineerJobs = useMemo(() => engineerJobsByName(failures), [failures]);
   const [reassignTarget, setReassignTarget] = useState(null);
 

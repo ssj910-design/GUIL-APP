@@ -23,7 +23,7 @@ function siteManagerOf(data, unitId, fallbackSiteName) {
 
 function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPrice }) {
   const { profiles } = data;
-  const engineers = profiles.filter((p) => p.role === "engineer");
+  const engineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
   const notesReady = data.billings.some((x) => x.notes !== undefined);
   const [form, setForm] = useState({
     notes: b.notes ?? "",

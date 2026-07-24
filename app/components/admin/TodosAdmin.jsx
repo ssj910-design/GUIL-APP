@@ -31,7 +31,7 @@ function displayTitle(t) {
 
 function TodoDetailModal({ t, data, onClose, onSave }) {
   const { sites, units, profiles } = data;
-  const engineers = profiles.filter((p) => p.role === "engineer");
+  const engineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
   const currentUnit = units.find((u) => u.id === t.unitId);
   const initialSiteId = currentUnit?.siteId ?? sites.find((s) => s.name === t.siteName)?.id ?? "";
   const [form, setForm] = useState({
@@ -166,7 +166,7 @@ function TodoDetailModal({ t, data, onClose, onSave }) {
 
 function AssignTodoModal({ data, onClose, onCreate }) {
   const { sites, units, profiles } = data;
-  const engineers = profiles.filter((p) => p.role === "engineer");
+  const engineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
   const [form, setForm] = useState({ siteId: "", unitId: "", title: "", description: "", assigneeId: "", dueDate: addDays(TODAY_STR, 7) });
   const [photos, setPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);

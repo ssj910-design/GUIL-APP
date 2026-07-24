@@ -365,7 +365,7 @@ export default function SitesAdmin({ data, setData }) {
       contractFilter === "ended" ? s.isActive === false :
       contractFilter === "expiring" ? s.isActive !== false && (in30(s.contractEnd) || isExpired(s.contractEnd)) :
       true);
-  const engineers = profiles.filter((p) => p.role === "engineer");
+  const engineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false); // 제외된 기사는 담당기사 배정 목록에서 뺀다
   // contract_date/maintenance_cost 컬럼은 각 마이그레이션 실행 전엔 존재하지 않는다 — undefined면 아직 미실행으로 간주.
   const contractDateReady = sites.some((s) => s.contractDate !== undefined);
   const maintenanceCostReady = sites.some((s) => s.maintenanceCost !== undefined);

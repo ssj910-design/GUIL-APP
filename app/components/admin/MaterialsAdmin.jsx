@@ -450,7 +450,7 @@ export default function MaterialsAdmin({ data, setData }) {
 function MaterialSupplyModal({ request, profiles, todos, onClose, onSubmit }) {
   const isEdit = request.status === "지급완료";
   const existingTodo = todos.find((t) => t.materialRequestId === request.id);
-  const engineers = profiles.filter((p) => p.role === "engineer");
+  const engineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
   const defaultAssigneeId = existingTodo?.assigneeId || request.requesterId || engineers.find((p) => p.name === request.engineer)?.id || "";
   const [assigneeId, setAssigneeId] = useState(defaultAssigneeId);
   const [photos, setPhotos] = useState(request.supplyPhotoUrls ?? []);
@@ -560,7 +560,7 @@ function MaterialSupplyModal({ request, profiles, todos, onClose, onSubmit }) {
 
 function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
   const isEdit = quote.status === "자재지급완료";
-  const engineers = profiles.filter((p) => p.role === "engineer");
+  const engineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
   const existingTodosForQuote = todos.filter((t) => t.quoteRequestId === quote.id);
   const existingAssigneeIds = existingTodosForQuote.map((t) => t.assigneeId);
   const defaultId = quote.requesterId || engineers.find((p) => p.name === quote.engineer)?.id || "";

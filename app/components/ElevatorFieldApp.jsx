@@ -560,7 +560,7 @@ export default function App() {
 
   // ★ 기사·관리자 누구나 현장정보의 "비고(전달사항)"을 수정
   async function handleUpdateSiteNotes(siteId, notes) {
-    await supabase.from("sites").update({ notes }).eq("id", siteId);
+    if (!(await writeOk(supabase.from("sites").update({ notes }).eq("id", siteId), "전달사항 저장 실패"))) return;
     setSites((prev) => prev.map((s) => (s.id === siteId ? { ...s, notes } : s)));
   }
 
@@ -846,7 +846,7 @@ export default function App() {
       reactions: {},
       isNotice: extra.isNotice ?? false,
     };
-    await supabase.from("feed_posts").insert({
+    const posted = await writeOk(supabase.from("feed_posts").insert({
       id: newPost.id,
       author: newPost.author,
       body: newPost.text,
@@ -854,7 +854,8 @@ export default function App() {
       reply_to_id: newPost.replyToId,
       ...(v2Ready ? { author_id: profileIdByName(profilesAll, newPost.author) } : {}),
       ...(feedNoticeReady ? { is_notice: newPost.isNotice } : {}),
-    });
+    }), "글 등록 실패 — 다시 시도해주세요");
+    if (!posted) return; // 글이 조용히 사라지지 않도록 (P1-7)
     setFeed((prev) => [...prev, newPost]);
   }
 
@@ -873,8 +874,12 @@ export default function App() {
 
   // ★ 우리방 글 수정 (본인 글만 — RoomTab에서 작성자 확인 후 호출)
   async function handleUpdateFeedPost(postId, text) {
+    const prevText = feed.find((p) => p.id === postId)?.text;
     setFeed((prev) => prev.map((p) => (p.id === postId ? { ...p, text } : p)));
-    await supabase.from("feed_posts").update({ body: text }).eq("id", postId);
+    // 실패하면 화면만 바뀐 채 남지 않도록 원래 글로 되돌린다 (P1-7)
+    if (!(await writeOk(supabase.from("feed_posts").update({ body: text }).eq("id", postId), "글 수정 저장 실패"))) {
+      setFeed((prev) => prev.map((p) => (p.id === postId ? { ...p, text: prevText } : p)));
+    }
   }
 
   // ★ 우리방 글 삭제 — 그 글의 댓글도 함께 삭제
@@ -1041,7 +1046,11 @@ export default function App() {
       const currentQty = kitStockRef.current[key] ?? 0;
       const newQty = Math.max(0, currentQty - usedQty);
       kitStockRef.current[key] = newQty;
-      await supabase.from("kit_stock").upsert({ engineer_id: engineerId, part, qty: newQty }, { onConflict: "engineer_id,part" });
+      // 재고는 수치 정합이 중요 — 저장 실패 시 화면·ref를 원래 수량으로 되돌린다 (P1-7)
+      if (!(await writeOk(supabase.from("kit_stock").upsert({ engineer_id: engineerId, part, qty: newQty }, { onConflict: "engineer_id,part" }), "상비부품 재고 갱신 실패"))) {
+        kitStockRef.current[key] = currentQty;
+        return;
+      }
       setKitStock((prev) => {
         const existing = prev.find((k) => k.engineerId === engineerId && k.part === part);
         if (existing) return prev.map((k) => (k === existing ? { ...k, qty: newQty } : k));
@@ -1064,7 +1073,11 @@ export default function App() {
       const currentQty = kitStockRef.current[key] ?? 0;
       const newQty = currentQty + (restock.quantity || 1);
       kitStockRef.current[key] = newQty;
-      await supabase.from("kit_stock").upsert({ engineer_id: restock.engineerId, part: restock.part, qty: newQty }, { onConflict: "engineer_id,part" });
+      // 실패 시 원복 — 안 그러면 화면 재고와 DB 재고가 어긋난다 (P1-7)
+      if (!(await writeOk(supabase.from("kit_stock").upsert({ engineer_id: restock.engineerId, part: restock.part, qty: newQty }, { onConflict: "engineer_id,part" }), "상비부품 재고 갱신 실패"))) {
+        kitStockRef.current[key] = currentQty;
+        return;
+      }
       setKitStock((prev) => {
         const existing = prev.find((k) => k.engineerId === restock.engineerId && k.part === restock.part);
         if (existing) return prev.map((k) => (k === existing ? { ...k, qty: newQty } : k));
@@ -1285,7 +1298,7 @@ export default function App() {
       photoCount: photoCount || 0,
       photoUrls: photoUrls ?? [],
     }));
-    await supabase.from("todos").insert(
+    const assigned = await writeOk(supabase.from("todos").insert(
       newTodos.map((t) => ({
         id: t.id,
         source: t.source,
@@ -1299,7 +1312,8 @@ export default function App() {
         photo_urls: t.photoUrls?.length ? t.photoUrls : null,
         ...(v2Ready ? { assignee_id: profileIdByName(profilesAll, t.assignee) } : {}),
       }))
-    );
+    ), "할 일 부여 실패");
+    if (!assigned) return; // 부여했다고 보이는데 실제로는 없는 상황 방지 (P1-7)
     setTodos((prev) => [...newTodos, ...prev]);
   }
 
@@ -1315,7 +1329,7 @@ export default function App() {
   // 나중에 배차가 바뀐 경우의 안전망입니다. 관리자 화면과 기사 본인 화면 양쪽에서 호출됩니다.
   async function handleReassignTodo(todoId, newAssignee) {
     // 재배정하면 걸려 있던 재배정 요청도 함께 해제한다.
-    await supabase.from("todos").update({ assignee: newAssignee, reassign_requested: false, reassign_reason: null, reassign_to: null }).eq("id", todoId);
+    if (!(await writeOk(supabase.from("todos").update({ assignee: newAssignee, reassign_requested: false, reassign_reason: null, reassign_to: null }).eq("id", todoId), "재배정 실패"))) return;
     setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, assignee: newAssignee, reassignRequested: false, reassignReason: null, reassignTo: null } : t)));
   }
 
