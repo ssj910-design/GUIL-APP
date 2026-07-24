@@ -378,7 +378,12 @@ export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoU
               value={todo.assignee}
               onChange={(e) => {
                 const next = e.target.value;
-                if (next !== todo.assignee && confirm(`담당자를 ${next}(으)로 변경하시겠습니까?`)) onReassign(todo.id, next);
+                if (next === todo.assignee) return;
+                if (confirm(`담당자를 ${next}(으)로 변경하시겠습니까?`)) {
+                  onReassign(todo.id, next);
+                } else {
+                  e.target.value = todo.assignee; // 취소 시 원래 값으로 되돌림 — 안 그러면 select가 리렌더 전까지 바뀐 값으로 남아있어 취소가 안 먹힌 것처럼 보인다
+                }
               }}
             >
               {engineerNames?.includes(todo.assignee) ? null : <option value={todo.assignee}>{todo.assignee}</option>}
