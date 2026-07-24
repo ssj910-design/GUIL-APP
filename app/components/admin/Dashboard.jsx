@@ -6,7 +6,7 @@ import { useState, useMemo } from "react";
 import WeekStrip from "@/app/components/admin/WeekStrip";
 import { AlertOctagon, Plus } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, shortDate, sortEngineersByDistance, parseErrorCode, engineerJobsByName } from "@/lib/utils";
+import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, shortDate, sortEngineersByDistance, parseErrorCode, engineerJobsByName, busyStatusOf } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -27,6 +27,45 @@ function Kpi({ label, value, tone = "text-slate-900" }) {
       <p className="text-xs text-slate-500">{label}</p>
       <p className={`text-2xl font-extrabold mt-1 ${tone}`}>{value}</p>
     </div>
+  );
+}
+
+// 재배정 팝업 — 배정 기사 select를 누르면 바로 바뀌던 것 대신, 버튼을 눌러야 여는 확인 단계.
+// 모바일 AssignEngineerSheet와 같은 기준(바쁜 기사 경고, 미배정 알림 문구)으로 확인 팝업을 띄운다.
+function ReassignModal({ failure, siteObj, engineers, engineerJobs, failures, onAssign, onClose }) {
+  const rows = sortEngineersByDistance(engineers, siteObj);
+  async function pick(name) {
+    const st = name ? busyStatusOf(failures, name) : null;
+    const msg = !name
+      ? "미배정 하시겠습니까?\n모든 직원에게 알림이 갑니다."
+      : st
+        ? `${name}님은 지금 ${st}입니다.\n그래도 이 건을 배정할까요?`
+        : `${name}으로 배정하시겠습니까?`;
+    if (!(await confirmAsync(msg))) return;
+    onAssign(failure, name);
+    onClose();
+  }
+  return (
+    <Modal title={`재배정 — ${failure.siteName}${failure.elevatorNo ? ` · ${formatUnitLabel(failure.elevatorNo)}` : ""}`} onClose={onClose}>
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={() => pick(null)} className="py-3 rounded-xl text-sm font-bold border text-red-500 border-red-200 bg-white hover:bg-red-50">
+          미배정으로
+        </button>
+        {rows.map(({ engineer: p, km }) => {
+          const job = engineerJobs.get(p.name);
+          return (
+            <button
+              key={p.id}
+              onClick={() => pick(p.name)}
+              className="py-3 rounded-xl text-sm font-bold border text-slate-700 border-slate-200 bg-white hover:bg-blue-50"
+            >
+              {p.name}{km != null ? ` (${km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`})` : ""}
+              {job && <span className="block text-[10px] font-normal text-slate-400 mt-0.5">{job.siteName} · {job.label}</span>}
+            </button>
+          );
+        })}
+      </div>
+    </Modal>
   );
 }
 
@@ -88,7 +127,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const engineers = profiles.filter((p) => p.role === "engineer");
   const engineerJobs = useMemo(() => engineerJobsByName(failures), [failures]);
-  const [openAssignRow, setOpenAssignRow] = useState(null);
+  const [reassignTarget, setReassignTarget] = useState(null);
   const [historySite, setHistorySite] = useState(null);
   const [failureDetail, setFailureDetail] = useState(null);
   const [failTarget, setFailTarget] = useState(null);
@@ -310,35 +349,14 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
                     <td className="px-1 py-2.5 font-semibold whitespace-nowrap">{loc.site} · {loc.unit}</td>
                     <td className="px-2 py-2.5 text-slate-600">{f.errorCode}</td>
                     <td className="px-2 py-2.5 whitespace-nowrap">{loc.siteObj?.assignedEngineer || "미배정"}</td>
-                    <td className="px-2 py-2.5" onClick={(e) => e.stopPropagation()}>
-                      <select
-                        className={`${inputCls} min-w-24`}
-                        value={engineerName(f.assigneeId, f.assignee) === "미배정" ? "" : engineerName(f.assigneeId, f.assignee)}
-                        onMouseDown={() => setOpenAssignRow(f.id)}
-                        onFocus={() => setOpenAssignRow(f.id)}
-                        onBlur={() => setOpenAssignRow(null)}
-                        onChange={async (e) => {
-                          const target = e.target;
-                          const name = target.value;
-                          setOpenAssignRow(null);
-                          const ok = await confirmAsync(
-                            name ? `${name}으로 배정하시겠습니까?` : "미배정 하시겠습니까?\n모든 직원에게 알림이 갑니다."
-                          );
-                          if (!ok) { target.value = engineerName(f.assigneeId, f.assignee) === "미배정" ? "" : engineerName(f.assigneeId, f.assignee); return; }
-                          assign(f, name);
-                        }}
+                    <td className="px-2 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <span className="text-slate-700 font-semibold mr-2">{engineerName(f.assigneeId, f.assignee)}</span>
+                      <button
+                        onClick={() => setReassignTarget({ failure: f, siteObj: loc.siteObj })}
+                        className="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-2 py-1 hover:bg-blue-50"
                       >
-                        <option value="">미배정</option>
-                        {sortEngineersByDistance(engineers, loc.siteObj).map(({ engineer: p, km }) => {
-                          const job = engineerJobs.get(p.name);
-                          const short = `${p.name}${km != null ? ` (${km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`})` : ""}`;
-                          return (
-                            <option key={p.id} value={p.name}>
-                              {openAssignRow === f.id && job ? `${short} — ${job.siteName} · ${job.label}` : short}
-                            </option>
-                          );
-                        })}
-                      </select>
+                        재배정
+                      </button>
                     </td>
                     <td className="px-2 py-2.5 whitespace-nowrap text-slate-500">{f.dispatchedAt || "-"}</td>
                     <td className="px-2 py-2.5 whitespace-nowrap text-slate-500">{f.arrivalTime || "-"}</td>
@@ -495,6 +513,18 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
       {failTarget && <InspectionFailDetailSheet inspection={failTarget} onClose={() => setFailTarget(null)} Container={Modal} />}
 
       {registering && <RegisterFailureModal data={data} onClose={() => setRegistering(false)} onCreate={createFailure} />}
+
+      {reassignTarget && (
+        <ReassignModal
+          failure={reassignTarget.failure}
+          siteObj={reassignTarget.siteObj}
+          engineers={engineers}
+          engineerJobs={engineerJobs}
+          failures={failures}
+          onAssign={assign}
+          onClose={() => setReassignTarget(null)}
+        />
+      )}
     </div>
   );
 }

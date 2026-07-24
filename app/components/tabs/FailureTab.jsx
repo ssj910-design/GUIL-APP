@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle, Wrench, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, labelToSeq, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory } from "@/lib/utils";
+import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, labelToSeq, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
 import { useLiveInspections } from "@/app/hooks/useLiveInspections";
 import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons } from "@/app/components/ui";
@@ -561,11 +561,7 @@ const ETA_OPTIONS = Array.from({ length: 12 }, (_, i) => (i + 1) * 10);
 export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allowUnassign, attendances = [], todayLeaves = [] }) {
   const { engineerNames, engineers = [] } = useContext(AuthContext);
   const sites = useContext(SitesContext);
-  const statusOf = (name) => {
-    const act = failures.filter((f) => f.assignee === name && f.status === "진행중");
-    if (!act.length) return null;
-    return act.some((f) => !f.arrivalTime) ? "출동중" : "처리중";
-  };
+  const statusOf = (name) => busyStatusOf(failures, name);
 
   // 가까운 기사 정렬 — 기사의 '마지막 확인 위치'(profiles.last_lat) 기준.
   // 출근 시 GPS, 이후 현장 도착·처리완료 때 그 현장 좌표로 갱신되므로 오후에도 최신에 가깝다.
