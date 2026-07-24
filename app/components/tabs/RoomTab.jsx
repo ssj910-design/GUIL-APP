@@ -443,14 +443,9 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
 
       <div className="flex-1 overflow-y-auto">
         {/* 글쓰기 */}
-        <div className="px-4 py-3 border-b border-slate-100">
-          {!composing ? (
-            <button onClick={() => setComposing(true)} className="w-full flex items-center gap-2.5 bg-slate-50 border border-slate-200 rounded-full pl-2 pr-4 py-1.5 active:bg-slate-100">
-              <span className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold shrink-0">{CURRENT_ENGINEER?.[0] ?? "나"}</span>
-              <span className="text-sm text-slate-400 flex-1 text-left">무슨 소식을 나눠볼까요?</span>
-              <Pencil size={16} className="text-blue-600 shrink-0" />
-            </button>
-          ) : (
+        {/* 컴포즈는 FAB(연필)로만 연다 — 상단 "무슨 소식을…" 입력창은 없앰 */}
+        {composing && (
+          <div className="px-4 py-3 border-b border-slate-100">
             <div>
               <textarea
                 autoFocus
@@ -508,18 +503,18 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
                 </div>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* 게시글 목록 — 누르면 상세화면(첨부파일처럼)으로 진입 */}
-        <div className="px-4 py-2 space-y-2.5">
+        <div className="px-4 divide-y divide-slate-100">
           {visiblePosts.map((p) => {
             const likes = p.reactions?.["👍"] ?? [];
             const liked = likes.includes(CURRENT_ENGINEER);
             const commentCount = commentsOf(p.id).length;
             const canManage = isAdmin || p.author === CURRENT_ENGINEER;
             return (
-              <div key={p.id} onClick={() => editingId !== p.id && goToPost(p.id)} className={`rounded-2xl border p-4 cursor-pointer ${p.isNotice ? "border-amber-300 bg-amber-50/50" : "border-slate-200 bg-white"}`}>
+              <div key={p.id} onClick={() => editingId !== p.id && goToPost(p.id)} className="py-5 cursor-pointer">
                 <PostHeader
                   p={p} canManage={canManage} canNotice={!!onSetNotice}
                   menuOpen={menuFor === p.id}
