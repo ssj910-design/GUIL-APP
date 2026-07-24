@@ -1,71 +1,30 @@
 "use client";
 
 // 기사 위치 지도 — 고장접수 모달 왼쪽에 붙여 배정 판단을 돕는다.
-// 마커 모양(물방울 핀)은 SiteMapModal(자체점검현황 현장지도)과 동일하게 맞추되, 타일은
-// 표준 OpenStreetMap 타일을 쓴다 — CARTO Voyager는 낮은 줌에서 도시명이 로마자로 나오는데
-// 표준 OSM 타일은 같은 줌에서도 시/구 단위 지명이 이미 한글로 들어있어 확인됨.
+// 마커 모양(물방울 핀)·타일은 SiteMapModal(자체점검현황 현장지도)과 동일하게 맞춘다.
 import { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import { pinIcon } from "@/app/components/admin/SiteMapModal";
 
 const ENGINEER_COLOR = "#2563eb"; // 파랑 — 기사 위치
 const SITE_COLOR = "#dc2626";     // 빨강 — 고장 현장 위치
-const RADIUS_KM = 15;
+const RADIUS_KM = 7;
 
-// 현장 좌표 기준 ±15km 사각 범위 (위도 1도≈111km, 경도는 위도에 따라 보정).
-function radiusBounds(lat, lng, km) {
-  const dLat = km / 111;
-  const dLng = km / (111 * Math.cos((lat * Math.PI) / 180));
-  return [[lat - dLat, lng - dLng], [lat + dLat, lng + dLng]];
+// 컨테이너 실제 픽셀 폭 기준으로 "반경 km가 화면 폭에 딱 맞는" 줌을 직접 계산한다.
+// fitBounds는 여백(padding)까지 보수적으로 맞추다 보니 경계 근처에서 한 단계 더 축소돼버리는
+// 경우가 있어(예: 7km도 15km와 같은 줌으로 끝남), 확대 정도가 반경마다 눈에 띄게 달라지도록
+// 직접 계산해 setView로 지정한다.
+function zoomForRadius(lat, km, widthPx) {
+  const metersPerPixel = (km * 1000 * 2) / widthPx;
+  const raw = Math.log2((156543.03392 * Math.cos((lat * Math.PI) / 180)) / metersPerPixel);
+  return Math.max(1, Math.min(18, Math.round(raw)));
 }
 
-function openRoute(engineer, site, kind) {
-  const fromName = encodeURIComponent(engineer.name || "기사");
-  const toName = encodeURIComponent(site.name || "현장");
-  if (kind === "tmap") {
-    window.open(
-      `tmap://route?startname=${fromName}&startx=${engineer.last_lng}&starty=${engineer.last_lat}&goalname=${toName}&goalx=${site.lng}&goaly=${site.lat}`,
-      "_blank"
-    );
-  } else {
-    window.open(
-      `https://map.kakao.com/link/from/${fromName},${engineer.last_lat},${engineer.last_lng}/to/${toName},${site.lat},${site.lng}`,
-      "_blank"
-    );
-  }
-}
-
-// 기사 마커 팝업 내용 — 이름만(호버) 또는 이름+길찾기 버튼(클릭, 현장이 정해졌을 때만) DOM을 직접 구성한다
-// (Leaflet 팝업은 raw HTML/엘리먼트라 버튼에 실제 이벤트 리스너를 달려면 이 방식이 필요하다).
-function buildEngineerPopup(engineer, site, withRoute) {
-  const wrap = document.createElement("div");
-  wrap.style.fontSize = "12px";
-  wrap.style.minWidth = "120px";
-
-  const nameEl = document.createElement("div");
-  nameEl.style.fontWeight = "700";
-  nameEl.textContent = engineer.name;
-  wrap.appendChild(nameEl);
-
-  if (withRoute && site?.lat != null && site?.lng != null) {
-    const row = document.createElement("div");
-    row.style.cssText = "display:flex;gap:6px;margin-top:6px";
-
-    const tmapBtn = document.createElement("button");
-    tmapBtn.textContent = "티맵";
-    tmapBtn.style.cssText = "font-size:11px;font-weight:700;color:#fff;background:#0067c0;border:none;border-radius:6px;padding:4px 8px;cursor:pointer";
-    tmapBtn.onclick = () => openRoute(engineer, site, "tmap");
-
-    const kakaoBtn = document.createElement("button");
-    kakaoBtn.textContent = "카카오맵";
-    kakaoBtn.style.cssText = "font-size:11px;font-weight:700;color:#191919;background:#fee500;border:none;border-radius:6px;padding:4px 8px;cursor:pointer";
-    kakaoBtn.onclick = () => openRoute(engineer, site, "kakao");
-
-    row.appendChild(tmapBtn);
-    row.appendChild(kakaoBtn);
-    wrap.appendChild(row);
-  }
-  return wrap;
+function nameOnlyPopup(name) {
+  const el = document.createElement("div");
+  el.style.cssText = "font-size:12px;font-weight:700";
+  el.textContent = name;
+  return el;
 }
 
 export function EngineerLocationMap({ engineers, site }) {
@@ -80,10 +39,10 @@ export function EngineerLocationMap({ engineers, site }) {
     import("leaflet").then((Lmod) => {
       if (cancelled || !containerRef.current) return;
       const map = Lmod.map(containerRef.current).setView([37.5665, 126.978], 11);
-      Lmod.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors",
-        maxZoom: 19,
-        subdomains: "abc",
+      Lmod.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+        attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+        maxZoom: 20,
+        subdomains: "abcd",
       }).addTo(map);
       mapObjRef.current = map;
       setL(Lmod);
@@ -103,34 +62,36 @@ export function EngineerLocationMap({ engineers, site }) {
     markersRef.current.forEach((m) => map.removeLayer(m));
     markersRef.current = [];
 
+    // 기사 마커 — 호버하면 이름이 뜨고 커서를 옮기면 사라진다. 클릭하면 고정(터치 기기 대응).
     const engPoints = engineers.filter((e) => e.last_lat != null && e.last_lng != null);
     engPoints.forEach((e) => {
       let pinned = false;
-      const marker = L.marker([e.last_lat, e.last_lng], { icon: pinIcon(L, ENGINEER_COLOR) }).addTo(map);
-      marker.bindPopup(buildEngineerPopup(e, site, false));
-      marker.on("mouseover", function () {
-        if (!pinned) this.setPopupContent(buildEngineerPopup(e, site, false));
-        this.openPopup();
-      });
-      marker.on("mouseout", function () {
-        if (!pinned) this.closePopup();
-      });
-      marker.on("click", function () {
-        pinned = true;
-        this.setPopupContent(buildEngineerPopup(e, site, true));
-        this.openPopup();
-      });
+      const marker = L.marker([e.last_lat, e.last_lng], { icon: pinIcon(L, ENGINEER_COLOR) })
+        .addTo(map)
+        .bindPopup(nameOnlyPopup(e.name));
+      marker.off("click");
+      marker.on("mouseover", function () { this.openPopup(); });
+      marker.on("mouseout", function () { if (!pinned) this.closePopup(); });
+      marker.on("click", function () { pinned = true; this.openPopup(); });
       marker.on("popupclose", () => { pinned = false; });
       markersRef.current.push(marker);
     });
 
-    // 현장 마커 — 자동으로 열리지 않고, 클릭해야 이름/주소 팝업이 뜬다(기본 클릭 동작 그대로 사용).
+    // 현장 마커 — 호버하면 이름/주소가 뜨고 커서를 옮기면 사라진다. 클릭하면 고정.
     if (site?.lat != null && site?.lng != null) {
+      let sitePinned = false;
       const siteMarker = L.marker([site.lat, site.lng], { icon: pinIcon(L, SITE_COLOR) })
         .addTo(map)
         .bindPopup(`<div style="font-size:12px"><b>${site.name}</b><br/>${site.address ?? ""}</div>`);
+      siteMarker.off("click");
+      siteMarker.on("mouseover", function () { this.openPopup(); });
+      siteMarker.on("mouseout", function () { if (!sitePinned) this.closePopup(); });
+      siteMarker.on("click", function () { sitePinned = true; this.openPopup(); });
+      siteMarker.on("popupclose", () => { sitePinned = false; });
       markersRef.current.push(siteMarker);
-      map.fitBounds(radiusBounds(site.lat, site.lng, RADIUS_KM), { padding: [10, 10] });
+      const width = containerRef.current?.clientWidth || 460;
+      // animate:false — 애니메이션 줌이 진행 중에 취소되면서 원래 줌으로 되돌아가는 문제가 있어 끈다.
+      map.setView([site.lat, site.lng], zoomForRadius(site.lat, RADIUS_KM, width), { animate: false });
     } else {
       const allPoints = engPoints.map((e) => [e.last_lat, e.last_lng]);
       if (allPoints.length > 0) {
