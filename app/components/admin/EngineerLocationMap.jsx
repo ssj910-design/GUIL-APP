@@ -4,9 +4,8 @@
 // 마커 모양(물방울 핀)·타일은 SiteMapModal(자체점검현황 현장지도)과 동일하게 맞춘다.
 import { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
-import { guOf } from "@/app/components/admin/SiteMapModal";
 
-const ENGINEER_COLOR = "#f97316"; // 주황 — 기사 위치 (안전모 아이콘)
+const ENGINEER_COLOR = "#2563eb"; // 파랑 — 기사 위치
 const SITE_COLOR = "#dc2626";     // 빨강 — 고장 현장 위치
 const RADIUS_KM = 7;
 
@@ -27,11 +26,18 @@ function makePin(L, color, glyphSvg) {
   });
 }
 
-// 고장현장 마커 — 위치 핀 아이콘.
+// 고장현장 마커 — 스패너 두 개가 X자로 겹친 정비 아이콘.
 function siteIcon(L) {
+  const wrench = `
+    <rect x="11.6" y="4.5" width="2.8" height="17" rx="1.4"/>
+    <circle cx="13" cy="5" r="2.7" fill="none" stroke="#fff" stroke-width="1.7"/>
+    <circle cx="13" cy="21" r="2.7" fill="none" stroke="#fff" stroke-width="1.7"/>
+  `;
   return makePin(L, SITE_COLOR, `
-    <path d="M13 5c-2.9 0-5.2 2.3-5.2 5.2 0 3.9 5.2 9.3 5.2 9.3s5.2-5.4 5.2-9.3C18.2 7.3 15.9 5 13 5z" fill="#fff"/>
-    <circle cx="13" cy="10.2" r="2.1" fill="${SITE_COLOR}"/>
+    <g fill="#fff">
+      <g transform="rotate(45 13 13)">${wrench}</g>
+      <g transform="rotate(-45 13 13)">${wrench}</g>
+    </g>
   `);
 }
 
@@ -39,10 +45,10 @@ function siteIcon(L) {
 function engineerIcon(L) {
   return makePin(L, ENGINEER_COLOR, `
     <g fill="#fff">
-      <path d="M7 11.5c0-3.3 2.7-6 6-6s6 2.7 6 6v0.8H7v-0.8z"/>
-      <rect x="6" y="12" width="14" height="1.7" rx="0.85"/>
-      <circle cx="13" cy="17" r="3.2"/>
-      <path d="M7.3 24.5c0-3.1 2.6-5.2 5.7-5.2s5.7 2.1 5.7 5.2v1H7.3v-1z"/>
+      <path d="M7.1 12.4a5.9 5.9 0 0 1 11.8 0z"/>
+      <rect x="6.2" y="11.8" width="13.6" height="1.8" rx="0.9"/>
+      <circle cx="13" cy="16.8" r="3.4"/>
+      <path d="M6.7 25.3c0-3.5 2.8-5.9 6.3-5.9s6.3 2.4 6.3 5.9v1.2H6.7v-1.2z"/>
     </g>
   `);
 }
@@ -191,22 +197,6 @@ export function EngineerLocationMap({ engineers, site, onEngineerClick }) {
       siteMarker.on("click", function () { sitePinned = true; this.openPopup(); });
       siteMarker.on("popupclose", () => { sitePinned = false; });
       markersRef.current.push(siteMarker);
-
-      // 구/시 이름표 — 타일 지도가 저배율·라벨 혼잡으로 구 이름을 안 띄우는 경우가 있어,
-      // 우리 DB 주소(한글)에서 뽑은 구/군 이름을 마커 위에 직접 얹어 항상 보이게 한다.
-      const gu = guOf(site.address);
-      if (gu) {
-        const guLabel = L.marker([site.lat, site.lng], {
-          icon: L.divIcon({
-            className: "",
-            html: `<div style="font-size:13px;font-weight:800;color:#334155;white-space:nowrap;pointer-events:none;text-shadow:0 1px 3px #fff,0 -1px 3px #fff,1px 0 3px #fff,-1px 0 3px #fff;transform:translateY(-30px)">${gu}</div>`,
-            iconSize: [0, 0],
-          }),
-          interactive: false,
-          zIndexOffset: 10000,
-        }).addTo(map);
-        markersRef.current.push(guLabel);
-      }
 
       const width = containerRef.current?.clientWidth || 460;
       // animate:false — 애니메이션 줌이 진행 중에 취소되면서 원래 줌으로 되돌아가는 문제가 있어 끈다.
