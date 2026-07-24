@@ -459,7 +459,7 @@ export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoU
                 <button
                   type="button"
                   onClick={() => { setExtendDate(todo.dueDate ?? ""); setExtendReason(""); setExtending(true); }}
-                  className="text-[11px] font-bold text-blue-600"
+                  className="text-sm font-semibold text-blue-600"
                 >
                   연장
                 </button>
