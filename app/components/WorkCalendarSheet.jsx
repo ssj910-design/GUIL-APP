@@ -27,7 +27,7 @@ function periodOf(note) {
 // 상단 월 이동 바 + 전체보기/신청 컨트롤 바 + 캘린더 박스 레이아웃을 그대로 맞춘다.
 // 연차 신청 로직은 MyPage.jsx와 동일(반차 0.5일, 근무 겹침 시 신청 막기)하되 이 탭 전용으로 둔다.
 function LeaveCalendarTab({ schedules = [] }) {
-  const { selfId, profiles = [] } = useContext(AuthContext);
+  const { selfId, profiles = [], role } = useContext(AuthContext);
   const me = profiles.find((p) => p.id === selfId) ?? {};
   const today = new Date(`${TODAY_STR}T00:00:00`);
   const [cursor, setCursor] = useState({ y: today.getFullYear(), m: today.getMonth() });
@@ -94,6 +94,42 @@ function LeaveCalendarTab({ schedules = [] }) {
   }
 
   const nameOf = (id) => profiles.find((p) => p.id === id)?.name ?? "";
+
+  // 관리자 전용 — 승인 대기·취소 요청 (날짜와 무관하게 전체 조회, PC 관리자콘솔과 동일한 처리).
+  const [allPending, setAllPending] = useState([]);
+  useEffect(() => {
+    if (role !== "admin") return;
+    supabase.from("leaves").select("*").or("status.eq.신청,cancel_requested.eq.true")
+      .order("start_date", { ascending: true })
+      .then(({ data }) => setAllPending(data ?? []));
+  }, [role]);
+  const pendingRequests = allPending.filter((l) => l.status === "신청");
+  const cancelRequests = allPending.filter((l) => l.cancel_requested);
+
+  function syncLeaveUpdate(id, patch) {
+    setAllPending((prev) => prev.filter((x) => x.id !== id));
+    setLeaves((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    setMyLeaves((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  }
+
+  async function decide(l, decision) {
+    const reason = decision === "반려" ? prompt(`${nameOf(l.profile_id)}님의 ${l.start_date} ${l.kind} 신청을 반려합니다.\n사유 (선택):`) : null;
+    if (decision === "반려" && reason === null) return;
+    const patch = { status: decision, decided_at: new Date().toISOString(), reject_reason: reason?.trim() || null };
+    const { error } = await supabase.from("leaves").update(patch).eq("id", l.id);
+    if (error) { alert("처리 실패: " + error.message); return; }
+    syncLeaveUpdate(l.id, patch);
+  }
+
+  // 취소 요청 승인 = 실제 취소 확정(status: 취소). 반려 = 요청만 해제, 승인 상태 유지.
+  async function decideCancel(l, decision) {
+    const patch = decision === "승인"
+      ? { status: "취소", cancel_requested: false, decided_at: new Date().toISOString() }
+      : { cancel_requested: false, cancel_reason: null };
+    const { error } = await supabase.from("leaves").update(patch).eq("id", l.id);
+    if (error) { alert("처리 실패: " + error.message); return; }
+    syncLeaveUpdate(l.id, patch);
+  }
   // 승인된 연차만 캘린더에 노출 — 신청/반려 상태는 아직 확정이 아니라서 남들 눈에 보이면 안 된다.
   const approvedOnCalendar = leaves.filter((l) => (l.status ?? "승인") === "승인");
   const visibleLeaves = onlyMine ? approvedOnCalendar.filter((l) => l.profile_id === selfId) : approvedOnCalendar;
@@ -155,6 +191,52 @@ function LeaveCalendarTab({ schedules = [] }) {
       </div>
 
       <div className="px-0 py-3">
+        {role === "admin" && pendingRequests.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3">
+            <p className="text-xs font-extrabold text-amber-800 mb-2">승인 대기 {pendingRequests.length}건</p>
+            <div className="space-y-1.5">
+              {pendingRequests.map((l) => (
+                <div key={l.id} className="flex items-center justify-between gap-2 bg-white rounded-lg px-2.5 py-2">
+                  <p className="text-[11px] text-slate-600 min-w-0">
+                    <b className="text-slate-800">{nameOf(l.profile_id)}</b> · {l.kind} {l.days}일
+                    <br />
+                    <span className="text-slate-400">
+                      {l.start_date.slice(5)}{l.end_date !== l.start_date && `~${l.end_date.slice(5)}`}
+                      {l.note && ` · ${l.note}`}
+                    </span>
+                  </p>
+                  <span className="flex gap-1 shrink-0">
+                    <button onClick={() => decide(l, "승인")} className="text-[10px] font-bold text-white bg-blue-700 rounded-lg px-2.5 py-1.5">승인</button>
+                    <button onClick={() => decide(l, "반려")} className="text-[10px] font-bold text-slate-600 bg-slate-100 rounded-lg px-2.5 py-1.5">반려</button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {role === "admin" && cancelRequests.length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-3">
+            <p className="text-xs font-extrabold text-red-800 mb-2">취소 요청 {cancelRequests.length}건</p>
+            <div className="space-y-1.5">
+              {cancelRequests.map((l) => (
+                <div key={l.id} className="flex items-center justify-between gap-2 bg-white rounded-lg px-2.5 py-2">
+                  <p className="text-[11px] text-slate-600 min-w-0">
+                    <b className="text-slate-800">{nameOf(l.profile_id)}</b> · {l.kind} {l.days}일
+                    <br />
+                    <span className="text-slate-400">
+                      {l.start_date.slice(5)}{l.end_date !== l.start_date && `~${l.end_date.slice(5)}`}
+                      {l.cancel_reason && ` · 사유: ${l.cancel_reason}`}
+                    </span>
+                  </p>
+                  <span className="flex gap-1 shrink-0">
+                    <button onClick={() => decideCancel(l, "승인")} className="text-[10px] font-bold text-white bg-red-600 rounded-lg px-2.5 py-1.5">취소승인</button>
+                    <button onClick={() => decideCancel(l, "반려")} className="text-[10px] font-bold text-slate-600 bg-slate-100 rounded-lg px-2.5 py-1.5">반려</button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
             {DOW.map((d, i) => (
