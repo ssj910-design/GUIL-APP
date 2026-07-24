@@ -62,8 +62,8 @@ function LeaveCalendarTab({ schedules = [] }) {
 
   const auto = annualLeaveDays(me.hire_date, `${year}-12-31`);
   const grant = me.annual_leave_days ?? auto;
-  // 승인된 것만 차감한다 — 신청 중인 건을 미리 빼면 반려됐을 때 숫자가 틀어진다
-  const approvedLeaves = myLeaves.filter((l) => (l.status ?? "승인") === "승인");
+  // 승인된 것만 차감한다 — 신청 중인 건을 미리 빼면 반려됐을 때 숫자가 틀어진다. 병가·공가는 연차와 별개라 차감 대상에서 뺀다.
+  const approvedLeaves = myLeaves.filter((l) => (l.status ?? "승인") === "승인" && l.kind !== "병가" && l.kind !== "공가");
   const waitingLeaves = myLeaves.filter((l) => l.status === "신청");
   const usedDays = approvedLeaves.reduce((n, l) => n + Number(l.days), 0);
   const leftDays = grant == null ? null : grant - usedDays;

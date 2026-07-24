@@ -30,9 +30,9 @@ export default function LeavesAdmin({ data, setData }) {
       .then(({ data: rows }) => setLeaves(rows ?? []));
   }, [year]);
 
-  // 잔여는 '승인'된 것만 뺀다 — 신청 중인 건을 미리 빼면 반려됐을 때 숫자가 틀어진다
+  // 잔여는 '승인'된 것만 뺀다 — 신청 중인 건을 미리 빼면 반려됐을 때 숫자가 틀어진다. 병가·공가는 연차와 별개라 차감 대상에서 뺀다.
   const st = (l) => l.status ?? "승인";
-  const usedBy = (id) => leaves.filter((l) => l.profile_id === id && st(l) === "승인").reduce((n, l) => n + Number(l.days), 0);
+  const usedBy = (id) => leaves.filter((l) => l.profile_id === id && st(l) === "승인" && l.kind !== "병가" && l.kind !== "공가").reduce((n, l) => n + Number(l.days), 0);
   const pending = leaves.filter((l) => st(l) === "신청").sort((a, b) => a.start_date.localeCompare(b.start_date));
   const cancelPending = leaves.filter((l) => l.cancel_requested).sort((a, b) => a.start_date.localeCompare(b.start_date));
 
