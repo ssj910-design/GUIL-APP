@@ -36,8 +36,8 @@ export function ConfirmHost() {
       <div className="bg-white rounded-2xl p-5 max-w-xs w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <p className="text-sm text-slate-800 whitespace-pre-line leading-relaxed mb-5">{req.message}</p>
         <div className="flex gap-2 justify-end">
-          <button onClick={() => finish(false)} className="text-sm font-bold text-slate-600 bg-slate-100 rounded-lg px-4 py-2.5">취소</button>
           <button onClick={() => finish(true)} className="text-sm font-bold text-white bg-blue-700 rounded-lg px-4 py-2.5">확인</button>
+          <button onClick={() => finish(false)} className="text-sm font-bold text-slate-600 bg-slate-100 rounded-lg px-4 py-2.5">취소</button>
         </div>
       </div>
     </div>,
