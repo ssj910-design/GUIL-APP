@@ -68,7 +68,7 @@ function SiteContractModal({ site, onClose, onSave }) {
   }
 
   return (
-    <Modal title={`${site.name} 계약서${urls.length > 1 ? ` (${idx + 1}/${urls.length})` : ""}`} onClose={onClose}>
+    <Modal title={`${site.name} 계약서${urls.length > 1 ? ` (${idx + 1}/${urls.length})` : ""}`} onClose={onClose} wide="xl">
       {urls.length === 0 ? (
         <>
           <input ref={fileInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleFile} />
@@ -84,7 +84,7 @@ function SiteContractModal({ site, onClose, onSave }) {
         </>
       ) : (
         <div className="space-y-3">
-          <div className="relative bg-slate-50 border border-slate-200 rounded-xl overflow-hidden h-[60vh] flex items-center justify-center">
+          <div className="relative bg-slate-50 border border-slate-200 rounded-xl overflow-hidden h-[calc(85vh-9rem)] flex items-center justify-center">
             {isPdf ? (
               <iframe src={current} className="w-full h-full" title="계약서 PDF" />
             ) : (

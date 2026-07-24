@@ -15,7 +15,7 @@ import { confirmAsync } from "@/app/components/ConfirmHost";
 /* FAILURE (고장접수)                                                   */
 /* ------------------------------------------------------------------ */
 
-function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported }) {
+function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported, onDispatch }) {
   const sites = useContext(SitesContext);
   const units = useContext(UnitsContext);
   const { engineerNames, profiles: allProfiles, selfId, name: myName, role } = useContext(AuthContext);
@@ -24,7 +24,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
   const isBusy = (name) => failures.some((f) => f.assignee === name && f.status === "진행중");
   const defaultAssignee = () => (role === "engineer" && !isBusy(myName) ? myName : "");
   const [form, setForm] = useState({
-    siteId: "", units: [], faultType: "", faultDetail: "", details: {}, notFault: false, assignee: defaultAssignee(), reporterPhone: "", sendSms: false, reportNote: "",
+    siteId: "", units: [], faultType: "", faultDetail: "", details: {}, notFault: false, assignee: defaultAssignee(), eta: "", reporterPhone: "", sendSms: false, reportNote: "",
   });
   const [step, setStep] = useState(0); // 스텝형 접수 (0~3)
   const site = sites.find((s) => s.id === form.siteId);
@@ -32,7 +32,9 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
   const detailFilled = form.units.length > 1
     ? form.units.every((u) => (form.details[u] ?? "").trim().length > 0)
     : form.faultDetail.trim().length > 0;
-  const canSubmit = !!site && !!form.faultType && detailFilled && form.reporterPhone.trim().length > 0;
+  // 기사가 본인 배정으로 접수하면 도착예정시간을 여기서 같이 받아 출동응답 단계를 건너뛴다 — 그때는 필수.
+  const selfDispatching = role === "engineer" && form.assignee === myName;
+  const canSubmit = !!site && !!form.faultType && detailFilled && form.reporterPhone.trim().length > 0 && (!selfDispatching || form.eta !== "");
 
   async function submit() {
     if (!canSubmit) return;
@@ -79,7 +81,11 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
     }
     setFailures((prev) => [...newFailures, ...prev]);
     onReported?.(newFailures);
-    setForm({ siteId: "", units: [], faultType: "", faultDetail: "", details: {}, notFault: false, assignee: defaultAssignee(), reporterPhone: "", sendSms: false, reportNote: "" });
+    // 접수 시점에 본인 배정 + 도착예정시간을 같이 받았으면 그대로 출동 처리 — 기사가 따로 "출동 응답"을 누를 필요가 없다.
+    if (selfDispatching && form.eta) {
+      newFailures.forEach((f) => onDispatch?.(f, Number(form.eta)));
+    }
+    setForm({ siteId: "", units: [], faultType: "", faultDetail: "", details: {}, notFault: false, assignee: defaultAssignee(), eta: "", reporterPhone: "", sendSms: false, reportNote: "" });
     setStep(0);
     goToUnassigned();
   }
@@ -96,7 +102,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
   const canNext =
     step === 0 ? !!site :
     step === 1 ? !!form.faultType && detailFilled :
-    step === 2 ? form.reporterPhone.trim().length > 0 : true;
+    step === 2 ? form.reporterPhone.trim().length > 0 && (!selfDispatching || form.eta !== "") : true;
 
   const infoRows = site ? [
     ["주소", site.address], ["현장 전화", site.phone], ["계약구분", site.contractType],
@@ -248,7 +254,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <button
-                  onClick={() => setForm({ ...form, assignee: "" })}
+                  onClick={() => setForm({ ...form, assignee: "", eta: "" })}
                   className={`py-3 rounded-xl text-sm font-bold border ${
                     form.assignee === "" ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200 bg-white"
                   }`}
@@ -286,6 +292,25 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                 </p>
               )}
             </div>
+            {/* 본인 배정이면 접수와 동시에 출동 처리 — 나중에 "출동 응답"을 따로 누를 필요가 없게 여기서 도착예정시간을 받는다. */}
+            {selfDispatching && (
+              <div>
+                <p className="text-xs font-bold text-slate-500 mb-1.5">도착 예정 시간 *</p>
+                <select
+                  value={form.eta}
+                  onChange={(e) => setForm({ ...form, eta: e.target.value })}
+                  className={inputCls}
+                >
+                  <option value="">선택해주세요</option>
+                  {ETA_OPTIONS.map((m) => (
+                    <option key={m} value={m}>{m}분 후</option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-orange-600 font-semibold mt-1.5 leading-relaxed">
+                  접수완료 시 바로 출동 처리되어 신고자에게 도착예정시간이 문자로 발송됩니다 — 출동 응답을 따로 누르지 않아도 됩니다
+                </p>
+              </div>
+            )}
             <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-bold text-slate-600">고객안심 출동문자 발송</span>
@@ -319,6 +344,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                 ...(form.reportNote.trim() ? [["비고", form.reportNote]] : []),
                 ["신고자 전화", form.reporterPhone],
                 ["배정 기사", form.assignee || "나중에 배정"],
+                ...(selfDispatching ? [["도착 예정 시간", form.eta ? `${form.eta}분 후` : "-"]] : []),
                 ["출동문자", form.sendSms ? "발송" : "미발송"],
                 ["접수일시", nowLabel],
               ].map(([k, v]) => (
@@ -1432,7 +1458,7 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
           </button>
         ))}
       </div>
-      {subTab === "접수등록" && <FailureRegisterForm onReported={onReported} failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />}
+      {subTab === "접수등록" && <FailureRegisterForm onReported={onReported} onDispatch={onDispatch} failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />}
       {subTab === "미배정" && (
         <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />
       )}

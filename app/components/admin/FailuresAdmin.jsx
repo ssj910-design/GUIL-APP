@@ -130,7 +130,7 @@ function FailureTrendChart({ failures }) {
                 <div className="flex-1 w-full min-h-0 flex flex-col justify-end items-center">
                   <span className={`text-[10px] font-bold text-slate-500 mb-0.5 ${b.count > 0 ? "" : "invisible"}`}>{b.count || 0}</span>
                   <div
-                    className="w-full rounded-t bg-red-500"
+                    className="w-full rounded-t bg-red-300"
                     style={{ height: `${(b.count / max) * 100}%`, minHeight: b.count > 0 ? "2px" : 0 }}
                   />
                 </div>
