@@ -92,7 +92,7 @@ export function FilterPills({ options, value, onChange }) {
 export function Modal({ title, onClose, children, wide }) {
   const widthCls = wide === "2xl" ? "max-w-[88rem]" : wide === "xl" ? "max-w-5xl" : wide ? "max-w-3xl" : "max-w-lg";
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-6" onClick={onClose}>
+    <div className="fixed inset-0 lg:left-56 z-40 flex items-center justify-center bg-black/40 p-6" onClick={onClose}>
       <div
         className={`bg-white rounded-2xl shadow-2xl max-h-[85vh] flex flex-col w-full ${widthCls}`}
         onClick={(e) => e.stopPropagation()}
