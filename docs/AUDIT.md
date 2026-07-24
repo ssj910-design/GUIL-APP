@@ -1,0 +1,129 @@
+# 전체 점검 — 버그리스트 & 수정리스트 (2026-07-24)
+
+로그인·마이페이지 착수 전 백엔드/프론트/QA/관리자콘솔 5개 병렬 감사 결과를 중복 제거·심각도 정렬한 것.
+심각도: **P0** 크래시·데이터유실·안전, **P1** 명확한 기능버그, **P2** 엣지케이스·정합성·역할누수, **P3** 코드건강.
+`[확인]`=코드 직접 검증됨, `[추정]`=실데이터/런타임 의존.
+
+---
+
+## P0 — 즉시 (크래시 / 데이터 유실 / 안전)
+
+- [x] **P0-1 `[확인]` 처리현황 재배정 시 관리자 화면 크래시** — (수정·검증 2026-07-24) — [FailureTab.jsx:1303](../app/components/tabs/FailureTab.jsx#L1303)
+  `FailureStatusOverview({ failures, onReassign })`(1246)에 없는 `attendances`/`todayLeaves`를 1303행이 참조 → 관리자가 처리현황에서 배정된 미완료 건 "재배정" 클릭 시 ReferenceError.
+  → 수정: FailureTab(두 prop 이미 보유)에서 FailureStatusOverview로 내려주고 시그니처에 추가.
+
+- [x] **P0-2 `[확인]` 고장 접수 insert 무방비 → 신고 소실 가능** — (수정 2026-07-24) — [FailureTab.jsx:56](../app/components/tabs/FailureTab.jsx#L56)
+  접수 insert의 `error` 미확인 + 즉시 낙관적 setFailures. write 실패 시 신고자는 접수완료로 보이나 DB엔 없음(갇힘사고 안전 직결).
+  → 수정: insert 결과 error 검사, 실패 시 롤백 + 에러 토스트.
+
+---
+
+## P1 — 명확한 기능 버그
+
+- [x] **P1-1 `[확인]` 다중 호기 직접입력 청구가 PK 충돌로 조용히 유실** — (수정 2026-07-24: crypto.randomUUID) — [BillingTab.jsx:126](../app/components/tabs/BillingTab.jsx#L126) + [ElevatorFieldApp.jsx:777](../app/components/ElevatorFieldApp.jsx#L777)
+  `submitManual`이 호기마다 `onSubmitBilling` 동기 호출 → `id:"bill-"+Date.now()` 같은 ms 중복 PK → 2번째부터 insert 실패(에러 미체크), UI엔 N건 낙관적 표시 → 새로고침 시 유실.
+  → 수정: id에 인덱스/랜덤 접미사(예: `bill-${Date.now()}-${i}` 또는 `crypto.randomUUID()`).
+
+- [x] **P1-2 `[확인]` 할일 자동완료가 청구 insert보다 선행 + insert 에러 미체크 → 자재 로스** — (수정 2026-07-24: 청구 성공 후 완료로 순서 반전) — [BillingTab.jsx:93](../app/components/tabs/BillingTab.jsx#L93) + [ElevatorFieldApp.jsx:791](../app/components/ElevatorFieldApp.jsx#L791)
+  `submitMaterial`이 todo.done=true를 먼저 확정 후 청구 insert. insert 실패 시 할일은 영구완료·청구는 없음(DESIGN 7-2 로스방지 루프 위반). 로스리포트도 done이라 못 잡음.
+  → 수정: 청구 insert 성공 확인 후 todo 완료로 순서 반전(또는 실패 시 done 롤백).
+
+- [ ] **P1-3 `[확인]` 우리방 글 인라인 수정 시 키 입력마다 포커스 상실 + 게시글 전량 리마운트** — [RoomTab.jsx:318](../app/components/tabs/RoomTab.jsx#L318)
+  `PostBody`가 RoomTab 렌더 함수 내부에 정의돼 매 렌더 새 컴포넌트 → 수정 textarea 커서 이탈, 상태변경마다 이미지/영상 리셋.
+  → 수정: PostBody(및 PostCard)를 모듈 최상위로 추출하고 편집 state를 props로 전달. (분리 제안과 동일 작업)
+
+- [ ] **P1-4 `[확인]` 당직표 실시간 미리보기와 실제 배정의 당직/숙직 순서 뒤바뀜** — [DutyGenerateWidget.jsx:75 vs 165](../app/components/DutyGenerateWidget.jsx#L75)
+  `generate()`는 `["숙직","당직"]`, `simulate()`는 `["당직","숙직"]` 순으로 커서 소비 → 미리보기가 실제와 반대. 관리자가 잘못된 근무표 확정.
+  → 수정: 두 함수 kind 순서 통일. 근본: 배정계산 순수함수 하나로 공유.
+
+- [ ] **P1-5 `[확인]` 견적 담당자 반복 수정 시 할일 id 충돌로 기존 할일 덮어씀** — [MaterialsAdmin.jsx:247](../app/components/admin/MaterialsAdmin.jsx#L247) (관리자 콘솔)
+  `todo-quote-${quote.id}-${existingTodos.length+i}` 위치인덱스 id → 담당자 add/remove 반복 시 살아있는 할일 suffix와 충돌 → upsert가 조용히 덮어씀(담당자·done·청구연결 유실).
+  → 수정: UUID/타임스탬프 id. 초기 생성(163)도 통일.
+
+- [ ] **P1-6 `[확인]` 관리자 콘솔이 옛 컬럼 `sites.manager` 신규 참조(v2 규칙 위반)** — [BillingsAdmin.jsx:14,217](../app/components/admin/BillingsAdmin.jsx#L14)
+  콘솔은 `sites.manager`를 갱신하지 않고 담당자는 `site_managers`(isPrimary)로만 편집 → 청구 "담당자" 항상 stale.
+  → 수정: `site_managers`의 대표 담당자로 교체.
+
+- [ ] **P1-7 `[확인]` 핵심 write 전반이 error 미검사 + 낙관적 setState (근본 패턴)** — ElevatorFieldApp 다수: handleFailureResult:720, handleSubmitBilling:791, handleSupplyComplete:905/929(비원자적), handleArriveFailure:701, handleAttendance:361, handleToggleLike:849, handleSetDutyPerson:374 등
+  RLS 꺼진 실DB라 컬럼오타·FK위반이 조용히 실패하고 화면만 성공. handleSupplyComplete는 자재 update 성공·todo insert 실패 시 "지급완료인데 할일 없음".
+  → 수정: 공용 write 래퍼(error면 toast+미반영/refetch)로 한 곳에서 처리하는 게 근본책. 최소한 핵심 3~4개부터.
+
+- [ ] **P1-8 `[확인]` 인증 없는 민감 API 엔드포인트 2건** — [self-check-submit/route.js:10](../app/api/self-check-submit/route.js#L10), [push/send/route.js:12](../app/api/push/send/route.js#L12)
+  self-check-submit: URL만 알면 회사 인증키로 승강기민원24에 공식 자체점검 제출/스푸핑. push/send: 누구나 전 직원에게 임의 푸시(피싱·스팸).
+  → 수정: 세션/시크릿 검증. (로그인 작업과 함께 처리하면 자연스러움.)
+
+---
+
+## P2 — 엣지케이스 / 정합성 / 역할 누수 / 동시성
+
+- [ ] **P2-1 `[확인]` 처리현황에서 기사에게 전사 고장 노출** — [FailureTab.jsx:1264](../app/components/tabs/FailureTab.jsx#L1264) — 역할 필터 없이 `failures` 전체 표시(설계상 기사=본인 배정만). → engineer면 `mine` 스코프.
+- [ ] **P2-2 `[확인]` 부담당 기사가 자기 현장을 못 봄 (site_assignments N:M 미로딩)** — 앱 전역이 단일 `assignedEngineer` 이름 기준(HomeTab:537, InspectionTab:60, CheckupTab:94, SiteTab:516). 부담당은 집중관리·검사도래·자체점검에 자기 현장 누락. → site_assignments 로드해 멤버십 스코프(또는 007 전까지 lead 기준 명시).
+- [x] **P2-3 `[확인]` (내 코드) AdminTab SwipeCarousel 아이템 축소 시 idx/scroll 보정 누락** — (수정 2026-07-24) — [AdminTab.jsx:51](../app/components/tabs/AdminTab.jsx#L51) — 처리로 카드 줄면 화살표 disabled 판정·n/N 카운터가 실제 스크롤과 어긋남. → `useEffect([items.length])`로 idx 클램프.
+- [ ] **P2-4 `[확인]` 콘솔 전역 is_active 필터 누락** — 제외 기사가 배정 드롭다운·대시보드 카운트에 계속 노출(SitesAdmin:307, FailuresAdmin:200/338, Dashboard:89/214, MaterialsAdmin:453/563, TodosAdmin:34/169, BillingsAdmin:22). → 배정용 목록 전부 `&& p.is_active !== false`.
+- [ ] **P2-5 `[확인]` 상비부품 재수령 가드 없음 + 재고 read-modify-write** — [ElevatorFieldApp.jsx:1023](../app/components/ElevatorFieldApp.jsx#L1023) — 더블탭 시 재고 2회 증가, 실패 무롤백. → `if(restock.receivedAt) return` 가드 + error 검사·원복.
+- [ ] **P2-6 `[확인]` 반려→재처리 시 지급사진 ref 미초기화 → 과거 사진 재노출** — [ElevatorFieldApp.jsx:1343](../app/components/ElevatorFieldApp.jsx#L1343)(handleReprocess)/875 — supplyPhotoUrlsRef·supply_photo_urls 함께 초기화.
+- [ ] **P2-7 `[확인]` 지원요청/운행정지로 미배정 복귀 시 알림 없음** — [ElevatorFieldApp.jsx:706](../app/components/ElevatorFieldApp.jsx#L706) — 접수 때와 달리 failure_unassigned 푸시 미발송 → 지원 필요 건을 아무도 모름.
+- [ ] **P2-8 `[확인]` 비용청구 selectedId stale 초기화** — [BillingTab.jsx:26](../app/components/tabs/BillingTab.jsx#L26) — `useState(openTodos[0]?.id)` 최초 1회만 → todos 늦게 오면 제출 불가. → `useEffect([openTodos])` 재설정.
+- [ ] **P2-9 `[확인]` 검사관리 도래현장 카드마다 실시간 API 호출(한도 위험)** — [InspectionTab.jsx:16](../app/components/tabs/InspectionTab.jsx#L16) DueSoonCard — "전 호기 실시간 호출 금지" 정책과 충돌. → units DB 캐시/결과 캐싱.
+- [ ] **P2-10 `[확인]` 관리자 수동완료가 청구 없이 루프 완료 위장** — handleAdminToggleTodo(1275) + isBilled(MaterialTab:687) — 관리자가 자재/견적 할일 임의 done → 반려차단 + 원가 미기록 + 로스리포트 false-closed. → 청구 존재와 done 분리 판정.
+- [ ] **P2-11 `[확인]` 낙관적 배정에 assignee_id 누락 + guard 실패 시 refetch 없음** — handleAssignFailure:581/handleReassign/handleRefuse — 로컬 assigneeId stale(현재 이름 fallback으로 가려짐, Phase2에서 깨짐), 동시배정 guard 0행 때 stale "미배정" 유지. → setState에 assigneeId 포함 + guard 실패 refetch.
+- [ ] **P2-12 `[추정]` elevator_no 빈/비정형 라벨이 집계 병합** — [utils.js:315,354](../lib/utils.js#L315) recentFailuresBySite/unitHistory — `""`이면 키 `siteId|`로 뭉쳐 다른 호기가 한 덩어리(집중관리 오탐). findUnitForInspection(216)은 라벨 불일치 시 1호기 오배정. → 데이터 정리 + 빈 키 집계 제외.
+- [ ] **P2-13 `[확인]` 인증 없는 크론/프록시** — geocode-sites, sync-holidays에 CRON_SECRET 없음(sync-inspection-cache만 검사). geocode는 TMAP 한도 소진+sites 대량 write 가능. → CRON_SECRET 가드.
+- [ ] **P2-14 `[확인]` 콘솔이 site_assignments 미로딩 → 담당기사 표기·집계가 옛 이름 컬럼 의존** — AdminApp:57, EngineersAdmin unitCountOf:362 — 동명이인·듀얼라이트 누락 시 대수 오류. → site_assignments 로드 후 FK 집계.
+- [ ] **P2-15 `[확인]` 콘솔 다수 mutation 낙관적 업데이트 error 미검사** — SitesAdmin saveSiteInfo/changeLead/bulkAssign/setPrimary/toggleSiteActive 등, Dashboard assign, FailuresAdmin assign, RoomAdmin sendPost/toggleLike/setNotice/deletePost. → `if(error){alert;return;}` 통일.
+
+---
+
+## P3 — 코드 건강 / 경미 / 접근성 (요약)
+
+- [ ] mapFailure `createdAt` 키 중복 정의 — [mappers.js:61,81](../lib/mappers.js#L61) (무해, 81 삭제)
+- [ ] AdminTab 미사용 import Badge/PrimaryButton/Field/formatPhone (내 코드) — 삭제
+- [ ] BillingTab:490 "이번 달" 라벨 오류(실제 전체 합계), :125 죽은 분기 `[null]`
+- [ ] RoomTab 영상 썸네일 탭 시 뷰어가 `<img>`로만 렌더 → isVideo 분기
+- [ ] 접근성: clickable `<div>`(SiteTab:595, InspectionTab:20/159), aria 없는 토글 다수, 44px 미달 터치타깃(MaterialTab 삭제버튼)
+- [ ] fixed 오버레이 portal 없음(TodoTab:514, RoomTab 뷰어, Duty 피커) — transform 조상 시 오작동 → createPortal
+- [ ] 재배정 요청 무알림(handleRequestReassignTodo:1291) — admin push + 알림벨 카운트 미포함
+- [ ] 자체점검 출석부 lazy 생성(등록/완료 시에만) — 완전 미점검 달이 누락으로 안 잡힘(DESIGN 7-3 "매월 1일 자동생성"과 불일치)
+- [ ] 관리자 지급완료가 지급사진 미필수(AdminTab:166/216) — DESIGN은 선행조건 명시 → 의도 확인
+- [ ] 중복 유틸: formatDateTime(CheckupTab:43·RoomTab:15), createFailure(Dashboard·FailuresAdmin) → lib로 승격
+- [ ] id 생성 Date.now(billings/feed/failure) → crypto.randomUUID
+- [ ] profileIdByName 이름 완전일치 취약(동명이인·개명)
+- [ ] 30초 폴링이 feed/duty 통째 교체 → 낙관적 업데이트 겹칠 때 깜빡임
+- [ ] ArrivalResultModal 홈/알림 경로에서 errorCodes 미전달(자동완성 비활성)
+- [ ] FailureTab 죽은 prop onRefuse(1020), fmtDist 중복(819/962), 미사용 import
+- [ ] HomeTab flagged 정렬 dueDate null 시 Invalid Date 비교
+- [ ] TodoTab descDraft 편집 진입 시 미동기화
+- [ ] index를 key로 쓰는 사진 리스트 다수(formWidgets:78, MaterialsAdmin, TodosAdmin, RoomAdmin)
+
+---
+
+## 분리(리팩터) 제안 — 큰 파일
+
+| 파일 | 줄 | 분리안 |
+|---|---|---|
+| ElevatorFieldApp.jsx | 1780 | `NotificationBell.jsx`(알림벨 JSX+파생), `hooks/useAttendanceLocation`, `hooks/useDutyHandlers`, `hooks/useMaterialHandlers` → 셸 800줄 목표 |
+| FailureTab.jsx | 1430 | `failure/FailureCards.jsx`, `failure/FailureModals.jsx`, `failure/FailureRegisterForm.jsx`, `failure/ErrorCodeBook.jsx` |
+| MaterialTab.jsx | 1201 | `material/RequestHistoryScreens.jsx`(+RequestDetailSheet), PartsRowsInput/UnitPickGrid는 formWidgets로 이동 |
+| AdminTab.jsx | 986 | SwipeCarousel 공용화, 자재/견적/상비/재배정 4세트 파일 분리, EditForm·HistoryScreen 쌍 중복 통합 |
+| SitesAdmin.jsx | 903 | `SiteUnitDetailModal`, `SiteUnitsSection`, `SiteContactsSection` |
+| HomeTab.jsx | 870 | `home/AttendanceBar`, `home/WorkCalendarMiniStrip`, `home/LiveInspectionPanel` |
+| MaterialsAdmin.jsx | 722 | `MaterialsModals.jsx`(3 모달) |
+| RoomTab.jsx | 578 | PostBody/PostCard 최상위 추출(P1-3 해결), PostDetail 통합 |
+| EngineersAdmin.jsx | 575 | `EngineerFileModals.jsx`, useRowDragReorder 훅 |
+| DutyGenerateWidget | 411 | computeRoster 순수함수 공유(P1-4 해결) |
+| BillingTab | 533 | PhotoEvidenceStep 위젯 |
+| CheckupTab | 739 | 공단 contents 빌더 순수함수 |
+
+---
+
+## 권장 수정 순서
+
+1. **P0 2건** — 재배정 크래시, 고장접수 무방비. (즉시, 각 한두 줄~작은 스레딩)
+2. **비용청구 P1 2건(P1-1·P1-2)** — 매출 직결 유실. id 충돌 + 순서/에러체크.
+3. **write 에러체크 근본책(P1-7)** — 공용 write 래퍼 도입 후 핵심 핸들러부터 적용(P0-2·P2-5·P2-15 상당수 흡수).
+4. **RoomTab/Duty P1(P1-3·P1-4)** — 분리 작업과 겸해서.
+5. **역할 누수 P2-1·P2-2 + 인증 API P1-8** — 로그인·마이페이지 작업과 함께(권한 체계 정비 시점).
+6. 분리 리팩터 — 위 버그 수정과 자연스럽게 겹치는 파일부터(RoomTab, Duty, AdminTab).
+7. P3 정리 — 틈틈이.
+
+> 참고: P1-8(인증)·P2-1/2(역할 스코프)는 다음주 **로그인·마이페이지** 작업과 직결이라 그때 함께 처리하는 게 효율적.

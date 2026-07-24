@@ -1,4 +1,4 @@
-import { useState, useContext, useRef } from "react";
+import { useState, useContext, useRef, useEffect } from "react";
 import { Package, Receipt, ChevronRight, ChevronLeft, ChevronDown, FileText, PackageCheck, RotateCcw, PackageX, Search, Repeat } from "lucide-react";
 import { Badge, PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { AuthContext } from "@/app/components/context";
@@ -50,6 +50,15 @@ function AccordionRow({ icon: Icon, label, badge, open, onToggle, children }) {
 function SwipeCarousel({ items, renderItem, emptyText }) {
   const ref = useRef(null);
   const [idx, setIdx] = useState(0);
+  // 처리로 아이템이 줄면(예: 지급완료) idx/스크롤이 마지막을 넘어가 화살표·카운터가 어긋난다 → 클램프 (P2-3)
+  useEffect(() => {
+    const max = items.length - 1;
+    if (max >= 0 && idx > max) {
+      setIdx(max);
+      const el = ref.current;
+      if (el) el.scrollTo({ left: max * el.clientWidth });
+    }
+  }, [items.length]); // eslint-disable-line react-hooks/exhaustive-deps
   if (items.length === 0) {
     return <p className="text-xs text-slate-400 text-center py-6">{emptyText}</p>;
   }

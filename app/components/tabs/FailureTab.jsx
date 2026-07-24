@@ -54,7 +54,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
       reporterPhone: form.reporterPhone.trim(),
       reportNote: form.reportNote.trim(),
     }));
-    await supabase.from("failures").insert(newFailures.map((f) => ({
+    const { error } = await supabase.from("failures").insert(newFailures.map((f) => ({
       id: f.id,
       site_id: f.siteId,
       site_name: f.siteName,
@@ -72,6 +72,11 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
         created_by: selfId,
       } : {}),
     })));
+    // ★ write 실패 시 낙관적 반영·이동을 막고 폼을 유지 — 신고가 조용히 소실되지 않도록 (P0)
+    if (error) {
+      alert("고장 접수 저장에 실패했습니다. 네트워크 상태를 확인하고 다시 시도해주세요.");
+      return;
+    }
     setFailures((prev) => [...newFailures, ...prev]);
     onReported?.(newFailures);
     setForm({ siteId: "", units: [], faultType: "", faultDetail: "", details: {}, notFault: false, assignee: defaultAssignee(), reporterPhone: "", sendSms: false, reportNote: "" });
@@ -1253,7 +1258,7 @@ function FailureStatusCard({ f, onOpenDetail, onReassign, canReassign }) {
   );
 }
 
-function FailureStatusOverview({ failures, onReassign }) {
+function FailureStatusOverview({ failures, onReassign, attendances = [], todayLeaves = [] }) {
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
   const [reassignTarget, setReassignTarget] = useState(null);
@@ -1432,7 +1437,7 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
       {subTab === "처리등록" && (
         <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />
       )}
-      {subTab === "처리현황" && <FailureStatusOverview failures={failures} onReassign={onReassign} />}
+      {subTab === "처리현황" && <FailureStatusOverview failures={failures} onReassign={onReassign} attendances={attendances} todayLeaves={todayLeaves} />}
       {subTab === "에러코드집" && <ErrorCodeBook errorCodes={errorCodes} failures={failures} />}
       <SmsToast message={toast} />
     </div>

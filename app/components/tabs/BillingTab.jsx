@@ -90,9 +90,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
           )
           .map((t) => t.id)
       : [selected.id];
-    await supabase.from("todos").update({ done: true }).in("id", idsToComplete);
-    setTodos((prev) => prev.map((t) => (idsToComplete.includes(t.id) ? { ...t, done: true } : t)));
-    onSubmitBilling({
+    const ok = await onSubmitBilling({
       type: "material",
       siteName: selected.siteName,
       elevatorNo: selected.elevatorNo,
@@ -108,6 +106,10 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       afterPhotoUrls: materialPhotos.after.map((p) => p.url),
       confirmPhotoUrl: materialPhotos.confirm,
     });
+    // ★ 청구 저장 성공 후에만 할일 완료 처리 — insert 실패 시 "완료됐는데 청구 없음"(자재 로스) 방지 (P1-2)
+    if (!ok) return;
+    await supabase.from("todos").update({ done: true }).in("id", idsToComplete);
+    setTodos((prev) => prev.map((t) => (idsToComplete.includes(t.id) ? { ...t, done: true } : t)));
     setSubmitted({ siteName: selected.siteName, part: selected.part, manual: false });
     setSelectedId(openTodos.find((t) => t.id !== selected.id)?.id ?? "");
     setMaterialCost("");
@@ -117,14 +119,15 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     setTimeout(() => setSubmitted(null), 2600);
   }
 
-  function submitManual() {
+  async function submitManual() {
     if (!manualValid) return;
     const site = sites.find((s) => s.id === manualForm.siteId);
     const partText = formatPartRows(manualForm.parts);
     // 선택한 호기마다 청구 1건씩 생성 (호기 단위 정합 — 자재/견적과 동일)
     const targets = manualForm.units.length ? manualForm.units : [null];
-    targets.forEach((u) => {
-      onSubmitBilling({
+    // 순차 await — insert 실패 시 즉시 중단하고 폼을 유지(리셋 안 함)해 재시도 가능 (P1-1/P1-2)
+    for (const u of targets) {
+      const ok = await onSubmitBilling({
         type: "manual",
         siteName: site.name,
         elevatorNo: u,
@@ -137,7 +140,8 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
         replaceDate: manualForm.replaceDate,
         contactPhone: manualForm.contactPhone,
       });
-    });
+      if (!ok) return;
+    }
     if (manualForm.fromKit) {
       manualForm.parts
         .filter((r) => r.name.trim() && r.qty)

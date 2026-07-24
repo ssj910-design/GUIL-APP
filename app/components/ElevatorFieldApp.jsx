@@ -774,7 +774,8 @@ export default function App() {
         : null;
     const billUnitId = unitId ?? (billSite ? unitIdFor(units, billSite.id, elevatorNo) : null);
     const newBilling = {
-      id: "bill-" + Date.now(),
+      // 다중 호기 청구는 같은 ms에 여러 건 생성되어 Date.now() PK가 충돌·조용히 실패했다 → 호기별 고유 id (P1-1)
+      id: "bill-" + crypto.randomUUID(),
       type,
       siteName,
       elevatorNo: elevatorNo || null,
@@ -788,7 +789,7 @@ export default function App() {
       afterPhotoUrls: afterPhotoUrls?.length ? afterPhotoUrls : [],
       confirmPhotoUrl: confirmPhotoUrl || null,
     };
-    await supabase.from("billings").insert({
+    const { error } = await supabase.from("billings").insert({
       id: newBilling.id,
       type: newBilling.type,
       site_name: newBilling.siteName,
@@ -808,7 +809,13 @@ export default function App() {
         material_request_id: materialRequestId ?? null,
       } : {}),
     });
+    // ★ 실패 시 유령 청구(낙관적 표시 후 새로고침에 사라짐)를 막고 호출부에 성공여부를 알린다 (P1-1/P1-2)
+    if (error) {
+      alert("비용청구 저장에 실패했습니다. 네트워크 상태를 확인하고 다시 시도해주세요.");
+      return false;
+    }
     setBillings((prev) => [newBilling, ...prev]);
+    return true;
   }
 
   // ★ 우리방 피드에 새 글 등록 (extra: photoUrls 첨부, replyToId 답장)
