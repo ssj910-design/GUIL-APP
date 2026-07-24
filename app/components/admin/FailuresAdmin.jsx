@@ -201,7 +201,7 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
   // 기사별 현재 진행 중인 고장 1건 — 지도 마커 호버·배정 기사 선택란에 표시.
   const engineerJobs = useMemo(() => engineerJobsByName(failures), [failures]);
   const [form, setForm] = useState({
-    siteId: "", unitIds: [], faultType: "", detail: "", details: {}, assignee: "", reporterPhone: "", notFault: false,
+    siteId: "", unitIds: [], faultType: "", detail: "", details: {}, assignee: "", reporterPhone: "", notFault: false, reportNote: "",
   });
   const [saving, setSaving] = useState(false);
   const site = sites.find((s) => s.id === form.siteId);
@@ -242,9 +242,9 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
             sites={sites}
             value={form.siteId}
             onChange={(id) => {
-              // 배정 기사는 현장 담당 기사를 기본값으로 — 다른 사람으로 바꾸고 싶으면 직접 고르면 된다.
+              // 배정 기사는 현장 담당 기사를, 비고는 현장정보에 적힌 비고를 기본값으로.
               const s = sites.find((x) => x.id === id);
-              setForm({ ...form, siteId: id, unitIds: [], assignee: s?.assignedEngineer || "" });
+              setForm({ ...form, siteId: id, unitIds: [], assignee: s?.assignedEngineer || "", reportNote: s?.notes || "" });
             }}
           />
         </div>
@@ -303,6 +303,10 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
             <input className={inputCls} placeholder="예: 3층에서 문이 안 닫힘" value={form.detail} onChange={(e) => setForm({ ...form, detail: e.target.value })} />
           </div>
         )}
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">비고 (선택)</p>
+          <input className={inputCls} placeholder="참고사항" value={form.reportNote} onChange={(e) => setForm({ ...form, reportNote: e.target.value })} />
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <p className="text-xs font-bold text-slate-500 mb-1">신고자 연락처 *</p>
@@ -383,12 +387,14 @@ export default function FailuresAdmin({ data, setData }) {
         status: "미처리", reportedAt,
         assignee: form.assignee || null, assigneeId: assigneeProfile?.id ?? null,
         notFault: form.notFault, reporterPhone: form.reporterPhone.trim(),
+        reportNote: form.reportNote?.trim() || null,
       };
     });
     const { error } = await supabase.from("failures").insert(rows.map((f) => ({
       id: f.id, site_id: f.siteId, site_name: f.siteName, elevator_no: f.elevatorNo, unit_id: f.unitId,
       error_code: f.errorCode, status: f.status, reported_at: f.reportedAt,
       assignee: f.assignee, assignee_id: f.assigneeId, not_fault: f.notFault, reporter_phone: f.reporterPhone,
+      report_note: f.reportNote,
     })));
     if (error) { alert("접수 실패: " + error.message); return; }
     setData((prev) => ({

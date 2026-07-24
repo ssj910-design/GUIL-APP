@@ -151,10 +151,12 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
         status: "미처리", reportedAt,
         assignee: form.assignee || null, assigneeId: assigneeProfile?.id ?? null,
         notFault: form.notFault, reporterPhone: form.reporterPhone.trim(),
+        reportNote: form.reportNote?.trim() || null,
       };
     });
     const { error } = await supabase.from("failures").insert(rows.map((f) => ({
       id: f.id, site_id: f.siteId, site_name: f.siteName, elevator_no: f.elevatorNo, unit_id: f.unitId,
+      report_note: f.reportNote,
       error_code: f.errorCode, status: f.status, reported_at: f.reportedAt,
       assignee: f.assignee, assignee_id: f.assigneeId, not_fault: f.notFault, reporter_phone: f.reporterPhone,
     })));

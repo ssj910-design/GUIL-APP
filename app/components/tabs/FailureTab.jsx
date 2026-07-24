@@ -24,7 +24,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
   const isBusy = (name) => failures.some((f) => f.assignee === name && f.status === "진행중");
   const defaultAssignee = () => (role === "engineer" && !isBusy(myName) ? myName : "");
   const [form, setForm] = useState({
-    siteId: "", units: [], faultType: "", faultDetail: "", details: {}, notFault: false, assignee: defaultAssignee(), reporterPhone: "", sendSms: false,
+    siteId: "", units: [], faultType: "", faultDetail: "", details: {}, notFault: false, assignee: defaultAssignee(), reporterPhone: "", sendSms: false, reportNote: "",
   });
   const [step, setStep] = useState(0); // 스텝형 접수 (0~3)
   const site = sites.find((s) => s.id === form.siteId);
@@ -52,6 +52,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
       assignee: form.assignee || null,
       notFault: form.notFault,
       reporterPhone: form.reporterPhone.trim(),
+      reportNote: form.reportNote.trim(),
     }));
     await supabase.from("failures").insert(newFailures.map((f) => ({
       id: f.id,
@@ -64,6 +65,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
       assignee: f.assignee,
       not_fault: f.notFault,
       reporter_phone: f.reporterPhone,
+      report_note: f.reportNote || null,
       ...(v2Ready ? {
         unit_id: unitIdFor(units, f.siteId, f.elevatorNo),
         assignee_id: profileIdByName(allProfiles, f.assignee),
@@ -72,7 +74,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
     })));
     setFailures((prev) => [...newFailures, ...prev]);
     onReported?.(newFailures);
-    setForm({ siteId: "", units: [], faultType: "", faultDetail: "", details: {}, notFault: false, assignee: defaultAssignee(), reporterPhone: "", sendSms: false });
+    setForm({ siteId: "", units: [], faultType: "", faultDetail: "", details: {}, notFault: false, assignee: defaultAssignee(), reporterPhone: "", sendSms: false, reportNote: "" });
     setStep(0);
     goToUnassigned();
   }
@@ -119,7 +121,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                   // 호기가 1대뿐인 현장은 자동 선택 (여러 대는 오접수 방지를 위해 명시적 선택)
                   const s = sites.find((x) => x.id === id);
                   const us = s ? siteUnits(s) : [];
-                  setForm({ ...form, siteId: id, units: us.length === 1 ? [us[0]] : [] });
+                  setForm({ ...form, siteId: id, units: us.length === 1 ? [us[0]] : [], reportNote: s?.notes || "" });
                 }}
                 placeholder="현장명 검색"
               />
@@ -206,6 +208,10 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                 <input className={inputCls} placeholder="예: 3층에서 문이 안 닫힘" value={form.faultDetail} onChange={(e) => setForm({ ...form, faultDetail: e.target.value })} />
               </div>
             )}
+            <div>
+              <p className="text-xs font-bold text-slate-500 mb-1.5">비고 (선택)</p>
+              <input className={inputCls} placeholder="참고사항" value={form.reportNote} onChange={(e) => setForm({ ...form, reportNote: e.target.value })} />
+            </div>
             <div className="flex items-center justify-between bg-white rounded-xl border border-slate-200 px-4 py-3">
               <span className="text-sm font-bold text-slate-600">고장아님(다발아님)으로 접수</span>
               <button onClick={() => setForm({ ...form, notFault: !form.notFault })}>
@@ -305,6 +311,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                   ? form.units.map((u) => `${u}: ${form.details[u] || "-"}`).join(" / ")
                   : form.faultDetail || "-"],
                 ...(form.notFault ? [["구분", "고장아님(다발아님)"]] : []),
+                ...(form.reportNote.trim() ? [["비고", form.reportNote]] : []),
                 ["신고자 전화", form.reporterPhone],
                 ["배정 기사", form.assignee || "나중에 배정"],
                 ["출동문자", form.sendSms ? "발송" : "미발송"],
