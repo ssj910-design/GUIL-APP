@@ -227,7 +227,13 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
     <Modal title="고장접수" onClose={onClose} wide="2xl">
       <div className="flex gap-4 items-start flex-wrap lg:flex-nowrap">
       <div className="w-full lg:w-[620px] shrink-0">
-        <EngineerLocationMap engineers={engineers} site={site} engineerJobs={engineerJobs} onEngineerClick={(name) => setForm((f) => ({ ...f, assignee: name }))} />
+        <EngineerLocationMap
+          engineers={engineers}
+          site={site}
+          engineerJobs={engineerJobs}
+          selectedEngineer={form.assignee || null}
+          onEngineerClick={(name) => setForm((f) => ({ ...f, assignee: name }))}
+        />
       </div>
       <div className="space-y-3 flex-1 min-w-0">
         <div>
@@ -455,7 +461,9 @@ export default function FailuresAdmin({ data, setData }) {
                     onChange={async (e) => {
                       const target = e.target;
                       const name = target.value;
-                      const ok = await confirmAsync(`${name || "미배정"}으로 배정하시겠습니까?`);
+                      const ok = await confirmAsync(
+                        name ? `${name}으로 배정하시겠습니까?` : "미배정 하시겠습니까?\n모든 직원에게 알림이 갑니다."
+                      );
                       if (!ok) { target.value = personOf(data, f.assigneeId, f.assignee) === "-" ? "" : personOf(data, f.assigneeId, f.assignee); return; }
                       assign(f, name);
                     }}

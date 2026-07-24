@@ -88,6 +88,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const engineers = profiles.filter((p) => p.role === "engineer");
   const engineerJobs = useMemo(() => engineerJobsByName(failures), [failures]);
+  const [openAssignRow, setOpenAssignRow] = useState(null);
   const [historySite, setHistorySite] = useState(null);
   const [failureDetail, setFailureDetail] = useState(null);
   const [failTarget, setFailTarget] = useState(null);
@@ -313,10 +314,16 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
                       <select
                         className={`${inputCls} min-w-24`}
                         value={engineerName(f.assigneeId, f.assignee) === "미배정" ? "" : engineerName(f.assigneeId, f.assignee)}
+                        onMouseDown={() => setOpenAssignRow(f.id)}
+                        onFocus={() => setOpenAssignRow(f.id)}
+                        onBlur={() => setOpenAssignRow(null)}
                         onChange={async (e) => {
                           const target = e.target;
                           const name = target.value;
-                          const ok = await confirmAsync(`${name || "미배정"}으로 배정하시겠습니까?`);
+                          setOpenAssignRow(null);
+                          const ok = await confirmAsync(
+                            name ? `${name}으로 배정하시겠습니까?` : "미배정 하시겠습니까?\n모든 직원에게 알림이 갑니다."
+                          );
                           if (!ok) { target.value = engineerName(f.assigneeId, f.assignee) === "미배정" ? "" : engineerName(f.assigneeId, f.assignee); return; }
                           assign(f, name);
                         }}
@@ -324,9 +331,10 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
                         <option value="">미배정</option>
                         {sortEngineersByDistance(engineers, loc.siteObj).map(({ engineer: p, km }) => {
                           const job = engineerJobs.get(p.name);
+                          const short = `${p.name}${km != null ? ` (${km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`})` : ""}`;
                           return (
                             <option key={p.id} value={p.name}>
-                              {p.name}{km != null ? ` (${km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`})` : ""}{job ? ` — ${job.siteName} · ${job.label}` : ""}
+                              {openAssignRow === f.id && job ? `${short} — ${job.siteName} · ${job.label}` : short}
                             </option>
                           );
                         })}

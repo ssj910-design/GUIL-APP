@@ -94,7 +94,7 @@ const fmtDuration = (sec) => {
 };
 const fmtDistance = (m) => (m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(1)}km`);
 
-export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerClick }) {
+export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerClick, selectedEngineer }) {
   const containerRef = useRef(null);
   const mapObjRef = useRef(null);
   const markersRef = useRef([]);
@@ -133,6 +133,7 @@ export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerC
 
     // 기사 마커 — 호버하면 이름이 뜨고 커서를 옮기면 사라진다. 클릭하면 고정(터치 기기 대응).
     const engPoints = engineers.filter((e) => e.last_lat != null && e.last_lng != null);
+    let autoSelectFn = null;
     engPoints.forEach((e) => {
       let pinned = false;
       const job = engineerJobs?.get(e.name);
@@ -154,11 +155,12 @@ export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerC
         if (pin) pin.style.transform = "scale(1)";
         if (!pinned) this.closePopup();
       });
-      marker.on("click", async function () {
+      // 마커 클릭과 "배정 기사" select 자동 선택(아래 selectedEngineer)이 공유하는 로직 — 경로 계산·표시.
+      async function selectThis() {
         pinned = true;
         onEngineerClick?.(e.name);
-        this.setPopupContent(namePopup(e.name, sideText, site ? "경로 계산 중..." : undefined));
-        this.openPopup();
+        marker.setPopupContent(namePopup(e.name, sideText, site ? "경로 계산 중..." : undefined));
+        marker.openPopup();
         if (!site?.lat || !site?.lng) return;
         if (routeLineRef.current) { map.removeLayer(routeLineRef.current); routeLineRef.current = null; }
         try {
@@ -172,19 +174,23 @@ export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerC
             }),
           });
           const data = await res.json();
-          if (!data.ok) { this.setPopupContent(namePopup(e.name, sideText, data.reason || "경로를 찾을 수 없습니다")); return; }
+          if (!data.ok) { marker.setPopupContent(namePopup(e.name, sideText, data.reason || "경로를 찾을 수 없습니다")); return; }
           routeLineRef.current = L.polyline(data.coords, { color: ENGINEER_COLOR, weight: 4, opacity: 0.8 }).addTo(map);
-          this.setPopupContent(namePopup(e.name, sideText, `예상 ${fmtDuration(data.totalTimeSec)} · ${fmtDistance(data.totalDistanceM)}`));
+          marker.setPopupContent(namePopup(e.name, sideText, `예상 ${fmtDuration(data.totalTimeSec)} · ${fmtDistance(data.totalDistanceM)}`));
         } catch {
-          this.setPopupContent(namePopup(e.name, sideText, "경로 조회 실패"));
+          marker.setPopupContent(namePopup(e.name, sideText, "경로 조회 실패"));
         }
-      });
+      }
+      marker.on("click", selectThis);
       // 경로선은 여기서 지우지 않는다 — 다른 기사에 커서만 올려도 popupclose가 발생해
       // (Leaflet 팝업 autoClose) 경로가 사라지던 문제가 있었다. 경로는 다른 기사를
       // "클릭"할 때만(위 click 핸들러에서) 새로 그리며 지운다.
       marker.on("popupclose", () => { pinned = false; });
       markersRef.current.push(marker);
+      if (selectedEngineer === e.name) autoSelectFn = selectThis;
     });
+    // 배정 기사 select에서 기사를 고르면, 지도에서 직접 클릭한 것과 동일하게 경로를 보여준다.
+    if (autoSelectFn) autoSelectFn();
 
     // 현장 마커 — 호버하면 이름/주소가 뜨고 커서를 옮기면 사라진다. 클릭하면 고정.
     if (site?.lat != null && site?.lng != null) {
@@ -218,7 +224,7 @@ export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerC
         map.fitBounds(L.latLngBounds(allPoints), { padding: [30, 30], maxZoom: 15 });
       }
     }
-  }, [L, engineers, site]);
+  }, [L, engineers, site, selectedEngineer]);
 
   return (
     <div className="relative w-full h-[760px] rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
