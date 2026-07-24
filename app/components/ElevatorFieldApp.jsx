@@ -37,7 +37,7 @@ const TABS = [
   { id: "billing", label: "비용청구", icon: Receipt },
   { id: "todo", label: "할일관리", icon: ListTodo },
   { id: "workcalendar", label: "워크캘린더", icon: CalendarClock },
-  { id: "admin", label: "관리자 모드", icon: Settings },
+  // 관리자 모드는 하단 탭에서 제외 — 관리자 전용 퀵버튼(우리방 FAB 위)으로만 진입
 ];
 
 
