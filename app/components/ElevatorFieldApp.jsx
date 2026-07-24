@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Home, AlertTriangle, CalendarCheck, CalendarClock, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound } from "lucide-react";
 import { PullToRefresh } from "@/app/components/PullToRefresh";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase, writeOk } from "@/lib/supabaseClient";
 import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
@@ -698,7 +698,7 @@ export default function App() {
   // (사람이 갇힌 급한 현장에선 앱에 도착시간을 입력할 여유가 없다 — 일단 도착만 찍고 구조부터, 처리결과는 나중에.)
   async function handleArriveFailure(failure) {
     const arrivalTime = new Date().toTimeString().slice(0, 5); // "HH:MM" — 기존 도착시간 형식과 일치(모달 입력값과 동일)
-    await supabase.from("failures").update({ arrival_time: arrivalTime }).eq("id", failure.id);
+    if (!(await writeOk(supabase.from("failures").update({ arrival_time: arrivalTime }).eq("id", failure.id), "도착 기록 저장 실패"))) return;
     setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, arrivalTime } : x)));
     markAtSite(failure, "도착"); // 도착 = 그 현장에 있음 → 마지막 위치 갱신
   }
@@ -717,21 +717,26 @@ export default function App() {
       : isEscalation
       ? { status: "미처리", assignee: null, dispatched_at: null, eta_minutes: null, arrival_time: null, ...(v2Ready ? { assignee_id: null } : {}) }
       : { status: failure.status };
-    await supabase
-      .from("failures")
-      .update({
-        ...statePatch,
-        process_result: result,
-        escalation,
-        fault_symptom: symptom || null,
-        fault_error_code: errorCode || null,
-        fault_cause: cause || null,
-        process_content: processContent || null,
-        process_note: note || null,
-        photo_count: photoCount || 0,
-        photo_urls: photoUrls?.length ? photoUrls : null,
-      })
-      .eq("id", failure.id);
+    // 처리결과는 유실되면 재작성이 어렵다 — write 실패 시 낙관적 반영을 막는다 (P1-7)
+    const resultSaved = await writeOk(
+      supabase
+        .from("failures")
+        .update({
+          ...statePatch,
+          process_result: result,
+          escalation,
+          fault_symptom: symptom || null,
+          fault_error_code: errorCode || null,
+          fault_cause: cause || null,
+          process_content: processContent || null,
+          process_note: note || null,
+          photo_count: photoCount || 0,
+          photo_urls: photoUrls?.length ? photoUrls : null,
+        })
+        .eq("id", failure.id),
+      "처리결과 저장 실패"
+    );
+    if (!resultSaved) return;
     setFailures((prev) =>
       prev.map((x) =>
         x.id === failure.id
@@ -752,6 +757,16 @@ export default function App() {
           : x
       )
     );
+    // 지원요청·운행정지로 미배정 풀에 되돌린 건은 접수 때와 마찬가지로 기사 전원에게 알린다.
+    // 이게 없으면 지원이 필요한 건이 미배정으로 돌아가도 아무도 모른다. (P2-7)
+    if (isEscalation) {
+      const unit = formatUnitLabel(failure.elevatorNo);
+      sendPush("failure_unassigned", engineerIds(), {
+        title: `${result} — 지원 필요 (미배정 복귀)`,
+        body: `${failure.siteName}${unit ? ` ${unit}` : ""}`,
+      });
+    }
+
     // 에러코드집에 없는 (기종, 코드) 조합이면 의미 미등록 상태로 자동 등록 — 다음에 같은 코드가
     // 나오면 이 처리 이력이 조회되도록 코드집을 자연스럽게 쌓는다.
     const unit = units.find((u) => u.id === failure.unitId);
@@ -909,14 +924,6 @@ export default function App() {
     const req = materialRequests.find((r) => r.id === requestId);
     if (!req) return;
 
-    await supabase
-      .from("material_requests")
-      .update({ status: "지급완료", supplied_date: TODAY_STR })
-      .eq("id", requestId);
-    setMaterialRequests((prev) =>
-      prev.map((r) => (r.id === requestId ? { ...r, status: "지급완료", suppliedDate: TODAY_STR } : r))
-    );
-
     const newTodo = {
       id: "todo-" + requestId,
       materialRequestId: requestId,
@@ -933,25 +940,42 @@ export default function App() {
       billingAmount: billingAmount || null,
       description: description || null,
     };
-    await supabase.from("todos").insert({
-      id: newTodo.id,
-      material_request_id: newTodo.materialRequestId,
-      source: newTodo.source,
-      title: newTodo.title,
-      site_name: newTodo.siteName,
-      elevator_no: newTodo.elevatorNo,
-      part: newTodo.part,
-      assignee: newTodo.assignee,
-      assigned_date: newTodo.assignedDate,
-      due_date: newTodo.dueDate,
-      done: newTodo.done,
-      description: newTodo.description,
-      ...(v2Ready ? {
-        unit_id: req.unitId ?? unitIdFor(units, req.siteId, req.elevatorNo),
-        assignee_id: profileIdByName(profilesAll, newTodo.assignee),
-      } : {}),
-      ...(todoBillingReady ? { billing_part: newTodo.billingPart, billing_amount: newTodo.billingAmount } : {}),
-    });
+    // ★ 할 일을 먼저 만든 뒤 자재 상태를 바꾼다 — 순서가 반대면 todo insert 실패 시
+    // "지급완료인데 할 일 없음"(= 교체작업 소실)이 된다. id가 요청당 고정이라 upsert면 재시도도
+    // 안전하다 (관리자 콘솔 견적 지급완료와 동일 패턴). (P1-7)
+    const todoSaved = await writeOk(
+      supabase.from("todos").upsert({
+        id: newTodo.id,
+        material_request_id: newTodo.materialRequestId,
+        source: newTodo.source,
+        title: newTodo.title,
+        site_name: newTodo.siteName,
+        elevator_no: newTodo.elevatorNo,
+        part: newTodo.part,
+        assignee: newTodo.assignee,
+        assigned_date: newTodo.assignedDate,
+        due_date: newTodo.dueDate,
+        done: newTodo.done,
+        description: newTodo.description,
+        ...(v2Ready ? {
+          unit_id: req.unitId ?? unitIdFor(units, req.siteId, req.elevatorNo),
+          assignee_id: profileIdByName(profilesAll, newTodo.assignee),
+        } : {}),
+        ...(todoBillingReady ? { billing_part: newTodo.billingPart, billing_amount: newTodo.billingAmount } : {}),
+      }),
+      "할 일 생성 실패 — 자재 지급완료 처리를 중단했습니다"
+    );
+    if (!todoSaved) return;
+
+    const statusSaved = await writeOk(
+      supabase.from("material_requests").update({ status: "지급완료", supplied_date: TODAY_STR }).eq("id", requestId),
+      "자재 지급완료 처리 실패"
+    );
+    if (!statusSaved) return;
+
+    setMaterialRequests((prev) =>
+      prev.map((r) => (r.id === requestId ? { ...r, status: "지급완료", suppliedDate: TODAY_STR } : r))
+    );
     setTodos((prev) => [newTodo, ...prev]);
   }
 
@@ -1349,14 +1373,16 @@ export default function App() {
 
   // 관리자가 반려 건을 재확인하고 다시 '지급 대기' 목록으로 돌려보냅니다.
   async function handleReprocess(requestId) {
+    // 지급사진도 함께 비운다 — 안 지우면 재지급 때 옛 사진 URL이 남아 새 사진에 덧붙는다 (P2-6)
+    delete supplyPhotoUrlsRef.current.material[requestId];
     await supabase
       .from("material_requests")
-      .update({ status: "승인대기", supplied_date: null, reject_reason: null, rejected_date: null, has_supply_photo: false })
+      .update({ status: "승인대기", supplied_date: null, reject_reason: null, rejected_date: null, has_supply_photo: false, supply_photo_urls: null })
       .eq("id", requestId);
     setMaterialRequests((prev) =>
       prev.map((r) =>
         r.id === requestId
-          ? { ...r, status: "승인대기", suppliedDate: null, rejectReason: null, rejectedDate: null, hasSupplyPhoto: false }
+          ? { ...r, status: "승인대기", suppliedDate: null, rejectReason: null, rejectedDate: null, hasSupplyPhoto: false, supplyPhotoUrls: [] }
           : r
       )
     );

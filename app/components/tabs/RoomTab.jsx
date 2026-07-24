@@ -222,6 +222,48 @@ export function PostDetailOverlay({ feed, postId, onSendChat, onToggleLike, onUp
 }
 
 
+// 게시글 본문(텍스트 수정폼 포함) — 목록 카드/상세화면 공용.
+// ★ 반드시 모듈 최상위에 둘 것: RoomTab 렌더 함수 안에 정의하면 매 렌더마다 새 컴포넌트 타입이 되어
+// 서브트리가 통째로 리마운트된다(수정 textarea가 키 입력마다 포커스를 잃고, 사진·영상이 깜빡임). (P1-3)
+function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEditingId, setViewerUrl }) {
+  if (editingId === p.id) {
+    return (
+      <div className="mb-2">
+        <textarea className="w-full text-sm border border-slate-200 rounded-xl p-2.5 resize-none focus:outline-none" rows={3} value={editText} onChange={(e) => setEditText(e.target.value)} />
+        <div className="flex justify-end gap-2 mt-1.5">
+          <button onClick={saveEdit} className="text-xs font-bold text-white bg-blue-700 rounded-full px-3.5 py-1.5">저장</button>
+          <button onClick={() => setEditingId(null)} className="text-xs font-bold text-slate-400 px-2.5 py-1.5">취소</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className={full ? "mb-2" : "flex items-start justify-between gap-2 mb-2"}>
+      {p.text && <p className={`${full ? "" : "flex-1 min-w-0"} text-sm text-slate-700 leading-relaxed whitespace-pre-wrap`}>{renderText(p.text)}</p>}
+      {(p.photoUrls ?? []).length > 0 && (
+        full ? (
+          <div className="space-y-1.5 mt-2">
+            {p.photoUrls.map((u) =>
+              isVideo(u)
+                ? <video key={u} src={u} controls playsInline className="rounded-lg w-full" />
+                : <img key={u} src={u} alt="첨부 사진" className="rounded-lg w-full object-cover" onClick={() => setViewerUrl(u)} />
+            )}
+          </div>
+        ) : (
+          <button onClick={(e) => { e.stopPropagation(); setViewerUrl(p.photoUrls[0]); }} className="relative shrink-0">
+            {isVideo(p.photoUrls[0])
+              ? <video src={p.photoUrls[0]} className="w-16 h-16 rounded-lg object-cover" />
+              : <img src={p.photoUrls[0]} alt="첨부 사진" className="w-16 h-16 rounded-lg object-cover" />}
+            {p.photoUrls.length > 1 && (
+              <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] font-bold rounded px-1">{p.photoUrls.length}</span>
+            )}
+          </button>
+        )
+      )}
+    </div>
+  );
+}
+
 export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDeletePost, onSetNotice }) {
   const { name: CURRENT_ENGINEER, role, profiles } = useContext(AuthContext);
   const [composing, setComposing] = useState(false);
@@ -314,45 +356,8 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
     if (openPostId === p.id) setOpenPostId(null);
   }
 
-  // 게시글 본문(텍스트 수정폼 포함) — 목록 카드/상세화면 공용
-  function PostBody({ p, full }) {
-    if (editingId === p.id) {
-      return (
-        <div className="mb-2">
-          <textarea className="w-full text-sm border border-slate-200 rounded-xl p-2.5 resize-none focus:outline-none" rows={3} value={editText} onChange={(e) => setEditText(e.target.value)} />
-          <div className="flex justify-end gap-2 mt-1.5">
-            <button onClick={saveEdit} className="text-xs font-bold text-white bg-blue-700 rounded-full px-3.5 py-1.5">저장</button>
-            <button onClick={() => setEditingId(null)} className="text-xs font-bold text-slate-400 px-2.5 py-1.5">취소</button>
-          </div>
-        </div>
-      );
-    }
-    return (
-      <div className={full ? "mb-2" : "flex items-start justify-between gap-2 mb-2"}>
-        {p.text && <p className={`${full ? "" : "flex-1 min-w-0"} text-sm text-slate-700 leading-relaxed whitespace-pre-wrap`}>{renderText(p.text)}</p>}
-        {(p.photoUrls ?? []).length > 0 && (
-          full ? (
-            <div className="space-y-1.5 mt-2">
-              {p.photoUrls.map((u) =>
-                isVideo(u)
-                  ? <video key={u} src={u} controls playsInline className="rounded-lg w-full" />
-                  : <img key={u} src={u} alt="첨부 사진" className="rounded-lg w-full object-cover" onClick={() => setViewerUrl(u)} />
-              )}
-            </div>
-          ) : (
-            <button onClick={(e) => { e.stopPropagation(); setViewerUrl(p.photoUrls[0]); }} className="relative shrink-0">
-              {isVideo(p.photoUrls[0])
-                ? <video src={p.photoUrls[0]} className="w-16 h-16 rounded-lg object-cover" />
-                : <img src={p.photoUrls[0]} alt="첨부 사진" className="w-16 h-16 rounded-lg object-cover" />}
-              {p.photoUrls.length > 1 && (
-                <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] font-bold rounded px-1">{p.photoUrls.length}</span>
-              )}
-            </button>
-          )
-        )}
-      </div>
-    );
-  }
+  // 모듈 최상위 PostBody에 넘길 편집·뷰어 상태 묶음 (P1-3)
+  const bodyProps = { editingId, editText, setEditText, saveEdit, setEditingId, setViewerUrl };
 
   const openPost = openPostId ? feed.find((p) => p.id === openPostId) : null;
 
@@ -380,7 +385,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
             onEdit={() => startEdit(openPost)}
             onDelete={() => deletePost(openPost)}
           />
-          <PostBody p={openPost} full />
+          <PostBody p={openPost} full {...bodyProps} />
           <div className="flex items-center gap-4 py-2.5 border-t border-b border-slate-100">
             <button onClick={() => onToggleLike?.(openPost.id)} className={`flex items-center gap-1 text-xs font-bold ${liked ? "text-blue-600" : "text-slate-500"}`}>
               <ThumbsUp size={14} className={liked ? "fill-blue-600" : ""} /> 좋아요{likes.length > 0 ? ` ${likes.length}` : ""}
@@ -524,7 +529,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
                   onEdit={() => startEdit(p)}
                   onDelete={() => deletePost(p)}
                 />
-                <PostBody p={p} />
+                <PostBody p={p} {...bodyProps} />
                 <div className="flex items-center gap-4 pt-2" onClick={(e) => e.stopPropagation()}>
                   <button onClick={() => onToggleLike?.(p.id)} className={`flex items-center gap-1 text-xs font-bold ${liked ? "text-blue-600" : "text-slate-500"}`}>
                     <ThumbsUp size={14} className={liked ? "fill-blue-600" : ""} /> 좋아요{likes.length > 0 ? ` ${likes.length}` : ""}

@@ -28,7 +28,7 @@
   `submitMaterial`이 todo.done=true를 먼저 확정 후 청구 insert. insert 실패 시 할일은 영구완료·청구는 없음(DESIGN 7-2 로스방지 루프 위반). 로스리포트도 done이라 못 잡음.
   → 수정: 청구 insert 성공 확인 후 todo 완료로 순서 반전(또는 실패 시 done 롤백).
 
-- [ ] **P1-3 `[확인]` 우리방 글 인라인 수정 시 키 입력마다 포커스 상실 + 게시글 전량 리마운트** — [RoomTab.jsx:318](../app/components/tabs/RoomTab.jsx#L318)
+- [x] **P1-3 `[확인]` 우리방 글 인라인 수정 시 키 입력마다 포커스 상실 + 게시글 전량 리마운트** — (수정 2026-07-24: PostBody 모듈 최상위 추출) — [RoomTab.jsx:318](../app/components/tabs/RoomTab.jsx#L318)
   `PostBody`가 RoomTab 렌더 함수 내부에 정의돼 매 렌더 새 컴포넌트 → 수정 textarea 커서 이탈, 상태변경마다 이미지/영상 리셋.
   → 수정: PostBody(및 PostCard)를 모듈 최상위로 추출하고 편집 state를 props로 전달. (분리 제안과 동일 작업)
 
@@ -44,7 +44,7 @@
   콘솔은 `sites.manager`를 갱신하지 않고 담당자는 `site_managers`(isPrimary)로만 편집 → 청구 "담당자" 항상 stale.
   → 수정: `site_managers`의 대표 담당자로 교체.
 
-- [ ] **P1-7 `[확인]` 핵심 write 전반이 error 미검사 + 낙관적 setState (근본 패턴)** — ElevatorFieldApp 다수: handleFailureResult:720, handleSubmitBilling:791, handleSupplyComplete:905/929(비원자적), handleArriveFailure:701, handleAttendance:361, handleToggleLike:849, handleSetDutyPerson:374 등
+- [x] **P1-7 `[확인]` 핵심 write 전반이 error 미검사 + 낙관적 setState (근본 패턴)** — (2026-07-24: `writeOk` 래퍼 도입[lib/supabaseClient.js] + handleArriveFailure·handleFailureResult·handleSupplyComplete 적용. handleSupplyComplete는 할일→상태 순서도 반전. **나머지 핸들러는 점진 적용 대상**) — ElevatorFieldApp 다수: handleFailureResult:720, handleSubmitBilling:791, handleSupplyComplete:905/929(비원자적), handleArriveFailure:701, handleAttendance:361, handleToggleLike:849, handleSetDutyPerson:374 등
   RLS 꺼진 실DB라 컬럼오타·FK위반이 조용히 실패하고 화면만 성공. handleSupplyComplete는 자재 update 성공·todo insert 실패 시 "지급완료인데 할일 없음".
   → 수정: 공용 write 래퍼(error면 toast+미반영/refetch)로 한 곳에서 처리하는 게 근본책. 최소한 핵심 3~4개부터.
 
@@ -61,8 +61,8 @@
 - [x] **P2-3 `[확인]` (내 코드) AdminTab SwipeCarousel 아이템 축소 시 idx/scroll 보정 누락** — (수정 2026-07-24) — [AdminTab.jsx:51](../app/components/tabs/AdminTab.jsx#L51) — 처리로 카드 줄면 화살표 disabled 판정·n/N 카운터가 실제 스크롤과 어긋남. → `useEffect([items.length])`로 idx 클램프.
 - [ ] **P2-4 `[확인]` 콘솔 전역 is_active 필터 누락** — 제외 기사가 배정 드롭다운·대시보드 카운트에 계속 노출(SitesAdmin:307, FailuresAdmin:200/338, Dashboard:89/214, MaterialsAdmin:453/563, TodosAdmin:34/169, BillingsAdmin:22). → 배정용 목록 전부 `&& p.is_active !== false`.
 - [x] **P2-5 `[확인]` 상비부품 재수령 가드 없음 + 재고 read-modify-write** — (수정 2026-07-24: receivedAt 가드. 무롤백 error검사는 P1-7 래퍼에서) — [ElevatorFieldApp.jsx:1023](../app/components/ElevatorFieldApp.jsx#L1023) — 더블탭 시 재고 2회 증가, 실패 무롤백. → `if(restock.receivedAt) return` 가드 + error 검사·원복.
-- [ ] **P2-6 `[확인]` 반려→재처리 시 지급사진 ref 미초기화 → 과거 사진 재노출** — [ElevatorFieldApp.jsx:1343](../app/components/ElevatorFieldApp.jsx#L1343)(handleReprocess)/875 — supplyPhotoUrlsRef·supply_photo_urls 함께 초기화.
-- [ ] **P2-7 `[확인]` 지원요청/운행정지로 미배정 복귀 시 알림 없음** — [ElevatorFieldApp.jsx:706](../app/components/ElevatorFieldApp.jsx#L706) — 접수 때와 달리 failure_unassigned 푸시 미발송 → 지원 필요 건을 아무도 모름.
+- [x] **P2-6 `[확인]` 반려→재처리 시 지급사진 ref 미초기화 → 과거 사진 재노출** — (수정 2026-07-24) — [ElevatorFieldApp.jsx:1343](../app/components/ElevatorFieldApp.jsx#L1343)(handleReprocess)/875 — supplyPhotoUrlsRef·supply_photo_urls 함께 초기화.
+- [x] **P2-7 `[확인]` 지원요청/운행정지로 미배정 복귀 시 알림 없음** — (수정 2026-07-24: failure_unassigned 푸시) — [ElevatorFieldApp.jsx:706](../app/components/ElevatorFieldApp.jsx#L706) — 접수 때와 달리 failure_unassigned 푸시 미발송 → 지원 필요 건을 아무도 모름.
 - [x] **P2-8 `[확인]` 비용청구 selectedId stale 초기화** — (수정 2026-07-24: openTodos 동기화 effect) — [BillingTab.jsx:26](../app/components/tabs/BillingTab.jsx#L26) — `useState(openTodos[0]?.id)` 최초 1회만 → todos 늦게 오면 제출 불가. → `useEffect([openTodos])` 재설정.
 - [ ] **P2-9 `[확인]` 검사관리 도래현장 카드마다 실시간 API 호출(한도 위험)** — [InspectionTab.jsx:16](../app/components/tabs/InspectionTab.jsx#L16) DueSoonCard — "전 호기 실시간 호출 금지" 정책과 충돌. → units DB 캐시/결과 캐싱.
 - [ ] **P2-10 `[확인]` 관리자 수동완료가 청구 없이 루프 완료 위장** — handleAdminToggleTodo(1275) + isBilled(MaterialTab:687) — 관리자가 자재/견적 할일 임의 done → 반려차단 + 원가 미기록 + 로스리포트 false-closed. → 청구 존재와 done 분리 판정.
@@ -76,7 +76,7 @@
 
 ## P3 — 코드 건강 / 경미 / 접근성 (요약)
 
-- [ ] mapFailure `createdAt` 키 중복 정의 — [mappers.js:61,81](../lib/mappers.js#L61) (무해, 81 삭제)
+- [x] mapFailure `createdAt` 키 중복 정의 — (수정 2026-07-24)
 - [ ] AdminTab 미사용 import Badge/PrimaryButton/Field/formatPhone (내 코드) — 삭제
 - [ ] BillingTab:490 "이번 달" 라벨 오류(실제 전체 합계), :125 죽은 분기 `[null]`
 - [ ] RoomTab 영상 썸네일 탭 시 뷰어가 `<img>`로만 렌더 → isVideo 분기
