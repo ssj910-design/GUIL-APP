@@ -90,7 +90,7 @@ export function FilterPills({ options, value, onChange }) {
 
 // PC용 중앙 모달 (관리자 콘솔 최초의 상세보기 팝업 패턴 — 모바일 Sheet와 별개).
 export function Modal({ title, onClose, children, wide }) {
-  const widthCls = wide === "xl" ? "max-w-5xl" : wide ? "max-w-3xl" : "max-w-lg";
+  const widthCls = wide === "2xl" ? "max-w-6xl" : wide === "xl" ? "max-w-5xl" : wide ? "max-w-3xl" : "max-w-lg";
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-6" onClick={onClose}>
       <div

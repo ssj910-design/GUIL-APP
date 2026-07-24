@@ -215,9 +215,9 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
   }
 
   return (
-    <Modal title="고장접수" onClose={onClose} wide="xl">
+    <Modal title="고장접수" onClose={onClose} wide="2xl">
       <div className="flex gap-4 items-start flex-wrap lg:flex-nowrap">
-      <div className="w-full lg:w-80 shrink-0">
+      <div className="w-full lg:w-[460px] shrink-0">
         <EngineerLocationMap engineers={engineers} site={site} />
       </div>
       <div className="space-y-3 flex-1 min-w-0">
