@@ -4,7 +4,7 @@
 // 마커 모양(물방울 핀)·타일은 SiteMapModal(자체점검현황 현장지도)과 동일하게 맞춘다.
 import { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
-import { pinIcon } from "@/app/components/admin/SiteMapModal";
+import { pinIcon, guOf } from "@/app/components/admin/SiteMapModal";
 
 const ENGINEER_COLOR = "#2563eb"; // 파랑 — 기사 위치
 const SITE_COLOR = "#dc2626";     // 빨강 — 고장 현장 위치
@@ -70,8 +70,18 @@ export function EngineerLocationMap({ engineers, site }) {
         .addTo(map)
         .bindPopup(nameOnlyPopup(e.name));
       marker.off("click");
-      marker.on("mouseover", function () { this.openPopup(); });
-      marker.on("mouseout", function () { if (!pinned) this.closePopup(); });
+      marker.on("mouseover", function () {
+        this.setZIndexOffset(2000);
+        const pin = this.getElement()?.querySelector(".site-pin");
+        if (pin) pin.style.transform = "scale(1.35)";
+        this.openPopup();
+      });
+      marker.on("mouseout", function () {
+        this.setZIndexOffset(0);
+        const pin = this.getElement()?.querySelector(".site-pin");
+        if (pin) pin.style.transform = "scale(1)";
+        if (!pinned) this.closePopup();
+      });
       marker.on("click", function () { pinned = true; this.openPopup(); });
       marker.on("popupclose", () => { pinned = false; });
       markersRef.current.push(marker);
@@ -84,11 +94,38 @@ export function EngineerLocationMap({ engineers, site }) {
         .addTo(map)
         .bindPopup(`<div style="font-size:12px"><b>${site.name}</b><br/>${site.address ?? ""}</div>`);
       siteMarker.off("click");
-      siteMarker.on("mouseover", function () { this.openPopup(); });
-      siteMarker.on("mouseout", function () { if (!sitePinned) this.closePopup(); });
+      siteMarker.on("mouseover", function () {
+        this.setZIndexOffset(2000);
+        const pin = this.getElement()?.querySelector(".site-pin");
+        if (pin) pin.style.transform = "scale(1.35)";
+        this.openPopup();
+      });
+      siteMarker.on("mouseout", function () {
+        this.setZIndexOffset(0);
+        const pin = this.getElement()?.querySelector(".site-pin");
+        if (pin) pin.style.transform = "scale(1)";
+        if (!sitePinned) this.closePopup();
+      });
       siteMarker.on("click", function () { sitePinned = true; this.openPopup(); });
       siteMarker.on("popupclose", () => { sitePinned = false; });
       markersRef.current.push(siteMarker);
+
+      // 구/시 이름표 — 타일 지도가 저배율에서 도시명을 로마자로 표시해도, 우리 DB의 주소(한글)에서
+      // 뽑은 구/시 이름을 마커 위에 직접 얹어 항상 한글로 보이게 한다 (자체점검현황 지도와 동일한 방식).
+      const gu = guOf(site.address);
+      if (gu) {
+        const guLabel = L.marker([site.lat, site.lng], {
+          icon: L.divIcon({
+            className: "",
+            html: `<div style="font-size:13px;font-weight:800;color:#334155;white-space:nowrap;pointer-events:none;text-shadow:0 1px 3px #fff,0 -1px 3px #fff,1px 0 3px #fff,-1px 0 3px #fff;transform:translateY(-30px)">${gu}</div>`,
+            iconSize: [0, 0],
+          }),
+          interactive: false,
+          zIndexOffset: 10000,
+        }).addTo(map);
+        markersRef.current.push(guLabel);
+      }
+
       const width = containerRef.current?.clientWidth || 460;
       // animate:false — 애니메이션 줌이 진행 중에 취소되면서 원래 줌으로 되돌아가는 문제가 있어 끈다.
       map.setView([site.lat, site.lng], zoomForRadius(site.lat, RADIUS_KM, width), { animate: false });
