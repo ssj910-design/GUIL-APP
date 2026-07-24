@@ -8,6 +8,7 @@ import { useState, useEffect, useContext } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { AuthContext } from "@/app/components/context";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 import { mapDutySchedule } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
 import { inputCls } from "@/app/components/admin/adminShared";
@@ -105,7 +106,7 @@ export function DutyGenerateWidget({ schedules, onSchedulesChange, onEngineersCh
     const [y, m] = ym.split("-").map(Number);
     const to = `${ym}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
     if (from > to) { alert("이미 지난 달입니다 — 회수할 오늘 이후 기록이 없습니다."); return; }
-    if (!confirm(`${y}년 ${m}월 근무표 중 ${from.slice(5).replace("-", "/")} 이후 배정을 전부 회수할까요?\n(그 이전 기록은 남습니다)`)) return;
+    if (!(await confirmAsync(`${y}년 ${m}월 근무표 중 ${from.slice(5).replace("-", "/")} 이후 배정을 전부 회수할까요?\n(그 이전 기록은 남습니다)`))) return;
     setRetracting(true);
     const { error } = await supabase.from("duty_schedules").delete().gte("duty_date", from).lte("duty_date", to);
     setRetracting(false);

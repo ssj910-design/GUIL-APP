@@ -23,6 +23,7 @@ import StatsAdmin from "@/app/components/admin/StatsAdmin";
 import NotifySettings from "@/app/components/admin/NotifySettings";
 import RoomAdmin from "@/app/components/admin/RoomAdmin";
 import ErrorCodesAdmin from "@/app/components/admin/ErrorCodesAdmin";
+import { ConfirmHost } from "@/app/components/ConfirmHost";
 
 const MENU = [
   { id: "dashboard", label: "대시보드", icon: LayoutDashboard },
@@ -93,6 +94,7 @@ export default function AdminApp() {
 
   return (
     <div className="min-h-screen lg:flex bg-slate-100 text-slate-900">
+      <ConfirmHost />
       {/* 모바일 상단바 */}
       <header className="lg:hidden sticky top-0 z-30 flex items-center gap-3 bg-blue-950 text-white px-4 py-3">
         <button onClick={() => setNavOpen(true)} aria-label="메뉴 열기"><Menu size={20} /></button>

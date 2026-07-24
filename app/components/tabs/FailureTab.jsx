@@ -8,6 +8,7 @@ import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsTo
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 
 
 /* ------------------------------------------------------------------ */
@@ -621,8 +622,8 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allo
           const st = statusOf(name);
           const leave = leaveOf(name);
           const visits = visitsOf(name);
-          const pick = () => {
-            if (st && !confirm(`${name}님은 지금 ${st}입니다.\n그래도 이 건을 배정할까요?`)) return;
+          const pick = async () => {
+            if (st && !(await confirmAsync(`${name}님은 지금 ${st}입니다.\n그래도 이 건을 배정할까요?`))) return;
             onAssign(failure, name);
             onClose();
           };

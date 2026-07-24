@@ -12,6 +12,7 @@ import { WorkCalendarSheet } from "@/app/components/WorkCalendarSheet";
 import { MyPage } from "@/app/components/MyPage";
 import { simulateSms } from "@/lib/sms";
 import { ScreenHeader } from "@/app/components/ui";
+import { ConfirmHost } from "@/app/components/ConfirmHost";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { LoginScreen } from "@/app/components/LoginScreen";
 import { SiteTab } from "@/app/components/tabs/SiteTab";
@@ -1421,6 +1422,7 @@ export default function App() {
     <SitesContext.Provider value={sites}>
     <UnitsContext.Provider value={units}>
       <div className="h-dvh w-screen bg-slate-50 flex flex-col overflow-hidden relative">
+          <ConfirmHost />
           <ScreenHeader
             title={tab === "home" ? "구일엘리베이터(주)" : tabTitle}
             right={

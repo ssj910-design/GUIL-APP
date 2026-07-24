@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { mapErrorCode } from "@/lib/mappers";
 import { errorCodeHistory } from "@/lib/utils";
 import { AdminTable, Modal, inputCls } from "@/app/components/admin/adminShared";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 
 const fmtDate = (iso) => {
   const d = new Date(iso);
@@ -82,7 +83,7 @@ function ErrorCodeDetailModal({ entry, failures, units, onClose, onSave, onDelet
   }
 
   async function remove() {
-    if (!confirm(`${entry.model} · ${entry.code} 항목을 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    if (!(await confirmAsync(`${entry.model} · ${entry.code} 항목을 삭제할까요? 되돌릴 수 없습니다.`))) return;
     setDeleting(true);
     await onDelete(entry);
     setDeleting(false);

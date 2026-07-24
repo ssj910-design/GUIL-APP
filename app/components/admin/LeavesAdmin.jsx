@@ -11,6 +11,7 @@ import { AdminTable, inputCls, StatusBadge, DateTextInput } from "@/app/componen
 import { TODAY_STR } from "@/lib/constants";
 import { annualLeaveDays, yearsOfService } from "@/lib/leave";
 import { shortDate } from "@/lib/utils";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 
 const KINDS = ["연차", "반차", "병가", "공가", "기타"];
 // 반차는 0.5일. 그 외는 시작~종료 일수 그대로 (주말 제외는 회사 규정이 갈려 자동 계산하지 않는다)
@@ -71,7 +72,7 @@ export default function LeavesAdmin({ data, setData }) {
   }
 
   async function remove(l) {
-    if (!confirm(`${nameOf(l.profile_id)} · ${l.start_date} ${l.kind} 기록을 삭제할까요?`)) return;
+    if (!(await confirmAsync(`${nameOf(l.profile_id)} · ${l.start_date} ${l.kind} 기록을 삭제할까요?`))) return;
     await supabase.from("leaves").delete().eq("id", l.id);
     setLeaves((prev) => prev.filter((x) => x.id !== l.id));
   }

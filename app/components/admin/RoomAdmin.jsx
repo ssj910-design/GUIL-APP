@@ -11,6 +11,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto } from "@/lib/photos";
 import { profileIdByName } from "@/lib/utils";
 import { Modal, inputCls } from "@/app/components/admin/adminShared";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 
 const ADMIN_NAME = "관리자";
 
@@ -199,7 +200,7 @@ export default function RoomAdmin({ data, setData }) {
   }
 
   async function deletePost(postId) {
-    if (!confirm("이 글을 삭제할까요? 댓글도 함께 삭제됩니다.")) return;
+    if (!(await confirmAsync("이 글을 삭제할까요? 댓글도 함께 삭제됩니다."))) return;
     setData((prev) => ({ ...prev, feed: prev.feed.filter((p) => p.id !== postId && p.replyToId !== postId) }));
     await supabase.from("feed_posts").delete().eq("reply_to_id", postId);
     await supabase.from("feed_posts").delete().eq("id", postId);

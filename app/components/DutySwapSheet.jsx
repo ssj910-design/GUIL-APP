@@ -3,6 +3,7 @@ import { X, ArrowLeftRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { AuthContext } from "@/app/components/context";
 import { TODAY_STR } from "@/lib/constants";
 import { useHolidays } from "@/app/hooks/useHolidays";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 
 // 근무 조정 세 가지 — 당직·숙직 근무표와 동일한 달력에서 칸(이름)을 눌러 고른다.
 //   교환   — 내 칸을 먼저 누르고, 바꿀 상대 칸을 누른다
@@ -44,9 +45,9 @@ export function DutySwapSheet({ schedules, swaps, onRequestSwap, onClose }) {
 
   async function submit({ target, toPersonId, from }) {
     let ok;
-    if (mode === "교환") ok = confirm(`내 ${fmt(mine.dutyDate)} ${mine.kind}\n↔ ${nameOf(target.profileId)}님의 ${fmt(target.dutyDate)} ${target.kind}\n\n교환을 요청할까요?`);
-    else if (mode === "넘기기") ok = confirm(`내 ${fmt(mine.dutyDate)} ${mine.kind} 근무를\n${nameOf(toPersonId)}님에게 넘길까요?\n\n상대가 수락하면 그 사람 근무가 됩니다.`);
-    else ok = confirm(`${nameOf(from.profileId)}님의 ${fmt(from.dutyDate)} ${from.kind} 근무를\n내가 대신 설까요?\n\n상대가 수락하면 내 근무가 됩니다.`);
+    if (mode === "교환") ok = await confirmAsync(`내 ${fmt(mine.dutyDate)} ${mine.kind}\n↔ ${nameOf(target.profileId)}님의 ${fmt(target.dutyDate)} ${target.kind}\n\n교환을 요청할까요?`);
+    else if (mode === "넘기기") ok = await confirmAsync(`내 ${fmt(mine.dutyDate)} ${mine.kind} 근무를\n${nameOf(toPersonId)}님에게 넘길까요?\n\n상대가 수락하면 그 사람 근무가 됩니다.`);
+    else ok = await confirmAsync(`${nameOf(from.profileId)}님의 ${fmt(from.dutyDate)} ${from.kind} 근무를\n내가 대신 설까요?\n\n상대가 수락하면 내 근무가 됩니다.`);
     if (!ok) return;
     setBusy(true);
     if (mode === "교환") await onRequestSwap(mine, target, { kind: "교환" });

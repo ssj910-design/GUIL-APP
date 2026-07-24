@@ -4,6 +4,7 @@ import { DutySwapSheet } from "@/app/components/DutySwapSheet";
 import { AuthContext } from "@/app/components/context";
 import { TODAY_STR } from "@/lib/constants";
 import { useHolidays } from "@/app/hooks/useHolidays";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 
 // 칸에 그리는 순서 — 당직 → 숙직 → 정상근무.
 // 정상근무는 주4일제 표에서 금요일에만 쓰이는 자리라 값이 있을 때(또는 관리자)만 칸을 보여준다.
@@ -125,7 +126,7 @@ export function DutyRoster({ schedules, swaps, onSetPerson, onRequestSwap, onRes
     }
     if (cell.id === swapFrom.id) { setSwapFrom(null); return; }
     if (cell.profileId === selfId) { setSwapFrom(cell); return; }
-    if (!confirm(`${labelOf(swapFrom.id)} (내 근무)\n↔ ${labelOf(cell.id)} (${nameOf(cell.profileId)})\n\n교환을 요청할까요? 상대가 수락하면 바로 바뀝니다.`)) return;
+    if (!(await confirmAsync(`${labelOf(swapFrom.id)} (내 근무)\n↔ ${labelOf(cell.id)} (${nameOf(cell.profileId)})\n\n교환을 요청할까요? 상대가 수락하면 바로 바뀝니다.`))) return;
     setBusy(true);
     await onRequestSwap(swapFrom, cell);
     setBusy(false);

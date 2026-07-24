@@ -15,6 +15,7 @@ import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { Modal, StatusBadge, DateTextInput, EditableDate } from "@/app/components/admin/adminShared";
 import ImportSites from "@/app/components/admin/ImportSites";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 
 const CONTRACT_TYPES = ["POG(일반계약)", "FM(종합계약)"];
 const CONTACT_ROLES = ["대표", "담당자", "관리소장", "건물주", "경비실", "입주민 대표", "기타"];
@@ -399,7 +400,7 @@ export default function SitesAdmin({ data, setData }) {
   }
 
   async function deleteUnit(unit) {
-    if (!confirm(`"${unit.unitNo}"를 완전히 삭제할까요? 연결된 고장·검사·청구 이력은 남아있지만 호기 정보와의 연결은 사라집니다.`)) return;
+    if (!(await confirmAsync(`"${unit.unitNo}"를 완전히 삭제할까요? 연결된 고장·검사·청구 이력은 남아있지만 호기 정보와의 연결은 사라집니다.`))) return;
     const { error } = await supabase.from("units").delete().eq("id", unit.id);
     if (error) { alert("삭제 실패: " + error.message); return; }
     const nextUnits = units.filter((u) => u.id !== unit.id);
@@ -472,7 +473,7 @@ export default function SitesAdmin({ data, setData }) {
   }
 
   async function deleteContact(c) {
-    if (!confirm(`담당자 "${c.name || "(이름 없음)"}"를 삭제할까요?`)) return;
+    if (!(await confirmAsync(`담당자 "${c.name || "(이름 없음)"}"를 삭제할까요?`))) return;
     await supabase.from("site_managers").delete().eq("id", c.id);
     setData((prev) => ({ ...prev, siteManagers: prev.siteManagers.filter((m) => m.id !== c.id) }));
   }

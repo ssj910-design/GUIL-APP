@@ -2,6 +2,7 @@ import { useState, useContext, useRef } from "react";
 import { Send, Plus, X, Download, MessageCircle, ThumbsUp, MoreVertical, ChevronLeft, Pin, Search, Pencil } from "lucide-react";
 import { AuthContext } from "@/app/components/context";
 import { uploadPhoto, downloadPhoto } from "@/lib/photos";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 
 const isVideo = (url) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(url);
 
@@ -127,8 +128,8 @@ export function PostDetailOverlay({ feed, postId, onSendChat, onToggleLike, onUp
     onUpdatePost?.(postId, editText.trim());
     setEditing(false);
   }
-  function doDelete() {
-    if (!confirm("이 글을 삭제할까요? 댓글도 함께 삭제됩니다.")) return;
+  async function doDelete() {
+    if (!(await confirmAsync("이 글을 삭제할까요? 댓글도 함께 삭제됩니다."))) return;
     onDeletePost?.(postId);
     onClose();
   }
@@ -307,8 +308,8 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
     onUpdatePost?.(editingId, editText.trim());
     setEditingId(null);
   }
-  function deletePost(p) {
-    if (!confirm("이 글을 삭제할까요? 댓글도 함께 삭제됩니다.")) return;
+  async function deletePost(p) {
+    if (!(await confirmAsync("이 글을 삭제할까요? 댓글도 함께 삭제됩니다."))) return;
     onDeletePost?.(p.id);
     if (openPostId === p.id) setOpenPostId(null);
   }

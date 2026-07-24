@@ -11,6 +11,7 @@ import { annualLeaveDays } from "@/lib/leave";
 import { DutyRoster } from "@/app/components/DutyRoster";
 import { DutyGenerateWidget } from "@/app/components/DutyGenerateWidget";
 import { Sheet } from "@/app/components/ui";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const ymOf = (y, m) => `${y}-${String(m + 1).padStart(2, "0")}`;
@@ -69,7 +70,7 @@ function LeaveCalendarTab({ schedules = [] }) {
   const leftDays = grant == null ? null : grant - usedDays;
 
   async function cancelLeave(l) {
-    if (!confirm(`${l.start_date} ${l.kind} 신청을 취소할까요?`)) return;
+    if (!(await confirmAsync(`${l.start_date} ${l.kind} 신청을 취소할까요?`))) return;
     await supabase.from("leaves").delete().eq("id", l.id);
     setMyLeaves((prev) => prev.filter((x) => x.id !== l.id));
     setLeaves((prev) => prev.filter((x) => x.id !== l.id));
