@@ -28,6 +28,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
   });
   const [step, setStep] = useState(0); // 스텝형 접수 (0~3)
   const [driveMin, setDriveMin] = useState(null); // T맵 예상 소요시간(분) — 출동응답과 동일하게 여기서도 보여준다
+  const [driveLoading, setDriveLoading] = useState(false);
   const site = sites.find((s) => s.id === form.siteId);
   const nowLabel = TODAY_STR + " " + new Date().toTimeString().slice(0, 5);
   const detailFilled = form.units.length > 1
@@ -39,8 +40,9 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
   const selfLoc = engineers.find((e) => e.id === selfId);
 
   useEffect(() => {
-    if (!selfDispatching || selfLoc?.last_lat == null || site?.lat == null) { setDriveMin(null); return; }
+    if (!selfDispatching || selfLoc?.last_lat == null || site?.lat == null) { setDriveMin(null); setDriveLoading(false); return; }
     let cancelled = false;
+    setDriveLoading(true);
     fetch("/api/tmap-route", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -51,8 +53,8 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
       }),
     })
       .then((res) => res.json())
-      .then((data) => { if (!cancelled && data.ok) setDriveMin(Math.round(data.totalTimeSec / 60)); })
-      .catch(() => {});
+      .then((data) => { if (cancelled) return; if (data.ok) setDriveMin(Math.round(data.totalTimeSec / 60)); setDriveLoading(false); })
+      .catch(() => { if (!cancelled) setDriveLoading(false); });
     return () => { cancelled = true; };
   }, [selfDispatching, selfLoc?.last_lat, selfLoc?.last_lng, site?.lat, site?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -322,7 +324,9 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
               <div>
                 <div className="flex items-center gap-2 mb-1.5">
                   <p className="text-xs font-bold text-slate-500">도착 예정 시간 *</p>
-                  {driveMin != null && (
+                  {driveLoading ? (
+                    <span className="text-xs font-bold text-red-600">T맵 예상시간 불러오는 중…</span>
+                  ) : driveMin != null && (
                     <span className="text-xs font-bold text-red-600">T맵 예상 {driveMin}분</span>
                   )}
                 </div>
@@ -740,6 +744,7 @@ export function AssignEngineerSheet({ failure, failures, onAssign, onClose, allo
 export function DispatchEtaModal({ failure, onConfirm, onClose }) {
   const [eta, setEta] = useState("");
   const [driveMin, setDriveMin] = useState(null); // T맵 예상 소요시간(분) — 실패·키 미설정 시 null로 조용히 숨김
+  const [driveLoading, setDriveLoading] = useState(false);
   const valid = eta !== "";
   const sites = useContext(SitesContext);
   const { selfId, engineers = [] } = useContext(AuthContext);
@@ -747,8 +752,9 @@ export function DispatchEtaModal({ failure, onConfirm, onClose }) {
   const selfLoc = engineers.find((e) => e.id === selfId);
 
   useEffect(() => {
-    if (selfLoc?.last_lat == null || site?.lat == null) return;
+    if (selfLoc?.last_lat == null || site?.lat == null) { setDriveLoading(false); return; }
     let cancelled = false;
+    setDriveLoading(true);
     fetch("/api/tmap-route", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -759,8 +765,8 @@ export function DispatchEtaModal({ failure, onConfirm, onClose }) {
       }),
     })
       .then((res) => res.json())
-      .then((data) => { if (!cancelled && data.ok) setDriveMin(Math.round(data.totalTimeSec / 60)); })
-      .catch(() => {});
+      .then((data) => { if (cancelled) return; if (data.ok) setDriveMin(Math.round(data.totalTimeSec / 60)); setDriveLoading(false); })
+      .catch(() => { if (!cancelled) setDriveLoading(false); });
     return () => { cancelled = true; };
   }, [selfLoc?.last_lat, selfLoc?.last_lng, site?.lat, site?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -769,7 +775,9 @@ export function DispatchEtaModal({ failure, onConfirm, onClose }) {
       <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {formatUnitLabel(failure.elevatorNo)}</p>
       <Field
         label="도착 예정 시간 *"
-        right={driveMin != null && (
+        right={driveLoading ? (
+          <span className="text-xs font-bold text-red-600">T맵 예상시간 불러오는 중…</span>
+        ) : driveMin != null && (
           <span className="text-xs font-bold text-red-600">T맵 예상 {driveMin}분</span>
         )}
       >
