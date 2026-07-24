@@ -150,9 +150,9 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
           const overdue = !t.done && new Date(t.dueDate) < new Date(TODAY_STR);
           const requester = getRequesterName(t, materialRequests, quoteRequests);
           const expanded = expandedId === t.id;
-          // 지브라 스트라이프 — 짝수줄만 살짝 톤(bg-slate-50), 펼친 행은 파란 톤
+          // 지브라 스트라이프 — 짝수줄만 살짝 톤(bg-slate-50), 펼친 행은 제목·내용을 한 박스로 묶어 흰 배경
           return (
-            <div key={t.id} className={`rounded-xl px-2 ${expanded ? "bg-blue-50/50" : i % 2 === 1 ? "bg-slate-50" : ""}`}>
+            <div key={t.id} className={`rounded-xl px-2 ${expanded ? "bg-white" : i % 2 === 1 ? "bg-slate-50" : ""}`}>
               <div className="flex items-start gap-2.5 py-2">
                 <div className="pt-0.5">
                   <TodoCheckbox
@@ -184,7 +184,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
                 </button>
               </div>
               {expanded && (
-                <div className="pl-8 pr-0.5 pb-3 pt-1 bg-white rounded-lg">
+                <div className="pl-8 pr-0.5 pb-3 pt-1">
                   <TodoDetailBody
                     todo={t}
                     requester={requester}
@@ -201,6 +201,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
                     onClearReassignRequest={onClearReassignRequest}
                     role={role}
                     onClose={() => setExpandedId(null)}
+                    hideTitleBlock
                   />
                 </div>
               )}
@@ -250,7 +251,7 @@ export function TodoDetailSheet(props) {
 }
 
 // 할 일 상세 본문 (시트/아코디언 공용). role: 'admin'이면 편집·재배정, 기사면 기한연장·재배정 요청.
-export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoUrls = [], siteAddress, onToggle, onReassign, engineerNames, onUpdateDescription, onUpdateDueDate, onExtendDueDate, onRequestReassign, onClearReassignRequest, role, onClose }) {
+export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoUrls = [], siteAddress, onToggle, onReassign, engineerNames, onUpdateDescription, onUpdateDueDate, onExtendDueDate, onRequestReassign, onClearReassignRequest, role, onClose, hideTitleBlock = false }) {
   const [descDraft, setDescDraft] = useState(todo.description ?? "");
   const [editingDesc, setEditingDesc] = useState(false);
   const [reassignOpen, setReassignOpen] = useState(false);
@@ -264,16 +265,20 @@ export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoU
 
   return (
     <>
-      <span
-        className={`inline-block text-[11px] font-bold px-2 py-1 rounded-md mb-2 ${
-          todo.done ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-        }`}
-      >
-        {todo.done ? "완료된 할 일" : "미완료된 할 일"}
-      </span>
-      <div className="bg-slate-100 rounded-xl p-3 mb-3">
-        <p className="font-bold text-slate-800">{todo.title}</p>
-      </div>
+      {!hideTitleBlock && (
+        <>
+          <span
+            className={`inline-block text-[11px] font-bold px-2 py-1 rounded-md mb-2 ${
+              todo.done ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+            }`}
+          >
+            {todo.done ? "완료된 할 일" : "미완료된 할 일"}
+          </span>
+          <div className="bg-slate-100 rounded-xl p-3 mb-3">
+            <p className="font-bold text-slate-800">{todo.title}</p>
+          </div>
+        </>
+      )}
 
       {/* 재배정 요청 — 기사: 넘기기 요청 / 관리자: 요청 확인·반려 */}
       {todo.reassignRequested && role === "admin" ? (
