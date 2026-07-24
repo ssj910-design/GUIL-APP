@@ -320,7 +320,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
             {/* 본인 배정이면 접수와 동시에 출동 처리 — 나중에 "출동 응답"을 따로 누를 필요가 없게 여기서 도착예정시간을 받는다. */}
             {selfDispatching && (
               <div>
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2 mb-1.5">
                   <p className="text-xs font-bold text-slate-500">도착 예정 시간 *</p>
                   {driveMin != null && (
                     <span className="text-xs font-bold text-red-600">T맵 예상 {driveMin}분</span>
