@@ -46,6 +46,9 @@ function toPlan(rows, existingGovNos) {
     name: col("건물명"), addr1: col("소재지1"), addr2: col("소재지2"),
     govNo: col("승강기고유번호"), status: col("승강기상태"), seq: col("호기"),
     kind: col("승강기종류"), model: col("승강기모델"), installed: col("최초설치일자"),
+    // 설치장소는 공단 양식에 없는 선택 열 — 파일에 "설치장소" 열을 넣어두면 같이 등록된다
+    // (예: 합참본부-1, 별관-3). 없으면 빈 값으로 두고 콘솔에서 직접 입력하면 된다.
+    place: col("설치장소"),
   };
   if (C.name < 0 || C.govNo < 0) throw new Error("공단 양식이 아닙니다 (건물명/승강기 고유번호 열 없음)");
 
@@ -73,6 +76,7 @@ function toPlan(rows, existingGovNos) {
       kind: (r[C.kind] ?? "").trim() || null,
       model: (r[C.model] ?? "").trim() || null,
       installDate: toDate((r[C.installed] ?? "").trim()),
+      installPlace: C.place >= 0 ? (r[C.place] ?? "").trim() || null : null,
       isActive: (r[C.status] ?? "운행중") === "운행중",
     });
   }
@@ -120,6 +124,7 @@ export default function ImportSites({ data, setData, onClose }) {
         unitRows.push({
           site_id: siteId, seq: u.seq, unit_no: `${u.seq}호기`, unit_type: u.unitType,
           model: u.model, install_date: u.installDate, gov_no: u.govNo, is_active: u.isActive,
+          install_place: u.installPlace,
         });
       }
     });
