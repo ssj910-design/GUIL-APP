@@ -399,7 +399,6 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
       <div className="flex-1 overflow-y-auto bg-slate-50 pb-6">
         <p className="px-5 pt-4 pb-2 text-xs font-bold text-slate-400">상세정보</p>
         <div className="bg-white">
-          <TimelineRow icon={Flag} label="승강기 번호" value={site.elevatorNo} valueColor="text-blue-600" />
           <TimelineRow icon={Flag} label="현장명" value={site.name} />
           <TimelineRow icon={Flag} label="대수" value={`${units.length} 대`} />
           <TimelineRow

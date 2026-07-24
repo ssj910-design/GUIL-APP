@@ -135,17 +135,16 @@ function AdminAttendanceCard({ attendances, engineers, todayLeaves = [] }) {
   const staleRows = rows.filter((r) => isWorking(r.a) && (Date.now() - new Date(r.e.last_seen_at ?? 0)) > STALE_MS);
 
   const permLabel = (s) => (s === "granted" ? "위치 켜짐" : s === "denied" ? "위치 거부" : s === "prompt" ? "위치 미설정" : "미확인");
-  const permTone = (s) => (s === "granted" ? "text-emerald-600" : s === "denied" ? "text-red-500" : "text-amber-600");
+  const permColor = (s) => (s === "granted" ? "bg-emerald-500" : s === "denied" ? "bg-red-500" : "bg-amber-500");
 
   return (
     <div className="bg-white rounded-xl border border-slate-200">
       <button onClick={() => setOpen((v) => !v)} className="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50 rounded-xl flex-wrap gap-y-1">
         <span className="flex items-center gap-1.5 flex-wrap min-w-0">
-          <span className="text-[11px] font-bold text-slate-400 whitespace-nowrap">{leaveStats}</span>
           <span className="text-xs font-bold text-slate-500 whitespace-nowrap">오늘 출근</span>
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="text-sm font-bold text-slate-800">{inCount} / {engineers.length}명</span>
+          <span className="text-sm font-bold text-slate-800 whitespace-nowrap">{leaveStats}</span>
           {staleRows.length > 0 && <span className="text-[10px] font-extrabold text-white bg-red-500 rounded-full px-1.5 py-0.5">2시간+ 미확인 {staleRows.length}</span>}
           {geoOff.length > 0 && <span className="text-[10px] font-extrabold text-white bg-amber-500 rounded-full px-1.5 py-0.5">위치 미설정 {geoOff.length}</span>}
           <span className="text-[11px] font-bold text-blue-700">{open ? "접기" : "명단"}</span>
@@ -173,7 +172,7 @@ function AdminAttendanceCard({ attendances, engineers, todayLeaves = [] }) {
                       : leave
                         ? <span className="text-emerald-600 font-bold">{leaveLabel(leave)}</span>
                         : <span className="text-slate-300">미출근</span>}
-                    <span className={`font-bold ${permTone(e.geo_perm)}`}>{permLabel(e.geo_perm)}</span>
+                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${permColor(e.geo_perm)}`} title={permLabel(e.geo_perm)} />
                   </span>
                 </div>
               );
