@@ -94,11 +94,14 @@ const fmtDuration = (sec) => {
 };
 const fmtDistance = (m) => (m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(1)}km`);
 
-export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerClick, selectedEngineer }) {
+export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerClick, selectedEngineer, heightClass = "h-[760px]" }) {
   const containerRef = useRef(null);
   const mapObjRef = useRef(null);
   const markersRef = useRef([]);
   const routeLineRef = useRef(null);
+  // 기사를 연달아 클릭하면 먼저 보낸 경로 요청이 나중에 응답으로 와서 최신 경로를 덮어쓰는 경우가 있어,
+  // 요청마다 번호를 매기고 "가장 최근 클릭"의 응답만 반영한다.
+  const routeRequestIdRef = useRef(0);
   const [loading, setLoading] = useState(true);
   const [L, setL] = useState(null);
 
@@ -159,6 +162,7 @@ export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerC
       async function selectThis() {
         pinned = true;
         onEngineerClick?.(e.name);
+        const myRequestId = ++routeRequestIdRef.current;
         marker.setPopupContent(namePopup(e.name, sideText, site ? "경로 계산 중..." : undefined));
         marker.openPopup();
         if (!site?.lat || !site?.lng) return;
@@ -174,11 +178,14 @@ export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerC
             }),
           });
           const data = await res.json();
+          // 응답을 기다리는 동안 다른 기사를 클릭했으면(더 최신 요청이 있으면) 이 오래된 응답은 버린다.
+          if (myRequestId !== routeRequestIdRef.current) return;
           if (!data.ok) { marker.setPopupContent(namePopup(e.name, sideText, data.reason || "경로를 찾을 수 없습니다")); return; }
+          if (routeLineRef.current) { map.removeLayer(routeLineRef.current); routeLineRef.current = null; }
           routeLineRef.current = L.polyline(data.coords, { color: ENGINEER_COLOR, weight: 4, opacity: 0.8 }).addTo(map);
           marker.setPopupContent(namePopup(e.name, sideText, `예상 ${fmtDuration(data.totalTimeSec)} · ${fmtDistance(data.totalDistanceM)}`));
         } catch {
-          marker.setPopupContent(namePopup(e.name, sideText, "경로 조회 실패"));
+          if (myRequestId === routeRequestIdRef.current) marker.setPopupContent(namePopup(e.name, sideText, "경로 조회 실패"));
         }
       }
       marker.on("click", selectThis);
@@ -227,7 +234,7 @@ export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerC
   }, [L, engineers, site, selectedEngineer]);
 
   return (
-    <div className="relative w-full h-[760px] rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+    <div className={`relative w-full ${heightClass} rounded-xl overflow-hidden border border-slate-200 bg-slate-50`}>
       {loading && <p className="absolute inset-0 flex items-center justify-center text-xs text-slate-400">지도 불러오는 중...</p>}
       <div ref={containerRef} className="w-full h-full" />
       <div className="absolute bottom-2 left-2 bg-white/90 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 flex items-center gap-3 shadow">

@@ -4,7 +4,7 @@
 // 호기·담당자 표기는 v2 FK(unitId/assigneeId)를 우선 쓰고, 옛 라벨은 fallback.
 import { useState, useMemo } from "react";
 import WeekStrip from "@/app/components/admin/WeekStrip";
-import { AlertOctagon, Plus } from "lucide-react";
+import { AlertOctagon, Plus, MapPin } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
 import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, shortDate, parseErrorCode, engineerJobsByName } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
@@ -12,6 +12,7 @@ import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { Modal, StatusBadge, inputCls, PhotoGrid, ReassignModal } from "@/app/components/admin/adminShared";
 import { RegisterFailureModal } from "@/app/components/admin/FailuresAdmin";
+import { EngineerLocationMap } from "@/app/components/admin/EngineerLocationMap";
 
 function unitLabel(units, sites, unitId, fallbackSiteName, fallbackLabel) {
   const u = units.find((x) => x.id === unitId);
@@ -92,6 +93,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
   const [failureDetail, setFailureDetail] = useState(null);
   const [failTarget, setFailTarget] = useState(null);
   const [registering, setRegistering] = useState(false);
+  const [staffMapOpen, setStaffMapOpen] = useState(false);
 
   // 고장관리(FailuresAdmin.jsx)의 접수 로직과 동일 — 여기서도 같은 위치에 고장접수 버튼을 두므로 그대로 둔다.
   async function createFailure(form) {
@@ -208,9 +210,14 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
     <div className="max-w-[100rem] mx-auto">
       <div className="flex items-center justify-between mb-1">
         <h1 className="text-xl font-extrabold">대시보드</h1>
-        <button onClick={() => setRegistering(true)} className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
-          <Plus size={15} /> 고장접수
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setStaffMapOpen(true)} className="flex items-center gap-1.5 text-sm font-bold text-blue-700 border border-blue-200 bg-white rounded-xl px-4 py-2.5 whitespace-nowrap">
+            <MapPin size={15} /> 지도
+          </button>
+          <button onClick={() => setRegistering(true)} className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
+            <Plus size={15} /> 고장접수
+          </button>
+        </div>
       </div>
       <p className="text-xs text-slate-500 mb-6">
         현장 {sites.length} · 호기 {units.length}대 · 기사 {profiles.filter((p) => p.role === "engineer").length}명 · 기준일 {TODAY_STR}
@@ -486,6 +493,12 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
           onAssign={assign}
           onClose={() => setReassignTarget(null)}
         />
+      )}
+
+      {staffMapOpen && (
+        <Modal title="전 직원 위치" onClose={() => setStaffMapOpen(false)} wide="xl">
+          <EngineerLocationMap engineers={engineers} engineerJobs={engineerJobs} heightClass="h-[65vh]" />
+        </Modal>
       )}
     </div>
   );
