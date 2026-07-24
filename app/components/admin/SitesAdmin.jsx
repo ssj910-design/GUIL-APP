@@ -731,7 +731,7 @@ export default function SitesAdmin({ data, setData }) {
               <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
                 {!editingInfo ? (
                   <>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-end gap-2">
                       <button onClick={() => setContractOpen(true)} className="flex items-center gap-1 text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 whitespace-nowrap">
                         <Paperclip size={13} /> 계약서
                       </button>
