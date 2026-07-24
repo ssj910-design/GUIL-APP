@@ -4,11 +4,48 @@
 // 마커 모양(물방울 핀)·타일은 SiteMapModal(자체점검현황 현장지도)과 동일하게 맞춘다.
 import { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
-import { pinIcon, guOf } from "@/app/components/admin/SiteMapModal";
+import { guOf } from "@/app/components/admin/SiteMapModal";
 
-const ENGINEER_COLOR = "#2563eb"; // 파랑 — 기사 위치
+const ENGINEER_COLOR = "#f97316"; // 주황 — 기사 위치 (안전모 아이콘)
 const SITE_COLOR = "#dc2626";     // 빨강 — 고장 현장 위치
 const RADIUS_KM = 7;
+
+// 물방울 핀 안에 아이콘을 얹은 마커. 바깥 모양·크기는 SiteMapModal의 pinIcon과 같게 유지해
+// 앵커·팝업 위치가 어긋나지 않게 하고, 안쪽 아이콘만 마커 종류에 따라 다르게 그린다.
+function makePin(L, color, glyphSvg) {
+  return L.divIcon({
+    className: "",
+    html: `<div class="site-pin" style="width:26px;height:36px;transform-origin:13px 36px;transition:transform .15s ease;">
+      <svg width="26" height="36" viewBox="0 0 26 36" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))">
+        <path d="M13 0C5.8 0 0 5.8 0 13c0 9.5 13 23 13 23s13-13.5 13-23C26 5.8 20.2 0 13 0z" fill="${color}" stroke="#fff" stroke-width="1.5"/>
+        ${glyphSvg}
+      </svg>
+    </div>`,
+    iconSize: [26, 36],
+    iconAnchor: [13, 36],
+    popupAnchor: [0, -32],
+  });
+}
+
+// 고장현장 마커 — 위치 핀 아이콘.
+function siteIcon(L) {
+  return makePin(L, SITE_COLOR, `
+    <path d="M13 5c-2.9 0-5.2 2.3-5.2 5.2 0 3.9 5.2 9.3 5.2 9.3s5.2-5.4 5.2-9.3C18.2 7.3 15.9 5 13 5z" fill="#fff"/>
+    <circle cx="13" cy="10.2" r="2.1" fill="${SITE_COLOR}"/>
+  `);
+}
+
+// 기사 마커 — 안전모(하드햇) 쓴 인물 아이콘.
+function engineerIcon(L) {
+  return makePin(L, ENGINEER_COLOR, `
+    <g fill="#fff">
+      <path d="M7 11.5c0-3.3 2.7-6 6-6s6 2.7 6 6v0.8H7v-0.8z"/>
+      <rect x="6" y="12" width="14" height="1.7" rx="0.85"/>
+      <circle cx="13" cy="17" r="3.2"/>
+      <path d="M7.3 24.5c0-3.1 2.6-5.2 5.7-5.2s5.7 2.1 5.7 5.2v1H7.3v-1z"/>
+    </g>
+  `);
+}
 
 // 컨테이너 실제 픽셀 폭 기준으로 "반경 km가 화면 폭에 딱 맞는" 줌을 직접 계산한다.
 // fitBounds는 여백(padding)까지 보수적으로 맞추다 보니 경계 근처에서 한 단계 더 축소돼버리는
@@ -83,7 +120,7 @@ export function EngineerLocationMap({ engineers, site, onEngineerClick }) {
     const engPoints = engineers.filter((e) => e.last_lat != null && e.last_lng != null);
     engPoints.forEach((e) => {
       let pinned = false;
-      const marker = L.marker([e.last_lat, e.last_lng], { icon: pinIcon(L, ENGINEER_COLOR) })
+      const marker = L.marker([e.last_lat, e.last_lng], { icon: engineerIcon(L) })
         .addTo(map)
         .bindPopup(namePopup(e.name));
       marker.off("click");
@@ -135,7 +172,7 @@ export function EngineerLocationMap({ engineers, site, onEngineerClick }) {
     // 현장 마커 — 호버하면 이름/주소가 뜨고 커서를 옮기면 사라진다. 클릭하면 고정.
     if (site?.lat != null && site?.lng != null) {
       let sitePinned = false;
-      const siteMarker = L.marker([site.lat, site.lng], { icon: pinIcon(L, SITE_COLOR) })
+      const siteMarker = L.marker([site.lat, site.lng], { icon: siteIcon(L) })
         .addTo(map)
         .bindPopup(`<div style="font-size:12px"><b>${site.name}</b><br/>${site.address ?? ""}</div>`);
       siteMarker.off("click");
