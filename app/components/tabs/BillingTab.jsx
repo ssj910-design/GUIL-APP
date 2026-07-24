@@ -1,10 +1,10 @@
 import { useState, useContext, useEffect } from "react";
 import { Receipt, Check, Search, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnits, formatPhone } from "@/lib/utils";
+import { siteUnitList, formatPhone } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
 import { DDay, PrimaryButton, Field, inputCls, DrillHeader } from "@/app/components/ui";
-import { SitesContext, AuthContext } from "@/app/components/context";
+import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload, SinglePhotoUpload } from "@/app/components/formWidgets";
 import { emptyPartRow, formatPartRows, PartsRowsInput, UnitPickGrid } from "@/app/components/tabs/MaterialTab";
 
@@ -18,6 +18,7 @@ const MAN_BILL_TITLES = ["현장·호기", "교체 내역·비용", "증빙 사�
 
 export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const sites = useContext(SitesContext);
+  const allUnits = useContext(UnitsContext);
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [uploadSession] = useState(() => Date.now());
   const [mode, setMode] = useState("material"); // material | manual
@@ -300,8 +301,8 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                 <Field label="현장 선택">
                   <SiteSearchSelect value={manualForm.siteId} onChange={(id) => {
                     const s = sites.find((x) => x.id === id);
-                    const us = s ? siteUnits(s) : [];
-                    setManualForm({ ...manualForm, siteId: id, units: us.length === 1 ? [us[0]] : [] });
+                    const us = s ? siteUnitList(s, allUnits) : [];
+                    setManualForm({ ...manualForm, siteId: id, units: us.length === 1 ? [us[0].unitNo] : [] });
                   }} />
                 </Field>
                 {manualForm.siteId && (

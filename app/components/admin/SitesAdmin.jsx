@@ -255,16 +255,20 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
 }
 
 function UnitRow({ unit, emergencyPhone, onSave, onSaveEmergencyPhone, onToggleActive, onDelete, onOpenDetail }) {
-  const [form, setForm] = useState({ unitType: unit.unitType, model: unit.model ?? "", installDate: unit.installDate ?? "", govNo: unit.govNo ?? "" });
+  const [form, setForm] = useState({ unitType: unit.unitType, model: unit.model ?? "", installDate: unit.installDate ?? "", govNo: unit.govNo ?? "", installPlace: unit.installPlace ?? "" });
   const [emergencyDraft, setEmergencyDraft] = useState(emergencyPhone ?? "");
   const [saving, setSaving] = useState(false);
-  const dirty = form.unitType !== unit.unitType || form.model !== (unit.model ?? "") || form.installDate !== (unit.installDate ?? "") || form.govNo !== (unit.govNo ?? "");
+  const dirty = form.unitType !== unit.unitType || form.model !== (unit.model ?? "") || form.installDate !== (unit.installDate ?? "") || form.govNo !== (unit.govNo ?? "") || form.installPlace !== (unit.installPlace ?? "");
   const emergencyDirty = emergencyDraft !== (emergencyPhone ?? "");
 
   return (
     <tr className={`border-b border-slate-50 ${unit.isActive === false ? "opacity-40" : ""}`}>
       <td className="px-4 py-2 font-bold whitespace-nowrap">
         <button onClick={() => onOpenDetail(unit)} className="text-blue-700 hover:underline">{unit.unitNo}</button>
+      </td>
+      <td className="px-2 py-2">
+        {/* 설치장소 — 호기 번호와 별개인 실제 위치(예: 합참본부-1, 별관-3, 교회) */}
+        <input className={inputCls} value={form.installPlace} placeholder="예: 합참본부-1" onChange={(e) => setForm({ ...form, installPlace: e.target.value })} />
       </td>
       <td className="px-2 py-2">
         <select className={inputCls} value={form.unitType} onChange={(e) => setForm({ ...form, unitType: e.target.value })}>
@@ -440,10 +444,10 @@ export default function SitesAdmin({ data, setData }) {
   }
 
   async function saveUnit(unit, form) {
-    const patch = { unit_type: form.unitType, model: form.model || null, install_date: form.installDate || null, gov_no: form.govNo || null };
+    const patch = { unit_type: form.unitType, model: form.model || null, install_date: form.installDate || null, gov_no: form.govNo || null, install_place: form.installPlace?.trim() || null };
     const { error } = await supabase.from("units").update(patch).eq("id", unit.id);
     if (error) { alert("저장 실패: " + error.message); return; }
-    const nextUnits = units.map((u) => (u.id === unit.id ? { ...u, unitType: form.unitType, model: form.model || null, installDate: form.installDate || null, govNo: form.govNo || null } : u));
+    const nextUnits = units.map((u) => (u.id === unit.id ? { ...u, unitType: form.unitType, model: form.model || null, installDate: form.installDate || null, govNo: form.govNo || null, installPlace: form.installPlace?.trim() || null } : u));
     setData((prev) => ({ ...prev, units: nextUnits }));
     await syncLegacy(unit.siteId, nextUnits);
   }
@@ -916,6 +920,7 @@ export default function SitesAdmin({ data, setData }) {
                     <thead>
                       <tr className="text-xs text-slate-400 border-b border-slate-100">
                         <th className="text-left px-4 py-2 font-semibold w-14">호기</th>
+                        <th className="text-left px-2 py-2 font-semibold w-32">설치장소</th>
                         <th className="text-left px-2 py-2 font-semibold w-28">종류</th>
                         <th className="text-left px-2 py-2 font-semibold">모델</th>
                         <th className="text-left px-2 py-2 font-semibold w-32">설치일</th>

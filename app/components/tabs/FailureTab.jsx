@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle, Wrench, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnits, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, labelToSeq, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf } from "@/lib/utils";
+import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, labelToSeq, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
 import { useLiveInspections } from "@/app/hooks/useLiveInspections";
 import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons } from "@/app/components/ui";
@@ -151,8 +151,8 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                 onChange={(id) => {
                   // 호기가 1대뿐인 현장은 자동 선택 (여러 대는 오접수 방지를 위해 명시적 선택)
                   const s = sites.find((x) => x.id === id);
-                  const us = s ? siteUnits(s) : [];
-                  setForm({ ...form, siteId: id, units: us.length === 1 ? [us[0]] : [], reportNote: s?.notes || "" });
+                  const us = s ? siteUnitList(s, units) : [];
+                  setForm({ ...form, siteId: id, units: us.length === 1 ? [us[0].unitNo] : [], reportNote: s?.notes || "" });
                 }}
                 placeholder="현장명 검색"
               />
@@ -161,23 +161,28 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
               <>
                 <div>
                   <p className="text-xs font-bold text-slate-500 mb-1.5">
-                    호기{siteUnits(site).length === 1 ? <span className="text-blue-600 font-semibold"> — 1대 현장, 자동 선택됨</span> : <span className="text-slate-400 font-semibold"> (여러 대 고장이면 모두 선택)</span>}
+                    호기{siteUnitList(site, units).length === 1 ? <span className="text-blue-600 font-semibold"> — 1대 현장, 자동 선택됨</span> : <span className="text-slate-400 font-semibold"> (여러 대 고장이면 모두 선택)</span>}
                   </p>
                   <div className="grid grid-cols-3 gap-2">
-                    {siteUnits(site).map((u) => (
-                      <button
-                        key={u}
-                        onClick={() => setForm({
-                          ...form,
-                          units: form.units.includes(u) ? form.units.filter((x) => x !== u) : [...form.units, u],
-                        })}
-                        className={`py-3 rounded-xl text-sm font-bold border ${
-                          form.units.includes(u) ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200 bg-white"
-                        }`}
-                      >
-                        {u}
-                      </button>
-                    ))}
+                    {siteUnitList(site, units).map((u) => {
+                      const place = realInstallPlace(u);
+                      const on = form.units.includes(u.unitNo);
+                      return (
+                        <button
+                          key={u.unitNo}
+                          onClick={() => setForm({
+                            ...form,
+                            units: on ? form.units.filter((x) => x !== u.unitNo) : [...form.units, u.unitNo],
+                          })}
+                          className={`py-2.5 px-1 rounded-xl border leading-tight ${
+                            on ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200 bg-white"
+                          }`}
+                        >
+                          <span className="block text-sm font-bold">{u.unitNo}</span>
+                          {place && <span className={`block text-[11px] font-semibold truncate ${on ? "text-blue-100" : "text-slate-400"}`}>{place}</span>}
+                        </button>
+                      );
+                    })}
                   </div>
                   {form.units.length > 1 && (
                     <p className="text-[11px] text-blue-600 font-semibold mt-1.5">

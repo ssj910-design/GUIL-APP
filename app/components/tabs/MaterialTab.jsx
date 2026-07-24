@@ -1,7 +1,7 @@
 import { Fragment, useState, useContext } from "react";
 import { ChevronRight, X, Plus, Search, PackageCheck, PackageX, AlertTriangle, Check } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnits, unitIdFor, profileIdByName, formatPhone } from "@/lib/utils";
+import { siteUnitList, realInstallPlace, unitIdFor, profileIdByName, formatPhone } from "@/lib/utils";
 import { TODAY_STR, QUOTE_STAGES, KIT_PARTS } from "@/lib/constants";
 import { PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -578,23 +578,30 @@ export function PartsRowsInput({ rows, setRows, nameOptions, namePlaceholder = "
 
 // 현장의 호기를 그리드로 고르는 공용 위젯 (고장접수와 동일 — 1대면 자동선택, 여러 대 멀티선택).
 export function UnitPickGrid({ site, selected, onToggle }) {
-  const us = site ? siteUnits(site) : [];
+  const allUnits = useContext(UnitsContext);
+  // ★ units 테이블 기준 실제 호기 — 개수로 1..N 합성하면 실제 호기와 어긋난다 (국방부본부 등)
+  const us = site ? siteUnitList(site, allUnits) : [];
   return (
     <div className="mb-4">
       <p className="text-xs font-bold text-slate-500 mb-1.5">
         호기{us.length === 1 ? <span className="text-blue-600 font-semibold"> — 1대 현장, 자동 선택됨</span> : <span className="text-slate-400 font-semibold"> (여러 대면 모두 선택)</span>}
       </p>
       <div className="grid grid-cols-3 gap-2">
-        {us.map((u) => (
-          <button
-            key={u}
-            type="button"
-            onClick={() => onToggle(u)}
-            className={`py-3 rounded-xl text-sm font-bold border ${selected.includes(u) ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200 bg-white"}`}
-          >
-            {u}
-          </button>
-        ))}
+        {us.map((u) => {
+          const place = realInstallPlace(u);
+          const on = selected.includes(u.unitNo);
+          return (
+            <button
+              key={u.unitNo}
+              type="button"
+              onClick={() => onToggle(u.unitNo)}
+              className={`py-2.5 px-1 rounded-xl border leading-tight ${on ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200 bg-white"}`}
+            >
+              <span className="block text-sm font-bold">{u.unitNo}</span>
+              {place && <span className={`block text-[11px] font-semibold truncate ${on ? "text-blue-100" : "text-slate-400"}`}>{place}</span>}
+            </button>
+          );
+        })}
       </div>
       {selected.length > 1 && (
         <p className="text-[11px] text-blue-600 font-semibold mt-1.5">선택 {selected.length}대 — 호기별로 {selected.length}건이 각각 생성됩니다</p>
@@ -829,8 +836,8 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
                   <Field label="현장 선택">
                     <SiteSearchSelect value={form.siteId} onChange={(id) => {
                       const s = sites.find((x) => x.id === id);
-                      const us = s ? siteUnits(s) : [];
-                      setForm({ ...form, siteId: id, units: us.length === 1 ? [us[0]] : [] });
+                      const us = s ? siteUnitList(s, units) : [];
+                      setForm({ ...form, siteId: id, units: us.length === 1 ? [us[0].unitNo] : [] });
                     }} />
                   </Field>
                   {form.siteId && (
@@ -1073,8 +1080,8 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
                 <Field label="현장 선택">
                   <SiteSearchSelect value={quoteForm.siteId} onChange={(id) => {
                     const s = sites.find((x) => x.id === id);
-                    const us = s ? siteUnits(s) : [];
-                    setQuoteForm({ ...quoteForm, siteId: id, units: us.length === 1 ? [us[0]] : [] });
+                    const us = s ? siteUnitList(s, units) : [];
+                    setQuoteForm({ ...quoteForm, siteId: id, units: us.length === 1 ? [us[0].unitNo] : [] });
                   }} />
                 </Field>
                 {quoteForm.siteId && (

@@ -1,6 +1,6 @@
 import React, { useState, useContext, useRef } from "react";
 import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Flame, Download } from "lucide-react";
-import { siteUnits, addDays, labelToSeq, govDateToDashed, formatShortDate, recentFailuresBySite, siteMatchesQuery } from "@/lib/utils";
+import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, formatShortDate, recentFailuresBySite, siteMatchesQuery } from "@/lib/utils";
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
@@ -387,7 +387,8 @@ export function PhotoViewerSheet({ urls, index, siteName, date, onClose }) {
 
 /* ---- 현장정보 화면 ---- */
 function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUpdateSiteNotes }) {
-  const units = siteUnits(site);
+  const allUnits = useContext(UnitsContext);
+  const units = siteUnitList(site, allUnits); // 실제 호기(개수로 1..N 합성 금지)
   const { engineers } = useContext(AuthContext);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState(site.notes ?? "");
@@ -450,18 +451,18 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
         </div>
         <div className="bg-white">
           {units.map((u, idx) => (
-            <div key={u} className="flex px-5">
+            <div key={u.unitNo} className="flex px-5">
               <div className="flex flex-col items-center mr-3 pt-3">
                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
                 {idx !== units.length - 1 && <div className="w-px flex-1 bg-slate-200 mt-1" />}
               </div>
               <div className="flex-1 pb-3">
                 <p className="text-sm font-bold text-slate-800 py-2.5">
-                  {u} ({site.govElevatorNos?.[idx] || "승강기고유번호 미등록"})
+                  {u.unitNo}{realInstallPlace(u) ? ` · ${realInstallPlace(u)}` : ""} ({u.govNo || site.govElevatorNos?.[idx] || "승강기고유번호 미등록"})
                   {site.emergencyPhone && ` (${site.emergencyPhone})`}
                 </p>
                 <button
-                  onClick={() => onOpenUnit(u)}
+                  onClick={() => onOpenUnit(u.unitNo)}
                   className="w-full bg-blue-500 text-white text-sm font-bold py-2.5 rounded-md active:bg-blue-600 mb-1"
                 >
                   상세내용
@@ -598,7 +599,7 @@ export function SiteTab({ inspections, failures, billings, siteManagers, onUpdat
               className="w-full text-left bg-white rounded-xl border border-slate-200 p-3.5 active:bg-slate-50 cursor-pointer"
             >
               <div className="flex items-center justify-between gap-2 mb-1">
-                <p className="font-bold text-slate-800 text-sm">{s.name} · {siteUnits(s).length}대</p>
+                <p className="font-bold text-slate-800 text-sm">{s.name} · {siteUnitList(s, allUnits).length}대</p>
                 <div className="flex items-center gap-1.5 flex-wrap shrink-0">
                   {(recentFailuresMap.get(s.id)?.length ?? 0) >= 3 && (
                     <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">집중관리</span>

@@ -8,6 +8,19 @@
 
 ## P0 — 즉시 (크래시 / 데이터 유실 / 안전)
 
+- [x] **P0-3 `[확인]` 호기 선택이 units 테이블을 안 보고 개수로 1..N을 합성 — 잘못된 호기로 접수됨** — (수정·검증 2026-07-24)
+  `siteUnits(site)`가 `unitCount`로 `1호기..N호기`를 만들어 고장접수·자재·견적·청구가 전부 이걸 썼다(자체점검만 `siteUnitList` 사용).
+  실데이터에서 **15개 현장의 호기 번호가 개수와 다름**:
+  - 국방부본부: 선택지 `1~32호기`가 떴지만 실제는 `1-6,17-34,36,38-40,45-48` → 없는 7~16호기 선택 가능(허위 접수), 33·34·36·38~40·45~48호기는 접수 자체 불가
+  - 뉴베리청담: 실제 `3호기` 1대인데 `1호기`로만 접수됨 / 미주메디컬빌딩: 실제 `2호기`인데 `1호기`
+  → 수정: 전 화면 `siteUnitList(site, units)`로 교체 + 호기 버튼을 `24호기 / 합참본부-1` 2줄 표기.
+  `siteUnits`는 fallback 전용으로 강등(주석 경고 추가).
+
+- [x] **설치장소·호기 분리** — (수정 2026-07-24) `units.install_place`가 이미 있었으나 876대 중 **782대가 호기 라벨 잔재**(`1-{seq}`)로 채워져 화면에서 미사용 상태였다.
+  → `058_clear_legacy_install_place.sql`로 잔재 782건 NULL 정리(실제 동번호 101-*/102-*/339-* 8건은 보존),
+  `realInstallPlace()` 방어 헬퍼 추가, SitesAdmin 호기 표에 **설치장소 입력 컬럼** 신설.
+
+
 - [x] **P0-1 `[확인]` 처리현황 재배정 시 관리자 화면 크래시** — (수정·검증 2026-07-24) — [FailureTab.jsx:1303](../app/components/tabs/FailureTab.jsx#L1303)
   `FailureStatusOverview({ failures, onReassign })`(1246)에 없는 `attendances`/`todayLeaves`를 1303행이 참조 → 관리자가 처리현황에서 배정된 미완료 건 "재배정" 클릭 시 ReferenceError.
   → 수정: FailureTab(두 prop 이미 보유)에서 FailureStatusOverview로 내려주고 시그니처에 추가.
