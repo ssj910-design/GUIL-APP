@@ -22,7 +22,7 @@ function LoadingDots() {
     const id = setInterval(() => setN((v) => (v % 3) + 1), 400);
     return () => clearInterval(id);
   }, []);
-  return <span>{"·".repeat(n)}</span>;
+  return <span>{Array(n).fill("·").join(" ")}</span>;
 }
 
 function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported, onDispatch }) {
