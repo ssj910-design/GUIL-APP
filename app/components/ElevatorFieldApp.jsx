@@ -91,7 +91,6 @@ export default function App() {
 
   const [tab, setTab] = useState("home");
   const [failureFocusTab, setFailureFocusTab] = useState(null); // 고장접수 탭 진입 시 열 서브탭 (홈 "모두 보기" 등)
-  const [failureReportSiteId, setFailureReportSiteId] = useState(null); // 집중관리현장 "바로 접수·처리" — 접수등록 폼에 미리 채울 현장
   const [sites, setSites] = useState([]);
   const [units, setUnits] = useState([]); // v2: 호기 목록 (마이그레이션 전 DB에서는 빈 배열)
   const [errorCodes, setErrorCodes] = useState([]); // v2: 에러코드집 (마이그레이션 전 DB에서는 빈 배열)
@@ -1631,7 +1630,6 @@ export default function App() {
               onAssign={handleAssignFailure}
               onReassign={handleReassignFailure}
               onShowAllFailures={() => { setFailureFocusTab("처리현황"); setTab("failure"); }}
-              onQuickReport={(site) => { setFailureReportSiteId(site.id); setFailureFocusTab("접수등록"); setTab("failure"); }}
               toast={failureToast}
             />
           )}
@@ -1639,8 +1637,6 @@ export default function App() {
           {tab === "failure" && (
             <FailureTab
               onReported={handleFailureReported}
-              reportPrefillSiteId={failureReportSiteId}
-              onReportPrefillHandled={() => setFailureReportSiteId(null)}
               attendances={attendances}
               todayLeaves={todayLeaves}
               failures={failures}

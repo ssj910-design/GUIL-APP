@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect, useRef } from "react";
-import { ShieldCheck, AlertOctagon, X, Map as MapIcon, Wrench } from "lucide-react";
+import { ShieldCheck, AlertOctagon, X, Map as MapIcon } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, distanceKm } from "@/lib/utils";
@@ -581,7 +581,7 @@ function WorkEndRow({ onAttendance, dutyKind }) {
   );
 }
 
-export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, onCloseNight, onAttendance, onOpenRoster, swapCount, inspections, failures, errorCodes = [], onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, onQuickReport, toast, todayLeaves = [] }) {
+export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, onCloseNight, onAttendance, onOpenRoster, swapCount, inspections, failures, errorCodes = [], onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, toast, todayLeaves = [] }) {
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const { name: CURRENT_ENGINEER, role, selfId, engineers = [], profiles = [] } = useContext(AuthContext);
@@ -752,33 +752,22 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
                 const units = [...new Set(recent.map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean))];
                 const unitLabel = units.length ? units.join(", ") : formatUnitLabel(s.elevatorNo);
                 return (
-                  <div
+                  <button
                     key={s.id}
-                    className={`bg-white rounded-xl px-3 py-2.5 ${stopped ? "border-2 border-red-400" : "border border-red-100"}`}
+                    onClick={() => setHistorySite(s)}
+                    className={`w-full flex items-center justify-between bg-white rounded-xl px-3 py-2.5 text-left active:bg-red-50 ${stopped ? "border-2 border-red-400" : "border border-red-100"}`}
                   >
-                    <button type="button" onClick={() => setHistorySite(s)} className="w-full flex items-center justify-between text-left active:bg-red-50">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-bold text-slate-800 text-sm">{s.name}{unitLabel ? ` · ${unitLabel}` : ""}</p>
-                        <p className="text-[11px] text-slate-400">{s.address}</p>
-                      </div>
-                      <span className="flex flex-col items-end gap-1 shrink-0 ml-2">
-                        {trapped && <span className="text-xs font-extrabold text-white bg-red-600 px-2 py-1 rounded-full">갇힘</span>}
-                        {support && <span className="text-xs font-extrabold text-amber-600 bg-amber-100 px-2 py-1 rounded-full">지원요청</span>}
-                        {stopped && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">운행정지</span>}
-                        {count30d > 0 && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">{count30d}회 고장</span>}
-                      </span>
-                    </button>
-                    {onQuickReport && (
-                      // 신고 없이도 지나가다 본 기사가 바로 접수+처리결과까지 등록할 수 있게 — 접수등록 폼에 이 현장이 미리 채워진 채로 열린다.
-                      <button
-                        type="button"
-                        onClick={() => onQuickReport(s)}
-                        className="w-full mt-2 flex items-center justify-center gap-1 text-xs font-bold text-red-700 bg-red-50 border border-red-200 rounded-lg py-2 active:bg-red-100"
-                      >
-                        <Wrench size={13} /> 바로 접수·처리
-                      </button>
-                    )}
-                  </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-slate-800 text-sm">{s.name}{unitLabel ? ` · ${unitLabel}` : ""}</p>
+                      <p className="text-[11px] text-slate-400">{s.address}</p>
+                    </div>
+                    <span className="flex flex-col items-end gap-1 shrink-0 ml-2">
+                      {trapped && <span className="text-xs font-extrabold text-white bg-red-600 px-2 py-1 rounded-full">갇힘</span>}
+                      {support && <span className="text-xs font-extrabold text-amber-600 bg-amber-100 px-2 py-1 rounded-full">지원요청</span>}
+                      {stopped && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">운행정지</span>}
+                      {count30d > 0 && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">{count30d}회 고장</span>}
+                    </span>
+                  </button>
                 );
               })}
             </div>

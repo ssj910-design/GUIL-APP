@@ -26,7 +26,7 @@ function LoadingDots() {
   return <span>{Array(n).fill("·").join(" ")}</span>;
 }
 
-function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported, onDispatch, prefillSiteId, onPrefillHandled }) {
+function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported, onDispatch }) {
   const sites = useContext(SitesContext);
   const units = useContext(UnitsContext);
   const { engineerNames, profiles: allProfiles, selfId, name: myName, role, engineers = [] } = useContext(AuthContext);
@@ -49,22 +49,6 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
   const selfDispatching = role === "engineer" && form.assignee === myName;
   const canSubmit = !!site && !!form.faultType && detailFilled && form.reporterPhone.trim().length > 0 && (!selfDispatching || form.eta !== "");
   const selfLoc = engineers.find((e) => e.id === selfId);
-
-  // 집중관리현장 카드의 "바로 접수·처리"로 들어오면 현장이 이미 정해져 있다 — 현장 검색을
-  // 직접 하지 않아도 되도록 SiteSearchSelect를 고른 것과 동일하게 채워준다(1대 현장 자동선택 포함).
-  // 참고사항엔 이 접수가 신고가 아니라 자율점검 목적임을 표시해둔다(별도 컬럼 없이 기존 필드 재사용).
-  useEffect(() => {
-    if (!prefillSiteId) return;
-    const s = sites.find((x) => x.id === prefillSiteId);
-    const us = s ? siteUnitList(s, units) : [];
-    setForm((f) => ({
-      ...f,
-      siteId: prefillSiteId,
-      units: us.length === 1 ? [us[0].unitNo] : [],
-      reportNote: ["[집중관리 자율점검]", s?.notes].filter(Boolean).join(" "),
-    }));
-    onPrefillHandled?.();
-  }, [prefillSiteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!selfDispatching || selfLoc?.last_lat == null || site?.lat == null) { setDriveMin(null); setDriveLoading(false); return; }
@@ -1634,7 +1618,7 @@ function ErrorCodeBook({ errorCodes, failures }) {
   );
 }
 
-export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [], errorCodes = [], onReported, reportPrefillSiteId, onReportPrefillHandled }) {
+export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [], errorCodes = [], onReported }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
   // 홈 "모두 보기" 등 외부에서 특정 서브탭으로 진입 (SiteTab focusSiteId와 같은 패턴)
@@ -1652,7 +1636,7 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
   // 접수등록/미배정/처리등록/처리현황/에러코드집 각 탭의 패널 — SwipeSubtabTrack이 드래그 중
   // 옆 탭을 함께 렌더링할 때 쓴다.
   function renderFailurePane(tab) {
-    if (tab === "접수등록") return <FailureRegisterForm onReported={onReported} onDispatch={onDispatch} failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} prefillSiteId={reportPrefillSiteId} onPrefillHandled={onReportPrefillHandled} />;
+    if (tab === "접수등록") return <FailureRegisterForm onReported={onReported} onDispatch={onDispatch} failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />;
     if (tab === "미배정") return <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
     if (tab === "처리등록") return <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
     if (tab === "처리현황") return <FailureStatusOverview failures={failures} onReassign={onReassign} attendances={attendances} todayLeaves={todayLeaves} />;
