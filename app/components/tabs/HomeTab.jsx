@@ -386,8 +386,8 @@ function periodOf(note) {
 // 홈탭용 워크 캘린더 미리보기 — 관리자 대시보드의 WeekStrip(admin/WeekStrip.jsx)을 좁은
 // 모바일 화면에 맞게 압축한 버전. 카드 폭이 좁아 "당직 아무개" 같은 라벨은 안 들어가서
 // 색점(당직=초록/숙직=파랑/휴가=호박색)만으로 구분하고 이름만 보여준다. 오늘 기준 앞뒤 7일씩
-// 총 15일치를 한 줄에 두고, 처음엔 오늘이 맨 앞에 오도록 스크롤해둔다 — 오른쪽으로 넘기면
-// 앞으로의 일정을, 왼쪽에서 오른쪽으로 드래그하면(스크롤을 왼쪽으로) 지난 날짜를 볼 수 있다.
+// 총 15일치를 한 줄에 두고, 처음엔 오늘이 화면 한가운데 오도록 스크롤해둔다 — 오른쪽으로
+// 넘기면 앞으로의 일정을, 왼쪽에서 오른쪽으로 드래그하면(스크롤을 왼쪽으로) 지난 날짜를 볼 수 있다.
 const CAL_PAST_DAYS = 7;
 const CAL_FUTURE_DAYS = 7;
 function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
@@ -415,10 +415,12 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
     });
   }, [from, to]);
 
-  // 처음 렌더될 때 오늘 칸이 맨 앞에 오도록 가로 스크롤 위치를 맞춘다 (지난 날짜는 왼쪽에 숨겨둠).
+  // 처음 렌더될 때 오늘 칸이 보이는 영역 한가운데 오도록 가로 스크롤 위치를 맞춘다.
   useEffect(() => {
     if (scrollRef.current && todayRef.current) {
-      scrollRef.current.scrollLeft = todayRef.current.offsetLeft - 4;
+      const container = scrollRef.current;
+      const today = todayRef.current;
+      container.scrollLeft = today.offsetLeft - container.clientWidth / 2 + today.offsetWidth / 2;
     }
   }, []);
 
