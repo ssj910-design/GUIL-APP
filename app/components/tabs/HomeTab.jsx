@@ -394,7 +394,6 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
   const [duties, setDuties] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [dayDetail, setDayDetail] = useState(null); // 날짜 카드 클릭 시 당직·숙직·휴가 인원 모아보기
-  const scrollRef = useRef(null);
   const todayRef = useRef(null);
 
   const center = new Date(`${TODAY_STR}T00:00:00`);
@@ -416,12 +415,10 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
   }, [from, to]);
 
   // 처음 렌더될 때 오늘 칸이 보이는 영역 한가운데 오도록 가로 스크롤 위치를 맞춘다.
+  // offsetLeft로 직접 계산하면 상위 요소 중 position이 지정된 게 있을 때 기준점이 어긋날 수
+  // 있어, 브라우저 내장 scrollIntoView로 가장 가까운 스크롤 컨테이너 기준 중앙 정렬한다.
   useEffect(() => {
-    if (scrollRef.current && todayRef.current) {
-      const container = scrollRef.current;
-      const today = todayRef.current;
-      container.scrollLeft = today.offsetLeft - container.clientWidth / 2 + today.offsetWidth / 2;
-    }
+    todayRef.current?.scrollIntoView({ block: "nearest", inline: "center" });
   }, []);
 
   const nameOf = (id) => profiles.find((p) => p.id === id)?.name ?? "";
@@ -439,7 +436,7 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
           )}
         </span>
       </div>
-      <div ref={scrollRef} className="flex gap-1.5 overflow-x-auto">
+      <div className="flex gap-1.5 overflow-x-auto">
         {days.map((d) => {
           const dow = new Date(`${d}T00:00:00`).getDay();
           const dutyDay = duties.filter((x) => x.duty_date === d && (x.kind === "당직" || x.kind === "숙직"));
