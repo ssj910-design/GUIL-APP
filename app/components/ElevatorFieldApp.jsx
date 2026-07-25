@@ -796,6 +796,18 @@ export default function App() {
     if (inserted) setErrorCodeRequests((prev) => [mapErrorCodeRequest(inserted), ...prev]);
   }
 
+  // ★ 고장처리결과 입력 시트를 열 때마다 코드집·등록요청을 새로 불러온다 — 세션 내내 한 번만
+  // 로드한 값을 계속 쓰면, 다른 기기(관리자 등)가 승인·반려해도 이 세션은 그걸 모른 채
+  // "이미 등록요청을 보낸 코드"라고 오래된 상태를 계속 보여주게 된다.
+  async function refreshErrorCodeData() {
+    const [errorCodesRes, errorCodeRequestsRes] = await Promise.all([
+      supabase.from("error_codes").select("*"),
+      supabase.from("error_code_requests").select("*").order("created_at", { ascending: false }),
+    ]);
+    setErrorCodes((errorCodesRes.data ?? []).map(mapErrorCode));
+    setErrorCodeRequests((errorCodeRequestsRes.data ?? []).map(mapErrorCodeRequest));
+  }
+
   async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId }) {
     // v2: 호기 확정 — 직접 전달받거나(자재건), siteId 또는 유일한 현장명으로 찾는다
     const billSite = siteId
@@ -1653,6 +1665,7 @@ export default function App() {
               errorCodes={errorCodes}
               errorCodeRequests={errorCodeRequests}
               onRequestErrorCode={handleRequestErrorCode}
+              onRefreshErrorCodes={refreshErrorCodeData}
               onDispatch={handleDispatchFailure}
               onArrive={handleArriveFailure}
               onResult={handleFailureResult}
@@ -1673,6 +1686,7 @@ export default function App() {
               errorCodes={errorCodes}
               errorCodeRequests={errorCodeRequests}
               onRequestErrorCode={handleRequestErrorCode}
+              onRefreshErrorCodes={refreshErrorCodeData}
               setFailures={setFailures}
               onDispatch={handleDispatchFailure}
               onArrive={handleArriveFailure}
@@ -1787,6 +1801,7 @@ export default function App() {
               errorCodes={errorCodes}
               errorCodeRequests={errorCodeRequests}
               onRequestErrorCode={handleRequestErrorCode}
+              onRefreshErrorCodes={refreshErrorCodeData}
               onClose={() => setNotifResultTarget(null)}
               onConfirm={(result) => { handleFailureResult(notifResultTarget, result); setNotifResultTarget(null); }}
             />

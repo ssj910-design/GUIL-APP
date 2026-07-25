@@ -954,7 +954,10 @@ function ErrorCodeRow({ code, model, errorCodes, errorCodeRequests = [], failure
   );
 }
 
-export function ArrivalResultModal({ failure, failures = [], errorCodes = [], errorCodeRequests = [], onConfirm, onClose, onRequestErrorCode }) {
+export function ArrivalResultModal({ failure, failures = [], errorCodes = [], errorCodeRequests = [], onConfirm, onClose, onRequestErrorCode, onRefreshErrorCodes }) {
+  // 이 시트를 열 때마다 코드집·등록요청을 새로 불러온다 — 다른 기기(관리자 등)가 승인·반려한
+  // 뒤에도 이 세션이 세션 시작 시점의 오래된 상태를 계속 들고 있지 않도록.
+  useEffect(() => { onRefreshErrorCodes?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [result, setResult] = useState("처리완료");
   const [symptom, setSymptom] = useState("");
   const [cause, setCause] = useState("");
@@ -1295,7 +1298,7 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
 }
 
 
-function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves, errorCodes, errorCodeRequests, onRequestErrorCode }) {
+function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves, errorCodes, errorCodeRequests, onRequestErrorCode, onRefreshErrorCodes }) {
   const [assignTarget, setAssignTarget] = useState(null);
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
@@ -1360,6 +1363,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
           errorCodes={errorCodes}
           errorCodeRequests={errorCodeRequests}
           onRequestErrorCode={onRequestErrorCode}
+          onRefreshErrorCodes={onRefreshErrorCodes}
           onClose={() => setResultTarget(null)}
           onConfirm={(result) => {
             onResult(resultTarget, result);
@@ -1372,7 +1376,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
 }
 
 
-function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves, errorCodes, errorCodeRequests, onRequestErrorCode }) {
+function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves, errorCodes, errorCodeRequests, onRequestErrorCode, onRefreshErrorCodes }) {
   const [assignTarget, setAssignTarget] = useState(null);
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [showDone, setShowDone] = useState(false);
@@ -1457,6 +1461,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
           errorCodes={errorCodes}
           errorCodeRequests={errorCodeRequests}
           onRequestErrorCode={onRequestErrorCode}
+          onRefreshErrorCodes={onRefreshErrorCodes}
           onClose={() => setResultTarget(null)}
           onConfirm={(result) => {
             onResult(resultTarget, result);
@@ -1669,7 +1674,7 @@ function ErrorCodeBook({ errorCodes, failures }) {
   );
 }
 
-export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [], errorCodes = [], errorCodeRequests = [], onReported, onRequestErrorCode }) {
+export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [], errorCodes = [], errorCodeRequests = [], onReported, onRequestErrorCode, onRefreshErrorCodes }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
   // 홈 "모두 보기" 등 외부에서 특정 서브탭으로 진입 (SiteTab focusSiteId와 같은 패턴)
@@ -1688,8 +1693,8 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
   // 옆 탭을 함께 렌더링할 때 쓴다.
   function renderFailurePane(tab) {
     if (tab === "접수등록") return <FailureRegisterForm onReported={onReported} onDispatch={onDispatch} failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />;
-    if (tab === "미배정") return <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} errorCodeRequests={errorCodeRequests} onRequestErrorCode={onRequestErrorCode} />;
-    if (tab === "처리등록") return <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} errorCodeRequests={errorCodeRequests} onRequestErrorCode={onRequestErrorCode} />;
+    if (tab === "미배정") return <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} errorCodeRequests={errorCodeRequests} onRequestErrorCode={onRequestErrorCode} onRefreshErrorCodes={onRefreshErrorCodes} />;
+    if (tab === "처리등록") return <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} errorCodeRequests={errorCodeRequests} onRequestErrorCode={onRequestErrorCode} onRefreshErrorCodes={onRefreshErrorCodes} />;
     if (tab === "처리현황") return <FailureStatusOverview failures={failures} onReassign={onReassign} attendances={attendances} todayLeaves={todayLeaves} />;
     return <ErrorCodeBook errorCodes={errorCodes} failures={failures} />;
   }

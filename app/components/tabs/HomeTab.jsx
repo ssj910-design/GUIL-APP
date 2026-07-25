@@ -551,7 +551,7 @@ function WorkEndRow({ onAttendance, dutyKind }) {
   );
 }
 
-export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, onCloseNight, onAttendance, onOpenRoster, swapCount, inspections, failures, errorCodes = [], errorCodeRequests = [], onRequestErrorCode, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, toast, todayLeaves = [] }) {
+export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, onCloseNight, onAttendance, onOpenRoster, swapCount, inspections, failures, errorCodes = [], errorCodeRequests = [], onRequestErrorCode, onRefreshErrorCodes, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, toast, todayLeaves = [] }) {
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const { name: CURRENT_ENGINEER, role, selfId, engineers = [], profiles = [] } = useContext(AuthContext);
@@ -883,6 +883,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
           errorCodes={errorCodes}
           errorCodeRequests={errorCodeRequests}
           onRequestErrorCode={onRequestErrorCode}
+          onRefreshErrorCodes={onRefreshErrorCodes}
           onClose={() => setResultTarget(null)}
           onConfirm={(result) => {
             onResult(resultTarget, result);
