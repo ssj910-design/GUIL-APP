@@ -428,12 +428,15 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
 }
 
 
-export function FailureDetailSheet({ failure, failures = [], nested = false, onClose, onDispatch, onArrive, onOpenResult, onAssignOpen }) {
-  const { role } = useContext(AuthContext);
+export function FailureDetailSheet({ failure, failures = [], nested = false, onClose, onDispatch, onArrive, onOpenResult, onAssignOpen, onJoinSupport }) {
+  const { role, name: me, selfId } = useContext(AuthContext);
   const sites = useContext(SitesContext);
   const site = sites.find((s) => s.id === failure.siteId);
   const history = unitHistory(failures, failure);
   const stage = failureStage(failure);
+  // 지원요청 걸린 건은 배정자와 별개로 "지원하러 갑니다"로 등록한 지원기사도 처리결과를 입력할 수 있다.
+  const isSupporter = failure.supporterIds?.includes(selfId) ?? false;
+  const canJoinSupport = role === "engineer" && failure.escalation === "지원요청" && failure.status !== "완료" && failure.assignee !== me && !isSupporter;
   const { faultType, faultDetail } = parseErrorCode(failure.errorCode);
   const unitLabel = formatUnitLabel(failure.elevatorNo);
   const unitIndex = (labelToSeq(failure.elevatorNo) ?? NaN) - 1;
@@ -608,7 +611,7 @@ export function FailureDetailSheet({ failure, failures = [], nested = false, onC
               도착
             </button>
           )}
-          {stage === "arrived" && onOpenResult && (
+          {(stage === "arrived" || isSupporter) && onOpenResult && (
             <button
               onClick={() => { onOpenResult(failure); onClose(); }}
               className="flex-1 inline-flex items-center justify-center gap-1.5 bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl active:bg-emerald-700"
@@ -617,6 +620,18 @@ export function FailureDetailSheet({ failure, failures = [], nested = false, onC
             </button>
           )}
         </div>
+      )}
+      {/* 지원요청 걸린 건 — 배정자를 그대로 둔 채 "지원 갑니다"만 기록하면 처리결과 입력 권한이 생긴다. */}
+      {!nested && canJoinSupport && onJoinSupport && (
+        <button
+          onClick={() => onJoinSupport(failure)}
+          className="w-full mt-2 flex items-center justify-center gap-1.5 text-sm font-bold text-amber-700 bg-amber-50 border border-amber-200 py-3 rounded-xl active:bg-amber-100"
+        >
+          지원하러 갑니다
+        </button>
+      )}
+      {!nested && isSupporter && (
+        <p className="text-xs font-semibold text-amber-600 text-center mt-2">이 건에 지원 등록되어 있어요 · 처리결과를 입력할 수 있어요</p>
       )}
     </Sheet>
     {photoViewer && (
@@ -1099,7 +1114,8 @@ function FailureResponseCard({ f, dist, history = [], site, onOpenDetail, onDisp
 
 function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult, onRefuse, onAssignOpen }) {
   const siteOf = useSiteOf();
-  const { name: me, role } = useContext(AuthContext);
+  const { name: me, role, selfId } = useContext(AuthContext);
+  const isSupporter = f.supporterIds?.includes(selfId) ?? false;
   const stage = failureStage(f);
   const { faultType, faultDetail } = parseErrorCode(f.errorCode);
   const unitLabel = formatUnitLabel(f.elevatorNo);
@@ -1124,58 +1140,70 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
         {(stage === "pending" || stage === "dispatched") && <MapLinkButtons site={siteOf(f)} />}
       </div>
       <div className="px-3.5 pb-3.5">
-        {stage === "pending" && (
-          <div className="flex gap-2">
-            {role === "admin" && !f.assignee && onAssignOpen ? (
-              <button
-                onClick={() => onAssignOpen(f)}
-                className="flex-1 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800"
-              >
-                기사 배정
-              </button>
-            ) : (
-            <button
-              onClick={() => onDispatch(f)}
-              className="flex-1 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800"
-            >
-              {f.assignee ? "출동 응답" : "내가 출동하기"}
-            </button>
-            )}
-            {onRefuse && f.assignee === me && (
-              <button
-                onClick={() => onRefuse(f)}
-                className="shrink-0 text-xs font-bold text-red-500 border border-red-200 px-3 rounded-lg active:bg-red-50"
-              >
-                거부
-              </button>
-            )}
-          </div>
-        )}
-        {stage === "dispatched" && (
-          <div className="flex gap-2">
-            <button
-              onClick={() => onArrive(f)}
-              className="flex-1 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800"
-            >
-              도착
-            </button>
-            {onRefuse && f.assignee === me && (
-              <button
-                onClick={() => onRefuse(f)}
-                className="shrink-0 text-xs font-bold text-red-500 border border-red-200 px-3 rounded-lg active:bg-red-50"
-              >
-                취소
-              </button>
-            )}
-          </div>
-        )}
-        {stage === "arrived" && (
+        {isSupporter ? (
+          // 지원기사는 배정자의 출동·도착 단계와 무관하게 바로 결과입력만 하면 된다.
           <button
             onClick={() => onOpenResult(f)}
             className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg active:bg-emerald-700"
           >
             <Wrench size={13} strokeWidth={2.5} /> 고장처리결과 입력
           </button>
+        ) : (
+          <>
+            {stage === "pending" && (
+              <div className="flex gap-2">
+                {role === "admin" && !f.assignee && onAssignOpen ? (
+                  <button
+                    onClick={() => onAssignOpen(f)}
+                    className="flex-1 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800"
+                  >
+                    기사 배정
+                  </button>
+                ) : (
+                <button
+                  onClick={() => onDispatch(f)}
+                  className="flex-1 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800"
+                >
+                  {f.assignee ? "출동 응답" : "내가 출동하기"}
+                </button>
+                )}
+                {onRefuse && f.assignee === me && (
+                  <button
+                    onClick={() => onRefuse(f)}
+                    className="shrink-0 text-xs font-bold text-red-500 border border-red-200 px-3 rounded-lg active:bg-red-50"
+                  >
+                    거부
+                  </button>
+                )}
+              </div>
+            )}
+            {stage === "dispatched" && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onArrive(f)}
+                  className="flex-1 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800"
+                >
+                  도착
+                </button>
+                {onRefuse && f.assignee === me && (
+                  <button
+                    onClick={() => onRefuse(f)}
+                    className="shrink-0 text-xs font-bold text-red-500 border border-red-200 px-3 rounded-lg active:bg-red-50"
+                  >
+                    취소
+                  </button>
+                )}
+              </div>
+            )}
+            {stage === "arrived" && (
+              <button
+                onClick={() => onOpenResult(f)}
+                className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg active:bg-emerald-700"
+              >
+                <Wrench size={13} strokeWidth={2.5} /> 고장처리결과 입력
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -1196,7 +1224,8 @@ const fmtMD = (d) => { const x = new Date(d); return `${String(x.getMonth() + 1)
 export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispatch, onArrive, onOpenResult, onRefuse, onAssignOpen }) {
   const siteOf = useSiteOf();
   const stage = failureStage(f);
-  const { name: me, role } = useContext(AuthContext);
+  const { name: me, role, selfId } = useContext(AuthContext);
+  const isSupporter = f.supporterIds?.includes(selfId) ?? false;
   // 상태별 컬러 — 작업중(초록)/출동중(파랑)/응답대기(노랑) 우선, 그다음 미배정을 세분:
   // 운행정지(빨강 심각) / 지원미배정=지원요청에서 넘어옴(주황) / 일반 미배정(빨강)
   const state = stage === "arrived" ? { label: "작업중", bar: "border-l-amber-500", chip: "bg-amber-50 text-amber-600" }
@@ -1221,25 +1250,31 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
       </button>
       {stage !== "done" && (
         <div className="flex items-center gap-2 px-3.5 pb-3">
-          {(stage === "pending" || stage === "dispatched") && <MapLinkButtons site={siteOf(f)} />}
-          {stage === "pending" && (
-            role === "admin" && onAssignOpen ? (
-              <button type="button" onClick={() => onAssignOpen(f)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2 rounded-lg active:bg-blue-800">{f.assignee ? "재배정" : "기사 배정"}</button>
-            ) : (
-              <>
-                <button type="button" onClick={() => onDispatch(f)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2 rounded-lg active:bg-blue-800">{f.assignee ? "출동 응답" : "내가 출동하기"}</button>
-                {onRefuse && f.assignee === me && <button type="button" onClick={() => onRefuse(f)} className="shrink-0 text-xs font-bold text-red-500 border border-red-200 px-3 py-2 rounded-lg active:bg-red-50">거부</button>}
-              </>
-            )
-          )}
-          {stage === "dispatched" && (
-            <>
-              <button type="button" onClick={() => onArrive(f)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2 rounded-lg active:bg-blue-800">도착 ({f.etaMinutes}분)</button>
-              {onRefuse && f.assignee === me && <button type="button" onClick={() => onRefuse(f)} className="shrink-0 text-xs font-bold text-red-500 border border-red-200 px-3 py-2 rounded-lg active:bg-red-50">취소</button>}
-            </>
-          )}
-          {stage === "arrived" && (
+          {isSupporter ? (
             <button type="button" onClick={() => onOpenResult(f)} className="flex-1 inline-flex items-center justify-center gap-1 bg-emerald-600 text-white text-xs font-bold py-2 rounded-lg active:bg-emerald-700"><Wrench size={13} strokeWidth={2.5} /> 결과입력</button>
+          ) : (
+            <>
+              {(stage === "pending" || stage === "dispatched") && <MapLinkButtons site={siteOf(f)} />}
+              {stage === "pending" && (
+                role === "admin" && onAssignOpen ? (
+                  <button type="button" onClick={() => onAssignOpen(f)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2 rounded-lg active:bg-blue-800">{f.assignee ? "재배정" : "기사 배정"}</button>
+                ) : (
+                  <>
+                    <button type="button" onClick={() => onDispatch(f)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2 rounded-lg active:bg-blue-800">{f.assignee ? "출동 응답" : "내가 출동하기"}</button>
+                    {onRefuse && f.assignee === me && <button type="button" onClick={() => onRefuse(f)} className="shrink-0 text-xs font-bold text-red-500 border border-red-200 px-3 py-2 rounded-lg active:bg-red-50">거부</button>}
+                  </>
+                )
+              )}
+              {stage === "dispatched" && (
+                <>
+                  <button type="button" onClick={() => onArrive(f)} className="flex-1 bg-blue-700 text-white text-xs font-bold py-2 rounded-lg active:bg-blue-800">도착 ({f.etaMinutes}분)</button>
+                  {onRefuse && f.assignee === me && <button type="button" onClick={() => onRefuse(f)} className="shrink-0 text-xs font-bold text-red-500 border border-red-200 px-3 py-2 rounded-lg active:bg-red-50">취소</button>}
+                </>
+              )}
+              {stage === "arrived" && (
+                <button type="button" onClick={() => onOpenResult(f)} className="flex-1 inline-flex items-center justify-center gap-1 bg-emerald-600 text-white text-xs font-bold py-2 rounded-lg active:bg-emerald-700"><Wrench size={13} strokeWidth={2.5} /> 결과입력</button>
+              )}
+            </>
           )}
         </div>
       )}
@@ -1323,14 +1358,15 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
 }
 
 
-function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves, errorCodes }) {
+function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onJoinSupport, attendances, todayLeaves, errorCodes }) {
   const [assignTarget, setAssignTarget] = useState(null);
-  const { name: CURRENT_ENGINEER } = useContext(AuthContext);
+  const { name: CURRENT_ENGINEER, selfId } = useContext(AuthContext);
   const [showDone, setShowDone] = useState(false);
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [resultTarget, setResultTarget] = useState(null);
-  const mine = failures.filter((f) => f.assignee === CURRENT_ENGINEER);
+  // 배정자 본인뿐 아니라, 지원요청 건에 "지원하러 갑니다"로 등록한 지원기사도 자기 목록에서 본다.
+  const mine = failures.filter((f) => f.assignee === CURRENT_ENGINEER || f.supporterIds?.includes(selfId));
   const active = mine.filter((f) => f.status !== "완료");
   const done = mine.filter((f) => f.status === "완료");
 
@@ -1386,6 +1422,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
           onArrive={onArrive}
           onOpenResult={setResultTarget}
           onAssignOpen={setAssignTarget}
+          onJoinSupport={onJoinSupport}
         />
       )}
       {assignTarget && (
@@ -1618,7 +1655,7 @@ function ErrorCodeBook({ errorCodes, failures }) {
   );
 }
 
-export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [], errorCodes = [], onReported }) {
+export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onJoinSupport, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [], errorCodes = [], onReported }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
   // 홈 "모두 보기" 등 외부에서 특정 서브탭으로 진입 (SiteTab focusSiteId와 같은 패턴)
@@ -1638,7 +1675,7 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
   function renderFailurePane(tab) {
     if (tab === "접수등록") return <FailureRegisterForm onReported={onReported} onDispatch={onDispatch} failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />;
     if (tab === "미배정") return <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
-    if (tab === "처리등록") return <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
+    if (tab === "처리등록") return <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} onJoinSupport={onJoinSupport} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
     if (tab === "처리현황") return <FailureStatusOverview failures={failures} onReassign={onReassign} attendances={attendances} todayLeaves={todayLeaves} />;
     return <ErrorCodeBook errorCodes={errorCodes} failures={failures} />;
   }

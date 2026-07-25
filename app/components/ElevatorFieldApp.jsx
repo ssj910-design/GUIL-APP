@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Home, AlertTriangle, CalendarCheck, CalendarClock, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound } from "lucide-react";
 import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk } from "@/lib/supabaseClient";
-import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode } from "@/lib/mappers";
+import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode, mapFailureSupporter } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { DutySwapNotice } from "@/app/components/DutyRoster";
@@ -468,6 +468,7 @@ export default function App() {
         engineersRes,
         unitsRes,
         errorCodesRes,
+        failureSupportersRes,
         kitStockRes,
         selfChecksRes,
         attendanceRes,
@@ -488,6 +489,7 @@ export default function App() {
         supabase.from("profiles").select("*").order("name"),
         supabase.from("units").select("*").order("seq"),
         supabase.from("error_codes").select("*"),
+        supabase.from("failure_supporters").select("*"),
         supabase.from("kit_stock").select("*"),
         supabase.from("self_checks").select("*"),
         supabase.from("attendances").select("*").eq("work_date", TODAY_STR),
@@ -497,7 +499,15 @@ export default function App() {
       ]);
       setSites((sitesRes.data ?? []).map(mapSite));
       setSiteManagers((siteManagersRes.data ?? []).map(mapSiteManager));
-      setFailures((failuresRes.data ?? []).map(mapFailure));
+      // 지원기사 목록(failure_supporters, 마이그레이션 전이면 빈 배열)을 고장건에 supporterIds로 얹는다 —
+      // 배정기사(assignee)와 별개로 "지원 간 사람"도 결과입력 권한을 갖게 하기 위함.
+      const supportersByFailureId = new Map();
+      (failureSupportersRes.data ?? []).map(mapFailureSupporter).forEach((s) => {
+        const list = supportersByFailureId.get(s.failureId) ?? [];
+        list.push(s.engineerId);
+        supportersByFailureId.set(s.failureId, list);
+      });
+      setFailures((failuresRes.data ?? []).map(mapFailure).map((f) => ({ ...f, supporterIds: supportersByFailureId.get(f.id) ?? [] })));
       setInspections((inspectionsRes.data ?? []).map(mapInspection));
       setMaterialRequests((materialRes.data ?? []).map(mapMaterialRequest));
       setTodos((todosRes.data ?? []).map(mapTodo));
@@ -654,6 +664,22 @@ export default function App() {
       `⚠️ ${profile.name}님이 ${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` — 사유: ${reason.trim()}` : ""}. 재배정이 필요합니다 ${admins}`.trim()
     );
     notifyFailure("출동 거부됨 — 미배정으로 이동, 관리자에게 알림");
+  }
+
+  // ★ 지원요청 걸린 건에 "지원하러 갑니다"를 누르면 failure_supporters에 기록만 남기고
+  // (배정기사는 그대로 유지) 이 기사도 처리결과를 입력할 수 있게 한다.
+  async function handleJoinSupport(failure) {
+    const engineerId = profileIdByName(profilesAll, profile.name);
+    if (!engineerId) { notifyFailure("본인 프로필을 찾을 수 없어요"); return; }
+    const { error } = await supabase.from("failure_supporters").insert({ failure_id: failure.id, engineer_id: engineerId });
+    if (error) {
+      notifyFailure(error.code === "23505" ? "이미 지원 등록된 건이에요" : "지원 등록 실패: " + error.message);
+      return;
+    }
+    setFailures((prev) => prev.map((x) => (x.id === failure.id
+      ? { ...x, supporterIds: [...(x.supporterIds ?? []), engineerId] }
+      : x)));
+    notifyFailure("지원 등록 완료 — 이제 이 건 처리결과를 입력할 수 있어요");
   }
 
   async function handleDispatchFailure(failure, etaMinutes) {
@@ -1629,6 +1655,7 @@ export default function App() {
               onRefuse={handleRefuseFailure}
               onAssign={handleAssignFailure}
               onReassign={handleReassignFailure}
+              onJoinSupport={handleJoinSupport}
               onShowAllFailures={() => { setFailureFocusTab("처리현황"); setTab("failure"); }}
               toast={failureToast}
             />
@@ -1648,6 +1675,7 @@ export default function App() {
               onRefuse={handleRefuseFailure}
               onAssign={handleAssignFailure}
               onReassign={handleReassignFailure}
+              onJoinSupport={handleJoinSupport}
               focusSubTab={failureFocusTab}
               onFocusHandled={() => setFailureFocusTab(null)}
               toast={failureToast}

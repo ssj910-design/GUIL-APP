@@ -49,7 +49,7 @@ function DueSoonRow({ i, address, govElevatorNo, onOpenFail }) {
 }
 
 
-function FailureHistoryDetailScreen({ site, failures, onBack }) {
+function FailureHistoryDetailScreen({ site, failures, onBack, onJoinSupport }) {
   const history = failures.filter((f) => f.siteId === site.id);
   const [detailTarget, setDetailTarget] = useState(null);
   return (
@@ -80,7 +80,7 @@ function FailureHistoryDetailScreen({ site, failures, onBack }) {
           ))
         )}
       </div>
-      {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} />}
+      {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} onJoinSupport={onJoinSupport} />}
     </Sheet>
   );
 }
@@ -581,7 +581,7 @@ function WorkEndRow({ onAttendance, dutyKind }) {
   );
 }
 
-export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, onCloseNight, onAttendance, onOpenRoster, swapCount, inspections, failures, errorCodes = [], onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, toast, todayLeaves = [] }) {
+export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, onCloseNight, onAttendance, onOpenRoster, swapCount, inspections, failures, errorCodes = [], onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onJoinSupport, onShowAllFailures, toast, todayLeaves = [] }) {
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const { name: CURRENT_ENGINEER, role, selfId, engineers = [], profiles = [] } = useContext(AuthContext);
@@ -647,9 +647,9 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
   );
 
   // 관리자는 남의 배정 건까지 전부 봐야 한다(누구 응답을 기다리는지 알아야 재배정 가능).
-  // 기사는 본인 배정 건 + 미배정(전원 노출) 건만.
+  // 기사는 본인 배정 건 + 미배정(전원 노출) 건 + 본인이 지원등록한 건만.
   const activeMine = failures.filter(
-    (f) => f.status !== "완료" && (role === "admin" || f.assignee === CURRENT_ENGINEER || !f.assignee)
+    (f) => f.status !== "완료" && (role === "admin" || f.assignee === CURRENT_ENGINEER || !f.assignee || f.supporterIds?.includes(selfId))
   );
   // 진행 중(작업중·출동중)을 위로, 그다음 응답대기·미배정
   const stageRank = (f) => (f.status === "진행중" ? 0 : f.assignee ? 1 : 2);
@@ -883,6 +883,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
           onArrive={onArrive}
           onOpenResult={setResultTarget}
           onAssignOpen={setAssignTarget}
+          onJoinSupport={onJoinSupport}
         />
       )}
       {assignTarget && (
@@ -922,7 +923,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
         <InspectionFailDetailSheet inspection={inspectionFailTarget} onClose={() => setInspectionFailTarget(null)} />
       )}
       {historySite && (
-        <FailureHistoryDetailScreen site={historySite} failures={failures} onBack={() => setHistorySite(null)} />
+        <FailureHistoryDetailScreen site={historySite} failures={failures} onBack={() => setHistorySite(null)} onJoinSupport={onJoinSupport} />
       )}
       <SmsToast message={toast} />
     </div>
