@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Home, AlertTriangle, CalendarCheck, CalendarClock, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound } from "lucide-react";
 import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk } from "@/lib/supabaseClient";
-import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode, mapErrorCodeRequest } from "@/lib/mappers";
+import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { DutySwapNotice } from "@/app/components/DutyRoster";
@@ -94,7 +94,6 @@ export default function App() {
   const [sites, setSites] = useState([]);
   const [units, setUnits] = useState([]); // v2: 호기 목록 (마이그레이션 전 DB에서는 빈 배열)
   const [errorCodes, setErrorCodes] = useState([]); // v2: 에러코드집 (마이그레이션 전 DB에서는 빈 배열)
-  const [errorCodeRequests, setErrorCodeRequests] = useState([]); // 에러코드 등록요청 큐 (테이블 없으면 빈 배열)
   const [profilesAll, setProfilesAll] = useState([]); // v2: 전 직원 프로필 (이름→id 매핑용)
   const [attendances, setAttendances] = useState([]); // 오늘 출퇴근 기록
   const [dutySchedules, setDutySchedules] = useState([]); // 당직·숙직 근무표 (이번 달 이후)
@@ -469,7 +468,6 @@ export default function App() {
         engineersRes,
         unitsRes,
         errorCodesRes,
-        errorCodeRequestsRes,
         kitStockRes,
         selfChecksRes,
         attendanceRes,
@@ -490,7 +488,6 @@ export default function App() {
         supabase.from("profiles").select("*").order("name"),
         supabase.from("units").select("*").order("seq"),
         supabase.from("error_codes").select("*"),
-        supabase.from("error_code_requests").select("*").order("created_at", { ascending: false }),
         supabase.from("kit_stock").select("*"),
         supabase.from("self_checks").select("*"),
         supabase.from("attendances").select("*").eq("work_date", TODAY_STR),
@@ -513,7 +510,6 @@ export default function App() {
       setEngineers(allProfiles.filter((p) => p.role === "engineer" && p.is_active !== false));
       setUnits((unitsRes.data ?? []).map(mapUnit)); // 테이블 없으면(마이그레이션 전) error → 빈 배열
       setErrorCodes((errorCodesRes.data ?? []).map(mapErrorCode)); // 테이블 없으면(마이그레이션 전) error → 빈 배열
-      setErrorCodeRequests((errorCodeRequestsRes.data ?? []).map(mapErrorCodeRequest)); // 테이블 없으면(마이그레이션 전) error → 빈 배열
       const loadedKitStock = (kitStockRes.data ?? []).map(mapKitStock); // kit_stock 테이블 없으면(마이그레이션 전) error → 빈 배열
       setKitStock(loadedKitStock);
       loadedKitStock.forEach((k) => { kitStockRef.current[`${k.engineerId}|${k.part}`] = k.qty; });
@@ -770,42 +766,6 @@ export default function App() {
         body: `${failure.siteName}${unit ? ` ${unit}` : ""}`,
       });
     }
-  }
-
-  // ★ 고장처리결과 입력 화면에서 코드집에 없는 에러코드를 발견하면 기사가 직접 코드집에 쓰지
-  // 못하고, 관리자에게 등록요청만 보낸다 — 관리자가 에러코드집 화면에서 검토 후 승인해야 반영됨.
-  async function handleRequestErrorCode(model, code, meaning, commonCause, standardAction, failure) {
-    if (!model.trim() || !code.trim()) return;
-    const { data: inserted, error } = await supabase
-      .from("error_code_requests")
-      .insert({
-        model: model.trim(),
-        code: code.trim(),
-        meaning: meaning || null,
-        common_cause: commonCause || null,
-        standard_action: standardAction || null,
-        failure_id: failure?.id ?? null,
-        site_name: failure?.siteName ?? null,
-        elevator_no: failure?.elevatorNo ?? null,
-        requester_id: profileIdByName(profilesAll, profile.name) ?? null,
-        requester_name: profile.name,
-      })
-      .select()
-      .maybeSingle();
-    if (error) { alert("등록요청 전송 실패: " + error.message); return; }
-    if (inserted) setErrorCodeRequests((prev) => [mapErrorCodeRequest(inserted), ...prev]);
-  }
-
-  // ★ 고장처리결과 입력 시트를 열 때마다 코드집·등록요청을 새로 불러온다 — 세션 내내 한 번만
-  // 로드한 값을 계속 쓰면, 다른 기기(관리자 등)가 승인·반려해도 이 세션은 그걸 모른 채
-  // "이미 등록요청을 보낸 코드"라고 오래된 상태를 계속 보여주게 된다.
-  async function refreshErrorCodeData() {
-    const [errorCodesRes, errorCodeRequestsRes] = await Promise.all([
-      supabase.from("error_codes").select("*"),
-      supabase.from("error_code_requests").select("*").order("created_at", { ascending: false }),
-    ]);
-    setErrorCodes((errorCodesRes.data ?? []).map(mapErrorCode));
-    setErrorCodeRequests((errorCodeRequestsRes.data ?? []).map(mapErrorCodeRequest));
   }
 
   async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId }) {
@@ -1663,9 +1623,6 @@ export default function App() {
               inspections={inspections}
               failures={failures}
               errorCodes={errorCodes}
-              errorCodeRequests={errorCodeRequests}
-              onRequestErrorCode={handleRequestErrorCode}
-              onRefreshErrorCodes={refreshErrorCodeData}
               onDispatch={handleDispatchFailure}
               onArrive={handleArriveFailure}
               onResult={handleFailureResult}
@@ -1684,9 +1641,6 @@ export default function App() {
               todayLeaves={todayLeaves}
               failures={failures}
               errorCodes={errorCodes}
-              errorCodeRequests={errorCodeRequests}
-              onRequestErrorCode={handleRequestErrorCode}
-              onRefreshErrorCodes={refreshErrorCodeData}
               setFailures={setFailures}
               onDispatch={handleDispatchFailure}
               onArrive={handleArriveFailure}
@@ -1799,9 +1753,6 @@ export default function App() {
               failure={notifResultTarget}
               failures={failures}
               errorCodes={errorCodes}
-              errorCodeRequests={errorCodeRequests}
-              onRequestErrorCode={handleRequestErrorCode}
-              onRefreshErrorCodes={refreshErrorCodeData}
               onClose={() => setNotifResultTarget(null)}
               onConfirm={(result) => { handleFailureResult(notifResultTarget, result); setNotifResultTarget(null); }}
             />
