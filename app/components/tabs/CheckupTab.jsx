@@ -166,9 +166,11 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     if (st?.applicable === false) return false;
     return isDueThisMonth(item, ym);
   });
-  const filteredItemCodes = dueItemCodes.filter(
-    (it) => !itemQuery.trim() || it.name.toLowerCase().includes(itemQuery.trim().toLowerCase()) || it.no.toLowerCase().includes(itemQuery.trim().toLowerCase())
-  );
+  const filteredItemCodes = dueItemCodes.filter((it) => {
+    const q = itemQuery.trim().toLowerCase();
+    if (!q) return true;
+    return it.name.toLowerCase().includes(q) || it.no.toLowerCase().includes(q) || (it.detail ?? "").toLowerCase().includes(q);
+  });
 
   // 달력: 오늘이 속한 달을 기준으로 그린다. (워크캘린더와 같은 룩 — 공휴일 포함)
   const today = new Date(`${TODAY_STR}T00:00:00`);
@@ -649,7 +651,8 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
                   const current = itemExceptions[item.code]?.result ?? "A";
                   return (
                     <div key={item.code} className="bg-slate-50 rounded-xl px-3.5 py-3">
-                      <p className="text-base font-medium text-slate-800 mb-2 leading-snug">{item.no} {item.name}</p>
+                      <p className="text-base font-medium text-slate-800 leading-snug">{item.no} {item.name}</p>
+                      {item.detail && <p className="text-sm text-slate-500 mb-2 leading-snug">{item.detail}</p>}
                       <div className="flex gap-2">
                         {RESULT_OPTIONS.map((o) => (
                           <button

@@ -68,7 +68,7 @@ function SelfCheckLogModal({ c, onClose }) {
                 const meta = SELF_CHECK_ITEM_CODES.find((x) => x.code === it.itemCd);
                 return (
                   <div key={it.id} className="px-3 py-2 text-sm flex items-center justify-between gap-3">
-                    <span className="text-slate-700">{meta ? `${meta.no} ${meta.name}` : it.itemCd}</span>
+                    <span className="text-slate-700">{meta ? `${meta.no} ${meta.name}${meta.detail ? ` - ${meta.detail}` : ""}` : it.itemCd}</span>
                     <span className="flex items-center gap-2 shrink-0">
                       {it.remark && <span className="text-xs text-slate-400">{it.remark}</span>}
                       <StatusBadge tone={RESULT_TONE[it.result] ?? "slate"}>{RESULT_LABEL[it.result] ?? it.result}</StatusBadge>
