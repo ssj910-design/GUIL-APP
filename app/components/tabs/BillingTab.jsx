@@ -182,6 +182,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       </div>
 
       <div
+        className="min-h-full"
         style={swipe.swipeStyle}
         onTouchStart={swipe.onTouchStart}
         onTouchMove={swipe.onTouchMove}
