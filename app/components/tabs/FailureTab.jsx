@@ -919,7 +919,9 @@ function ErrorCodeRow({ code, model, errorCodes, errorCodeRequests = [], failure
         </div>
       )}
       {pendingRequest && (
-        <p className="text-xs text-amber-600 mt-2">이미 등록요청을 보낸 코드예요 · 관리자 승인 대기중</p>
+        <p className="text-xs text-amber-600 mt-2">
+          이미 등록요청을 보낸 코드예요({pendingRequest.model} · {pendingRequest.code}) · 관리자 승인 대기중
+        </p>
       )}
       {sent && (
         <p className="text-xs text-emerald-600 font-semibold mt-2">등록요청을 보냈습니다 · 관리자 승인 대기중</p>
