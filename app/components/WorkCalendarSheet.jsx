@@ -12,6 +12,7 @@ import { DutyRoster } from "@/app/components/DutyRoster";
 import { DutyGenerateWidget } from "@/app/components/DutyGenerateWidget";
 import { Sheet } from "@/app/components/ui";
 import { confirmAsync } from "@/app/components/ConfirmHost";
+import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const ymOf = (y, m) => `${y}-${String(m + 1).padStart(2, "0")}`;
@@ -413,6 +414,7 @@ function LeaveCalendarTab({ schedules = [] }) {
 export function WorkCalendarSheet({ schedules, swaps, onSetPerson, onRequestSwap, onRespondSwap, onSchedulesChange, onEngineersChange }) {
   const [subTab, setSubTab] = useState("당직·숙직");
   const subTabs = ["당직·숙직", "연차"];
+  const swipe = useSwipeSubtab(subTabs, subTab, setSubTab);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -428,7 +430,13 @@ export function WorkCalendarSheet({ schedules, swaps, onSetPerson, onRequestSwap
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div
+        className="flex-1 overflow-y-auto"
+        style={swipe.swipeStyle}
+        onTouchStart={swipe.onTouchStart}
+        onTouchMove={swipe.onTouchMove}
+        onTouchEnd={swipe.onTouchEnd}
+      >
         {subTab === "당직·숙직" ? (
           <DutyRoster
             schedules={schedules}

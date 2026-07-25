@@ -7,6 +7,7 @@ import { DDay, PrimaryButton, Field, inputCls, DrillHeader } from "@/app/compone
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload, SinglePhotoUpload } from "@/app/components/formWidgets";
 import { emptyPartRow, formatPartRows, PartsRowsInput, UnitPickGrid } from "@/app/components/tabs/MaterialTab";
+import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 
 
 /* ------------------------------------------------------------------ */
@@ -22,6 +23,8 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [uploadSession] = useState(() => Date.now());
   const [mode, setMode] = useState("material"); // material | manual
+  const billingSubTabs = ["material", "manual"];
+  const swipe = useSwipeSubtab(billingSubTabs, mode, setMode);
   // 자재지급건 청구는 기사가 자재신청/견적요청으로 만든 할일만 대상 — 관리자가 직접 부여한 할일(source: manual)은 제외.
   const openTodos = todos.filter((t) => !t.done && t.assignee === CURRENT_ENGINEER && t.source !== "manual");
   const [selectedId, setSelectedId] = useState(openTodos[0]?.id ?? "");
@@ -178,6 +181,12 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
         </button>
       </div>
 
+      <div
+        style={swipe.swipeStyle}
+        onTouchStart={swipe.onTouchStart}
+        onTouchMove={swipe.onTouchMove}
+        onTouchEnd={swipe.onTouchEnd}
+      >
       {mode === "material" ? (
         openTodos.length === 0 ? (
           <div className="flex flex-col items-center justify-center px-8 text-center pt-16">
@@ -422,6 +431,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
           </div>
         </div>
       )}
+      </div>
 
       {/* 필수 미입력 안내 토스트 (자재·견적과 동일 패턴) */}
       {billToast && (

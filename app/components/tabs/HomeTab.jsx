@@ -191,7 +191,14 @@ function AdminAttendanceCard({ attendances, engineers, todayLeaves = [] }) {
       )}
 
       {mapOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-50 flex flex-col">
+        // 지도 드래그(패닝)가 공용 당겨서 새로고침(PullToRefresh) 제스처로 오인되지 않게,
+        // 터치 이벤트가 그 상위 리스너로 올라가지 않도록 여기서 막는다.
+        <div
+          className="fixed inset-0 z-50 bg-slate-50 flex flex-col"
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+        >
           <div className="shrink-0 bg-blue-900 text-white px-4 py-3 flex items-center justify-between">
             <p className="text-sm font-extrabold">전직원 위치</p>
             <button onClick={() => setMapOpen(false)} className="p-1" aria-label="닫기"><X size={18} /></button>

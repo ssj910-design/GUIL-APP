@@ -3,6 +3,7 @@ import { Search, MapPin, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { useHolidays } from "@/app/hooks/useHolidays";
+import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 import { siteUnitList, distanceKm } from "@/lib/utils";
 import { mapSelfCheck, mapSelfCheckItem, mapSelfCheckItemState } from "@/lib/mappers";
 import { PrimaryButton, Sheet, Field, inputCls, MapLinkButtons } from "@/app/components/ui";
@@ -361,10 +362,13 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     setSavingCheckup(false);
   }
 
+  const checkupSubTabs = ["계획", "처리", "달력"];
+  const swipe = useSwipeSubtab(checkupSubTabs, subTab, setSubTab);
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="flex border-b border-slate-100 shrink-0">
-        {["계획", "처리", "달력"].map((t) => (
+        {checkupSubTabs.map((t) => (
           <button
             key={t}
             onClick={() => setSubTab(t)}
@@ -390,7 +394,13 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div
+        className="flex-1 overflow-y-auto"
+        style={swipe.swipeStyle}
+        onTouchStart={swipe.onTouchStart}
+        onTouchMove={swipe.onTouchMove}
+        onTouchEnd={swipe.onTouchEnd}
+      >
         {subTab === "계획" && (
           <div className="px-5 pt-2 pb-4">
             <div className="relative mb-3">

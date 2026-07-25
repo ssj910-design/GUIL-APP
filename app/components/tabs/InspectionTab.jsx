@@ -5,6 +5,7 @@ import { Badge, DDay, MapLinkButtons } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { usePriorFlaggedInspection } from "@/app/hooks/useLiveInspections";
+import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 
 
 /* ------------------------------------------------------------------ */
@@ -93,10 +94,13 @@ export function InspectionTab({ inspections }) {
       .filter((i) => !i.dueDate || Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) <= 60)
   ).sort(flagCmp);
 
+  const inspectionSubTabs = ["검사도래현장", "조건부/불합격 현장"];
+  const swipe = useSwipeSubtab(inspectionSubTabs, subTab, setSubTab);
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="flex border-b border-slate-100 shrink-0">
-        {["검사도래현장", "조건부/불합격 현장"].map((t) => (
+        {inspectionSubTabs.map((t) => (
           <button
             key={t}
             onClick={() => setSubTab(t)}
@@ -129,7 +133,13 @@ export function InspectionTab({ inspections }) {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-2.5">
+      <div
+        className="flex-1 overflow-y-auto px-5 pb-4 space-y-2.5"
+        style={swipe.swipeStyle}
+        onTouchStart={swipe.onTouchStart}
+        onTouchMove={swipe.onTouchMove}
+        onTouchEnd={swipe.onTouchEnd}
+      >
         {subTab === "검사도래현장" ? (
           dueSoon.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-10">도래한 검사 현장이 없습니다</p>

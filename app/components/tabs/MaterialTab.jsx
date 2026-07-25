@@ -7,6 +7,7 @@ import { PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
+import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 
 
 // 자재 신청/견적 요청/상비부품 보충 각각의 상세보기(신청 사진 포함)에 공용으로 쓰는 시트.
@@ -620,6 +621,8 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
   const v2Ready = units.length > 0;
   const [uploadSession] = useState(() => Date.now());
   const [sub, setSub] = useState("material");
+  const materialSubTabs = ["material", "quote"];
+  const swipe = useSwipeSubtab(materialSubTabs, sub, setSub);
   const [form, setForm] = useState({ siteId: "", units: [], parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
   const [quoteForm, setQuoteForm] = useState({ siteId: "", units: [], parts: [emptyPartRow(), emptyPartRow(), emptyPartRow()], contactPhone: "", photos: [], note: "" });
   const [matStep, setMatStep] = useState(0);
@@ -821,6 +824,12 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
         </button>
       </div>
 
+      <div
+        style={swipe.swipeStyle}
+        onTouchStart={swipe.onTouchStart}
+        onTouchMove={swipe.onTouchMove}
+        onTouchEnd={swipe.onTouchEnd}
+      >
       {sub === "material" ? (
         <>
           <div className="px-5 pt-4">
@@ -1156,6 +1165,7 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
           </div>
         </div>
       )}
+      </div>
 
       {rejectTarget && (
         <Sheet title="자재 반려하기" onClose={() => setRejectTarget(null)}>

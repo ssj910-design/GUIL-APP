@@ -8,6 +8,7 @@ import { Badge, TimelineRow, HistoryCard, PrimaryButton, Sheet, Field, inputCls,
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { BillingCard } from "@/app/components/tabs/BillingTab";
+import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 
 
 /* ---- 승강기정보 화면 (정보 / 고장 / 검사) ---- */
@@ -32,12 +33,14 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
   const unitBillings = billings.filter((b) => b.siteName === site.name && (!b.elevatorNo || b.elevatorNo === unit));
   const [inspectionFailTarget, setInspectionFailTarget] = useState(null);
   const [photoViewer, setPhotoViewer] = useState(null);
+  const elevatorSubTabs = ["정보", "고장", "검사", "부품교체내역"];
+  const swipe = useSwipeSubtab(elevatorSubTabs, subTab, setSubTab);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
       <DrillHeader title="승강기정보" onBack={onBack} onHome={onHome} />
       <div className="flex border-b border-slate-100 shrink-0">
-        {["정보", "고장", "검사", "부품교체내역"].map((t) => (
+        {elevatorSubTabs.map((t) => (
           <button
             key={t}
             onClick={() => setSubTab(t)}
@@ -48,7 +51,13 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div
+        className="flex-1 overflow-y-auto"
+        style={swipe.swipeStyle}
+        onTouchStart={swipe.onTouchStart}
+        onTouchMove={swipe.onTouchMove}
+        onTouchEnd={swipe.onTouchEnd}
+      >
         {subTab === "정보" && (
           <div className="bg-slate-50 pb-6">
             <p className="px-5 pt-4 pb-2 text-xs font-bold text-slate-400">기본정보</p>
