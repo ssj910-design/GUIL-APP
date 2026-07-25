@@ -2,7 +2,7 @@
 
 // 에러코드집 관리 — 기종별 에러코드 의미·원인·조치법을 등록하고, 과거 처리이력을 함께 본다.
 import { useRef, useState } from "react";
-import { Plus, Upload } from "lucide-react";
+import { Plus, Upload, Download } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapErrorCode } from "@/lib/mappers";
 import { errorCodeHistory } from "@/lib/utils";
@@ -152,6 +152,66 @@ function pickCol(row, keys) {
   return "";
 }
 
+// "엑셀로 대량입력" 팝업 — 샘플 양식을 내려받아 채운 뒤 그 파일을 그대로 첨부하면 된다.
+function ImportErrorCodesModal({ onClose, onImportFile }) {
+  const [importing, setImporting] = useState(false);
+  const [fileName, setFileName] = useState("");
+  const fileInputRef = useRef(null);
+
+  async function downloadSample() {
+    const XLSX = await import("xlsx");
+    const wsData = [
+      ["기종", "코드", "의미", "흔한 원인", "표준 조치법"],
+      ["OTIS Gen2", "E-32", "도어 센서 오류", "도어 센서 오염 또는 단선", "센서 청소 후 재조정, 필요 시 교체"],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "에러코드");
+    XLSX.writeFile(wb, "에러코드_샘플양식.xlsx");
+  }
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setFileName(file.name);
+    setImporting(true);
+    await onImportFile(file);
+    setImporting(false);
+  }
+
+  return (
+    <Modal title="엑셀로 대량입력" onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-xs text-slate-500 leading-relaxed">
+          “기종”·“코드” 열이 있는 엑셀(.xlsx/.xls) 또는 CSV 파일을 올리면 여러 건을 한 번에 등록합니다.
+          “의미”·“흔한 원인”·“표준 조치법” 열은 있으면 함께 채워지고, 없어도 됩니다. 이미 등록된
+          (기종, 코드) 조합은 새 내용으로 덮어씁니다.
+        </p>
+        <button
+          type="button"
+          onClick={downloadSample}
+          className="flex items-center justify-center gap-1.5 text-sm font-bold text-blue-700 bg-blue-50 rounded-xl px-4 py-2.5 w-full"
+        >
+          <Download size={15} /> 샘플 양식 다운로드
+        </button>
+        <div>
+          <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} />
+          <button
+            type="button"
+            disabled={importing}
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center justify-center gap-1.5 text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2.5 w-full"
+          >
+            <Upload size={15} /> {importing ? "가져오는 중..." : "엑셀 파일 첨부"}
+          </button>
+          {fileName && <p className="text-xs text-slate-400 text-center mt-1.5">{fileName}</p>}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export default function ErrorCodesAdmin({ data, setData }) {
   const { errorCodes = [], units, failures } = data;
   const models = [...new Set(units.map((u) => u.model).filter(Boolean))].sort();
@@ -159,8 +219,7 @@ export default function ErrorCodesAdmin({ data, setData }) {
   const [search, setSearch] = useState("");
   const [registering, setRegistering] = useState(false);
   const [detail, setDetail] = useState(null);
-  const [importing, setImporting] = useState(false);
-  const importInputRef = useRef(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const rows = errorCodes.filter((e) => {
     if (modelFilter !== "all" && e.model !== modelFilter) return false;
@@ -172,11 +231,7 @@ export default function ErrorCodesAdmin({ data, setData }) {
 
   // 엑셀(.xlsx/.xls) 또는 CSV로 여러 건을 한 번에 등록 — 헤더에 "기종"·"코드"가 있는 행만 가져온다.
   // 이미 있는 (기종,코드) 조합은 upsert로 덮어쓴다(단일 등록과 동일한 규칙).
-  async function handleImportFile(e) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setImporting(true);
+  async function importErrorCodesFile(file) {
     try {
       const XLSX = await import("xlsx");
       const buf = await file.arrayBuffer();
@@ -216,8 +271,6 @@ export default function ErrorCodesAdmin({ data, setData }) {
       alert(`${mapped.length}건을 등록했습니다.`);
     } catch (err) {
       alert("엑셀 파일을 읽는 중 오류가 발생했습니다: " + (err.message ?? "알 수 없는 오류"));
-    } finally {
-      setImporting(false);
     }
   }
 
@@ -269,19 +322,11 @@ export default function ErrorCodesAdmin({ data, setData }) {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-extrabold">에러코드집</h1>
         <div className="flex items-center gap-2">
-          <input
-            ref={importInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-            onChange={handleImportFile}
-          />
           <button
-            disabled={importing}
-            onClick={() => importInputRef.current?.click()}
-            className="flex items-center gap-1.5 text-sm font-bold text-blue-700 bg-blue-50 disabled:opacity-50 rounded-xl px-4 py-2.5 whitespace-nowrap"
+            onClick={() => setImportOpen(true)}
+            className="flex items-center gap-1.5 text-sm font-bold text-blue-700 bg-blue-50 rounded-xl px-4 py-2.5 whitespace-nowrap"
           >
-            <Upload size={15} /> {importing ? "가져오는 중..." : "엑셀로 대량입력"}
+            <Upload size={15} /> 엑셀로 대량입력
           </button>
           <button onClick={() => setRegistering(true)} className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
             <Plus size={15} /> 코드 등록
@@ -309,6 +354,9 @@ export default function ErrorCodesAdmin({ data, setData }) {
       </AdminTable>
       {rows.length === 0 && <p className="text-xs text-slate-400 text-center py-10">등록된 에러코드가 없습니다</p>}
 
+      {importOpen && (
+        <ImportErrorCodesModal onClose={() => setImportOpen(false)} onImportFile={importErrorCodesFile} />
+      )}
       {registering && (
         <RegisterErrorCodeModal models={models} onClose={() => setRegistering(false)} onCreate={createErrorCode} />
       )}

@@ -1,5 +1,5 @@
-import { useState, useContext, useEffect } from "react";
-import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle, Wrench, ChevronRight, Search } from "lucide-react";
+import { useState, useContext, useEffect, useRef } from "react";
+import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle, Wrench, ChevronRight, Search, X, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, labelToSeq, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
@@ -830,10 +830,119 @@ const FAILURE_RESULT_BTN_CLS = {
 };
 
 
+// 에러코드 입력 한 줄 — 현장선택(SiteSearchSelect)과 동일한 포커스-드롭다운 검색 방식으로
+// 코드를 고르고, 코드집에 없는 코드면 의미·원인·조치를 채워 바로 등록할 수 있다.
+// ArrivalResultModal이 여러 줄(코드 1개 이상)을 렌더링할 때 줄마다 검색·등록 상태를 독립적으로 갖는다.
+function ErrorCodeRow({ code, model, errorCodes, failures, units, onChange, onRemove, canRemove, onAddErrorCode, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const codeOptions = model ? errorCodes.filter((e) => e.model === model) : [];
+  const filteredCodes = codeOptions.filter((e) => e.code.toLowerCase().includes(code.trim().toLowerCase()));
+  const matched = model ? findErrorCode(errorCodes, model, code) : null;
+  const matchedHistory = matched ? errorCodeHistory(failures, units, model, code) : [];
+
+  const [addingCode, setAddingCode] = useState(false);
+  const [newMeaning, setNewMeaning] = useState("");
+  const [newCause, setNewCause] = useState("");
+  const [newAction, setNewAction] = useState("");
+  const [savingCode, setSavingCode] = useState(false);
+  const showAddCode = model && code.trim() && !matched;
+
+  async function saveNewCode() {
+    setSavingCode(true);
+    await onAddErrorCode(model, code.trim(), newMeaning.trim(), newCause.trim(), newAction.trim());
+    setSavingCode(false);
+    setAddingCode(false);
+    setNewMeaning("");
+    setNewCause("");
+    setNewAction("");
+  }
+
+  return (
+    <div className="mb-2">
+      <div className="flex items-center gap-1.5">
+        <div className="relative flex-1">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            className={`${inputCls} pl-8`}
+            value={code}
+            onChange={(e) => { onChange(e.target.value); setAddingCode(false); }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setTimeout(() => setOpen(false), 150)}
+            placeholder={placeholder}
+          />
+          {open && codeOptions.length > 0 && (
+            <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+              {filteredCodes.map((e) => (
+                <button
+                  key={e.id}
+                  type="button"
+                  onMouseDown={() => { onChange(e.code); setOpen(false); }}
+                  className="w-full text-left px-3 py-2.5 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0"
+                >
+                  <span className="font-semibold text-slate-700">{e.code}</span>
+                  {e.meaning && <span className="text-slate-400 text-xs ml-1.5">{e.meaning}</span>}
+                </button>
+              ))}
+              {filteredCodes.length === 0 && <p className="text-xs text-slate-400 text-center py-3">검색 결과가 없습니다</p>}
+            </div>
+          )}
+        </div>
+        {canRemove && (
+          <button type="button" onClick={onRemove} className="shrink-0 w-9 h-9 flex items-center justify-center text-slate-400 border border-slate-200 rounded-lg">
+            <X size={16} />
+          </button>
+        )}
+      </div>
+      {matched && (
+        <div className="bg-blue-50 rounded-xl p-3 mt-2">
+          <p className="text-sm font-bold text-blue-800">{matched.meaning || "의미 미등록"}</p>
+          {matched.commonCause && <p className="text-xs text-blue-600 mt-1">흔한 원인: {matched.commonCause}</p>}
+          {matched.standardAction && <p className="text-xs text-blue-600 mt-0.5">표준 조치: {matched.standardAction}</p>}
+          <p className="text-xs font-bold text-blue-700 mt-2">과거 처리사례 {matchedHistory.length}건</p>
+          {matchedHistory.length === 0 ? (
+            <p className="text-xs text-blue-500 mt-1">아직 처리된 사례가 없습니다.</p>
+          ) : (
+            <ul className="space-y-1 mt-1.5">
+              {matchedHistory.slice(0, 3).map((h) => (
+                <li key={h.id} className="text-xs text-blue-700">
+                  {h.siteName} — {[h.faultCause, h.processContent].filter(Boolean).join(" → ") || "내용 없음"}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {showAddCode && onAddErrorCode && (
+        <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mt-2">
+          {!addingCode ? (
+            <button type="button" onClick={() => setAddingCode(true)} className="text-xs font-bold text-amber-700">
+              “{model}”에 등록되지 않은 코드예요 · 코드집에 추가하기
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-amber-700">에러코드 등록 · {model} · {code.trim()}</p>
+              <input className={inputCls} value={newMeaning} onChange={(e) => setNewMeaning(e.target.value)} placeholder="의미 (선택)" />
+              <input className={inputCls} value={newCause} onChange={(e) => setNewCause(e.target.value)} placeholder="흔한 원인 (선택)" />
+              <input className={inputCls} value={newAction} onChange={(e) => setNewAction(e.target.value)} placeholder="표준 조치법 (선택)" />
+              <button
+                type="button"
+                disabled={savingCode}
+                onClick={saveNewCode}
+                className="w-full text-xs font-bold text-white bg-amber-600 disabled:bg-slate-300 rounded-lg py-2"
+              >
+                {savingCode ? "등록 중..." : "코드집에 등록"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ArrivalResultModal({ failure, failures = [], errorCodes = [], onConfirm, onClose, onAddErrorCode }) {
   const [result, setResult] = useState("처리완료");
   const [symptom, setSymptom] = useState("");
-  const [errorCode, setErrorCode] = useState("");
   const [cause, setCause] = useState("");
   const [processContent, setProcessContent] = useState("");
   const [note, setNote] = useState("");
@@ -842,32 +951,20 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
   const models = [...new Set(units.map((u) => u.model).filter(Boolean))].sort();
   // 기종은 이 호기의 등록된 값으로 자동 선택하되, 잘못됐거나 비어있으면 기사가 직접 바꿀 수 있다.
   const [selectedModel, setSelectedModel] = useState(() => units.find((u) => u.id === failure.unitId)?.model ?? "");
-  const codeOptions = selectedModel ? errorCodes.filter((e) => e.model === selectedModel) : [];
-  const matched = selectedModel ? findErrorCode(errorCodes, selectedModel, errorCode) : null;
-  const matchedHistory = matched ? errorCodeHistory(failures, units, selectedModel, errorCode) : [];
 
-  // 에러코드 검색 드롭다운 — 현장선택(SiteSearchSelect)과 동일하게 입력에 포커스하면 목록이 뜨고,
-  // 타이핑할 때마다 대소문자 구분 없이 걸러진다.
-  const [codeOpen, setCodeOpen] = useState(false);
-  const filteredCodes = codeOptions.filter((e) => e.code.toLowerCase().includes(errorCode.trim().toLowerCase()));
-
-  // 새 에러코드 등록 — 기종을 고르고 코드집에 없는 코드를 입력하면 바로 의미·원인·조치를 채워 등록할 수 있다.
-  const [addingCode, setAddingCode] = useState(false);
-  const [newMeaning, setNewMeaning] = useState("");
-  const [newCause, setNewCause] = useState("");
-  const [newAction, setNewAction] = useState("");
-  const [savingCode, setSavingCode] = useState(false);
-  const showAddCode = selectedModel && errorCode.trim() && !matched;
-
-  async function saveNewCode() {
-    setSavingCode(true);
-    await onAddErrorCode(selectedModel, errorCode.trim(), newMeaning.trim(), newCause.trim(), newAction.trim());
-    setSavingCode(false);
-    setAddingCode(false);
-    setNewMeaning("");
-    setNewCause("");
-    setNewAction("");
+  // 에러코드 1개 이상 입력 — 부품 내역 입력(PartsRowsInput)과 같은 "줄 추가/삭제" 방식.
+  const nextCodeRowId = useRef(2);
+  const [codeRows, setCodeRows] = useState([{ id: 1, code: "" }]);
+  function updateCodeRow(id, value) {
+    setCodeRows((rows) => rows.map((r) => (r.id === id ? { ...r, code: value } : r)));
   }
+  function addCodeRow() {
+    setCodeRows((rows) => [...rows, { id: nextCodeRowId.current++, code: "" }]);
+  }
+  function removeCodeRow(id) {
+    setCodeRows((rows) => (rows.length === 1 ? rows : rows.filter((r) => r.id !== id)));
+  }
+  const errorCodeText = codeRows.map((r) => r.code.trim()).filter(Boolean).join(", ");
 
   return (
     <Sheet title="고장처리결과 입력" onClose={onClose}>
@@ -888,7 +985,7 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
         <div>
           <label className="text-xs font-bold text-slate-600 mb-1 block">기종</label>
           {models.length > 0 ? (
-            <select className={inputCls} value={selectedModel} onChange={(e) => { setSelectedModel(e.target.value); setAddingCode(false); }}>
+            <select className={inputCls} value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
               <option value="">선택 안 함</option>
               {models.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
@@ -897,77 +994,25 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
           )}
         </div>
         <div>
-          <label className="text-xs font-bold text-slate-600 mb-1 block">에러코드 <span className="text-red-500">*</span></label>
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              className={`${inputCls} pl-8`}
-              value={errorCode}
-              onChange={(e) => { setErrorCode(e.target.value); setAddingCode(false); }}
-              onFocus={() => setCodeOpen(true)}
-              onBlur={() => setTimeout(() => setCodeOpen(false), 150)}
+          <label className="text-xs font-bold text-slate-600 mb-1 block">에러코드 <span className="text-red-500">*</span> (1개 이상)</label>
+          {codeRows.map((row) => (
+            <ErrorCodeRow
+              key={row.id}
+              code={row.code}
+              model={selectedModel}
+              errorCodes={errorCodes}
+              failures={failures}
+              units={units}
+              onChange={(v) => updateCodeRow(row.id, v)}
+              onRemove={() => removeCodeRow(row.id)}
+              canRemove={codeRows.length > 1}
+              onAddErrorCode={onAddErrorCode}
               placeholder={selectedModel ? "예: E-32 (입력하면 등록된 코드 중에서 검색됩니다)" : "예: E-32 (기종을 먼저 선택하면 검색됩니다)"}
             />
-            {codeOpen && codeOptions.length > 0 && (
-              <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
-                {filteredCodes.map((e) => (
-                  <button
-                    key={e.id}
-                    type="button"
-                    onMouseDown={() => { setErrorCode(e.code); setCodeOpen(false); }}
-                    className="w-full text-left px-3 py-2.5 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0"
-                  >
-                    <span className="font-semibold text-slate-700">{e.code}</span>
-                    {e.meaning && <span className="text-slate-400 text-xs ml-1.5">{e.meaning}</span>}
-                  </button>
-                ))}
-                {filteredCodes.length === 0 && <p className="text-xs text-slate-400 text-center py-3">검색 결과가 없습니다</p>}
-              </div>
-            )}
-          </div>
-          {matched && (
-            <div className="bg-blue-50 rounded-xl p-3 mt-2">
-              <p className="text-sm font-bold text-blue-800">{matched.meaning || "의미 미등록"}</p>
-              {matched.commonCause && <p className="text-xs text-blue-600 mt-1">흔한 원인: {matched.commonCause}</p>}
-              {matched.standardAction && <p className="text-xs text-blue-600 mt-0.5">표준 조치: {matched.standardAction}</p>}
-              <p className="text-xs font-bold text-blue-700 mt-2">과거 처리사례 {matchedHistory.length}건</p>
-              {matchedHistory.length === 0 ? (
-                <p className="text-xs text-blue-500 mt-1">아직 처리된 사례가 없습니다.</p>
-              ) : (
-                <ul className="space-y-1 mt-1.5">
-                  {matchedHistory.slice(0, 3).map((h) => (
-                    <li key={h.id} className="text-xs text-blue-700">
-                      {h.siteName} — {[h.faultCause, h.processContent].filter(Boolean).join(" → ") || "내용 없음"}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-          {showAddCode && onAddErrorCode && (
-            <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mt-2">
-              {!addingCode ? (
-                <button type="button" onClick={() => setAddingCode(true)} className="text-xs font-bold text-amber-700">
-                  “{selectedModel}”에 등록되지 않은 코드예요 · 코드집에 추가하기
-                </button>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-xs font-bold text-amber-700">에러코드 등록 · {selectedModel} · {errorCode.trim()}</p>
-                  <input className={inputCls} value={newMeaning} onChange={(e) => setNewMeaning(e.target.value)} placeholder="의미 (선택)" />
-                  <input className={inputCls} value={newCause} onChange={(e) => setNewCause(e.target.value)} placeholder="흔한 원인 (선택)" />
-                  <input className={inputCls} value={newAction} onChange={(e) => setNewAction(e.target.value)} placeholder="표준 조치법 (선택)" />
-                  <button
-                    type="button"
-                    disabled={savingCode}
-                    onClick={saveNewCode}
-                    className="w-full text-xs font-bold text-white bg-amber-600 disabled:bg-slate-300 rounded-lg py-2"
-                  >
-                    {savingCode ? "등록 중..." : "코드집에 등록"}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+          ))}
+          <button type="button" onClick={addCodeRow} className="flex items-center gap-1 text-xs font-bold text-blue-600">
+            <Plus size={14} /> 에러코드 추가
+          </button>
         </div>
         <div>
           <label className="text-xs font-bold text-slate-600 mb-1 block">발생원인 <span className="text-red-500">*</span></label>
@@ -990,12 +1035,12 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
           required={false}
         />
         {(() => {
-          const valid = symptom.trim() && errorCode.trim() && cause.trim() && processContent.trim();
+          const valid = symptom.trim() && errorCodeText && cause.trim() && processContent.trim();
           return (
             <button
               type="button"
               disabled={!valid}
-              onClick={() => onConfirm({ result, symptom, errorCode, cause, processContent, note, model: selectedModel, photoCount: photos.length, photoUrls: photos.map((p) => p.url) })}
+              onClick={() => onConfirm({ result, symptom, errorCode: errorCodeText, cause, processContent, note, model: selectedModel, photoCount: photos.length, photoUrls: photos.map((p) => p.url) })}
               className={`w-full text-white text-sm font-bold py-3 rounded-xl ${valid ? FAILURE_RESULT_BTN_CLS[result] : "bg-slate-300"}`}
             >
               {result} 등록

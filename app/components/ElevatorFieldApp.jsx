@@ -770,15 +770,19 @@ export default function App() {
     // 에러코드집에 없는 (기종, 코드) 조합이면 의미 미등록 상태로 자동 등록 — 다음에 같은 코드가
     // 나오면 이 처리 이력이 조회되도록 코드집을 자연스럽게 쌓는다. 기종은 처리결과 시트에서
     // 기사가 직접 고른 값(payload.model)을 우선하고, 없으면 호기에 등록된 값으로 대체한다.
+    // 에러코드는 여러 개를 ", "로 이어붙여 저장하므로(1개 이상 입력) 하나씩 나눠 확인한다.
     const unit = units.find((u) => u.id === failure.unitId);
     const errorCodeModel = payload.model || unit?.model;
-    if (errorCodeModel && errorCode && !errorCodes.some((e) => e.model === errorCodeModel && e.code === errorCode)) {
+    const errorCodeList = errorCode.split(",").map((c) => c.trim()).filter(Boolean);
+    const newErrorCodes = errorCodeModel
+      ? errorCodeList.filter((code) => !errorCodes.some((e) => e.model === errorCodeModel && e.code === code))
+      : [];
+    if (newErrorCodes.length > 0) {
       const { data: inserted } = await supabase
         .from("error_codes")
-        .upsert({ model: errorCodeModel, code: errorCode }, { onConflict: "model,code" })
-        .select()
-        .maybeSingle();
-      if (inserted) setErrorCodes((prev) => [...prev, mapErrorCode(inserted)]);
+        .upsert(newErrorCodes.map((code) => ({ model: errorCodeModel, code })), { onConflict: "model,code" })
+        .select();
+      if (inserted?.length) setErrorCodes((prev) => [...prev, ...inserted.map(mapErrorCode)]);
     }
   }
 
