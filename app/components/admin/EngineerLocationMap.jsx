@@ -118,16 +118,17 @@ export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerC
     let cancelled = false;
     import("leaflet").then((Lmod) => {
       if (cancelled || !containerRef.current) return;
-      const map = Lmod.map(containerRef.current).setView([37.5665, 126.978], 11);
+      // zoomAnimation: false — 핀치줌이 끝나면 Leaflet이 정수 줌으로 스냅되는 CSS 트랜지션을
+      // 돌리는데, 그 트랜지션이 진행되는 동안(최대 250ms, 기기에 따라 체감 더 길게) 지도
+      // 컨테이너에 'leaflet-zoom-anim' 클래스가 붙어있어 드래그 핸들러가 새 터치 시작을
+      // 무시한다 — 그래서 핀치줌 직후 한동안 한 손가락 드래그가 안 먹혔다. 줌 애니메이션
+      // 자체를 꺼서 스냅이 즉시 끝나게 하면 그 클래스가 아예 걸리지 않아 드래그가 곧바로 이어진다.
+      const map = Lmod.map(containerRef.current, { zoomAnimation: false }).setView([37.5665, 126.978], 11);
       Lmod.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap contributors",
         maxZoom: 19,
         subdomains: "abc",
       }).addTo(map);
-      // 모바일에서 두 손가락으로 확대·축소(pinch zoom)한 직후 한 손가락 드래그로 지도 이동이
-      // 안 먹는 경우가 있어(Leaflet 드래그 핸들러가 다음 터치 시작을 놓치는 내부 상태 문제),
-      // 줌이 끝날 때마다 드래그 핸들러를 껐다 켜서 터치 리스너를 깨끗하게 다시 건다.
-      map.on("zoomend", () => { map.dragging.disable(); map.dragging.enable(); });
       mapObjRef.current = map;
       setL(Lmod);
       setLoading(false);
