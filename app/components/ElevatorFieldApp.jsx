@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Home, AlertTriangle, CalendarCheck, CalendarClock, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound } from "lucide-react";
 import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk } from "@/lib/supabaseClient";
-import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode } from "@/lib/mappers";
+import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode, mapErrorCodeRequest } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { DutySwapNotice } from "@/app/components/DutyRoster";
@@ -94,6 +94,7 @@ export default function App() {
   const [sites, setSites] = useState([]);
   const [units, setUnits] = useState([]); // v2: 호기 목록 (마이그레이션 전 DB에서는 빈 배열)
   const [errorCodes, setErrorCodes] = useState([]); // v2: 에러코드집 (마이그레이션 전 DB에서는 빈 배열)
+  const [errorCodeRequests, setErrorCodeRequests] = useState([]); // 에러코드 등록요청 큐 (테이블 없으면 빈 배열)
   const [profilesAll, setProfilesAll] = useState([]); // v2: 전 직원 프로필 (이름→id 매핑용)
   const [attendances, setAttendances] = useState([]); // 오늘 출퇴근 기록
   const [dutySchedules, setDutySchedules] = useState([]); // 당직·숙직 근무표 (이번 달 이후)
@@ -468,6 +469,7 @@ export default function App() {
         engineersRes,
         unitsRes,
         errorCodesRes,
+        errorCodeRequestsRes,
         kitStockRes,
         selfChecksRes,
         attendanceRes,
@@ -488,6 +490,7 @@ export default function App() {
         supabase.from("profiles").select("*").order("name"),
         supabase.from("units").select("*").order("seq"),
         supabase.from("error_codes").select("*"),
+        supabase.from("error_code_requests").select("*").order("created_at", { ascending: false }),
         supabase.from("kit_stock").select("*"),
         supabase.from("self_checks").select("*"),
         supabase.from("attendances").select("*").eq("work_date", TODAY_STR),
@@ -510,6 +513,7 @@ export default function App() {
       setEngineers(allProfiles.filter((p) => p.role === "engineer" && p.is_active !== false));
       setUnits((unitsRes.data ?? []).map(mapUnit)); // 테이블 없으면(마이그레이션 전) error → 빈 배열
       setErrorCodes((errorCodesRes.data ?? []).map(mapErrorCode)); // 테이블 없으면(마이그레이션 전) error → 빈 배열
+      setErrorCodeRequests((errorCodeRequestsRes.data ?? []).map(mapErrorCodeRequest)); // 테이블 없으면(마이그레이션 전) error → 빈 배열
       const loadedKitStock = (kitStockRes.data ?? []).map(mapKitStock); // kit_stock 테이블 없으면(마이그레이션 전) error → 빈 배열
       setKitStock(loadedKitStock);
       loadedKitStock.forEach((k) => { kitStockRef.current[`${k.engineerId}|${k.part}`] = k.qty; });
@@ -766,40 +770,30 @@ export default function App() {
         body: `${failure.siteName}${unit ? ` ${unit}` : ""}`,
       });
     }
-
-    // 에러코드집에 없는 (기종, 코드) 조합이면 의미 미등록 상태로 자동 등록 — 다음에 같은 코드가
-    // 나오면 이 처리 이력이 조회되도록 코드집을 자연스럽게 쌓는다. 기종은 처리결과 시트에서
-    // 기사가 직접 고른 값(payload.model)을 우선하고, 없으면 호기에 등록된 값으로 대체한다.
-    // 에러코드는 여러 개를 ", "로 이어붙여 저장하므로(1개 이상 입력) 하나씩 나눠 확인한다.
-    const unit = units.find((u) => u.id === failure.unitId);
-    const errorCodeModel = payload.model || unit?.model;
-    const errorCodeList = errorCode.split(",").map((c) => c.trim()).filter(Boolean);
-    const newErrorCodes = errorCodeModel
-      ? errorCodeList.filter((code) => !errorCodes.some((e) => e.model === errorCodeModel && e.code === code))
-      : [];
-    if (newErrorCodes.length > 0) {
-      const { data: inserted } = await supabase
-        .from("error_codes")
-        .upsert(newErrorCodes.map((code) => ({ model: errorCodeModel, code })), { onConflict: "model,code" })
-        .select();
-      if (inserted?.length) setErrorCodes((prev) => [...prev, ...inserted.map(mapErrorCode)]);
-    }
   }
 
-  // ★ 고장처리결과 입력 화면에서 코드집에 없는 에러코드를 의미·원인·조치까지 채워 바로 등록
-  async function handleAddErrorCode(model, code, meaning, commonCause, standardAction) {
+  // ★ 고장처리결과 입력 화면에서 코드집에 없는 에러코드를 발견하면 기사가 직접 코드집에 쓰지
+  // 못하고, 관리자에게 등록요청만 보낸다 — 관리자가 에러코드집 화면에서 검토 후 승인해야 반영됨.
+  async function handleRequestErrorCode(model, code, meaning, commonCause, standardAction, failure) {
     if (!model.trim() || !code.trim()) return;
     const { data: inserted, error } = await supabase
-      .from("error_codes")
-      .upsert(
-        { model: model.trim(), code: code.trim(), meaning: meaning || null, common_cause: commonCause || null, standard_action: standardAction || null },
-        { onConflict: "model,code" }
-      )
+      .from("error_code_requests")
+      .insert({
+        model: model.trim(),
+        code: code.trim(),
+        meaning: meaning || null,
+        common_cause: commonCause || null,
+        standard_action: standardAction || null,
+        failure_id: failure?.id ?? null,
+        site_name: failure?.siteName ?? null,
+        elevator_no: failure?.elevatorNo ?? null,
+        requester_id: profileIdByName(profilesAll, profile.name) ?? null,
+        requester_name: profile.name,
+      })
       .select()
       .maybeSingle();
-    if (error) { alert("에러코드 등록 실패: " + error.message); return; }
-    const mapped = mapErrorCode(inserted);
-    setErrorCodes((prev) => [...prev.filter((e) => !(e.model === mapped.model && e.code === mapped.code)), mapped]);
+    if (error) { alert("등록요청 전송 실패: " + error.message); return; }
+    if (inserted) setErrorCodeRequests((prev) => [mapErrorCodeRequest(inserted), ...prev]);
   }
 
   async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId }) {
@@ -1657,7 +1651,8 @@ export default function App() {
               inspections={inspections}
               failures={failures}
               errorCodes={errorCodes}
-              onAddErrorCode={handleAddErrorCode}
+              errorCodeRequests={errorCodeRequests}
+              onRequestErrorCode={handleRequestErrorCode}
               onDispatch={handleDispatchFailure}
               onArrive={handleArriveFailure}
               onResult={handleFailureResult}
@@ -1676,7 +1671,8 @@ export default function App() {
               todayLeaves={todayLeaves}
               failures={failures}
               errorCodes={errorCodes}
-              onAddErrorCode={handleAddErrorCode}
+              errorCodeRequests={errorCodeRequests}
+              onRequestErrorCode={handleRequestErrorCode}
               setFailures={setFailures}
               onDispatch={handleDispatchFailure}
               onArrive={handleArriveFailure}
@@ -1789,7 +1785,8 @@ export default function App() {
               failure={notifResultTarget}
               failures={failures}
               errorCodes={errorCodes}
-              onAddErrorCode={handleAddErrorCode}
+              errorCodeRequests={errorCodeRequests}
+              onRequestErrorCode={handleRequestErrorCode}
               onClose={() => setNotifResultTarget(null)}
               onConfirm={(result) => { handleFailureResult(notifResultTarget, result); setNotifResultTarget(null); }}
             />

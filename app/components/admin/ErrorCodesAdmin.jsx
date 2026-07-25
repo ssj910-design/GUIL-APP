@@ -2,7 +2,7 @@
 
 // 에러코드집 관리 — 기종별 에러코드 의미·원인·조치법을 등록하고, 과거 처리이력을 함께 본다.
 import { useRef, useState } from "react";
-import { Plus, Upload, Download } from "lucide-react";
+import { Plus, Upload, Download, Bell } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapErrorCode } from "@/lib/mappers";
 import { errorCodeHistory } from "@/lib/utils";
@@ -142,6 +142,81 @@ function ErrorCodeDetailModal({ entry, failures, units, onClose, onSave, onDelet
   );
 }
 
+// 기사가 고장처리결과에서 올린 에러코드 등록요청 목록 — 승인하면 코드집(error_codes)에
+// 반영되고, 반려하면 사유와 함께 요청 상태만 바뀐다(코드집엔 영향 없음).
+function ErrorCodeRequestsModal({ requests, onClose, onApprove, onReject }) {
+  const [busyId, setBusyId] = useState(null);
+  const [rejectingId, setRejectingId] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
+
+  async function approve(r) {
+    setBusyId(r.id);
+    await onApprove(r);
+    setBusyId(null);
+  }
+  async function reject(r) {
+    setBusyId(r.id);
+    await onReject(r, rejectReason.trim());
+    setBusyId(null);
+    setRejectingId(null);
+    setRejectReason("");
+  }
+
+  return (
+    <Modal title={`에러코드 등록요청 (${requests.length}건)`} onClose={onClose} wide>
+      {requests.length === 0 ? (
+        <p className="text-sm text-slate-400 text-center py-8">대기 중인 등록요청이 없습니다</p>
+      ) : (
+        <div className="space-y-3">
+          {requests.map((r) => (
+            <div key={r.id} className="border border-slate-200 rounded-xl p-3.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-800">{r.model} · {r.code}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {r.requesterName ?? "알 수 없음"} · {fmtDate(r.createdAt)}
+                    {r.siteName && ` · ${r.siteName}${r.elevatorNo ? ` ${r.elevatorNo}` : ""}`}
+                  </p>
+                </div>
+                <span className="shrink-0 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded-full">대기</span>
+              </div>
+              {(r.meaning || r.commonCause || r.standardAction) && (
+                <div className="mt-2 text-xs text-slate-600 space-y-0.5">
+                  {r.meaning && <p>의미: {r.meaning}</p>}
+                  {r.commonCause && <p>흔한 원인: {r.commonCause}</p>}
+                  {r.standardAction && <p>표준 조치법: {r.standardAction}</p>}
+                </div>
+              )}
+              {rejectingId === r.id ? (
+                <div className="mt-2 space-y-2">
+                  <input className={inputCls} placeholder="반려 사유 (선택)" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
+                  <div className="flex gap-2">
+                    <button disabled={busyId === r.id} onClick={() => reject(r)} className="flex-1 text-xs font-bold text-white bg-red-600 disabled:bg-slate-300 rounded-lg py-2">
+                      {busyId === r.id ? "반려 중..." : "반려 확정"}
+                    </button>
+                    <button onClick={() => { setRejectingId(null); setRejectReason(""); }} className="px-3 text-xs font-bold text-slate-500 border border-slate-200 rounded-lg py-2">
+                      취소
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2 mt-2.5">
+                  <button disabled={busyId === r.id} onClick={() => approve(r)} className="flex-1 text-xs font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-lg py-2">
+                    {busyId === r.id ? "승인 중..." : "승인 · 코드집에 등록"}
+                  </button>
+                  <button disabled={busyId === r.id} onClick={() => setRejectingId(r.id)} className="px-4 text-xs font-bold text-red-600 border border-red-200 rounded-lg py-2">
+                    반려
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 // 엑셀/CSV 한 행에서 기종·코드·의미·흔한원인·표준조치법 값을 찾는다 — 헤더 이름이 정확히
 // 같지 않아도(띄어쓰기·대소문자 차이) 매칭되도록 정규화해서 비교한다.
 function pickCol(row, keys) {
@@ -213,7 +288,7 @@ function ImportErrorCodesModal({ onClose, onImportFile }) {
 }
 
 export default function ErrorCodesAdmin({ data, setData }) {
-  const { errorCodes = [], units, failures } = data;
+  const { errorCodes = [], errorCodeRequests = [], units, failures } = data;
   // 실제 호기에 등록된 기종뿐 아니라, 엑셀 대량입력 등으로 코드집에만 새로 등록된 기종도 포함한다.
   const models = [...new Set([...units.map((u) => u.model), ...errorCodes.map((e) => e.model)].filter(Boolean))].sort();
   const [modelFilter, setModelFilter] = useState("all");
@@ -221,6 +296,8 @@ export default function ErrorCodesAdmin({ data, setData }) {
   const [registering, setRegistering] = useState(false);
   const [detail, setDetail] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [requestsOpen, setRequestsOpen] = useState(false);
+  const pendingRequests = errorCodeRequests.filter((r) => r.status === "대기");
 
   const rows = errorCodes.filter((e) => {
     if (modelFilter !== "all" && e.model !== modelFilter) return false;
@@ -229,6 +306,43 @@ export default function ErrorCodesAdmin({ data, setData }) {
     return [e.model, e.code, e.meaning].filter(Boolean).join(" ").toLowerCase().includes(q);
   });
   const historyCount = (e) => errorCodeHistory(failures, units, e.model, e.code).length;
+
+  // 등록요청 승인 — 코드집(error_codes)에 반영하고 요청 상태를 '승인'으로 바꾼다.
+  async function approveErrorCodeRequest(r) {
+    const { data: inserted, error } = await supabase
+      .from("error_codes")
+      .upsert(
+        { model: r.model, code: r.code, meaning: r.meaning, common_cause: r.commonCause, standard_action: r.standardAction },
+        { onConflict: "model,code" }
+      )
+      .select()
+      .maybeSingle();
+    if (error) { alert("승인 실패: " + error.message); return; }
+    const { error: updError } = await supabase
+      .from("error_code_requests")
+      .update({ status: "승인", reviewed_at: new Date().toISOString() })
+      .eq("id", r.id);
+    if (updError) { alert("요청 상태 갱신 실패: " + updError.message); return; }
+    const mappedCode = mapErrorCode(inserted);
+    setData((prev) => ({
+      ...prev,
+      errorCodes: [...prev.errorCodes.filter((e) => !(e.model === mappedCode.model && e.code === mappedCode.code)), mappedCode],
+      errorCodeRequests: prev.errorCodeRequests.map((x) => (x.id === r.id ? { ...x, status: "승인" } : x)),
+    }));
+  }
+
+  // 등록요청 반려 — 코드집엔 영향 없이 요청 상태만 바꾼다.
+  async function rejectErrorCodeRequest(r, reason) {
+    const { error } = await supabase
+      .from("error_code_requests")
+      .update({ status: "반려", reject_reason: reason || null, reviewed_at: new Date().toISOString() })
+      .eq("id", r.id);
+    if (error) { alert("반려 실패: " + error.message); return; }
+    setData((prev) => ({
+      ...prev,
+      errorCodeRequests: prev.errorCodeRequests.map((x) => (x.id === r.id ? { ...x, status: "반려", rejectReason: reason } : x)),
+    }));
+  }
 
   // 엑셀(.xlsx/.xls) 또는 CSV로 여러 건을 한 번에 등록 — 헤더에 "기종"·"코드"가 있는 행만 가져온다.
   // 이미 있는 (기종,코드) 조합은 upsert로 덮어쓴다(단일 등록과 동일한 규칙).
@@ -324,6 +438,17 @@ export default function ErrorCodesAdmin({ data, setData }) {
         <h1 className="text-xl font-extrabold">에러코드집</h1>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setRequestsOpen(true)}
+            className="relative flex items-center gap-1.5 text-sm font-bold text-amber-700 bg-amber-50 rounded-xl px-4 py-2.5 whitespace-nowrap"
+          >
+            <Bell size={15} /> 등록요청
+            {pendingRequests.length > 0 && (
+              <span className="ml-0.5 text-[10px] font-bold text-white bg-amber-600 rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+                {pendingRequests.length}
+              </span>
+            )}
+          </button>
+          <button
             onClick={() => setImportOpen(true)}
             className="flex items-center gap-1.5 text-sm font-bold text-blue-700 bg-blue-50 rounded-xl px-4 py-2.5 whitespace-nowrap"
           >
@@ -355,6 +480,14 @@ export default function ErrorCodesAdmin({ data, setData }) {
       </AdminTable>
       {rows.length === 0 && <p className="text-xs text-slate-400 text-center py-10">등록된 에러코드가 없습니다</p>}
 
+      {requestsOpen && (
+        <ErrorCodeRequestsModal
+          requests={pendingRequests}
+          onClose={() => setRequestsOpen(false)}
+          onApprove={approveErrorCodeRequest}
+          onReject={rejectErrorCodeRequest}
+        />
+      )}
       {importOpen && (
         <ImportErrorCodesModal onClose={() => setImportOpen(false)} onImportFile={importErrorCodesFile} />
       )}

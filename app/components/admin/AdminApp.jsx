@@ -8,7 +8,7 @@ import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, Cale
 import { supabase } from "@/lib/supabaseClient";
 import {
   mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest,
-  mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck, mapFeedPost, mapRestockRequest, mapErrorCode,
+  mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck, mapFeedPost, mapRestockRequest, mapErrorCode, mapErrorCodeRequest,
 } from "@/lib/mappers";
 import Dashboard from "@/app/components/admin/Dashboard";
 import SitesAdmin from "@/app/components/admin/SitesAdmin";
@@ -49,12 +49,12 @@ export default function AdminApp() {
   const [data, setData] = useState({
     sites: [], units: [], siteManagers: [], failures: [], inspections: [],
     materialRequests: [], quoteRequests: [], restockRequests: [], todos: [], billings: [],
-    selfChecks: [], profiles: [], feed: [], errorCodes: [],
+    selfChecks: [], profiles: [], feed: [], errorCodes: [], errorCodeRequests: [],
   });
 
   useEffect(() => {
     async function load() {
-      const [sites, units, siteManagers, failures, inspections, materials, quotes, restock, todos, billings, selfChecks, profiles, feed, errorCodes] =
+      const [sites, units, siteManagers, failures, inspections, materials, quotes, restock, todos, billings, selfChecks, profiles, feed, errorCodes, errorCodeRequests] =
         await Promise.all([
           supabase.from("sites").select("*").order("name"),
           supabase.from("units").select("*").order("seq"),
@@ -70,6 +70,7 @@ export default function AdminApp() {
           supabase.from("profiles").select("*").order("name"),
           supabase.from("feed_posts").select("*").order("created_at", { ascending: true }),
           supabase.from("error_codes").select("*"),
+          supabase.from("error_code_requests").select("*").order("created_at", { ascending: false }),
         ]);
       setData({
         sites: (sites.data ?? []).map(mapSite),
@@ -86,6 +87,7 @@ export default function AdminApp() {
         profiles: profiles.data ?? [],
         feed: (feed.data ?? []).map(mapFeedPost),
         errorCodes: (errorCodes.data ?? []).map(mapErrorCode),
+        errorCodeRequests: (errorCodeRequests.data ?? []).map(mapErrorCodeRequest),
       });
       setLoading(false);
     }

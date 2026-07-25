@@ -831,27 +831,33 @@ const FAILURE_RESULT_BTN_CLS = {
 
 
 // 에러코드 입력 한 줄 — 현장선택(SiteSearchSelect)과 동일한 포커스-드롭다운 검색 방식으로
-// 코드를 고르고, 코드집에 없는 코드면 의미·원인·조치를 채워 바로 등록할 수 있다.
-// ArrivalResultModal이 여러 줄(코드 1개 이상)을 렌더링할 때 줄마다 검색·등록 상태를 독립적으로 갖는다.
-function ErrorCodeRow({ code, model, errorCodes, failures, units, onChange, onRemove, canRemove, onAddErrorCode, placeholder }) {
+// 관리자웹 코드집(errorCodes)에 이미 등록된 코드만 골라 쓴다. 코드집에 없는 코드를 입력하면
+// 기사가 직접 코드집에 써넣지 못하고, 관리자에게 등록요청만 보낼 수 있다(승인은 관리자 몫).
+// ArrivalResultModal이 여러 줄(코드 1개 이상)을 렌더링할 때 줄마다 검색·요청 상태를 독립적으로 갖는다.
+function ErrorCodeRow({ code, model, errorCodes, errorCodeRequests = [], failures, units, failure, onChange, onRemove, canRemove, onRequestErrorCode, placeholder }) {
   const [open, setOpen] = useState(false);
   const codeOptions = model ? errorCodes.filter((e) => e.model === model) : [];
   const filteredCodes = codeOptions.filter((e) => e.code.toLowerCase().includes(code.trim().toLowerCase()));
   const matched = model ? findErrorCode(errorCodes, model, code) : null;
   const matchedHistory = matched ? errorCodeHistory(failures, units, model, code) : [];
+  const pendingRequest = model && code.trim() && !matched
+    ? errorCodeRequests.find((r) => r.status === "대기" && r.model === model && r.code === code.trim())
+    : null;
 
-  const [addingCode, setAddingCode] = useState(false);
+  const [requesting, setRequesting] = useState(false);
   const [newMeaning, setNewMeaning] = useState("");
   const [newCause, setNewCause] = useState("");
   const [newAction, setNewAction] = useState("");
-  const [savingCode, setSavingCode] = useState(false);
-  const showAddCode = model && code.trim() && !matched;
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const showRequest = model && code.trim() && !matched && !pendingRequest;
 
-  async function saveNewCode() {
-    setSavingCode(true);
-    await onAddErrorCode(model, code.trim(), newMeaning.trim(), newCause.trim(), newAction.trim());
-    setSavingCode(false);
-    setAddingCode(false);
+  async function sendRequest() {
+    setSending(true);
+    await onRequestErrorCode(model, code.trim(), newMeaning.trim(), newCause.trim(), newAction.trim(), failure);
+    setSending(false);
+    setRequesting(false);
+    setSent(true);
     setNewMeaning("");
     setNewCause("");
     setNewAction("");
@@ -865,7 +871,7 @@ function ErrorCodeRow({ code, model, errorCodes, failures, units, onChange, onRe
           <input
             className={`${inputCls} pl-8`}
             value={code}
-            onChange={(e) => { onChange(e.target.value); setAddingCode(false); }}
+            onChange={(e) => { onChange(e.target.value); setRequesting(false); setSent(false); }}
             onFocus={() => setOpen(true)}
             onBlur={() => setTimeout(() => setOpen(false), 150)}
             placeholder={placeholder}
@@ -912,25 +918,31 @@ function ErrorCodeRow({ code, model, errorCodes, failures, units, onChange, onRe
           )}
         </div>
       )}
-      {showAddCode && onAddErrorCode && (
+      {pendingRequest && (
+        <p className="text-xs text-amber-600 mt-2">이미 등록요청을 보낸 코드예요 · 관리자 승인 대기중</p>
+      )}
+      {sent && (
+        <p className="text-xs text-emerald-600 font-semibold mt-2">등록요청을 보냈습니다 · 관리자 승인 대기중</p>
+      )}
+      {showRequest && !sent && onRequestErrorCode && (
         <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mt-2">
-          {!addingCode ? (
-            <button type="button" onClick={() => setAddingCode(true)} className="text-xs font-bold text-amber-700">
-              “{model}”에 등록되지 않은 코드예요 · 코드집에 추가하기
+          {!requesting ? (
+            <button type="button" onClick={() => setRequesting(true)} className="text-xs font-bold text-amber-700">
+              “{model}”에 등록되지 않은 코드예요 · 등록요청 보내기
             </button>
           ) : (
             <div className="space-y-2">
-              <p className="text-xs font-bold text-amber-700">에러코드 등록 · {model} · {code.trim()}</p>
-              <input className={inputCls} value={newMeaning} onChange={(e) => setNewMeaning(e.target.value)} placeholder="의미 (선택)" />
+              <p className="text-xs font-bold text-amber-700">등록요청 · {model} · {code.trim()}</p>
+              <input className={inputCls} value={newMeaning} onChange={(e) => setNewMeaning(e.target.value)} placeholder="의미 (선택, 알고 있으면 적어주세요)" />
               <input className={inputCls} value={newCause} onChange={(e) => setNewCause(e.target.value)} placeholder="흔한 원인 (선택)" />
               <input className={inputCls} value={newAction} onChange={(e) => setNewAction(e.target.value)} placeholder="표준 조치법 (선택)" />
               <button
                 type="button"
-                disabled={savingCode}
-                onClick={saveNewCode}
+                disabled={sending}
+                onClick={sendRequest}
                 className="w-full text-xs font-bold text-white bg-amber-600 disabled:bg-slate-300 rounded-lg py-2"
               >
-                {savingCode ? "등록 중..." : "코드집에 등록"}
+                {sending ? "보내는 중..." : "등록요청 보내기"}
               </button>
             </div>
           )}
@@ -940,7 +952,7 @@ function ErrorCodeRow({ code, model, errorCodes, failures, units, onChange, onRe
   );
 }
 
-export function ArrivalResultModal({ failure, failures = [], errorCodes = [], onConfirm, onClose, onAddErrorCode }) {
+export function ArrivalResultModal({ failure, failures = [], errorCodes = [], errorCodeRequests = [], onConfirm, onClose, onRequestErrorCode }) {
   const [result, setResult] = useState("처리완료");
   const [symptom, setSymptom] = useState("");
   const [cause, setCause] = useState("");
@@ -1016,12 +1028,14 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
                   code={row.code}
                   model={selectedModel}
                   errorCodes={errorCodes}
+                  errorCodeRequests={errorCodeRequests}
                   failures={failures}
                   units={units}
+                  failure={failure}
                   onChange={(v) => updateCodeRow(row.id, v)}
                   onRemove={() => removeCodeRow(row.id)}
                   canRemove={codeRows.length > 1}
-                  onAddErrorCode={onAddErrorCode}
+                  onRequestErrorCode={onRequestErrorCode}
                   placeholder={selectedModel ? "예: E-32 (입력하면 등록된 코드 중에서 검색됩니다)" : "예: E-32 (기종을 먼저 선택하면 검색됩니다)"}
                 />
               ))}
@@ -1279,7 +1293,7 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
 }
 
 
-function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves, errorCodes, onAddErrorCode }) {
+function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves, errorCodes, errorCodeRequests, onRequestErrorCode }) {
   const [assignTarget, setAssignTarget] = useState(null);
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
@@ -1342,7 +1356,8 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
           failure={resultTarget}
           failures={failures}
           errorCodes={errorCodes}
-          onAddErrorCode={onAddErrorCode}
+          errorCodeRequests={errorCodeRequests}
+          onRequestErrorCode={onRequestErrorCode}
           onClose={() => setResultTarget(null)}
           onConfirm={(result) => {
             onResult(resultTarget, result);
@@ -1355,7 +1370,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
 }
 
 
-function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves, errorCodes, onAddErrorCode }) {
+function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves, errorCodes, errorCodeRequests, onRequestErrorCode }) {
   const [assignTarget, setAssignTarget] = useState(null);
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [showDone, setShowDone] = useState(false);
@@ -1438,7 +1453,8 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
           failure={resultTarget}
           failures={failures}
           errorCodes={errorCodes}
-          onAddErrorCode={onAddErrorCode}
+          errorCodeRequests={errorCodeRequests}
+          onRequestErrorCode={onRequestErrorCode}
           onClose={() => setResultTarget(null)}
           onConfirm={(result) => {
             onResult(resultTarget, result);
@@ -1651,7 +1667,7 @@ function ErrorCodeBook({ errorCodes, failures }) {
   );
 }
 
-export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [], errorCodes = [], onReported, onAddErrorCode }) {
+export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [], errorCodes = [], errorCodeRequests = [], onReported, onRequestErrorCode }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
   // 홈 "모두 보기" 등 외부에서 특정 서브탭으로 진입 (SiteTab focusSiteId와 같은 패턴)
@@ -1670,8 +1686,8 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
   // 옆 탭을 함께 렌더링할 때 쓴다.
   function renderFailurePane(tab) {
     if (tab === "접수등록") return <FailureRegisterForm onReported={onReported} onDispatch={onDispatch} failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />;
-    if (tab === "미배정") return <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} onAddErrorCode={onAddErrorCode} />;
-    if (tab === "처리등록") return <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} onAddErrorCode={onAddErrorCode} />;
+    if (tab === "미배정") return <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} errorCodeRequests={errorCodeRequests} onRequestErrorCode={onRequestErrorCode} />;
+    if (tab === "처리등록") return <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} errorCodeRequests={errorCodeRequests} onRequestErrorCode={onRequestErrorCode} />;
     if (tab === "처리현황") return <FailureStatusOverview failures={failures} onReassign={onReassign} attendances={attendances} todayLeaves={todayLeaves} />;
     return <ErrorCodeBook errorCodes={errorCodes} failures={failures} />;
   }
