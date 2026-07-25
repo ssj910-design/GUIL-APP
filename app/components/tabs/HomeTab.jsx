@@ -442,6 +442,13 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
           const dow = new Date(`${d}T00:00:00`).getDay();
           const dutyDay = duties.filter((x) => x.duty_date === d && (x.kind === "당직" || x.kind === "숙직"));
           const leaveDay = leaves.filter((l) => l.start_date <= d && d <= l.end_date);
+          // 카드 폭이 좁아 이름을 3명까지만 보여주고, 나머지는 "+N"으로 요약한다 (자세히는 카드 클릭 시 팝업).
+          const dayPeople = [
+            ...dutyDay.map((x) => ({ id: `duty-${x.id}`, color: x.kind === "당직" ? "bg-emerald-500" : "bg-blue-500", name: nameOf(x.profile_id) })),
+            ...leaveDay.map((l) => ({ id: `leave-${l.id}`, color: "bg-amber-500", name: nameOf(l.profile_id) })),
+          ];
+          const visiblePeople = dayPeople.slice(0, 3);
+          const extraCount = dayPeople.length - visiblePeople.length;
           return (
             <button
               key={d}
@@ -456,18 +463,15 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
                 {DOW[dow]} {Number(d.slice(8))}
               </p>
               <div className="mt-1 space-y-0.5">
-                {dutyDay.map((x) => (
-                  <p key={x.id} className="flex items-center gap-1 text-[9.5px] font-semibold text-slate-600">
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${x.kind === "당직" ? "bg-emerald-500" : "bg-blue-500"}`} />
-                    <span className="truncate">{nameOf(x.profile_id)}</span>
+                {visiblePeople.map((p) => (
+                  <p key={p.id} className="flex items-center gap-1 text-[9.5px] font-semibold text-slate-600">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${p.color}`} />
+                    <span className="truncate">{p.name}</span>
                   </p>
                 ))}
-                {leaveDay.map((l) => (
-                  <p key={l.id} className="flex items-center gap-1 text-[9.5px] font-semibold text-slate-600">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                    <span className="truncate">{nameOf(l.profile_id)}</span>
-                  </p>
-                ))}
+                {extraCount > 0 && (
+                  <p className="text-[9.5px] font-bold text-slate-400">+{extraCount}</p>
+                )}
               </div>
             </button>
           );
