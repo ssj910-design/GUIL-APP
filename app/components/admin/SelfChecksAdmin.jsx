@@ -101,8 +101,8 @@ function SelfCheckLogModal({ c, onClose }) {
 function EngineerDetailModal({ name, rows, onClose }) {
   const [logRow, setLogRow] = useState(null);
   const [search, setSearch] = useState("");
-  const q = search.trim();
-  const filtered = rows.filter((r) => !q || r.loc.includes(q) || (r.address ?? "").includes(q));
+  const q = search.trim().toLowerCase();
+  const filtered = rows.filter((r) => !q || r.loc.toLowerCase().includes(q) || (r.address ?? "").toLowerCase().includes(q));
   const sorted = [...filtered].sort((a, b) => (a.notes ? 0 : 1) - (b.notes ? 0 : 1));
   return (
     <>

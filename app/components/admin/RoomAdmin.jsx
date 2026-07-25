@@ -152,13 +152,13 @@ export default function RoomAdmin({ data, setData }) {
   const commentsOf = (id) =>
     feed.filter((p) => p.replyToId === id).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
-  const q = search.trim();
+  const q = search.trim().toLowerCase();
   const roots = feed
     .filter((p) => !p.replyToId)
     .filter((p) => {
       if (!q) return true;
-      if ((p.text ?? "").includes(q) || (p.author ?? "").includes(q)) return true;
-      return commentsOf(p.id).some((c) => (c.text ?? "").includes(q) || (c.author ?? "").includes(q));
+      if ((p.text ?? "").toLowerCase().includes(q) || (p.author ?? "").toLowerCase().includes(q)) return true;
+      return commentsOf(p.id).some((c) => (c.text ?? "").toLowerCase().includes(q) || (c.author ?? "").toLowerCase().includes(q));
     })
     .sort((a, b) => {
       if (!!a.isNotice !== !!b.isNotice) return a.isNotice ? -1 : 1;

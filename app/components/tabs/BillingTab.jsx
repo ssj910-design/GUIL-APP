@@ -499,7 +499,7 @@ export function BillingHistoryScreen({ billings, onBack }) {
   const [type, setType] = useState("전체");
 
   const filtered = billings.filter(
-    (b) => (type === "전체" || (type === "자재지급" && b.type === "material") || (type === "직접입력" && b.type === "manual")) && b.siteName.includes(query.trim())
+    (b) => (type === "전체" || (type === "자재지급" && b.type === "material") || (type === "직접입력" && b.type === "manual")) && b.siteName.toLowerCase().includes(query.trim().toLowerCase())
   );
 
   // 날짜별 그룹핑 (최신 날짜 먼저)

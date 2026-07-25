@@ -151,7 +151,8 @@ function SiteAutocomplete({ sites, value, onChange }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const selected = sites.find((s) => s.id === value);
-  const filtered = sites.filter((s) => (s.name ?? "").includes(query.trim()) || (s.address ?? "").includes(query.trim()));
+  const q = query.trim().toLowerCase();
+  const filtered = sites.filter((s) => (s.name ?? "").toLowerCase().includes(q) || (s.address ?? "").toLowerCase().includes(q));
 
   return (
     <div className="relative">
@@ -357,12 +358,13 @@ export default function FailuresAdmin({ data, setData }) {
 
   const rows = failures.filter((f) => {
     if (status !== "all" && f.status !== status) return false;
-    const q = search.trim();
+    const q = search.trim().toLowerCase();
     if (!q) return true;
     const site = sites.find((s) => s.id === f.siteId);
     const haystack = [f.reportedAt, f.siteName, site?.name, f.errorCode, site?.assignedEngineer, f.assignee]
       .filter(Boolean)
-      .join(" ");
+      .join(" ")
+      .toLowerCase();
     return haystack.includes(q);
   });
 

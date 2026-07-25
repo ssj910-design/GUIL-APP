@@ -674,9 +674,9 @@ function SupplyEditForm({ r, existingTodo, engineerNames, onSubmit, onAttachPhot
 function SupplyHistoryScreen({ supplied, todos, engineerNames, onSupplyEdit, onAttachPhoto, onRemoveSupplyPhoto, onBack }) {
   const [query, setQuery] = useState("");
   const [editTarget, setEditTarget] = useState(null);
-  const q = query.trim();
+  const q = query.trim().toLowerCase();
   const filtered = supplied
-    .filter((r) => r.siteName.includes(q) || r.part.includes(q))
+    .filter((r) => r.siteName.toLowerCase().includes(q) || r.part.toLowerCase().includes(q))
     .sort((a, b) => new Date(b.suppliedDate) - new Date(a.suppliedDate));
 
   return (
@@ -805,9 +805,9 @@ function QuoteSupplyEditForm({ q, existingTodos, engineerNames, onSubmit, onAtta
 function QuoteSupplyHistoryScreen({ completed, todos, engineerNames, onQuoteSupplyEdit, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onBack }) {
   const [query, setQuery] = useState("");
   const [editTarget, setEditTarget] = useState(null);
-  const q = query.trim();
+  const q = query.trim().toLowerCase();
   const filtered = completed
-    .filter((r) => r.siteName.includes(q) || r.constructionType.includes(q))
+    .filter((r) => r.siteName.toLowerCase().includes(q) || r.constructionType.toLowerCase().includes(q))
     .sort((a, b) => new Date(b.suppliedDate) - new Date(a.suppliedDate));
 
   return (

@@ -293,12 +293,12 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
     feed.filter((p) => p.replyToId === postId).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
   // 검색 — 게시자, 글내용, 댓글내용까지 모두 대상
-  const searchQuery = search.trim();
+  const searchQuery = search.trim().toLowerCase();
   const visiblePosts = posts.filter((p) => {
     if (!searchQuery) return true;
-    if ((p.author ?? "").includes(searchQuery)) return true;
-    if ((p.text ?? "").includes(searchQuery)) return true;
-    return commentsOf(p.id).some((c) => (c.text ?? "").includes(searchQuery));
+    if ((p.author ?? "").toLowerCase().includes(searchQuery)) return true;
+    if ((p.text ?? "").toLowerCase().includes(searchQuery)) return true;
+    return commentsOf(p.id).some((c) => (c.text ?? "").toLowerCase().includes(searchQuery));
   });
 
   function submitPost() {
@@ -331,7 +331,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   // @멘션 피커 — 글쓰기 입력에서만 지원 (댓글은 텍스트만)
   const tagMatch = /@([가-힣a-zA-Z0-9()]*)$/.exec(postInput);
   const memberNames = (profiles ?? []).map((p) => p.name).filter((n) => n !== CURRENT_ENGINEER);
-  const tagCands = composing && tagMatch ? ["모두", ...memberNames].filter((n) => n.includes(tagMatch[1])) : [];
+  const tagCands = composing && tagMatch ? ["모두", ...memberNames].filter((n) => n.toLowerCase().includes(tagMatch[1].toLowerCase())) : [];
   const pickTag = (n) => setPostInput(postInput.replace(/@[가-힣a-zA-Z0-9()]*$/, "@" + n + " "));
 
   function submitComment(postId) {

@@ -176,7 +176,7 @@ export default function InspectionsAdmin({ data, setData }) {
   const flagged = withUnitLabel.filter((i) => i.result === "conditional" || i.result === "fail");
 
   const base = view === "flagged" ? flagged : withUnitLabel;
-  const filteredRows = base.filter((i) => !search || (i.siteName ?? "").includes(search));
+  const filteredRows = base.filter((i) => !search || (i.siteName ?? "").toLowerCase().includes(search.toLowerCase()));
 
   // 조건부·불합격: 현장·호기/담당자/보완기한 정렬 가능(할일관리와 동일한 SortableTh 방식).
   // 보완기한은 화면에 보이는 값(조건부합격=유효기간, 불합격=날짜 없음) 기준으로 비교한다.

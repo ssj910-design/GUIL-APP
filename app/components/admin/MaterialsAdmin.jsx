@@ -47,12 +47,12 @@ export default function MaterialsAdmin({ data, setData }) {
   const [quoteSupplyTarget, setQuoteSupplyTarget] = useState(null); // 자재지급완료 처리 중인 견적요청
   const [detailTarget, setDetailTarget] = useState(null); // 상세내역 보는 중인 신청 { type, data }
 
-  const query = search.trim();
+  const query = search.trim().toLowerCase();
   const materialRequests = allMaterialRequests.filter((m) =>
-    !query || locOf(data, m.unitId, m.siteName, m.elevatorNo).includes(query) || (m.part ?? "").includes(query) || personOf(data, m.requesterId, m.engineer).includes(query)
+    !query || locOf(data, m.unitId, m.siteName, m.elevatorNo).toLowerCase().includes(query) || (m.part ?? "").toLowerCase().includes(query) || personOf(data, m.requesterId, m.engineer).toLowerCase().includes(query)
   );
   const quoteRequests = allQuoteRequests.filter((q) =>
-    !query || locOf(data, q.unitId, q.siteName, q.elevatorNo).includes(query) || (q.constructionType ?? "").includes(query) || personOf(data, q.requesterId, q.engineer).includes(query)
+    !query || locOf(data, q.unitId, q.siteName, q.elevatorNo).toLowerCase().includes(query) || (q.constructionType ?? "").toLowerCase().includes(query) || personOf(data, q.requesterId, q.engineer).toLowerCase().includes(query)
   );
 
   async function handleMaterialSupplyComplete(request, { assigneeId, billingPart, billingAmount, photoUrls }) {

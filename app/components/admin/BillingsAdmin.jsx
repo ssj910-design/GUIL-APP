@@ -148,12 +148,12 @@ export default function BillingsAdmin({ data, setData }) {
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState(null);
 
-  const q = search.trim();
+  const q = search.trim().toLowerCase();
   const rows = billings.filter((b) =>
     !q ||
-    locOf(data, b.unitId, b.siteName, b.elevatorNo).includes(q) ||
-    (b.part ?? "").includes(q) ||
-    personOf(data, b.engineerId, b.engineer).includes(q)
+    locOf(data, b.unitId, b.siteName, b.elevatorNo).toLowerCase().includes(q) ||
+    (b.part ?? "").toLowerCase().includes(q) ||
+    personOf(data, b.engineerId, b.engineer).toLowerCase().includes(q)
   );
   // 무상 처리된 건은 합계에서 제외한다.
   const total = rows.reduce((sum, b) => sum + (b.isFree ? 0 : Number(b.cost) || 0), 0);

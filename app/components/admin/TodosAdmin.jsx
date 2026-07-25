@@ -274,10 +274,10 @@ export default function TodosAdmin({ data, setData }) {
   const [assigning, setAssigning] = useState(false);
 
   const viewFiltered = todos.filter((t) => (view === "open" ? !t.done : true));
-  const q = search.trim();
+  const q = search.trim().toLowerCase();
   const rows = viewFiltered
     .filter((t) => sourceFilter === "all" || t.source === sourceFilter)
-    .filter((t) => !q || (t.description ?? "").includes(q) || (t.title ?? "").includes(q) || locOf(data, t.unitId, t.siteName, t.elevatorNo).includes(q) || personOf(data, t.assigneeId, t.assignee).includes(q));
+    .filter((t) => !q || (t.description ?? "").toLowerCase().includes(q) || (t.title ?? "").toLowerCase().includes(q) || locOf(data, t.unitId, t.siteName, t.elevatorNo).toLowerCase().includes(q) || personOf(data, t.assigneeId, t.assignee).toLowerCase().includes(q));
 
   const getVal = (t, key) => {
     switch (key) {

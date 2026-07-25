@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from "react";
-import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle, Wrench, ChevronRight } from "lucide-react";
+import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle, Wrench, ChevronRight, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, labelToSeq, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
@@ -846,6 +846,11 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
   const matched = selectedModel ? findErrorCode(errorCodes, selectedModel, errorCode) : null;
   const matchedHistory = matched ? errorCodeHistory(failures, units, selectedModel, errorCode) : [];
 
+  // 에러코드 검색 드롭다운 — 현장선택(SiteSearchSelect)과 동일하게 입력에 포커스하면 목록이 뜨고,
+  // 타이핑할 때마다 대소문자 구분 없이 걸러진다.
+  const [codeOpen, setCodeOpen] = useState(false);
+  const filteredCodes = codeOptions.filter((e) => e.code.toLowerCase().includes(errorCode.trim().toLowerCase()));
+
   // 새 에러코드 등록 — 기종을 고르고 코드집에 없는 코드를 입력하면 바로 의미·원인·조치를 채워 등록할 수 있다.
   const [addingCode, setAddingCode] = useState(false);
   const [newMeaning, setNewMeaning] = useState("");
@@ -893,18 +898,33 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
         </div>
         <div>
           <label className="text-xs font-bold text-slate-600 mb-1 block">에러코드 <span className="text-red-500">*</span></label>
-          <input
-            className={inputCls}
-            list="error-code-options"
-            value={errorCode}
-            onChange={(e) => { setErrorCode(e.target.value); setAddingCode(false); }}
-            placeholder={selectedModel ? "예: E-32 (입력하면 등록된 코드 중에서 검색됩니다)" : "예: E-32 (기종을 먼저 선택하면 검색됩니다)"}
-          />
-          {codeOptions.length > 0 && (
-            <datalist id="error-code-options">
-              {codeOptions.map((e) => <option key={e.id} value={e.code} />)}
-            </datalist>
-          )}
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              className={`${inputCls} pl-8`}
+              value={errorCode}
+              onChange={(e) => { setErrorCode(e.target.value); setAddingCode(false); }}
+              onFocus={() => setCodeOpen(true)}
+              onBlur={() => setTimeout(() => setCodeOpen(false), 150)}
+              placeholder={selectedModel ? "예: E-32 (입력하면 등록된 코드 중에서 검색됩니다)" : "예: E-32 (기종을 먼저 선택하면 검색됩니다)"}
+            />
+            {codeOpen && codeOptions.length > 0 && (
+              <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                {filteredCodes.map((e) => (
+                  <button
+                    key={e.id}
+                    type="button"
+                    onMouseDown={() => { setErrorCode(e.code); setCodeOpen(false); }}
+                    className="w-full text-left px-3 py-2.5 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0"
+                  >
+                    <span className="font-semibold text-slate-700">{e.code}</span>
+                    {e.meaning && <span className="text-slate-400 text-xs ml-1.5">{e.meaning}</span>}
+                  </button>
+                ))}
+                {filteredCodes.length === 0 && <p className="text-xs text-slate-400 text-center py-3">검색 결과가 없습니다</p>}
+              </div>
+            )}
+          </div>
           {matched && (
             <div className="bg-blue-50 rounded-xl p-3 mt-2">
               <p className="text-sm font-bold text-blue-800">{matched.meaning || "의미 미등록"}</p>
@@ -928,7 +948,7 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
             <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mt-2">
               {!addingCode ? (
                 <button type="button" onClick={() => setAddingCode(true)} className="text-xs font-bold text-amber-700">
-                  "{selectedModel}"에 등록되지 않은 코드예요 · 코드집에 추가하기
+                  “{selectedModel}”에 등록되지 않은 코드예요 · 코드집에 추가하기
                 </button>
               ) : (
                 <div className="space-y-2">
@@ -1498,7 +1518,7 @@ function ErrorCodeBook({ errorCodes, failures }) {
   const [model, setModel] = useState(models[0] ?? "");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(null);
-  const list = errorCodes.filter((e) => e.model === model && (e.code.includes(query) || (e.meaning ?? "").includes(query)));
+  const list = errorCodes.filter((e) => e.model === model && (e.code.toLowerCase().includes(query.trim().toLowerCase()) || (e.meaning ?? "").toLowerCase().includes(query.trim().toLowerCase())));
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">

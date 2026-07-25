@@ -1,8 +1,8 @@
 "use client";
 
 // 에러코드집 관리 — 기종별 에러코드 의미·원인·조치법을 등록하고, 과거 처리이력을 함께 본다.
-import { useState } from "react";
-import { Plus } from "lucide-react";
+import { useRef, useState } from "react";
+import { Plus, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapErrorCode } from "@/lib/mappers";
 import { errorCodeHistory } from "@/lib/utils";
@@ -142,6 +142,16 @@ function ErrorCodeDetailModal({ entry, failures, units, onClose, onSave, onDelet
   );
 }
 
+// 엑셀/CSV 한 행에서 기종·코드·의미·흔한원인·표준조치법 값을 찾는다 — 헤더 이름이 정확히
+// 같지 않아도(띄어쓰기·대소문자 차이) 매칭되도록 정규화해서 비교한다.
+function pickCol(row, keys) {
+  const norm = (s) => String(s).replace(/\s/g, "").toLowerCase();
+  for (const k of Object.keys(row)) {
+    if (keys.some((kk) => norm(k) === norm(kk))) return String(row[k] ?? "").trim();
+  }
+  return "";
+}
+
 export default function ErrorCodesAdmin({ data, setData }) {
   const { errorCodes = [], units, failures } = data;
   const models = [...new Set(units.map((u) => u.model).filter(Boolean))].sort();
@@ -149,14 +159,67 @@ export default function ErrorCodesAdmin({ data, setData }) {
   const [search, setSearch] = useState("");
   const [registering, setRegistering] = useState(false);
   const [detail, setDetail] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const importInputRef = useRef(null);
 
   const rows = errorCodes.filter((e) => {
     if (modelFilter !== "all" && e.model !== modelFilter) return false;
-    const q = search.trim();
+    const q = search.trim().toLowerCase();
     if (!q) return true;
-    return [e.model, e.code, e.meaning].filter(Boolean).join(" ").includes(q);
+    return [e.model, e.code, e.meaning].filter(Boolean).join(" ").toLowerCase().includes(q);
   });
   const historyCount = (e) => errorCodeHistory(failures, units, e.model, e.code).length;
+
+  // 엑셀(.xlsx/.xls) 또는 CSV로 여러 건을 한 번에 등록 — 헤더에 "기종"·"코드"가 있는 행만 가져온다.
+  // 이미 있는 (기종,코드) 조합은 upsert로 덮어쓴다(단일 등록과 동일한 규칙).
+  async function handleImportFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImporting(true);
+    try {
+      const XLSX = await import("xlsx");
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const sheetRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      const parsed = sheetRows
+        .map((row) => ({
+          model: pickCol(row, ["기종", "model"]),
+          code: pickCol(row, ["코드", "에러코드", "code"]),
+          meaning: pickCol(row, ["의미", "meaning"]),
+          commonCause: pickCol(row, ["흔한원인", "원인", "commoncause"]),
+          standardAction: pickCol(row, ["표준조치법", "표준조치", "조치법", "standardaction"]),
+        }))
+        .filter((r) => r.model && r.code);
+      if (parsed.length === 0) {
+        alert("가져올 수 있는 행이 없습니다 — '기종'·'코드' 열이 채워진 행이 있는지 확인해주세요.");
+        return;
+      }
+      if (!(await confirmAsync(`${parsed.length}건을 코드집에 등록할까요? 이미 있는 (기종, 코드) 조합은 덮어씁니다.`))) return;
+      const payload = parsed.map((r) => ({
+        model: r.model,
+        code: r.code,
+        meaning: r.meaning || null,
+        common_cause: r.commonCause || null,
+        standard_action: r.standardAction || null,
+      }));
+      const { data: inserted, error } = await supabase.from("error_codes").upsert(payload, { onConflict: "model,code" }).select();
+      if (error) { alert("대량입력 실패: " + error.message); return; }
+      const mapped = (inserted ?? []).map(mapErrorCode);
+      const key = (m, c) => `${m}::${c}`;
+      const newKeys = new Set(mapped.map((m) => key(m.model, m.code)));
+      setData((prev) => ({
+        ...prev,
+        errorCodes: [...prev.errorCodes.filter((x) => !newKeys.has(key(x.model, x.code))), ...mapped],
+      }));
+      alert(`${mapped.length}건을 등록했습니다.`);
+    } catch (err) {
+      alert("엑셀 파일을 읽는 중 오류가 발생했습니다: " + (err.message ?? "알 수 없는 오류"));
+    } finally {
+      setImporting(false);
+    }
+  }
 
   async function createErrorCode(form) {
     const row = {
@@ -205,9 +268,25 @@ export default function ErrorCodesAdmin({ data, setData }) {
     <div className="max-w-[100rem] mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-extrabold">에러코드집</h1>
-        <button onClick={() => setRegistering(true)} className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
-          <Plus size={15} /> 코드 등록
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="hidden"
+            onChange={handleImportFile}
+          />
+          <button
+            disabled={importing}
+            onClick={() => importInputRef.current?.click()}
+            className="flex items-center gap-1.5 text-sm font-bold text-blue-700 bg-blue-50 disabled:opacity-50 rounded-xl px-4 py-2.5 whitespace-nowrap"
+          >
+            <Upload size={15} /> {importing ? "가져오는 중..." : "엑셀로 대량입력"}
+          </button>
+          <button onClick={() => setRegistering(true)} className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
+            <Plus size={15} /> 코드 등록
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-3">

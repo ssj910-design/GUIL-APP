@@ -137,7 +137,7 @@ function MaterialHistoryScreen({ requests, todos, isBilled, onBack }) {
   const withStage = requests.map((r) => ({ ...r, displayStage: isBilled(r.id) ? "비용청구완료" : r.status }));
   const filtered = withStage
     .filter((r) => stage === "전체" || r.displayStage === stage)
-    .filter((r) => r.siteName.includes(query.trim()) || r.part.includes(query.trim()))
+    .filter((r) => r.siteName.toLowerCase().includes(query.trim().toLowerCase()) || r.part.toLowerCase().includes(query.trim().toLowerCase()))
     .sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate));
 
   return (
@@ -236,7 +236,7 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack }) {
   const withStage = quoteRequests.map((q) => ({ ...q, displayStage: isQuoteBilled(q.id) ? "비용청구완료" : q.status }));
   const filtered = withStage
     .filter((q) => stage === "전체" || q.displayStage === stage)
-    .filter((q) => q.siteName.includes(query.trim()) || q.constructionType.includes(query.trim()))
+    .filter((q) => q.siteName.toLowerCase().includes(query.trim().toLowerCase()) || q.constructionType.toLowerCase().includes(query.trim().toLowerCase()))
     .sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate));
 
   return (
@@ -355,7 +355,7 @@ function RestockHistoryScreen({ restockRequests, kitStock, onBack, onReceiveRest
 
   const filtered = restockRequests
     .filter((r) => stage === "전체" || r.status === stage)
-    .filter((r) => r.part.includes(query.trim()) || r.siteName.includes(query.trim()))
+    .filter((r) => r.part.toLowerCase().includes(query.trim().toLowerCase()) || r.siteName.toLowerCase().includes(query.trim().toLowerCase()))
     .sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate));
 
   return (

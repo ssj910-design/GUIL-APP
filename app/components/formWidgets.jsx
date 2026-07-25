@@ -14,7 +14,7 @@ export function SiteSearchSelect({ value, onChange, placeholder = "현장명을 
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const selected = sites.find((s) => s.id === value);
-  const filtered = sites.filter((s) => s.name.includes(query.trim()));
+  const filtered = sites.filter((s) => s.name.toLowerCase().includes(query.trim().toLowerCase()));
 
   return (
     <div className="relative">

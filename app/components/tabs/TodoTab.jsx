@@ -107,10 +107,10 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
     );
   }
 
-  const q = search.trim();
+  const q = search.trim().toLowerCase();
   const visible = mine
     .filter((t) => showDone || !t.done)
-    .filter((t) => !q || t.title.includes(q) || (t.siteName ?? "").includes(q))
+    .filter((t) => !q || t.title.toLowerCase().includes(q) || (t.siteName ?? "").toLowerCase().includes(q))
     .slice()
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
@@ -642,7 +642,7 @@ export function TodoManageScreen({ todos, onToggle, onAssignTodo, onReassignTodo
 
   const filtered = todos.filter((t) => {
     const matchesSource = source === "전체" || t.source === sourceMatch[source];
-    const matchesQuery = t.siteName.includes(query.trim()) || t.assignee.includes(query.trim());
+    const matchesQuery = t.siteName.toLowerCase().includes(query.trim().toLowerCase()) || t.assignee.toLowerCase().includes(query.trim().toLowerCase());
     return matchesSource && matchesQuery;
   });
 
