@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, labelToSeq, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
 import { useLiveInspections } from "@/app/hooks/useLiveInspections";
-import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons } from "@/app/components/ui";
+import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
@@ -1521,14 +1521,24 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
   const badgeCount = { 미배정: unassignedCount, 처리등록: waitingCount };
   const swipe = useSwipeSubtab(subTabs, subTab, setSubTab);
 
+  // 접수등록/미배정/처리등록/처리현황/에러코드집 각 탭의 패널 — SwipeSubtabTrack이 드래그 중
+  // 옆 탭을 함께 렌더링할 때 쓴다.
+  function renderFailurePane(tab) {
+    if (tab === "접수등록") return <FailureRegisterForm onReported={onReported} onDispatch={onDispatch} failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />;
+    if (tab === "미배정") return <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
+    if (tab === "처리등록") return <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
+    if (tab === "처리현황") return <FailureStatusOverview failures={failures} onReassign={onReassign} attendances={attendances} todayLeaves={todayLeaves} />;
+    return <ErrorCodeBook errorCodes={errorCodes} failures={failures} />;
+  }
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
-      <div className="flex border-b border-slate-100 shrink-0 overflow-x-auto">
+      <div className="flex border-b border-slate-100 shrink-0 overflow-x-auto relative">
         {subTabs.map((t) => (
           <button
             key={t}
             onClick={() => setSubTab(t)}
-            className={`flex-1 py-3 text-xs font-bold shrink-0 px-1.5 whitespace-nowrap flex items-center justify-center gap-1 ${subTab === t ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}
+            className={`flex-1 py-3 text-xs font-bold shrink-0 px-1.5 whitespace-nowrap flex items-center justify-center gap-1 ${subTab === t ? "text-blue-700" : "text-slate-400"}`}
           >
             {!!badgeCount[t] && (
               <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">{badgeCount[t]}</span>
@@ -1536,24 +1546,15 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
             {t}
           </button>
         ))}
+        <SwipeIndicatorBar swipe={swipe} />
       </div>
-      <div
-        className="flex-1 flex flex-col overflow-hidden min-h-0"
-        style={swipe.swipeStyle}
-        onTouchStart={swipe.onTouchStart}
-        onTouchMove={swipe.onTouchMove}
-        onTouchEnd={swipe.onTouchEnd}
-      >
-        {subTab === "접수등록" && <FailureRegisterForm onReported={onReported} onDispatch={onDispatch} failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />}
-        {subTab === "미배정" && (
-          <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />
-        )}
-        {subTab === "처리등록" && (
-          <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />
-        )}
-        {subTab === "처리현황" && <FailureStatusOverview failures={failures} onReassign={onReassign} attendances={attendances} todayLeaves={todayLeaves} />}
-        {subTab === "에러코드집" && <ErrorCodeBook errorCodes={errorCodes} failures={failures} />}
-      </div>
+      <SwipeSubtabTrack
+        swipe={swipe}
+        tabs={subTabs}
+        trackClassName="flex-1 min-h-0"
+        paneClassName="flex flex-col overflow-hidden min-h-0"
+        renderTab={renderFailurePane}
+      />
       <SmsToast message={toast} />
     </div>
   );

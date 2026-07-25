@@ -10,7 +10,7 @@ import { TODAY_STR } from "@/lib/constants";
 import { annualLeaveDays } from "@/lib/leave";
 import { DutyRoster } from "@/app/components/DutyRoster";
 import { DutyGenerateWidget } from "@/app/components/DutyGenerateWidget";
-import { Sheet } from "@/app/components/ui";
+import { Sheet, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 
@@ -416,48 +416,51 @@ export function WorkCalendarSheet({ schedules, swaps, onSetPerson, onRequestSwap
   const subTabs = ["당직·숙직", "연차"];
   const swipe = useSwipeSubtab(subTabs, subTab, setSubTab);
 
+  // 당직·숙직/연차 각 탭의 패널 — SwipeSubtabTrack이 드래그 중 옆 탭을 함께 렌더링할 때 쓴다.
+  function renderWorkCalendarPane(tab) {
+    if (tab === "당직·숙직") return (
+      <DutyRoster
+        schedules={schedules}
+        swaps={swaps}
+        onSetPerson={onSetPerson}
+        onRequestSwap={onRequestSwap}
+        onRespondSwap={onRespondSwap}
+        embedded
+        showControls
+        belowCalendar={
+          <DutyGenerateWidget
+            schedules={schedules}
+            onSchedulesChange={onSchedulesChange}
+            onEngineersChange={onEngineersChange}
+          />
+        }
+      />
+    );
+    return <LeaveCalendarTab schedules={schedules} />;
+  }
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
-      <div className="flex border-b border-slate-100 shrink-0 overflow-x-auto">
+      <div className="flex border-b border-slate-100 shrink-0 overflow-x-auto relative">
         {subTabs.map((t) => (
           <button
             key={t}
             onClick={() => setSubTab(t)}
-            className={`flex-1 py-3 text-xs font-bold shrink-0 px-1.5 whitespace-nowrap flex items-center justify-center gap-1 ${subTab === t ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}
+            className={`flex-1 py-3 text-xs font-bold shrink-0 px-1.5 whitespace-nowrap flex items-center justify-center gap-1 ${subTab === t ? "text-blue-700" : "text-slate-400"}`}
           >
             {t}
           </button>
         ))}
+        <SwipeIndicatorBar swipe={swipe} />
       </div>
 
-      <div
-        className="flex-1 overflow-y-auto"
-        style={swipe.swipeStyle}
-        onTouchStart={swipe.onTouchStart}
-        onTouchMove={swipe.onTouchMove}
-        onTouchEnd={swipe.onTouchEnd}
-      >
-        {subTab === "당직·숙직" ? (
-          <DutyRoster
-            schedules={schedules}
-            swaps={swaps}
-            onSetPerson={onSetPerson}
-            onRequestSwap={onRequestSwap}
-            onRespondSwap={onRespondSwap}
-            embedded
-            showControls
-            belowCalendar={
-              <DutyGenerateWidget
-                schedules={schedules}
-                onSchedulesChange={onSchedulesChange}
-                onEngineersChange={onEngineersChange}
-              />
-            }
-          />
-        ) : (
-          <LeaveCalendarTab schedules={schedules} />
-        )}
-      </div>
+      <SwipeSubtabTrack
+        swipe={swipe}
+        tabs={subTabs}
+        trackClassName="flex-1"
+        paneClassName="overflow-y-auto"
+        renderTab={renderWorkCalendarPane}
+      />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, f
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
-import { Badge, TimelineRow, HistoryCard, PrimaryButton, Sheet, Field, inputCls, DrillHeader, MapLinkButtons } from "@/app/components/ui";
+import { Badge, TimelineRow, HistoryCard, PrimaryButton, Sheet, Field, inputCls, DrillHeader, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { BillingCard } from "@/app/components/tabs/BillingTab";
@@ -36,29 +36,9 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
   const elevatorSubTabs = ["정보", "고장", "검사", "부품교체내역"];
   const swipe = useSwipeSubtab(elevatorSubTabs, subTab, setSubTab);
 
-  return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-white">
-      <DrillHeader title="승강기정보" onBack={onBack} onHome={onHome} />
-      <div className="flex border-b border-slate-100 shrink-0">
-        {elevatorSubTabs.map((t) => (
-          <button
-            key={t}
-            onClick={() => setSubTab(t)}
-            className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1 ${subTab === t ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      <div
-        className="flex-1 overflow-y-auto"
-        style={swipe.swipeStyle}
-        onTouchStart={swipe.onTouchStart}
-        onTouchMove={swipe.onTouchMove}
-        onTouchEnd={swipe.onTouchEnd}
-      >
-        {subTab === "정보" && (
+  // 정보/고장/검사/부품교체내역 각 탭의 패널 — SwipeSubtabTrack이 드래그 중 옆 탭을 함께 렌더링할 때 쓴다.
+  function renderElevatorPane(tab) {
+    if (tab === "정보") return (
           <div className="bg-slate-50 pb-6">
             <p className="px-5 pt-4 pb-2 text-xs font-bold text-slate-400">기본정보</p>
             <div className="bg-white">
@@ -78,9 +58,9 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
             </div>
             {liveInfo && <p className="px-5 pt-2 text-[10px] text-slate-400">* 국가승강기정보센터 실시간 데이터</p>}
           </div>
-        )}
+        );
 
-        {subTab === "고장" && (
+    if (tab === "고장") return (
           <div className="bg-slate-50 pt-4 pb-2">
             <p className="px-5 pb-3 text-xs font-bold text-slate-400">고장 과거이력</p>
             {unitFailures.length === 0 ? (
@@ -135,9 +115,9 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
               </div>
             )}
           </div>
-        )}
+        );
 
-        {subTab === "검사" && (
+    if (tab === "검사") return (
           <div className="bg-slate-50 pt-4 pb-2">
             <p className="px-5 pb-3 text-xs font-bold text-slate-400">검사이력</p>
             {unitGovNo ? (
@@ -214,9 +194,9 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
               </div>
             )}
           </div>
-        )}
+        );
 
-        {subTab === "부품교체내역" && (
+    return (
           <div className="bg-slate-50 pt-4 pb-6 px-5">
             <p className="pb-3 text-xs font-bold text-slate-400">부품교체내역</p>
             {unitBillings.length === 0 ? (
@@ -233,8 +213,32 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
               </div>
             )}
           </div>
-        )}
+        );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden bg-white">
+      <DrillHeader title="승강기정보" onBack={onBack} onHome={onHome} />
+      <div className="flex border-b border-slate-100 shrink-0 relative">
+        {elevatorSubTabs.map((t) => (
+          <button
+            key={t}
+            onClick={() => setSubTab(t)}
+            className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1 ${subTab === t ? "text-blue-700" : "text-slate-400"}`}
+          >
+            {t}
+          </button>
+        ))}
+        <SwipeIndicatorBar swipe={swipe} />
       </div>
+
+      <SwipeSubtabTrack
+        swipe={swipe}
+        tabs={elevatorSubTabs}
+        trackClassName="flex-1"
+        paneClassName="overflow-y-auto"
+        renderTab={renderElevatorPane}
+      />
       {inspectionFailTarget && (
         <InspectionFailDetailSheet
           inspection={inspectionFailTarget.inspection}

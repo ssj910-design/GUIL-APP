@@ -3,7 +3,7 @@ import { Receipt, Check, Search, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, formatPhone } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
-import { DDay, PrimaryButton, Field, inputCls, DrillHeader } from "@/app/components/ui";
+import { DDay, PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload, SinglePhotoUpload } from "@/app/components/formWidgets";
 import { emptyPartRow, formatPartRows, PartsRowsInput, UnitPickGrid } from "@/app/components/tabs/MaterialTab";
@@ -164,31 +164,9 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     setTimeout(() => setSubmitted(null), 2600);
   }
 
-  return (
-    <div className="flex-1 overflow-y-auto pb-4">
-      <div className="flex border-b border-slate-100 shrink-0">
-        <button
-          onClick={() => { setMode("material"); setBillStep(0); setBillToast(null); }}
-          className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${mode === "material" ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}
-        >
-          자재 지급건
-        </button>
-        <button
-          onClick={() => { setMode("manual"); setBillStep(0); setBillToast(null); }}
-          className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${mode === "manual" ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}
-        >
-          직접 입력
-        </button>
-      </div>
-
-      <div
-        className="min-h-full"
-        style={swipe.swipeStyle}
-        onTouchStart={swipe.onTouchStart}
-        onTouchMove={swipe.onTouchMove}
-        onTouchEnd={swipe.onTouchEnd}
-      >
-      {mode === "material" ? (
+  // 자재 지급건/직접 입력 각 탭의 패널 — SwipeSubtabTrack이 드래그 중 옆 탭을 함께 렌더링할 때 쓴다.
+  function renderBillingPane(tab) {
+    if (tab === "material") return (
         openTodos.length === 0 ? (
           <div className="flex flex-col items-center justify-center px-8 text-center pt-16">
             <Receipt size={32} className="text-slate-300 mb-3" />
@@ -297,7 +275,9 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
             </div>
           </div>
         )
-      ) : (
+    );
+
+    return (
         <div className="px-5 pt-4">
           <p className="text-[11px] text-slate-400 mb-3 px-1">자재 신청 없이 현장에서 바로 교체한 부품(예비 재고 사용 등)을 직접 입력해 청구합니다.</p>
           <div className="bg-white rounded-2xl border border-slate-200 p-4 overflow-visible">
@@ -431,8 +411,34 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
             )}
           </div>
         </div>
-      )}
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex border-b border-slate-100 shrink-0 relative">
+        <button
+          onClick={() => { setMode("material"); setBillStep(0); setBillToast(null); }}
+          className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${mode === "material" ? "text-blue-700" : "text-slate-400"}`}
+        >
+          자재 지급건
+        </button>
+        <button
+          onClick={() => { setMode("manual"); setBillStep(0); setBillToast(null); }}
+          className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${mode === "manual" ? "text-blue-700" : "text-slate-400"}`}
+        >
+          직접 입력
+        </button>
+        <SwipeIndicatorBar swipe={swipe} />
       </div>
+
+      <SwipeSubtabTrack
+        swipe={swipe}
+        tabs={billingSubTabs}
+        trackClassName="flex-1"
+        paneClassName="overflow-y-auto pb-4"
+        renderTab={renderBillingPane}
+      />
 
       {/* 필수 미입력 안내 토스트 (자재·견적과 동일 패턴) */}
       {billToast && (

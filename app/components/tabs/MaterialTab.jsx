@@ -3,7 +3,7 @@ import { ChevronRight, X, Plus, Search, PackageCheck, PackageX, AlertTriangle, C
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, realInstallPlace, unitIdFor, profileIdByName, formatPhone } from "@/lib/utils";
 import { TODAY_STR, QUOTE_STAGES, KIT_PARTS } from "@/lib/constants";
-import { PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
+import { PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
@@ -813,25 +813,9 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
     );
   }
 
-  return (
-    <div className="flex-1 overflow-y-auto pb-4">
-      <div className="flex border-b border-slate-100 shrink-0">
-        <button onClick={() => setSub("material")} className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${sub === "material" ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}>
-          자재 신청
-        </button>
-        <button onClick={() => setSub("quote")} className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${sub === "quote" ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}>
-          견적 요청
-        </button>
-      </div>
-
-      <div
-        className="min-h-full"
-        style={swipe.swipeStyle}
-        onTouchStart={swipe.onTouchStart}
-        onTouchMove={swipe.onTouchMove}
-        onTouchEnd={swipe.onTouchEnd}
-      >
-      {sub === "material" ? (
+  // 자재 신청/견적 요청 각 탭의 패널 — SwipeSubtabTrack이 드래그 중 옆 탭을 함께 렌더링할 때 쓴다.
+  function renderMaterialPane(tab) {
+    if (tab === "material") return (
         <>
           <div className="px-5 pt-4">
             <div className="bg-white rounded-2xl border border-slate-200 p-4 overflow-visible">
@@ -1077,7 +1061,9 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
             </div>
           </div>
         </>
-      ) : (
+    );
+
+    return (
         <div className="px-5 pt-4">
           <div className="bg-white rounded-2xl border border-slate-200 p-4 overflow-visible">
             <div className="flex gap-1 mb-2">
@@ -1165,8 +1151,27 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
             </button>
           </div>
         </div>
-      )}
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex border-b border-slate-100 shrink-0 relative">
+        <button onClick={() => setSub("material")} className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${sub === "material" ? "text-blue-700" : "text-slate-400"}`}>
+          자재 신청
+        </button>
+        <button onClick={() => setSub("quote")} className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${sub === "quote" ? "text-blue-700" : "text-slate-400"}`}>
+          견적 요청
+        </button>
+        <SwipeIndicatorBar swipe={swipe} />
       </div>
+      <SwipeSubtabTrack
+        swipe={swipe}
+        tabs={materialSubTabs}
+        trackClassName="flex-1"
+        paneClassName="overflow-y-auto pb-4"
+        renderTab={renderMaterialPane}
+      />
 
       {rejectTarget && (
         <Sheet title="자재 반려하기" onClose={() => setRejectTarget(null)}>

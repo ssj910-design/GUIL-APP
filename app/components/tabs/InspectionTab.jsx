@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { TODAY_STR } from "@/lib/constants";
 import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed } from "@/lib/utils";
-import { Badge, DDay, MapLinkButtons } from "@/app/components/ui";
+import { Badge, DDay, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { usePriorFlaggedInspection } from "@/app/hooks/useLiveInspections";
@@ -97,18 +97,80 @@ export function InspectionTab({ inspections }) {
   const inspectionSubTabs = ["검사도래현장", "조건부/불합격 현장"];
   const swipe = useSwipeSubtab(inspectionSubTabs, subTab, setSubTab);
 
+  // 검사도래현장/조건부·불합격 현장 각 탭의 패널 — SwipeSubtabTrack이 드래그 방향에 따라
+  // 현재 탭과 옆 탭을 동시에 렌더링할 때 이 함수로 각 탭의 내용을 얻는다.
+  function renderInspectionPane(tab) {
+    if (tab === "검사도래현장") {
+      return dueSoon.length === 0 ? (
+        <p className="text-xs text-slate-400 text-center py-10">도래한 검사 현장이 없습니다</p>
+      ) : (
+        dueSoon.map((insp) => {
+          const priorUnit = findUnitForInspection(insp, allUnits);
+          return (
+            <DueSoonCard
+              key={insp.id}
+              insp={insp}
+              address={stripCityPrefix(siteById.get(insp.siteId)?.address)}
+              site={siteById.get(insp.siteId)}
+              govElevatorNo={priorUnit?.govNo}
+              onOpenFail={setInspectionFailTarget}
+            />
+          );
+        })
+      );
+    }
+    return flagged.length === 0 ? (
+      <p className="text-xs text-slate-400 text-center py-10">조건부·불합격 현장이 없습니다</p>
+    ) : (
+      flagged.map((insp) => {
+        const isLive = insp.id?.startsWith("unit-");
+        // 불합격=빨강(심각) / 조건부합격=주황(주의) — 고장카드처럼 왼쪽 색바로 구분
+        const bar = insp.result === "fail" ? "border-l-red-500" : "border-l-amber-400";
+        return (
+          <div
+            key={insp.id}
+            onClick={isLive ? () => setInspectionFailTarget(insp) : undefined}
+            className={`bg-white rounded-xl border border-slate-200 border-l-4 ${bar} overflow-hidden touch-manipulation ${isLive ? "active:bg-slate-50 cursor-pointer" : ""}`}
+          >
+            <div className="p-3.5">
+              {/* 우측엔 결과 배지 1개만 — 정기검사는 아래 주소 앞으로 빼서 우측 혼잡 해소 */}
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <p className="font-bold text-slate-800 text-[15px] truncate min-w-0">{insp.siteName} · {insp.elevatorNo}</p>
+                <Badge result={insp.result} />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[12px] text-slate-400 truncate min-w-0">
+                  <span className="font-medium text-slate-500">{insp.type}</span>
+                  {stripCityPrefix(siteById.get(insp.siteId)?.address) ? ` · ${stripCityPrefix(siteById.get(insp.siteId)?.address)}` : ""}
+                </p>
+                <span className="shrink-0 flex items-center gap-1.5">
+                  {insp.dueDate && <span className="text-xs font-extrabold text-blue-700 whitespace-nowrap">{formatMonthDay(insp.dueDate)}</span>}
+                  <DDay dueDate={insp.dueDate} />
+                </span>
+              </div>
+              {insp.notes && (
+                <p className="text-[11px] text-red-600 leading-relaxed bg-red-50 rounded-lg px-2.5 py-1.5 mt-2">지적사항: {insp.notes}</p>
+              )}
+            </div>
+          </div>
+        );
+      })
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex border-b border-slate-100 shrink-0">
+      <div className="flex border-b border-slate-100 shrink-0 relative">
         {inspectionSubTabs.map((t) => (
           <button
             key={t}
             onClick={() => setSubTab(t)}
-            className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${subTab === t ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}
+            className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${subTab === t ? "text-blue-700" : "text-slate-400"}`}
           >
             {t}
           </button>
         ))}
+        <SwipeIndicatorBar swipe={swipe} />
       </div>
 
       <div className="px-5 pt-4 pb-2 shrink-0 flex items-center justify-between">
@@ -133,69 +195,13 @@ export function InspectionTab({ inspections }) {
         </div>
       )}
 
-      <div
-        className="flex-1 overflow-y-auto px-5 pb-4 space-y-2.5"
-        style={swipe.swipeStyle}
-        onTouchStart={swipe.onTouchStart}
-        onTouchMove={swipe.onTouchMove}
-        onTouchEnd={swipe.onTouchEnd}
-      >
-        {subTab === "검사도래현장" ? (
-          dueSoon.length === 0 ? (
-            <p className="text-xs text-slate-400 text-center py-10">도래한 검사 현장이 없습니다</p>
-          ) : (
-            dueSoon.map((insp) => {
-              const priorUnit = findUnitForInspection(insp, allUnits);
-              return (
-                <DueSoonCard
-                  key={insp.id}
-                  insp={insp}
-                  address={stripCityPrefix(siteById.get(insp.siteId)?.address)}
-                  site={siteById.get(insp.siteId)}
-                  govElevatorNo={priorUnit?.govNo}
-                  onOpenFail={setInspectionFailTarget}
-                />
-              );
-            })
-          )
-        ) : flagged.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-10">조건부·불합격 현장이 없습니다</p>
-        ) : (
-          flagged.map((insp) => {
-            const isLive = insp.id?.startsWith("unit-");
-            // 불합격=빨강(심각) / 조건부합격=주황(주의) — 고장카드처럼 왼쪽 색바로 구분
-            const bar = insp.result === "fail" ? "border-l-red-500" : "border-l-amber-400";
-            return (
-              <div
-                key={insp.id}
-                onClick={isLive ? () => setInspectionFailTarget(insp) : undefined}
-                className={`bg-white rounded-xl border border-slate-200 border-l-4 ${bar} overflow-hidden touch-manipulation ${isLive ? "active:bg-slate-50 cursor-pointer" : ""}`}
-              >
-                <div className="p-3.5">
-                  {/* 우측엔 결과 배지 1개만 — 정기검사는 아래 주소 앞으로 빼서 우측 혼잡 해소 */}
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <p className="font-bold text-slate-800 text-[15px] truncate min-w-0">{insp.siteName} · {insp.elevatorNo}</p>
-                    <Badge result={insp.result} />
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[12px] text-slate-400 truncate min-w-0">
-                      <span className="font-medium text-slate-500">{insp.type}</span>
-                      {stripCityPrefix(siteById.get(insp.siteId)?.address) ? ` · ${stripCityPrefix(siteById.get(insp.siteId)?.address)}` : ""}
-                    </p>
-                    <span className="shrink-0 flex items-center gap-1.5">
-                      {insp.dueDate && <span className="text-xs font-extrabold text-blue-700 whitespace-nowrap">{formatMonthDay(insp.dueDate)}</span>}
-                      <DDay dueDate={insp.dueDate} />
-                    </span>
-                  </div>
-                  {insp.notes && (
-                    <p className="text-[11px] text-red-600 leading-relaxed bg-red-50 rounded-lg px-2.5 py-1.5 mt-2">지적사항: {insp.notes}</p>
-                  )}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+      <SwipeSubtabTrack
+        swipe={swipe}
+        tabs={inspectionSubTabs}
+        trackClassName="flex-1"
+        paneClassName="overflow-y-auto px-5 pb-4 space-y-2.5"
+        renderTab={renderInspectionPane}
+      />
 
       {inspectionFailTarget && (
         <InspectionFailDetailSheet inspection={inspectionFailTarget} onClose={() => setInspectionFailTarget(null)} />

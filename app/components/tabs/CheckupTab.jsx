@@ -6,7 +6,7 @@ import { useHolidays } from "@/app/hooks/useHolidays";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 import { siteUnitList, distanceKm } from "@/lib/utils";
 import { mapSelfCheck, mapSelfCheckItem, mapSelfCheckItemState } from "@/lib/mappers";
-import { PrimaryButton, Sheet, Field, inputCls, MapLinkButtons } from "@/app/components/ui";
+import { PrimaryButton, Sheet, Field, inputCls, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import SELF_CHECK_ITEM_CODES from "@/lib/data/selfCheckItemCodes.json";
@@ -365,18 +365,183 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   const checkupSubTabs = ["계획", "처리", "달력"];
   const swipe = useSwipeSubtab(checkupSubTabs, subTab, setSubTab);
 
+  // 계획/처리/달력 각 탭의 패널 — SwipeSubtabTrack이 드래그 중 옆 탭을 함께 렌더링할 때 쓴다.
+  function renderCheckupPane(tab) {
+    if (tab === "계획") {
+      return (
+        <div className="px-5 pt-2 pb-4">
+          <div className="relative mb-3">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="현장명 또는 주소로 검색"
+              className="w-full border border-slate-300 rounded-xl pl-9 pr-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex items-center gap-3 mb-3">
+            <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+              <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
+              모든 현장보기
+            </label>
+            <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+              <input type="checkbox" checked={showCompleted} onChange={(e) => setShowCompleted(e.target.checked)} />
+              점검완료현장 보기
+            </label>
+          </div>
+          <div className="space-y-2.5">
+            {planSites.map((s) => {
+              const hasUnits = siteUnitList(s, units).filter((u) => u.id).length > 0;
+              const planned = plannedDateOf(s);
+              const dist = distOf(s);
+              return (
+                <div key={s.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                  {/* 윗줄: 현장명·대수 + 예정일 배지 / 거리·주소 — 개요라 정보 먼저 */}
+                  <div className="p-3.5 pb-2.5">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <p className="font-bold text-slate-800 text-sm truncate">{s.name} · {siteUnitList(s, units).length}대</p>
+                      {planned
+                        ? <span className="shrink-0 text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">예정 {fmtMD(planned)}</span>
+                        : <span className="shrink-0 text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">미정</span>}
+                    </div>
+                    <p className="text-[11px] text-slate-400 flex items-center gap-1 min-w-0">
+                      {dist != null && <span className="inline-flex items-center gap-0.5 font-bold text-blue-600 shrink-0"><MapPin size={11} strokeWidth={2.5} />{fmtDist(dist)} ·</span>}
+                      <span className="truncate">{s.address}</span>
+                    </p>
+                  </div>
+                  {/* 아랫줄: 지도 + 액션 버튼(풀폭) */}
+                  <div className="flex items-center gap-2 px-3.5 pb-3">
+                    <MapLinkButtons site={s} />
+                    {hasUnits ? (
+                      <>
+                        <button
+                          onClick={() => { setScheduleTarget(s); setScheduleDate(TODAY_STR); }}
+                          className="flex-1 text-xs font-bold text-blue-700 bg-blue-50 py-2 rounded-lg active:bg-blue-100"
+                        >
+                          일정 등록
+                        </button>
+                        <button
+                          onClick={() => openCheckup(s)}
+                          className="flex-1 text-xs font-bold text-white bg-blue-700 py-2 rounded-lg active:bg-blue-800"
+                        >
+                          자체점검 등록
+                        </button>
+                      </>
+                    ) : (
+                      <span className="flex-1 text-center text-[10px] text-slate-400">호기 미등록</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {planSites.length === 0 && <p className="text-xs text-slate-400 text-center py-8">표시할 현장이 없습니다</p>}
+          </div>
+        </div>
+      );
+    }
+
+    if (tab === "처리") {
+      return (
+        <div className="px-5 pt-4 pb-4">
+          {doneChecks.length === 0 ? (
+            <p className="text-xs text-slate-400 text-center py-10">해당 기간에 자체점검 등록된 현장이 없습니다</p>
+          ) : (
+            <div className="space-y-2.5">
+              {doneChecks.map((c) => (
+                <div key={c.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-800 text-sm">{locOfCheck(c)}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">완료일 {c.doneDate}</p>
+                    </div>
+                    {c.govResultCode === "000" ? (
+                      <span className="shrink-0 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full">제출 성공</span>
+                    ) : c.govSubmittedAt ? (
+                      <span className="shrink-0 text-[10px] font-bold text-red-600 bg-red-50 px-2 py-1 rounded-full">제출 실패</span>
+                    ) : (
+                      <span className="shrink-0 text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full">미제출</span>
+                    )}
+                  </div>
+                  {c.govSubmittedAt && (
+                    <p className="text-[10px] text-slate-400 mt-1">전송 {formatDateTime(c.govSubmittedAt)}</p>
+                  )}
+                  {c.govResultCode && c.govResultCode !== "000" && (
+                    <p className="text-[11px] text-red-600 mt-0.5">{c.govResultCode} {c.govResultMsg}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div className="pb-4 px-2">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
+            {WEEK_LABELS.map((d, idx) => (
+              <p key={d} className={`text-center text-[11px] font-bold py-2 ${idx === 0 ? "text-red-500" : idx === 6 ? "text-blue-500" : "text-slate-500"}`}>{d}</p>
+            ))}
+          </div>
+          <div className="grid grid-cols-7">
+            {Array.from({ length: startDow }).map((_, i) => (
+              <div key={"pad" + i} className="min-h-[84px] border-b border-r border-slate-100 bg-slate-50/40" />
+            ))}
+            {monthDays.map((d) => {
+              const dow = (startDow + d - 1) % 7;
+              const iso = isoOf(d);
+              const isToday = iso === TODAY_STR;
+              const holiday = HOLIDAY[iso];
+              const daySchedules = checksThisMonth.filter((c) => c.plannedDate === iso);
+              const numColorCls = holiday || dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : isToday ? "text-blue-700" : "text-slate-500";
+              return (
+                <button
+                  key={d}
+                  onClick={() => setDayPopup(iso)}
+                  className={`min-h-[84px] border-b border-r border-slate-100 p-1.5 flex flex-col items-start text-left active:bg-slate-50 ${isToday ? "bg-blue-50" : holiday ? "bg-red-50/40" : ""}`}
+                >
+                  <div className="flex items-baseline gap-1 mb-0.5 w-full min-w-0">
+                    <span className={`text-[11px] font-bold ${numColorCls}`}>{d}</span>
+                    {holiday && <span className="text-[9px] font-bold text-red-400 truncate">{holiday}</span>}
+                  </div>
+                  {daySchedules.length > 0 && (
+                    <div className="space-y-0.5 w-full">
+                      {daySchedules.slice(0, 2).map((c) => (
+                        <p key={c.id} className="text-[10px] font-semibold rounded px-1 py-0.5 truncate bg-blue-50 text-blue-700">{siteById.get(unitById.get(c.unitId)?.siteId)?.name ?? "-"}</p>
+                      ))}
+                      {daySchedules.length > 2 && (
+                        <p className="text-[9px] text-slate-400 px-1">+{daySchedules.length - 2}건 더</p>
+                      )}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 mt-2.5 px-1 text-[10px] text-slate-400 flex-wrap">
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-100 inline-block" /> 점검 예정 현장</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-50 border border-blue-300 inline-block" /> 오늘</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-50 border border-red-200 inline-block" /> 공휴일</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex border-b border-slate-100 shrink-0">
+      <div className="flex border-b border-slate-100 shrink-0 relative">
         {checkupSubTabs.map((t) => (
           <button
             key={t}
             onClick={() => setSubTab(t)}
-            className={`flex-1 py-3 text-sm font-bold ${subTab === t ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}
+            className={`flex-1 py-3 text-sm font-bold ${subTab === t ? "text-blue-700" : "text-slate-400"}`}
           >
             {t}
           </button>
         ))}
+        <SwipeIndicatorBar swipe={swipe} />
       </div>
 
       <div className="px-5 pt-4 pb-2 shrink-0">
@@ -394,170 +559,13 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
         </div>
       </div>
 
-      <div
-        className="flex-1 overflow-y-auto"
-        style={swipe.swipeStyle}
-        onTouchStart={swipe.onTouchStart}
-        onTouchMove={swipe.onTouchMove}
-        onTouchEnd={swipe.onTouchEnd}
-      >
-        {subTab === "계획" && (
-          <div className="px-5 pt-2 pb-4">
-            <div className="relative mb-3">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="현장명 또는 주소로 검색"
-                className="w-full border border-slate-300 rounded-xl pl-9 pr-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div className="flex items-center gap-3 mb-3">
-              <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
-                <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
-                모든 현장보기
-              </label>
-              <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
-                <input type="checkbox" checked={showCompleted} onChange={(e) => setShowCompleted(e.target.checked)} />
-                점검완료현장 보기
-              </label>
-            </div>
-            <div className="space-y-2.5">
-              {planSites.map((s) => {
-                const hasUnits = siteUnitList(s, units).filter((u) => u.id).length > 0;
-                const planned = plannedDateOf(s);
-                const dist = distOf(s);
-                return (
-                  <div key={s.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                    {/* 윗줄: 현장명·대수 + 예정일 배지 / 거리·주소 — 개요라 정보 먼저 */}
-                    <div className="p-3.5 pb-2.5">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <p className="font-bold text-slate-800 text-sm truncate">{s.name} · {siteUnitList(s, units).length}대</p>
-                        {planned
-                          ? <span className="shrink-0 text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">예정 {fmtMD(planned)}</span>
-                          : <span className="shrink-0 text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">미정</span>}
-                      </div>
-                      <p className="text-[11px] text-slate-400 flex items-center gap-1 min-w-0">
-                        {dist != null && <span className="inline-flex items-center gap-0.5 font-bold text-blue-600 shrink-0"><MapPin size={11} strokeWidth={2.5} />{fmtDist(dist)} ·</span>}
-                        <span className="truncate">{s.address}</span>
-                      </p>
-                    </div>
-                    {/* 아랫줄: 지도 + 액션 버튼(풀폭) */}
-                    <div className="flex items-center gap-2 px-3.5 pb-3">
-                      <MapLinkButtons site={s} />
-                      {hasUnits ? (
-                        <>
-                          <button
-                            onClick={() => { setScheduleTarget(s); setScheduleDate(TODAY_STR); }}
-                            className="flex-1 text-xs font-bold text-blue-700 bg-blue-50 py-2 rounded-lg active:bg-blue-100"
-                          >
-                            일정 등록
-                          </button>
-                          <button
-                            onClick={() => openCheckup(s)}
-                            className="flex-1 text-xs font-bold text-white bg-blue-700 py-2 rounded-lg active:bg-blue-800"
-                          >
-                            자체점검 등록
-                          </button>
-                        </>
-                      ) : (
-                        <span className="flex-1 text-center text-[10px] text-slate-400">호기 미등록</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-              {planSites.length === 0 && <p className="text-xs text-slate-400 text-center py-8">표시할 현장이 없습니다</p>}
-            </div>
-          </div>
-        )}
-
-        {subTab === "처리" && (
-          <div className="px-5 pt-4 pb-4">
-            {doneChecks.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-10">해당 기간에 자체점검 등록된 현장이 없습니다</p>
-            ) : (
-              <div className="space-y-2.5">
-                {doneChecks.map((c) => (
-                  <div key={c.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-bold text-slate-800 text-sm">{locOfCheck(c)}</p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">완료일 {c.doneDate}</p>
-                      </div>
-                      {c.govResultCode === "000" ? (
-                        <span className="shrink-0 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full">제출 성공</span>
-                      ) : c.govSubmittedAt ? (
-                        <span className="shrink-0 text-[10px] font-bold text-red-600 bg-red-50 px-2 py-1 rounded-full">제출 실패</span>
-                      ) : (
-                        <span className="shrink-0 text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full">미제출</span>
-                      )}
-                    </div>
-                    {c.govSubmittedAt && (
-                      <p className="text-[10px] text-slate-400 mt-1">전송 {formatDateTime(c.govSubmittedAt)}</p>
-                    )}
-                    {c.govResultCode && c.govResultCode !== "000" && (
-                      <p className="text-[11px] text-red-600 mt-0.5">{c.govResultCode} {c.govResultMsg}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {subTab === "달력" && (
-          <div className="pb-4 px-2">
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
-                {WEEK_LABELS.map((d, idx) => (
-                  <p key={d} className={`text-center text-[11px] font-bold py-2 ${idx === 0 ? "text-red-500" : idx === 6 ? "text-blue-500" : "text-slate-500"}`}>{d}</p>
-                ))}
-              </div>
-              <div className="grid grid-cols-7">
-                {Array.from({ length: startDow }).map((_, i) => (
-                  <div key={"pad" + i} className="min-h-[84px] border-b border-r border-slate-100 bg-slate-50/40" />
-                ))}
-                {monthDays.map((d) => {
-                  const dow = (startDow + d - 1) % 7;
-                  const iso = isoOf(d);
-                  const isToday = iso === TODAY_STR;
-                  const holiday = HOLIDAY[iso];
-                  const daySchedules = checksThisMonth.filter((c) => c.plannedDate === iso);
-                  const numColorCls = holiday || dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : isToday ? "text-blue-700" : "text-slate-500";
-                  return (
-                    <button
-                      key={d}
-                      onClick={() => setDayPopup(iso)}
-                      className={`min-h-[84px] border-b border-r border-slate-100 p-1.5 flex flex-col items-start text-left active:bg-slate-50 ${isToday ? "bg-blue-50" : holiday ? "bg-red-50/40" : ""}`}
-                    >
-                      <div className="flex items-baseline gap-1 mb-0.5 w-full min-w-0">
-                        <span className={`text-[11px] font-bold ${numColorCls}`}>{d}</span>
-                        {holiday && <span className="text-[9px] font-bold text-red-400 truncate">{holiday}</span>}
-                      </div>
-                      {daySchedules.length > 0 && (
-                        <div className="space-y-0.5 w-full">
-                          {daySchedules.slice(0, 2).map((c) => (
-                            <p key={c.id} className="text-[10px] font-semibold rounded px-1 py-0.5 truncate bg-blue-50 text-blue-700">{siteById.get(unitById.get(c.unitId)?.siteId)?.name ?? "-"}</p>
-                          ))}
-                          {daySchedules.length > 2 && (
-                            <p className="text-[9px] text-slate-400 px-1">+{daySchedules.length - 2}건 더</p>
-                          )}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="flex items-center gap-3 mt-2.5 px-1 text-[10px] text-slate-400 flex-wrap">
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-100 inline-block" /> 점검 예정 현장</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-50 border border-blue-300 inline-block" /> 오늘</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-50 border border-red-200 inline-block" /> 공휴일</span>
-            </div>
-          </div>
-        )}
-      </div>
+      <SwipeSubtabTrack
+        swipe={swipe}
+        tabs={checkupSubTabs}
+        trackClassName="flex-1"
+        paneClassName="overflow-y-auto"
+        renderTab={renderCheckupPane}
+      />
 
       {scheduleTarget && (
         <Sheet title={`${scheduleTarget.name} 일정 등록`} onClose={() => setScheduleTarget(null)}>

@@ -326,3 +326,43 @@ export function SmsToast({ message }) {
     </div>
   );
 }
+
+// 서브탭 버튼 바 바로 아래, 활성 탭 위치를 손가락 드래그를 따라 부드럽게 옮겨다니는 파란 밑줄.
+// 탭 버튼들이 flex-1로 같은 폭이라는 전제로 useSwipeSubtab의 barStyle(left/width %)을 그대로 쓴다.
+// 버튼 바 wrapper에 className="relative"가 있어야 이 절대위치 바가 그 안에서 자리를 잡는다.
+export function SwipeIndicatorBar({ swipe }) {
+  return <div className="absolute left-0 bottom-0 h-0.5 bg-blue-700 pointer-events-none" style={swipe.barStyle} />;
+}
+
+// 서브탭 화면 좌우 스와이프 트랙 — useSwipeSubtab이 계산한 위치를 그대로 받아 현재 탭과,
+// 드래그 중일 때만 옆 탭(이전/다음) 한 장을 나란히 렌더링해 스크롤하듯 옆 화면이 보이게 한다.
+// renderTab(tabKey)는 그 탭의 패널 JSX를 반환해야 하고, paneClassName은 각 패널이 원래 갖고 있던
+// 스크롤·여백 클래스(overflow-y-auto, padding 등)를 그대로 옮겨 붙이는 용도다.
+export function SwipeSubtabTrack({ swipe, tabs, renderTab, paneClassName = "", trackClassName = "" }) {
+  const { containerRef, index, showPrev, showNext, trackStyle, onTouchStart, onTouchMove, onTouchEnd } = swipe;
+  return (
+    <div
+      ref={containerRef}
+      className={`overflow-hidden ${trackClassName}`}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    >
+      <div className="flex h-full" style={trackStyle}>
+        {showPrev && (
+          <div key={tabs[index - 1]} className={`w-full shrink-0 h-full ${paneClassName}`}>
+            {renderTab(tabs[index - 1])}
+          </div>
+        )}
+        <div key={tabs[index]} className={`w-full shrink-0 h-full ${paneClassName}`}>
+          {renderTab(tabs[index])}
+        </div>
+        {showNext && (
+          <div key={tabs[index + 1]} className={`w-full shrink-0 h-full ${paneClassName}`}>
+            {renderTab(tabs[index + 1])}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
