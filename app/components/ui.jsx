@@ -255,19 +255,20 @@ export function PrimaryButton({ children, onClick, disabled, tone = "blue", clas
 }
 
 
-export function Sheet({ title, onClose, children, bg = "bg-slate-50" }) {
+export function Sheet({ title, onClose, children, bg = "bg-slate-50", full = false }) {
   // body Portal로 렌더 — 탭 콘텐츠(PullToRefresh)의 transform이 fixed를 가두는 걸 피해,
   // 플로팅 버튼(게시판 퀵) 등 다른 요소가 시트 위로 겹치지 않게 한다.
+  // full=true면 하단 시트가 아니라 화면 전체를 덮는 모달로 렌더한다 (입력 항목이 많은 화면용).
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const content = (
     <div className="fixed inset-0 z-30 flex flex-col bg-black/40" onClick={onClose}>
-      <div className="mt-auto" />
+      {!full && <div className="mt-auto" />}
       <div
-        className={`${bg} rounded-t-3xl max-h-[88%] flex flex-col shadow-2xl`}
+        className={`${bg} ${full ? "h-full" : "rounded-t-3xl max-h-[88%]"} flex flex-col shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-white rounded-t-3xl shrink-0">
+        <div className={`flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-white shrink-0 ${full ? "" : "rounded-t-3xl"}`}>
           <h2 className="font-bold text-slate-900">{title}</h2>
           <button onClick={onClose} className="p-1 text-slate-400 active:text-slate-700">
             <X size={20} />

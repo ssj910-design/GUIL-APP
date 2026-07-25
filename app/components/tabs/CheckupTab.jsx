@@ -581,7 +581,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
       )}
 
       {checkupTarget && (
-        <Sheet title={`${checkupTarget.name} 자체점검 등록`} onClose={() => setCheckupTarget(null)}>
+        <Sheet title={`${checkupTarget.name} 자체점검 등록`} onClose={() => setCheckupTarget(null)} full>
           {siteUnitList(checkupTarget, units).filter((u) => u.id).length > 1 && (
             <Field label="호기">
               <select className={inputCls} value={checkupUnitId ?? ""} onChange={(e) => loadCheckupForUnit(e.target.value, checkupTarget)}>
