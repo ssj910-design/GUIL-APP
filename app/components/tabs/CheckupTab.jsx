@@ -580,8 +580,6 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
 
       {checkupTarget && (
         <Sheet title={`${checkupTarget.name} 자체점검 등록`} onClose={() => setCheckupTarget(null)}>
-          {/* 안내문 = 고정(스텝과 무관). 영문 코드(RegistInspectionService)는 제거 */}
-          <p className="text-[11px] text-slate-400 mb-2">승강기민원24에 실제로 제출됩니다. 내용을 확인한 뒤 등록해주세요.</p>
           {siteUnitList(checkupTarget, units).filter((u) => u.id).length > 1 && (
             <Field label="호기">
               <select className={inputCls} value={checkupUnitId ?? ""} onChange={(e) => loadCheckupForUnit(e.target.value, checkupTarget)}>
@@ -618,7 +616,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
                   {CURRENT_ENGINEER} {selfProfile?.minwon_id ? `(${selfProfile.minwon_id})` : "— 민원24 ID 미등록"}
                 </p>
               </Field>
-              <Field label="부점검자 (민원24 ID 등록된 인원 중 선택 — 자체점검자 2명 이상 입력 필수)">
+              <Field label="부점검자 (자체점검자 2명 이상 입력 필수)">
                 <select className={inputCls} value={checkupSubProfileId} onChange={(e) => setCheckupSubProfileId(e.target.value)}>
                   <option value="">부점검자를 선택하세요</option>
                   {profilesAll.filter((p) => p.id !== selfId && p.minwon_id).map((p) => (
