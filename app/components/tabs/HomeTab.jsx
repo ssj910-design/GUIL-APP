@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from "react";
-import { ShieldCheck, AlertOctagon, X } from "lucide-react";
+import { ShieldCheck, AlertOctagon, X, Map as MapIcon } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, distanceKm } from "@/lib/utils";
@@ -8,6 +8,7 @@ import { SitesContext, UnitsContext, AuthContext } from "@/app/components/contex
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { usePriorFlaggedInspection } from "@/app/hooks/useLiveInspections";
 import { FailureDetailSheet, DispatchEtaModal, ArrivalResultModal, FailureMiniCard, AssignEngineerSheet } from "@/app/components/tabs/FailureTab";
+import { EngineerLocationMap } from "@/app/components/admin/EngineerLocationMap";
 
 
 // 검사도래현장 한 줄: 직전 검사가 조건부합격/조건후합격이면 현장명을 눌러 당시 부적합내역을 볼 수 있다.
@@ -103,6 +104,7 @@ function leaveLabel(l) {
 // 관리자 출근 현황 — 요약을 누르면 출근·미출근 명단과 위치 권한 상태를 펼친다.
 function AdminAttendanceCard({ attendances, engineers, todayLeaves = [] }) {
   const [open, setOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const attByPid = new Map(attendances.map((a) => [a.profileId, a]));
   const rows = engineers.map((e) => ({ e, a: attByPid.get(e.id) }));
   const inCount = rows.filter((r) => r.a?.checkedInAt).length;
@@ -139,7 +141,7 @@ function AdminAttendanceCard({ attendances, engineers, todayLeaves = [] }) {
 
   return (
     <div className="bg-white rounded-xl border border-slate-200">
-      <button onClick={() => setOpen((v) => !v)} className="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50 rounded-xl flex-wrap gap-y-1">
+      <div onClick={() => setOpen((v) => !v)} className="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50 rounded-xl flex-wrap gap-y-1 cursor-pointer">
         <span className="flex items-center gap-1.5 flex-wrap min-w-0">
           <span className="text-xs font-bold text-slate-500 whitespace-nowrap">오늘 출근</span>
         </span>
@@ -147,9 +149,16 @@ function AdminAttendanceCard({ attendances, engineers, todayLeaves = [] }) {
           <span className="text-[11px] font-bold text-slate-400 whitespace-nowrap">{leaveStats}</span>
           {staleRows.length > 0 && <span className="text-[10px] font-extrabold text-white bg-red-500 rounded-full px-1.5 py-0.5">2시간+ 미확인 {staleRows.length}</span>}
           {geoOff.length > 0 && <span className="text-[10px] font-extrabold text-white bg-amber-500 rounded-full px-1.5 py-0.5">위치 미설정 {geoOff.length}</span>}
-          <span className="text-[11px] font-bold text-blue-700">{open ? "접기" : "명단"}</span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setMapOpen(true); }}
+            className="p-0.5 text-blue-700"
+            aria-label="전직원 위치지도"
+          >
+            <MapIcon size={14} />
+          </button>
         </span>
-      </button>
+      </div>
 
       {open && (
         <div className="px-4 pb-3 border-t border-slate-100 pt-2.5">
@@ -177,6 +186,18 @@ function AdminAttendanceCard({ attendances, engineers, todayLeaves = [] }) {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {mapOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-50 flex flex-col">
+          <div className="shrink-0 bg-blue-900 text-white px-4 py-3 flex items-center justify-between">
+            <p className="text-sm font-extrabold">전직원 위치</p>
+            <button onClick={() => setMapOpen(false)} className="p-1" aria-label="닫기"><X size={18} /></button>
+          </div>
+          <div className="flex-1 p-3 overflow-hidden">
+            <EngineerLocationMap engineers={engineers} alwaysShowLabels heightClass="h-full" />
           </div>
         </div>
       )}
