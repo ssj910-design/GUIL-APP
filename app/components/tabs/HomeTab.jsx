@@ -1,4 +1,4 @@
-import { useState, useContext, useEffect } from "react";
+import { useState, useContext, useEffect, useRef } from "react";
 import { ShieldCheck, AlertOctagon, X, Map as MapIcon } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
@@ -385,21 +385,25 @@ function periodOf(note) {
 
 // 홈탭용 워크 캘린더 미리보기 — 관리자 대시보드의 WeekStrip(admin/WeekStrip.jsx)을 좁은
 // 모바일 화면에 맞게 압축한 버전. 카드 폭이 좁아 "당직 아무개" 같은 라벨은 안 들어가서
-// 색점(당직=초록/숙직=파랑/휴가=호박색)만으로 구분하고 이름만 보여준다. 오늘을 맨 첫 칸에
-// 고정하고 앞으로 6일치를 이어서 총 7칸을 가로 스크롤로 넘겨본다(폭이 375px 안팎이라 전부
-// 한 화면에 안 들어가는 게 정상 — 스와이프 전제).
+// 색점(당직=초록/숙직=파랑/휴가=호박색)만으로 구분하고 이름만 보여준다. 오늘 이전 2주 ~ 이후
+// 한 달치를 한 줄에 두고, 처음엔 오늘이 맨 앞에 오도록 스크롤해둔다 — 오른쪽으로 넘기면
+// 앞으로의 일정을, 왼쪽에서 오른쪽으로 드래그하면(스크롤을 왼쪽으로) 지난 날짜를 볼 수 있다.
+const CAL_PAST_DAYS = 14;
+const CAL_FUTURE_DAYS = 30;
 function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
   const [duties, setDuties] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [dayDetail, setDayDetail] = useState(null); // 날짜 카드 클릭 시 당직·숙직·휴가 인원 모아보기
+  const scrollRef = useRef(null);
+  const todayRef = useRef(null);
 
   const center = new Date(`${TODAY_STR}T00:00:00`);
-  const week = Array.from({ length: 7 }, (_, i) => {
+  const days = Array.from({ length: CAL_PAST_DAYS + CAL_FUTURE_DAYS + 1 }, (_, i) => {
     const d = new Date(center);
-    d.setDate(center.getDate() + i);
+    d.setDate(center.getDate() - CAL_PAST_DAYS + i);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   });
-  const from = week[0], to = week[6];
+  const from = days[0], to = days[days.length - 1];
 
   useEffect(() => {
     Promise.all([
@@ -410,6 +414,13 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
       setLeaves((l.data ?? []).filter((x) => (x.status ?? "승인") === "승인"));
     });
   }, [from, to]);
+
+  // 처음 렌더될 때 오늘 칸이 맨 앞에 오도록 가로 스크롤 위치를 맞춘다 (지난 날짜는 왼쪽에 숨겨둠).
+  useEffect(() => {
+    if (scrollRef.current && todayRef.current) {
+      scrollRef.current.scrollLeft = todayRef.current.offsetLeft - 4;
+    }
+  }, []);
 
   const nameOf = (id) => profiles.find((p) => p.id === id)?.name ?? "";
 
@@ -426,14 +437,15 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
           )}
         </span>
       </div>
-      <div className="flex gap-1.5 overflow-x-auto">
-        {week.map((d) => {
+      <div ref={scrollRef} className="flex gap-1.5 overflow-x-auto">
+        {days.map((d) => {
           const dow = new Date(`${d}T00:00:00`).getDay();
           const dutyDay = duties.filter((x) => x.duty_date === d && (x.kind === "당직" || x.kind === "숙직"));
           const leaveDay = leaves.filter((l) => l.start_date <= d && d <= l.end_date);
           return (
             <button
               key={d}
+              ref={d === TODAY_STR ? todayRef : null}
               type="button"
               onClick={() => setDayDetail(d)}
               className={`shrink-0 w-[54px] text-left rounded-lg border p-1.5 ${
