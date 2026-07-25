@@ -385,11 +385,11 @@ function periodOf(note) {
 
 // 홈탭용 워크 캘린더 미리보기 — 관리자 대시보드의 WeekStrip(admin/WeekStrip.jsx)을 좁은
 // 모바일 화면에 맞게 압축한 버전. 카드 폭이 좁아 "당직 아무개" 같은 라벨은 안 들어가서
-// 색점(당직=초록/숙직=파랑/휴가=호박색)만으로 구분하고 이름만 보여준다. 오늘 이전 2주 ~ 이후
-// 한 달치를 한 줄에 두고, 처음엔 오늘이 맨 앞에 오도록 스크롤해둔다 — 오른쪽으로 넘기면
+// 색점(당직=초록/숙직=파랑/휴가=호박색)만으로 구분하고 이름만 보여준다. 오늘 기준 앞뒤 7일씩
+// 총 15일치를 한 줄에 두고, 처음엔 오늘이 맨 앞에 오도록 스크롤해둔다 — 오른쪽으로 넘기면
 // 앞으로의 일정을, 왼쪽에서 오른쪽으로 드래그하면(스크롤을 왼쪽으로) 지난 날짜를 볼 수 있다.
-const CAL_PAST_DAYS = 14;
-const CAL_FUTURE_DAYS = 30;
+const CAL_PAST_DAYS = 7;
+const CAL_FUTURE_DAYS = 7;
 function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
   const [duties, setDuties] = useState([]);
   const [leaves, setLeaves] = useState([]);
