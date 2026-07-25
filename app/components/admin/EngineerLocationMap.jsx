@@ -116,25 +116,41 @@ export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerC
 
   useEffect(() => {
     let cancelled = false;
+    let cleanupTouchZoomFix = () => {};
     import("leaflet").then((Lmod) => {
       if (cancelled || !containerRef.current) return;
-      // zoomAnimation: false — 핀치줌이 끝나면 Leaflet이 정수 줌으로 스냅되는 CSS 트랜지션을
-      // 돌리는데, 그 트랜지션이 진행되는 동안(최대 250ms, 기기에 따라 체감 더 길게) 지도
-      // 컨테이너에 'leaflet-zoom-anim' 클래스가 붙어있어 드래그 핸들러가 새 터치 시작을
-      // 무시한다 — 그래서 핀치줌 직후 한동안 한 손가락 드래그가 안 먹혔다. 줌 애니메이션
-      // 자체를 꺼서 스냅이 즉시 끝나게 하면 그 클래스가 아예 걸리지 않아 드래그가 곧바로 이어진다.
-      const map = Lmod.map(containerRef.current, { zoomAnimation: false }).setView([37.5665, 126.978], 11);
+      const map = Lmod.map(containerRef.current).setView([37.5665, 126.978], 11);
       Lmod.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap contributors",
         maxZoom: 19,
         subdomains: "abc",
       }).addTo(map);
+      // 핀치줌이 끝나면 Leaflet이 정수 줌으로 스냅되는 CSS 트랜지션을 돌리는데, 그 동안(최대
+      // 250ms) 지도 컨테이너에 'leaflet-zoom-anim' 클래스가 붙어있어 드래그 핸들러가 새 터치
+      // 시작을 무시한다 — 핀치줌 직후 한동안 드래그가 안 먹히던 원인. 줌 애니메이션 자체를
+      // 끄면(zoomAnimation:false) 데스크톱 마우스휠 줌까지 뚝뚝 끊기게 되므로, 대신 터치가
+      // 끝난 직후(매크로태스크로 한 틱 늦춰 Leaflet 자신의 처리가 먼저 끝나게 한 뒤) 진행 중인
+      // 줌 트랜지션을 즉시 마무리시켜 그 클래스를 빨리 떼어낸다 — 마우스휠 줌은 터치 이벤트가
+      // 전혀 없으니 이 처리와 무관해 부드러운 애니메이션이 그대로 유지된다.
+      const finishTouchZoom = () => {
+        setTimeout(() => {
+          if (map._animatingZoom) map._onZoomTransitionEnd();
+        }, 0);
+      };
+      const zoomFixEl = map.getContainer();
+      zoomFixEl.addEventListener("touchend", finishTouchZoom, { passive: true });
+      zoomFixEl.addEventListener("touchcancel", finishTouchZoom, { passive: true });
+      cleanupTouchZoomFix = () => {
+        zoomFixEl.removeEventListener("touchend", finishTouchZoom);
+        zoomFixEl.removeEventListener("touchcancel", finishTouchZoom);
+      };
       mapObjRef.current = map;
       setL(Lmod);
       setLoading(false);
     });
     return () => {
       cancelled = true;
+      cleanupTouchZoomFix();
       if (mapObjRef.current) { mapObjRef.current.remove(); mapObjRef.current = null; }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -768,16 +768,34 @@ export default function App() {
     }
 
     // 에러코드집에 없는 (기종, 코드) 조합이면 의미 미등록 상태로 자동 등록 — 다음에 같은 코드가
-    // 나오면 이 처리 이력이 조회되도록 코드집을 자연스럽게 쌓는다.
+    // 나오면 이 처리 이력이 조회되도록 코드집을 자연스럽게 쌓는다. 기종은 처리결과 시트에서
+    // 기사가 직접 고른 값(payload.model)을 우선하고, 없으면 호기에 등록된 값으로 대체한다.
     const unit = units.find((u) => u.id === failure.unitId);
-    if (unit?.model && errorCode && !errorCodes.some((e) => e.model === unit.model && e.code === errorCode)) {
+    const errorCodeModel = payload.model || unit?.model;
+    if (errorCodeModel && errorCode && !errorCodes.some((e) => e.model === errorCodeModel && e.code === errorCode)) {
       const { data: inserted } = await supabase
         .from("error_codes")
-        .upsert({ model: unit.model, code: errorCode }, { onConflict: "model,code" })
+        .upsert({ model: errorCodeModel, code: errorCode }, { onConflict: "model,code" })
         .select()
         .maybeSingle();
       if (inserted) setErrorCodes((prev) => [...prev, mapErrorCode(inserted)]);
     }
+  }
+
+  // ★ 고장처리결과 입력 화면에서 코드집에 없는 에러코드를 의미·원인·조치까지 채워 바로 등록
+  async function handleAddErrorCode(model, code, meaning, commonCause, standardAction) {
+    if (!model.trim() || !code.trim()) return;
+    const { data: inserted, error } = await supabase
+      .from("error_codes")
+      .upsert(
+        { model: model.trim(), code: code.trim(), meaning: meaning || null, common_cause: commonCause || null, standard_action: standardAction || null },
+        { onConflict: "model,code" }
+      )
+      .select()
+      .maybeSingle();
+    if (error) { alert("에러코드 등록 실패: " + error.message); return; }
+    const mapped = mapErrorCode(inserted);
+    setErrorCodes((prev) => [...prev.filter((e) => !(e.model === mapped.model && e.code === mapped.code)), mapped]);
   }
 
   async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId }) {
@@ -1634,6 +1652,8 @@ export default function App() {
               swapCount={dutySwaps.filter((w) => w.status === "대기" && w.targetId === profileIdByName(profilesAll, profile.name)).length}
               inspections={inspections}
               failures={failures}
+              errorCodes={errorCodes}
+              onAddErrorCode={handleAddErrorCode}
               onDispatch={handleDispatchFailure}
               onArrive={handleArriveFailure}
               onResult={handleFailureResult}
@@ -1652,6 +1672,7 @@ export default function App() {
               todayLeaves={todayLeaves}
               failures={failures}
               errorCodes={errorCodes}
+              onAddErrorCode={handleAddErrorCode}
               setFailures={setFailures}
               onDispatch={handleDispatchFailure}
               onArrive={handleArriveFailure}
@@ -1762,6 +1783,9 @@ export default function App() {
           {notifResultTarget && (
             <ArrivalResultModal
               failure={notifResultTarget}
+              failures={failures}
+              errorCodes={errorCodes}
+              onAddErrorCode={handleAddErrorCode}
               onClose={() => setNotifResultTarget(null)}
               onConfirm={(result) => { handleFailureResult(notifResultTarget, result); setNotifResultTarget(null); }}
             />

@@ -830,7 +830,7 @@ const FAILURE_RESULT_BTN_CLS = {
 };
 
 
-export function ArrivalResultModal({ failure, failures = [], errorCodes = [], onConfirm, onClose }) {
+export function ArrivalResultModal({ failure, failures = [], errorCodes = [], onConfirm, onClose, onAddErrorCode }) {
   const [result, setResult] = useState("처리완료");
   const [symptom, setSymptom] = useState("");
   const [errorCode, setErrorCode] = useState("");
@@ -839,10 +839,30 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
   const [note, setNote] = useState("");
   const [photos, setPhotos] = useState([]);
   const units = useContext(UnitsContext);
-  const model = units.find((u) => u.id === failure.unitId)?.model;
-  const codeOptions = model ? errorCodes.filter((e) => e.model === model) : [];
-  const matched = model ? findErrorCode(errorCodes, model, errorCode) : null;
-  const matchedHistory = matched ? errorCodeHistory(failures, units, model, errorCode) : [];
+  const models = [...new Set(units.map((u) => u.model).filter(Boolean))].sort();
+  // 기종은 이 호기의 등록된 값으로 자동 선택하되, 잘못됐거나 비어있으면 기사가 직접 바꿀 수 있다.
+  const [selectedModel, setSelectedModel] = useState(() => units.find((u) => u.id === failure.unitId)?.model ?? "");
+  const codeOptions = selectedModel ? errorCodes.filter((e) => e.model === selectedModel) : [];
+  const matched = selectedModel ? findErrorCode(errorCodes, selectedModel, errorCode) : null;
+  const matchedHistory = matched ? errorCodeHistory(failures, units, selectedModel, errorCode) : [];
+
+  // 새 에러코드 등록 — 기종을 고르고 코드집에 없는 코드를 입력하면 바로 의미·원인·조치를 채워 등록할 수 있다.
+  const [addingCode, setAddingCode] = useState(false);
+  const [newMeaning, setNewMeaning] = useState("");
+  const [newCause, setNewCause] = useState("");
+  const [newAction, setNewAction] = useState("");
+  const [savingCode, setSavingCode] = useState(false);
+  const showAddCode = selectedModel && errorCode.trim() && !matched;
+
+  async function saveNewCode() {
+    setSavingCode(true);
+    await onAddErrorCode(selectedModel, errorCode.trim(), newMeaning.trim(), newCause.trim(), newAction.trim());
+    setSavingCode(false);
+    setAddingCode(false);
+    setNewMeaning("");
+    setNewCause("");
+    setNewAction("");
+  }
 
   return (
     <Sheet title="고장처리결과 입력" onClose={onClose}>
@@ -861,8 +881,25 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
           <input className={inputCls} value={symptom} onChange={(e) => setSymptom(e.target.value)} placeholder="예: 도어가 완전히 닫히지 않음" />
         </div>
         <div>
+          <label className="text-xs font-bold text-slate-600 mb-1 block">기종</label>
+          {models.length > 0 ? (
+            <select className={inputCls} value={selectedModel} onChange={(e) => { setSelectedModel(e.target.value); setAddingCode(false); }}>
+              <option value="">선택 안 함</option>
+              {models.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          ) : (
+            <input className={inputCls} value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} placeholder="예: OTIS Gen2" />
+          )}
+        </div>
+        <div>
           <label className="text-xs font-bold text-slate-600 mb-1 block">에러코드 <span className="text-red-500">*</span></label>
-          <input className={inputCls} list="error-code-options" value={errorCode} onChange={(e) => setErrorCode(e.target.value)} placeholder="예: E-32" />
+          <input
+            className={inputCls}
+            list="error-code-options"
+            value={errorCode}
+            onChange={(e) => { setErrorCode(e.target.value); setAddingCode(false); }}
+            placeholder={selectedModel ? "예: E-32 (입력하면 등록된 코드 중에서 검색됩니다)" : "예: E-32 (기종을 먼저 선택하면 검색됩니다)"}
+          />
           {codeOptions.length > 0 && (
             <datalist id="error-code-options">
               {codeOptions.map((e) => <option key={e.id} value={e.code} />)}
@@ -884,6 +921,30 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
                     </li>
                   ))}
                 </ul>
+              )}
+            </div>
+          )}
+          {showAddCode && onAddErrorCode && (
+            <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mt-2">
+              {!addingCode ? (
+                <button type="button" onClick={() => setAddingCode(true)} className="text-xs font-bold text-amber-700">
+                  "{selectedModel}"에 등록되지 않은 코드예요 · 코드집에 추가하기
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-amber-700">에러코드 등록 · {selectedModel} · {errorCode.trim()}</p>
+                  <input className={inputCls} value={newMeaning} onChange={(e) => setNewMeaning(e.target.value)} placeholder="의미 (선택)" />
+                  <input className={inputCls} value={newCause} onChange={(e) => setNewCause(e.target.value)} placeholder="흔한 원인 (선택)" />
+                  <input className={inputCls} value={newAction} onChange={(e) => setNewAction(e.target.value)} placeholder="표준 조치법 (선택)" />
+                  <button
+                    type="button"
+                    disabled={savingCode}
+                    onClick={saveNewCode}
+                    className="w-full text-xs font-bold text-white bg-amber-600 disabled:bg-slate-300 rounded-lg py-2"
+                  >
+                    {savingCode ? "등록 중..." : "코드집에 등록"}
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -914,7 +975,7 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
             <button
               type="button"
               disabled={!valid}
-              onClick={() => onConfirm({ result, symptom, errorCode, cause, processContent, note, photoCount: photos.length, photoUrls: photos.map((p) => p.url) })}
+              onClick={() => onConfirm({ result, symptom, errorCode, cause, processContent, note, model: selectedModel, photoCount: photos.length, photoUrls: photos.map((p) => p.url) })}
               className={`w-full text-white text-sm font-bold py-3 rounded-xl ${valid ? FAILURE_RESULT_BTN_CLS[result] : "bg-slate-300"}`}
             >
               {result} 등록
@@ -1136,7 +1197,7 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
 }
 
 
-function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves, errorCodes }) {
+function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves, errorCodes, onAddErrorCode }) {
   const [assignTarget, setAssignTarget] = useState(null);
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
@@ -1199,6 +1260,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
           failure={resultTarget}
           failures={failures}
           errorCodes={errorCodes}
+          onAddErrorCode={onAddErrorCode}
           onClose={() => setResultTarget(null)}
           onConfirm={(result) => {
             onResult(resultTarget, result);
@@ -1211,7 +1273,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
 }
 
 
-function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves, errorCodes }) {
+function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves, errorCodes, onAddErrorCode }) {
   const [assignTarget, setAssignTarget] = useState(null);
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [showDone, setShowDone] = useState(false);
@@ -1294,6 +1356,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
           failure={resultTarget}
           failures={failures}
           errorCodes={errorCodes}
+          onAddErrorCode={onAddErrorCode}
           onClose={() => setResultTarget(null)}
           onConfirm={(result) => {
             onResult(resultTarget, result);
@@ -1506,7 +1569,7 @@ function ErrorCodeBook({ errorCodes, failures }) {
   );
 }
 
-export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [], errorCodes = [], onReported }) {
+export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [], errorCodes = [], onReported, onAddErrorCode }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
   // 홈 "모두 보기" 등 외부에서 특정 서브탭으로 진입 (SiteTab focusSiteId와 같은 패턴)
@@ -1525,8 +1588,8 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
   // 옆 탭을 함께 렌더링할 때 쓴다.
   function renderFailurePane(tab) {
     if (tab === "접수등록") return <FailureRegisterForm onReported={onReported} onDispatch={onDispatch} failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />;
-    if (tab === "미배정") return <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
-    if (tab === "처리등록") return <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
+    if (tab === "미배정") return <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} onAddErrorCode={onAddErrorCode} />;
+    if (tab === "처리등록") return <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} onAddErrorCode={onAddErrorCode} />;
     if (tab === "처리현황") return <FailureStatusOverview failures={failures} onReassign={onReassign} attendances={attendances} todayLeaves={todayLeaves} />;
     return <ErrorCodeBook errorCodes={errorCodes} failures={failures} />;
   }
