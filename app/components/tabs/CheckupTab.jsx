@@ -646,13 +646,13 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
                 className={inputCls}
               />
               {/* 바깥 보더 없이 항목별 연회색 카드로 구분. 글씨 크게(16px)·진하게(어르신 가독성). 시트 전체 스크롤. */}
-              <div className="mt-2 space-y-2">
+              <div className="mt-2 space-y-1">
                 {filteredItemCodes.map((item) => {
                   const current = itemExceptions[item.code]?.result ?? "A";
                   return (
-                    <div key={item.code} className="bg-slate-50 rounded-xl px-3.5 py-3">
+                    <div key={item.code} className="bg-slate-50 rounded-xl px-3.5 py-2">
                       <p className="text-base font-medium text-slate-800 leading-snug">{item.no} {item.name}</p>
-                      {item.detail && <p className="text-sm text-slate-500 mb-2 leading-snug">{item.detail}</p>}
+                      {item.detail && <p className="text-sm text-slate-500 mb-1 leading-snug">{item.detail}</p>}
                       <div className="flex gap-2">
                         {RESULT_OPTIONS.map((o) => (
                           <button
