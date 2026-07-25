@@ -57,7 +57,7 @@ export function useSwipeSubtab(tabs, active, onChange) {
   return {
     swipeStyle: {
       transform: `translateX(${dragX}px)`,
-      transition: animating ? "transform 0.22s ease" : "none",
+      transition: animating ? "transform 0.42s cubic-bezier(0.22, 1, 0.36, 1)" : "none",
     },
     onTouchStart,
     onTouchMove,
