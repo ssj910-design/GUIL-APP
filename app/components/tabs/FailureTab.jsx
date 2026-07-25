@@ -850,7 +850,9 @@ function ErrorCodeRow({ code, model, errorCodes, errorCodeRequests = [], failure
   const [newAction, setNewAction] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
-  const showRequest = model && code.trim() && !matched && !pendingRequest;
+  // 이미 대기 중인 요청이 있어도 막지는 않는다 — 안내만 보여주고 다시 보낼지는 기사가 판단.
+  // (중복 요청은 관리자 쪽에서 봐도 그냥 같은 코드 승인 한 번이면 되는 정도라 해가 없다.)
+  const showRequest = model && code.trim() && !matched;
 
   async function sendRequest() {
     setSending(true);
