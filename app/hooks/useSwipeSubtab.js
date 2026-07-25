@@ -6,7 +6,7 @@ import { useRef, useState } from "react";
 // 순수 React 합성 이벤트만 써서 파일마다 ref/useEffect 없이 컨테이너에 그대로 붙일 수 있다.
 // pivotIndex·width는 렌더링(trackStyle/barStyle 계산)에도 쓰이므로 ref가 아니라 state로 둔다
 // (ref.current를 렌더 중에 읽으면 React 규칙 위반 — 이벤트 핸들러 안에서만 읽어야 하는 값이 아니다).
-const THRESHOLD_RATIO = 0.3; // 화면 폭의 30% 이상 끌면 손을 뗐을 때 다음/이전 탭으로 커밋
+const THRESHOLD_RATIO = 0.2; // 화면 폭의 20% 이상 끌면 손을 뗐을 때 다음/이전 탭으로 커밋
 const EDGE_RESISTANCE = 0.35; // 맨 앞/뒤 탭에서 더 끌 때(더 넘어갈 곳이 없을 때)의 저항감
 const SETTLE_MS = 450; // 커밋/복귀 애니메이션(0.42s)이 끝난 뒤 여분 탭을 정리하기까지 여유시간
 const TRANSITION = "transform 0.42s cubic-bezier(0.22, 1, 0.36, 1)";
