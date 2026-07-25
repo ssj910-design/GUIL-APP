@@ -214,7 +214,8 @@ function ImportErrorCodesModal({ onClose, onImportFile }) {
 
 export default function ErrorCodesAdmin({ data, setData }) {
   const { errorCodes = [], units, failures } = data;
-  const models = [...new Set(units.map((u) => u.model).filter(Boolean))].sort();
+  // 실제 호기에 등록된 기종뿐 아니라, 엑셀 대량입력 등으로 코드집에만 새로 등록된 기종도 포함한다.
+  const models = [...new Set([...units.map((u) => u.model), ...errorCodes.map((e) => e.model)].filter(Boolean))].sort();
   const [modelFilter, setModelFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [registering, setRegistering] = useState(false);

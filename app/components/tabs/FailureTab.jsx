@@ -948,9 +948,14 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
   const [note, setNote] = useState("");
   const [photos, setPhotos] = useState([]);
   const units = useContext(UnitsContext);
-  const models = [...new Set(units.map((u) => u.model).filter(Boolean))].sort();
+  // 기종 목록엔 실제 호기에 등록된 값뿐 아니라, 에러코드집에만 있는 기종(엑셀 대량입력으로
+  // 새로 등록된 기종 등)도 포함한다 — 안 그러면 방금 등록한 기종을 여기서 고를 수가 없다.
+  const models = [...new Set([...units.map((u) => u.model), ...errorCodes.map((e) => e.model)].filter(Boolean))].sort();
   // 기종은 이 호기의 등록된 값으로 자동 선택하되, 잘못됐거나 비어있으면 기사가 직접 바꿀 수 있다.
   const [selectedModel, setSelectedModel] = useState(() => units.find((u) => u.id === failure.unitId)?.model ?? "");
+
+  // 에러코드 없음(해당 없음 처리) — 체크하면 코드 입력 없이도 등록할 수 있다.
+  const [noErrorCode, setNoErrorCode] = useState(false);
 
   // 에러코드 1개 이상 입력 — 부품 내역 입력(PartsRowsInput)과 같은 "줄 추가/삭제" 방식.
   const nextCodeRowId = useRef(2);
@@ -964,7 +969,7 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
   function removeCodeRow(id) {
     setCodeRows((rows) => (rows.length === 1 ? rows : rows.filter((r) => r.id !== id)));
   }
-  const errorCodeText = codeRows.map((r) => r.code.trim()).filter(Boolean).join(", ");
+  const errorCodeText = noErrorCode ? "" : codeRows.map((r) => r.code.trim()).filter(Boolean).join(", ");
 
   return (
     <Sheet title="고장처리결과 입력" onClose={onClose}>
@@ -994,25 +999,37 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
           )}
         </div>
         <div>
-          <label className="text-xs font-bold text-slate-600 mb-1 block">에러코드 <span className="text-red-500">*</span> (1개 이상)</label>
-          {codeRows.map((row) => (
-            <ErrorCodeRow
-              key={row.id}
-              code={row.code}
-              model={selectedModel}
-              errorCodes={errorCodes}
-              failures={failures}
-              units={units}
-              onChange={(v) => updateCodeRow(row.id, v)}
-              onRemove={() => removeCodeRow(row.id)}
-              canRemove={codeRows.length > 1}
-              onAddErrorCode={onAddErrorCode}
-              placeholder={selectedModel ? "예: E-32 (입력하면 등록된 코드 중에서 검색됩니다)" : "예: E-32 (기종을 먼저 선택하면 검색됩니다)"}
-            />
-          ))}
-          <button type="button" onClick={addCodeRow} className="flex items-center gap-1 text-xs font-bold text-blue-600">
-            <Plus size={14} /> 에러코드 추가
-          </button>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-bold text-slate-600 block">
+              에러코드 {!noErrorCode && <span className="text-red-500">*</span>} {!noErrorCode && "(1개 이상)"}
+            </label>
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+              <input type="checkbox" checked={noErrorCode} onChange={(e) => setNoErrorCode(e.target.checked)} />
+              에러코드 없음
+            </label>
+          </div>
+          {!noErrorCode && (
+            <>
+              {codeRows.map((row) => (
+                <ErrorCodeRow
+                  key={row.id}
+                  code={row.code}
+                  model={selectedModel}
+                  errorCodes={errorCodes}
+                  failures={failures}
+                  units={units}
+                  onChange={(v) => updateCodeRow(row.id, v)}
+                  onRemove={() => removeCodeRow(row.id)}
+                  canRemove={codeRows.length > 1}
+                  onAddErrorCode={onAddErrorCode}
+                  placeholder={selectedModel ? "예: E-32 (입력하면 등록된 코드 중에서 검색됩니다)" : "예: E-32 (기종을 먼저 선택하면 검색됩니다)"}
+                />
+              ))}
+              <button type="button" onClick={addCodeRow} className="flex items-center gap-1 text-xs font-bold text-blue-600">
+                <Plus size={14} /> 에러코드 추가
+              </button>
+            </>
+          )}
         </div>
         <div>
           <label className="text-xs font-bold text-slate-600 mb-1 block">발생원인 <span className="text-red-500">*</span></label>
@@ -1035,7 +1052,7 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
           required={false}
         />
         {(() => {
-          const valid = symptom.trim() && errorCodeText && cause.trim() && processContent.trim();
+          const valid = symptom.trim() && (noErrorCode || errorCodeText) && cause.trim() && processContent.trim();
           return (
             <button
               type="button"
