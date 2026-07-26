@@ -273,24 +273,24 @@ export default function App() {
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", check); };
   }, []);
 
-  // 어제 숙직을 마감 안 하고 밤샘한 경우를 잡아둔다 (오늘 조회엔 어제 행이 안 들어오므로 따로 조회).
-  // → 익일 출근하면 handleAttendance가 자동 마감, 연차·미출근이면 홈의 '어제 숙직 마감' 버튼으로.
+  // 마감 안 하고 밤샘한 숙직을 잡아둔다. → 익일 출근하면 handleAttendance가 자동 마감,
+  // 연차·미출근이면 홈의 '어제 숙직 마감' 버튼으로.
+  // "정확히 어제"만 보면, 다음날 아예 로그인을 안 하는 경우(연차·경조사·퇴사 등) 그 미마감
+  // 기록을 영영 못 챙긴다 — 오늘 이전 날짜 전체에서 미마감 출근기록을 찾는다.
   useEffect(() => {
     if (!profile || profile.role !== "engineer") { setPendingNight(null); return; }
     const pid = profileIdByName(profilesAll, profile.name);
     if (!pid) return;
-    const y = new Date(TODAY_STR + "T12:00:00Z");
-    y.setUTCDate(y.getUTCDate() - 1);
-    const ystStr = y.toISOString().slice(0, 10); // 어제 (KST 기준 날짜)
     let alive = true;
     (async () => {
       const { data: att } = await supabase.from("attendances").select("*")
-        .eq("profile_id", pid).eq("work_date", ystStr)
-        .not("checked_in_at", "is", null).is("checked_out_at", null).limit(1);
+        .eq("profile_id", pid).lt("work_date", TODAY_STR)
+        .not("checked_in_at", "is", null).is("checked_out_at", null)
+        .order("work_date", { ascending: false }).limit(1);
       if (!alive) return;
       if (!att?.length) { setPendingNight(null); return; }
       const { data: duty } = await supabase.from("duty_schedules").select("id")
-        .eq("profile_id", pid).eq("duty_date", ystStr).eq("kind", "숙직").limit(1);
+        .eq("profile_id", pid).eq("duty_date", att[0].work_date).eq("kind", "숙직").limit(1);
       if (alive) setPendingNight(duty?.length ? mapAttendance(att[0]) : null);
     })();
     return () => { alive = false; };
@@ -349,6 +349,12 @@ export default function App() {
     // 출근·위치재시도는 출근 위치(lat/lng)로, 퇴근·당직은 퇴근 위치(out_lat/out_lng)로 저장.
     const isOut = kind === "out" || kind === "duty" || kind === "night";
     const wantLoc = kind === "in" || kind === "relocate" || isOut; // 위치는 항상 사용(권한 필수)
+    // 출근 기록 없이 퇴근/당직/숙직 마감이 찍히는 걸 막는다 — 순서가 뒤바뀌면 "퇴근시각이
+    // 출근시각보다 이른" 기록이 남는다.
+    if (isOut) {
+      const todayAtt = attendances.find((a) => a.profileId === pid && a.workDate === TODAY_STR);
+      if (!todayAtt?.checkedInAt) { alert("출근 기록이 없어 퇴근 처리를 할 수 없어요."); return { locFailed: false }; }
+    }
     const here = wantLoc ? await getPositionOnce() : null;
 
     // 위치만 다시 받기인데 실패하면 아무것도 저장하지 않는다
@@ -358,7 +364,9 @@ export default function App() {
     const patch = kind === "relocate"
       ? { lat: here.lat, lng: here.lng, located_at: now }
       : kind === "in"
-      ? { checked_in_at: now, status: null, ...(here ? { lat: here.lat, lng: here.lng, located_at: now } : {}) }
+      // 퇴근 후 다시 출근(재출근)이면 이전 퇴근 기록을 지워, "퇴근시각이 출근시각보다 이른"
+      // 상태로 안 남게 한다.
+      ? { checked_in_at: now, status: null, checked_out_at: null, out_lat: null, out_lng: null, ...(here ? { lat: here.lat, lng: here.lng, located_at: now } : {}) }
       : { checked_out_at: now, status: outStatus, ...(here ? { out_lat: here.lat, out_lng: here.lng } : {}) };
 
     const { data } = await supabase
@@ -409,32 +417,75 @@ export default function App() {
 
   // 수락 = 두 칸의 담당자를 맞바꾼다. 같은 달이든 다음 달이든 동일 로직(이월도 이걸로 처리).
   async function handleRespondDutySwap(swap, decision) {
-    await supabase.from("duty_swaps")
-      .update({ status: decision, responded_at: new Date().toISOString(), target_seen: true })
-      .eq("id", swap.id);
-    setDutySwaps((prev) => prev.map((w) => (w.id === swap.id ? { ...w, status: decision, targetSeen: true } : w)));
+    const myId = profileIdByName(profilesAll, profile.name);
     if (decision !== "수락") {
+      // 이 요청의 진짜 당사자(target)만 처리할 수 있게, 그리고 아직 대기중일 때만 반영되게 조건을 건다.
+      // 화면에서 버튼을 숨기는 것만으론 처리 함수 자체를 막지 못한다.
+      const { data: ok } = await supabase.from("duty_swaps")
+        .update({ status: decision, responded_at: new Date().toISOString(), target_seen: true })
+        .eq("id", swap.id).eq("status", "대기").eq("target_id", myId)
+        .select();
+      if (!ok?.length) { alert("이미 처리됐거나 내 요청이 아니에요. 새로고침 후 다시 확인해주세요."); return; }
+      setDutySwaps((prev) => prev.map((w) => (w.id === swap.id ? { ...w, status: decision, targetSeen: true } : w)));
       sendPush("duty_swap_result", [swap.requesterId], {
         title: "교환이 거절됐습니다",
         body: `${profile.name}님이 근무 교환 요청을 거절했습니다`,
       });
       return;
     }
+
+    // 수락 — 요청 당시 저장해둔 담당자 정보로 그대로 밀어쓰면, 그 사이 관리자가 재배정했거나
+    // 같은 자리를 두고 다른 교환 요청이 있었을 때 최신 배정을 조용히 덮어쓴다. 지금 실제 담당자가
+    // 요청 당시와 같은지 먼저 확인하고, 반영도 그 담당자를 조건으로 걸어 확인~반영 사이에
+    // 또 바뀌어도 엉뚱한 사람 근무를 옮기지 않게 한다.
+    const fromExpectedOwner = swap.kind === "대신서기" ? swap.targetId : swap.requesterId;
+    const scheduleIds = [swap.fromScheduleId, ...(swap.kind === "교환" && swap.toScheduleId ? [swap.toScheduleId] : [])];
+    const { data: current } = await supabase.from("duty_schedules").select("id, profile_id").in("id", scheduleIds);
+    const fromRow = current?.find((d) => d.id === swap.fromScheduleId);
+    const toRow = swap.kind === "교환" ? current?.find((d) => d.id === swap.toScheduleId) : null;
+    const stale = !fromRow || fromRow.profile_id !== fromExpectedOwner
+      || (swap.kind === "교환" && (!toRow || toRow.profile_id !== swap.targetId));
+    if (stale) {
+      alert("그 사이 근무표가 바뀌어서 이 요청을 반영할 수 없어요. 새로고침 후 다시 확인해주세요.");
+      return;
+    }
+
+    // 당사자 확인 + 이중 처리 방지 (아직 대기중일 때만 수락 처리)
+    const { data: ok } = await supabase.from("duty_swaps")
+      .update({ status: "수락", responded_at: new Date().toISOString(), target_seen: true })
+      .eq("id", swap.id).eq("status", "대기").eq("target_id", myId)
+      .select();
+    if (!ok?.length) { alert("이미 처리됐거나 내 요청이 아니에요. 새로고침 후 다시 확인해주세요."); return; }
+
     // 교환: 두 칸 맞바꿈 / 넘기기: from 주인=넘겨받은 사람(target) / 대신서기: from 주인=요청자(requester)
     if (swap.kind === "교환") {
-      await Promise.all([
-        supabase.from("duty_schedules").update({ profile_id: swap.targetId }).eq("id", swap.fromScheduleId),
-        supabase.from("duty_schedules").update({ profile_id: swap.requesterId }).eq("id", swap.toScheduleId),
-      ]);
+      // from을 먼저 옮기고 to를 옮긴다 — 둘 다 "요청 당시 담당자일 때만" 조건을 걸어, from만
+      // 옮겨지고 to는 실패하는 반쪽짜리 상태가 되면 즉시 되돌린다(그 사이 한쪽이 또 바뀐 경우).
+      const { data: fromOk } = await supabase.from("duty_schedules").update({ profile_id: swap.targetId })
+        .eq("id", swap.fromScheduleId).eq("profile_id", swap.requesterId).select();
+      const { data: toOk } = fromOk?.length
+        ? await supabase.from("duty_schedules").update({ profile_id: swap.requesterId })
+            .eq("id", swap.toScheduleId).eq("profile_id", swap.targetId).select()
+        : { data: null };
+      if (!fromOk?.length || !toOk?.length) {
+        if (fromOk?.length && !toOk?.length) {
+          await supabase.from("duty_schedules").update({ profile_id: swap.requesterId }).eq("id", swap.fromScheduleId);
+        }
+        alert("근무표 반영에 실패했어요. 관리자에게 확인을 요청해주세요.");
+        return;
+      }
       setDutySchedules((prev) => prev.map((d) =>
         d.id === swap.fromScheduleId ? { ...d, profileId: swap.targetId }
           : d.id === swap.toScheduleId ? { ...d, profileId: swap.requesterId } : d
       ));
     } else {
       const newOwner = swap.kind === "넘기기" ? swap.targetId : swap.requesterId;
-      await supabase.from("duty_schedules").update({ profile_id: newOwner }).eq("id", swap.fromScheduleId);
+      const { data: moved } = await supabase.from("duty_schedules").update({ profile_id: newOwner })
+        .eq("id", swap.fromScheduleId).eq("profile_id", fromExpectedOwner).select();
+      if (!moved?.length) { alert("근무표 반영에 실패했어요. 관리자에게 확인을 요청해주세요."); return; }
       setDutySchedules((prev) => prev.map((d) => (d.id === swap.fromScheduleId ? { ...d, profileId: newOwner } : d)));
     }
+    setDutySwaps((prev) => prev.map((w) => (w.id === swap.id ? { ...w, status: "수락", targetSeen: true } : w)));
     sendPush("duty_swap_result", [swap.requesterId], {
       title: swap.kind === "교환" ? "교환이 성사됐습니다" : "근무 요청이 수락됐습니다",
       body: `${profile.name}님이 수락했습니다`,
@@ -443,6 +494,9 @@ export default function App() {
 
   // 교환 알림 팝업을 확인하면 다시 뜨지 않도록 표시한다 (우리방에는 아무것도 올리지 않는다)
   async function handleSeenDutySwap(swap, as) {
+    const myId = profileIdByName(profilesAll, profile.name);
+    const expectedId = as === "requester" ? swap.requesterId : swap.targetId;
+    if (myId !== expectedId) return; // 당사자가 아니면 무시
     const patch = as === "requester" ? { requester_seen: true } : { target_seen: true };
     await supabase.from("duty_swaps").update(patch).eq("id", swap.id);
     setDutySwaps((prev) => prev.map((w) => (w.id === swap.id
@@ -576,12 +630,15 @@ export default function App() {
   // ★ 관리자가 미배정 고장에 기사 배정 — 출동 시작은 기사가 "출동 응답"으로
   async function handleAssignFailure(failure, engineerName) {
     const assignedId = profileIdByName(profilesAll, engineerName);
-    const { data: ok } = await supabase.from("failures")
-      .update({ assignee: engineerName, ...(v2Ready ? { assignee_id: profileIdByName(profilesAll, engineerName) } : {}) })
+    const { data: ok, error } = await supabase.from("failures")
+      .update({ assignee: engineerName, ...(v2Ready ? { assignee_id: assignedId } : {}) })
       .eq("id", failure.id).eq("status", "미처리").is("assignee", null)
       .select();
+    // 0행이 "이미 남이 배정함"인지 "저장 자체가 실패함"인지 구분한다 — 구분 안 하면 진짜 오류를
+    // 정상적인 선점 상황으로 오인해서, 아무도 못 배정됐는데 배정된 것처럼 넘어갈 수 있다.
+    if (error) { alert(`배정 저장 실패\n${error.message ?? ""}`); return; }
     if (!ok?.length) { notifyFailure("이미 배정되었거나 진행 중인 건이에요"); return; }
-    setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, assignee: engineerName } : x)));
+    setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, assignee: engineerName, assigneeId: assignedId } : x)));
     sendPush("failure_assigned", [assignedId], {
       title: "고장이 배정되었습니다",
       body: `${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} — ${parseErrorCode(failure.errorCode).faultType}`,
@@ -591,20 +648,30 @@ export default function App() {
 
   // ★ 관리자 재배정 — 잘못 배정·중복 출동 정정용. 진행 상태를 미처리로 되돌리고 새 기사(또는 미배정)로
   async function handleReassignFailure(failure, engineerName) {
-    const { data: ok } = await supabase.from("failures")
+    const newAssigneeId = engineerName ? profileIdByName(profilesAll, engineerName) : null;
+    // 다른 형제 핸들러들과 동일하게, 지금 화면에서 본 배정자가 그대로일 때만 반영되게 조건을 걸어
+    // 관리자 두 명이 동시에 재배정해도 한쪽이 조용히 덮어써지지 않게 한다.
+    let query = supabase.from("failures")
       .update({
         assignee: engineerName || null,
         dispatched_at: null,
         eta_minutes: null,
         arrival_time: null,
         status: "미처리",
-        ...(v2Ready ? { assignee_id: engineerName ? profileIdByName(profilesAll, engineerName) : null } : {}),
+        ...(v2Ready ? { assignee_id: newAssigneeId } : {}),
       })
-      .eq("id", failure.id).neq("status", "완료")
-      .select();
-    if (!ok?.length) { notifyFailure("이미 완료된 건은 재배정할 수 없어요"); return; }
+      .eq("id", failure.id).neq("status", "완료");
+    query = failure.assignee ? query.eq("assignee", failure.assignee) : query.is("assignee", null);
+    const { data: ok, error } = await query.select();
+    if (error) { alert(`재배정 저장 실패\n${error.message ?? ""}`); return; }
+    if (!ok?.length) {
+      const { data: fresh } = await supabase.from("failures").select("*").eq("id", failure.id).single();
+      if (fresh) setFailures((prev) => prev.map((x) => (x.id === failure.id ? mapFailure(fresh) : x)));
+      notifyFailure("이미 완료됐거나 다른 곳에서 먼저 바뀐 건이에요 · 목록을 새로고침했습니다");
+      return;
+    }
     setFailures((prev) => prev.map((x) => (x.id === failure.id
-      ? { ...x, assignee: engineerName || null, dispatchedAt: null, etaMinutes: null, arrivalTime: null, status: "미처리" }
+      ? { ...x, assignee: engineerName || null, assigneeId: newAssigneeId, dispatchedAt: null, etaMinutes: null, arrivalTime: null, status: "미처리" }
       : x)));
     notifyFailure(engineerName ? `${engineerName}(으)로 재배정 완료` : "미배정으로 되돌림");
   }
@@ -640,13 +707,14 @@ export default function App() {
       const reason = window.prompt("출동을 거부하고 미배정으로 돌립니다.\n사유를 입력하세요 (선택)");
       if (reason === null) return; // 취소
       // 출동 후 취소도 지원 — 출동 기록을 초기화하고 미처리·미배정으로 되돌린다 (완료 건은 불가)
-      const { data: ok } = await supabase.from("failures")
+      const { data: ok, error } = await supabase.from("failures")
         .update({
           assignee: null, dispatched_at: null, eta_minutes: null, arrival_time: null, status: "미처리",
           ...(v2Ready ? { assignee_id: null } : {}),
         })
         .eq("id", failure.id).neq("status", "완료")
         .select();
+      if (error) { alert(`출동거부 저장 실패\n${error.message ?? ""}`); return; }
       if (!ok?.length) { notifyFailure("이미 완료 처리된 건이에요"); return; }
       setFailures((prev) => prev.map((x) => (x.id === failure.id
         ? { ...x, assignee: null, dispatchedAt: null, etaMinutes: null, arrivalTime: null, status: "미처리" }
@@ -682,7 +750,10 @@ export default function App() {
       .eq("id", failure.id)
       .eq("status", "미처리");
     claim = failure.assignee ? claim.eq("assignee", failure.assignee) : claim.is("assignee", null);
-    const { data: claimed } = await claim.select();
+    const { data: claimed, error: claimError } = await claim.select();
+    // 0행이 "남이 먼저 출동함"인지 "저장 자체가 실패함"인지 구분한다 — 안 그러면 진짜 통신 오류가
+    // 났을 때도 "누가 먼저 갔다"고 안내해서, 아무도 출동 안 했는데 기사가 안심하고 안 갈 수 있다.
+    if (claimError) { alert(`출동 저장 실패\n${claimError.message ?? ""}`); return; }
     if (!claimed?.length) {
       const { data: fresh } = await supabase.from("failures").select("*").eq("id", failure.id).single();
       if (fresh) setFailures((prev) => prev.map((x) => (x.id === failure.id ? mapFailure(fresh) : x)));
@@ -811,6 +882,15 @@ export default function App() {
   }
 
   async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId }) {
+    // 같은 자재신청 건에 이미 청구기록이 있으면 막는다 — 할 일 완료 처리가 실패해 재시도하는
+    // 과정에서 청구 자체는 또 저장돼버리는(중복청구) 경로를 막기 위함.
+    if (materialRequestId) {
+      const { data: already } = await supabase.from("billings").select("id").eq("material_request_id", materialRequestId).limit(1);
+      if (already?.length) {
+        alert("이 신청은 이미 비용청구가 접수됐어요. 화면을 새로고침해주세요.");
+        return false;
+      }
+    }
     // v2: 호기 확정 — 직접 전달받거나(자재건), siteId 또는 유일한 현장명으로 찾는다
     const billSite = siteId
       ? sites.find((x) => x.id === siteId)
@@ -885,8 +965,9 @@ export default function App() {
       ...(v2Ready ? { author_id: profileIdByName(profilesAll, newPost.author) } : {}),
       ...(feedNoticeReady ? { is_notice: newPost.isNotice } : {}),
     }), "글 등록 실패 — 다시 시도해주세요");
-    if (!posted) return; // 글이 조용히 사라지지 않도록 (P1-7)
+    if (!posted) return false; // 글이 조용히 사라지지 않도록 (P1-7)
     setFeed((prev) => [...prev, newPost]);
+    return true;
   }
 
   // ★ 우리방 좋아요 토글
@@ -1155,10 +1236,14 @@ export default function App() {
   async function handleAdvanceQuote(quoteId) {
     const q = quoteRequests.find((x) => x.id === quoteId);
     if (!q) return;
+    // 저장 실패했는데 화면만 다음 단계로 넘어가면, 이후 지급완료 처리가 실제 DB 상태와 다른
+    // 단계를 기준으로 동작할 수 있다 — 실패 시 반영하지 않는다.
     if (q.status === "요청접수") {
-      await supabase.from("quote_requests").update({ status: "견적발행", quote_issued_date: TODAY_STR }).eq("id", quoteId);
+      if (!(await writeOk(supabase.from("quote_requests").update({ status: "견적발행", quote_issued_date: TODAY_STR }).eq("id", quoteId), "견적발행 처리 실패"))) return;
     } else if (q.status === "견적발행") {
-      await supabase.from("quote_requests").update({ status: "승인", approved_date: TODAY_STR }).eq("id", quoteId);
+      if (!(await writeOk(supabase.from("quote_requests").update({ status: "승인", approved_date: TODAY_STR }).eq("id", quoteId), "승인 처리 실패"))) return;
+    } else {
+      return;
     }
     setQuoteRequests((prev) =>
       prev.map((x) => {
@@ -1413,8 +1498,10 @@ export default function App() {
   async function handleReject(requestId, reason) {
     // "이미 비용청구 완료된 건은 반려 불가"는 화면에선 로컬 todos로 버튼을 숨기는 것뿐이라,
     // 반려 시트를 열어둔 채로 다른 곳에서 청구가 끝나는 경쟁을 못 막는다 — 실행 직전 DB를 다시 조회해 확인.
-    const { data: linkedTodos } = await supabase.from("todos").select("done").eq("material_request_id", requestId);
-    if (linkedTodos?.some((t) => t.done)) {
+    // 할 일의 done 여부가 아니라 실제 청구기록(billings) 존재 여부로 판단한다 — 관리자가 "완료취소"로
+    // 할 일을 되돌려도 청구기록 자체는 안 지워지므로 이게 더 확실한 기준이다.
+    const { data: existingBillings } = await supabase.from("billings").select("id").eq("material_request_id", requestId).limit(1);
+    if (existingBillings?.length) {
       alert("이미 비용청구가 완료된 건이라 반려할 수 없어요. 화면을 새로고침해주세요.");
       return;
     }
@@ -1426,11 +1513,18 @@ export default function App() {
       prev.map((r) => (r.id === requestId ? { ...r, status: "반려", rejectReason: reason, rejectedDate: TODAY_STR } : r))
     );
 
-    const todoIdsToRemove = todos.filter((t) => t.materialRequestId === requestId && !t.done).map((t) => t.id);
+    // 삭제 대상도 방금 확인한 최신 DB 상태로 다시 조회해서 정하고, 삭제 자체의 실패 여부도 확인한다 —
+    // 실패했는데 화면에서만 지워지면 반려된 신청에 할 일이 유령처럼 DB에 남는다.
+    const { data: freshTodos } = await supabase.from("todos").select("id, done").eq("material_request_id", requestId);
+    const todoIdsToRemove = (freshTodos ?? []).filter((t) => !t.done).map((t) => t.id);
     if (todoIdsToRemove.length > 0) {
-      await supabase.from("todos").delete().in("id", todoIdsToRemove);
+      const { error: delError } = await supabase.from("todos").delete().in("id", todoIdsToRemove);
+      if (delError) {
+        alert(`반려는 처리됐지만 연결된 할 일 정리에 실패했어요.\n${delError.message ?? ""}\n관리자에게 확인을 요청해주세요.`);
+        return;
+      }
     }
-    setTodos((prev) => prev.filter((t) => !(t.materialRequestId === requestId && !t.done)));
+    setTodos((prev) => prev.filter((t) => !todoIdsToRemove.includes(t.id)));
   }
 
   // 관리자가 반려 건을 재확인하고 다시 '지급 대기' 목록으로 돌려보냅니다.
