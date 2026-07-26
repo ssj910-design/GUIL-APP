@@ -165,9 +165,11 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       }
     }
     if (manualForm.fromKit) {
+      // 호기 수만큼 부품을 썼으니 그만큼 차감해야 한다 — 3개 호기를 한 번에 청구하면 3배 차감.
+      const unitCount = targets.length;
       manualForm.parts
         .filter((r) => r.name.trim() && r.qty)
-        .forEach((r) => onUseKitPart({ part: r.name.trim(), siteName: site.name, qty: Number(r.qty) }));
+        .forEach((r) => onUseKitPart({ part: r.name.trim(), siteName: site.name, qty: Number(r.qty) * unitCount }));
     }
     setSubmitted({ siteName: site.name, part: partText, manual: true, fromKit: manualForm.fromKit });
     setManualForm({ siteId: "", units: [], parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });

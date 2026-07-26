@@ -102,7 +102,7 @@ function PostHeader({ p, canManage, canNotice, menuOpen, onToggleMenu, onCloseMe
 // 알림(종)에서 게시글 하나를 눌렀을 때 — 게시판 전체를 열지 않고 그 글만 팝업으로 보여준다
 // (게시판을 열면 전체 안읽음이 한번에 읽음 처리되는데, 다른 안읽은 글 알림까지 사라지는 걸 막기 위함).
 export function PostDetailOverlay({ feed, postId, onSendChat, onToggleLike, onUpdatePost, onDeletePost, onSetNotice, onClose }) {
-  const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
+  const { name: CURRENT_ENGINEER, role, selfId } = useContext(AuthContext);
   const isAdmin = role === "admin";
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -115,7 +115,9 @@ export function PostDetailOverlay({ feed, postId, onSendChat, onToggleLike, onUp
   const comments = feed.filter((p) => p.replyToId === postId).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
   const likes = post.reactions?.["👍"] ?? [];
   const liked = likes.includes(CURRENT_ENGINEER);
-  const canManage = isAdmin || post.author === CURRENT_ENGINEER;
+  // 이름이 같은 계정이 둘 이상이면 이름만으로는 남의 글도 내 글로 오판될 수 있어, 아이디가 있으면
+  // 아이디로 판단하고(authorId가 없는 옛 글만 이름으로 대체 판단).
+  const canManage = isAdmin || (post.authorId != null ? post.authorId === selfId : post.author === CURRENT_ENGINEER);
 
   function submitComment() {
     const text = commentDraft.trim();
@@ -265,7 +267,7 @@ function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEdit
 }
 
 export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDeletePost, onSetNotice }) {
-  const { name: CURRENT_ENGINEER, role, profiles } = useContext(AuthContext);
+  const { name: CURRENT_ENGINEER, role, profiles, selfId } = useContext(AuthContext);
   const [composing, setComposing] = useState(false);
   const [postInput, setPostInput] = useState("");
   const [postIsNotice, setPostIsNotice] = useState(false);
@@ -301,9 +303,12 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
     return commentsOf(p.id).some((c) => (c.text ?? "").toLowerCase().includes(searchQuery));
   });
 
-  function submitPost() {
+  async function submitPost() {
     if (!postInput.trim() && pendingPhotos.length === 0) return;
-    onSendChat(postInput.trim(), { photoUrls: pendingPhotos, replyToId: null, isNotice: postIsNotice });
+    // 저장 성공을 확인한 뒤에만 입력창을 비운다 — 실패했는데 먼저 비우면 이미 올린 사진은
+    // 어디에도 안 붙은 채 남고, 사용자는 글을 처음부터 다시 써야 한다.
+    const ok = await onSendChat(postInput.trim(), { photoUrls: pendingPhotos, replyToId: null, isNotice: postIsNotice });
+    if (!ok) return;
     setPostInput("");
     setPendingPhotos([]);
     setPostIsNotice(false);
@@ -366,7 +371,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
     const likes = openPost.reactions?.["👍"] ?? [];
     const liked = likes.includes(CURRENT_ENGINEER);
     const comments = commentsOf(openPost.id);
-    const canManage = isAdmin || openPost.author === CURRENT_ENGINEER;
+    const canManage = isAdmin || (openPost.authorId != null ? openPost.authorId === selfId : openPost.author === CURRENT_ENGINEER);
     return (
       <div className="flex-1 flex flex-col overflow-hidden bg-white">
         <div className="px-4 pt-4 pb-2.5 flex items-center gap-2 shrink-0 border-b border-slate-100">
@@ -517,7 +522,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
             const likes = p.reactions?.["👍"] ?? [];
             const liked = likes.includes(CURRENT_ENGINEER);
             const commentCount = commentsOf(p.id).length;
-            const canManage = isAdmin || p.author === CURRENT_ENGINEER;
+            const canManage = isAdmin || (p.authorId != null ? p.authorId === selfId : p.author === CURRENT_ENGINEER);
             return (
               <div key={p.id} onClick={() => editingId !== p.id && goToPost(p.id)} className="py-5 cursor-pointer">
                 <PostHeader
