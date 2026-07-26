@@ -187,19 +187,18 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
       .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
   );
 
-  // 집중 관리현장: 최근 30일 고장 3회 이상, 또는 지원요청/운행정지 등 미해결 에스컬레이션이 있는 현장
-  // (모바일 홈탭과 동일 기준). 지원요청/운행정지는 각각 독립적으로 판단해 배지를 함께 표시합니다.
+  // 지원요청/운행정지가 걸린 현장 — 카드 배지 표시에만 쓴다 (집중관리현장 편입 기준에서는 빠졌다 — 아래 criticalSites 참고).
   const openEscalations = failures.filter((f) => f.escalation && f.status !== "완료");
   const supportSiteIds = new Set(openEscalations.filter((f) => f.escalation === "지원요청").map((f) => f.siteId));
   const stoppedSiteIds = new Set(openEscalations.filter((f) => f.escalation === "운행정지").map((f) => f.siteId));
-  const escalatedSiteIds = new Set([...supportSiteIds, ...stoppedSiteIds]);
   // 최근 30일 고장 목록은 실시간 계산 — 처리완료 여부와 무관하게 누적되어야 하므로
   // 현장에 수동 저장된 failures30d 대신 실제 failures 레코드에서 직접 센다.
   const recentFailuresBySiteId = recentFailuresBySite(failures);
   // 갇힘사고는 재발 횟수와 무관하게 최근 30일 내 1건만 있어도 집중관리 대상 — 30일이 지나면 자동으로 빠진다.
   const entrapmentSiteIds = entrapmentSitesRecent(failures);
+  // 집중관리현장: 3회 이상 고장 또는 갇힘사고 걸린 현장 (모바일 홈탭과 동일 기준).
   const criticalSites = sites.filter((s) =>
-    (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || escalatedSiteIds.has(s.id) || entrapmentSiteIds.has(s.id)
+    (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || entrapmentSiteIds.has(s.id)
   );
 
   const engineerName = (id, fallback) => profiles.find((p) => p.id === id)?.name ?? fallback ?? "미배정";
@@ -253,7 +252,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
 
       {/* 집중 관리현장 */}
       <section className="bg-red-50 border border-red-200 rounded-xl p-5 mb-6">
-        <h2 className="text-sm font-extrabold text-red-700 mb-3">집중관리현장(갇힘·운행정지·고장다발·지원요청)</h2>
+        <h2 className="text-sm font-extrabold text-red-700 mb-3">집중관리현장(갇힘·고장다발)</h2>
         {criticalSites.length === 0 ? (
           <p className="text-xs text-red-500">현재 집중 관리 대상 현장이 없습니다.</p>
         ) : (
