@@ -712,10 +712,19 @@ export default function App() {
     const isEscalation = result === "지원요청" || result === "운행정지";
     if (result === "처리완료") markAtSite(failure, "처리완료"); // 완료한 그 현장 = 마지막 위치
     const escalation = isClosed ? null : result;
+    // 지원요청·운행정지로 배정을 풀면 assignee가 비어서 "누가 그 판단을 내렸는지"가 사라진다 —
+    // 비우기 직전 값을 별도 컬럼에 스냅샷으로 남겨 고장상세 화면에서 보여준다.
+    const escalatedBy = isEscalation ? (failure.assignee || null) : null;
+    const escalatedById = isEscalation ? (failure.assigneeId ?? profileIdByName(profilesAll, failure.assignee) ?? null) : null;
+    const escalatedAt = isEscalation ? new Date().toISOString() : null;
     const statePatch = isClosed
       ? { status: "완료" }
       : isEscalation
-      ? { status: "미처리", assignee: null, dispatched_at: null, eta_minutes: null, arrival_time: null, ...(v2Ready ? { assignee_id: null } : {}) }
+      ? {
+          status: "미처리", assignee: null, dispatched_at: null, eta_minutes: null, arrival_time: null,
+          escalated_by: escalatedBy, escalated_by_id: escalatedById, escalated_at: escalatedAt,
+          ...(v2Ready ? { assignee_id: null } : {}),
+        }
       : { status: failure.status };
     // 처리결과는 유실되면 재작성이 어렵다 — write 실패 시 낙관적 반영을 막는다 (P1-7)
     const resultSaved = await writeOk(
@@ -743,7 +752,7 @@ export default function App() {
           ? {
               ...x,
               status: isClosed ? "완료" : isEscalation ? "미처리" : x.status,
-              ...(isEscalation ? { assignee: null, assigneeId: null, dispatchedAt: null, etaMinutes: null, arrivalTime: null } : {}),
+              ...(isEscalation ? { assignee: null, assigneeId: null, dispatchedAt: null, etaMinutes: null, arrivalTime: null, escalatedBy, escalatedById, escalatedAt } : {}),
               processResult: result,
               escalation,
               faultSymptom: symptom || null,

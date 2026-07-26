@@ -503,6 +503,12 @@ export function FailureDetailSheet({ failure, failures = [], nested = false, onC
             <span className="font-semibold text-red-600">{failure.escalation}</span>
           </div>
         )}
+        {failure.escalatedBy && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-400">{failure.escalation} 요청자</span>
+            <span className="font-semibold text-slate-700">{failure.escalatedBy}</span>
+          </div>
+        )}
         {failure.faultErrorCode && (
           <div className="flex items-center justify-between text-sm">
             <span className="text-slate-400">에러코드</span>
