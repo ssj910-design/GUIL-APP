@@ -509,6 +509,12 @@ export function FailureDetailSheet({ failure, failures = [], nested = false, onC
             <span className="font-semibold text-slate-700">{failure.escalatedBy}</span>
           </div>
         )}
+        {failure.escalatedArrivalTime && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-400">{failure.escalation} 당시 도착</span>
+            <span className="font-semibold text-slate-700">{failure.escalatedArrivalTime}</span>
+          </div>
+        )}
         {failure.faultErrorCode && (
           <div className="flex items-center justify-between text-sm">
             <span className="text-slate-400">에러코드</span>

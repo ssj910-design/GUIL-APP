@@ -118,8 +118,14 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     });
     // ★ 청구 저장 성공 후에만 할일 완료 처리 — insert 실패 시 "완료됐는데 청구 없음"(자재 로스) 방지 (P1-2)
     if (!ok) return;
-    await supabase.from("todos").update({ done: true }).in("id", idsToComplete);
-    setTodos((prev) => prev.map((t) => (idsToComplete.includes(t.id) ? { ...t, done: true } : t)));
+    // 할일 완료 처리 자체가 실패할 수도 있다 — 이 결과를 확인 안 하면 DB엔 아직 미완료인데
+    // 화면만 완료로 보여서, 그 할일이 다시 청구 대상 목록에 남아 재청구(중복청구) 유혹이 생긴다.
+    const { error: todoError } = await supabase.from("todos").update({ done: true }).in("id", idsToComplete);
+    if (todoError) {
+      alert(`청구는 저장됐지만 할 일 완료 처리에 실패했습니다.\n${todoError.message ?? ""}\n목록에 남아있을 수 있으니 관리자에게 확인을 요청해주세요.`);
+    } else {
+      setTodos((prev) => prev.map((t) => (idsToComplete.includes(t.id) ? { ...t, done: true } : t)));
+    }
     setSubmitted({ siteName: selected.siteName, part: selected.part, manual: false });
     setSelectedId(openTodos.find((t) => t.id !== selected.id)?.id ?? "");
     setMaterialCost("");
@@ -135,8 +141,11 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     const partText = formatPartRows(manualForm.parts);
     // 선택한 호기마다 청구 1건씩 생성 (호기 단위 정합 — 자재/견적과 동일)
     const targets = manualForm.units.length ? manualForm.units : [null];
-    // 순차 await — insert 실패 시 즉시 중단하고 폼을 유지(리셋 안 함)해 재시도 가능 (P1-1/P1-2)
-    for (const u of targets) {
+    // 순차 await — insert 실패 시 즉시 중단하고 폼을 유지(리셋 안 함)해 재시도 가능 (P1-1/P1-2).
+    // 단, 이미 성공한 호기까지 폼에 남겨두면 재시도 시 그 호기들을 또 청구(중복청구)하게 되므로,
+    // 실패한 호기부터만 남기고 이미 성공한 호기는 폼에서 미리 제거한다.
+    for (let i = 0; i < targets.length; i++) {
+      const u = targets[i];
       const ok = await onSubmitBilling({
         type: "manual",
         siteName: site.name,
@@ -150,7 +159,10 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
         replaceDate: manualForm.replaceDate,
         contactPhone: manualForm.contactPhone,
       });
-      if (!ok) return;
+      if (!ok) {
+        if (manualForm.units.length) setManualForm((f) => ({ ...f, units: targets.slice(i) }));
+        return;
+      }
     }
     if (manualForm.fromKit) {
       manualForm.parts
@@ -209,6 +221,9 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                       <input type="text" className={`${inputCls} bg-slate-100 text-slate-500`} value="견적서 참조" disabled readOnly />
                     ) : (
                       <>
+                        {selected?.billingAmount != null && (
+                          <p className="text-[11px] text-blue-500 mb-1">관리자 사전승인 금액 참고: ₩{Number(selected.billingAmount).toLocaleString()}</p>
+                        )}
                         <input
                           type="number"
                           className={inputCls}
@@ -216,8 +231,12 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                           value={materialCost}
                           onChange={(e) => setMaterialCost(e.target.value)}
                         />
-                        {!(Number(materialCost) > 0) && (
+                        {!(Number(materialCost) > 0) ? (
                           <p className="text-[11px] text-red-500 mt-1">수리비를 입력해주세요</p>
+                        ) : (
+                          selected?.billingAmount != null && Number(materialCost) !== Number(selected.billingAmount) && (
+                            <p className="text-[11px] text-amber-600 mt-1">⚠️ 사전승인 금액과 달라요 — 맞는지 한 번 더 확인해주세요</p>
+                          )
                         )}
                       </>
                     )}

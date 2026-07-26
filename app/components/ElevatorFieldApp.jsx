@@ -122,6 +122,9 @@ export default function App() {
   // 상비부품 재고도 같은 이유로(한 번의 청구에서 여러 부품을 동시에 차감할 수 있어) ref에
   // 최신 수량을 직접 보관합니다. key: `${engineerId}|${part}`
   const kitStockRef = useRef({});
+  // 출동거부는 window.prompt()로 블로킹되는 사이 두 번째 클릭이 큐에 쌓였다가 첫 처리 직후
+  // 다시 실행될 수 있어(중복 피드글·중복 푸시), 같은 건은 처리 중엔 다시 안 받게 막는다.
+  const refusingFailureIdsRef = useRef(new Set());
   const [failureToast, setFailureToast] = useState("");
   const [loading, setLoading] = useState(true);
   const [feedReadAt, setFeedReadAt] = useState(null); // 이번 세션에서 우리방을 마지막으로 읽은 시각
@@ -631,29 +634,35 @@ export default function App() {
   }
 
   async function handleRefuseFailure(failure) {
-    const reason = window.prompt("출동을 거부하고 미배정으로 돌립니다.\n사유를 입력하세요 (선택)");
-    if (reason === null) return; // 취소
-    // 출동 후 취소도 지원 — 출동 기록을 초기화하고 미처리·미배정으로 되돌린다 (완료 건은 불가)
-    const { data: ok } = await supabase.from("failures")
-      .update({
-        assignee: null, dispatched_at: null, eta_minutes: null, arrival_time: null, status: "미처리",
-        ...(v2Ready ? { assignee_id: null } : {}),
-      })
-      .eq("id", failure.id).neq("status", "완료")
-      .select();
-    if (!ok?.length) { notifyFailure("이미 완료 처리된 건이에요"); return; }
-    setFailures((prev) => prev.map((x) => (x.id === failure.id
-      ? { ...x, assignee: null, dispatchedAt: null, etaMinutes: null, arrivalTime: null, status: "미처리" }
-      : x)));
-    sendPush("failure_refused", adminIds(), {
-      title: "출동 거부됨 — 재배정 필요",
-      body: `${profile.name}님이 ${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` (${reason.trim()})` : ""}`,
-    });
-    const admins = profilesAll.filter((p) => p.role === "admin").map((p) => "@" + p.name).join(" ");
-    handleSendFeedPost(
-      `⚠️ ${profile.name}님이 ${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` — 사유: ${reason.trim()}` : ""}. 재배정이 필요합니다 ${admins}`.trim()
-    );
-    notifyFailure("출동 거부됨 — 미배정으로 이동, 관리자에게 알림");
+    if (refusingFailureIdsRef.current.has(failure.id)) return; // 처리 중 중복 클릭 무시
+    refusingFailureIdsRef.current.add(failure.id);
+    try {
+      const reason = window.prompt("출동을 거부하고 미배정으로 돌립니다.\n사유를 입력하세요 (선택)");
+      if (reason === null) return; // 취소
+      // 출동 후 취소도 지원 — 출동 기록을 초기화하고 미처리·미배정으로 되돌린다 (완료 건은 불가)
+      const { data: ok } = await supabase.from("failures")
+        .update({
+          assignee: null, dispatched_at: null, eta_minutes: null, arrival_time: null, status: "미처리",
+          ...(v2Ready ? { assignee_id: null } : {}),
+        })
+        .eq("id", failure.id).neq("status", "완료")
+        .select();
+      if (!ok?.length) { notifyFailure("이미 완료 처리된 건이에요"); return; }
+      setFailures((prev) => prev.map((x) => (x.id === failure.id
+        ? { ...x, assignee: null, dispatchedAt: null, etaMinutes: null, arrivalTime: null, status: "미처리" }
+        : x)));
+      sendPush("failure_refused", adminIds(), {
+        title: "출동 거부됨 — 재배정 필요",
+        body: `${profile.name}님이 ${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` (${reason.trim()})` : ""}`,
+      });
+      const admins = profilesAll.filter((p) => p.role === "admin").map((p) => "@" + p.name).join(" ");
+      handleSendFeedPost(
+        `⚠️ ${profile.name}님이 ${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` — 사유: ${reason.trim()}` : ""}. 재배정이 필요합니다 ${admins}`.trim()
+      );
+      notifyFailure("출동 거부됨 — 미배정으로 이동, 관리자에게 알림");
+    } finally {
+      refusingFailureIdsRef.current.delete(failure.id);
+    }
   }
 
   async function handleDispatchFailure(failure, etaMinutes) {
@@ -698,7 +707,20 @@ export default function App() {
   // (사람이 갇힌 급한 현장에선 앱에 도착시간을 입력할 여유가 없다 — 일단 도착만 찍고 구조부터, 처리결과는 나중에.)
   async function handleArriveFailure(failure) {
     const arrivalTime = new Date().toTimeString().slice(0, 5); // "HH:MM" — 기존 도착시간 형식과 일치(모달 입력값과 동일)
-    if (!(await writeOk(supabase.from("failures").update({ arrival_time: arrivalTime }).eq("id", failure.id), "도착 기록 저장 실패"))) return;
+    // 그 사이 관리자가 재배정/거부해 담당자·상태가 바뀌었으면 덮어쓰지 않는다 — 배정 갱신과 동일하게
+    // 조건부 update로 막고, 0행이면 최신 상태로 새로고침한다.
+    const { data: ok, error } = await supabase
+      .from("failures")
+      .update({ arrival_time: arrivalTime })
+      .eq("id", failure.id).eq("status", "진행중").eq("assignee", failure.assignee)
+      .select();
+    if (error) { alert(`도착 기록 저장 실패\n${error.message ?? ""}`); return; }
+    if (!ok?.length) {
+      const { data: fresh } = await supabase.from("failures").select("*").eq("id", failure.id).single();
+      if (fresh) setFailures((prev) => prev.map((x) => (x.id === failure.id ? mapFailure(fresh) : x)));
+      notifyFailure("이미 상태가 바뀐 건이에요 · 목록을 새로고침했습니다");
+      return;
+    }
     setFailures((prev) => prev.map((x) => (x.id === failure.id ? { ...x, arrivalTime } : x)));
     markAtSite(failure, "도착"); // 도착 = 그 현장에 있음 → 마지막 위치 갱신
   }
@@ -712,47 +734,58 @@ export default function App() {
     const isEscalation = result === "지원요청" || result === "운행정지";
     if (result === "처리완료") markAtSite(failure, "처리완료"); // 완료한 그 현장 = 마지막 위치
     const escalation = isClosed ? null : result;
+    // 완료 시각도 도착시각과 같은 "HH:MM" 형식으로 남긴다 — 상세 타임라인(도착→완료)에 쓰인다.
+    const completeTime = isClosed ? new Date().toTimeString().slice(0, 5) : null;
     // 지원요청·운행정지로 배정을 풀면 assignee가 비어서 "누가 그 판단을 내렸는지"가 사라진다 —
     // 비우기 직전 값을 별도 컬럼에 스냅샷으로 남겨 고장상세 화면에서 보여준다.
     const escalatedBy = isEscalation ? (failure.assignee || null) : null;
     const escalatedById = isEscalation ? (failure.assigneeId ?? profileIdByName(profilesAll, failure.assignee) ?? null) : null;
     const escalatedAt = isEscalation ? new Date().toISOString() : null;
+    // arrival_time도 같은 이유로 비우기 직전 값을 스냅샷 — 안 그러면 "실제로 언제 도착했었는지"가 사라진다.
+    const escalatedArrivalTime = isEscalation ? (failure.arrivalTime || null) : null;
     const statePatch = isClosed
-      ? { status: "완료" }
+      ? { status: "완료", complete_time: completeTime }
       : isEscalation
       ? {
           status: "미처리", assignee: null, dispatched_at: null, eta_minutes: null, arrival_time: null,
           escalated_by: escalatedBy, escalated_by_id: escalatedById, escalated_at: escalatedAt,
+          escalated_arrival_time: escalatedArrivalTime,
           ...(v2Ready ? { assignee_id: null } : {}),
         }
       : { status: failure.status };
-    // 처리결과는 유실되면 재작성이 어렵다 — write 실패 시 낙관적 반영을 막는다 (P1-7)
-    const resultSaved = await writeOk(
-      supabase
-        .from("failures")
-        .update({
-          ...statePatch,
-          process_result: result,
-          escalation,
-          fault_symptom: symptom || null,
-          fault_error_code: errorCode || null,
-          fault_cause: cause || null,
-          process_content: processContent || null,
-          process_note: note || null,
-          photo_count: photoCount || 0,
-          photo_urls: photoUrls?.length ? photoUrls : null,
-        })
-        .eq("id", failure.id),
-      "처리결과 저장 실패"
-    );
-    if (!resultSaved) return;
+    // 처리결과는 유실되면 재작성이 어렵다 — 저장 실패는 물론, 그 사이 재배정/거부로 담당자·상태가
+    // 바뀐 경우(동시성 충돌)에도 낙관적 반영을 막는다. 배정 갱신과 동일한 조건부 update 패턴.
+    const { data: resultRows, error: resultError } = await supabase
+      .from("failures")
+      .update({
+        ...statePatch,
+        process_result: result,
+        escalation,
+        fault_symptom: symptom || null,
+        fault_error_code: errorCode || null,
+        fault_cause: cause || null,
+        process_content: processContent || null,
+        process_note: note || null,
+        photo_count: photoCount || 0,
+        photo_urls: photoUrls?.length ? photoUrls : null,
+      })
+      .eq("id", failure.id).eq("status", "진행중").eq("assignee", failure.assignee)
+      .select();
+    if (resultError) { alert(`처리결과 저장 실패\n${resultError.message ?? ""}`); return; }
+    if (!resultRows?.length) {
+      const { data: fresh } = await supabase.from("failures").select("*").eq("id", failure.id).single();
+      if (fresh) setFailures((prev) => prev.map((x) => (x.id === failure.id ? mapFailure(fresh) : x)));
+      notifyFailure("다른 곳에서 이미 처리된 건이에요 · 목록을 새로고침했습니다");
+      return;
+    }
     setFailures((prev) =>
       prev.map((x) =>
         x.id === failure.id
           ? {
               ...x,
               status: isClosed ? "완료" : isEscalation ? "미처리" : x.status,
-              ...(isEscalation ? { assignee: null, assigneeId: null, dispatchedAt: null, etaMinutes: null, arrivalTime: null, escalatedBy, escalatedById, escalatedAt } : {}),
+              ...(isClosed ? { completeTime } : {}),
+              ...(isEscalation ? { assignee: null, assigneeId: null, dispatchedAt: null, etaMinutes: null, arrivalTime: null, escalatedBy, escalatedById, escalatedAt, escalatedArrivalTime } : {}),
               processResult: result,
               escalation,
               faultSymptom: symptom || null,
@@ -1172,11 +1205,6 @@ export default function App() {
     const finalAssignees = assignees?.length ? assignees : [q.engineer];
     const finalDueDate = dueDate || addDays(TODAY_STR, 30);
 
-    await supabase.from("quote_requests").update({ status: "자재지급완료", supplied_date: TODAY_STR }).eq("id", quoteId);
-    setQuoteRequests((prev) =>
-      prev.map((x) => (x.id === quoteId ? { ...x, status: "자재지급완료", suppliedDate: TODAY_STR } : x))
-    );
-
     const newTodos = finalAssignees.map((assignee, idx) => ({
       id: `todo-quote-${quoteId}-${idx}`,
       materialRequestId: null,
@@ -1192,25 +1220,41 @@ export default function App() {
       done: false,
       description: description || null,
     }));
-    await supabase.from("todos").insert(
-      newTodos.map((t) => ({
-        id: t.id,
-        quote_request_id: t.quoteRequestId,
-        source: t.source,
-        title: t.title,
-        site_name: t.siteName,
-        elevator_no: t.elevatorNo,
-        part: t.part,
-        assignee: t.assignee,
-        assigned_date: t.assignedDate,
-        due_date: t.dueDate,
-        done: t.done,
-        description: t.description,
-        ...(v2Ready ? {
-          unit_id: q.unitId ?? unitIdFor(units, q.siteId, q.elevatorNo),
-          assignee_id: profileIdByName(profilesAll, t.assignee),
-        } : {}),
-      }))
+    // ★ 할 일을 먼저 만든 뒤 견적 상태를 바꾼다 — 자재 지급완료(handleSupplyComplete)와 동일 패턴.
+    // id가 견적당 고정이라 upsert면 재시도도 안전하다.
+    const todosSaved = await writeOk(
+      supabase.from("todos").upsert(
+        newTodos.map((t) => ({
+          id: t.id,
+          quote_request_id: t.quoteRequestId,
+          source: t.source,
+          title: t.title,
+          site_name: t.siteName,
+          elevator_no: t.elevatorNo,
+          part: t.part,
+          assignee: t.assignee,
+          assigned_date: t.assignedDate,
+          due_date: t.dueDate,
+          done: t.done,
+          description: t.description,
+          ...(v2Ready ? {
+            unit_id: q.unitId ?? unitIdFor(units, q.siteId, q.elevatorNo),
+            assignee_id: profileIdByName(profilesAll, t.assignee),
+          } : {}),
+        }))
+      ),
+      "할 일 생성 실패 — 견적 지급완료 처리를 중단했습니다"
+    );
+    if (!todosSaved) return;
+
+    const statusSaved = await writeOk(
+      supabase.from("quote_requests").update({ status: "자재지급완료", supplied_date: TODAY_STR }).eq("id", quoteId),
+      "견적 지급완료 처리 실패"
+    );
+    if (!statusSaved) return;
+
+    setQuoteRequests((prev) =>
+      prev.map((x) => (x.id === quoteId ? { ...x, status: "자재지급완료", suppliedDate: TODAY_STR } : x))
     );
     setTodos((prev) => [...newTodos, ...prev]);
   }
@@ -1367,10 +1411,17 @@ export default function App() {
 
   // ★ 기사 반려: 잘못된 자재가 지급된 경우. 연결된 할 일은 취소되고 담당자에게 재지급 알림이 전달됩니다.
   async function handleReject(requestId, reason) {
-    await supabase
-      .from("material_requests")
-      .update({ status: "반려", reject_reason: reason, rejected_date: TODAY_STR })
-      .eq("id", requestId);
+    // "이미 비용청구 완료된 건은 반려 불가"는 화면에선 로컬 todos로 버튼을 숨기는 것뿐이라,
+    // 반려 시트를 열어둔 채로 다른 곳에서 청구가 끝나는 경쟁을 못 막는다 — 실행 직전 DB를 다시 조회해 확인.
+    const { data: linkedTodos } = await supabase.from("todos").select("done").eq("material_request_id", requestId);
+    if (linkedTodos?.some((t) => t.done)) {
+      alert("이미 비용청구가 완료된 건이라 반려할 수 없어요. 화면을 새로고침해주세요.");
+      return;
+    }
+    if (!(await writeOk(
+      supabase.from("material_requests").update({ status: "반려", reject_reason: reason, rejected_date: TODAY_STR }).eq("id", requestId),
+      "반려 처리 실패"
+    ))) return;
     setMaterialRequests((prev) =>
       prev.map((r) => (r.id === requestId ? { ...r, status: "반려", rejectReason: reason, rejectedDate: TODAY_STR } : r))
     );
