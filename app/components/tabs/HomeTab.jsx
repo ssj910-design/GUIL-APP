@@ -593,18 +593,18 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
     return distanceKm(selfCoord, s?.lat != null ? { lat: s.lat, lng: s.lng } : null);
   };
   const mySites = role === "admin" ? sites : sites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER);
-  // 지원요청/운행정지가 걸린 현장 — 집중관리 섹션 + 고장현황 카드 라벨 양쪽에서 쓴다.
+  // 지원요청/운행정지가 걸린 현장 — 고장현황 카드 라벨(지원미배정)과 집중관리 카드의 배지 표시에 쓴다
+  // (집중관리현장 편입 기준에서는 빠졌다 — 아래 criticalSites 참고).
   const openEscalations = failures.filter((f) => f.escalation && f.status !== "완료");
   const supportSiteIds = new Set(openEscalations.filter((f) => f.escalation === "지원요청").map((f) => f.siteId));
   const stoppedSiteIds = new Set(openEscalations.filter((f) => f.escalation === "운행정지").map((f) => f.siteId));
-  const escalatedSiteIds = new Set([...supportSiteIds, ...stoppedSiteIds]);
   // 최근 30일 고장 목록은 실시간 계산 — 처리완료 여부와 무관하게 누적. 3회↑ 재발 배지·집중관리 판정에 쓴다.
   const recentFailuresBySiteId = recentFailuresBySite(failures);
   // 갇힘사고는 재발 횟수와 무관하게 최근 30일 내 1건만 있어도 집중관리 대상 — 30일 지나면 자동으로 빠진다.
   const entrapmentSiteIds = entrapmentSitesRecent(failures);
-  // 집중관리현장: 3회 이상 고장, 갇힘사고, 지원요청/운행정지 걸린 현장 (담당 무관 — 기사도 회사 전체 위험 현장을 봄).
+  // 집중관리현장: 3회 이상 고장 또는 갇힘사고 걸린 현장 (담당 무관 — 기사도 회사 전체 위험 현장을 봄).
   const criticalSites = sites.filter((s) =>
-    (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || escalatedSiteIds.has(s.id) || entrapmentSiteIds.has(s.id)
+    (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || entrapmentSiteIds.has(s.id)
   );
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
@@ -737,7 +737,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
         <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-2">
             <AlertOctagon size={18} className="text-red-600" />
-            <h3 className="font-extrabold text-red-700 text-sm whitespace-nowrap">집중관리현장(갇힘·운행정지·고장다발·지원요청)</h3>
+            <h3 className="font-extrabold text-red-700 text-sm whitespace-nowrap">집중관리현장(갇힘·고장다발)</h3>
           </div>
           {criticalSites.length === 0 ? (
             <p className="text-xs text-red-500">현재 집중 관리 대상 현장이 없습니다.</p>
