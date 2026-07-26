@@ -434,10 +434,12 @@ export function FailureDetailSheet({ failure, failures = [], nested = false, onC
   const site = sites.find((s) => s.id === failure.siteId);
   const history = unitHistory(failures, failure);
   const stage = failureStage(failure);
-  // 지원요청 걸린 건은 배정자와 별개로 "지원하러 갑니다"로 등록한 지원기사도 처리결과를 입력할 수 있다.
-  const isSupporter = failure.supporterIds?.includes(selfId) ?? false;
-  const canJoinSupport = role === "engineer" && failure.escalation === "지원요청" && failure.status !== "완료" && failure.assignee !== me && !isSupporter;
   const { faultType, faultDetail } = parseErrorCode(failure.errorCode);
+  // 지원요청·운행정지·갇힘사고 건은 배정자와 별개로 "지원하러 갑니다"로 등록한 지원기사도
+  // 처리결과를 입력할 수 있다 — 집중관리현장 판정 기준(갇힘·운행정지·지원요청)과 맞춘다.
+  const isSupporter = failure.supporterIds?.includes(selfId) ?? false;
+  const isCriticalCase = failure.escalation === "지원요청" || failure.escalation === "운행정지" || faultType === "갇힘사고";
+  const canJoinSupport = role === "engineer" && isCriticalCase && failure.status !== "완료" && failure.assignee !== me && !isSupporter;
   const unitLabel = formatUnitLabel(failure.elevatorNo);
   const unitIndex = (labelToSeq(failure.elevatorNo) ?? NaN) - 1;
   const unitGovNo = site?.govElevatorNos?.[unitIndex];
