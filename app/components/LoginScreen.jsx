@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PrimaryButton, Field, inputCls } from "@/app/components/ui";
 
+const SAVED_ID_KEY = "guilSavedLoginId"; // 아이디 저장(비번은 저장 안 함)
 
 /* ------------------------------------------------------------------ */
 /* LOGIN                                                                */
@@ -9,6 +10,23 @@ import { PrimaryButton, Field, inputCls } from "@/app/components/ui";
 export function LoginScreen({ onLogin, error, submitting, demo }) {
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(false);
+
+  // 저장해둔 아이디가 있으면 미리 채우고 체크박스도 켜둔다.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(SAVED_ID_KEY);
+      if (saved) { setLoginId(saved); setRemember(true); }
+    } catch { /* 무시 */ }
+  }, []);
+
+  function submit() {
+    try {
+      if (remember) localStorage.setItem(SAVED_ID_KEY, loginId.trim());
+      else localStorage.removeItem(SAVED_ID_KEY);
+    } catch { /* 무시 */ }
+    onLogin(loginId, password);
+  }
 
   return (
     // PC에서도 접속하므로 반응형 — 모바일은 꽉 차게, PC는 가운데 카드로 보이게.
@@ -37,11 +55,15 @@ export function LoginScreen({ onLogin, error, submitting, demo }) {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="비밀번호"
             autoComplete="current-password"
-            onKeyDown={(e) => e.key === "Enter" && onLogin(loginId, password)}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
           />
         </Field>
+        <label className="flex items-center gap-2 mb-3 mt-1 cursor-pointer select-none">
+          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="w-4 h-4 rounded border-slate-300 accent-blue-700" />
+          <span className="text-xs font-semibold text-slate-500">아이디 저장</span>
+        </label>
         {error && <p className="text-xs text-red-500 mb-3 text-center">{error}</p>}
-        <PrimaryButton onClick={() => onLogin(loginId, password)} disabled={submitting || !loginId || !password}>
+        <PrimaryButton onClick={submit} disabled={submitting || !loginId || !password}>
           {submitting ? "로그인 중..." : "로그인"}
         </PrimaryButton>
         {demo && (
