@@ -1,7 +1,7 @@
 "use client";
 
 // 관리자 콘솔 공용 헬퍼 — 표기(호기·담당자)는 v2 FK 우선, 옛 라벨 fallback.
-import { useState, useRef } from "react";
+import { useState, useRef, createContext } from "react";
 import { createPortal } from "react-dom";
 import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil, Paperclip } from "lucide-react";
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
@@ -9,6 +9,11 @@ import { shortDate, parseShortDate, autoFormatShortDate, formatUnitLabel, sortEn
 import { confirmAsync } from "@/app/components/ConfirmHost";
 
 export const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
+
+// 콘솔 로그인 관리자 정보 — tier: 'super'(최고관리자) | 'manager'(중간관리자).
+// 로그인 꺼진(배포본·dev) 상태에선 tier='super'로 줘서 기존 동작을 유지한다.
+// 최고관리자 전용 기능은 useContext(AdminAuthContext).tier === 'super' 로 잠근다.
+export const AdminAuthContext = createContext({ tier: "super", name: "", signOut: () => {} });
 
 // 기록의 위치 표기: unitId → "현장 · N호기", 없으면 옛 텍스트
 export function locOf(data, unitId, fallbackSiteName, fallbackLabel) {

@@ -48,7 +48,10 @@ const TABS = [
 
 // 앱 구성이 끝날 때까지 로그인 화면을 잠시 꺼두는 스위치입니다.
 // 다시 로그인을 켜려면 이 값을 false로 바꾸면 됩니다.
-const SKIP_LOGIN = true;
+// 로그인 강제 스위치. 기본은 꺼둠(true=로그인 생략)이라 배포본은 지금처럼 열려 있다.
+// 로컬에서 3단계(진짜 로그인)를 만들 땐 .env.local에 NEXT_PUBLIC_SKIP_LOGIN=false 를 넣어 켠다.
+// 나중에 운영에 실제 반영할 땐 Vercel 환경변수만 false로 바꾸면 된다(코드 분기 없음).
+const SKIP_LOGIN = process.env.NEXT_PUBLIC_SKIP_LOGIN !== "false";
 
 const DEV_FAKE_PROFILE = { name: "관리자", role: "admin" };
 
@@ -186,7 +189,7 @@ export default function App() {
     // 제외·삭제된 계정이면 세션을 버리고 로그아웃시킨다.
     let alive = true;
     (async () => {
-      const { data } = await supabase.from("profiles").select("id,name,role,is_active,deleted_at").eq("id", session.id).single();
+      const { data } = await supabase.from("profiles").select("id,name,role,admin_tier,is_active,deleted_at").eq("id", session.id).single();
       if (!alive) return;
       if (!data || data.is_active === false || data.deleted_at) {
         localStorage.removeItem("guilAuthV1");
@@ -194,7 +197,7 @@ export default function App() {
         setProfile(null);
         return;
       }
-      setProfile({ id: data.id, name: data.name, role: data.role });
+      setProfile({ id: data.id, name: data.name, role: data.role, adminTier: data.admin_tier });
     })();
     return () => { alive = false; };
   }, [session, skipLogin]);
@@ -1649,7 +1652,7 @@ export default function App() {
   }
 
   return (
-    <AuthContext.Provider value={{ name: profile.name, role: profile.role, engineerNames, engineers, profiles: profilesAll, selfId: profile.id ?? profileIdByName(profilesAll, profile.name), signOut: handleLogout }}>
+    <AuthContext.Provider value={{ name: profile.name, role: profile.role, adminTier: skipLogin ? "super" : profile.adminTier, engineerNames, engineers, profiles: profilesAll, selfId: profile.id ?? profileIdByName(profilesAll, profile.name), signOut: handleLogout }}>
     <SitesContext.Provider value={sites}>
     <UnitsContext.Provider value={units}>
       <div className="h-dvh w-screen bg-slate-50 flex flex-col overflow-hidden relative">

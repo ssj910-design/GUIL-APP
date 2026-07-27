@@ -24,6 +24,12 @@ import NotifySettings from "@/app/components/admin/NotifySettings";
 import RoomAdmin from "@/app/components/admin/RoomAdmin";
 import ErrorCodesAdmin from "@/app/components/admin/ErrorCodesAdmin";
 import { ConfirmHost } from "@/app/components/ConfirmHost";
+import { LoginScreen } from "@/app/components/LoginScreen";
+import { PasswordChangeForm } from "@/app/components/PasswordChangeForm";
+import { AdminAuthContext } from "@/app/components/admin/adminShared";
+
+// 로그인 강제 스위치 — 모바일 앱과 동일. 기본 꺼짐(배포본은 지금처럼 열림), 로컬 .env.local에서 켠다.
+const SKIP_LOGIN = process.env.NEXT_PUBLIC_SKIP_LOGIN !== "false";
 
 const MENU = [
   { id: "dashboard", label: "대시보드", icon: LayoutDashboard },
@@ -51,6 +57,47 @@ export default function AdminApp() {
     materialRequests: [], quoteRequests: [], restockRequests: [], todos: [], billings: [],
     selfChecks: [], profiles: [], feed: [], errorCodes: [],
   });
+
+  // ── 콘솔 로그인 (관리자만) ──
+  const [authChecked, setAuthChecked] = useState(false);
+  const [me, setMe] = useState(null); // { id, name, role, adminTier, mustChange }
+  const [authError, setAuthError] = useState("");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (SKIP_LOGIN) { setAuthChecked(true); return; }
+    let alive = true;
+    (async () => {
+      try {
+        const raw = localStorage.getItem("guilAuthV1");
+        if (!raw) { if (alive) setAuthChecked(true); return; }
+        const s = JSON.parse(raw);
+        const { data } = await supabase.from("profiles").select("id,name,role,admin_tier,is_active,deleted_at").eq("id", s.id).single();
+        if (!alive) return;
+        if (data && data.role === "admin" && data.is_active !== false && !data.deleted_at) {
+          setMe({ id: data.id, name: data.name, role: data.role, adminTier: data.admin_tier, mustChange: s.mustChange });
+        }
+      } catch { /* 무시 — 로그인 화면으로 */ }
+      if (alive) setAuthChecked(true);
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  async function handleAdminLogin(loginId, password) {
+    setAuthSubmitting(true); setAuthError("");
+    const { data, error } = await supabase.rpc("verify_login", { p_login_id: (loginId || "").trim(), p_password: password });
+    const row = Array.isArray(data) ? data[0] : data;
+    if (error || !row) { setAuthError("아이디 또는 비밀번호가 올바르지 않습니다."); setAuthSubmitting(false); return; }
+    if (row.role !== "admin") { setAuthError("관리자만 접근할 수 있는 페이지입니다."); setAuthSubmitting(false); return; }
+    localStorage.setItem("guilAuthV1", JSON.stringify({ id: row.id, name: row.name, role: row.role, mustChange: row.must_change }));
+    const { data: p } = await supabase.from("profiles").select("admin_tier").eq("id", row.id).single();
+    setMe({ id: row.id, name: row.name, role: row.role, adminTier: p?.admin_tier, mustChange: row.must_change });
+    setAuthSubmitting(false);
+  }
+
+  function adminLogout() { localStorage.removeItem("guilAuthV1"); setMe(null); }
+
+  const tier = SKIP_LOGIN ? "super" : me?.adminTier; // 로그인 꺼진 상태선 전 기능 노출(기존 동작)
 
   useEffect(() => {
     async function load() {
@@ -92,7 +139,28 @@ export default function AdminApp() {
     load();
   }, []);
 
+  // ── 접근 통제 (로그인 켜졌을 때만) ──
+  if (!SKIP_LOGIN && !authChecked) {
+    return <div className="min-h-screen flex items-center justify-center bg-slate-100 text-sm font-bold text-slate-400">확인 중...</div>;
+  }
+  if (!SKIP_LOGIN && !me) {
+    return <LoginScreen onLogin={handleAdminLogin} error={authError} submitting={authSubmitting} demo={false} />;
+  }
+  if (!SKIP_LOGIN && me?.mustChange) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100 px-8">
+        <div className="w-full max-w-sm">
+          <h1 className="text-lg font-extrabold text-blue-950 mb-1 text-center">비밀번호를 변경해주세요</h1>
+          <p className="text-xs text-slate-400 mb-6 text-center">{me.name}님, 초기 비밀번호(1234)를 바꿔야 시작할 수 있습니다.</p>
+          <PasswordChangeForm profileId={me.id} submitLabel="변경하고 시작하기" onDone={() => setMe({ ...me, mustChange: false })} />
+          <button onClick={adminLogout} className="w-full text-[11px] font-bold text-slate-400 mt-4">다른 계정으로 로그인</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
+    <AdminAuthContext.Provider value={{ tier, name: me?.name ?? "관리자", signOut: adminLogout }}>
     <div className="min-h-screen lg:flex bg-slate-100 text-slate-900">
       <ConfirmHost />
       {/* 모바일 상단바 */}
@@ -166,5 +234,6 @@ export default function AdminApp() {
         )}
       </main>
     </div>
+    </AdminAuthContext.Provider>
   );
 }
