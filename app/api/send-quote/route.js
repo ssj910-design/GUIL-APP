@@ -37,7 +37,10 @@ export async function POST(request) {
     }
   }
 
-  await supabase.from("quote_requests").update(patch).eq("id", quoteRequestId);
+  const { error } = await supabase.from("quote_requests").update(patch).eq("id", quoteRequestId);
+  if (error) {
+    console.error(`Failed to update quote_requests id=${quoteRequestId}:`, error.message);
+  }
 
   return Response.json({ results });
 }
