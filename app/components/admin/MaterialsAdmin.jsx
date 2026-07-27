@@ -12,6 +12,7 @@ import { unitIdFor, addDays, shortDate } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid, DateTextInput } from "@/app/components/admin/adminShared";
 import QuoteItemsModal from "@/app/components/admin/QuoteItemsModal";
+import QuoteSendModal from "@/app/components/admin/QuoteSendModal";
 
 const MATERIAL_TONE = { 승인대기: "blue", 지급완료: "green", 반려: "red", 교체완료: "indigo" };
 const QUOTE_TONE = { 요청접수: "blue", 견적발행: "amber", 승인: "amber", 지급완료: "green", 교체완료: "indigo" };
@@ -48,6 +49,7 @@ export default function MaterialsAdmin({ data, setData }) {
   const [quoteSupplyTarget, setQuoteSupplyTarget] = useState(null); // 자재지급완료 처리 중인 견적요청
   const [detailTarget, setDetailTarget] = useState(null); // 상세내역 보는 중인 신청 { type, data }
   const [itemsTarget, setItemsTarget] = useState(null); // 품목편집 중인 견적요청
+  const [sendTarget, setSendTarget] = useState(null); // 발송 중인 견적요청
 
   const query = search.trim().toLowerCase();
   const materialRequests = allMaterialRequests.filter((m) =>
@@ -400,9 +402,14 @@ export default function MaterialsAdmin({ data, setData }) {
                       품목 수정
                     </button>
                     {q.quotePdfUrl && (
-                      <a href={q.quotePdfUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs font-bold text-blue-700 border border-blue-200 px-2.5 py-1.5 rounded-lg">
-                        PDF 보기
-                      </a>
+                      <>
+                        <button onClick={(e) => { e.stopPropagation(); setSendTarget(q); }} className="text-xs font-bold text-green-700 bg-green-50 px-2.5 py-1.5 rounded-lg">
+                          발송
+                        </button>
+                        <a href={q.quotePdfUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs font-bold text-blue-700 border border-blue-200 px-2.5 py-1.5 rounded-lg">
+                          PDF 보기
+                        </a>
+                      </>
                     )}
                   </div>
                 )}
@@ -448,6 +455,21 @@ export default function MaterialsAdmin({ data, setData }) {
             if (quoteSupplyTarget.status === "자재지급완료") await handleQuoteEdit(quoteSupplyTarget, input);
             else await handleQuoteSupplyComplete(quoteSupplyTarget, input);
             setQuoteSupplyTarget(null);
+          }}
+        />
+      )}
+
+      {sendTarget && (
+        <QuoteSendModal
+          quote={sendTarget}
+          site={(data.sites ?? []).find((s) => s.id === sendTarget.siteId)}
+          siteManagers={(data.siteManagers ?? []).filter((m) => m.siteId === sendTarget.siteId)}
+          onClose={() => setSendTarget(null)}
+          onSaved={(patch) => {
+            setData((prev) => ({
+              ...prev,
+              quoteRequests: prev.quoteRequests.map((x) => (x.id === sendTarget.id ? { ...x, ...patch } : x)),
+            }));
           }}
         />
       )}
