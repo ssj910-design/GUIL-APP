@@ -60,6 +60,9 @@ const DEV_FAKE_PROFILE = { name: "관리자", role: "admin" };
 // 예: ?as=engineer (기본 이름 "신석주"), ?as=engineer&name=김기사, ?as=admin
 function getDevProfileOverride() {
   if (typeof window === "undefined") return null;
+  // ?as= 역할 전환은 로컬(개발)에서만 허용 — 배포된 도메인에선 URL 파라미터로 역할을 바꿔 들어올 수 없다.
+  const host = window.location.hostname;
+  if (host !== "localhost" && host !== "127.0.0.1") return null;
   const params = new URLSearchParams(window.location.search);
   const as = params.get("as");
   if (as === "admin") return { name: params.get("name") || "관리자", role: "admin" };
