@@ -9,7 +9,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { Modal, inputCls } from "@/app/components/admin/adminShared";
 
-const CATEGORIES = ["자재비", "인건비"];
+const CATEGORIES = ["자재비", "인건비", "운반비", "안전관리비"];
 
 function emptyItem(category) {
   return { category, name: "", unitNo: "", spec: "", unit: "", qty: 1, unitPrice: 0 };
@@ -25,8 +25,6 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
   const [quoteTitle, setQuoteTitle] = useState(quote.quoteTitle || quote.constructionType || "");
   const [quoteNumber, setQuoteNumber] = useState(quote.quoteNumber || "");
   const [quoteDate, setQuoteDate] = useState(quote.quoteIssuedDate || TODAY_STR);
-  const [transportCost, setTransportCost] = useState(quote.transportCost || 0);
-  const [safetyCost, setSafetyCost] = useState(quote.safetyCost || 0);
   const [profit, setProfit] = useState(quote.profit || 0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -41,8 +39,13 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
     setItems((prev) => prev.filter((_, i) => i !== idx));
   }
 
+  function categoryAmount(category) {
+    return items
+      .filter((it) => it.category === category)
+      .reduce((s, it) => s + Number(it.qty || 0) * Number(it.unitPrice || 0), 0);
+  }
   const itemsSubtotal = items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.unitPrice || 0), 0);
-  const subtotal = itemsSubtotal + Number(transportCost || 0) + Number(safetyCost || 0) + Number(profit || 0);
+  const subtotal = itemsSubtotal + Number(profit || 0);
   const grandTotal = Math.floor(subtotal / 1000) * 1000;
 
   async function handleConfirm() {
@@ -50,10 +53,15 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
     setSaving(true);
     setError("");
 
+    // transport_cost/safety_cost 컬럼은 이제 직접 입력값이 아니라 운반비/안전관리비
+    // 품목들의 합계를 그대로 저장해두는 값(참고·집계용)이다 — 실제 금액 출처는 items.
+    const transportCost = categoryAmount("운반비");
+    const safetyCost = categoryAmount("안전관리비");
+
     const patch = {
       quote_items: items,
-      transport_cost: Number(transportCost) || 0,
-      safety_cost: Number(safetyCost) || 0,
+      transport_cost: transportCost,
+      safety_cost: safetyCost,
       profit: Number(profit) || 0,
       quote_number: quoteNumber || null,
       recipient_name: recipientName || null,
@@ -68,7 +76,7 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
         quoteRequestId: quote.id,
         siteName: site?.name ?? quote.siteName,
         quoteNumber, recipientName, quoteTitle, quoteDate,
-        items, transportCost, safetyCost, profit,
+        items, profit,
       }),
     }).then((r) => r.json()).catch((e) => ({ ok: false, reason: e.message }));
 
@@ -88,7 +96,7 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
     }
 
     onSaved({
-      quoteItems: items, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
+      quoteItems: items, transportCost, safetyCost,
       profit: Number(profit) || 0, quoteNumber, recipientName, quoteTitle,
       quoteIssuedDate: quoteDate, quotePdfUrl: pdfRes.url, status: "견적발행",
     });
@@ -113,10 +121,10 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
           <input type="date" className={inputCls} value={quoteDate} onChange={(e) => setQuoteDate(e.target.value)} /></div>
       </div>
 
-      {CATEGORIES.map((category) => (
+      {CATEGORIES.map((category, catIdx) => (
         <div key={category} className="mb-4">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-bold text-slate-600">{category === "자재비" ? "1.자재비" : "2.인건비"}</p>
+            <p className="text-xs font-bold text-slate-600">{catIdx + 1}.{category}</p>
             <button onClick={() => addItem(category)} className="flex items-center gap-1 text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-2.5 py-1">
               <Plus size={12} /> 품목 추가
             </button>
@@ -141,13 +149,9 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
         </div>
       ))}
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        <div><p className="text-xs font-bold text-slate-500 mb-1">운반비</p>
-          <input type="number" className={inputCls} value={transportCost} onChange={(e) => setTransportCost(e.target.value)} /></div>
-        <div><p className="text-xs font-bold text-slate-500 mb-1">안전관리비 및 기타</p>
-          <input type="number" className={inputCls} value={safetyCost} onChange={(e) => setSafetyCost(e.target.value)} /></div>
-        <div><p className="text-xs font-bold text-slate-500 mb-1">이윤</p>
-          <input type="number" className={inputCls} value={profit} onChange={(e) => setProfit(e.target.value)} /></div>
+      <div className="w-1/3 mb-4">
+        <p className="text-xs font-bold text-slate-500 mb-1">5.이윤</p>
+        <input type="number" className={inputCls} value={profit} onChange={(e) => setProfit(e.target.value)} />
       </div>
 
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-4 text-sm space-y-1">
