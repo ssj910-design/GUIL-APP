@@ -487,16 +487,19 @@ const { buildQuotePdfBytes } = require('./lib/quotePdf.js');
   const isPdf = Buffer.from(bytes.slice(0, 5)).toString() === '%PDF-';
   if (!isPdf) throw new Error('FAIL: 생성된 바이트가 PDF 시그니처로 시작하지 않음');
   if (bytes.length < 1000) throw new Error('FAIL: PDF 크기가 비정상적으로 작음(' + bytes.length + 'B)');
-  require('fs').writeFileSync('/tmp/test-quote.pdf', bytes);
-  console.log('OK: PDF 생성됨,', bytes.length, 'bytes, /tmp/test-quote.pdf 저장');
+  const outPath = require('path').join(require('os').tmpdir(), 'test-quote.pdf');
+  require('fs').writeFileSync(outPath, bytes);
+  console.log('OK: PDF 생성됨,', bytes.length, 'bytes,', outPath, '저장');
 })().catch((e) => { console.error(e); process.exit(1); });
 "
 ```
 
-Expected: `OK: PDF 생성됨, N bytes, /tmp/test-quote.pdf 저장` (require 문법이 이 프로젝트의 ESM 설정과
-안 맞으면 Task 2의 Step 2와 같은 방식으로 `--input-type=module` + `import`로 바꿔 실행).
+Expected: `OK: PDF 생성됨, N bytes, <경로> 저장` (require 문법이 이 프로젝트의 ESM 설정과 안 맞으면
+Task 2의 Step 2와 같은 방식으로 `--input-type=module` + `import`로 바꿔 실행). Windows에서는
+`os.tmpdir()`가 절대 `/tmp`가 아니므로(경로가 다름) 반드시 이 방식대로 경로를 구해서 써야 한다 —
+`/tmp/...`를 하드코딩하지 않는다.
 
-생성된 `/tmp/test-quote.pdf`를 Read 도구로 열어 레이아웃이 깨지지 않았는지(글자 겹침, 표 밖으로
+콘솔에 찍힌 경로의 PDF 파일을 Read 도구로 열어 레이아웃이 깨지지 않았는지(글자 겹침, 표 밖으로
 튀어나가는 텍스트 없는지) 육안으로 확인한다. 좌표가 어색하면 이 단계에서 `MARGIN_X`/컬럼
 `width`/`y -=` 값들을 조정한다.
 
