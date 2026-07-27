@@ -159,14 +159,16 @@ export default function App() {
     };
   }, [notifOpen]);
 
-  // 로그인 상태를 확인하고, 로그인/로그아웃이 일어날 때마다 알림을 받습니다.
+  // 로그인 세션 — Supabase Auth 대신 자체 로그인(민원24 아이디+비번, verify_login RPC) 결과를
+  // localStorage에 담아둔다. 여기서 읽어와 로그인 여부를 판단한다. { id, name, role, mustChange }
   useEffect(() => {
     if (skipLogin) return;
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-    });
-    return () => listener.subscription.unsubscribe();
+    try {
+      const raw = localStorage.getItem("guilAuthV1");
+      setSession(raw ? JSON.parse(raw) : null);
+    } catch {
+      setSession(null);
+    }
   }, [skipLogin]);
 
   // 로그인이 되면 profiles 테이블에서 이 계정의 이름/역할을 가져옵니다.
@@ -179,23 +181,37 @@ export default function App() {
       setProfile(null);
       return;
     }
-    async function loadProfile() {
-      const { data } = await supabase.from("profiles").select("*").eq("auth_user_id", session.user.id).single();
-      setProfile(data ? { name: data.name, role: data.role } : null);
-    }
-    loadProfile();
+    // 세션의 프로필이 아직 유효한지(활성·미삭제) DB에서 다시 확인하고 최신 이름/역할을 반영한다.
+    // 제외·삭제된 계정이면 세션을 버리고 로그아웃시킨다.
+    let alive = true;
+    (async () => {
+      const { data } = await supabase.from("profiles").select("id,name,role,is_active,deleted_at").eq("id", session.id).single();
+      if (!alive) return;
+      if (!data || data.is_active === false || data.deleted_at) {
+        localStorage.removeItem("guilAuthV1");
+        setSession(null);
+        setProfile(null);
+        return;
+      }
+      setProfile({ id: data.id, name: data.name, role: data.role });
+    })();
+    return () => { alive = false; };
   }, [session, skipLogin]);
 
-  async function handleLogin(email, password) {
-    // Phase 2 전 미리보기: SKIP_LOGIN 동안 ?auth=1 로그인은 아무 값이나 통과시켜 화면 흐름만 확인한다.
-    if (SKIP_LOGIN) {
-      setForceAuth(false);
-      return;
-    }
+  async function handleLogin(loginId, password) {
     setAuthSubmitting(true);
     setAuthError("");
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setAuthError("이메일 또는 비밀번호가 올바르지 않습니다.");
+    // 민원24 아이디 + 비번을 DB 함수(verify_login)로 검증한다. 해시는 클라이언트로 안 나온다.
+    const { data, error } = await supabase.rpc("verify_login", { p_login_id: (loginId || "").trim(), p_password: password });
+    const row = Array.isArray(data) ? data[0] : data;
+    if (error || !row) {
+      setAuthError("아이디 또는 비밀번호가 올바르지 않습니다.");
+      setAuthSubmitting(false);
+      return;
+    }
+    const sess = { id: row.id, name: row.name, role: row.role, mustChange: row.must_change };
+    localStorage.setItem("guilAuthV1", JSON.stringify(sess));
+    setSession(sess);
     setAuthSubmitting(false);
   }
 
@@ -504,7 +520,9 @@ export default function App() {
   }
 
   function handleLogout() {
-    supabase.auth.signOut();
+    localStorage.removeItem("guilAuthV1");
+    setSession(null);
+    setProfile(null);
   }
 
   // 로그인이 완료된 뒤에만 Supabase에서 실제 데이터를 불러옵니다.
@@ -1596,7 +1614,7 @@ export default function App() {
   }
 
   if (!skipLogin && !session) {
-    return <LoginScreen onLogin={handleLogin} error={authError} submitting={authSubmitting} demo={SKIP_LOGIN} />;
+    return <LoginScreen onLogin={handleLogin} error={authError} submitting={authSubmitting} demo={false} />;
   }
 
   if (loading || !profile) {
@@ -1608,7 +1626,7 @@ export default function App() {
   }
 
   return (
-    <AuthContext.Provider value={{ name: profile.name, role: profile.role, engineerNames, engineers, profiles: profilesAll, selfId: profileIdByName(profilesAll, profile.name), signOut: handleLogout }}>
+    <AuthContext.Provider value={{ name: profile.name, role: profile.role, engineerNames, engineers, profiles: profilesAll, selfId: profile.id ?? profileIdByName(profilesAll, profile.name), signOut: handleLogout }}>
     <SitesContext.Provider value={sites}>
     <UnitsContext.Provider value={units}>
       <div className="h-dvh w-screen bg-slate-50 flex flex-col overflow-hidden relative">

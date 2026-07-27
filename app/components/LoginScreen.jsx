@@ -7,7 +7,7 @@ import { PrimaryButton, Field, inputCls } from "@/app/components/ui";
 /* ------------------------------------------------------------------ */
 
 export function LoginScreen({ onLogin, error, submitting, demo }) {
-  const [email, setEmail] = useState("");
+  const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
 
   return (
@@ -17,13 +17,15 @@ export function LoginScreen({ onLogin, error, submitting, demo }) {
           <h1 className="text-xl font-extrabold text-blue-950 mb-1 text-center">구일엘리베이터(주)</h1>
           <p className="text-xs text-slate-400 mb-8 text-center">현장관리 시스템 로그인</p>
 
-          <Field label="이메일">
+          <Field label="아이디">
             <input
-              type="email"
+              type="text"
               className={inputCls}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              value={loginId}
+              onChange={(e) => setLoginId(e.target.value)}
+              placeholder="민원24 아이디"
+              autoCapitalize="none"
+              autoCorrect="off"
               autoComplete="username"
             />
           </Field>
@@ -35,15 +37,15 @@ export function LoginScreen({ onLogin, error, submitting, demo }) {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="비밀번호"
               autoComplete="current-password"
-              onKeyDown={(e) => e.key === "Enter" && onLogin(email, password)}
+              onKeyDown={(e) => e.key === "Enter" && onLogin(loginId, password)}
             />
           </Field>
           {error && <p className="text-xs text-red-500 mb-3 text-center">{error}</p>}
-          <PrimaryButton onClick={() => onLogin(email, password)} disabled={submitting || !email || !password}>
+          <PrimaryButton onClick={() => onLogin(loginId, password)} disabled={submitting || !loginId || !password}>
             {submitting ? "로그인 중..." : "로그인"}
           </PrimaryButton>
           <p className="text-[11px] text-slate-400 text-center mt-4">
-            계정이 없으신가요? <a href="/signup" className="text-blue-600 font-bold">회사 가입</a>
+            초기 비밀번호는 <span className="font-bold text-slate-500">1234</span> 입니다 · 로그인 후 마이페이지에서 변경하세요
           </p>
           {demo && (
             <p className="text-[11px] text-amber-500 text-center mt-2">
