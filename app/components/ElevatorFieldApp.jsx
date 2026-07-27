@@ -15,6 +15,7 @@ import { ScreenHeader } from "@/app/components/ui";
 import { ConfirmHost } from "@/app/components/ConfirmHost";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { LoginScreen } from "@/app/components/LoginScreen";
+import { PasswordChangeForm } from "@/app/components/PasswordChangeForm";
 import { SiteTab } from "@/app/components/tabs/SiteTab";
 import { HomeTab } from "@/app/components/tabs/HomeTab";
 import { FailureTab, FailureDetailSheet, DispatchEtaModal, ArrivalResultModal } from "@/app/components/tabs/FailureTab";
@@ -1621,6 +1622,28 @@ export default function App() {
     return (
       <div className="h-dvh w-screen bg-slate-50 flex items-center justify-center">
         <p className="text-sm font-bold text-slate-400">데이터를 불러오는 중...</p>
+      </div>
+    );
+  }
+
+  // 첫 로그인(초기 비번 1234) 또는 관리자 초기화 후에는 비밀번호를 바꿔야 앱에 들어갈 수 있다.
+  if (!skipLogin && session?.mustChange) {
+    return (
+      <div className="h-dvh w-screen bg-slate-50 flex items-center justify-center px-8">
+        <div className="w-full max-w-sm">
+          <h1 className="text-lg font-extrabold text-blue-950 mb-1 text-center">비밀번호를 변경해주세요</h1>
+          <p className="text-xs text-slate-400 mb-6 text-center">{profile.name}님, 초기 비밀번호(1234)를 바꿔야 시작할 수 있습니다.</p>
+          <PasswordChangeForm
+            profileId={session.id}
+            submitLabel="변경하고 시작하기"
+            onDone={() => {
+              const next = { ...session, mustChange: false };
+              localStorage.setItem("guilAuthV1", JSON.stringify(next));
+              setSession(next);
+            }}
+          />
+          <button onClick={handleLogout} className="w-full text-[11px] font-bold text-slate-400 mt-4">다른 계정으로 로그인</button>
+        </div>
       </div>
     );
   }

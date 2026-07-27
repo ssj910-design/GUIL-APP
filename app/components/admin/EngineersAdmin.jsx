@@ -13,7 +13,7 @@ import LeavesAdmin from "@/app/components/admin/LeavesAdmin";
 import WorkCalendar from "@/app/components/admin/WorkCalendar";
 import AttendanceAdmin from "@/app/components/admin/AttendanceAdmin";
 
-function EngineerRow({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContract, dragProps }) {
+function EngineerRow({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContract, onResetPassword, dragProps }) {
   const [form, setForm] = useState({
     phone: p.phone ?? "", minwonId: p.minwon_id ?? "", hireDate: p.hire_date ?? "",
     address: p.address ?? "", vehicleNo: p.vehicle_no ?? "",
@@ -67,6 +67,10 @@ function EngineerRow({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContr
           className="ml-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5">
           근로계약서
         </button>
+        <button onClick={() => onResetPassword(p)}
+          className="ml-1.5 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-1.5">
+          비번초기화
+        </button>
         <button disabled={!dirty} onClick={() => onSave(p, form)}
           className="ml-1.5 text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-3 py-1.5">
           저장
@@ -82,7 +86,7 @@ function EngineerRow({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContr
 
 
 // 모바일용 인사기록카드 — 12칸짜리 표를 가로로 미는 대신 한 사람을 한 장에 담는다.
-function EngineerCard({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContract }) {
+function EngineerCard({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContract, onResetPassword }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     phone: p.phone ?? "", minwonId: p.minwon_id ?? "", hireDate: p.hire_date ?? "",
@@ -156,6 +160,8 @@ function EngineerCard({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenCont
           className="text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-2.5">지급대장</button>
         <button onClick={() => onOpenContract(p)}
           className="text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-2.5">근로계약서</button>
+        <button onClick={() => onResetPassword(p)}
+          className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2.5">비번초기화</button>
         <button onClick={() => onDelete(p)}
           className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-2.5">삭제</button>
       </div>
@@ -344,6 +350,14 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
     setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, ...patch } : x)) }));
   }
 
+  // 비밀번호 초기화 — 기사가 비번을 잊었을 때. 1234로 되돌리고 다음 로그인 때 새로 정하게 한다.
+  async function resetPassword(p) {
+    if (!confirm(`${p.name} 님의 비밀번호를 1234로 초기화할까요?\n다음 로그인 때 새 비밀번호를 정하게 됩니다.`)) return;
+    const { data, error } = await supabase.rpc("admin_reset_password", { p_profile_id: p.id });
+    if (error || !data) { alert("초기화 실패: " + (error?.message ?? "다시 시도해주세요")); return; }
+    alert(`${p.name} 님의 비밀번호가 1234로 초기화됐습니다.`);
+  }
+
   async function save(p, form) {
     const patch = {
       phone: form.phone || null,
@@ -413,7 +427,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
       {importing && <ImportEngineers data={data} setData={setData} onClose={() => setImporting(false)} />}
       <div className="lg:hidden space-y-2.5">
         {engineers.map((p) => (
-          <EngineerCard key={p.id} p={p} unitCount={unitCountOf(p)} onSave={save} onDelete={remove} onOpenLedger={setLedgerTarget} onOpenContract={setContractTarget} />
+          <EngineerCard key={p.id} p={p} unitCount={unitCountOf(p)} onSave={save} onDelete={remove} onOpenLedger={setLedgerTarget} onOpenContract={setContractTarget} onResetPassword={resetPassword} />
         ))}
       </div>
       <div className="hidden lg:block">
@@ -427,6 +441,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
             onDelete={remove}
             onOpenLedger={setLedgerTarget}
             onOpenContract={setContractTarget}
+            onResetPassword={resetPassword}
             dragProps={{
               onDragStart: (e) => {
                 setDragIndex(i);

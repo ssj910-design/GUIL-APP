@@ -1,7 +1,8 @@
 import { useState, useEffect, useContext } from "react";
-import { X, LogOut, CalendarDays, Bell, BellRing } from "lucide-react";
+import { X, LogOut, CalendarDays, Bell, BellRing, KeyRound } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { AuthContext } from "@/app/components/context";
+import { PasswordChangeForm } from "@/app/components/PasswordChangeForm";
 import { TODAY_STR } from "@/lib/constants";
 import { yearsOfService } from "@/lib/leave";
 import { forRole, GROUPS, LEVELS, isEnabled, levelOf } from "@/lib/notifications";
@@ -19,6 +20,8 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwDone, setPwDone] = useState(false);
 
   // 회사에서 켜둔 알림만 개인이 조절할 수 있다
   useEffect(() => {
@@ -186,6 +189,25 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
                 「이 기기에서 알림 받기」를 켜야 앱을 닫아도 알림이 옵니다. 기기마다 따로 켜야 합니다.
               </p>
             </div>
+          )}
+        </Card>
+
+        {/* 비밀번호 변경 */}
+        <Card
+          icon={<KeyRound size={13} />}
+          title="비밀번호 변경"
+          extra={
+            <button onClick={() => { setPwOpen((v) => !v); setPwDone(false); }} className="text-[11px] font-bold text-blue-700">
+              {pwOpen ? "접기" : "변경"}
+            </button>
+          }
+        >
+          {pwDone ? (
+            <p className="text-xs text-emerald-600 font-semibold">비밀번호가 변경되었습니다</p>
+          ) : pwOpen ? (
+            <PasswordChangeForm profileId={selfId} onDone={() => { setPwDone(true); setPwOpen(false); }} />
+          ) : (
+            <p className="text-xs text-slate-400">숫자 6자 이상으로 바꿀 수 있습니다</p>
           )}
         </Card>
 
