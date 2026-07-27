@@ -11,6 +11,7 @@ import { uploadPhoto } from "@/lib/photos";
 import { unitIdFor, addDays, shortDate } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid, DateTextInput } from "@/app/components/admin/adminShared";
+import QuoteItemsModal from "@/app/components/admin/QuoteItemsModal";
 
 const MATERIAL_TONE = { 승인대기: "blue", 지급완료: "green", 반려: "red", 교체완료: "indigo" };
 const QUOTE_TONE = { 요청접수: "blue", 견적발행: "amber", 승인: "amber", 지급완료: "green", 교체완료: "indigo" };
@@ -46,6 +47,7 @@ export default function MaterialsAdmin({ data, setData }) {
   const [payTarget, setPayTarget] = useState(null); // 지급완료 처리 중인 자재신청
   const [quoteSupplyTarget, setQuoteSupplyTarget] = useState(null); // 자재지급완료 처리 중인 견적요청
   const [detailTarget, setDetailTarget] = useState(null); // 상세내역 보는 중인 신청 { type, data }
+  const [itemsTarget, setItemsTarget] = useState(null); // 품목편집 중인 견적요청
 
   const query = search.trim().toLowerCase();
   const materialRequests = allMaterialRequests.filter((m) =>
@@ -385,14 +387,24 @@ export default function MaterialsAdmin({ data, setData }) {
               </td>
               <td className="px-3 py-2.5 whitespace-nowrap">
                 {q.status === "요청접수" && (
-                  <button onClick={(e) => { e.stopPropagation(); handleQuoteAdvance(q); }} className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-lg">
+                  <button onClick={(e) => { e.stopPropagation(); setItemsTarget(q); }} className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-lg">
                     견적발행 처리
                   </button>
                 )}
                 {q.status === "견적발행" && (
-                  <button onClick={(e) => { e.stopPropagation(); handleQuoteAdvance(q); }} className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1.5 rounded-lg">
-                    승인 처리
-                  </button>
+                  <div className="flex gap-1.5">
+                    <button onClick={(e) => { e.stopPropagation(); handleQuoteAdvance(q); }} className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1.5 rounded-lg">
+                      승인 처리
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); setItemsTarget(q); }} className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-lg">
+                      품목 수정
+                    </button>
+                    {q.quotePdfUrl && (
+                      <a href={q.quotePdfUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs font-bold text-blue-700 border border-blue-200 px-2.5 py-1.5 rounded-lg">
+                        PDF 보기
+                      </a>
+                    )}
+                  </div>
                 )}
                 {q.status === "승인" && (
                   <button onClick={(e) => { e.stopPropagation(); setQuoteSupplyTarget(q); }} className="text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors px-2.5 py-1.5 rounded-lg">
@@ -436,6 +448,21 @@ export default function MaterialsAdmin({ data, setData }) {
             if (quoteSupplyTarget.status === "자재지급완료") await handleQuoteEdit(quoteSupplyTarget, input);
             else await handleQuoteSupplyComplete(quoteSupplyTarget, input);
             setQuoteSupplyTarget(null);
+          }}
+        />
+      )}
+
+      {itemsTarget && (
+        <QuoteItemsModal
+          quote={itemsTarget}
+          site={(data.sites ?? []).find((s) => s.id === itemsTarget.siteId)}
+          onClose={() => setItemsTarget(null)}
+          onSaved={(patch) => {
+            setData((prev) => ({
+              ...prev,
+              quoteRequests: prev.quoteRequests.map((x) => (x.id === itemsTarget.id ? { ...x, ...patch } : x)),
+            }));
+            setItemsTarget(null);
           }}
         />
       )}
