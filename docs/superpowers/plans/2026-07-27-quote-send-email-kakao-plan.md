@@ -40,7 +40,7 @@
 ### Task 1: 마이그레이션 — 발송 수신처·발송시각 컬럼
 
 **Files:**
-- Create: `supabase/migrations/065_quote_send_DRAFT.sql`
+- Create: `supabase/migrations/069_quote_send_DRAFT.sql`
 
 **Interfaces:**
 - Produces: `quote_requests`에 `recipient_email text`, `recipient_phone text`, `email_sent_at timestamptz`, `kakao_sent_at timestamptz` 컬럼.
@@ -48,7 +48,7 @@
 - [ ] **Step 1: 마이그레이션 파일 작성**
 
 ```sql
--- 065: 견적서 발송(이메일/카카오알림톡) 수신처·발송시각 (2026-07-27)
+-- 069: 견적서 발송(이메일/카카오알림톡) 수신처·발송시각 (2026-07-27)
 -- 발행(발행일시는 기존 quote_issued_date)과 발송은 별개 동작이라 컬럼도 분리한다.
 -- recipient_phone은 발송 대상(현장 담당자)용으로, 기존 contact_phone(기사가 접수 시 입력한
 -- 신고자 연락처)과는 다른 값 — 혼용 금지.
@@ -73,7 +73,7 @@ order by column_name;
 - [ ] **Step 3: 커밋**
 
 ```bash
-git add supabase/migrations/065_quote_send_DRAFT.sql
+git add supabase/migrations/069_quote_send_DRAFT.sql
 git commit -m "마이그레이션: 견적서 발송 수신처·발송시각 컬럼 (실행 전 DRAFT)"
 ```
 
