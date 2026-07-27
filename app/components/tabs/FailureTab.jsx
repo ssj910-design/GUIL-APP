@@ -356,21 +356,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                 </p>
               </div>
             )}
-            <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-bold text-slate-600">고객안심 출동문자 발송</span>
-                <button onClick={() => setForm({ ...form, sendSms: !form.sendSms })}>
-                  <div className={`w-9 h-5 rounded-full flex items-center px-0.5 ${form.sendSms ? "bg-blue-600 justify-end" : "bg-slate-300 justify-start"}`}>
-                    <div className="w-4 h-4 rounded-full bg-white" />
-                  </div>
-                </button>
-              </div>
-              {form.sendSms && (
-                <p className="pt-2 text-[11px] text-blue-600 leading-relaxed">
-                  접수완료시 신고자 전화번호로 고장처리 상태와 기사님의 실시간 위치가 전송됩니다
-                </p>
-              )}
-            </div>
+            {/* "고객안심 출동문자 발송" 토글 — 실제 발송 기능이 아직 없어 숨김. 기능 붙이면 다시 노출. */}
           </>
         )}
 
@@ -390,7 +376,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                 ["신고자 전화", form.reporterPhone],
                 ["배정 기사", form.assignee || "나중에 배정"],
                 ...(selfDispatching ? [["도착 예정 시간", form.eta ? `${form.eta}분 후` : "-"]] : []),
-                ["출동문자", form.sendSms ? "발송" : "미발송"],
+                // ["출동문자", form.sendSms ? "발송" : "미발송"], — 위 토글과 함께 숨김
                 ["접수일시", nowLabel],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between gap-3">
