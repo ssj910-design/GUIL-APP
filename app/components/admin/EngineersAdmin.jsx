@@ -1,19 +1,19 @@
 "use client";
 
 // 기사 관리 — 프로필(연락처·담당지역) 편집 + 배정 현장·업무량 한눈에.
-import { useState } from "react";
-import { GripVertical, X } from "lucide-react";
+import { useState, useContext } from "react";
+import { GripVertical, X, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto } from "@/lib/photos";
 import { formatPhone, shortDate } from "@/lib/utils";
-import { StatusBadge, AdminTable, inputCls, DateTextInput, EditableDate, EditableText, Modal, FileCarousel } from "@/app/components/admin/adminShared";
+import { StatusBadge, AdminTable, inputCls, DateTextInput, EditableDate, EditableText, Modal, FileCarousel, AdminAuthContext } from "@/app/components/admin/adminShared";
 import ImportEngineers from "@/app/components/admin/ImportEngineers";
 import DutyAdmin from "@/app/components/admin/DutyAdmin";
 import LeavesAdmin from "@/app/components/admin/LeavesAdmin";
 import WorkCalendar from "@/app/components/admin/WorkCalendar";
 import AttendanceAdmin from "@/app/components/admin/AttendanceAdmin";
 
-function EngineerRow({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContract, onResetPassword, dragProps }) {
+function EngineerRow({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContract, onResetPassword, canSuper, dragProps }) {
   const [form, setForm] = useState({
     phone: p.phone ?? "", minwonId: p.minwon_id ?? "", hireDate: p.hire_date ?? "",
     address: p.address ?? "", vehicleNo: p.vehicle_no ?? "",
@@ -67,18 +67,22 @@ function EngineerRow({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContr
           className="ml-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5">
           근로계약서
         </button>
-        <button onClick={() => onResetPassword(p)}
-          className="ml-1.5 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-1.5">
-          비번초기화
-        </button>
+        {canSuper && (
+          <button onClick={() => onResetPassword(p)}
+            className="ml-1.5 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-1.5">
+            비번초기화
+          </button>
+        )}
         <button disabled={!dirty} onClick={() => onSave(p, form)}
           className="ml-1.5 text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-3 py-1.5">
           저장
         </button>
-        <button onClick={() => onDelete(p)}
-          className="ml-1.5 text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">
-          삭제
-        </button>
+        {canSuper && (
+          <button onClick={() => onDelete(p)}
+            className="ml-1.5 text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">
+            삭제
+          </button>
+        )}
       </td>
     </tr>
   );
@@ -86,7 +90,7 @@ function EngineerRow({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContr
 
 
 // 모바일용 인사기록카드 — 12칸짜리 표를 가로로 미는 대신 한 사람을 한 장에 담는다.
-function EngineerCard({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContract, onResetPassword }) {
+function EngineerCard({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContract, onResetPassword, canSuper }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     phone: p.phone ?? "", minwonId: p.minwon_id ?? "", hireDate: p.hire_date ?? "",
@@ -160,10 +164,14 @@ function EngineerCard({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenCont
           className="text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-2.5">지급대장</button>
         <button onClick={() => onOpenContract(p)}
           className="text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-2.5">근로계약서</button>
-        <button onClick={() => onResetPassword(p)}
-          className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2.5">비번초기화</button>
-        <button onClick={() => onDelete(p)}
-          className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-2.5">삭제</button>
+        {canSuper && (
+          <button onClick={() => onResetPassword(p)}
+            className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2.5">비번초기화</button>
+        )}
+        {canSuper && (
+          <button onClick={() => onDelete(p)}
+            className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-2.5">삭제</button>
+        )}
       </div>
     </div>
   );
@@ -281,6 +289,8 @@ function LedgerModal({ p, restockRequests, onClose, onSaveFile, onSaveItems }) {
 
 export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
   const { profiles, sites, units, restockRequests } = data;
+  const { tier } = useContext(AdminAuthContext);
+  const isSuper = tier === "super"; // 최고관리자만: 관리자 등록·직원 제외·비번초기화
   // 표시 순서(staff_order)대로 정렬 — 순서 없는 사람은 뒤로. 당직 순번(duty_order)과는
   // 별개 컬럼이라 여기서 드래그로 바꿔도 당직 근무표 로직에 영향이 없다.
   const engineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false)
@@ -288,6 +298,9 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [adminForm, setAdminForm] = useState({ name: "", loginId: "", tier: "manager" });
+  const [addingAdmin, setAddingAdmin] = useState(false);
+  const admins = profiles.filter((p) => p.role === "admin" && p.is_active !== false);
   const [contractTarget, setContractTarget] = useState(null);
   const [ledgerTarget, setLedgerTarget] = useState(null);
   const [dragIndex, setDragIndex] = useState(null);
@@ -313,6 +326,26 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
     if (error) { alert("등록 실패: " + error.message); return; }
     setData((prev) => ({ ...prev, profiles: [...prev.profiles, data[0]] }));
     setNewName("");
+  }
+
+  // 관리자 등록 (최고관리자만) — 프로필(role=admin, 등급, 로그인아이디) 생성 후 비번을 1234로 심는다.
+  async function addAdmin() {
+    const name = adminForm.name.trim();
+    const loginId = adminForm.loginId.trim();
+    if (!name || !loginId) { alert("이름과 로그인 아이디를 입력해주세요."); return; }
+    if (profiles.some((p) => p.name === name)) { alert("같은 이름의 직원/관리자가 이미 있습니다."); return; }
+    if (profiles.some((p) => p.login_id === loginId)) { alert("이미 쓰는 로그인 아이디입니다."); return; }
+    setAddingAdmin(true);
+    const { data: rows, error } = await supabase.from("profiles")
+      .insert({ name, role: "admin", admin_tier: adminForm.tier, login_id: loginId }).select();
+    if (error || !rows?.[0]) { setAddingAdmin(false); alert("등록 실패: " + (error?.message ?? "")); return; }
+    // 초기 비번 1234 + 첫 로그인 강제변경
+    const { error: pwErr } = await supabase.rpc("admin_reset_password", { p_profile_id: rows[0].id });
+    setAddingAdmin(false);
+    if (pwErr) { alert("계정은 만들어졌지만 초기 비밀번호 설정에 실패했습니다. 비번초기화를 다시 눌러주세요."); }
+    setData((prev) => ({ ...prev, profiles: [...prev.profiles, rows[0]] }));
+    setAdminForm({ name: "", loginId: "", tier: "manager" });
+    alert(`${name} 관리자 계정이 만들어졌습니다.\n아이디: ${loginId} · 초기 비밀번호: 1234 (첫 로그인 때 변경)`);
   }
 
   // 드래그로 목록 순서를 바꾸면 전체 순서를 1..N으로 다시 매겨 staff_order에 저장한다.
@@ -392,7 +425,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
     <div className="max-w-[100rem] mx-auto">
       <h1 className="text-xl font-extrabold mb-3">인사관리</h1>
       <div className="flex gap-1 mb-4 border-b border-slate-200">
-        {["직원", "당직 근무표", "출근부", "연차관리", "워크 캘린더"].map((s) => (
+        {["직원", "당직 근무표", "출근부", "연차관리", "워크 캘린더"].filter((s) => s !== "당직 근무표" || isSuper).map((s) => (
           <button key={s} onClick={() => setSub(s)}
             className={`text-sm font-bold px-4 py-2.5 -mb-px border-b-2 ${
               sub === s ? "text-blue-700 border-blue-700" : "text-slate-400 border-transparent"
@@ -401,7 +434,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
           </button>
         ))}
       </div>
-      {sub === "당직 근무표" && <DutyAdmin data={data} setData={setData} />}
+      {sub === "당직 근무표" && isSuper && <DutyAdmin data={data} setData={setData} />}
       {sub === "연차관리" && <LeavesAdmin data={data} setData={setData} />}
       {sub === "출근부" && <AttendanceAdmin data={data} />}
       {sub === "워크 캘린더" && <WorkCalendar data={data} />}
@@ -424,10 +457,44 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
         </button>
         <p className="text-[11px] text-slate-400 ml-auto max-w-xs text-right">당직 순번·근무제 지정은 「당직 근무표」 탭에서 합니다.</p>
       </div>
+
+      {/* 관리자 등록 — 최고관리자만 */}
+      {isSuper && (
+        <div className="bg-white border border-indigo-200 rounded-xl p-4 mb-4">
+          <p className="text-xs font-extrabold text-indigo-700 flex items-center gap-1.5 mb-2"><ShieldCheck size={14} /> 관리자 계정 등록 <span className="font-semibold text-slate-400">(최고관리자 전용)</span></p>
+          <div className="flex items-end gap-2 flex-wrap">
+            <div>
+              <p className="text-[11px] font-bold text-slate-500 mb-1">이름</p>
+              <input className={inputCls} placeholder="예: 홍길동" value={adminForm.name} onChange={(e) => setAdminForm({ ...adminForm, name: e.target.value })} />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-slate-500 mb-1">로그인 아이디</p>
+              <input className={inputCls} placeholder="예: manager2" value={adminForm.loginId} onChange={(e) => setAdminForm({ ...adminForm, loginId: e.target.value })} autoCapitalize="none" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-slate-500 mb-1">등급</p>
+              <select className={inputCls} value={adminForm.tier} onChange={(e) => setAdminForm({ ...adminForm, tier: e.target.value })}>
+                <option value="manager">중간관리자</option>
+                <option value="super">최고관리자</option>
+              </select>
+            </div>
+            <button onClick={addAdmin} disabled={!adminForm.name.trim() || !adminForm.loginId.trim() || addingAdmin}
+              className="text-xs font-bold text-white bg-indigo-600 disabled:bg-slate-200 rounded-lg px-4 py-2">
+              {addingAdmin ? "등록 중…" : "관리자 추가"}
+            </button>
+          </div>
+          {admins.length > 0 && (
+            <p className="text-[11px] text-slate-400 mt-2.5">
+              현재 관리자: {admins.map((a) => `${a.name}(${a.admin_tier === "super" ? "최고" : "중간"})`).join(" · ")}
+            </p>
+          )}
+        </div>
+      )}
+
       {importing && <ImportEngineers data={data} setData={setData} onClose={() => setImporting(false)} />}
       <div className="lg:hidden space-y-2.5">
         {engineers.map((p) => (
-          <EngineerCard key={p.id} p={p} unitCount={unitCountOf(p)} onSave={save} onDelete={remove} onOpenLedger={setLedgerTarget} onOpenContract={setContractTarget} onResetPassword={resetPassword} />
+          <EngineerCard key={p.id} p={p} unitCount={unitCountOf(p)} onSave={save} onDelete={remove} onOpenLedger={setLedgerTarget} onOpenContract={setContractTarget} onResetPassword={resetPassword} canSuper={isSuper} />
         ))}
       </div>
       <div className="hidden lg:block">
@@ -442,6 +509,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
             onOpenLedger={setLedgerTarget}
             onOpenContract={setContractTarget}
             onResetPassword={resetPassword}
+            canSuper={isSuper}
             dragProps={{
               onDragStart: (e) => {
                 setDragIndex(i);

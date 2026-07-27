@@ -44,7 +44,7 @@ const MENU = [
   { id: "room", label: "게시판", icon: MessageSquare },
   { id: "engineers", label: "인사관리", icon: Users },
   { id: "stats", label: "통계", icon: BarChart3 },
-  { id: "notify", label: "알림 설정", icon: Bell },
+  { id: "notify", label: "알림 설정", icon: Bell, superOnly: true },
 ];
 
 export default function AdminApp() {
@@ -63,6 +63,7 @@ export default function AdminApp() {
   const [me, setMe] = useState(null); // { id, name, role, adminTier, mustChange }
   const [authError, setAuthError] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
 
   useEffect(() => {
     if (SKIP_LOGIN) { setAuthChecked(true); return; }
@@ -178,7 +179,7 @@ export default function AdminApp() {
           <p className="text-xs text-blue-300 mt-0.5">관리자 콘솔</p>
         </div>
         <nav className="flex-1 py-3">
-          {MENU.map(({ id, label, icon: Icon }) => (
+          {MENU.filter((m) => !m.superOnly || tier === "super").map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => { setMenu(id); setNavOpen(false); }}
@@ -191,8 +192,18 @@ export default function AdminApp() {
             </button>
           ))}
         </nav>
-        <p className="px-5 py-4 text-[10px] text-blue-400 border-t border-blue-900">
-          모바일 앱: / · Phase 2에서 로그인 적용 예정
+        {!SKIP_LOGIN && me && (
+          <div className="px-5 py-3 border-t border-blue-900">
+            <p className="text-[11px] font-bold text-blue-100">{me.name}</p>
+            <p className="text-[10px] text-blue-400 mb-2">{tier === "super" ? "최고관리자" : "중간관리자"}</p>
+            <div className="flex gap-1.5">
+              <button onClick={() => setPwOpen(true)} className="flex-1 text-[11px] font-bold text-blue-100 bg-blue-900 rounded-lg py-1.5">비밀번호 변경</button>
+              <button onClick={adminLogout} className="flex-1 text-[11px] font-bold text-blue-100 bg-blue-900 rounded-lg py-1.5">로그아웃</button>
+            </div>
+          </div>
+        )}
+        <p className="px-5 py-3 text-[10px] text-blue-400 border-t border-blue-900">
+          모바일 앱: /
         </p>
       </aside>
 
@@ -221,7 +232,7 @@ export default function AdminApp() {
         ) : menu === "engineers" ? (
           <EngineersAdmin data={data} setData={setData} sub={hrSub} onSub={setHrSub} />
         ) : menu === "notify" ? (
-          <NotifySettings />
+          tier === "super" ? <NotifySettings /> : <div className="pt-20 text-center text-slate-400 text-sm">최고관리자만 접근할 수 있습니다</div>
         ) : menu === "stats" ? (
           <StatsAdmin data={data} />
         ) : menu === "errorCodes" ? (
@@ -233,6 +244,16 @@ export default function AdminApp() {
           </div>
         )}
       </main>
+
+      {pwOpen && me && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setPwOpen(false)}>
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm font-extrabold text-slate-800 mb-3">비밀번호 변경</p>
+            <PasswordChangeForm profileId={me.id} onDone={() => setPwOpen(false)} />
+            <button onClick={() => setPwOpen(false)} className="w-full text-xs font-bold text-slate-400 mt-2 py-2">닫기</button>
+          </div>
+        </div>
+      )}
     </div>
     </AdminAuthContext.Provider>
   );

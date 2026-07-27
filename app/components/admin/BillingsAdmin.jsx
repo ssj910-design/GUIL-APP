@@ -2,11 +2,11 @@
 
 // 부품교체·공사 내역 — 청구 건 조회 + 합계. 각 건 클릭 시 상세보기(사진 포함)에서
 // 내용(관리자 메모) 추가, 담당자 변경, 기한(교체일자) 수정이 가능하다.
-import { useState } from "react";
+import { useState, useContext } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { shortDate } from "@/lib/utils";
-import { locOf, addressOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate } from "@/app/components/admin/adminShared";
+import { locOf, addressOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate, AdminAuthContext } from "@/app/components/admin/adminShared";
 
 const BILLING_METHODS = ["계좌이체", "CMS", "지로"];
 
@@ -23,6 +23,7 @@ function siteManagerOf(data, unitId, fallbackSiteName) {
 
 function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPrice }) {
   const { profiles } = data;
+  const isSuper = useContext(AdminAuthContext).tier === "super"; // 무상처리·가격조정은 최고관리자만
   const engineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
   const notesReady = data.billings.some((x) => x.notes !== undefined);
   const [form, setForm] = useState({
@@ -128,12 +129,18 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
 
       <div className="flex justify-between mt-4">
         <div className="flex gap-2">
-          <button onClick={handleToggleFree} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-5 py-2.5">
-            {b.isFree ? "무상 해제하기" : "무상 처리"}
-          </button>
-          <button onClick={handleAdjustPrice} className="text-sm font-bold text-blue-700 bg-white border border-blue-200 rounded-xl px-5 py-2.5">
-            가격 조정
-          </button>
+          {isSuper ? (
+            <>
+              <button onClick={handleToggleFree} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-5 py-2.5">
+                {b.isFree ? "무상 해제하기" : "무상 처리"}
+              </button>
+              <button onClick={handleAdjustPrice} className="text-sm font-bold text-blue-700 bg-white border border-blue-200 rounded-xl px-5 py-2.5">
+                가격 조정
+              </button>
+            </>
+          ) : (
+            <p className="text-[11px] text-slate-400 self-center">무상 처리·가격 조정은 최고관리자만 가능합니다</p>
+          )}
         </div>
         <button disabled={saving} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
           저장
