@@ -339,13 +339,16 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
     const { data: rows, error } = await supabase.from("profiles")
       .insert({ name, role: "admin", admin_tier: adminForm.tier, login_id: loginId }).select();
     if (error || !rows?.[0]) { setAddingAdmin(false); alert("등록 실패: " + (error?.message ?? "")); return; }
-    // 초기 비번 1234 + 첫 로그인 강제변경
-    const { error: pwErr } = await supabase.rpc("admin_reset_password", { p_profile_id: rows[0].id });
+    // 초기 비번 1234 심기 — 최고관리자 재확인을 거친다(아무나 못 부르게).
+    const ok = await superReset(rows[0].id);
     setAddingAdmin(false);
-    if (pwErr) { alert("계정은 만들어졌지만 초기 비밀번호 설정에 실패했습니다. 비번초기화를 다시 눌러주세요."); }
     setData((prev) => ({ ...prev, profiles: [...prev.profiles, rows[0]] }));
     setAdminForm({ name: "", loginId: "", tier: "manager" });
-    alert(`${name} 관리자 계정이 만들어졌습니다.\n아이디: ${loginId} · 초기 비밀번호: 1234 (첫 로그인 때 변경)`);
+    if (ok) {
+      alert(`${name} 관리자 계정이 만들어졌습니다.\n아이디: ${loginId} · 초기 비밀번호: 1234 (첫 로그인 때 변경)`);
+    } else {
+      alert(`${name} 계정은 생성됐지만 초기 비밀번호가 설정되지 않았습니다.\n목록에서 [비번초기화]를 눌러 다시 설정해주세요.`);
+    }
   }
 
   // 드래그로 목록 순서를 바꾸면 전체 순서를 1..N으로 다시 매겨 staff_order에 저장한다.
@@ -383,12 +386,26 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
     setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, ...patch } : x)) }));
   }
 
-  // 비밀번호 초기화 — 기사가 비번을 잊었을 때. 1234로 되돌리고 다음 로그인 때 새로 정하게 한다.
+  // 비밀번호 1234 초기화 — 아무나 못 부르게, 호출자가 진짜 최고관리자인지 아이디+비번으로 재확인한다.
+  // 반환: true 성공, false 실패, null 취소.
+  async function superReset(targetId) {
+    const aid = prompt("본인 확인 — 최고관리자 아이디를 입력하세요");
+    if (aid === null) return null;
+    const pw = prompt("최고관리자 비밀번호를 입력하세요");
+    if (pw === null) return null;
+    const { data, error } = await supabase.rpc("admin_reset_password", {
+      p_admin_login_id: aid.trim(), p_admin_password: pw, p_target_id: targetId,
+    });
+    if (error) { alert("처리 실패: " + error.message); return false; }
+    if (data) { alert(data); return false; } // 인증 실패 사유
+    return true;
+  }
+
+  // 비밀번호 초기화 — 기사가 비번을 잊었을 때. 최고관리자 재확인 후 1234로 되돌린다.
   async function resetPassword(p) {
     if (!confirm(`${p.name} 님의 비밀번호를 1234로 초기화할까요?\n다음 로그인 때 새 비밀번호를 정하게 됩니다.`)) return;
-    const { data, error } = await supabase.rpc("admin_reset_password", { p_profile_id: p.id });
-    if (error || !data) { alert("초기화 실패: " + (error?.message ?? "다시 시도해주세요")); return; }
-    alert(`${p.name} 님의 비밀번호가 1234로 초기화됐습니다.`);
+    const ok = await superReset(p.id);
+    if (ok) alert(`${p.name} 님의 비밀번호가 1234로 초기화됐습니다.`);
   }
 
   async function save(p, form) {
