@@ -272,8 +272,8 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
   const workTone = dutyOn
     ? (dutyKind === "당직" ? "text-emerald-700 bg-emerald-50" : "text-blue-700 bg-blue-50")
     : "text-blue-600 bg-blue-50";
-  // 위치 권한이 거부·미결정이면 출근을 막는다(위치는 필수). 권한 API 미지원(unknown)이면 통과.
-  const needGeo = geoPerm === "denied" || geoPerm === "prompt";
+  // ⚠️ 위치 제공은 강제할 수 없다(동의 강제는 위법) → 출근 체크는 위치 권한과 무관하게 항상 가능하게 둔다.
+  // 위치는 "권장"으로만 안내하고, 거부해도 좌표 없이 출근이 기록된다(handleAttendance가 좌표 null 허용).
 
   async function relocate() {
     setChecking(true);
@@ -332,10 +332,10 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
             )}
             <button
               onClick={async () => { setChecking(true); await onAttendance("in"); setChecking(false); }}
-              disabled={checking || needGeo}
+              disabled={checking}
               className="w-full bg-blue-700 text-white text-sm font-bold py-3.5 rounded-xl active:bg-blue-800 disabled:opacity-60"
             >
-              {checking ? "위치 확인 중…" : needGeo ? "위치 허용 후 출근신고 가능" : "출근 체크"}
+              {checking ? "확인 중…" : "출근 체크"}
             </button>
             <p className="text-[10px] text-slate-400 mt-1.5 px-1">출근할 때 위치를 한 번만 확인해요 · 급한 출동 때 가까운 현장 우선 안내에 쓰여요</p>
           </>
