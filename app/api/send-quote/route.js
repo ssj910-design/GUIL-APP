@@ -40,7 +40,7 @@ export async function POST(request) {
 
   if (channels?.kakao) {
     try {
-      await sendQuoteAlimtalk({ to: recipientPhone, quote, pdfUrl: quote?.pdfUrl, supplierName, supplierPhone });
+      await sendQuoteAlimtalk({ to: recipientPhone, quote, pdfUrl: quote?.pdfUrl });
       results.kakao = { ok: true };
       patch.kakao_sent_at = now;
       newLogEntries.push({ channel: "kakao", sentAt: now, target: recipientPhone });
@@ -54,7 +54,7 @@ export async function POST(request) {
     // 이력만 추적한다.
     if (referencePhone) {
       try {
-        await sendQuoteAlimtalk({ to: referencePhone, quote, pdfUrl: quote?.pdfUrl, supplierName, supplierPhone });
+        await sendQuoteAlimtalk({ to: referencePhone, quote, pdfUrl: quote?.pdfUrl });
       } catch (err) {
         console.error(`참조인 카카오 발송 실패 (quoteRequestId=${quoteRequestId}):`, err.message);
       }

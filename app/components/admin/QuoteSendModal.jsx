@@ -26,6 +26,9 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
   const activeStaff = (profiles ?? []).filter((p) => p.is_active !== false && !p.deleted_at);
   const staffByName = [...activeStaff].sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "ko"));
   const staffWithEmail = staffByName.filter((p) => p.email);
+  // 전화번호 없는 직원을 고르면 서명이 그 사람이 아니라 폴백(신석주)으로 조용히 바뀌어
+  // 드롭다운 표시와 실제 서명이 어긋난다 — 그 상황 자체를 만들지 않도록 후보를 좁힌다.
+  const staffWithPhone = staffByName.filter((p) => p.phone || p.tel);
   const defaultSupplier = staffByName.find((p) => p.name === "신석주" && p.phone) ?? null;
 
   const [supplierId, setSupplierId] = useState(defaultSupplier?.id ?? "");
@@ -119,7 +122,7 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
             <p className="text-xs font-bold text-slate-500 mb-1">담당자</p>
             <select className={inputCls} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
               <option value="">선택 안 함</option>
-              {staffByName.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {staffWithPhone.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
           <div>
