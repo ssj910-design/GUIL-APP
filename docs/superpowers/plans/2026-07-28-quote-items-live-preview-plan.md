@@ -1,3 +1,39 @@
+# 견적 품목편집 실시간 미리보기 (4단계) Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** `QuoteItemsModal`을 2열로 재구성해서, 왼쪽 입력 폼 옆에 오른쪽으로 간단한 견적서
+요약 미리보기 카드를 추가하고 입력값이 바뀔 때마다 같이 갱신되게 한다.
+
+**Architecture:** 새 state나 새 계산 로직 없이, 이미 존재하는 `items`/`transportCost`/
+`safetyCost`/`profit`/`subtotal`/`grandTotal`/`discountAmount`/`finalAmount`/`quoteNumber`/
+`quoteDate` 값을 그대로 읽어서 미리보기 카드를 렌더링한다. PDF 생성·저장(`handleConfirm`)은
+전혀 건드리지 않는다.
+
+**Tech Stack:** React 19, Tailwind v4 flex 레이아웃 — 새 라이브러리 없음.
+
+## Global Constraints
+
+- PDF 서식(로고, 사업자정보, 자재비/인건비 구분, 특이사항 조항)을 재현하지 않는다 — 간단한
+  카드형 요약만.
+- 미리보기는 화면 표시 전용이다 — 새 상태·저장·PDF 요청 바디 어디에도 영향을 주지 않는다.
+- `handleConfirm`의 PDF 생성/DB 저장 로직은 한 글자도 바뀌지 않는다.
+- `npm run build` 통과 필수.
+
+---
+
+### Task 1: `QuoteItemsModal.jsx` 2열 레이아웃 + 미리보기 카드
+
+**Files:**
+- Modify: `app/components/admin/QuoteItemsModal.jsx` (전체 교체)
+
+**Interfaces:**
+- Consumes: `lib/company.js`의 `COMPANY`(이미 존재, `QuoteSendModal.jsx`가 쓰는 것과 동일)
+- Produces: 없음 (독립 작업, 다른 파일 변경 없음)
+
+- [ ] **Step 1: 파일 전체를 아래 내용으로 교체**
+
+```jsx
 "use client";
 
 // 견적요청 품목편집 — 기사가 신청한 부품명/수량(원본, 읽기전용 참고)을 관리자가
@@ -98,12 +134,8 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
 
   // 오른쪽 미리보기 카드용 — 자재비/인건비 구분 없이 하나로 합치고, 운반비/안전관리비/이윤은
   // 값이 0보다 클 때만 같은 목록에 끼워 넣는다. 새 계산 없이 기존 값을 다시 나열만 함.
-  // 구분(CATEGORIES) 순서로 정렬 — 왼쪽 폼·PDF(lib/quotePdf.js)와 같은 순서로 보여야
-  // 발행 전 대조가 의미 있다. sort는 안정 정렬이라 같은 구분 내 순서는 보존된다.
   const previewRows = [
-    ...[...items]
-      .sort((a, b) => CATEGORIES.indexOf(a.category) - CATEGORIES.indexOf(b.category))
-      .map((it) => ({
+    ...items.map((it) => ({
       name: it.name || "(품명 없음)",
       qty: Number(it.qty || 0),
       unitPrice: Number(it.unitPrice || 0),
@@ -375,3 +407,32 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
     </Modal>
   );
 }
+```
+
+- [ ] **Step 2: 빌드 확인**
+
+Run: `npm run build`
+Expected: 에러 없이 성공.
+
+- [ ] **Step 3: 브라우저 실사용 검증 (디스포저블 테스트 견적 사용)**
+
+`npm run dev` 후 `/admin` → 자재·견적 신청내역 → "+ 새 견적 발행" → 실제 현장 선택 →
+품목편집 모달에서:
+
+1. 오른쪽에 "견적서 미리보기" 카드가 왼쪽 입력 폼과 나란히 보이는지 확인.
+2. 품목을 추가하고 품명/수량/단가를 입력 → 오른쪽 미리보기 목록에 같은 품목이 즉시
+   나타나고 금액이 맞는지 확인.
+3. 운반비에 금액을 입력 → 미리보기 목록에 "운반비" 줄이 추가되는지 확인(0이면 안 보이는지도
+   확인).
+4. 할인율을 입력 → 미리보기 하단에 "최종금액"이 추가로 나오는지 확인(할인 0일 땐 안 보이는지
+   확인).
+5. "발행 확정" 클릭 → PDF가 기존과 동일하게 정상 생성되고 상태가 "견적발행"으로 바뀌는지
+   확인(이 작업이 PDF 로직에 영향을 주지 않았는지 최종 확인).
+6. 테스트에 사용한 디스포저블 견적 행은 REST DELETE로 정리한다.
+
+- [ ] **Step 4: 커밋**
+
+```bash
+git add app/components/admin/QuoteItemsModal.jsx
+git commit -m "feat: 견적 품목편집에 오른쪽 실시간 미리보기 카드 추가"
+```
