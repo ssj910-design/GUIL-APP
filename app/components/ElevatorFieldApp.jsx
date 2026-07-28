@@ -698,6 +698,12 @@ export default function App() {
     setFailures((prev) => prev.map((x) => (x.id === failure.id
       ? { ...x, assignee: engineerName || null, assigneeId: newAssigneeId, dispatchedAt: null, etaMinutes: null, arrivalTime: null, status: "미처리" }
       : x)));
+    // 재배정도 배정만큼 급하다 — 새 기사에겐 배정 알림, 회수당한 이전 기사에겐 회수 알림을 보낸다.
+    const where = `${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} — ${parseErrorCode(failure.errorCode).faultType}`;
+    if (newAssigneeId) sendPush("failure_assigned", [newAssigneeId], { title: "고장이 배정되었습니다", body: where });
+    if (failure.assigneeId && failure.assigneeId !== newAssigneeId) {
+      sendPush("failure_reassigned", [failure.assigneeId], { title: "배정이 회수되었습니다", body: where });
+    }
     notifyFailure(engineerName ? `${engineerName}(으)로 재배정 완료` : "미배정으로 되돌림");
   }
 
