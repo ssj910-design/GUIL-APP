@@ -85,8 +85,8 @@ function legacySiteFields(siteUnits) {
   return { unit_count: act.length, gov_elevator_nos: govArr, elevator_model: act[0]?.model || null };
 }
 
-// 호기 상세정보 — 승강기정보(국가승강기정보센터 연동)/고장내역/검사내역/부품교체내역
-function UnitDetailModal({ unit, site, failures, inspections, billings, onClose }) {
+// 호기 상세정보 — 승강기정보(국가승강기정보센터 연동)/고장내역/검사내역/부품교체내역/견적내역
+function UnitDetailModal({ unit, site, failures, inspections, billings, quoteRequests, onClose }) {
   const [tab, setTab] = useState("정보");
   const [failTarget, setFailTarget] = useState(null);
   // units.gov_no가 아직 안 채워진 호기가 있다(마이그레이션 진행 중) — 그런 경우
@@ -105,6 +105,12 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
     .sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt));
   const manualInspections = inspections.filter((i) => (i.unitId ? i.unitId === unit.id : i.siteId === site.id));
   const unitBillings = billings.filter((b) => (b.unitId ? b.unitId === unit.id : b.siteName === site.name));
+
+  // 고장내역/부품교체내역과 동일한 컨벤션: unit_id가 있으면 그 호기만, 없으면(관리자가 호기를
+  // 안 정한 경우 등) 현장 전체로 fallback.
+  const unitQuotes = quoteRequests
+    .filter((q) => (q.unitId ? q.unitId === unit.id : q.siteId === site.id))
+    .sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate));
 
   // 모바일 앱 "승강기정보 - 정보" 탭과 동일한 항목·순서.
   const infoRows = [
@@ -127,7 +133,7 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
   return (
     <Modal title={`${site.name} · ${unit.unitNo} 상세정보`} onClose={onClose} wide>
       <div className="flex gap-1 mb-4 border-b border-slate-100 shrink-0">
-        {["정보", "고장내역", "검사내역", "부품교체내역"].map((t) => (
+        {["정보", "고장내역", "검사내역", "부품교체내역", "견적내역"].map((t) => (
           <button key={t} onClick={() => setTab(t)} className={`px-3 py-2 text-xs font-bold ${tab === t ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}>
             {t}
           </button>
@@ -240,6 +246,36 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, onClose 
             </div>
           )
         )}
+
+        {tab === "견적내역" && (
+          unitQuotes.length === 0 ? <p className="text-xs text-slate-400 text-center py-10">등록된 견적 내역이 없습니다</p> : (
+            <div className="space-y-2">
+              {unitQuotes.map((q) => {
+                const displayStatus = q.status === "자재지급완료" ? "교체완료" : q.status;
+                const tone = displayStatus === "교체완료" ? "indigo"
+                  : (displayStatus === "승인" || displayStatus === "견적발행") ? "amber"
+                  : displayStatus === "요청접수" ? "blue" : "slate";
+                return (
+                  <div key={q.id} className="border border-slate-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="font-bold text-sm">{q.quoteTitle || q.constructionType || "견적"}</p>
+                      <StatusBadge tone={tone}>{displayStatus}</StatusBadge>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      {shortDate(q.quoteIssuedDate || q.requestedDate)}
+                      {(q.emailSentAt || q.kakaoSentAt) && " · 발송완료"}
+                    </p>
+                    {q.quotePdfUrl && (
+                      <a href={q.quotePdfUrl} target="_blank" rel="noreferrer" className="text-[10px] text-blue-600 font-semibold mt-1 inline-block">
+                        PDF 보기
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
       </div>
 
       {failTarget && (
@@ -331,7 +367,7 @@ function ContactRow({ c, onSave, onDelete, onSetPrimary }) {
 }
 
 export default function SitesAdmin({ data, setData }) {
-  const { sites, units, profiles, failures, inspections, billings, siteManagers } = data;
+  const { sites, units, profiles, failures, inspections, billings, siteManagers, quoteRequests } = data;
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState(null);
   const [siteForm, setSiteForm] = useState(null); // 선택 현장 기본정보 편집값
@@ -995,6 +1031,7 @@ export default function SitesAdmin({ data, setData }) {
           failures={failures}
           inspections={inspections}
           billings={billings}
+          quoteRequests={quoteRequests ?? []}
           onClose={() => setUnitDetail(null)}
         />
       )}
