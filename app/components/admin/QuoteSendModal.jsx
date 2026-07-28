@@ -3,10 +3,15 @@
 // 발행된 견적서를 이메일/카카오 알림톡으로 발송 — 발행과는 분리된 별도 동작(관리자가
 // PDF 확인 후 직접 발송 버튼을 눌러야 나간다). 두 채널은 독립적으로 시도되고, 실패해도
 // 조용히 숨기지 않고 채널별로 성공/실패를 그대로 보여준다.
+//
+// 공급자/고객 정보 2단 레이아웃 — 청구스(chungoose.ai) 참고 2단계(설계:
+// docs/superpowers/specs/2026-07-28-quote-send-two-column-design.md). 담당자 드롭다운은
+// 기존 텍스트 입력을 채워주는 편의 기능일 뿐, 실제 전송 값은 여전히 텍스트 입력이다.
 import { useState } from "react";
 import { Modal, inputCls } from "@/app/components/admin/adminShared";
+import { COMPANY } from "@/lib/company";
 
-export default function QuoteSendModal({ quote, site, siteManagers, onClose, onSaved }) {
+export default function QuoteSendModal({ quote, site, siteManagers, profiles, onClose, onSaved }) {
   const primaryManager = (siteManagers ?? []).find((m) => m.isPrimary) ?? (siteManagers ?? [])[0];
   const [email, setEmail] = useState(quote.recipientEmail || primaryManager?.email || "");
   const [phone, setPhone] = useState(quote.recipientPhone || primaryManager?.phone || "");
@@ -18,9 +23,41 @@ export default function QuoteSendModal({ quote, site, siteManagers, onClose, onS
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState(null);
 
+  const activeStaff = (profiles ?? []).filter((p) => p.is_active !== false && !p.deleted_at);
+  const staffByName = [...activeStaff].sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "ko"));
+  const staffWithEmail = staffByName.filter((p) => p.email);
+  const defaultSupplier = staffByName.find((p) => p.name === "신석주" && p.phone) ?? null;
+
+  const [supplierId, setSupplierId] = useState(defaultSupplier?.id ?? "");
+  const [supplierCcId, setSupplierCcId] = useState("");
+  const [customerManagerId, setCustomerManagerId] = useState(primaryManager?.id ?? "");
+  const [customerCcId, setCustomerCcId] = useState("");
+
+  const supplier = staffByName.find((p) => p.id === supplierId);
+  const otherManagers = (siteManagers ?? []).filter((m) => m.id !== customerManagerId);
+
+  function selectCustomerManager(id) {
+    setCustomerManagerId(id);
+    const m = (siteManagers ?? []).find((x) => x.id === id);
+    if (m) { setEmail(m.email || ""); setPhone(m.phone || ""); }
+  }
+  function selectCustomerCc(id) {
+    setCustomerCcId(id);
+    const m = (siteManagers ?? []).find((x) => x.id === id);
+    if (m) { setReferenceEmail(m.email || ""); setReferencePhone(m.phone || ""); }
+  }
+  function selectSupplierCc(id) {
+    setSupplierCcId(id);
+    const p = staffWithEmail.find((x) => x.id === id);
+    if (p) setSenderCcEmail(p.email || "");
+  }
+
   async function handleSend() {
     setSending(true);
     setResults(null);
+
+    const supplierName = supplier?.name || null;
+    const supplierPhone = supplier ? (supplier.phone || supplier.tel || null) : null;
 
     const res = await fetch("/api/send-quote", {
       method: "POST",
@@ -33,6 +70,8 @@ export default function QuoteSendModal({ quote, site, siteManagers, onClose, onS
         senderCcEmail: senderCcEmail || null,
         referenceEmail: referenceEmail || null,
         referencePhone: referencePhone || null,
+        supplierName,
+        supplierPhone,
         quote: {
           siteName: site?.name ?? quote.siteName,
           quoteTitle: quote.quoteTitle,
@@ -69,26 +108,58 @@ export default function QuoteSendModal({ quote, site, siteManagers, onClose, onS
 
   return (
     <Modal title={`${site?.name ?? quote.siteName} 견적 발송`} onClose={onClose} wide="xl">
-      <div className="space-y-3 mb-4">
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">받는사람 이메일</p>
-          <input className={inputCls} value={email} onChange={(e) => setEmail(e.target.value)} />
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="border border-slate-200 rounded-xl p-3">
+          <p className="text-xs font-bold text-slate-600 mb-2">공급자 정보</p>
+          <div className="space-y-2 text-sm mb-3">
+            <div><p className="text-xs text-slate-400">회사명</p><p className="font-semibold">{COMPANY.name}</p></div>
+            <div><p className="text-xs text-slate-400">주소</p><p className="font-semibold">{COMPANY.address}</p></div>
+          </div>
+          <div className="mb-2">
+            <p className="text-xs font-bold text-slate-500 mb-1">담당자</p>
+            <select className={inputCls} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+              <option value="">선택 안 함</option>
+              {staffByName.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">참조(CC) 이메일 (선택)</p>
+            <select className={`${inputCls} mb-1.5`} value={supplierCcId} onChange={(e) => selectSupplierCc(e.target.value)}>
+              <option value="">직원 목록에서 선택</option>
+              {staffWithEmail.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.email})</option>)}
+            </select>
+            <input className={inputCls} value={senderCcEmail} onChange={(e) => setSenderCcEmail(e.target.value)} placeholder="직접 입력도 가능" />
+          </div>
         </div>
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">받는사람 전화번호</p>
-          <input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} />
-        </div>
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">발신측 CC 이메일 (선택)</p>
-          <input className={inputCls} value={senderCcEmail} onChange={(e) => setSenderCcEmail(e.target.value)} />
-        </div>
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">참조인 이메일 (선택)</p>
-          <input className={inputCls} value={referenceEmail} onChange={(e) => setReferenceEmail(e.target.value)} />
-        </div>
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">참조인 전화번호 (선택)</p>
-          <input className={inputCls} value={referencePhone} onChange={(e) => setReferencePhone(e.target.value)} />
+
+        <div className="border border-slate-200 rounded-xl p-3">
+          <p className="text-xs font-bold text-slate-600 mb-2">고객 정보</p>
+          <div className="mb-2">
+            <p className="text-xs font-bold text-slate-500 mb-1">담당자(받는사람)</p>
+            <select className={inputCls} value={customerManagerId} onChange={(e) => selectCustomerManager(e.target.value)}>
+              <option value="">선택 안 함</option>
+              {(siteManagers ?? []).map((m) => <option key={m.id} value={m.id}>{m.name}{m.isPrimary ? " (대표)" : ""}</option>)}
+            </select>
+          </div>
+          <div className="space-y-2 mb-3">
+            <div>
+              <p className="text-xs font-bold text-slate-500 mb-1">받는사람 이메일</p>
+              <input className={inputCls} value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-500 mb-1">받는사람 전화번호</p>
+              <input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">참조인 (선택)</p>
+            <select className={`${inputCls} mb-1.5`} value={customerCcId} onChange={(e) => selectCustomerCc(e.target.value)}>
+              <option value="">현장담당자 목록에서 선택</option>
+              {otherManagers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+            <input className={`${inputCls} mb-1.5`} value={referenceEmail} onChange={(e) => setReferenceEmail(e.target.value)} placeholder="참조인 이메일 (직접 입력 가능)" />
+            <input className={inputCls} value={referencePhone} onChange={(e) => setReferencePhone(e.target.value)} placeholder="참조인 전화번호 (직접 입력 가능)" />
+          </div>
         </div>
       </div>
 

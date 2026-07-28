@@ -503,6 +503,7 @@ export default function MaterialsAdmin({ data, setData }) {
           quote={sendTarget}
           site={(data.sites ?? []).find((s) => s.id === sendTarget.siteId)}
           siteManagers={(data.siteManagers ?? []).filter((m) => m.siteId === sendTarget.siteId)}
+          profiles={data.profiles ?? []}
           onClose={() => setSendTarget(null)}
           onSaved={(patch) => {
             setData((prev) => ({
