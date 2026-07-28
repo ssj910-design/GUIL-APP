@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { mapQuoteRequest } from "@/lib/mappers";
 import { uploadPhoto } from "@/lib/photos";
 import { unitIdFor, addDays, shortDate } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
@@ -50,6 +51,7 @@ export default function MaterialsAdmin({ data, setData }) {
   const [detailTarget, setDetailTarget] = useState(null); // 상세내역 보는 중인 신청 { type, data }
   const [itemsTarget, setItemsTarget] = useState(null); // 품목편집 중인 견적요청
   const [sendTarget, setSendTarget] = useState(null); // 발송 중인 견적요청
+  const [pickingSite, setPickingSite] = useState(false); // 새 견적 발행 — 현장선택 모달
 
   const query = search.trim().toLowerCase();
   const materialRequests = allMaterialRequests.filter((m) =>
@@ -295,6 +297,31 @@ export default function MaterialsAdmin({ data, setData }) {
     }));
   }
 
+  async function handleCreateQuote(siteId) {
+    const site = (data.sites ?? []).find((s) => s.id === siteId);
+    if (!site) return;
+    const row = {
+      id: "q" + Date.now(),
+      site_id: siteId,
+      site_name: site.name,
+      elevator_no: null,
+      unit_id: null,
+      construction_type: "관리자 발행",
+      contact_phone: null,
+      note: null,
+      engineer: null,
+      requester_id: null,
+      requested_date: TODAY_STR,
+      status: "요청접수",
+    };
+    const { error } = await supabase.from("quote_requests").insert(row);
+    if (error) { alert("견적 생성 실패: " + error.message); return; }
+    const created = mapQuoteRequest(row);
+    setData((prev) => ({ ...prev, quoteRequests: [created, ...prev.quoteRequests] }));
+    setPickingSite(false);
+    setItemsTarget(created);
+  }
+
   return (
     <div className="max-w-[100rem] mx-auto">
       <h1 className="text-xl font-extrabold mb-4">자재·견적 신청내역</h1>
@@ -363,7 +390,15 @@ export default function MaterialsAdmin({ data, setData }) {
 
       {(tab === "quote" || tab === "all") && (
         <>
-        {tab === "all" && <h2 className="text-xs font-bold text-slate-400 mb-2 mt-6">견적요청</h2>}
+        <div className="flex items-center justify-between mb-2 mt-6">
+          {tab === "all" ? <h2 className="text-xs font-bold text-slate-400">견적요청</h2> : <span />}
+          <button
+            onClick={() => setPickingSite(true)}
+            className="text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 transition-colors px-3 py-1.5 rounded-lg"
+          >
+            + 새 견적 발행
+          </button>
+        </div>
         <AdminTable head={["신청일", "현장 · 호기", "공사 내용", "신청 기사", "발행/승인/지급", "상태", "처리"]}>
           {quoteRequests.map((q) => (
             <tr
@@ -374,7 +409,11 @@ export default function MaterialsAdmin({ data, setData }) {
               <td className="pl-5 pr-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(q.requestedDate)}</td>
               <td className="px-3 py-2.5 font-semibold whitespace-nowrap">{locOf(data, q.unitId, q.siteName, q.elevatorNo)}</td>
               <td className="px-3 py-2.5 text-slate-600">{q.constructionType}</td>
-              <td className="px-3 py-2.5 whitespace-nowrap">{personOf(data, q.requesterId, q.engineer)}</td>
+              <td className="px-3 py-2.5 whitespace-nowrap">
+                {!q.requesterId && !q.engineer
+                  ? <StatusBadge tone="slate">관리자발행</StatusBadge>
+                  : personOf(data, q.requesterId, q.engineer)}
+              </td>
               <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">
                 {shortDate(q.quoteIssuedDate)} / {shortDate(q.approvedDate)} / {shortDate(q.suppliedDate)}
               </td>
@@ -486,6 +525,14 @@ export default function MaterialsAdmin({ data, setData }) {
             }));
             setItemsTarget(null);
           }}
+        />
+      )}
+
+      {pickingSite && (
+        <QuoteNewSiteModal
+          sites={data.sites ?? []}
+          onClose={() => setPickingSite(false)}
+          onSelect={handleCreateQuote}
         />
       )}
 
@@ -765,6 +812,45 @@ function RequestDetailModal({ target, data, onClose }) {
       <div>
         <p className="text-xs font-bold text-slate-500 mb-2">사진 ({photos.length}장)</p>
         <PhotoGrid urls={photos} />
+      </div>
+    </Modal>
+  );
+}
+
+// 관리자가 기사 요청 없이 새 견적을 발행할 때 현장을 고르는 팝업.
+// formWidgets.jsx의 SiteSearchSelect는 SitesContext(모바일 트리 전용)로 현장을 읽어서
+// 관리자 콘솔에서는 목록이 비어 보인다 — 그래서 sites를 prop으로 받는 버전을 따로 둔다.
+function QuoteNewSiteModal({ sites, onClose, onSelect }) {
+  const [query, setQuery] = useState("");
+  const filtered = sites.filter((s) => s.name.toLowerCase().includes(query.trim().toLowerCase()));
+
+  return (
+    <Modal title="새 견적 발행 — 현장 선택" onClose={onClose}>
+      <div className="relative mb-3">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          className={`${inputCls} pl-8`}
+          placeholder="현장명을 검색하세요"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          autoFocus
+        />
+      </div>
+      <div className="max-h-72 overflow-y-auto space-y-1">
+        {filtered.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-6">검색 결과가 없습니다</p>
+        ) : (
+          filtered.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => onSelect(s.id)}
+              className="w-full text-left px-3 py-2.5 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0 rounded-lg"
+            >
+              {s.name}
+            </button>
+          ))
+        )}
       </div>
     </Modal>
   );
