@@ -47,6 +47,11 @@ export default function QuoteSendModal({ quote, site, siteManagers, onClose, onS
     setResults(res.results ?? {});
     setSending(false);
 
+    const now = new Date().toISOString();
+    const newLogEntries = [];
+    if (res.results?.email?.ok) newLogEntries.push({ channel: "email", sentAt: now, target: email });
+    if (res.results?.kakao?.ok) newLogEntries.push({ channel: "kakao", sentAt: now, target: phone });
+
     const patch = {
       recipientEmail: email,
       recipientPhone: phone,
@@ -54,8 +59,9 @@ export default function QuoteSendModal({ quote, site, siteManagers, onClose, onS
       referenceEmail: referenceEmail || null,
       referencePhone: referencePhone || null,
     };
-    if (res.results?.email?.ok) patch.emailSentAt = new Date().toISOString();
-    if (res.results?.kakao?.ok) patch.kakaoSentAt = new Date().toISOString();
+    if (res.results?.email?.ok) patch.emailSentAt = now;
+    if (res.results?.kakao?.ok) patch.kakaoSentAt = now;
+    if (newLogEntries.length) patch.sendLog = [...(quote.sendLog ?? []), ...newLogEntries];
     if (res.results?.email?.ok || res.results?.kakao?.ok) onSaved(patch);
   }
 

@@ -58,6 +58,32 @@ export function sentLabel(q) {
   return parts.length ? parts.join(" · ") : "-";
 }
 
+// 발송 이력(sendLog) 중 가장 최근 발송일만 날짜로 — 목록 표에 쓰는 짧은 표기.
+export function lastSentDate(q) {
+  const log = q.sendLog ?? [];
+  if (!log.length) return "-";
+  const latest = log.reduce((a, b) => (new Date(a.sentAt) > new Date(b.sentAt) ? a : b));
+  return shortDate(latest.sentAt.slice(0, 10));
+}
+
+// 발송 이력(sendLog) 전체를 같은 시각(=같은 발송 동작)끼리 묶어 한 줄씩 —
+// "26.07.28 이메일(a@b.com), 알림톡(010-0000-0000)" 형식. 여러 번 발송했으면 여러 줄.
+export function sentHistory(q) {
+  const log = q.sendLog ?? [];
+  if (!log.length) return [];
+  const groups = new Map();
+  for (const entry of log) {
+    if (!groups.has(entry.sentAt)) groups.set(entry.sentAt, []);
+    groups.get(entry.sentAt).push(entry);
+  }
+  return Array.from(groups.entries())
+    .sort((a, b) => new Date(b[0]) - new Date(a[0]))
+    .map(([sentAt, entries]) => {
+      const parts = entries.map((e) => `${e.channel === "email" ? "이메일" : "알림톡"}(${e.target})`);
+      return `${shortDate(sentAt.slice(0, 10))} ${parts.join(", ")}`;
+    });
+}
+
 const TONES = {
   red: "bg-red-50 text-red-600",
   amber: "bg-amber-50 text-amber-700",

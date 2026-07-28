@@ -11,7 +11,7 @@ import { mapQuoteRequest } from "@/lib/mappers";
 import { uploadPhoto } from "@/lib/photos";
 import { unitIdFor, addDays, shortDate } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
-import { locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid, DateTextInput, sentLabel } from "@/app/components/admin/adminShared";
+import { locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid, DateTextInput, lastSentDate, sentHistory } from "@/app/components/admin/adminShared";
 import QuoteItemsModal from "@/app/components/admin/QuoteItemsModal";
 import QuoteSendModal from "@/app/components/admin/QuoteSendModal";
 
@@ -415,7 +415,7 @@ export default function MaterialsAdmin({ data, setData }) {
                   : personOf(data, q.requesterId, q.engineer)}
               </td>
               <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">
-                {shortDate(q.quoteIssuedDate)} / {shortDate(q.approvedDate)} / {shortDate(q.suppliedDate)} / {sentLabel(q)}
+                {shortDate(q.quoteIssuedDate)} / {shortDate(q.approvedDate)} / {shortDate(q.suppliedDate)} / {lastSentDate(q)}
               </td>
               <td className="px-3 py-2.5">
                 {(() => {
@@ -803,7 +803,14 @@ function RequestDetailModal({ target, data, onClose }) {
         {!isMaterial && (
           <>
             <div><p className="text-xs font-bold text-slate-400 mb-1">발행일 / 승인일 / 지급일</p><p className="font-semibold text-slate-800">{shortDate(r.quoteIssuedDate)} / {shortDate(r.approvedDate)} / {shortDate(r.suppliedDate)}</p></div>
-            <div><p className="text-xs font-bold text-slate-400 mb-1">발송일</p><p className="font-semibold text-slate-800">{sentLabel(r)}</p></div>
+            <div>
+              <p className="text-xs font-bold text-slate-400 mb-1">발송일</p>
+              {sentHistory(r).length === 0 ? (
+                <p className="font-semibold text-slate-800">-</p>
+              ) : (
+                sentHistory(r).map((line, i) => <p key={i} className="font-semibold text-slate-800">{line}</p>)
+              )}
+            </div>
           </>
         )}
 

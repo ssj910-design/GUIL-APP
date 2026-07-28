@@ -15,6 +15,8 @@ export async function POST(request) {
     senderCcEmail, referenceEmail, referencePhone, quote,
   } = body;
   const results = {};
+  const now = new Date().toISOString();
+  const newLogEntries = [];
   const patch = {
     recipient_email: recipientEmail || null,
     recipient_phone: recipientPhone || null,
@@ -28,7 +30,8 @@ export async function POST(request) {
       const cc = [senderCcEmail, referenceEmail].filter(Boolean);
       await sendQuoteEmail({ to: recipientEmail, cc, quote, pdfUrl: quote?.pdfUrl });
       results.email = { ok: true };
-      patch.email_sent_at = new Date().toISOString();
+      patch.email_sent_at = now;
+      newLogEntries.push({ channel: "email", sentAt: now, target: recipientEmail });
     } catch (err) {
       results.email = { ok: false, reason: err.message };
     }
@@ -38,13 +41,16 @@ export async function POST(request) {
     try {
       await sendQuoteAlimtalk({ to: recipientPhone, quote, pdfUrl: quote?.pdfUrl });
       results.kakao = { ok: true };
-      patch.kakao_sent_at = new Date().toISOString();
+      patch.kakao_sent_at = now;
+      newLogEntries.push({ channel: "kakao", sentAt: now, target: recipientPhone });
     } catch (err) {
       results.kakao = { ok: false, reason: err.message };
     }
 
     // 참조인 카카오 발송은 최선노력 — 실패해도 위 results.kakao(주 수신인 결과)에는
     // 영향을 주지 않고 서버 로그에만 남긴다(주 수신인이 못 받은 것과 무게가 다른 문제).
+    // 발송 이력(send_log)에도 남기지 않는다 — 참조인은 부수적 대상이라 주 수신인 발송
+    // 이력만 추적한다.
     if (referencePhone) {
       try {
         await sendQuoteAlimtalk({ to: referencePhone, quote, pdfUrl: quote?.pdfUrl });
@@ -52,6 +58,15 @@ export async function POST(request) {
         console.error(`참조인 카카오 발송 실패 (quoteRequestId=${quoteRequestId}):`, err.message);
       }
     }
+  }
+
+  if (newLogEntries.length) {
+    const { data: existing } = await supabase
+      .from("quote_requests")
+      .select("send_log")
+      .eq("id", quoteRequestId)
+      .single();
+    patch.send_log = [...(existing?.send_log ?? []), ...newLogEntries];
   }
 
   const { error } = await supabase.from("quote_requests").update(patch).eq("id", quoteRequestId);
