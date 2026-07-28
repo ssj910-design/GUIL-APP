@@ -13,7 +13,7 @@ export async function POST(request) {
   const {
     quoteRequestId, channels, recipientEmail, recipientPhone,
     senderCcEmail, referenceEmail, referencePhone, quote,
-    supplierName, supplierPhone,
+    supplierName, supplierPhone, noticeMessage, attachmentUrls,
   } = body;
   const results = {};
   const now = new Date().toISOString();
@@ -24,12 +24,14 @@ export async function POST(request) {
     sender_cc_email: senderCcEmail || null,
     reference_email: referenceEmail || null,
     reference_phone: referencePhone || null,
+    notice_message: noticeMessage || null,
+    attachment_urls: attachmentUrls && attachmentUrls.length ? attachmentUrls : [],
   };
 
   if (channels?.email) {
     try {
       const cc = [senderCcEmail, referenceEmail].filter(Boolean);
-      await sendQuoteEmail({ to: recipientEmail, cc, quote, pdfUrl: quote?.pdfUrl, supplierName, supplierPhone });
+      await sendQuoteEmail({ to: recipientEmail, cc, quote, pdfUrl: quote?.pdfUrl, supplierName, supplierPhone, noticeMessage, attachmentUrls });
       results.email = { ok: true };
       patch.email_sent_at = now;
       newLogEntries.push({ channel: "email", sentAt: now, target: recipientEmail });
