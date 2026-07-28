@@ -10,16 +10,23 @@ export async function POST(request) {
     return Response.json({ results: {} }, { status: 200 });
   }
 
-  const { quoteRequestId, channels, recipientEmail, recipientPhone, quote } = body;
+  const {
+    quoteRequestId, channels, recipientEmail, recipientPhone,
+    senderCcEmail, referenceEmail, referencePhone, quote,
+  } = body;
   const results = {};
   const patch = {
     recipient_email: recipientEmail || null,
     recipient_phone: recipientPhone || null,
+    sender_cc_email: senderCcEmail || null,
+    reference_email: referenceEmail || null,
+    reference_phone: referencePhone || null,
   };
 
   if (channels?.email) {
     try {
-      await sendQuoteEmail({ to: recipientEmail, quote, pdfUrl: quote?.pdfUrl });
+      const cc = [senderCcEmail, referenceEmail].filter(Boolean);
+      await sendQuoteEmail({ to: recipientEmail, cc, quote, pdfUrl: quote?.pdfUrl });
       results.email = { ok: true };
       patch.email_sent_at = new Date().toISOString();
     } catch (err) {
@@ -34,6 +41,16 @@ export async function POST(request) {
       patch.kakao_sent_at = new Date().toISOString();
     } catch (err) {
       results.kakao = { ok: false, reason: err.message };
+    }
+
+    // 참조인 카카오 발송은 최선노력 — 실패해도 위 results.kakao(주 수신인 결과)에는
+    // 영향을 주지 않고 서버 로그에만 남긴다(주 수신인이 못 받은 것과 무게가 다른 문제).
+    if (referencePhone) {
+      try {
+        await sendQuoteAlimtalk({ to: referencePhone, quote, pdfUrl: quote?.pdfUrl });
+      } catch (err) {
+        console.error(`참조인 카카오 발송 실패 (quoteRequestId=${quoteRequestId}):`, err.message);
+      }
     }
   }
 

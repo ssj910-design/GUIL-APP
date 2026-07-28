@@ -10,6 +10,9 @@ export default function QuoteSendModal({ quote, site, siteManagers, onClose, onS
   const primaryManager = (siteManagers ?? []).find((m) => m.isPrimary) ?? (siteManagers ?? [])[0];
   const [email, setEmail] = useState(quote.recipientEmail || primaryManager?.email || "");
   const [phone, setPhone] = useState(quote.recipientPhone || primaryManager?.phone || "");
+  const [senderCcEmail, setSenderCcEmail] = useState("");
+  const [referenceEmail, setReferenceEmail] = useState("");
+  const [referencePhone, setReferencePhone] = useState("");
   const [sendEmail, setSendEmail] = useState(true);
   const [sendKakao, setSendKakao] = useState(true);
   const [sending, setSending] = useState(false);
@@ -27,6 +30,9 @@ export default function QuoteSendModal({ quote, site, siteManagers, onClose, onS
         channels: { email: sendEmail, kakao: sendKakao },
         recipientEmail: email,
         recipientPhone: phone,
+        senderCcEmail: senderCcEmail || null,
+        referenceEmail: referenceEmail || null,
+        referencePhone: referencePhone || null,
         quote: {
           siteName: site?.name ?? quote.siteName,
           quoteTitle: quote.quoteTitle,
@@ -41,7 +47,13 @@ export default function QuoteSendModal({ quote, site, siteManagers, onClose, onS
     setResults(res.results ?? {});
     setSending(false);
 
-    const patch = { recipientEmail: email, recipientPhone: phone };
+    const patch = {
+      recipientEmail: email,
+      recipientPhone: phone,
+      senderCcEmail: senderCcEmail || null,
+      referenceEmail: referenceEmail || null,
+      referencePhone: referencePhone || null,
+    };
     if (res.results?.email?.ok) patch.emailSentAt = new Date().toISOString();
     if (res.results?.kakao?.ok) patch.kakaoSentAt = new Date().toISOString();
     if (res.results?.email?.ok || res.results?.kakao?.ok) onSaved(patch);
@@ -59,6 +71,18 @@ export default function QuoteSendModal({ quote, site, siteManagers, onClose, onS
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">받는사람 전화번호</p>
           <input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </div>
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">발신측 CC 이메일 (선택)</p>
+          <input className={inputCls} value={senderCcEmail} onChange={(e) => setSenderCcEmail(e.target.value)} />
+        </div>
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">참조인 이메일 (선택)</p>
+          <input className={inputCls} value={referenceEmail} onChange={(e) => setReferenceEmail(e.target.value)} />
+        </div>
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">참조인 전화번호 (선택)</p>
+          <input className={inputCls} value={referencePhone} onChange={(e) => setReferencePhone(e.target.value)} />
         </div>
       </div>
 
