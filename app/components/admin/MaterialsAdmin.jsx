@@ -59,6 +59,7 @@ export default function MaterialsAdmin({ data, setData }) {
   );
   const quoteRequests = allQuoteRequests.filter((q) =>
     !query || locOf(data, q.unitId, q.siteName, q.elevatorNo).toLowerCase().includes(query) || (q.constructionType ?? "").toLowerCase().includes(query) || personOf(data, q.requesterId, q.engineer).toLowerCase().includes(query)
+      || (q.quoteItems ?? []).some((it) => (it.spec ?? "").toLowerCase().includes(query))
   );
 
   async function handleMaterialSupplyComplete(request, { assigneeId, billingPart, billingAmount, photoUrls }) {
@@ -337,7 +338,7 @@ export default function MaterialsAdmin({ data, setData }) {
         />
         <div className="relative max-w-64">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input className={`${inputCls} pl-8`} placeholder="현장·부품·기사명 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input className={`${inputCls} pl-8`} placeholder="현장·부품·규격·기사명 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
       </div>
 
