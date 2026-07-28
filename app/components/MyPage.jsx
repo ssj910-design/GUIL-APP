@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react";
-import { X, LogOut, CalendarDays, Bell, BellRing, KeyRound } from "lucide-react";
+import { X, LogOut, CalendarDays, Bell, BellRing, KeyRound, MessageSquarePlus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { AuthContext } from "@/app/components/context";
 import { PasswordChangeForm } from "@/app/components/PasswordChangeForm";
@@ -22,6 +22,29 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
   const [pushBusy, setPushBusy] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
   const [pwDone, setPwDone] = useState(false);
+  const [fbOpen, setFbOpen] = useState(false);
+  const [fbMsg, setFbMsg] = useState("");
+  const [fbSending, setFbSending] = useState(false);
+  const [fbResult, setFbResult] = useState(null); // { ok, reason }
+
+  async function sendFeedback() {
+    if (!fbMsg.trim()) return;
+    setFbSending(true);
+    setFbResult(null);
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, role: role === "admin" ? "관리자" : "기사", message: fbMsg.trim() }),
+      });
+      const data = await res.json().catch(() => ({ ok: false }));
+      setFbResult(data);
+      if (data.ok) { setFbMsg(""); setFbOpen(false); }
+    } catch {
+      setFbResult({ ok: false, reason: "전송 중 오류가 발생했습니다" });
+    }
+    setFbSending(false);
+  }
 
   // 회사에서 켜둔 알림만 개인이 조절할 수 있다
   useEffect(() => {
@@ -208,6 +231,41 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
             <PasswordChangeForm profileId={selfId} onDone={() => { setPwDone(true); setPwOpen(false); }} />
           ) : (
             <p className="text-xs text-slate-400">숫자 6자 이상으로 바꿀 수 있습니다</p>
+          )}
+        </Card>
+
+        {/* 건의하기 — 앱 개선 의견을 운영자에게 메일로 보낸다 */}
+        <Card
+          icon={<MessageSquarePlus size={13} />}
+          title="건의하기"
+          extra={
+            <button onClick={() => { setFbOpen((v) => !v); setFbResult(null); }} className="text-[11px] font-bold text-blue-700">
+              {fbOpen ? "접기" : "보내기"}
+            </button>
+          }
+        >
+          {fbOpen ? (
+            <div className="space-y-2">
+              <textarea
+                className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm bg-white resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={4}
+                placeholder="불편한 점·개선 아이디어를 자유롭게 적어주세요"
+                value={fbMsg}
+                onChange={(e) => setFbMsg(e.target.value)}
+              />
+              {fbResult && !fbResult.ok && <p className="text-xs text-red-500">{fbResult.reason || "전송에 실패했습니다"}</p>}
+              <button
+                onClick={sendFeedback}
+                disabled={fbSending || !fbMsg.trim()}
+                className="w-full bg-blue-700 disabled:bg-slate-300 text-white text-sm font-bold py-2.5 rounded-lg"
+              >
+                {fbSending ? "보내는 중..." : "보내기"}
+              </button>
+            </div>
+          ) : fbResult?.ok ? (
+            <p className="text-xs text-emerald-600 font-semibold">의견을 보냈습니다. 감사합니다!</p>
+          ) : (
+            <p className="text-xs text-slate-400">앱 개선 의견을 운영자에게 보낼 수 있습니다</p>
           )}
         </Card>
 
