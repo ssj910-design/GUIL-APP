@@ -3,16 +3,29 @@
 // 견적요청 품목편집 — 기사가 신청한 부품명/수량(원본, 읽기전용 참고)을 관리자가
 // 세부 품목(자재비/인건비 구분·규격·단가 등)으로 확장해 "발행 확정"하면
 // PDF까지 생성해서 견적요청을 "견적발행" 상태로 넘긴다.
+//
+// 품목 테이블의 공급가액/세액/합계 컬럼과 할인 정보 섹션은 화면 표시 전용이다 — 실제
+// PDF(lib/quotePdf.js)와 저장 데이터(quote_items, transport_cost 등)는 그대로 두고
+// 입력 화면만 청구스(chungoose.ai) 스타일에 맞춰 다듬은 것 (설계:
+// docs/superpowers/specs/2026-07-28-quote-items-chungoose-style-design.md).
 import { useState, useEffect } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { Modal, inputCls } from "@/app/components/admin/adminShared";
 
 const CATEGORIES = ["자재비", "인건비"];
+const VAT_RATE = 0.1;
 
 function emptyItem(category) {
   return { category, name: "", unitNo: "", spec: "", unit: "", qty: 1, unitPrice: 0 };
+}
+
+// 공급가액/세액/합계 — 품목 행과 운반비/안전관리비/이윤 고정행이 공유하는 계산식.
+function rowCalc(qty, unitPrice) {
+  const supply = Number(qty || 0) * Number(unitPrice || 0);
+  const vat = Math.round(supply * VAT_RATE);
+  return { supply, vat, total: supply + vat };
 }
 
 export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
@@ -28,6 +41,8 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
   const [transportCost, setTransportCost] = useState(quote.transportCost || 0);
   const [safetyCost, setSafetyCost] = useState(quote.safetyCost || 0);
   const [profit, setProfit] = useState(quote.profit || 0);
+  const [discountPercent, setDiscountPercent] = useState(0);
+  const [discountAmount, setDiscountAmount] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -55,10 +70,39 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
   function removeItem(idx) {
     setItems((prev) => prev.filter((_, i) => i !== idx));
   }
+  // 같은 구분(자재비/인건비) 안에서만 위/아래로 순서를 바꾼다 — 구분을 넘나드는 이동은
+  // PDF가 구분별로 섹션을 나눠 그리므로 지원하지 않는다.
+  function moveItem(idx, direction) {
+    setItems((prev) => {
+      const category = prev[idx].category;
+      const catIndices = prev.map((it, i) => (it.category === category ? i : -1)).filter((i) => i !== -1);
+      const pos = catIndices.indexOf(idx);
+      const swapPos = pos + direction;
+      if (swapPos < 0 || swapPos >= catIndices.length) return prev;
+      const swapIdx = catIndices[swapPos];
+      const next = [...prev];
+      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+      return next;
+    });
+  }
 
   const itemsSubtotal = items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.unitPrice || 0), 0);
   const subtotal = itemsSubtotal + Number(transportCost || 0) + Number(safetyCost || 0) + Number(profit || 0);
   const grandTotal = Math.floor(subtotal / 1000) * 1000;
+  const finalAmount = subtotal - discountAmount;
+
+  // 할인율/할인금액은 서로의 값을 기준으로 자동 계산되는 화면 표시 전용 값 —
+  // handleConfirm의 patch나 PDF 요청 바디 어디에도 들어가지 않는다.
+  function handleDiscountPercent(value) {
+    const pct = Number(value) || 0;
+    setDiscountPercent(pct);
+    setDiscountAmount(Math.round((subtotal * pct) / 100));
+  }
+  function handleDiscountAmount(value) {
+    const amt = Number(value) || 0;
+    setDiscountAmount(amt);
+    setDiscountPercent(subtotal > 0 ? Math.round((amt / subtotal) * 1000) / 10 : 0);
+  }
 
   async function handleConfirm() {
     if (items.length === 0) return;
@@ -128,6 +172,18 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
           <input type="date" className={inputCls} value={quoteDate} onChange={(e) => setQuoteDate(e.target.value)} /></div>
       </div>
 
+      <div className="grid grid-cols-12 gap-1 mb-1 text-[10px] font-bold text-slate-400 px-0.5">
+        <span className="col-span-1"></span>
+        <span className="col-span-2">품명</span>
+        <span className="col-span-1">단위</span>
+        <span className="col-span-1">수량</span>
+        <span className="col-span-2">단가</span>
+        <span className="col-span-2 text-right">공급가액</span>
+        <span className="col-span-1 text-right">세액</span>
+        <span className="col-span-1 text-right">합계</span>
+        <span className="col-span-1"></span>
+      </div>
+
       {CATEGORIES.map((category) => (
         <div key={category} className="mb-4">
           <div className="flex items-center justify-between mb-2">
@@ -136,19 +192,39 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
               <Plus size={12} /> 품목 추가
             </button>
           </div>
-          <div className="space-y-1.5">
-            {items.map((it, idx) => it.category !== category ? null : (
-              <div key={idx} className="grid grid-cols-12 gap-1.5 items-center">
-                <input className={`${inputCls} col-span-3`} placeholder="품명" value={it.name} onChange={(e) => updateItem(idx, { name: e.target.value })} />
-                <input className={`${inputCls} col-span-1`} placeholder="호기" value={it.unitNo} onChange={(e) => updateItem(idx, { unitNo: e.target.value })} />
-                <input className={`${inputCls} col-span-2`} placeholder="규격" value={it.spec} onChange={(e) => updateItem(idx, { spec: e.target.value })} />
-                <input className={`${inputCls} col-span-1`} placeholder="단위" value={it.unit} onChange={(e) => updateItem(idx, { unit: e.target.value })} />
-                <input type="number" className={`${inputCls} col-span-1`} placeholder="수량" value={it.qty} onChange={(e) => updateItem(idx, { qty: e.target.value })} />
-                <input type="number" className={`${inputCls} col-span-2`} placeholder="단가" value={it.unitPrice} onChange={(e) => updateItem(idx, { unitPrice: e.target.value })} />
-                <span className="col-span-1 text-xs text-slate-500 text-right">{(Number(it.qty || 0) * Number(it.unitPrice || 0)).toLocaleString()}</span>
-                <button onClick={() => removeItem(idx)} className="col-span-1 text-red-400 hover:text-red-600 flex justify-center"><Trash2 size={14} /></button>
-              </div>
-            ))}
+          <div className="space-y-2">
+            {items.map((it, idx) => {
+              if (it.category !== category) return null;
+              const catIndices = items.map((x, i) => (x.category === category ? i : -1)).filter((i) => i !== -1);
+              const pos = catIndices.indexOf(idx);
+              const { supply, vat, total } = rowCalc(it.qty, it.unitPrice);
+              return (
+                <div key={idx} className="border border-slate-100 rounded-lg p-1.5">
+                  <div className="grid grid-cols-12 gap-1 items-center mb-1">
+                    <div className="col-span-1 flex flex-col">
+                      <button type="button" onClick={() => moveItem(idx, -1)} disabled={pos === 0} className="text-slate-400 hover:text-slate-700 disabled:opacity-20">
+                        <ChevronUp size={12} />
+                      </button>
+                      <button type="button" onClick={() => moveItem(idx, 1)} disabled={pos === catIndices.length - 1} className="text-slate-400 hover:text-slate-700 disabled:opacity-20">
+                        <ChevronDown size={12} />
+                      </button>
+                    </div>
+                    <input className={`${inputCls} col-span-2`} placeholder="품명" value={it.name} onChange={(e) => updateItem(idx, { name: e.target.value })} />
+                    <input className={`${inputCls} col-span-1`} placeholder="단위" value={it.unit} onChange={(e) => updateItem(idx, { unit: e.target.value })} />
+                    <input type="number" className={`${inputCls} col-span-1`} placeholder="수량" value={it.qty} onChange={(e) => updateItem(idx, { qty: e.target.value })} />
+                    <input type="number" className={`${inputCls} col-span-2`} placeholder="단가" value={it.unitPrice} onChange={(e) => updateItem(idx, { unitPrice: e.target.value })} />
+                    <span className="col-span-2 text-xs text-slate-500 text-right">{supply.toLocaleString()}</span>
+                    <span className="col-span-1 text-xs text-slate-500 text-right">{vat.toLocaleString()}</span>
+                    <span className="col-span-1 text-xs font-semibold text-slate-700 text-right">{total.toLocaleString()}</span>
+                    <button type="button" onClick={() => removeItem(idx)} className="col-span-1 text-red-400 hover:text-red-600 flex justify-center"><Trash2 size={14} /></button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 pl-[calc(8.333%+0.25rem)]">
+                    <input className={inputCls} placeholder="호기" value={it.unitNo} onChange={(e) => updateItem(idx, { unitNo: e.target.value })} />
+                    <input className={inputCls} placeholder="규격" value={it.spec} onChange={(e) => updateItem(idx, { spec: e.target.value })} />
+                  </div>
+                </div>
+              );
+            })}
             {items.filter((it) => it.category === category).length === 0 && (
               <p className="text-xs text-slate-300 text-center py-2">품목 없음</p>
             )}
@@ -156,18 +232,43 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
         </div>
       ))}
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        <div><p className="text-xs font-bold text-slate-500 mb-1">운반비</p>
-          <input type="number" className={inputCls} value={transportCost} onChange={(e) => setTransportCost(e.target.value)} /></div>
-        <div><p className="text-xs font-bold text-slate-500 mb-1">안전관리비 및 기타</p>
-          <input type="number" className={inputCls} value={safetyCost} onChange={(e) => setSafetyCost(e.target.value)} /></div>
-        <div><p className="text-xs font-bold text-slate-500 mb-1">이윤</p>
-          <input type="number" className={inputCls} value={profit} onChange={(e) => setProfit(e.target.value)} /></div>
+      <div className="mb-4 space-y-1.5">
+        {[
+          { label: "운반비", value: transportCost, setValue: setTransportCost },
+          { label: "안전관리비 및 기타", value: safetyCost, setValue: setSafetyCost },
+          { label: "이윤", value: profit, setValue: setProfit },
+        ].map(({ label, value, setValue }) => {
+          const { supply, vat, total } = rowCalc(1, value);
+          return (
+            <div key={label} className="grid grid-cols-12 gap-1 items-center">
+              <span className="col-span-1"></span>
+              <span className="col-span-2 text-xs font-semibold text-slate-600">{label}</span>
+              <span className="col-span-1"></span>
+              <span className="col-span-1 text-xs text-slate-400 text-center">1</span>
+              <input type="number" className={`${inputCls} col-span-2`} value={value} onChange={(e) => setValue(e.target.value)} />
+              <span className="col-span-2 text-xs text-slate-500 text-right">{supply.toLocaleString()}</span>
+              <span className="col-span-1 text-xs text-slate-500 text-right">{vat.toLocaleString()}</span>
+              <span className="col-span-1 text-xs font-semibold text-slate-700 text-right">{total.toLocaleString()}</span>
+              <span className="col-span-1"></span>
+            </div>
+          );
+        })}
       </div>
 
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-4 text-sm space-y-1">
         <div className="flex justify-between"><span className="text-slate-500">소계</span><span className="font-semibold">{subtotal.toLocaleString()}원</span></div>
         <div className="flex justify-between font-bold"><span>합계(VAT별도, 천단위 절사)</span><span>{grandTotal.toLocaleString()}원</span></div>
+      </div>
+
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-4 text-sm">
+        <p className="text-xs font-bold text-slate-500 mb-2">할인 정보 (화면 표시용 — 저장·PDF에는 반영되지 않습니다)</p>
+        <div className="grid grid-cols-2 gap-3 mb-2">
+          <div><p className="text-xs text-slate-500 mb-1">할인율(%)</p>
+            <input type="number" className={inputCls} value={discountPercent} onChange={(e) => handleDiscountPercent(e.target.value)} /></div>
+          <div><p className="text-xs text-slate-500 mb-1">할인금액(원)</p>
+            <input type="number" className={inputCls} value={discountAmount} onChange={(e) => handleDiscountAmount(e.target.value)} /></div>
+        </div>
+        <div className="flex justify-between font-bold text-blue-700"><span>최종금액</span><span>{finalAmount.toLocaleString()}원</span></div>
       </div>
 
       {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">{error}</p>}
