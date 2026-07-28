@@ -172,16 +172,15 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
           <input type="date" className={inputCls} value={quoteDate} onChange={(e) => setQuoteDate(e.target.value)} /></div>
       </div>
 
-      <div className="grid grid-cols-12 gap-1 mb-1 text-[10px] font-bold text-slate-400 px-0.5">
-        <span className="col-span-1"></span>
-        <span className="col-span-2">품명</span>
-        <span className="col-span-1">단위</span>
-        <span className="col-span-1">수량</span>
-        <span className="col-span-2">단가</span>
-        <span className="col-span-2 text-right">공급가액</span>
-        <span className="col-span-1 text-right">세액</span>
-        <span className="col-span-1 text-right">합계</span>
-        <span className="col-span-1"></span>
+      <div className="flex items-center gap-1.5 mb-1 text-[10px] font-bold text-slate-400 px-0.5">
+        <span className="w-3.5 shrink-0"></span>
+        <span className="flex-1 min-w-0">품명</span>
+        <span className="w-12 shrink-0">호기</span>
+        <span className="w-24 shrink-0">규격</span>
+        <span className="w-16 shrink-0">단위</span>
+        <span className="w-12 shrink-0">수량</span>
+        <span className="w-24 shrink-0">단가</span>
+        <span className="w-3.5 shrink-0"></span>
       </div>
 
       {CATEGORIES.map((category) => (
@@ -200,8 +199,8 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
               const { supply, vat, total } = rowCalc(it.qty, it.unitPrice);
               return (
                 <div key={idx} className="border border-slate-100 rounded-lg p-1.5">
-                  <div className="grid grid-cols-12 gap-1 items-center mb-1">
-                    <div className="col-span-1 flex flex-col">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <div className="w-3.5 shrink-0 flex flex-col">
                       <button type="button" onClick={() => moveItem(idx, -1)} disabled={pos === 0} className="text-slate-400 hover:text-slate-700 disabled:opacity-20">
                         <ChevronUp size={12} />
                       </button>
@@ -209,18 +208,23 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
                         <ChevronDown size={12} />
                       </button>
                     </div>
-                    <input className={`${inputCls} col-span-2`} placeholder="품명" value={it.name} onChange={(e) => updateItem(idx, { name: e.target.value })} />
-                    <input className={`${inputCls} col-span-1`} placeholder="단위" value={it.unit} onChange={(e) => updateItem(idx, { unit: e.target.value })} />
-                    <input type="number" className={`${inputCls} col-span-1`} placeholder="수량" value={it.qty} onChange={(e) => updateItem(idx, { qty: e.target.value })} />
-                    <input type="number" className={`${inputCls} col-span-2`} placeholder="단가" value={it.unitPrice} onChange={(e) => updateItem(idx, { unitPrice: e.target.value })} />
-                    <span className="col-span-2 text-xs text-slate-500 text-right">{supply.toLocaleString()}</span>
-                    <span className="col-span-1 text-xs text-slate-500 text-right">{vat.toLocaleString()}</span>
-                    <span className="col-span-1 text-xs font-semibold text-slate-700 text-right">{total.toLocaleString()}</span>
-                    <button type="button" onClick={() => removeItem(idx)} className="col-span-1 text-red-400 hover:text-red-600 flex justify-center"><Trash2 size={14} /></button>
+                    <input className={`${inputCls} flex-1 min-w-0`} placeholder="품명" value={it.name} onChange={(e) => updateItem(idx, { name: e.target.value })} />
+                    <input className={`${inputCls} w-12 shrink-0`} placeholder="호기" value={it.unitNo} onChange={(e) => updateItem(idx, { unitNo: e.target.value })} />
+                    <input className={`${inputCls} w-24 shrink-0`} placeholder="규격" value={it.spec} onChange={(e) => updateItem(idx, { spec: e.target.value })} />
+                    <select className={`${inputCls} w-16 shrink-0`} value={it.unit} onChange={(e) => updateItem(idx, { unit: e.target.value })}>
+                      <option value="">단위</option>
+                      <option value="EA">EA</option>
+                      <option value="SET">SET</option>
+                      <option value="식">식</option>
+                    </select>
+                    <input type="number" className={`${inputCls} w-12 shrink-0`} placeholder="수량" value={it.qty} onChange={(e) => updateItem(idx, { qty: e.target.value })} />
+                    <input type="number" className={`${inputCls} w-24 shrink-0`} placeholder="단가" value={it.unitPrice} onChange={(e) => updateItem(idx, { unitPrice: e.target.value })} />
+                    <button type="button" onClick={() => removeItem(idx)} className="w-3.5 shrink-0 text-red-400 hover:text-red-600 flex justify-center"><Trash2 size={14} /></button>
                   </div>
-                  <div className="grid grid-cols-2 gap-1 pl-[calc(8.333%+0.25rem)]">
-                    <input className={inputCls} placeholder="호기" value={it.unitNo} onChange={(e) => updateItem(idx, { unitNo: e.target.value })} />
-                    <input className={inputCls} placeholder="규격" value={it.spec} onChange={(e) => updateItem(idx, { spec: e.target.value })} />
+                  <div className="flex justify-end gap-4 text-xs text-slate-500">
+                    <span>공급가액 <b className="text-slate-700 font-semibold">{supply.toLocaleString()}</b></span>
+                    <span>세액 <b className="text-slate-700 font-semibold">{vat.toLocaleString()}</b></span>
+                    <span>합계 <b className="text-slate-800 font-bold">{total.toLocaleString()}</b></span>
                   </div>
                 </div>
               );
@@ -240,16 +244,22 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
         ].map(({ label, value, setValue }) => {
           const { supply, vat, total } = rowCalc(1, value);
           return (
-            <div key={label} className="grid grid-cols-12 gap-1 items-center">
-              <span className="col-span-1"></span>
-              <span className="col-span-2 text-xs font-semibold text-slate-600">{label}</span>
-              <span className="col-span-1"></span>
-              <span className="col-span-1 text-xs text-slate-400 text-center">1</span>
-              <input type="number" className={`${inputCls} col-span-2`} value={value} onChange={(e) => setValue(e.target.value)} />
-              <span className="col-span-2 text-xs text-slate-500 text-right">{supply.toLocaleString()}</span>
-              <span className="col-span-1 text-xs text-slate-500 text-right">{vat.toLocaleString()}</span>
-              <span className="col-span-1 text-xs font-semibold text-slate-700 text-right">{total.toLocaleString()}</span>
-              <span className="col-span-1"></span>
+            <div key={label} className="border border-slate-100 rounded-lg p-1.5">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="w-3.5 shrink-0"></span>
+                <span className="flex-1 min-w-0 text-xs font-semibold text-slate-600">{label}</span>
+                <span className="w-12 shrink-0"></span>
+                <span className="w-24 shrink-0"></span>
+                <span className="w-16 shrink-0"></span>
+                <span className="w-12 shrink-0 text-xs text-slate-400 text-center">1</span>
+                <input type="number" className={`${inputCls} w-24 shrink-0`} value={value} onChange={(e) => setValue(e.target.value)} />
+                <span className="w-3.5 shrink-0"></span>
+              </div>
+              <div className="flex justify-end gap-4 text-xs text-slate-500">
+                <span>공급가액 <b className="text-slate-700 font-semibold">{supply.toLocaleString()}</b></span>
+                <span>세액 <b className="text-slate-700 font-semibold">{vat.toLocaleString()}</b></span>
+                <span>합계 <b className="text-slate-800 font-bold">{total.toLocaleString()}</b></span>
+              </div>
             </div>
           );
         })}
