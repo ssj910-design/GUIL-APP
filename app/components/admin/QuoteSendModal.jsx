@@ -26,7 +26,7 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
   const [sendKakao, setSendKakao] = useState(true);
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState(null);
-  const [noticeMessage, setNoticeMessage] = useState(quote.noticeMessage || "");
+  const [noticeMessage, setNoticeMessage] = useState(quote.noticeMessage || "■ 특이사항: ");
   const [attachments, setAttachments] = useState(quote.attachmentUrls ?? []); // { name, url }[]
   const [uploading, setUploading] = useState(false);
   const [attachError, setAttachError] = useState("");
