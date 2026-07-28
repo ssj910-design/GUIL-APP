@@ -26,8 +26,8 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
   const [sendKakao, setSendKakao] = useState(true);
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState(null);
-  const [noticeMessage, setNoticeMessage] = useState("");
-  const [attachments, setAttachments] = useState([]); // { name, url }[]
+  const [noticeMessage, setNoticeMessage] = useState(quote.noticeMessage || "");
+  const [attachments, setAttachments] = useState(quote.attachmentUrls ?? []); // { name, url }[]
   const [uploading, setUploading] = useState(false);
   const [attachError, setAttachError] = useState("");
   const fileInputRef = useRef(null);
@@ -150,7 +150,7 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
     if (res.results?.email?.ok || res.results?.kakao?.ok) onSaved(patch);
   }
 
-  const canSend = (sendEmail || sendKakao) && (!sendEmail || email) && (!sendKakao || phone);
+  const canSend = !uploading && (sendEmail || sendKakao) && (!sendEmail || email) && (!sendKakao || phone);
 
   return (
     <Modal title={`${site?.name ?? quote.siteName} 견적 발송`} onClose={onClose} wide="xl">
