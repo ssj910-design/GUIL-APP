@@ -175,11 +175,14 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
       <div className="flex items-center gap-1.5 mb-1 text-[10px] font-bold text-slate-400 px-0.5">
         <span className="w-3.5 shrink-0"></span>
         <span className="flex-1 min-w-0">품명</span>
-        <span className="w-12 shrink-0">호기</span>
-        <span className="w-24 shrink-0">규격</span>
+        <span className="w-10 shrink-0">호기</span>
+        <span className="w-28 shrink-0">규격</span>
         <span className="w-16 shrink-0">단위</span>
-        <span className="w-12 shrink-0">수량</span>
-        <span className="w-24 shrink-0">단가</span>
+        <span className="w-10 shrink-0">수량</span>
+        <span className="w-24 shrink-0 text-right">단가</span>
+        <span className="w-24 shrink-0 text-right">공급가액</span>
+        <span className="w-16 shrink-0 text-right">세액</span>
+        <span className="w-24 shrink-0 text-right">합계</span>
         <span className="w-3.5 shrink-0"></span>
       </div>
 
@@ -198,34 +201,42 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
               const pos = catIndices.indexOf(idx);
               const { supply, vat, total } = rowCalc(it.qty, it.unitPrice);
               return (
-                <div key={idx} className="border border-slate-100 rounded-lg p-1.5">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <div className="w-3.5 shrink-0 flex flex-col">
-                      <button type="button" onClick={() => moveItem(idx, -1)} disabled={pos === 0} className="text-slate-400 hover:text-slate-700 disabled:opacity-20">
-                        <ChevronUp size={12} />
-                      </button>
-                      <button type="button" onClick={() => moveItem(idx, 1)} disabled={pos === catIndices.length - 1} className="text-slate-400 hover:text-slate-700 disabled:opacity-20">
-                        <ChevronDown size={12} />
-                      </button>
-                    </div>
-                    <input className={`${inputCls} flex-1 min-w-0`} placeholder="품명" value={it.name} onChange={(e) => updateItem(idx, { name: e.target.value })} />
-                    <input className={`${inputCls} w-12 shrink-0`} placeholder="호기" value={it.unitNo} onChange={(e) => updateItem(idx, { unitNo: e.target.value })} />
-                    <input className={`${inputCls} w-24 shrink-0`} placeholder="규격" value={it.spec} onChange={(e) => updateItem(idx, { spec: e.target.value })} />
-                    <select className={`${inputCls} w-16 shrink-0`} value={it.unit} onChange={(e) => updateItem(idx, { unit: e.target.value })}>
+                <div key={idx} className="flex items-center gap-1.5">
+                  <div className="w-3.5 shrink-0 flex flex-col">
+                    <button type="button" onClick={() => moveItem(idx, -1)} disabled={pos === 0} className="text-slate-400 hover:text-slate-700 disabled:opacity-20">
+                      <ChevronUp size={12} />
+                    </button>
+                    <button type="button" onClick={() => moveItem(idx, 1)} disabled={pos === catIndices.length - 1} className="text-slate-400 hover:text-slate-700 disabled:opacity-20">
+                      <ChevronDown size={12} />
+                    </button>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <input className={inputCls} placeholder="품명" value={it.name} onChange={(e) => updateItem(idx, { name: e.target.value })} />
+                  </div>
+                  <div className="w-10 shrink-0">
+                    <input className={inputCls} placeholder="호기" value={it.unitNo} onChange={(e) => updateItem(idx, { unitNo: e.target.value })} />
+                  </div>
+                  <div className="w-28 shrink-0">
+                    <input className={inputCls} placeholder="규격" value={it.spec} onChange={(e) => updateItem(idx, { spec: e.target.value })} />
+                  </div>
+                  <div className="w-16 shrink-0">
+                    <select className={inputCls} value={it.unit} onChange={(e) => updateItem(idx, { unit: e.target.value })}>
                       <option value="">단위</option>
                       <option value="EA">EA</option>
                       <option value="SET">SET</option>
                       <option value="식">식</option>
                     </select>
-                    <input type="number" className={`${inputCls} w-12 shrink-0`} placeholder="수량" value={it.qty} onChange={(e) => updateItem(idx, { qty: e.target.value })} />
-                    <input type="number" className={`${inputCls} w-24 shrink-0`} placeholder="단가" value={it.unitPrice} onChange={(e) => updateItem(idx, { unitPrice: e.target.value })} />
-                    <button type="button" onClick={() => removeItem(idx)} className="w-3.5 shrink-0 text-red-400 hover:text-red-600 flex justify-center"><Trash2 size={14} /></button>
                   </div>
-                  <div className="flex justify-end gap-4 text-xs text-slate-500">
-                    <span>공급가액 <b className="text-slate-700 font-semibold">{supply.toLocaleString()}</b></span>
-                    <span>세액 <b className="text-slate-700 font-semibold">{vat.toLocaleString()}</b></span>
-                    <span>합계 <b className="text-slate-800 font-bold">{total.toLocaleString()}</b></span>
+                  <div className="w-10 shrink-0">
+                    <input type="number" className={inputCls} placeholder="수량" value={it.qty} onChange={(e) => updateItem(idx, { qty: e.target.value })} />
                   </div>
+                  <div className="w-24 shrink-0">
+                    <input type="number" className={inputCls} placeholder="단가" value={it.unitPrice} onChange={(e) => updateItem(idx, { unitPrice: e.target.value })} />
+                  </div>
+                  <span className="w-24 shrink-0 text-xs text-slate-500 text-right">{supply.toLocaleString()}</span>
+                  <span className="w-16 shrink-0 text-xs text-slate-500 text-right">{vat.toLocaleString()}</span>
+                  <span className="w-24 shrink-0 text-xs font-semibold text-slate-700 text-right">{total.toLocaleString()}</span>
+                  <button type="button" onClick={() => removeItem(idx)} className="w-3.5 shrink-0 text-red-400 hover:text-red-600 flex justify-center"><Trash2 size={14} /></button>
                 </div>
               );
             })}
@@ -244,22 +255,19 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
         ].map(({ label, value, setValue }) => {
           const { supply, vat, total } = rowCalc(1, value);
           return (
-            <div key={label} className="border border-slate-100 rounded-lg p-1.5">
-              <div className="flex items-center gap-1.5 mb-1">
-                <span className="w-3.5 shrink-0"></span>
-                <span className="flex-1 min-w-0 text-xs font-semibold text-slate-600">{label}</span>
-                <span className="w-12 shrink-0"></span>
-                <span className="w-24 shrink-0"></span>
-                <span className="w-16 shrink-0"></span>
-                <span className="w-12 shrink-0 text-xs text-slate-400 text-center">1</span>
-                <input type="number" className={`${inputCls} w-24 shrink-0`} value={value} onChange={(e) => setValue(e.target.value)} />
-                <span className="w-3.5 shrink-0"></span>
+            <div key={label} className="flex items-center gap-1.5">
+              <span className="w-3.5 shrink-0"></span>
+              <span className="flex-1 min-w-0 text-xs font-semibold text-slate-600">{label}</span>
+              <span className="w-10 shrink-0"></span>
+              <span className="w-28 shrink-0"></span>
+              <span className="w-16 shrink-0"></span>
+              <span className="w-10 shrink-0 text-xs text-slate-400 text-center">1</span>
+              <div className="w-24 shrink-0">
+                <input type="number" className={inputCls} value={value} onChange={(e) => setValue(e.target.value)} />
               </div>
-              <div className="flex justify-end gap-4 text-xs text-slate-500">
-                <span>공급가액 <b className="text-slate-700 font-semibold">{supply.toLocaleString()}</b></span>
-                <span>세액 <b className="text-slate-700 font-semibold">{vat.toLocaleString()}</b></span>
-                <span>합계 <b className="text-slate-800 font-bold">{total.toLocaleString()}</b></span>
-              </div>
+              <span className="w-24 shrink-0 text-xs text-slate-500 text-right">{supply.toLocaleString()}</span>
+              <span className="w-16 shrink-0 text-xs text-slate-500 text-right">{vat.toLocaleString()}</span>
+              <span className="w-24 shrink-0 text-xs font-semibold text-slate-700 text-right">{total.toLocaleString()}</span>
             </div>
           );
         })}
