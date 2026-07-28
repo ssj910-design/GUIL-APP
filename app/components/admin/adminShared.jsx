@@ -49,15 +49,6 @@ export function personOf(data, profileId, fallbackName) {
   return data.profiles.find((p) => p.id === profileId)?.name ?? fallbackName ?? "-";
 }
 
-// 발송일자 표기: 이메일/카카오 각각 보낸 시각이 있으면 "이메일 260728 · 카카오 260728"
-// 형식으로, 둘 다 없으면 "-".
-export function sentLabel(q) {
-  const parts = [];
-  if (q.emailSentAt) parts.push(`이메일 ${shortDate(q.emailSentAt.slice(0, 10))}`);
-  if (q.kakaoSentAt) parts.push(`카카오 ${shortDate(q.kakaoSentAt.slice(0, 10))}`);
-  return parts.length ? parts.join(" · ") : "-";
-}
-
 // 발송 이력(sendLog) 중 가장 최근 발송일만 날짜로 — 목록 표에 쓰는 짧은 표기.
 export function lastSentDate(q) {
   const log = q.sendLog ?? [];
