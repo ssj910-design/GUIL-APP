@@ -13,7 +13,7 @@ import { addDays, govDateToDashed, siteMatchesQuery, formatPhone, shortDate } fr
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
-import { Modal, StatusBadge, DateTextInput, EditableDate, FileCarousel } from "@/app/components/admin/adminShared";
+import { Modal, StatusBadge, DateTextInput, EditableDate, FileCarousel, sentLabel } from "@/app/components/admin/adminShared";
 import ImportSites from "@/app/components/admin/ImportSites";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { uploadPhoto } from "@/lib/photos";
@@ -263,7 +263,7 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
                     </div>
                     <p className="text-xs text-slate-500">
                       {shortDate(q.quoteIssuedDate || q.requestedDate)}
-                      {(q.emailSentAt || q.kakaoSentAt) && " · 발송완료"}
+                      {(q.emailSentAt || q.kakaoSentAt) && ` · ${sentLabel(q)}`}
                     </p>
                     {q.quotePdfUrl && (
                       <a href={q.quotePdfUrl} target="_blank" rel="noreferrer" className="text-[10px] text-blue-600 font-semibold mt-1 inline-block">
