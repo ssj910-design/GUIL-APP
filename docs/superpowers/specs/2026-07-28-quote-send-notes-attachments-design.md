@@ -1,10 +1,11 @@
-# 견적 발송 비고/안내메시지/첨부파일 (3단계) 설계
+# 견적 발송 안내메시지/첨부파일 (3단계) 설계
 
 ## 배경
 
-청구스(chungoose.ai) 참고 3단계 — 견적 발송 모달(`QuoteSendModal.jsx`)에 비고, 안내메시지,
-첨부파일을 추가한다. 청구스 화면에서는 이 항목들이 견적서 문서 자체(품목편집 화면)에 있지만,
-우리는 발송 모달에 둔다 — PDF 견적서 양식은 이번에도 그대로 유지한다(1단계부터 지켜온 제약).
+청구스(chungoose.ai) 참고 3단계 — 견적 발송 모달(`QuoteSendModal.jsx`)에 안내메시지와
+첨부파일을 추가한다(비고는 이번 범위에서 제외). 청구스 화면에서는 이 항목들이 견적서
+문서 자체(품목편집 화면)에 있지만, 우리는 발송 모달에 둔다 — PDF 견적서 양식은 이번에도
+그대로 유지한다(1단계부터 지켜온 제약).
 
 **중요한 제약**: 카카오 알림톡은 알리고(Aligo)에 승인받은 템플릿 문구와 정확히 일치해야
 발송된다(변수는 현장명/견적명/견적일/링크 4개만 허용, 나머지는 고정 텍스트 —
@@ -14,13 +15,7 @@
 템플릿 재승인 신청은 `docs/HANDOFF.md`에 대기 항목으로 남긴다 — 승인 완료 후 정확히 승인된
 문구를 알려주면 그때 `lib/alimtalk.js`를 별도로 업데이트한다.
 
-## 1. 비고
-
-- 발송 모달에 여러 줄 텍스트박스로 추가.
-- **내부 기록용 메모다** — 이메일·카카오 어디에도 들어가지 않는다. 발송 시
-  `quote_requests.remarks`에 저장만 된다(나중에 참조용).
-
-## 2. 안내메시지
+## 1. 안내메시지
 
 - 발송 모달에 여러 줄 텍스트박스로 추가(리치텍스트 에디터 아님 — 새 라이브러리 없이
   `<textarea>`).
@@ -30,7 +25,7 @@
 - 카카오는 이번엔 반영하지 않는다(위 "중요한 제약" 참고).
 - 발송 시 `quote_requests.notice_message`에 저장(실제 보낸 내용의 감사 기록).
 
-## 3. 첨부파일
+## 2. 첨부파일
 
 - 발송 모달에 드래그드롭 영역 + "파일 찾기" 버튼 (네이티브 HTML5 drag/drop 이벤트, 새
   라이브러리 없음).
@@ -47,15 +42,14 @@
 - 카카오는 원래도 링크 방식(첨부파일 개념 없음)이라 변경 없음.
 - 발송 시 `quote_requests.attachment_urls`(jsonb 배열, `{ name, url }` 객체들)에 저장.
 
-## 4. 데이터 흐름
+## 3. 데이터 흐름
 
-- 마이그레이션: `quote_requests`에 `remarks text`, `notice_message text`,
+- 마이그레이션: `quote_requests`에 `notice_message text`,
   `attachment_urls jsonb not null default '[]'::jsonb` 추가.
-- `lib/mappers.js`의 `mapQuoteRequest`에 `remarks`/`noticeMessage`/`attachmentUrls` 매핑
-  추가.
-- `QuoteSendModal`이 발송 시 `remarks`, `noticeMessage`, `attachmentUrls`를
-  `/api/send-quote` 요청 바디에 실어 보내고, 성공하면 로컬 상태(`onSaved` patch)와 DB
-  patch 양쪽에 저장한다(기존 `recipientEmail` 등과 동일한 패턴).
+- `lib/mappers.js`의 `mapQuoteRequest`에 `noticeMessage`/`attachmentUrls` 매핑 추가.
+- `QuoteSendModal`이 발송 시 `noticeMessage`, `attachmentUrls`를 `/api/send-quote` 요청
+  바디에 실어 보내고, 성공하면 로컬 상태(`onSaved` patch)와 DB patch 양쪽에 저장한다(기존
+  `recipientEmail` 등과 동일한 패턴).
 - `/api/send-quote/route.js`가 `noticeMessage`/`attachmentUrls`를 `sendQuoteEmail`에
   전달한다. `sendQuoteAlimtalk` 호출에는 전달하지 않는다(카카오는 이번 범위 밖).
 
