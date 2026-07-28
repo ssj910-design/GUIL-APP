@@ -13,6 +13,7 @@ export async function POST(request) {
   const {
     quoteRequestId, channels, recipientEmail, recipientPhone,
     senderCcEmail, referenceEmail, referencePhone, quote,
+    supplierName, supplierPhone,
   } = body;
   const results = {};
   const now = new Date().toISOString();
@@ -28,7 +29,7 @@ export async function POST(request) {
   if (channels?.email) {
     try {
       const cc = [senderCcEmail, referenceEmail].filter(Boolean);
-      await sendQuoteEmail({ to: recipientEmail, cc, quote, pdfUrl: quote?.pdfUrl });
+      await sendQuoteEmail({ to: recipientEmail, cc, quote, pdfUrl: quote?.pdfUrl, supplierName, supplierPhone });
       results.email = { ok: true };
       patch.email_sent_at = now;
       newLogEntries.push({ channel: "email", sentAt: now, target: recipientEmail });
@@ -39,7 +40,7 @@ export async function POST(request) {
 
   if (channels?.kakao) {
     try {
-      await sendQuoteAlimtalk({ to: recipientPhone, quote, pdfUrl: quote?.pdfUrl });
+      await sendQuoteAlimtalk({ to: recipientPhone, quote, pdfUrl: quote?.pdfUrl, supplierName, supplierPhone });
       results.kakao = { ok: true };
       patch.kakao_sent_at = now;
       newLogEntries.push({ channel: "kakao", sentAt: now, target: recipientPhone });
@@ -53,7 +54,7 @@ export async function POST(request) {
     // 이력만 추적한다.
     if (referencePhone) {
       try {
-        await sendQuoteAlimtalk({ to: referencePhone, quote, pdfUrl: quote?.pdfUrl });
+        await sendQuoteAlimtalk({ to: referencePhone, quote, pdfUrl: quote?.pdfUrl, supplierName, supplierPhone });
       } catch (err) {
         console.error(`참조인 카카오 발송 실패 (quoteRequestId=${quoteRequestId}):`, err.message);
       }
