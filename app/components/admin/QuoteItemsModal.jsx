@@ -174,11 +174,11 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
 
       <div className="flex items-center gap-1.5 mb-1 text-[10px] font-bold text-slate-400 px-0.5">
         <span className="w-3.5 shrink-0"></span>
-        <span className="flex-1 min-w-0">품명</span>
-        <span className="w-10 shrink-0">호기</span>
-        <span className="w-28 shrink-0">규격</span>
+        <span className="w-44 shrink-0">품명</span>
+        <span className="w-20 shrink-0">호기</span>
+        <span className="w-80 shrink-0">규격</span>
         <span className="w-16 shrink-0">단위</span>
-        <span className="w-10 shrink-0">수량</span>
+        <span className="w-20 shrink-0">수량</span>
         <span className="w-24 shrink-0 text-right">단가</span>
         <span className="w-3.5 shrink-0"></span>
       </div>
@@ -208,13 +208,13 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
                         <ChevronDown size={12} />
                       </button>
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="w-44 shrink-0">
                       <input className={inputCls} placeholder="품명" value={it.name} onChange={(e) => updateItem(idx, { name: e.target.value })} />
                     </div>
-                    <div className="w-10 shrink-0">
+                    <div className="w-20 shrink-0">
                       <input className={inputCls} placeholder="호기" value={it.unitNo} onChange={(e) => updateItem(idx, { unitNo: e.target.value })} />
                     </div>
-                    <div className="w-28 shrink-0">
+                    <div className="w-80 shrink-0">
                       <input className={inputCls} placeholder="규격" value={it.spec} onChange={(e) => updateItem(idx, { spec: e.target.value })} />
                     </div>
                     <div className="w-16 shrink-0">
@@ -225,7 +225,7 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
                         <option value="식">식</option>
                       </select>
                     </div>
-                    <div className="w-10 shrink-0">
+                    <div className="w-20 shrink-0">
                       <input type="number" className={inputCls} placeholder="수량" value={it.qty} onChange={(e) => updateItem(idx, { qty: e.target.value })} />
                     </div>
                     <div className="w-24 shrink-0">
@@ -260,11 +260,11 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
             <div key={label} className="space-y-1">
               <div className="flex items-center gap-1.5">
                 <span className="w-3.5 shrink-0"></span>
-                <span className="flex-1 min-w-0 text-xs font-semibold text-slate-600">{label}</span>
-                <span className="w-10 shrink-0"></span>
-                <span className="w-28 shrink-0"></span>
+                <span className="w-44 shrink-0 text-xs font-semibold text-slate-600">{label}</span>
+                <span className="w-20 shrink-0"></span>
+                <span className="w-80 shrink-0"></span>
                 <span className="w-16 shrink-0"></span>
-                <span className="w-10 shrink-0 text-xs text-slate-400 text-center">1</span>
+                <span className="w-20 shrink-0 text-xs text-slate-400 text-center">1</span>
                 <div className="w-24 shrink-0">
                   <input type="number" className={inputCls} value={value} onChange={(e) => setValue(e.target.value)} />
                 </div>
