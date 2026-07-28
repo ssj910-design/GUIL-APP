@@ -517,7 +517,17 @@ export default function MaterialsAdmin({ data, setData }) {
         <QuoteItemsModal
           quote={itemsTarget}
           site={(data.sites ?? []).find((s) => s.id === itemsTarget.siteId)}
-          onClose={() => setItemsTarget(null)}
+          onClose={async () => {
+            // 관리자가 새 견적 발행에서 현장만 고르고 품목편집을 취소하면, 기사 요청도 없이
+            // 만들어진 빈 초안(요청접수 상태, 담당 기사 없음)만 남는다 — 그건 내역에 남기지 않고
+            // 바로 삭제한다. 기사 요청건이나 이미 발행된 견적을 다시 열었다가 취소하는 경우는
+            // (requesterId/engineer가 있거나 상태가 이미 넘어갔으므로) 이 조건에 안 걸려 그대로 둔다.
+            if (itemsTarget.status === "요청접수" && !itemsTarget.requesterId && !itemsTarget.engineer) {
+              await supabase.from("quote_requests").delete().eq("id", itemsTarget.id);
+              setData((prev) => ({ ...prev, quoteRequests: prev.quoteRequests.filter((x) => x.id !== itemsTarget.id) }));
+            }
+            setItemsTarget(null);
+          }}
           onSaved={(patch) => {
             setData((prev) => ({
               ...prev,
