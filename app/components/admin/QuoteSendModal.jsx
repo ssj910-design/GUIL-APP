@@ -7,9 +7,13 @@
 // 공급자/고객 정보 2단 레이아웃 — 청구스(chungoose.ai) 참고 2단계(설계:
 // docs/superpowers/specs/2026-07-28-quote-send-two-column-design.md). 담당자 드롭다운은
 // 기존 텍스트 입력을 채워주는 편의 기능일 뿐, 실제 전송 값은 여전히 텍스트 입력이다.
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Modal, inputCls } from "@/app/components/admin/adminShared";
 import { COMPANY } from "@/lib/company";
+import { uploadPhoto } from "@/lib/photos";
+
+const MAX_ATTACHMENTS = 10;
+const MAX_ATTACHMENT_MB = 25;
 
 export default function QuoteSendModal({ quote, site, siteManagers, profiles, onClose, onSaved }) {
   const primaryManager = (siteManagers ?? []).find((m) => m.isPrimary) ?? (siteManagers ?? [])[0];
@@ -22,6 +26,11 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
   const [sendKakao, setSendKakao] = useState(true);
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState(null);
+  const [noticeMessage, setNoticeMessage] = useState("");
+  const [attachments, setAttachments] = useState([]); // { name, url }[]
+  const [uploading, setUploading] = useState(false);
+  const [attachError, setAttachError] = useState("");
+  const fileInputRef = useRef(null);
 
   const activeStaff = (profiles ?? []).filter((p) => p.is_active !== false && !p.deleted_at);
   const staffByName = [...activeStaff].sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "ko"));
@@ -55,6 +64,36 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
     if (p) setSenderCcEmail(p.email || "");
   }
 
+  async function handleFiles(fileList) {
+    setAttachError("");
+    const files = Array.from(fileList ?? []);
+    if (files.length === 0) return;
+    if (attachments.length + files.length > MAX_ATTACHMENTS) {
+      setAttachError(`첨부파일은 최대 ${MAX_ATTACHMENTS}개까지 가능합니다.`);
+      return;
+    }
+    const tooBig = files.find((f) => f.size > MAX_ATTACHMENT_MB * 1024 * 1024);
+    if (tooBig) {
+      setAttachError(`"${tooBig.name}" 파일이 ${MAX_ATTACHMENT_MB}MB를 초과합니다.`);
+      return;
+    }
+    setUploading(true);
+    try {
+      const uploaded = [];
+      for (const file of files) {
+        const url = await uploadPhoto(file, `quotes/${quote.id}/attachments`);
+        uploaded.push({ name: file.name, url });
+      }
+      setAttachments((prev) => [...prev, ...uploaded]);
+    } catch (e) {
+      setAttachError(`업로드 실패: ${e.message}`);
+    }
+    setUploading(false);
+  }
+  function removeAttachment(idx) {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
+  }
+
   async function handleSend() {
     setSending(true);
     setResults(null);
@@ -75,6 +114,8 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
         referencePhone: referencePhone || null,
         supplierName,
         supplierPhone,
+        noticeMessage: noticeMessage || null,
+        attachmentUrls: attachments,
         quote: {
           siteName: site?.name ?? quote.siteName,
           quoteTitle: quote.quoteTitle,
@@ -100,6 +141,8 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
       senderCcEmail: senderCcEmail || null,
       referenceEmail: referenceEmail || null,
       referencePhone: referencePhone || null,
+      noticeMessage: noticeMessage || null,
+      attachmentUrls: attachments,
     };
     if (res.results?.email?.ok) patch.emailSentAt = now;
     if (res.results?.kakao?.ok) patch.kakaoSentAt = now;
@@ -164,6 +207,46 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
             <input className={inputCls} value={referencePhone} onChange={(e) => setReferencePhone(e.target.value)} placeholder="참조인 전화번호 (직접 입력 가능)" />
           </div>
         </div>
+      </div>
+
+      <div className="mb-4">
+        <p className="text-xs font-bold text-slate-500 mb-1">안내메시지 (선택, 이메일 본문에만 반영)</p>
+        <textarea
+          className={`${inputCls} min-h-20`}
+          value={noticeMessage}
+          onChange={(e) => setNoticeMessage(e.target.value)}
+          placeholder="이메일 본문 서명 아래에 추가로 들어갈 안내 문구를 입력하세요."
+        />
+      </div>
+
+      <div className="mb-4">
+        <p className="text-xs font-bold text-slate-500 mb-1">첨부파일 (선택, 이메일에만 첨부됨 — 최대 {MAX_ATTACHMENTS}개, 파일당 {MAX_ATTACHMENT_MB}MB)</p>
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
+          onClick={() => fileInputRef.current?.click()}
+          className="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center text-xs text-slate-400 cursor-pointer hover:border-blue-400"
+        >
+          {uploading ? "업로드 중..." : "파일을 끌어다 놓거나 클릭해서 선택하세요"}
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }}
+        />
+        {attachError && <p className="text-xs text-red-600 mt-1">{attachError}</p>}
+        {attachments.length > 0 && (
+          <ul className="mt-2 space-y-1">
+            {attachments.map((att, idx) => (
+              <li key={idx} className="flex items-center justify-between text-xs bg-slate-50 rounded-lg px-2.5 py-1.5">
+                <span className="truncate">{att.name}</span>
+                <button type="button" onClick={() => removeAttachment(idx)} className="text-red-400 hover:text-red-600 ml-2 shrink-0">삭제</button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="flex gap-4 mb-4">
