@@ -12,6 +12,7 @@ import { TODAY_STR } from "@/lib/constants";
 import { annualLeaveDays, yearsOfService } from "@/lib/leave";
 import { shortDate } from "@/lib/utils";
 import { confirmAsync } from "@/app/components/ConfirmHost";
+import { notify } from "@/lib/push";
 
 const KINDS = ["연차", "반차", "병가", "공가", "기타"];
 // 반차는 0.5일. 그 외는 시작~종료 일수 그대로 (주말 제외는 회사 규정이 갈려 자동 계산하지 않는다)
@@ -59,6 +60,11 @@ export default function LeavesAdmin({ data, setData }) {
     const { error } = await supabase.from("leaves").update(patch).eq("id", l.id);
     if (error) { alert("처리 실패: " + error.message); return; }
     setLeaves((prev) => prev.map((x) => (x.id === l.id ? { ...x, ...patch } : x)));
+    notify("leave_decided", {
+      profileIds: [l.profile_id],
+      title: `연차 신청이 ${decision}되었어요`,
+      body: `${shortDate(l.start_date)} ${l.kind}${decision === "반려" && reason ? ` — ${reason}` : ""}`,
+    });
   }
 
   // 취소 요청 승인 = 실제 취소 확정(status: 취소). 반려 = 요청만 해제, 승인 상태 유지.

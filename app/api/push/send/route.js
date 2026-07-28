@@ -21,10 +21,21 @@ export async function POST(request) {
 
   const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
-  const [{ data: settingRows }, { data: profiles }] = await Promise.all([
+  // 받는 사람 결정: profileIds를 주면 그대로, 안 주면 알림 종류의 audience(admin/engineer/all)로 서버가 정한다.
+  // 이러면 관리자 전체·기사 전체·전원 대상 알림은 호출자가 대상 목록을 몰라도 key만으로 보낼 수 있다.
+  const hasIds = Array.isArray(profileIds) && profileIds.length > 0;
+  let profQ = db.from("profiles").select("id,name,role,notify_prefs,is_active,deleted_at");
+  if (hasIds) profQ = profQ.in("id", profileIds);
+  else if (item.audience === "admin") profQ = profQ.eq("role", "admin");
+  else if (item.audience === "engineer") profQ = profQ.eq("role", "engineer");
+  // audience === "all"이면 역할 필터 없이 전원
+
+  const [{ data: settingRows }, { data: profRows }] = await Promise.all([
     db.from("notify_settings").select("*"),
-    db.from("profiles").select("id,name,role,notify_prefs").in("id", profileIds ?? []),
+    profQ,
   ]);
+  // audience 자동 대상은 비활성·삭제 계정을 뺀다 (명시 id는 호출자가 책임진다)
+  const profiles = hasIds ? (profRows ?? []) : (profRows ?? []).filter((p) => p.is_active !== false && !p.deleted_at);
   const org = {};
   for (const r of settingRows ?? []) org[r.key] = { enabled: r.enabled, level: r.level };
 

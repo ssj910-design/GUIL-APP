@@ -11,6 +11,7 @@ import { DutySwapNotice } from "@/app/components/DutyRoster";
 import { WorkCalendarSheet } from "@/app/components/WorkCalendarSheet";
 import { MyPage } from "@/app/components/MyPage";
 import { simulateSms } from "@/lib/sms";
+import { notify } from "@/lib/push";
 import { ScreenHeader } from "@/app/components/ui";
 import { ConfirmHost } from "@/app/components/ConfirmHost";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -998,6 +999,14 @@ export default function App() {
     }), "글 등록 실패 — 다시 시도해주세요");
     if (!posted) return false; // 글이 조용히 사라지지 않도록 (P1-7)
     setFeed((prev) => [...prev, newPost]);
+    // 우리방 알림 — @멘션 대상에겐 멘션 알림, 공지글이면 전원에게 공지 알림 (본인은 제외).
+    const myId = profileIdByName(profilesAll, profile.name);
+    const tags = [...text.matchAll(/@([가-힣a-zA-Z0-9()]+)/g)].map((m) => m[1]);
+    const mentionIds = tags.includes("모두")
+      ? profilesAll.filter((p) => p.is_active !== false && p.id !== myId).map((p) => p.id)
+      : profilesAll.filter((p) => tags.includes(p.name) && p.id !== myId).map((p) => p.id);
+    if (mentionIds.length) sendPush("room_mention", mentionIds, { title: `${profile.name}님이 회원님을 언급했어요`, body: text.slice(0, 60) });
+    if (newPost.isNotice) notify("room_notice", { title: "새 공지가 등록됐어요", body: text.slice(0, 60) });
     return true;
   }
 
@@ -1036,6 +1045,10 @@ export default function App() {
     if (!feedNoticeReady) return;
     setFeed((prev) => prev.map((p) => (p.id === postId ? { ...p, isNotice } : p)));
     await supabase.from("feed_posts").update({ is_notice: isNotice }).eq("id", postId);
+    if (isNotice) {
+      const post = feed.find((p) => p.id === postId);
+      notify("room_notice", { title: "새 공지가 등록됐어요", body: (post?.text ?? "").slice(0, 60) });
+    }
   }
 
   // ★ 자재 담당자가 지급할 자재 사진을 한 장 추가하는 순간 (지급완료 체크의 선행 조건)
@@ -1124,6 +1137,11 @@ export default function App() {
       prev.map((r) => (r.id === requestId ? { ...r, status: "지급완료", suppliedDate: TODAY_STR } : r))
     );
     setTodos((prev) => [newTodo, ...prev]);
+    const suppliedTo = profileIdByName(profilesAll, newTodo.assignee);
+    if (suppliedTo) sendPush("supply_ready", [suppliedTo], {
+      title: "자재 지급 완료 — 수령 확인해주세요",
+      body: `${req.siteName}${formatUnitLabel(req.elevatorNo) ? ` ${formatUnitLabel(req.elevatorNo)}` : ""} · ${req.part}`,
+    });
   }
 
   // ★ 이미 지급완료된 자재신청 수정 — 상태/지급일/사진(별도 handleAttachPhoto)은 그대로 두고
@@ -1182,6 +1200,10 @@ export default function App() {
       ...(kitStockReady ? { quantity: usedQty } : {}),
     });
     setRestockRequests((prev) => [newRestock, ...prev]);
+    sendPush("supply_requested", adminIds(), {
+      title: "상비부품 보충 신청",
+      body: `${profile.name} · ${part}${siteName ? ` (${siteName})` : ""}`,
+    });
 
     if (kitStockReady && engineerId) {
       const key = `${engineerId}|${part}`;
@@ -1261,6 +1283,11 @@ export default function App() {
     setRestockRequests((prev) =>
       prev.map((x) => (x.id === restockId ? { ...x, status: "완료", suppliedDate: TODAY_STR } : x))
     );
+    const restockTo = r.engineerId ?? profileIdByName(profilesAll, r.engineer);
+    if (restockTo) sendPush("supply_ready", [restockTo], {
+      title: "상비부품 지급 완료 — 수령 확인해주세요",
+      body: `${r.part}${r.siteName ? ` · ${r.siteName}` : ""}`,
+    });
   }
 
   // ★ 견적 진행 단계 전진: 요청접수 → 견적발행 → 승인 (사진 불필요)
@@ -1373,6 +1400,11 @@ export default function App() {
       prev.map((x) => (x.id === quoteId ? { ...x, status: "자재지급완료", suppliedDate: TODAY_STR } : x))
     );
     setTodos((prev) => [...newTodos, ...prev]);
+    const quoteTo = finalAssignees.map((n) => profileIdByName(profilesAll, n)).filter(Boolean);
+    if (quoteTo.length) sendPush("supply_ready", quoteTo, {
+      title: "견적 자재 지급 완료 — 수령 확인해주세요",
+      body: `${q.siteName}${formatUnitLabel(q.elevatorNo) ? ` ${formatUnitLabel(q.elevatorNo)}` : ""} · ${q.constructionType}`,
+    });
   }
 
   // ★ 이미 자재지급완료된 견적요청 수정 — 상태/지급일/사진(별도 onAttachQuotePhoto)은 그대로 두고

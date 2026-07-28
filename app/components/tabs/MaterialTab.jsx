@@ -8,6 +8,7 @@ import { SitesContext, UnitsContext, AuthContext } from "@/app/components/contex
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
+import { notify } from "@/lib/push";
 
 
 // 자재 신청/견적 요청/상비부품 보충 각각의 상세보기(신청 사진 포함)에 공용으로 쓰는 시트.
@@ -681,6 +682,7 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
       } : {}),
     })));
     setRequests((prev) => [...newRequests, ...prev]);
+    notify("supply_requested", { title: "자재 신청이 들어왔어요", body: `${CURRENT_ENGINEER} · ${newRequests[0]?.siteName ?? ""} ${newRequests.length}건` });
     setForm({ siteId: "", units: [], parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
     setMatStep(0);
     toastForm(newRequests.length > 1 ? `자재 신청 ${newRequests.length}건이 접수되었습니다` : "자재 신청이 접수되었습니다", true);
@@ -776,6 +778,7 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
       } : {}),
     })));
     setQuoteRequests((prev) => [...newQuotes, ...prev]);
+    notify("supply_requested", { title: "견적 신청이 들어왔어요", body: `${CURRENT_ENGINEER} · ${newQuotes[0]?.siteName ?? ""} ${newQuotes.length}건` });
     setQuoteForm({ siteId: "", units: [], parts: [emptyPartRow(), emptyPartRow(), emptyPartRow()], contactPhone: "", photos: [], note: "" });
     setQuoteStep(0);
     toastForm(newQuotes.length > 1 ? `견적 요청 ${newQuotes.length}건이 접수되었습니다` : "견적 요청이 접수되었습니다", true);

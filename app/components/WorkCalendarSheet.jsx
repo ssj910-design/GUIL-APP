@@ -13,6 +13,7 @@ import { DutyGenerateWidget } from "@/app/components/DutyGenerateWidget";
 import { Sheet, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
+import { notify } from "@/lib/push";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const ymOf = (y, m) => `${y}-${String(m + 1).padStart(2, "0")}`;
@@ -153,6 +154,7 @@ function LeaveCalendarTab({ schedules = [] }) {
     }).select();
     setBusy(false);
     if (error) { alert("신청 실패: " + error.message); return; }
+    notify("leave_requested", { title: "연차 신청이 들어왔어요", body: `${me.name ?? ""} · ${form.kind} ${form.start}${form.end !== form.start ? `~${form.end}` : ""} (${reqDays}일)` });
     if (data[0] && data[0].start_date <= last && data[0].end_date >= `${ym}-01`) {
       setLeaves((prev) => [data[0], ...prev]);
     }
