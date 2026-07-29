@@ -530,16 +530,18 @@ export default function MaterialsAdmin({ data, setData }) {
             // data.quoteRequests도 아직 "요청접수"인 옛 스냅샷 그대로다(onSaved의 setData가
             // 아직 리렌더로 반영되기 전에 같은 틱에서 onClose가 바로 호출되기 때문 — React
             // state는 비동기 배치라 클라이언트 state를 다시 찾아봐도 최신값이 아니다). 그래서
-            // 클라이언트 state 대신 DB에서 방금 값을 직접 다시 읽어 판단한다.
-            const { data: row } = await supabase
+            // 클라이언트 state 대신 DB에서 방금 값을 직접 다시 읽어 판단한다. 이 재조회 자체가
+            // 실패하면(네트워크 문제 등) 옛 스냅샷으로 되돌아가지 않는다 — 옛 스냅샷은 항상
+            // "요청접수"라 재조회 실패 시 그걸 믿으면 방금 발행·발송한 견적을 오삭제하는
+            // 원래 버그가 그대로 재현되기 때문. 확인이 안 되면 삭제하지 않고 넘어간다.
+            const { data: row, error: rowError } = await supabase
               .from("quote_requests")
               .select("status, requester_id, engineer")
               .eq("id", itemsTarget.id)
               .maybeSingle();
-            const current = row
-              ? { status: row.status, requesterId: row.requester_id, engineer: row.engineer }
-              : itemsTarget;
-            if (current.status === "요청접수" && !current.requesterId && !current.engineer) {
+            if (rowError) {
+              console.error(`onClose: quote_requests 재조회 실패(id=${itemsTarget.id}), 삭제 판단을 건너뜁니다:`, rowError.message);
+            } else if (row && row.status === "요청접수" && !row.requester_id && !row.engineer) {
               await supabase.from("quote_requests").delete().eq("id", itemsTarget.id);
               setData((prev) => ({ ...prev, quoteRequests: prev.quoteRequests.filter((x) => x.id !== itemsTarget.id) }));
             }
