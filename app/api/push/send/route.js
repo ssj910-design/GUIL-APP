@@ -130,7 +130,13 @@ async function handlePost(request) {
       if (goneNative.length) await db.from("native_push_tokens").delete().in("token", goneNative);
     } catch (e) {
       console.error("FCM 초기화/발송 실패:", e.message);
-      nativeError = e.message;
+      nativeError = {
+        message: e.message,
+        hasProjectId: !!process.env.FIREBASE_PROJECT_ID,
+        hasClientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
+        privateKeyLength: (process.env.FIREBASE_PRIVATE_KEY || "").length,
+        privateKeyStartsOk: (process.env.FIREBASE_PRIVATE_KEY || "").startsWith("-----BEGIN PRIVATE KEY-----"),
+      };
     }
   }
 
