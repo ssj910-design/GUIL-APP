@@ -13,7 +13,7 @@ import { MyPage } from "@/app/components/MyPage";
 import { simulateSms } from "@/lib/sms";
 import { notify } from "@/lib/push";
 import { ScreenHeader } from "@/app/components/ui";
-import { ConfirmHost } from "@/app/components/ConfirmHost";
+import { ConfirmHost, confirmAsync } from "@/app/components/ConfirmHost";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { LoginScreen } from "@/app/components/LoginScreen";
 import { PasswordChangeForm } from "@/app/components/PasswordChangeForm";
@@ -408,6 +408,16 @@ export default function App() {
 
   // ---------- 당직·숙직 근무표 ----------
   async function handleSetDutyPerson(iso, kind, profileId) {
+    // 이미 승인된 연차가 있는 날짜로 배정하려는 건지 확인 — 막지는 않고 관리자가 알고 결정하게 경고만 한다.
+    if (profileId) {
+      const { data: leaveHit } = await supabase.from("leaves").select("kind")
+        .eq("profile_id", profileId).eq("status", "승인")
+        .lte("start_date", iso).gte("end_date", iso).limit(1);
+      if (leaveHit?.length) {
+        const engName = profilesAll.find((p) => p.id === profileId)?.name ?? "이 사람";
+        if (!(await confirmAsync(`${engName}님은 ${iso}에 ${leaveHit[0].kind}가 있어요.\n그래도 배정할까요?`))) return;
+      }
+    }
     const { data } = await supabase
       .from("duty_schedules").upsert({ duty_date: iso, kind, profile_id: profileId }, { onConflict: "duty_date,kind" }).select();
     const row = data?.[0];
@@ -614,17 +624,21 @@ export default function App() {
 
   // 새 글·근무 교환 감지 — 30초 폴링 (작은 팀이라 실시간 구독 대신 단순하게)
   // 교환은 상대가 수락하면 근무표 자체가 바뀌므로 duty_schedules도 같이 받는다.
+  // 연차도 같이 받는다 — 안 받으면 앱을 오래 켜둔 세션에서 방금 승인된 연차가 고장 배정
+  // 화면(todayLeaves 기준 배정 제외)에 계속 반영이 안 된다.
   useEffect(() => {
     if (!skipLogin && !session) return;
     const t = setInterval(async () => {
-      const [feedRes, swapRes, dutyRes] = await Promise.all([
+      const [feedRes, swapRes, dutyRes, leaveRes] = await Promise.all([
         supabase.from("feed_posts").select("*").order("created_at", { ascending: true }),
         supabase.from("duty_swaps").select("*"),
         supabase.from("duty_schedules").select("*").gte("duty_date", TODAY_STR.slice(0, 8) + "01").order("duty_date"),
+        supabase.from("leaves").select("*").lte("start_date", TODAY_STR).gte("end_date", TODAY_STR),
       ]);
       if (feedRes.data) setFeed(feedRes.data.map(mapFeedPost));
       if (swapRes.data) setDutySwaps(swapRes.data.map(mapDutySwap));
       if (dutyRes.data) setDutySchedules(dutyRes.data.map(mapDutySchedule));
+      if (leaveRes.data) setTodayLeaves(leaveRes.data.filter((l) => (l.status ?? "승인") === "승인"));
     }, 30000);
     return () => clearInterval(t);
   }, [session, skipLogin]);

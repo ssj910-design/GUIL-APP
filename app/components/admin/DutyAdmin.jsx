@@ -6,6 +6,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { AuthContext } from "@/app/components/context";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 import { DutyRoster } from "@/app/components/DutyRoster";
 import { DutyGenerateWidget } from "@/app/components/DutyGenerateWidget";
 import { mapDutySchedule, mapDutySwap } from "@/lib/mappers";
@@ -29,6 +30,16 @@ export default function DutyAdmin({ data, setData }) {
   }, []);
 
   async function setPerson(iso, kind, profileId) {
+    // 이미 승인된 연차가 있는 날짜로 배정하려는 건지 확인 — 막지는 않고 관리자가 알고 결정하게 경고만 한다.
+    if (profileId) {
+      const { data: leaveHit } = await supabase.from("leaves").select("kind")
+        .eq("profile_id", profileId).eq("status", "승인")
+        .lte("start_date", iso).gte("end_date", iso).limit(1);
+      if (leaveHit?.length) {
+        const engName = data.profiles.find((p) => p.id === profileId)?.name ?? "이 사람";
+        if (!(await confirmAsync(`${engName}님은 ${iso}에 ${leaveHit[0].kind}가 있어요.\n그래도 배정할까요?`))) return;
+      }
+    }
     const { data: rows } = await supabase.from("duty_schedules")
       .upsert({ duty_date: iso, kind, profile_id: profileId }, { onConflict: "duty_date,kind" }).select();
     const row = rows?.[0];

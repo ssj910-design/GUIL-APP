@@ -118,9 +118,28 @@ function LeaveCalendarTab({ schedules = [] }) {
   async function decide(l, decision) {
     const reason = decision === "반려" ? prompt(`${nameOf(l.profile_id)}님의 ${l.start_date} ${l.kind} 신청을 반려합니다.\n사유 (선택):`) : null;
     if (decision === "반려" && reason === null) return;
+    // 잔여 연차를 넘겨 승인하려는 건지 확인 — 막지는 않고 관리자가 알고 결정하게 경고만 한다.
+    if (decision === "승인" && l.kind !== "병가" && l.kind !== "공가") {
+      const person = profiles.find((p) => p.id === l.profile_id);
+      const leaveYear = l.start_date.slice(0, 4);
+      const grant = person ? annualLeaveDays(person.hire_date, `${leaveYear}-12-31`) : null;
+      if (grant != null) {
+        const { data: yearLeaves } = await supabase.from("leaves").select("days, kind, status")
+          .eq("profile_id", l.profile_id)
+          .gte("start_date", `${leaveYear}-01-01`).lte("start_date", `${leaveYear}-12-31`);
+        const used = (yearLeaves ?? [])
+          .filter((x) => (x.status ?? "승인") === "승인" && x.kind !== "병가" && x.kind !== "공가")
+          .reduce((n, x) => n + Number(x.days), 0);
+        if (used + Number(l.days) > grant) {
+          if (!(await confirmAsync(`${nameOf(l.profile_id)}님의 잔여 연차(${grant - used}일)를 초과해요.\n그래도 승인할까요?`))) return;
+        }
+      }
+    }
+    // 이중 처리 방지 — 아직 대기중일 때만 반영되게 조건을 건다.
     const patch = { status: decision, decided_at: new Date().toISOString(), reject_reason: reason?.trim() || null };
-    const { error } = await supabase.from("leaves").update(patch).eq("id", l.id);
+    const { data: ok, error } = await supabase.from("leaves").update(patch).eq("id", l.id).eq("status", "신청").select();
     if (error) { alert("처리 실패: " + error.message); return; }
+    if (!ok?.length) { alert("이미 처리된 요청이에요. 새로고침 후 다시 확인해주세요."); return; }
     syncLeaveUpdate(l.id, patch);
   }
 
@@ -129,8 +148,10 @@ function LeaveCalendarTab({ schedules = [] }) {
     const patch = decision === "승인"
       ? { status: "취소", cancel_requested: false, decided_at: new Date().toISOString() }
       : { cancel_requested: false, cancel_reason: null };
-    const { error } = await supabase.from("leaves").update(patch).eq("id", l.id);
+    // 이중 처리 방지 — 아직 취소요청 상태일 때만 반영되게 조건을 건다.
+    const { data: ok, error } = await supabase.from("leaves").update(patch).eq("id", l.id).eq("cancel_requested", true).select();
     if (error) { alert("처리 실패: " + error.message); return; }
+    if (!ok?.length) { alert("이미 처리된 요청이에요. 새로고침 후 다시 확인해주세요."); return; }
     syncLeaveUpdate(l.id, patch);
   }
   // 승인된 연차만 캘린더에 노출 — 신청/반려 상태는 아직 확정이 아니라서 남들 눈에 보이면 안 된다.
@@ -141,10 +162,17 @@ function LeaveCalendarTab({ schedules = [] }) {
   // 반차는 0.5일, 그 외는 시작~종료 일수 (주말 제외는 회사 규정이 갈려 자동 계산하지 않는다)
   const reqDays = form.kind === "반차" ? 0.5 : Math.max(1, Math.floor((new Date(form.end) - new Date(form.start)) / 86400000) + 1);
   // 신청 기간에 내 당직·숙직이 끼면 신청을 막는다 — 근무를 먼저 교환한 뒤 연차를 써야 한다.
+  // 단, 병가·공가는 본인 뜻과 무관하게 갑자기 생기는 경우가 많아 막지 않고 경고만 하고 통과시킨다
+  // (관리자가 승인 대기 목록에서 겹치는 근무를 보고 따로 재배정하면 된다).
   const dutyConflicts = schedules.filter((d) => d.profileId === selfId && d.dutyDate >= form.start && d.dutyDate <= form.end);
+  const isSoftKind = form.kind === "병가" || form.kind === "공가";
+  const blockingConflicts = isSoftKind ? [] : dutyConflicts;
+  // 관리자용 — 승인 대기 목록의 각 신청 건이 그 사람의 근무와 겹치는지 (병가·공가처럼 막지 않고
+  // 통과된 신청이 여기 걸린다).
+  const pendingConflictsOf = (l) => schedules.filter((d) => d.profileId === l.profile_id && d.dutyDate >= l.start_date && d.dutyDate <= l.end_date);
 
   async function submitLeave() {
-    if (dutyConflicts.length) return;
+    if (blockingConflicts.length) return;
     setBusy(true);
     const finalNote = form.kind === "반차" ? `${form.period}${form.note ? " · " + form.note : ""}` : (form.note || null);
     const { data, error } = await supabase.from("leaves").insert({
@@ -199,7 +227,9 @@ function LeaveCalendarTab({ schedules = [] }) {
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3">
             <p className="text-xs font-extrabold text-amber-800 mb-2">승인 대기 {pendingRequests.length}건</p>
             <div className="space-y-1.5">
-              {pendingRequests.map((l) => (
+              {pendingRequests.map((l) => {
+                const conflicts = pendingConflictsOf(l);
+                return (
                 <div key={l.id} className="flex items-center justify-between gap-2 bg-white rounded-lg px-2.5 py-2">
                   <p className="text-[11px] text-slate-600 min-w-0">
                     <b className="text-slate-800">{nameOf(l.profile_id)}</b> · {l.kind} {l.days}일
@@ -208,13 +238,22 @@ function LeaveCalendarTab({ schedules = [] }) {
                       {l.start_date.slice(5)}{l.end_date !== l.start_date && `~${l.end_date.slice(5)}`}
                       {l.note && ` · ${l.note}`}
                     </span>
+                    {conflicts.length > 0 && (
+                      <>
+                        <br />
+                        <span className="font-bold text-red-500">
+                          ⚠️ {conflicts.map((d) => `${d.dutyDate.slice(5)} ${d.kind}`).join(", ")} 근무와 겹침 — 승인 시 재배정 필요
+                        </span>
+                      </>
+                    )}
                   </p>
                   <span className="flex gap-1 shrink-0">
                     <button onClick={() => decide(l, "승인")} className="text-[10px] font-bold text-white bg-blue-700 rounded-lg px-2.5 py-1.5">승인</button>
                     <button onClick={() => decide(l, "반려")} className="text-[10px] font-bold text-slate-600 bg-slate-100 rounded-lg px-2.5 py-1.5">반려</button>
                   </span>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -394,15 +433,16 @@ function LeaveCalendarTab({ schedules = [] }) {
             />
             {dutyConflicts.length > 0 && (
               <p className="text-[11px] font-bold text-red-500 leading-relaxed">
-                {dutyConflicts.map((d) => `${d.dutyDate.slice(5).replace("-", "/")} ${d.kind}`).join(", ")} 근무가 있습니다. 먼저 근무 교환을 한 뒤 신청하세요.
+                {dutyConflicts.map((d) => `${d.dutyDate.slice(5).replace("-", "/")} ${d.kind}`).join(", ")} 근무가 있습니다.
+                {isSoftKind ? " 신청은 되지만, 관리자가 그 근무를 다시 배정해야 해요." : " 먼저 근무 교환을 한 뒤 신청하세요."}
               </p>
             )}
             <button
               onClick={submitLeave}
-              disabled={busy || dutyConflicts.length > 0}
+              disabled={busy || blockingConflicts.length > 0}
               className="w-full text-sm font-bold text-white bg-blue-700 py-2.5 rounded-lg disabled:bg-slate-200"
             >
-              {busy ? "신청 중…" : dutyConflicts.length ? "근무일 포함" : `${reqDays}일 신청`}
+              {busy ? "신청 중…" : blockingConflicts.length ? "근무일 포함" : `${reqDays}일 신청`}
             </button>
           </div>
         </Sheet>
