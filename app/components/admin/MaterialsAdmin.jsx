@@ -444,7 +444,7 @@ export default function MaterialsAdmin({ data, setData }) {
                     {q.quotePdfUrl && (
                       <>
                         <button onClick={(e) => { e.stopPropagation(); setSendTarget(q); }} className="text-xs font-bold text-green-700 bg-green-50 px-2.5 py-1.5 rounded-lg">
-                          발송
+                          재발송
                         </button>
                         <a href={q.quotePdfUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs font-bold text-blue-700 border border-blue-200 px-2.5 py-1.5 rounded-lg">
                           PDF 보기
