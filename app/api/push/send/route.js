@@ -98,24 +98,32 @@ export async function POST(request) {
   if (gone.length) await db.from("push_subscriptions").delete().in("endpoint", gone);
 
   // 네이티브(Capacitor) 앱 사용자는 web-push 대신 FCM으로 받는다 — 같은 대상(targets)에 병행 발송.
+  // firebase-admin 초기화 실패가 web-push 발송까지 통째로 죽이면 안 되므로 이 블록 전체를 격리한다.
+  let nativeError = null;
   if (nativeTokens?.length && process.env.FIREBASE_PROJECT_ID) {
-    const app = firebaseApp();
-    const goneNative = [];
-    await Promise.all(nativeTokens.map(async (t) => {
-      try {
-        await admin.messaging(app).send({
-          token: t.token,
-          notification: { title: title || item.label, body: body || "" },
-          data: { url: url || "/", tag: tag || key },
-          android: { priority: urgency === "high" ? "high" : "normal" },
-        });
-        sent++;
-      } catch (e) {
-        if (e.code === "messaging/registration-token-not-registered") goneNative.push(t.token);
-      }
-    }));
-    if (goneNative.length) await db.from("native_push_tokens").delete().in("token", goneNative);
+    try {
+      const app = firebaseApp();
+      const goneNative = [];
+      await Promise.all(nativeTokens.map(async (t) => {
+        try {
+          await admin.messaging(app).send({
+            token: t.token,
+            notification: { title: title || item.label, body: body || "" },
+            data: { url: url || "/", tag: tag || key },
+            android: { priority: urgency === "high" ? "high" : "normal" },
+          });
+          sent++;
+        } catch (e) {
+          if (e.code === "messaging/registration-token-not-registered") goneNative.push(t.token);
+          else console.error("FCM 개별 발송 실패:", e.message);
+        }
+      }));
+      if (goneNative.length) await db.from("native_push_tokens").delete().in("token", goneNative);
+    } catch (e) {
+      console.error("FCM 초기화/발송 실패:", e.message);
+      nativeError = e.message;
+    }
   }
 
-  return Response.json({ ok: true, sent, removed: gone.length });
+  return Response.json({ ok: true, sent, removed: gone.length, nativeError });
 }
