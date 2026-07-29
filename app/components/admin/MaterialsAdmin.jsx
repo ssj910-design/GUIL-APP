@@ -336,9 +336,19 @@ export default function MaterialsAdmin({ data, setData }) {
             { value: "quote", label: "견적요청", count: allQuoteRequests.length },
           ]}
         />
-        <div className="relative max-w-64">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input className={`${inputCls} pl-8`} placeholder="현장·부품·규격·기사명 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className="flex items-center gap-2">
+          {(tab === "quote" || tab === "all") && (
+            <button
+              onClick={() => setPickingSite(true)}
+              className="text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 transition-colors px-3 py-1.5 rounded-lg whitespace-nowrap"
+            >
+              + 새 견적서
+            </button>
+          )}
+          <div className="relative max-w-64">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input className={`${inputCls} pl-8`} placeholder="현장·부품·규격·기사명 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
         </div>
       </div>
 
@@ -391,15 +401,7 @@ export default function MaterialsAdmin({ data, setData }) {
 
       {(tab === "quote" || tab === "all") && (
         <>
-        <div className="flex items-center justify-between mb-2 mt-6">
-          {tab === "all" ? <h2 className="text-xs font-bold text-slate-400">견적요청</h2> : <span />}
-          <button
-            onClick={() => setPickingSite(true)}
-            className="text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 transition-colors px-3 py-1.5 rounded-lg"
-          >
-            + 새 견적서
-          </button>
-        </div>
+        {tab === "all" && <h2 className="text-xs font-bold text-slate-400 mb-2 mt-6">견적요청</h2>}
         <AdminTable head={["신청일", "현장 · 호기", "공사 내용", "신청 기사", "발행/승인/지급/발송", "상태", "처리"]}>
           {quoteRequests.map((q) => (
             <tr
