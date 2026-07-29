@@ -397,7 +397,7 @@ export default function MaterialsAdmin({ data, setData }) {
             onClick={() => setPickingSite(true)}
             className="text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 transition-colors px-3 py-1.5 rounded-lg"
           >
-            + 새 견적 발행
+            + 새 견적서
           </button>
         </div>
         <AdminTable head={["신청일", "현장 · 호기", "공사 내용", "신청 기사", "발행/승인/지급/발송", "상태", "처리"]}>
@@ -439,7 +439,7 @@ export default function MaterialsAdmin({ data, setData }) {
                       승인 처리
                     </button>
                     <button onClick={(e) => { e.stopPropagation(); setItemsTarget(q); }} className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-lg">
-                      품목 수정
+                      견적서 수정
                     </button>
                     {q.quotePdfUrl && (
                       <>
