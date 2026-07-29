@@ -403,7 +403,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
         </div>
 
         <div className="w-80 shrink-0">
-          <div className="sticky top-0 border border-slate-200 rounded-xl p-4 bg-white">
+          <div className="sticky top-0 h-full border border-slate-200 rounded-xl p-4 bg-white">
             <p className="text-sm font-bold text-slate-800 mb-3 text-center">견적서 미리보기</p>
             <div className="text-xs text-slate-500 space-y-1 mb-3">
               <div className="flex justify-between"><span>공급자</span><span className="font-semibold text-slate-700">{COMPANY.name}</span></div>
