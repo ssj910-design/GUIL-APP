@@ -34,6 +34,14 @@ export default function LeavesAdmin({ data, setData }) {
   const [busy, setBusy] = useState(false);
   const [cycleLeaves, setCycleLeaves] = useState([]);
   const { start: cycleStart, end: cycleEnd } = payCycleFor(TODAY_STR.slice(0, 7));
+  // 병가·공가는 근무가 겹쳐도 신청을 막지 않고 통과시키므로(모바일 WorkCalendarSheet와 동일 정책),
+  // 승인 대기 목록에서 겹치는 근무를 보여주려면 근무표도 따로 로드해야 한다.
+  const [schedules, setSchedules] = useState([]);
+  useEffect(() => {
+    supabase.from("duty_schedules").select("*").gte("duty_date", TODAY_STR.slice(0, 8) + "01")
+      .then(({ data: rows }) => setSchedules(rows ?? []));
+  }, []);
+  const pendingConflictsOf = (l) => schedules.filter((d) => d.profile_id === l.profile_id && d.duty_date >= l.start_date && d.duty_date <= l.end_date);
 
   useEffect(() => {
     supabase.from("leaves").select("*").gte("start_date", `${year}-01-01`).lte("start_date", `${year}-12-31`)
@@ -55,9 +63,21 @@ export default function LeavesAdmin({ data, setData }) {
   async function decide(l, decision) {
     const reason = decision === "반려" ? prompt(`${nameOf(l.profile_id)}님의 ${shortDate(l.start_date)} ${l.kind} 신청을 반려합니다.\n사유 (선택):`) : null;
     if (decision === "반려" && reason === null) return;
+    // 잔여 연차를 넘겨 승인하려는 건지 확인 — 막지는 않고 관리자가 알고 결정하게 경고만 한다.
+    // leaves state가 이미 "이 연도 전체"라 usedBy를 그대로 재사용할 수 있다.
+    if (decision === "승인" && l.kind !== "병가" && l.kind !== "공가") {
+      const person = staff.find((p) => p.id === l.profile_id);
+      const grant = person ? annualLeaveDays(person.hire_date, `${l.start_date.slice(0, 4)}-12-31`) : null;
+      const used = usedBy(l.profile_id);
+      if (grant != null && used + Number(l.days) > grant) {
+        if (!(await confirmAsync(`${nameOf(l.profile_id)}님의 잔여 연차(${grant - used}일)를 초과해요.\n그래도 승인할까요?`))) return;
+      }
+    }
+    // 이중 처리 방지 — 아직 대기중일 때만 반영되게 조건을 건다.
     const patch = { status: decision, decided_at: new Date().toISOString(), reject_reason: reason?.trim() || null };
-    const { error } = await supabase.from("leaves").update(patch).eq("id", l.id);
+    const { data: ok, error } = await supabase.from("leaves").update(patch).eq("id", l.id).eq("status", "신청").select();
     if (error) { alert("처리 실패: " + error.message); return; }
+    if (!ok?.length) { alert("이미 처리된 요청이에요. 새로고침 후 다시 확인해주세요."); return; }
     setLeaves((prev) => prev.map((x) => (x.id === l.id ? { ...x, ...patch } : x)));
   }
 
@@ -66,8 +86,10 @@ export default function LeavesAdmin({ data, setData }) {
     const patch = decision === "승인"
       ? { status: "취소", cancel_requested: false, decided_at: new Date().toISOString() }
       : { cancel_requested: false, cancel_reason: null };
-    const { error } = await supabase.from("leaves").update(patch).eq("id", l.id);
+    // 이중 처리 방지 — 아직 취소요청 상태일 때만 반영되게 조건을 건다.
+    const { data: ok, error } = await supabase.from("leaves").update(patch).eq("id", l.id).eq("cancel_requested", true).select();
     if (error) { alert("처리 실패: " + error.message); return; }
+    if (!ok?.length) { alert("이미 처리된 요청이에요. 새로고침 후 다시 확인해주세요."); return; }
     setLeaves((prev) => prev.map((x) => (x.id === l.id ? { ...x, ...patch } : x)));
   }
   const nameOf = (id) => staff.find((p) => p.id === id)?.name ?? "(퇴사)";
@@ -162,7 +184,9 @@ export default function LeavesAdmin({ data, setData }) {
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
           <p className="text-xs font-extrabold text-amber-800 mb-2.5">승인 대기 {pending.length}건</p>
           <div className="space-y-2">
-            {pending.map((l) => (
+            {pending.map((l) => {
+              const conflicts = pendingConflictsOf(l);
+              return (
               <div key={l.id} className="flex items-center justify-between gap-2 bg-white rounded-lg px-3 py-2.5">
                 <p className="text-xs text-slate-600 min-w-0">
                   <b className="text-slate-800">{nameOf(l.profile_id)}</b> · {l.kind} {l.days}일
@@ -171,13 +195,22 @@ export default function LeavesAdmin({ data, setData }) {
                     {shortDate(l.start_date)}{l.end_date !== l.start_date && ` ~ ${shortDate(l.end_date)}`}
                     {l.note && ` · ${l.note}`}
                   </span>
+                  {conflicts.length > 0 && (
+                    <>
+                      <br />
+                      <span className="text-[11px] font-bold text-red-500">
+                        ⚠️ {conflicts.map((d) => `${d.duty_date.slice(5)} ${d.kind}`).join(", ")} 근무와 겹침 — 승인 시 재배정 필요
+                      </span>
+                    </>
+                  )}
                 </p>
                 <div className="flex gap-1.5 shrink-0">
                   <button onClick={() => decide(l, "승인")} className="text-xs font-bold text-white bg-blue-700 rounded-lg px-3 py-1.5">승인</button>
                   <button onClick={() => decide(l, "반려")} className="text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5">반려</button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
