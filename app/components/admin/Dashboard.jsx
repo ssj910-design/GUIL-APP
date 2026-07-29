@@ -8,6 +8,7 @@ import { AlertOctagon, Plus, MapPin } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
 import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, shortDate, parseErrorCode, engineerJobsByName } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
+import { notify } from "@/lib/push";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { Modal, StatusBadge, inputCls, PhotoGrid, ReassignModal } from "@/app/components/admin/adminShared";
@@ -127,6 +128,11 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
       ...prev,
       failures: [...rows.map((f) => ({ ...f, createdAt: new Date().toISOString() })), ...prev.failures],
     }));
+    // 콘솔 접수도 앱 접수와 동일하게 알림 — 관리자엔 접수, 배정했으면 그 기사, 미배정이면 기사 전원(선착순).
+    const where = `${site.name}${rows.length > 1 ? ` 외 ${rows.length}건` : (rows[0]?.elevatorNo ? ` · ${rows[0].elevatorNo}` : "")}`;
+    notify("failure_reported", { title: "고장 접수", body: `${where} — ${form.faultType}` });
+    if (assigneeProfile?.id) notify("failure_assigned", { profileIds: [assigneeProfile.id], title: "고장이 배정되었습니다", body: `${where} — ${form.faultType}` });
+    else notify("failure_unassigned", { title: "미배정 고장 — 먼저 잡는 사람이 담당", body: `${where} — ${form.faultType}` });
   }
 
   async function assign(f, name) {

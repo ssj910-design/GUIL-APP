@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { Image as ImageIcon, Pin, ThumbsUp, MessageCircle, Trash2, X, Send, Search, MoreVertical } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { notify } from "@/lib/push";
 import { uploadPhoto } from "@/lib/photos";
 import { profileIdByName } from "@/lib/utils";
 import { Modal, inputCls } from "@/app/components/admin/adminShared";
@@ -187,6 +188,14 @@ export default function RoomAdmin({ data, setData }) {
       is_notice: newPost.isNotice,
     });
     setData((prev) => ({ ...prev, feed: [...(prev.feed ?? []), newPost] }));
+    // 우리방 알림 — 앱과 동일하게 @멘션 대상·공지 전원에게 (콘솔에서 쓴 글도 기사 폰에 뜨게).
+    const myId = profileIdByName(data.profiles, ADMIN_NAME);
+    const tags = [...text.matchAll(/@([가-힣a-zA-Z0-9()]+)/g)].map((m) => m[1]);
+    const mentionIds = tags.includes("모두")
+      ? (data.profiles ?? []).filter((p) => p.is_active !== false && p.id !== myId).map((p) => p.id)
+      : (data.profiles ?? []).filter((p) => tags.includes(p.name) && p.id !== myId).map((p) => p.id);
+    if (mentionIds.length) notify("room_mention", { profileIds: mentionIds, title: `${ADMIN_NAME}님이 회원님을 언급했어요`, body: text.slice(0, 60) });
+    if (newPost.isNotice) notify("room_notice", { title: "새 공지가 등록됐어요", body: text.slice(0, 60) });
   }
 
   async function toggleLike(postId) {
@@ -210,6 +219,10 @@ export default function RoomAdmin({ data, setData }) {
   async function setNotice(postId, isNotice) {
     setData((prev) => ({ ...prev, feed: prev.feed.map((p) => (p.id === postId ? { ...p, isNotice } : p)) }));
     await supabase.from("feed_posts").update({ is_notice: isNotice }).eq("id", postId);
+    if (isNotice) {
+      const post = feed.find((p) => p.id === postId);
+      notify("room_notice", { title: "새 공지가 등록됐어요", body: (post?.text ?? "").slice(0, 60) });
+    }
   }
 
   const detailPost = detailId ? feed.find((p) => p.id === detailId) : null;

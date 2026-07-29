@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { notify } from "@/lib/push";
 import { mapQuoteRequest } from "@/lib/mappers";
 import { uploadPhoto } from "@/lib/photos";
 import { unitIdFor, addDays, shortDate } from "@/lib/utils";
@@ -133,6 +134,7 @@ export default function MaterialsAdmin({ data, setData }) {
     };
     const { error } = await supabase.from("material_requests").update(patch).eq("id", request.id);
     if (error) { alert("지급완료 처리 실패: " + error.message); return; }
+    if (assigneeId) notify("supply_ready", { profileIds: [assigneeId], title: "자재 지급 완료 — 수령 확인해주세요", body: `${request.siteName}${request.elevatorNo ? ` · ${request.elevatorNo}` : ""} · ${request.part}` });
 
     setData((prev) => ({
       ...prev,
@@ -242,6 +244,8 @@ export default function MaterialsAdmin({ data, setData }) {
     };
     const { error } = await supabase.from("quote_requests").update(patch).eq("id", quote.id);
     if (error) { alert("자재지급완료 처리 실패: " + error.message); return; }
+    const quoteTo = assigneeIds.filter(Boolean);
+    if (quoteTo.length) notify("supply_ready", { profileIds: quoteTo, title: "견적 자재 지급 완료 — 수령 확인해주세요", body: `${quote.siteName}${quote.elevatorNo ? ` · ${quote.elevatorNo}` : ""} · ${quote.constructionType}` });
 
     setData((prev) => ({
       ...prev,
