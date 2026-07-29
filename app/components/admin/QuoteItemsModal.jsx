@@ -250,10 +250,13 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
   }
 
   const saveDisabled = items.length === 0 || saving;
-  const sendDisabled = saveDisabled || !rf.canSend;
+  // 발송 성공 후 버튼을 그대로 두면 실수로 다시 눌러 이메일/카카오(유료)가 중복 발송될 수 있다 —
+  // 한 번 성공하면 "바로 발송하기"를 다시 누르지 못하게 막는다(실패는 재시도할 수 있어야 하므로 제외).
+  const sendSucceeded = results?.email?.ok || results?.kakao?.ok;
+  const sendDisabled = saveDisabled || !rf.canSend || sendSucceeded;
 
   return (
-    <Modal title={`${site?.name ?? quote.siteName} 견적 품목편집`} onClose={onClose} wide="2xl">
+    <Modal title={`${site?.name ?? quote.siteName} 견적 품목편집`} onClose={saving ? () => {} : onClose} wide="2xl">
       <QuoteRecipientInfo rf={rf} siteManagers={siteManagers} />
 
       <div className="flex gap-4 mb-4">
@@ -453,7 +456,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
       )}
 
       <div className="flex justify-end gap-2">
-        <button onClick={onClose} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5">닫기</button>
+        <button onClick={onClose} disabled={saving} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5 disabled:opacity-40">닫기</button>
         <button
           onClick={() => handleSave(false)}
           disabled={saveDisabled}
