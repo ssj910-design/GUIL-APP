@@ -21,7 +21,7 @@ import { useState, useEffect } from "react";
 import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
-import { Modal, inputCls } from "@/app/components/admin/adminShared";
+import { Modal, inputCls, PhotoGrid } from "@/app/components/admin/adminShared";
 import { COMPANY } from "@/lib/company";
 import { useQuoteRecipientFields, QuoteRecipientInfo, QuoteRecipientExtras } from "@/app/components/admin/QuoteRecipientFields";
 
@@ -264,6 +264,11 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-4 text-sm">
             <p className="text-xs font-bold text-slate-500 mb-1">기사 요청 원본 (참고용)</p>
             <p className="font-semibold text-slate-700">{quote.part || quote.constructionType} · {quote.quantity ?? "-"}개</p>
+            {quote.photoUrls?.length > 0 && (
+              <div className="mt-2 max-w-xs">
+                <PhotoGrid urls={quote.photoUrls} cols={6} />
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">

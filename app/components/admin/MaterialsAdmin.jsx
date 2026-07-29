@@ -75,6 +75,7 @@ export default function MaterialsAdmin({ data, setData }) {
   const { materialRequests: allMaterialRequests, quoteRequests: allQuoteRequests } = data;
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
+  const [quoteStageFilter, setQuoteStageFilter] = useState("all");
   const [payTarget, setPayTarget] = useState(null); // 지급완료 처리 중인 자재신청
   const [quoteSupplyTarget, setQuoteSupplyTarget] = useState(null); // 자재지급완료 처리 중인 견적요청
   const [detailTarget, setDetailTarget] = useState(null); // 상세내역 보는 중인 신청 { type, data }
@@ -86,9 +87,12 @@ export default function MaterialsAdmin({ data, setData }) {
   const materialRequests = allMaterialRequests.filter((m) =>
     !query || locOf(data, m.unitId, m.siteName, m.elevatorNo).toLowerCase().includes(query) || (m.part ?? "").toLowerCase().includes(query) || personOf(data, m.requesterId, m.engineer).toLowerCase().includes(query)
   );
-  const quoteRequests = allQuoteRequests.filter((q) =>
+  const quoteRequestsSearched = allQuoteRequests.filter((q) =>
     !query || locOf(data, q.unitId, q.siteName, q.elevatorNo).toLowerCase().includes(query) || (q.constructionType ?? "").toLowerCase().includes(query) || personOf(data, q.requesterId, q.engineer).toLowerCase().includes(query)
       || (q.quoteItems ?? []).some((it) => (it.spec ?? "").toLowerCase().includes(query))
+  );
+  const quoteRequests = quoteRequestsSearched.filter((q) =>
+    quoteStageFilter === "all" || quoteStageInfo(q, data.todos ?? []).stage === quoteStageFilter
   );
 
   async function handleMaterialSupplyComplete(request, { assigneeId, billingPart, billingAmount, photoUrls }) {
@@ -431,6 +435,22 @@ export default function MaterialsAdmin({ data, setData }) {
       {(tab === "quote" || tab === "all") && (
         <>
         {tab === "all" && <h2 className="text-xs font-bold text-slate-400 mb-2 mt-6">견적요청</h2>}
+        {(() => {
+          const stages = quoteRequestsSearched.map((q) => quoteStageInfo(q, data.todos ?? []).stage);
+          const stageCounts = QUOTE_STAGES.reduce((acc, s) => ({ ...acc, [s]: stages.filter((x) => x === s).length }), {});
+          return (
+            <div className="mb-3">
+              <FilterPills
+                value={quoteStageFilter}
+                onChange={setQuoteStageFilter}
+                options={[
+                  { value: "all", label: "전체", count: quoteRequestsSearched.length },
+                  ...QUOTE_STAGES.map((s) => ({ value: s, label: s, count: stageCounts[s] })),
+                ]}
+              />
+            </div>
+          );
+        })()}
         <AdminTable head={["신청일", "현장 · 호기", "공사 내용", "신청 기사", "진행상태", "처리"]}>
           {quoteRequests.map((q) => (
             <tr
@@ -849,12 +869,29 @@ function RequestDetailModal({ target, data, onClose }) {
           <div><p className="text-xs font-bold text-slate-400 mb-1">신청일</p><p className="font-semibold text-slate-800">{shortDate(r.requestedDate)}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">신청 기사</p><p className="font-semibold text-slate-800">{personOf(data, r.requesterId, r.engineer)}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">담당 기사</p><p className="font-semibold text-slate-800">{assignee ?? "미배정"}</p></div>
-          <div><StatusBadge tone={tone}>{displayStatus}</StatusBadge></div>
+          <div>
+            {isMaterial ? (
+              <StatusBadge tone={tone}>{displayStatus}</StatusBadge>
+            ) : (
+              (() => {
+                const { stage, dates } = quoteStageInfo(r, data.todos ?? []);
+                return (
+                  <div className="flex gap-1">
+                    {QUOTE_STAGES.map((s) => (
+                      <div key={s} className="flex flex-col items-center">
+                        <StatusBadge tone={s === stage ? QUOTE_STAGE_TONES[s] : "slate"}>{s}</StatusBadge>
+                        <span className="text-[9px] text-slate-400 mt-0.5">{dates[s]}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()
+            )}
+          </div>
         </div>
 
         {!isMaterial && (
           <>
-            <div><p className="text-xs font-bold text-slate-400 mb-1">발행일 / 승인일 / 지급일</p><p className="font-semibold text-slate-800">{shortDate(r.quoteIssuedDate)} / {shortDate(r.approvedDate)} / {shortDate(r.suppliedDate)}</p></div>
             <div>
               <p className="text-xs font-bold text-slate-400 mb-1">발송일</p>
               {sentHistory(r).length === 0 ? (
