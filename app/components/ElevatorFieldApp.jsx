@@ -1872,7 +1872,7 @@ export default function App() {
               toast={failureToast}
             />
           )}
-          {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} siteManagers={siteManagers} onUpdateSiteNotes={handleUpdateSiteNotes} />}
+          {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} quoteRequests={quoteRequests} siteManagers={siteManagers} onUpdateSiteNotes={handleUpdateSiteNotes} />}
           {tab === "failure" && (
             <FailureTab
               onReported={handleFailureReported}

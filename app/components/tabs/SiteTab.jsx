@@ -12,7 +12,7 @@ import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 
 
 /* ---- 승강기정보 화면 (정보 / 고장 / 검사) ---- */
-function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspections, billings, onBack, onHome }) {
+function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspections, billings, quoteRequests, onBack, onHome }) {
   // v2: units 테이블에서 이 호기의 실제 정보(호기별 모델·설치일·고유번호)를 찾는다.
   // 마이그레이션 전 DB에서는 realUnit이 없어 기존 방식(site 공통값) 그대로 동작.
   const allUnits = useContext(UnitsContext);
@@ -31,9 +31,12 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
   const manualInspections = [...inspections.filter((i) => i.siteId === site.id)].sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate));
   // 호기가 지정된 청구건은 그 호기에서만, 호기 미지정(기존) 청구건은 현장 전체에서 계속 보여줍니다.
   const unitBillings = billings.filter((b) => b.siteName === site.name && (!b.elevatorNo || b.elevatorNo === unit));
+  const unitQuotes = [...quoteRequests
+    .filter((q) => (realUnit?.id && q.unitId ? q.unitId === realUnit.id : q.siteId === site.id && q.elevatorNo === unit))]
+    .sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate));
   const [inspectionFailTarget, setInspectionFailTarget] = useState(null);
   const [photoViewer, setPhotoViewer] = useState(null);
-  const elevatorSubTabs = ["정보", "고장", "검사", "부품교체내역"];
+  const elevatorSubTabs = ["정보", "고장", "검사", "부품교체내역", "견적내역"];
   const swipe = useSwipeSubtab(elevatorSubTabs, subTab, setSubTab);
 
   // 정보/고장/검사/부품교체내역 각 탭의 패널 — SwipeSubtabTrack이 드래그 중 옆 탭을 함께 렌더링할 때 쓴다.
@@ -196,7 +199,7 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
           </div>
         );
 
-    return (
+    if (tab === "부품교체내역") return (
           <div className="bg-slate-50 pt-4 pb-6 px-5">
             <p className="pb-3 text-xs font-bold text-slate-400">부품교체내역</p>
             {unitBillings.length === 0 ? (
@@ -210,6 +213,35 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
                     onPhotoClick={(urls, i) => setPhotoViewer({ urls, index: i, siteName: b.siteName, date: b.replaceDate })}
                   />
                 ))}
+              </div>
+            )}
+          </div>
+        );
+
+    return (
+          <div className="bg-slate-50 pt-4 pb-6 px-5">
+            <p className="pb-3 text-xs font-bold text-slate-400">견적내역</p>
+            {unitQuotes.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-10">등록된 견적 내역이 없습니다</p>
+            ) : (
+              <div className="space-y-2">
+                {unitQuotes.map((q) => {
+                  const displayStatus = q.status === "자재지급완료" ? "교체완료" : q.status;
+                  return (
+                    <div key={q.id} className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="font-bold text-sm text-slate-800">{q.quoteTitle || q.constructionType || "견적"}</p>
+                        <span className="text-[11px] border border-blue-300 text-blue-600 rounded-full px-2 py-0.5 font-semibold shrink-0">{displayStatus}</span>
+                      </div>
+                      <p className="text-xs text-slate-500">{q.quoteIssuedDate || q.requestedDate}</p>
+                      {q.quotePdfUrl && (
+                        <a href={q.quotePdfUrl} target="_blank" rel="noreferrer" className="text-[11px] text-blue-600 font-semibold mt-1.5 inline-block">
+                          PDF 보기
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -512,7 +544,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
 }
 
 
-export function SiteTab({ inspections, failures, billings, siteManagers, onUpdateSiteNotes }) {
+export function SiteTab({ inspections, failures, billings, quoteRequests, siteManagers, onUpdateSiteNotes }) {
   const allSites = useContext(SitesContext);
   const allUnits = useContext(UnitsContext);
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
@@ -557,6 +589,7 @@ export function SiteTab({ inspections, failures, billings, siteManagers, onUpdat
         failures={failures}
         inspections={inspections}
         billings={billings}
+        quoteRequests={quoteRequests}
         onBack={() => setView("site")}
         onHome={backToList}
       />
