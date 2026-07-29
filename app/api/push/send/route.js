@@ -4,10 +4,22 @@
 // 개인이 껐으면 그 사람만 건너뛴다 (lib/notifications.js의 isEnabled).
 // 만료된 구독(404/410)은 지워서 다음부터 헛되이 보내지 않는다.
 import webpush from "web-push";
+import admin from "firebase-admin";
 import { createClient } from "@supabase/supabase-js";
 import { NOTIFICATIONS, isEnabled, levelOf } from "@/lib/notifications";
 
 const CATALOG = Object.fromEntries(NOTIFICATIONS.map((n) => [n.key, n]));
+
+function firebaseApp() {
+  if (admin.apps.length) return admin.apps[0];
+  return admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: (process.env.FIREBASE_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
+    }),
+  });
+}
 
 export async function POST(request) {
   const { key, profileIds, title, body, url, tag } = await request.json().catch(() => ({}));
@@ -45,8 +57,15 @@ export async function POST(request) {
   const targets = (profiles ?? []).filter((p) => isEnabled(item, org, p.notify_prefs ?? {}));
   if (!targets.length) return Response.json({ ok: true, sent: 0, skipped: "받을 사람 없음" });
 
-  const { data: subs } = await db.from("push_subscriptions").select("*").in("profile_id", targets.map((p) => p.id));
-  if (!subs?.length) return Response.json({ ok: true, sent: 0, skipped: "구독 기기 없음" });
+  // 웹 구독자(subs)와 네이티브 앱 사용자(native_push_tokens)는 서로 다른 채널이라, 한쪽이
+  // 없어도 다른 쪽엔 보내야 한다 — 그래서 "구독 기기 없음" 판정은 두 채널을 다 조회한 뒤로 미룬다.
+  const [{ data: subs }, { data: nativeTokens }] = await Promise.all([
+    db.from("push_subscriptions").select("*").in("profile_id", targets.map((p) => p.id)),
+    db.from("native_push_tokens").select("token").in("profile_id", targets.map((p) => p.id)),
+  ]);
+  if (!subs?.length && !nativeTokens?.length) {
+    return Response.json({ ok: true, sent: 0, skipped: "구독 기기 없음" });
+  }
 
   const payload = JSON.stringify({
     title: title || item.label,
@@ -64,7 +83,7 @@ export async function POST(request) {
 
   let sent = 0;
   const gone = [];
-  await Promise.all(subs.map(async (s) => {
+  await Promise.all((subs ?? []).map(async (s) => {
     try {
       await webpush.sendNotification(
         { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
@@ -77,6 +96,26 @@ export async function POST(request) {
     }
   }));
   if (gone.length) await db.from("push_subscriptions").delete().in("endpoint", gone);
+
+  // 네이티브(Capacitor) 앱 사용자는 web-push 대신 FCM으로 받는다 — 같은 대상(targets)에 병행 발송.
+  if (nativeTokens?.length && process.env.FIREBASE_PROJECT_ID) {
+    const app = firebaseApp();
+    const goneNative = [];
+    await Promise.all(nativeTokens.map(async (t) => {
+      try {
+        await admin.messaging(app).send({
+          token: t.token,
+          notification: { title: title || item.label, body: body || "" },
+          data: { url: url || "/", tag: tag || key },
+          android: { priority: urgency === "high" ? "high" : "normal" },
+        });
+        sent++;
+      } catch (e) {
+        if (e.code === "messaging/registration-token-not-registered") goneNative.push(t.token);
+      }
+    }));
+    if (goneNative.length) await db.from("native_push_tokens").delete().in("token", goneNative);
+  }
 
   return Response.json({ ok: true, sent, removed: gone.length });
 }
