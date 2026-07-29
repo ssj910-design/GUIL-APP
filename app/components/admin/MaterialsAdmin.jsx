@@ -519,12 +519,27 @@ export default function MaterialsAdmin({ data, setData }) {
         <QuoteItemsModal
           quote={itemsTarget}
           site={(data.sites ?? []).find((s) => s.id === itemsTarget.siteId)}
+          siteManagers={(data.siteManagers ?? []).filter((m) => m.siteId === itemsTarget.siteId)}
+          profiles={data.profiles ?? []}
           onClose={async () => {
             // 관리자가 새 견적 발행에서 현장만 고르고 품목편집을 취소하면, 기사 요청도 없이
             // 만들어진 빈 초안(요청접수 상태, 담당 기사 없음)만 남는다 — 그건 내역에 남기지 않고
             // 바로 삭제한다. 기사 요청건이나 이미 발행된 견적을 다시 열었다가 취소하는 경우는
             // (requesterId/engineer가 있거나 상태가 이미 넘어갔으므로) 이 조건에 안 걸려 그대로 둔다.
-            if (itemsTarget.status === "요청접수" && !itemsTarget.requesterId && !itemsTarget.engineer) {
+            // "저장"은 성공하면 모달이 스스로 이 onClose를 호출한다 — 그 순간 itemsTarget도
+            // data.quoteRequests도 아직 "요청접수"인 옛 스냅샷 그대로다(onSaved의 setData가
+            // 아직 리렌더로 반영되기 전에 같은 틱에서 onClose가 바로 호출되기 때문 — React
+            // state는 비동기 배치라 클라이언트 state를 다시 찾아봐도 최신값이 아니다). 그래서
+            // 클라이언트 state 대신 DB에서 방금 값을 직접 다시 읽어 판단한다.
+            const { data: row } = await supabase
+              .from("quote_requests")
+              .select("status, requester_id, engineer")
+              .eq("id", itemsTarget.id)
+              .maybeSingle();
+            const current = row
+              ? { status: row.status, requesterId: row.requester_id, engineer: row.engineer }
+              : itemsTarget;
+            if (current.status === "요청접수" && !current.requesterId && !current.engineer) {
               await supabase.from("quote_requests").delete().eq("id", itemsTarget.id);
               setData((prev) => ({ ...prev, quoteRequests: prev.quoteRequests.filter((x) => x.id !== itemsTarget.id) }));
             }
@@ -535,7 +550,6 @@ export default function MaterialsAdmin({ data, setData }) {
               ...prev,
               quoteRequests: prev.quoteRequests.map((x) => (x.id === itemsTarget.id ? { ...x, ...patch } : x)),
             }));
-            setItemsTarget(null);
           }}
         />
       )}

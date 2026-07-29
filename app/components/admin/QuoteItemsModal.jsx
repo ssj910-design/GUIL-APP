@@ -1,23 +1,29 @@
 "use client";
 
-// 견적요청 품목편집 — 기사가 신청한 부품명/수량(원본, 읽기전용 참고)을 관리자가
-// 세부 품목(자재비/인건비 구분·규격·단가 등)으로 확장해 "발행 확정"하면
-// PDF까지 생성해서 견적요청을 "견적발행" 상태로 넘긴다.
+// 견적요청 품목편집+발행+발송 통합 화면 — 기사가 신청한 부품명/수량(원본, 읽기전용
+// 참고)을 관리자가 세부 품목(자재비/인건비 구분·규격·단가 등)으로 확장하고, "저장"으로
+// 발행만 하거나(PDF 생성만, 발송 안 함 — 나중에 검토 후 보내는 흐름) "바로 발송하기"로
+// 발행과 발송을 한 번에 처리한다(설계:
+// docs/superpowers/specs/2026-07-29-quote-issue-send-merge-design.md).
+//
+// 공급자/고객 정보·안내메시지·첨부파일·채널 체크박스는 QuoteRecipientFields.jsx를
+// QuoteSendModal.jsx(재발송)과 공유한다. 재발송은 이미 있는 quotePdfUrl로 바로 보내지만,
+// 여기 "바로 발송하기"는 먼저 PDF를 새로 생성한 뒤 그 pdfUrl로 발송한다 — 신규 발행
+// 건은 아직 quotePdfUrl이 없기 때문.
 //
 // 품목 테이블의 공급가액/세액/합계 컬럼과 할인 정보 섹션은 화면 표시 전용이다 — 실제
 // PDF(lib/quotePdf.js)와 저장 데이터(quote_items, transport_cost 등)는 그대로 두고
-// 입력 화면만 청구스(chungoose.ai) 스타일에 맞춰 다듬은 것 (설계:
-// docs/superpowers/specs/2026-07-28-quote-items-chungoose-style-design.md).
+// 입력 화면만 청구스(chungoose.ai) 스타일에 맞춰 다듬은 것.
 //
 // 오른쪽 미리보기 카드는 실제 PDF 서식을 재현하지 않는 간단한 요약이다 — 새 계산 없이
-// 이미 있는 값을 다시 보여줄 뿐이다 (설계:
-// docs/superpowers/specs/2026-07-28-quote-items-live-preview-design.md).
+// 이미 있는 값을 다시 보여줄 뿐이다.
 import { useState, useEffect } from "react";
 import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { Modal, inputCls } from "@/app/components/admin/adminShared";
 import { COMPANY } from "@/lib/company";
+import { useQuoteRecipientFields, QuoteRecipientInfo, QuoteRecipientExtras } from "@/app/components/admin/QuoteRecipientFields";
 
 const CATEGORIES = ["자재비", "인건비"];
 const VAT_RATE = 0.1;
@@ -33,7 +39,7 @@ function rowCalc(qty, unitPrice) {
   return { supply, vat, total: supply + vat };
 }
 
-export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
+export default function QuoteItemsModal({ quote, site, siteManagers, profiles, onClose, onSaved }) {
   const [items, setItems] = useState(() => {
     if (quote.quoteItems?.length) return quote.quoteItems;
     // 처음 여는 경우 기사 원본(부품명+수량)을 자재비 1행에 프리필
@@ -50,6 +56,9 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [results, setResults] = useState(null);
+
+  const rf = useQuoteRecipientFields(quote, siteManagers, profiles);
 
   useEffect(() => {
     if (quote.quoteNumber) return; // 이미 발행된 견적은 번호를 유지
@@ -119,7 +128,7 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
   ];
 
   // 할인율/할인금액은 서로의 값을 기준으로 자동 계산되는 화면 표시 전용 값 —
-  // handleConfirm의 patch나 PDF 요청 바디 어디에도 들어가지 않는다.
+  // handleSave의 patch나 PDF/발송 요청 바디 어디에도 들어가지 않는다.
   function handleDiscountPercent(value) {
     const pct = Number(value) || 0;
     setDiscountPercent(pct);
@@ -131,10 +140,12 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
     setDiscountPercent(subtotal > 0 ? Math.round((amt / subtotal) * 1000) / 10 : 0);
   }
 
-  async function handleConfirm() {
+  // alsoSend=false → "저장"(발행만). alsoSend=true → "바로 발송하기"(발행 후 이어서 발송).
+  async function handleSave(alsoSend) {
     if (items.length === 0) return;
     setSaving(true);
     setError("");
+    setResults(null);
 
     const patch = {
       quote_items: items,
@@ -173,16 +184,78 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
       return;
     }
 
+    let sendPatch = {};
+    if (alsoSend) {
+      const supplierName = rf.supplier?.name || null;
+      const supplierPhone = rf.supplier ? (rf.supplier.phone || rf.supplier.tel || null) : null;
+
+      const sendRes = await fetch("/api/send-quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quoteRequestId: quote.id,
+          channels: { email: rf.sendEmail, kakao: rf.sendKakao },
+          recipientEmail: rf.email,
+          recipientPhone: rf.phone,
+          senderCcEmail: rf.senderCcEmail || null,
+          referenceEmail: rf.referenceEmail || null,
+          referencePhone: rf.referencePhone || null,
+          supplierName,
+          supplierPhone,
+          noticeMessage: rf.noticeMessage || null,
+          attachmentUrls: rf.attachments,
+          quote: {
+            siteName: site?.name ?? quote.siteName,
+            quoteTitle,
+            quoteDate,
+            pdfUrl: pdfRes.url,
+          },
+        }),
+      })
+        .then((r) => r.json())
+        .catch((e) => ({ results: { email: { ok: false, reason: e.message }, kakao: { ok: false, reason: e.message } } }));
+
+      setResults(sendRes.results ?? {});
+
+      const now = new Date().toISOString();
+      const newLogEntries = [];
+      if (sendRes.results?.email?.ok) newLogEntries.push({ channel: "email", sentAt: now, target: rf.email });
+      if (sendRes.results?.kakao?.ok) newLogEntries.push({ channel: "kakao", sentAt: now, target: rf.phone });
+
+      sendPatch = {
+        recipientEmail: rf.email,
+        recipientPhone: rf.phone,
+        senderCcEmail: rf.senderCcEmail || null,
+        referenceEmail: rf.referenceEmail || null,
+        referencePhone: rf.referencePhone || null,
+        noticeMessage: rf.noticeMessage || null,
+        attachmentUrls: rf.attachments,
+      };
+      if (sendRes.results?.email?.ok) sendPatch.emailSentAt = now;
+      if (sendRes.results?.kakao?.ok) sendPatch.kakaoSentAt = now;
+      if (newLogEntries.length) sendPatch.sendLog = [...(quote.sendLog ?? []), ...newLogEntries];
+    }
+
     onSaved({
       quoteItems: items, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
       profit: Number(profit) || 0, quoteNumber, recipientName, quoteTitle,
       quoteIssuedDate: quoteDate, quotePdfUrl: pdfRes.url, status: "견적발행",
+      ...sendPatch,
     });
     setSaving(false);
+
+    // "저장"만 눌렀을 땐 지금처럼 바로 닫는다. "바로 발송하기"는 채널별 발송 결과를
+    // 화면에 보여줘야 하므로 자동으로 닫지 않는다 — 확인 후 "닫기"로 직접 닫는다.
+    if (!alsoSend) onClose();
   }
+
+  const saveDisabled = items.length === 0 || saving;
+  const sendDisabled = saveDisabled || !rf.canSend;
 
   return (
     <Modal title={`${site?.name ?? quote.siteName} 견적 품목편집`} onClose={onClose} wide="2xl">
+      <QuoteRecipientInfo rf={rf} siteManagers={siteManagers} />
+
       <div className="flex gap-4 mb-4">
         <div className="flex-1 min-w-0">
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-4 text-sm">
@@ -360,16 +433,40 @@ export default function QuoteItemsModal({ quote, site, onClose, onSaved }) {
         </div>
       </div>
 
+      <QuoteRecipientExtras rf={rf} />
+
       {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">{error}</p>}
 
+      {results && (
+        <div className="space-y-1.5 mb-3 text-sm">
+          {rf.sendEmail && (
+            <p className={results.email?.ok ? "text-green-700" : "text-red-600"}>
+              이메일: {results.email?.ok ? "✅ 발송 완료" : `❌ 실패 - ${results.email?.reason}`}
+            </p>
+          )}
+          {rf.sendKakao && (
+            <p className={results.kakao?.ok ? "text-green-700" : "text-red-600"}>
+              카카오 알림톡: {results.kakao?.ok ? "✅ 발송 완료" : `❌ 실패 - ${results.kakao?.reason}`}
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="flex justify-end gap-2">
-        <button onClick={onClose} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5">취소</button>
+        <button onClick={onClose} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5">닫기</button>
         <button
-          onClick={handleConfirm}
-          disabled={items.length === 0 || saving}
+          onClick={() => handleSave(false)}
+          disabled={saveDisabled}
+          className="text-sm font-bold text-slate-700 bg-slate-100 disabled:bg-slate-50 disabled:text-slate-300 rounded-xl px-4 py-2.5"
+        >
+          {saving ? "저장 중..." : "저장"}
+        </button>
+        <button
+          onClick={() => handleSave(true)}
+          disabled={sendDisabled}
           className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2.5"
         >
-          {saving ? "생성 중..." : "발행 확정"}
+          {saving ? "처리 중..." : "바로 발송하기"}
         </button>
       </div>
     </Modal>
