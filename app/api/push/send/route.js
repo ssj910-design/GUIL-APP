@@ -56,13 +56,18 @@ export async function POST(request) {
     level: levelOf(item, org),
   });
 
+  // urgent 등급은 FCM에도 높은 우선순위로 알려야, 안드로이드가 절전모드(Doze)일 때도
+  // 즉시 깨워서 전달한다 — 이게 없으면 잠금화면에서 알림이 늦게(화면 켤 때) 도착할 수 있다.
+  const urgency = levelOf(item, org) === "urgent" ? "high" : "normal";
+
   let sent = 0;
   const gone = [];
   await Promise.all(subs.map(async (s) => {
     try {
       await webpush.sendNotification(
         { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-        payload
+        payload,
+        { urgency }
       );
       sent++;
     } catch (e) {

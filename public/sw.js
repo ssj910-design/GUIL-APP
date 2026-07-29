@@ -12,6 +12,8 @@ self.addEventListener("push", (event) => {
     tag: data.tag,                 // 같은 tag면 알림이 쌓이지 않고 갱신된다
     renotify: data.level === "urgent",
     silent: data.level !== "urgent",   // 긴급만 소리·진동
+    // 안드로이드는 silent:false만으로는 진동이 안 붙는 기기가 있어 vibrate 패턴을 명시로 줘야 한다.
+    vibrate: data.level === "urgent" ? [300, 150, 300, 150, 300] : undefined,
     requireInteraction: data.level === "urgent",
     data: { url: data.url || "/" },
   };
