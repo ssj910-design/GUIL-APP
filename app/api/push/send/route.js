@@ -10,13 +10,17 @@ import { NOTIFICATIONS, isEnabled, levelOf } from "@/lib/notifications";
 
 const CATALOG = Object.fromEntries(NOTIFICATIONS.map((n) => [n.key, n]));
 
+// 서비스 계정 JSON 전체를 base64로 감싼 값 하나로 받는다 — 개행이 포함된 private_key를
+// 환경변수 UI에 수동으로 옮겨적다 보면 줄바꿈이 깨지기 쉬워서(실제로 겪음), base64 한 줄로 통일한다.
 function firebaseApp() {
   if (admin.apps.length) return admin.apps[0];
+  const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64 || "";
+  const sa = JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
   return admin.initializeApp({
     credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: (process.env.FIREBASE_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
+      projectId: sa.project_id,
+      clientEmail: sa.client_email,
+      privateKey: sa.private_key,
     }),
   });
 }
@@ -130,13 +134,7 @@ async function handlePost(request) {
       if (goneNative.length) await db.from("native_push_tokens").delete().in("token", goneNative);
     } catch (e) {
       console.error("FCM 초기화/발송 실패:", e.message);
-      nativeError = {
-        message: e.message,
-        hasProjectId: !!process.env.FIREBASE_PROJECT_ID,
-        hasClientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
-        privateKeyLength: (process.env.FIREBASE_PRIVATE_KEY || "").length,
-        privateKeyStartsOk: (process.env.FIREBASE_PRIVATE_KEY || "").startsWith("-----BEGIN PRIVATE KEY-----"),
-      };
+      nativeError = e.message;
     }
   }
 
