@@ -40,7 +40,7 @@ function billingCompleteFor(todos, key, requestId) {
 // 으로 보여준다. 각 단계 밑에는 그 단계에 실제로 도달했을 때의 날짜를 표시한다(교체는 별도
 // 완료일 컬럼이 없어 자재지급일을 그대로 재사용).
 const QUOTE_STAGES = ["요청", "작성", "발송", "승인", "출하", "교체"];
-const QUOTE_STAGE_TONES = { 요청: "blue", 작성: "amber", 발송: "purple", 승인: "indigo", 출하: "cyan", 교체: "green" };
+const QUOTE_STAGE_TONES = { 요청: "red", 작성: "amber", 발송: "purple", 승인: "indigo", 출하: "cyan", 교체: "green" };
 function quoteStageInfo(q, todos) {
   const billingDone = q.status === "자재지급완료" && billingCompleteFor(todos, "quoteRequestId", q.id);
   const sent = !!(q.emailSentAt || q.kakaoSentAt);
