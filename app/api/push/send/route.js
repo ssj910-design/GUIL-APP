@@ -4,7 +4,10 @@
 // 개인이 껐으면 그 사람만 건너뛴다 (lib/notifications.js의 isEnabled).
 // 만료된 구독(404/410)은 지워서 다음부터 헛되이 보내지 않는다.
 import webpush from "web-push";
-import admin from "firebase-admin";
+// firebase-admin v12+는 루트 패키지가 아니라 서브모듈(firebase-admin/app, firebase-admin/messaging)로
+// API를 나눠 제공한다 — admin.credential.cert()/admin.messaging() 같은 옛 네임스페이스 방식은 없다.
+import { initializeApp, cert, getApps } from "firebase-admin/app";
+import { getMessaging } from "firebase-admin/messaging";
 import { createClient } from "@supabase/supabase-js";
 import { NOTIFICATIONS, isEnabled, levelOf } from "@/lib/notifications";
 
@@ -13,11 +16,12 @@ const CATALOG = Object.fromEntries(NOTIFICATIONS.map((n) => [n.key, n]));
 // 서비스 계정 JSON 전체를 base64로 감싼 값 하나로 받는다 — 개행이 포함된 private_key를
 // 환경변수 UI에 수동으로 옮겨적다 보면 줄바꿈이 깨지기 쉬워서(실제로 겪음), base64 한 줄로 통일한다.
 function firebaseApp() {
-  if (admin.apps.length) return admin.apps[0];
+  const apps = getApps();
+  if (apps.length) return apps[0];
   const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64 || "";
   const sa = JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
-  return admin.initializeApp({
-    credential: admin.credential.cert({
+  return initializeApp({
+    credential: cert({
       projectId: sa.project_id,
       clientEmail: sa.client_email,
       privateKey: sa.private_key,
@@ -113,13 +117,13 @@ async function handlePost(request) {
   // 네이티브(Capacitor) 앱 사용자는 web-push 대신 FCM으로 받는다 — 같은 대상(targets)에 병행 발송.
   // firebase-admin 초기화 실패가 web-push 발송까지 통째로 죽이면 안 되므로 이 블록 전체를 격리한다.
   let nativeError = null;
-  if (nativeTokens?.length && process.env.FIREBASE_PROJECT_ID) {
+  if (nativeTokens?.length && process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
     try {
       const app = firebaseApp();
       const goneNative = [];
       await Promise.all(nativeTokens.map(async (t) => {
         try {
-          await admin.messaging(app).send({
+          await getMessaging(app).send({
             token: t.token,
             notification: { title: title || item.label, body: body || "" },
             data: { url: url || "/", tag: tag || key },
