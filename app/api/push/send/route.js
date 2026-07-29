@@ -52,7 +52,9 @@ export async function POST(request) {
     title: title || item.label,
     body: body || "",
     url: url || "/",
-    tag: tag || key,
+    // tag를 안 주면 매번 고유하게 — 같은 종류(key) 알림이 안드로이드에서 서로 덮어써(소리 없이 갱신)
+    // 두 번째부터 안 울리는 문제 방지. sendPush()·크론처럼 tag를 안 넘기는 호출까지 서버에서 일괄 커버.
+    tag: tag || `${key}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     level: levelOf(item, org),
   });
 
