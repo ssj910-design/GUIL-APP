@@ -34,6 +34,24 @@ function billingCompleteFor(todos, key, requestId) {
   return linked.length > 0 && linked.every((t) => t.done);
 }
 
+// 견적요청 목록의 "상태"·"발행/승인/지급/발송" 두 컬럼을 하나로 합친 진행상태 표시.
+// 요청접수 → 견적발행(미발송="작성"/발송함="발송") → 승인 → 자재지급완료(미교체="출하"/교체="교체")
+// 6단계 중 현재 해당하는 한 단계만 색(blue)으로, 나머지는 흑백(slate)으로 보여준다.
+const QUOTE_STAGES = ["요청", "작성", "발송", "승인", "출하", "교체"];
+function quoteStageInfo(q, todos) {
+  if (q.status === "요청접수") return { stage: "요청", date: shortDate(q.requestedDate) };
+  if (q.status === "견적발행") {
+    const sent = !!(q.emailSentAt || q.kakaoSentAt);
+    return sent ? { stage: "발송", date: lastSentDate(q) } : { stage: "작성", date: shortDate(q.quoteIssuedDate) };
+  }
+  if (q.status === "승인") return { stage: "승인", date: shortDate(q.approvedDate) };
+  if (q.status === "자재지급완료") {
+    const done = billingCompleteFor(todos, "quoteRequestId", q.id);
+    return { stage: done ? "교체" : "출하", date: shortDate(q.suppliedDate) };
+  }
+  return { stage: null, date: null };
+}
+
 // 지급완료 처리 시 만들어지는 연결 할 일(todos)의 담당자 — 요청 자체엔 담당기사 컬럼이 없고
 // todos.assignee(_id)에만 있어서(견적은 담당 기사 여러 명 가능) 여기서 조인해 이름을 뽑는다.
 function assigneeNames(data, key, requestId) {
@@ -402,7 +420,7 @@ export default function MaterialsAdmin({ data, setData }) {
       {(tab === "quote" || tab === "all") && (
         <>
         {tab === "all" && <h2 className="text-xs font-bold text-slate-400 mb-2 mt-6">견적요청</h2>}
-        <AdminTable head={["신청일", "현장 · 호기", "공사 내용", "신청 기사", "발행/승인/지급/발송", "상태", "처리"]}>
+        <AdminTable head={["신청일", "현장 · 호기", "공사 내용", "신청 기사", "진행상태", "처리"]}>
           {quoteRequests.map((q) => (
             <tr
               key={q.id}
@@ -417,21 +435,24 @@ export default function MaterialsAdmin({ data, setData }) {
                   ? <StatusBadge tone="slate">관리자발행</StatusBadge>
                   : personOf(data, q.requesterId, q.engineer)}
               </td>
-              <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">
-                {shortDate(q.quoteIssuedDate)} / {shortDate(q.approvedDate)} / {shortDate(q.suppliedDate)} / {lastSentDate(q)}
-              </td>
-              <td className="px-3 py-2.5">
+              <td className="px-3 py-2.5 whitespace-nowrap">
                 {(() => {
-                  const displayStatus =
-                    q.status === "자재지급완료"
-                      ? billingCompleteFor(data.todos ?? [], "quoteRequestId", q.id) ? "교체완료" : "지급완료"
-                      : q.status;
-                  return <StatusBadge tone={QUOTE_TONE[displayStatus] ?? "slate"}>{displayStatus}</StatusBadge>;
+                  const { stage, date } = quoteStageInfo(q, data.todos ?? []);
+                  return (
+                    <div>
+                      <div className="flex gap-1">
+                        {QUOTE_STAGES.map((s) => (
+                          <StatusBadge key={s} tone={s === stage ? "blue" : "slate"}>{s}</StatusBadge>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">{date ?? "-"}</p>
+                    </div>
+                  );
                 })()}
               </td>
               <td className="px-3 py-2.5 whitespace-nowrap">
                 {q.status === "요청접수" && (
-                  <button onClick={(e) => { e.stopPropagation(); setItemsTarget(q); }} className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-lg">
+                  <button onClick={(e) => { e.stopPropagation(); setItemsTarget(q); }} className="text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 transition-colors px-3 py-1.5 rounded-lg whitespace-nowrap">
                     견적발행 처리
                   </button>
                 )}
