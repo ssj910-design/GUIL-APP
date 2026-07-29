@@ -12,7 +12,7 @@ import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 
 
 /* ---- 승강기정보 화면 (정보 / 고장 / 검사) ---- */
-function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspections, billings, quoteRequests, onBack, onHome }) {
+function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspections, billings, quoteRequests, todos, onBack, onHome }) {
   // v2: units 테이블에서 이 호기의 실제 정보(호기별 모델·설치일·고유번호)를 찾는다.
   // 마이그레이션 전 DB에서는 realUnit이 없어 기존 방식(site 공통값) 그대로 동작.
   const allUnits = useContext(UnitsContext);
@@ -226,14 +226,30 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
             ) : (
               <div className="space-y-2">
                 {unitQuotes.map((q) => {
-                  const displayStatus = q.status === "자재지급완료" ? "교체완료" : q.status;
+                  // 어플 "나의 견적 요청 전체보기"(MaterialTab.jsx QuoteHistoryScreen)와 동일한
+                  // 4단계(QUOTE_STAGES) + 비용청구완료 오버레이 배지를 그대로 재사용한다.
+                  const isBilled = (todos ?? []).some((t) => t.quoteRequestId === q.id && t.done === true);
+                  const displayStage = isBilled ? "비용청구완료" : q.status;
+                  const dateMap = { 요청접수: q.requestedDate, 견적발행: q.quoteIssuedDate, 승인: q.approvedDate, 자재지급완료: q.suppliedDate, 비용청구완료: q.suppliedDate };
+                  const stageDate = dateMap[displayStage];
                   return (
                     <div key={q.id} className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <p className="font-bold text-sm text-slate-800">{q.quoteTitle || q.constructionType || "견적"}</p>
-                        <span className="text-[11px] border border-blue-300 text-blue-600 rounded-full px-2 py-0.5 font-semibold shrink-0">{displayStatus}</span>
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <p className="font-bold text-sm text-slate-800 min-w-0">{q.quoteTitle || q.constructionType || "견적"}</p>
+                        <div className="flex flex-col items-center shrink-0">
+                          <span
+                            className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                              displayStage === "비용청구완료" ? "bg-slate-100 text-slate-500" :
+                              displayStage === "자재지급완료" ? "bg-emerald-100 text-emerald-700" :
+                              displayStage === "승인" ? "bg-indigo-100 text-indigo-700" :
+                              displayStage === "견적발행" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+                            }`}
+                          >
+                            {displayStage === "비용청구완료" ? "비용청구 완료" : displayStage}
+                          </span>
+                          <span className="text-[10px] text-slate-400 mt-0.5">{stageDate || "-"}</span>
+                        </div>
                       </div>
-                      <p className="text-xs text-slate-500">{q.quoteIssuedDate || q.requestedDate}</p>
                       {q.quotePdfUrl && (
                         <a href={q.quotePdfUrl} target="_blank" rel="noreferrer" className="text-[11px] text-blue-600 font-semibold mt-1.5 inline-block">
                           PDF 보기
@@ -544,7 +560,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
 }
 
 
-export function SiteTab({ inspections, failures, billings, quoteRequests, siteManagers, onUpdateSiteNotes }) {
+export function SiteTab({ inspections, failures, billings, quoteRequests, todos, siteManagers, onUpdateSiteNotes }) {
   const allSites = useContext(SitesContext);
   const allUnits = useContext(UnitsContext);
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
@@ -590,6 +606,7 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, siteMa
         inspections={inspections}
         billings={billings}
         quoteRequests={quoteRequests}
+        todos={todos}
         onBack={() => setView("site")}
         onHome={backToList}
       />
