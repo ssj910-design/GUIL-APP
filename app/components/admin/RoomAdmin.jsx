@@ -64,7 +64,7 @@ function PhotoGrid({ urls, onOpen, compact }) {
   );
 }
 
-function ComposeBox({ onSubmit, placeholder, compact }) {
+function ComposeBox({ onSubmit, placeholder, compact, members = [] }) {
   const [text, setText] = useState("");
   const [photos, setPhotos] = useState([]);
   const [notice, setNotice] = useState(false);
@@ -92,6 +92,11 @@ function ComposeBox({ onSubmit, placeholder, compact }) {
     setNotice(false);
   }
 
+  // @멘션 자동완성 — 입력 끝이 "@..."면 후보를 띄우고, 고르면 "@이름 "으로 채운다 (모바일 우리방과 동일).
+  const tagMatch = /@([가-힣a-zA-Z0-9()]*)$/.exec(text);
+  const tagCands = tagMatch ? ["모두", ...members].filter((n) => n.toLowerCase().includes(tagMatch[1].toLowerCase())).slice(0, 8) : [];
+  const pickTag = (n) => setText(text.replace(/@[가-힣a-zA-Z0-9()]*$/, "@" + n + " "));
+
   return (
     <div className={compact ? "" : "bg-white rounded-2xl border border-slate-200 p-4"}>
       <textarea
@@ -101,6 +106,15 @@ function ComposeBox({ onSubmit, placeholder, compact }) {
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
+      {tagCands.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {tagCands.map((n) => (
+            <button key={n} type="button" onClick={() => pickTag(n)} className="text-xs font-bold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100">
+              @{n}
+            </button>
+          ))}
+        </div>
+      )}
       {photos.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {photos.map((url, i) => (
@@ -242,7 +256,7 @@ export default function RoomAdmin({ data, setData }) {
         </div>
       </div>
 
-      <ComposeBox onSubmit={sendPost} placeholder="팀에 공지하거나 이야기를 나눠보세요" />
+      <ComposeBox onSubmit={sendPost} placeholder="팀에 공지하거나 이야기를 나눠보세요 (@로 멘션)" members={(data.profiles ?? []).filter((p) => p.is_active !== false).map((p) => p.name).filter((n) => n && n !== ADMIN_NAME)} />
 
       <div className="space-y-3">
         {roots.length === 0 ? (
@@ -340,7 +354,7 @@ export default function RoomAdmin({ data, setData }) {
             ))}
             {commentsOf(detailPost.id).length === 0 && <p className="text-xs text-slate-400 text-center py-4">댓글이 없습니다</p>}
           </div>
-          <ComposeBox compact placeholder="댓글 달기" onSubmit={(text, extra) => sendPost(text, { ...extra, replyToId: detailPost.id })} />
+          <ComposeBox compact placeholder="댓글 달기 (@로 멘션)" onSubmit={(text, extra) => sendPost(text, { ...extra, replyToId: detailPost.id })} members={(data.profiles ?? []).filter((p) => p.is_active !== false).map((p) => p.name).filter((n) => n && n !== ADMIN_NAME)} />
         </Modal>
       )}
 
