@@ -1,0 +1,9 @@
+{
+  "appId": "com.guilelevator.app",
+  "appName": "구일엘리베이터",
+  "webDir": "public",
+  "server": {
+    "url": "https://guil-app-pi.vercel.app",
+    "cleartext": false
+  }
+}

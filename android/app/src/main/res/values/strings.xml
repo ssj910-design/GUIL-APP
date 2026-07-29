@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">구일엘리베이터</string>
+    <string name="title_activity_main">구일엘리베이터</string>
+    <string name="package_name">com.guilelevator.app</string>
+    <string name="custom_url_scheme">com.guilelevator.app</string>
+</resources>
