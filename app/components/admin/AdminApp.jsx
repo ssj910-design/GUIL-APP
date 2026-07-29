@@ -153,7 +153,13 @@ export default function AdminApp() {
         <div className="w-full max-w-sm">
           <h1 className="text-lg font-extrabold text-blue-950 mb-1 text-center">비밀번호를 변경해주세요</h1>
           <p className="text-xs text-slate-400 mb-6 text-center">{me.name}님, 초기 비밀번호(1234)를 바꿔야 시작할 수 있습니다.</p>
-          <PasswordChangeForm profileId={me.id} submitLabel="변경하고 시작하기" onDone={() => setMe({ ...me, mustChange: false })} />
+          <PasswordChangeForm profileId={me.id} submitLabel="변경하고 시작하기" onDone={() => {
+            // localStorage 세션도 함께 갱신해야 한다 — 안 하면 새로고침 때 캐시된 mustChange=true가 되살아나 또 변경창이 뜬다.
+            const raw = localStorage.getItem("guilAuthV1");
+            const s = raw ? JSON.parse(raw) : {};
+            localStorage.setItem("guilAuthV1", JSON.stringify({ ...s, mustChange: false }));
+            setMe({ ...me, mustChange: false });
+          }} />
           <button onClick={adminLogout} className="w-full text-[11px] font-bold text-slate-400 mt-4">다른 계정으로 로그인</button>
         </div>
       </div>

@@ -137,13 +137,18 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
 
   async function assign(f, name) {
     const p = profiles.find((x) => x.name === name);
+    // 배정 시각 기록(출동 미응답 5분 크론 기준) + 미응답 알림 타이머 리셋.
     await supabase.from("failures")
-      .update({ assignee: name || null, assignee_id: p?.id ?? null })
+      .update({ assignee: name || null, assignee_id: p?.id ?? null, assigned_at: name ? new Date().toISOString() : null, no_response_nag_at: null })
       .eq("id", f.id);
     setData((prev) => ({
       ...prev,
       failures: prev.failures.map((x) => (x.id === f.id ? { ...x, assignee: name || null, assigneeId: p?.id ?? null } : x)),
     }));
+    // 콘솔 배정도 앱과 동일하게 알림 — 지정 기사에겐 배정, 미배정 복귀면 기사 전원.
+    const where = `${f.siteName ?? ""}${f.elevatorNo ? ` · ${f.elevatorNo}` : ""}`;
+    if (p?.id) notify("failure_assigned", { profileIds: [p.id], title: "고장이 배정되었습니다", body: where });
+    else notify("failure_unassigned", { title: "미배정 고장 — 먼저 잡는 사람이 담당", body: where });
   }
 
   const openFailures = failures.filter((f) => f.status === "미처리");
