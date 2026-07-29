@@ -22,7 +22,6 @@ function firebaseApp() {
 }
 
 export async function POST(request) {
-  return Response.json({ DEBUG_MARKER: "v3-2026-07-29-1" });
   try {
     return await handlePost(request);
   } catch (e) {
