@@ -6,6 +6,30 @@
 
 ---
 
+## 🔴 대기 중 — 예약형 고장 알림(pg_cron) 활성화 (2026-07-29)
+
+> 코드는 배포됨. 아래 3단계를 해야 **실제로 알림이 울린다**(안 하면 코드만 있고 무동작 — 앱은 정상).
+> 대상: ① 미배정 15분 → 관리자  ② 출동 배정 후 5분 미응답 → 배정 기사+관리자(5분마다 반복)
+
+**① Vercel 환경변수 추가**
+- `CRON_SECRET` = 임의의 긴 랜덤 문자열(32자+). pg_cron과 엔드포인트가 공유하는 암호. 아무 값이나 하나 정하면 됨.
+
+**② Supabase 대시보드 SQL Editor에서 `074_dispatch_cron_columns.sql` 실행**
+- failures에 시각 컬럼 3개 추가. `add column if not exists`라 안전.
+
+**③ Supabase 대시보드 SQL Editor에서 `075_pg_cron_failure_alerts.sql` 실행**
+- 파일 안 `<배포URL>`(2곳)과 `<CRON_SECRET>`을 ①에서 정한 값·실제 주소로 바꿔 실행.
+- 확인: `select jobname, schedule, active from cron.job;` 에 `failure-alerts` 보이면 성공.
+- 실행 로그: `select * from cron.job_run_details order by start_time desc limit 10;`
+
+**검증**: 미배정 고장 1건 두고 15분 뒤 관리자 알림 / 배정 후 5분 미응답 시 알림 확인.
+※ pg_cron이 매분 엔드포인트를 부르고, "미배정 15분·미응답 5분" 판정은 엔드포인트(`/api/cron/check-failures`)가 함.
+※ 이슈 생기면 Vercel Pro(1분 크론)로 전환해도 이 코드 그대로 동작(스케줄만 Vercel로 옮기면 됨).
+
+> 완료되면 이 섹션 삭제.
+
+---
+
 ## 💬 UX 확인 요청 — 출근/근태 (차호근 → 친구, 2026-07-21)
 
 > 출근체크·근무종료·위치 기능을 만들면서 **차호근이 이해한 UX**가 맞는지 확인 부탁해.

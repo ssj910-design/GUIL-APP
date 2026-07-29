@@ -124,6 +124,8 @@ export default function App() {
   // is_notice 컬럼은 마이그레이션 022 실행 전엔 존재하지 않는다 — undefined면 아직 미실행으로 간주.
   const feedNoticeReady = feed.some((p) => p.isNotice !== undefined);
   const todoBillingReady = todos.some((t) => t.billingAmount !== undefined);
+  // failures.assigned_at 컬럼 존재 여부 — 마이그레이션 074 전엔 컬럼이 없어, 있을 때만 배정 시각을 쓴다(미구현 시 배정이 깨지지 않게).
+  const assignedAtReady = failures.some((f) => f.assignedAt !== undefined);
   // 지급 사진을 여러 장 연달아 올릴 때, setState 업데이터 함수가 React 렌더링 타이밍에 따라
   // 아직 반영되지 않은 상태를 기준으로 계산될 수 있어(경쟁 상태) ref에 최신값을 직접 보관합니다.
   const supplyPhotoUrlsRef = useRef({ material: {}, quote: {}, restock: {} });
@@ -657,7 +659,7 @@ export default function App() {
   async function handleAssignFailure(failure, engineerName) {
     const assignedId = profileIdByName(profilesAll, engineerName);
     const { data: ok, error } = await supabase.from("failures")
-      .update({ assignee: engineerName, ...(v2Ready ? { assignee_id: assignedId } : {}) })
+      .update({ assignee: engineerName, ...(v2Ready ? { assignee_id: assignedId } : {}), ...(assignedAtReady ? { assigned_at: new Date().toISOString(), no_response_nag_at: null } : {}) })
       .eq("id", failure.id).eq("status", "미처리").is("assignee", null)
       .select();
     // 0행이 "이미 남이 배정함"인지 "저장 자체가 실패함"인지 구분한다 — 구분 안 하면 진짜 오류를
@@ -685,6 +687,8 @@ export default function App() {
         arrival_time: null,
         status: "미처리",
         ...(v2Ready ? { assignee_id: newAssigneeId } : {}),
+        // 재배정: 새 기사면 배정시각 갱신(5분 미응답 재판정), 미배정 복귀면 비움. dedup도 리셋해 재알림 허용.
+        ...(assignedAtReady ? { assigned_at: engineerName ? new Date().toISOString() : null, no_response_nag_at: null, stale_notified_at: null } : {}),
       })
       .eq("id", failure.id).neq("status", "완료");
     query = failure.assignee ? query.eq("assignee", failure.assignee) : query.is("assignee", null);
@@ -854,6 +858,8 @@ export default function App() {
           escalated_by: escalatedBy, escalated_by_id: escalatedById, escalated_at: escalatedAt,
           escalated_arrival_time: escalatedArrivalTime,
           ...(v2Ready ? { assignee_id: null } : {}),
+          // 미배정 복귀 → 배정시각 비우고 dedup 리셋(다시 미배정 15분·재알림 판정되게).
+          ...(assignedAtReady ? { assigned_at: null, no_response_nag_at: null, stale_notified_at: null } : {}),
         }
       : { status: failure.status };
     // 처리결과는 유실되면 재작성이 어렵다 — 저장 실패는 물론, 그 사이 재배정/거부로 담당자·상태가
