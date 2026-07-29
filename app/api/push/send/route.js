@@ -22,6 +22,15 @@ function firebaseApp() {
 }
 
 export async function POST(request) {
+  try {
+    return await handlePost(request);
+  } catch (e) {
+    console.error("push/send 처리 중 예외:", e);
+    return Response.json({ ok: false, reason: String(e?.message || e) }, { status: 500 });
+  }
+}
+
+async function handlePost(request) {
   const { key, profileIds, title, body, url, tag } = await request.json().catch(() => ({}));
   const item = CATALOG[key];
   if (!item) return Response.json({ ok: false, reason: `알 수 없는 알림 종류: ${key}` }, { status: 400 });
