@@ -36,20 +36,31 @@ function billingCompleteFor(todos, key, requestId) {
 
 // 견적요청 목록의 "상태"·"발행/승인/지급/발송" 두 컬럼을 하나로 합친 진행상태 표시.
 // 요청접수 → 견적발행(미발송="작성"/발송함="발송") → 승인 → 자재지급완료(미교체="출하"/교체="교체")
-// 6단계 중 현재 해당하는 한 단계만 색(blue)으로, 나머지는 흑백(slate)으로 보여준다.
+// 6단계를 한 줄에 나열하고, 현재 해당하는 한 단계만 그 단계 고유 색으로, 나머지는 흑백(slate)
+// 으로 보여준다. 각 단계 밑에는 그 단계에 실제로 도달했을 때의 날짜를 표시한다(교체는 별도
+// 완료일 컬럼이 없어 자재지급일을 그대로 재사용).
 const QUOTE_STAGES = ["요청", "작성", "발송", "승인", "출하", "교체"];
+const QUOTE_STAGE_TONES = { 요청: "blue", 작성: "amber", 발송: "purple", 승인: "indigo", 출하: "cyan", 교체: "green" };
 function quoteStageInfo(q, todos) {
-  if (q.status === "요청접수") return { stage: "요청", date: shortDate(q.requestedDate) };
-  if (q.status === "견적발행") {
-    const sent = !!(q.emailSentAt || q.kakaoSentAt);
-    return sent ? { stage: "발송", date: lastSentDate(q) } : { stage: "작성", date: shortDate(q.quoteIssuedDate) };
-  }
-  if (q.status === "승인") return { stage: "승인", date: shortDate(q.approvedDate) };
-  if (q.status === "자재지급완료") {
-    const done = billingCompleteFor(todos, "quoteRequestId", q.id);
-    return { stage: done ? "교체" : "출하", date: shortDate(q.suppliedDate) };
-  }
-  return { stage: null, date: null };
+  const billingDone = q.status === "자재지급완료" && billingCompleteFor(todos, "quoteRequestId", q.id);
+  const sent = !!(q.emailSentAt || q.kakaoSentAt);
+
+  let stage = null;
+  if (q.status === "요청접수") stage = "요청";
+  else if (q.status === "견적발행") stage = sent ? "발송" : "작성";
+  else if (q.status === "승인") stage = "승인";
+  else if (q.status === "자재지급완료") stage = billingDone ? "교체" : "출하";
+
+  const dates = {
+    요청: shortDate(q.requestedDate),
+    작성: q.quoteIssuedDate ? shortDate(q.quoteIssuedDate) : "-",
+    발송: sent ? lastSentDate(q) : "-",
+    승인: q.approvedDate ? shortDate(q.approvedDate) : "-",
+    출하: q.suppliedDate ? shortDate(q.suppliedDate) : "-",
+    교체: billingDone && q.suppliedDate ? shortDate(q.suppliedDate) : "-",
+  };
+
+  return { stage, dates };
 }
 
 // 지급완료 처리 시 만들어지는 연결 할 일(todos)의 담당자 — 요청 자체엔 담당기사 컬럼이 없고
@@ -437,15 +448,15 @@ export default function MaterialsAdmin({ data, setData }) {
               </td>
               <td className="px-3 py-2.5 whitespace-nowrap">
                 {(() => {
-                  const { stage, date } = quoteStageInfo(q, data.todos ?? []);
+                  const { stage, dates } = quoteStageInfo(q, data.todos ?? []);
                   return (
-                    <div>
-                      <div className="flex gap-1">
-                        {QUOTE_STAGES.map((s) => (
-                          <StatusBadge key={s} tone={s === stage ? "blue" : "slate"}>{s}</StatusBadge>
-                        ))}
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-1">{date ?? "-"}</p>
+                    <div className="flex gap-1">
+                      {QUOTE_STAGES.map((s) => (
+                        <div key={s} className="flex flex-col items-center">
+                          <StatusBadge tone={s === stage ? QUOTE_STAGE_TONES[s] : "slate"}>{s}</StatusBadge>
+                          <span className="text-[9px] text-slate-400 mt-0.5">{dates[s]}</span>
+                        </div>
+                      ))}
                     </div>
                   );
                 })()}
@@ -453,7 +464,7 @@ export default function MaterialsAdmin({ data, setData }) {
               <td className="px-3 py-2.5 whitespace-nowrap">
                 {q.status === "요청접수" && (
                   <button onClick={(e) => { e.stopPropagation(); setItemsTarget(q); }} className="text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 transition-colors px-3 py-1.5 rounded-lg whitespace-nowrap">
-                    견적발행 처리
+                    + 새 견적서
                   </button>
                 )}
                 {q.status === "견적발행" && (

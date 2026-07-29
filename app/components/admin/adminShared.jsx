@@ -81,6 +81,8 @@ const TONES = {
   green: "bg-emerald-50 text-emerald-700",
   blue: "bg-blue-50 text-blue-700",
   indigo: "bg-indigo-50 text-indigo-700",
+  purple: "bg-purple-50 text-purple-700",
+  cyan: "bg-cyan-50 text-cyan-700",
   slate: "bg-slate-100 text-slate-500",
 };
 
