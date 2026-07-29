@@ -77,7 +77,9 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
     await supabase.from("profiles").update({ notify_prefs: nextPrefs }).eq("id", selfId);
   }
 
-  const myNotifs = forRole(role).filter((n) => orgSettings[n.key]?.enabled !== false);
+  // 예약형(trigger: scheduled)은 크론 미구현이라 아직 실제로 안 온다 — 켜봐야 안 오니 설정에서 숨긴다.
+  // 크론(당직·출근·검사 등)을 붙이면 이 `trigger !== "scheduled"` 필터만 지우면 다시 노출된다.
+  const myNotifs = forRole(role).filter((n) => orgSettings[n.key]?.enabled !== false && n.trigger !== "scheduled");
 
 
   // 오늘 이후 내 당직 (가까운 순 5건)
