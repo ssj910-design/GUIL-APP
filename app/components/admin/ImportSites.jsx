@@ -4,10 +4,26 @@
 // 업체계정에서 받은 xlsx를 브라우저에서 파싱(JSZip, 이미 설치된 의존성)해
 // 건물별로 묶어 sites + units를 생성한다. 이미 등록된 승강기(gov_no)는 스킵.
 import { useState } from "react";
+import { Download } from "lucide-react";
 import JSZip from "jszip";
 import { supabase } from "@/lib/supabaseClient";
 import { mapUnit, mapSite } from "@/lib/mappers";
 import { Modal } from "@/app/components/admin/adminShared";
+
+// toPlan()이 찾는 컬럼 그대로 샘플을 만든다 — 같은 건물명+소재지1이면 한 현장으로 묶이는 걸
+// 보여주려고 호기 2개짜리 예시로 둔다. "설치장소"는 선택 열이라는 걸 주석 행으로 안내한다.
+async function downloadSample() {
+  const XLSX = await import("xlsx");
+  const wsData = [
+    ["건물명", "소재지1", "소재지2", "승강기고유번호", "승강기상태", "호기", "승강기종류", "승강기모델", "최초설치일자", "설치장소"],
+    ["구일빌딩", "서울특별시 강남구 테헤란로 123", "1층", "12345678", "운행중", "1", "승객용", "OTIS Gen2", "20200101", "본관-1"],
+    ["구일빌딩", "서울특별시 강남구 테헤란로 123", "1층", "12345679", "운행중", "2", "승객용", "OTIS Gen2", "20200101", "본관-2"],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "현장");
+  XLSX.writeFile(wb, "현장등록_샘플양식.xlsx");
+}
 
 const unesc = (s) => s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&apos;/g, "'").replace(/&quot;/g, '"');
 const colIdx = (ref) => [...ref].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0) - 1;
@@ -163,6 +179,13 @@ export default function ImportSites({ data, setData, onClose }) {
             국가승강기정보센터 <b>업체계정 → 유지관리 현장관리</b>에서 내려받은 엑셀(.xlsx)을 선택하세요.
             건물별로 현장과 호기(고유번호·모델·설치일 포함)가 자동 생성됩니다.
           </p>
+          <button
+            type="button"
+            onClick={downloadSample}
+            className="flex items-center justify-center gap-1.5 text-sm font-bold text-blue-700 bg-blue-50 rounded-xl px-4 py-2.5 w-full mb-3"
+          >
+            <Download size={15} /> 샘플 양식 다운로드
+          </button>
           <input type="file" accept=".xlsx" onChange={pick} disabled={busy} className="text-sm" />
           {busy && <p className="text-xs text-slate-400 mt-2">파일 분석 중...</p>}
         </div>
