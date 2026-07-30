@@ -90,3 +90,15 @@ mark.changed { background: var(--warn-soft); color: var(--warn-ink); padding: 0 
 .tree li { margin: 5px 0; font-size: 14px; }
 .tree .d { color: var(--sub); font-size: 12.5px; }
 .badge.gate { background: var(--purple-soft); color: var(--purple-ink); }
+
+/* 화면설계서 (screens/*.html) — 실물 스크린샷 + 연결 스트립 */
+.shot { border: 1px solid var(--line); border-radius: 16px; max-width: 300px; width: 100%; display: block; }
+.shot-row { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; margin: 12px 0; }
+.shot-row .col { flex: 1; min-width: 280px; }
+.connect { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0 4px; }
+.connect .node { text-align: center; font-size: 12px; color: var(--sub); }
+.connect .node img { width: 104px; border: 1px solid var(--line); border-radius: 10px; display: block; margin: 0 auto 4px; }
+.connect .node.this img { border: 2px solid var(--accent); }
+.connect .node.this { color: var(--accent); font-weight: 700; }
+.connect .node .ph { width: 104px; height: 188px; border: 1px dashed var(--line); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--faint); font-size: 11px; margin: 0 auto 4px; padding: 6px; text-align: center; }
+.connect .arrow { color: var(--faint); font-size: 18px; padding-bottom: 18px; }

@@ -1,0 +1,101 @@
+<!doctype html>
+<!--
+  ═══ 편집 규칙 — AI 포함, 이 문서를 고치는 누구든 따를 것 ═══
+  1. 의미가 바뀌는 수정은 버전(v0.x)을 올리고 "변경 이력" 표에 한 줄 추가한다.
+  2. 섹션의 기존 내용이 "변경·삭제"되면(단순 추가 말고) 그 섹션 끝에
+     <details class="history"><summary>이전 버전 (vX.X)</summary>예전 내용/요약</details>
+     으로 직전 버전을 남긴다. 직전 1개 버전만 인라인 보존 — 더 오래된 건 git 이력으로.
+  3. 이번 버전에서 바뀐 문구는 <mark class="changed">…</mark>로 표시하고,
+     다음 버전을 만들 때 이전 버전의 mark는 벗긴다.
+  4. 오타·문구 다듬기는 버전·이력 없이 바로 수정.
+  ※ 스크린샷은 실물이 진실 — 화면이 바뀌면 img/를 재캡처한다. (로그인은 localhost:3000/?auth=1 로 캡처)
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>화면설계 — 로그인</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<main>
+  <h1>로그인 <span class="badge doing">v0.1</span></h1>
+  <p class="doc-meta">화면설계서 · 코드 <code>LoginScreen.jsx</code> + <code>ElevatorFieldApp.jsx(handleLogin)</code> + RPC <code>verify_login</code>(마이그 067) · <a href="../index.html">← 설계 허브</a> · <a href="../03-sitemap.html">화면 지도</a></p>
+
+  <h2>1. 연결 — 어디서 와서, 어디로 가나</h2>
+  <div class="connect">
+    <div class="node"><div class="ph">앱 첫 실행<br>(설치·URL 접속)</div>진입</div>
+    <div class="arrow">→</div>
+    <div class="node this"><img src="img/login.png" alt="로그인 화면">로그인 (이 화면)</div>
+    <div class="arrow">→</div>
+    <div class="node"><div class="ph">강제 비밀번호<br>변경<br><small>(첫 로그인만)</small></div>조건부</div>
+    <div class="arrow">→</div>
+    <div class="node"><a href="#"><img src="img/home-eng.png" alt="홈 화면"></a>홈 <span class="badge todo">페이지 예정</span></div>
+  </div>
+  <ul>
+    <li>로그인 성공 → <b>must_change(초기비번 1234 그대로)면 강제 비밀번호 변경</b>을 지나야 홈 진입. 아니면 바로 홈</li>
+    <li>같은 화면이 <b>PC 콘솔(/admin)</b>에도 있음 — 동일 구조, 단 role=admin만 통과</li>
+    <li>지금은 <code>SKIP_LOGIN=true</code>(로그인 꺼짐)라 배포본에선 이 화면이 안 뜸 — 켜는 건 친구와 시점 맞춰서</li>
+  </ul>
+
+  <h2>2. 화면 요소</h2>
+  <div class="shot-row">
+    <div class="col"><img class="shot" src="img/login.png" alt="로그인 화면 스크린샷"></div>
+    <div class="col">
+      <table>
+        <tr><th>요소</th><th>설명</th></tr>
+        <tr><td>회사명 타이틀</td><td>"구일엘리베이터(주)" — <b>화이트라벨 대상</b>(6장)</td></tr>
+        <tr><td>아이디 입력</td><td>기사=민원24 아이디, 관리자=지정 아이디. 자동 대문자·자동수정 꺼짐, trim만</td></tr>
+        <tr><td>비밀번호 입력</td><td>Enter로 제출 가능. 초기비번 안내 문구는 일부러 없음(보안)</td></tr>
+        <tr><td>아이디 저장 체크</td><td>체크 시 아이디만 localStorage 저장(비번 저장 안 함) — 재방문 시 자동 채움</td></tr>
+        <tr><td>에러 문구</td><td>"아이디 또는 비밀번호가 올바르지 않습니다" 한 종류뿐(보안상 의도)</td></tr>
+        <tr><td>로그인 버튼</td><td>아이디·비번 둘 다 있어야 활성. 처리 중엔 "로그인 중…"</td></tr>
+        <tr><td>반응형</td><td>모바일=풀폭, PC=가운데 카드(흰 배경·그림자)</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h2>3. 필요 요소 (동작 전제)</h2>
+  <ul>
+    <li><code>profiles</code>: login_id 있음, is_active=true, deleted_at=null — <b>login_id가 활성·미삭제 중 유일</b>해야 함(중복이면 로그인 실패)</li>
+    <li><code>user_secrets</code>: 비번 해시(초기 1234, must_change=true) — <b>신규 직원 등록 시 1234 시딩 필수</b></li>
+    <li>검증은 DB 함수(verify_login)에서 — 해시는 클라이언트로 안 나옴. 세션은 localStorage(guilAuthV1)</li>
+  </ul>
+
+  <h2>4. QA 체크포인트</h2>
+  <ol>
+    <li><b>중복 login_id</b> → 둘 다 로그인 실패. 기사 민원24 아이디와 관리자 아이디가 겹치면 사고(과거 실제 사례: guil238684)</li>
+    <li><b>login_id 없는 기사</b>(민원24 미등록) → 로그인 불가 — 등록 시 확인</li>
+    <li><b>user_secrets 없는 신규</b> → "아이디/비번 틀림"으로 표시됨(실은 비번 미설정) — 원인 구분은 DB 확인</li>
+    <li><b>강제 비번변경이 새로고침해도 반복 안 되는지</b> (앱·콘솔 둘 다 수정 완료 — 회귀 주의)</li>
+    <li><b>아이디 저장</b>: 체크→저장·자동채움·체크복원 / 해제→삭제. 비번은 절대 저장 안 됨</li>
+    <li><b>퇴사·비활성 계정 차단</b> (is_active=false, deleted_at)</li>
+    <li>비번 규칙(6자 이상 숫자)은 변경 화면 쪽 — 로그인엔 규칙 검사 없음(기존 비번 그대로 통과)</li>
+    <li>배포본에서 <code>?as=</code>/<code>?auth=</code> 파라미터는 localhost 전용 — 프로덕션에선 무시되는지</li>
+  </ol>
+
+  <h2>5. 알려진 한계 (보류 중)</h2>
+  <ul>
+    <li>연속 실패 잠금(브루트포스 방어) 없음 — 마이그 076에 친구가 초안 작업 중</li>
+    <li>세션이 localStorage 소프트 세션 — 진짜 격리는 RLS+서버 세션(멀티테넌트 Phase 3)</li>
+  </ul>
+
+  <h2>6. 화이트라벨 — 구일전용 → 타사 일반화</h2>
+  <table>
+    <tr><th>지금 (구일)</th><th>타사 입주 시</th></tr>
+    <tr><td>타이틀 "구일엘리베이터(주)" 하드코딩</td><td><code>tenant.name</code>에서 읽기 (+로고 옵션)</td></tr>
+    <tr><td>기사 login_id = 민원24 아이디</td><td>민원24와 분리된 일반 아이디 (067에서 이미 분리해둠 — 구조 준비됨)</td></tr>
+    <tr><td>login_id 유일성 = 전역</td><td>테넌트별 유일 <code>unique(tenant_id, login_id)</code> + verify_login을 테넌트로 스코프</td></tr>
+    <tr><td>회사 구분 없음</td><td>로그인 시 테넌트 식별 필요 — 전역 유일 아이디로 유도 or 회사코드/서브도메인 <span class="tbd">미정</span></td></tr>
+    <tr><td>초기 비번 1234 고정</td><td>테넌트별 정책 가능 <span class="tbd">미정</span></td></tr>
+  </table>
+
+  <h2>변경 이력</h2>
+  <table>
+    <tr><th>버전</th><th>날짜</th><th>변경</th></tr>
+    <tr><td>v0.1</td><td>2026-07-30</td><td>최초 작성 — docs/QA-RULES.md의 "1. 기사 로그인" 항목을 흡수(연결·요소·QA·화이트라벨)</td></tr>
+  </table>
+</main>
+<footer>GUIL-APP 설계 문서 · docs/design/screens/login.html</footer>
+</body>
+</html>
