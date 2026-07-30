@@ -76,10 +76,13 @@ const korVariantKey = (key) => {
 const nameKeys = (s) => {
   // (주)·(유) 법인 표기를 먼저 지워야 "(구.(주)에이알)" 같은 중첩 괄호에서 별칭이 제대로 나온다
   const s2 = String(s ?? "").replace(/\((주|유)\)/g, "");
-  const base = [
-    nameKey(s),
-    ...[...s2.matchAll(/\(([^)]+)\)/g)].map((m) => nameKey(m[1].replace(/^\s*구[.\s]+/, ""))),
-  ].filter(Boolean);
+  const alias = [...s2.matchAll(/\(([^)]+)\)/g)].map((m) => m[1].replace(/^\s*구[.\s]+/, ""));
+  // "대진월드타워1,2"처럼 한 별칭에 여러 동을 합쳐 적은 경우 → 대진월드타워1 / 대진월드타워2로 분해
+  const expanded = alias.flatMap((a) => {
+    const m = /^(.*?)(\d+)\s*[,·/]\s*(\d+)$/.exec(norm(a));
+    return m ? [a, `${m[1]}${m[2]}`, `${m[1]}${m[3]}`] : [a];
+  });
+  const base = [nameKey(s), ...expanded.map(nameKey)].filter(Boolean);
   const withEng = [...new Set([...base, ...base.map(engToKorKey).filter(Boolean)])];
   return [...new Set([...withEng, ...withEng.map(korVariantKey).filter(Boolean)])];
 };
@@ -568,8 +571,11 @@ export default function VerifyImport({ data, setData, onClose }) {
     for (let i = 0; i < targets.length; i++) {
       const r = targets[i];
       setGeoProg({ done: i, total: targets.length });
+      // 지오코딩용 주소 정리 — 우리 주소 체계엔 콤마가 없다. 콤마 뒤는 두 번째 번지("616-8,9")나
+      // 건물 별칭(", 디모데관")이라 지오코딩을 실패시키므로 자른다. 괄호 부기·"외 N필지"도 같이 제거.
+      let a = r.parsed.address.split(",")[0].replace(/\([^)]*\)/g, "").replace(/외\s*\d+\s*필지?/g, "").trim();
       // 내부 엑셀 주소는 시/도가 생략됨 — 구로 시작하면 서울, 시로 시작하면 그대로(티맵이 알아서 찾음)
-      const addr = /^[가-힣]{1,4}구\s/.test(r.parsed.address) ? `서울특별시 ${r.parsed.address}` : r.parsed.address;
+      const addr = /^[가-힣]{1,4}구\s/.test(a) ? `서울특별시 ${a}` : a;
       try {
         const j = await fetch(`/api/geocode?addr=${encodeURIComponent(addr)}`).then((x) => x.json());
         if (!j.ok) { fail++; firstFailReason ??= j.reason; continue; }
