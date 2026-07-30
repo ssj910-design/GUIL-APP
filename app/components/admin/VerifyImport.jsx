@@ -94,7 +94,9 @@ function validateRow(raw, col, monthCols) {
   parsed.phones = phones;
   parsed.contactMemo = contact;
   if (phones.length >= 2) issues.push({ level: "yellow", msg: `전화 ${phones.length}개가 한 셀에 — 유형 추정을 확인해주세요(010=담당자, 지역번호=현장)` });
-  if (/비밀번호|비번|열쇠|현관|공동현관/.test(contact)) issues.push({ level: "yellow", msg: "연락처 셀에 비밀번호·열쇠 메모 — 앱에 그대로 넣으면 안 됨(별도 보관)" });
+  // 출입 정보(공동현관 비번·기계실 열쇠)는 기사가 현장 가서 필요한 운영 정보 — 막지 않고,
+  // 인증완료 후 반영하면 현장 비고(전달사항)로 저장돼 기사들이 현장정보에서 본다. (노랑 = 사람이 한번 보고 확정)
+  if (/비밀번호|비번|열쇠|현관|공동현관/.test(contact)) issues.push({ level: "yellow", msg: "출입 정보(비밀번호·열쇠) 포함 — 인증완료 후 반영하면 현장 비고로 저장되어 기사들이 봅니다" });
 
   // 사업자번호 — 주민번호가 섞여 있는 열
   const biz = get("bizNo");
@@ -322,11 +324,14 @@ export default function VerifyImport({ data, setData, onClose }) {
     ["maintenance_cost", "보수료", (p) => p.cost],
     ["contract_date", "계약일", (p) => p.contractDate],
     ["contract_type", "계약종류", (p) => p.contractType || null],
+    // 연락처 원본 메모(담당자 라벨·출입 비번·열쇠 위치 등) → 비어 있는 현장 비고로.
+    // 기사 앱 현장정보의 "비고(전달사항)"에 그대로 보인다 — 현장 가서 문 열 때 필요한 정보.
+    ["notes", "비고(연락처 메모)", (p) => p.contactMemo || null],
   ];
   const fillPlan = useMemo(() => {
     if (!finalRows) return [];
     const siteById = new Map((data?.sites ?? []).map((s) => [s.id, s]));
-    const camel = { phone: "phone", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType" };
+    const camel = { phone: "phone", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType", notes: "notes" };
     const bySite = new Map();
     for (const r of finalRows) {
       if (r.level === "red") continue;
@@ -394,7 +399,7 @@ export default function VerifyImport({ data, setData, onClose }) {
     }
     // 화면(콘솔 전체 데이터)에도 반영해 새로고침 없이 최신으로
     if (ok && setData) {
-      const camel = { phone: "phone", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType", verify_level: "verifyLevel", verified_at: "verifiedAt" };
+      const camel = { phone: "phone", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType", notes: "notes", verify_level: "verifyLevel", verified_at: "verifiedAt" };
       setData((prev) => ({
         ...prev,
         sites: prev.sites.map((s) => {
