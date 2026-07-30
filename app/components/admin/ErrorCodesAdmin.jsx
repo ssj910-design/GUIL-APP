@@ -1,6 +1,6 @@
 "use client";
 
-// 에러코드집 관리 — 기종별 에러코드 의미·원인·조치법을 등록하고, 과거 처리이력을 함께 본다.
+// 에러코드집 관리 — 기종별 에러코드의 고장 이름·의미·조치사항을 등록한다. 과거 처리이력은 상세보기에서만 본다.
 import { useRef, useState } from "react";
 import { Plus, Upload, Download } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
@@ -15,7 +15,7 @@ const fmtDate = (iso) => {
 };
 
 function RegisterErrorCodeModal({ models, onClose, onCreate }) {
-  const [form, setForm] = useState({ model: models[0] ?? "", code: "", meaning: "", commonCause: "", standardAction: "" });
+  const [form, setForm] = useState({ model: models[0] ?? "", code: "", faultName: "", meaning: "", standardAction: "" });
   const [saving, setSaving] = useState(false);
   const valid = form.model.trim() && form.code.trim();
 
@@ -32,28 +32,31 @@ function RegisterErrorCodeModal({ models, onClose, onCreate }) {
       <div className="space-y-3">
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">기종 *</p>
-          {models.length > 0 ? (
-            <select className={inputCls} value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })}>
-              {models.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-          ) : (
-            <input className={inputCls} placeholder="예: OTIS Gen2" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
-          )}
+          <input
+            className={inputCls}
+            list="error-code-model-options"
+            placeholder="예: OTIS Gen2 (새 기종은 직접 입력)"
+            value={form.model}
+            onChange={(e) => setForm({ ...form, model: e.target.value })}
+          />
+          <datalist id="error-code-model-options">
+            {models.map((m) => <option key={m} value={m} />)}
+          </datalist>
         </div>
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">코드 *</p>
           <input className={inputCls} placeholder="예: E-32" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
         </div>
         <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">고장 이름</p>
+          <input className={inputCls} value={form.faultName} onChange={(e) => setForm({ ...form, faultName: e.target.value })} />
+        </div>
+        <div>
           <p className="text-xs font-bold text-slate-500 mb-1">의미</p>
           <input className={inputCls} value={form.meaning} onChange={(e) => setForm({ ...form, meaning: e.target.value })} />
         </div>
         <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">흔한 원인</p>
-          <input className={inputCls} value={form.commonCause} onChange={(e) => setForm({ ...form, commonCause: e.target.value })} />
-        </div>
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">표준 조치법</p>
+          <p className="text-xs font-bold text-slate-500 mb-1">조치사항</p>
           <input className={inputCls} value={form.standardAction} onChange={(e) => setForm({ ...form, standardAction: e.target.value })} />
         </div>
         <div className="flex justify-end pt-2">
@@ -69,8 +72,8 @@ function RegisterErrorCodeModal({ models, onClose, onCreate }) {
 function ErrorCodeDetailModal({ entry, failures, units, onClose, onSave, onDelete }) {
   const [model, setModel] = useState(entry.model ?? "");
   const [code, setCode] = useState(entry.code ?? "");
+  const [faultName, setFaultName] = useState(entry.faultName ?? "");
   const [meaning, setMeaning] = useState(entry.meaning ?? "");
-  const [commonCause, setCommonCause] = useState(entry.commonCause ?? "");
   const [standardAction, setStandardAction] = useState(entry.standardAction ?? "");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -78,7 +81,7 @@ function ErrorCodeDetailModal({ entry, failures, units, onClose, onSave, onDelet
 
   async function save() {
     setSaving(true);
-    await onSave(entry, { model, code, meaning, commonCause, standardAction });
+    await onSave(entry, { model, code, faultName, meaning, standardAction });
     setSaving(false);
   }
 
@@ -103,15 +106,15 @@ function ErrorCodeDetailModal({ entry, failures, units, onClose, onSave, onDelet
           </div>
         </div>
         <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">고장 이름</p>
+          <input className={inputCls} value={faultName} onChange={(e) => setFaultName(e.target.value)} />
+        </div>
+        <div>
           <p className="text-xs font-bold text-slate-500 mb-1">의미</p>
           <input className={inputCls} value={meaning} onChange={(e) => setMeaning(e.target.value)} placeholder="미등록" />
         </div>
         <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">흔한 원인</p>
-          <input className={inputCls} value={commonCause} onChange={(e) => setCommonCause(e.target.value)} />
-        </div>
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">표준 조치법</p>
+          <p className="text-xs font-bold text-slate-500 mb-1">조치사항</p>
           <input className={inputCls} value={standardAction} onChange={(e) => setStandardAction(e.target.value)} />
         </div>
         <div className="flex justify-between items-center">
@@ -142,7 +145,7 @@ function ErrorCodeDetailModal({ entry, failures, units, onClose, onSave, onDelet
   );
 }
 
-// 엑셀/CSV 한 행에서 기종·코드·의미·흔한원인·표준조치법 값을 찾는다 — 헤더 이름이 정확히
+// 엑셀/CSV 한 행에서 기종·코드·고장이름·의미·조치사항 값을 찾는다 — 헤더 이름이 정확히
 // 같지 않아도(띄어쓰기·대소문자 차이) 매칭되도록 정규화해서 비교한다.
 function pickCol(row, keys) {
   const norm = (s) => String(s).replace(/\s/g, "").toLowerCase();
@@ -161,8 +164,8 @@ function ImportErrorCodesModal({ onClose, onImportFile }) {
   async function downloadSample() {
     const XLSX = await import("xlsx");
     const wsData = [
-      ["기종", "코드", "의미", "흔한 원인", "표준 조치법"],
-      ["OTIS Gen2", "E-32", "도어 센서 오류", "도어 센서 오염 또는 단선", "센서 청소 후 재조정, 필요 시 교체"],
+      ["기종", "코드", "고장 이름", "의미", "조치사항"],
+      ["OTIS Gen2", "E-32", "도어 센서 오류", "도어 센서가 물체를 감지해 문이 안 닫힘", "센서 청소 후 재조정, 필요 시 교체"],
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
@@ -185,7 +188,7 @@ function ImportErrorCodesModal({ onClose, onImportFile }) {
       <div className="space-y-4">
         <p className="text-xs text-slate-500 leading-relaxed">
           “기종”·“코드” 열이 있는 엑셀(.xlsx/.xls) 또는 CSV 파일을 올리면 여러 건을 한 번에 등록합니다.
-          “의미”·“흔한 원인”·“표준 조치법” 열은 있으면 함께 채워지고, 없어도 됩니다. 이미 등록된
+          “고장 이름”·“의미”·“조치사항” 열은 있으면 함께 채워지고, 없어도 됩니다. 이미 등록된
           (기종, 코드) 조합은 새 내용으로 덮어씁니다.
         </p>
         <button
@@ -214,8 +217,8 @@ function ImportErrorCodesModal({ onClose, onImportFile }) {
 
 export default function ErrorCodesAdmin({ data, setData }) {
   const { errorCodes = [], units, failures } = data;
-  // 실제 호기에 등록된 기종뿐 아니라, 엑셀 대량입력 등으로 코드집에만 새로 등록된 기종도 포함한다.
-  const models = [...new Set([...units.map((u) => u.model), ...errorCodes.map((e) => e.model)].filter(Boolean))].sort();
+  // 에러코드집의 기종은 실제 호기 기종 데이터와 별개로, 등록된 에러코드에 쓰인 기종만으로 관리한다.
+  const models = [...new Set(errorCodes.map((e) => e.model).filter(Boolean))].sort();
   const [modelFilter, setModelFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [registering, setRegistering] = useState(false);
@@ -226,9 +229,8 @@ export default function ErrorCodesAdmin({ data, setData }) {
     if (modelFilter !== "all" && e.model !== modelFilter) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
-    return [e.model, e.code, e.meaning].filter(Boolean).join(" ").toLowerCase().includes(q);
+    return [e.model, e.code, e.faultName, e.meaning].filter(Boolean).join(" ").toLowerCase().includes(q);
   });
-  const historyCount = (e) => errorCodeHistory(failures, units, e.model, e.code).length;
 
   // 엑셀(.xlsx/.xls) 또는 CSV로 여러 건을 한 번에 등록 — 헤더에 "기종"·"코드"가 있는 행만 가져온다.
   // 이미 있는 (기종,코드) 조합은 upsert로 덮어쓴다(단일 등록과 동일한 규칙).
@@ -243,9 +245,9 @@ export default function ErrorCodesAdmin({ data, setData }) {
         .map((row) => ({
           model: pickCol(row, ["기종", "model"]),
           code: pickCol(row, ["코드", "에러코드", "code"]),
+          faultName: pickCol(row, ["고장이름", "고장명", "faultname"]),
           meaning: pickCol(row, ["의미", "meaning"]),
-          commonCause: pickCol(row, ["흔한원인", "원인", "commoncause"]),
-          standardAction: pickCol(row, ["표준조치법", "표준조치", "조치법", "standardaction"]),
+          standardAction: pickCol(row, ["조치사항", "표준조치법", "표준조치", "조치법", "standardaction"]),
         }))
         .filter((r) => r.model && r.code);
       if (parsed.length === 0) {
@@ -256,8 +258,8 @@ export default function ErrorCodesAdmin({ data, setData }) {
       const payload = parsed.map((r) => ({
         model: r.model,
         code: r.code,
+        fault_name: r.faultName || null,
         meaning: r.meaning || null,
-        common_cause: r.commonCause || null,
         standard_action: r.standardAction || null,
       }));
       const { data: inserted, error } = await supabase.from("error_codes").upsert(payload, { onConflict: "model,code" }).select();
@@ -279,8 +281,8 @@ export default function ErrorCodesAdmin({ data, setData }) {
     const row = {
       model: form.model.trim(),
       code: form.code.trim(),
+      fault_name: form.faultName.trim() || null,
       meaning: form.meaning.trim() || null,
-      common_cause: form.commonCause.trim() || null,
       standard_action: form.standardAction.trim() || null,
     };
     const { data: inserted, error } = await supabase.from("error_codes").upsert(row, { onConflict: "model,code" }).select().maybeSingle();
@@ -298,8 +300,8 @@ export default function ErrorCodesAdmin({ data, setData }) {
       .update({
         model: patch.model.trim(),
         code: patch.code.trim(),
+        fault_name: patch.faultName.trim() || null,
         meaning: patch.meaning.trim() || null,
-        common_cause: patch.commonCause.trim() || null,
         standard_action: patch.standardAction.trim() || null,
       })
       .eq("id", entry.id)
@@ -340,16 +342,17 @@ export default function ErrorCodesAdmin({ data, setData }) {
           <option value="all">전체 기종</option>
           {models.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
-        <input className={`${inputCls} flex-1 min-w-48`} placeholder="기종·코드·의미 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <input className={`${inputCls} flex-1 min-w-48`} placeholder="기종·코드·고장이름·의미 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
-      <AdminTable head={["기종", "코드", "의미", "처리이력"]}>
+      <AdminTable head={["기종", "코드", "고장 이름", "의미", "조치사항"]}>
         {rows.map((e) => (
           <tr key={e.id} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setDetail(e)}>
             <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{e.model}</td>
             <td className="px-3 py-2.5 font-bold whitespace-nowrap">{e.code}</td>
+            <td className="px-3 py-2.5 text-slate-600">{e.faultName || <span className="text-slate-400">미등록</span>}</td>
             <td className="px-3 py-2.5 text-slate-600">{e.meaning || <span className="text-slate-400">미등록</span>}</td>
-            <td className="px-3 py-2.5 text-slate-500">{historyCount(e)}건</td>
+            <td className="px-3 py-2.5 text-slate-600">{e.standardAction || <span className="text-slate-400">미등록</span>}</td>
           </tr>
         ))}
       </AdminTable>

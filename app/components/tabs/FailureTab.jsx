@@ -854,7 +854,7 @@ function ErrorCodeRow({ code, model, errorCodes, failures, units, onChange, onRe
                   className="w-full text-left px-3 py-2.5 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0"
                 >
                   <span className="font-semibold text-slate-700">{e.code}</span>
-                  {e.meaning && <span className="text-slate-400 text-xs ml-1.5">{e.meaning}</span>}
+                  {(e.faultName || e.meaning) && <span className="text-slate-400 text-xs ml-1.5">{e.faultName || e.meaning}</span>}
                 </button>
               ))}
               {filteredCodes.length === 0 && <p className="text-xs text-slate-400 text-center py-3">검색 결과가 없습니다</p>}
@@ -869,9 +869,9 @@ function ErrorCodeRow({ code, model, errorCodes, failures, units, onChange, onRe
       </div>
       {matched && (
         <div className="bg-blue-50 rounded-xl p-3 mt-2">
-          <p className="text-sm font-bold text-blue-800">{matched.meaning || "의미 미등록"}</p>
-          {matched.commonCause && <p className="text-xs text-blue-600 mt-1">흔한 원인: {matched.commonCause}</p>}
-          {matched.standardAction && <p className="text-xs text-blue-600 mt-0.5">표준 조치: {matched.standardAction}</p>}
+          {matched.faultName && <p className="text-sm font-bold text-blue-800">{matched.faultName}</p>}
+          <p className="text-sm text-blue-700">{matched.meaning || "의미 미등록"}</p>
+          {matched.standardAction && <p className="text-xs text-blue-600 mt-1">조치사항: {matched.standardAction}</p>}
           <p className="text-xs font-bold text-blue-700 mt-2">과거 처리사례 {matchedHistory.length}건</p>
           {matchedHistory.length === 0 ? (
             <p className="text-xs text-blue-500 mt-1">아직 처리된 사례가 없습니다.</p>
@@ -904,11 +904,9 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
   const [note, setNote] = useState("");
   const [photos, setPhotos] = useState([]);
   const units = useContext(UnitsContext);
-  // 기종 목록엔 실제 호기에 등록된 값뿐 아니라, 에러코드집에만 있는 기종(엑셀 대량입력으로
-  // 새로 등록된 기종 등)도 포함한다 — 안 그러면 방금 등록한 기종을 여기서 고를 수가 없다.
-  const models = [...new Set([...units.map((u) => u.model), ...errorCodes.map((e) => e.model)].filter(Boolean))].sort();
-  // 기종은 이 호기의 등록된 값으로 자동 선택하되, 잘못됐거나 비어있으면 기사가 직접 바꿀 수 있다.
-  const [selectedModel, setSelectedModel] = useState(() => units.find((u) => u.id === failure.unitId)?.model ?? "");
+  // 기종은 실제 호기 데이터가 아니라 에러코드집에 등록된 기종 중에서만 고른다.
+  const models = [...new Set(errorCodes.map((e) => e.model).filter(Boolean))].sort();
+  const [selectedModel, setSelectedModel] = useState("");
 
   // 에러코드 없음(해당 없음 처리) — 체크하면 코드 입력 없이도 등록할 수 있다.
   const [noErrorCode, setNoErrorCode] = useState(false);
@@ -945,14 +943,10 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
         </div>
         <div>
           <label className="text-xs font-bold text-slate-600 mb-1 block">기종</label>
-          {models.length > 0 ? (
-            <select className={inputCls} value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
-              <option value="">선택 안 함</option>
-              {models.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-          ) : (
-            <input className={inputCls} value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} placeholder="예: OTIS Gen2" />
-          )}
+          <select className={inputCls} value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
+            <option value="">{models.length > 0 ? "선택 안 함" : "에러코드집에 등록된 기종이 없습니다"}</option>
+            {models.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
         </div>
         <div>
           <div className="flex items-center justify-between mb-1">
@@ -1540,7 +1534,12 @@ function ErrorCodeBook({ errorCodes, failures }) {
   const [model, setModel] = useState(models[0] ?? "");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(null);
-  const list = errorCodes.filter((e) => e.model === model && (e.code.toLowerCase().includes(query.trim().toLowerCase()) || (e.meaning ?? "").toLowerCase().includes(query.trim().toLowerCase())));
+  const list = errorCodes.filter((e) => {
+    if (e.model !== model) return false;
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return [e.code, e.faultName, e.meaning].filter(Boolean).join(" ").toLowerCase().includes(q);
+  });
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -1557,7 +1556,7 @@ function ErrorCodeBook({ errorCodes, failures }) {
         ) : (
           list.map((e) => (
             <button key={e.id} type="button" onClick={() => setSelected(e)} className="w-full text-left rounded-lg bg-white border border-slate-200 px-3 py-2.5 active:bg-slate-50">
-              <p className="font-bold text-slate-800 text-sm">{e.code}</p>
+              <p className="font-bold text-slate-800 text-sm">{e.code} {e.faultName && <span className="font-normal text-slate-500">· {e.faultName}</span>}</p>
               <p className="text-xs text-slate-500 mt-0.5">{e.meaning || "의미 미등록"}</p>
             </button>
           ))
@@ -1566,19 +1565,19 @@ function ErrorCodeBook({ errorCodes, failures }) {
       {selected && (
         <Sheet title={`${selected.model} · ${selected.code}`} onClose={() => setSelected(null)}>
           <div className="space-y-3">
+            {selected.faultName && (
+              <div>
+                <p className="text-xs font-bold text-slate-500 mb-1">고장 이름</p>
+                <p className="text-sm text-slate-800">{selected.faultName}</p>
+              </div>
+            )}
             <div>
               <p className="text-xs font-bold text-slate-500 mb-1">의미</p>
               <p className="text-sm text-slate-800">{selected.meaning || "의미 미등록"}</p>
             </div>
-            {selected.commonCause && (
-              <div>
-                <p className="text-xs font-bold text-slate-500 mb-1">흔한 원인</p>
-                <p className="text-sm text-slate-800">{selected.commonCause}</p>
-              </div>
-            )}
             {selected.standardAction && (
               <div>
-                <p className="text-xs font-bold text-slate-500 mb-1">표준 조치법</p>
+                <p className="text-xs font-bold text-slate-500 mb-1">조치사항</p>
                 <p className="text-sm text-slate-800">{selected.standardAction}</p>
               </div>
             )}

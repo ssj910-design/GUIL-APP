@@ -19,7 +19,7 @@ import VerifyImport from "@/app/components/admin/VerifyImport";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { uploadPhoto } from "@/lib/photos";
 
-const CONTRACT_TYPES = ["POG(일반계약)", "FM(종합계약)"];
+const CONTRACT_TYPES = ["POG(일반계약)", "FM(종합계약)", "2회점검"];
 const CONTACT_ROLES = ["대표", "담당자", "관리소장", "건물주", "경비실", "입주민 대표", "총무", "기타"];
 const UNIT_TYPES = ["엘리베이터", "에스컬레이터", "휠체어리프트", "카리프트"];
 const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
@@ -894,7 +894,7 @@ export default function SitesAdmin({ data, setData }) {
                         <div><p className="text-xs font-bold text-slate-400 mb-1">전화번호</p><p className="font-semibold text-slate-800">{site.phone || "-"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">팩스</p><p className="font-semibold text-slate-800">{site.fax || "-"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">이메일</p><p className="font-semibold text-slate-800">{site.email || "-"}</p></div>
-                        <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(전달사항)</p><p className="text-slate-700">{site.notes || "-"}</p></div>
+                        <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(전달사항)</p><p className="text-slate-700 whitespace-pre-wrap">{site.notes || "-"}</p></div>
                       </div>
                     </div>
                     {/* 재계약 안내 — 계약종료 상태이거나 종료일이 임박/지난 현장에만 표시 */}
@@ -985,8 +985,11 @@ export default function SitesAdmin({ data, setData }) {
                       <div><p className="text-xs font-bold text-slate-500 mb-1">팩스</p><input className={inputCls} value={siteForm.fax} onChange={(e) => setSiteForm({ ...siteForm, fax: formatPhone(e.target.value) })} /></div>
                       <div><p className="text-xs font-bold text-slate-500 mb-1">이메일</p><input className={inputCls} value={siteForm.email} onChange={(e) => setSiteForm({ ...siteForm, email: e.target.value })} /></div>
                     </div>
-                    <div className="flex items-end gap-3">
-                      <div className="flex-1"><p className="text-xs font-bold text-slate-500 mb-1">비고(전달사항)</p><input className={inputCls} value={siteForm.notes} onChange={(e) => setSiteForm({ ...siteForm, notes: e.target.value })} /></div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-500 mb-1">비고(전달사항)</p>
+                      <textarea className={inputCls + " resize-y"} rows={4} value={siteForm.notes} onChange={(e) => setSiteForm({ ...siteForm, notes: e.target.value })} />
+                    </div>
+                    <div className="flex justify-end gap-3">
                       <button onClick={cancelEditInfo} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5 whitespace-nowrap">취소</button>
                       <button onClick={saveSiteInfo} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">저장</button>
                     </div>
