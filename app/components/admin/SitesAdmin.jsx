@@ -5,7 +5,7 @@
 // 모바일 앱이 아직 참조하는 sites의 옛 컬럼(unit_count, gov_elevator_nos,
 // elevator_model)도 함께 동기화한다(듀얼라이트).
 import { useState } from "react";
-import { Plus, Trash2, Paperclip, FileText, ShieldCheck } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, ShieldCheck, BadgeCheck } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapUnit, mapSite } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
@@ -809,8 +809,11 @@ export default function SitesAdmin({ data, setData }) {
             {filtered.map((s) => {
               const cnt = units.filter((u) => u.siteId === s.id && u.isActive !== false).length;
               const open = failures.filter((f) => f.siteId === s.id && f.status !== "완료").length;
+              // 엑셀 검증 상태 띠 — red/yellow/green (083 미실행이거나 미검증이면 투명)
+              const bandCls = s.verifyLevel === "red" ? "bg-red-400" : s.verifyLevel === "yellow" ? "bg-amber-400" : s.verifyLevel === "green" ? "bg-emerald-400" : "bg-transparent";
               return (
                 <li key={s.id} className="flex items-stretch">
+                  <span className={`w-1 shrink-0 ${bandCls}`} title={s.verifyLevel ? `검증 상태: ${s.verifyLevel}` : ""} />
                   {assignMode && (
                     <label className="flex items-center px-2 border-b border-slate-50 cursor-pointer">
                       <input type="checkbox" checked={checkedIds.has(s.id)} onChange={() => {
@@ -823,8 +826,10 @@ export default function SitesAdmin({ data, setData }) {
                   <button onClick={() => select(s)}
                     className={`flex-1 text-left px-4 py-3 border-b border-slate-50 ${selectedId === s.id ? "bg-blue-50" : "hover:bg-slate-50"}`}>
                     <div className="flex items-center justify-between">
-                      <p className={`font-bold text-sm ${s.isActive === false ? "text-slate-300 line-through" : ""}`}>
-                        {s.name} <span className="text-slate-400 font-semibold">· {cnt}대</span>
+                      <p className={`font-bold text-sm flex items-center gap-1 ${s.isActive === false ? "text-slate-300 line-through" : ""}`}>
+                        {s.name}
+                        {s.verifiedAt && <BadgeCheck size={14} className="shrink-0 text-emerald-500" title="검증 인증완료" />}
+                        <span className="text-slate-400 font-semibold">· {cnt}대</span>
                       </p>
                       <span className="flex gap-1">
                         {s.assignedEngineer

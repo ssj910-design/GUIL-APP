@@ -348,37 +348,66 @@ export default function VerifyImport({ data, setData, onClose }) {
     return [...bySite.values()];
   }, [finalRows, reviewed, links, data]);
 
+  // 검증 상태 스냅샷 — 매칭된 현장마다: 띠 색(그 현장 행들 중 최악 레벨) + 인증 여부(전 행이 통과·인증완료).
+  // sites.verify_level 컬럼이 아직 없으면(마이그 083 전) 건너뛴다.
+  const verifyReady = useMemo(() => (data?.sites ?? []).some((s) => s.verifyLevel !== undefined), [data]);
+  const statusPlan = useMemo(() => {
+    if (!finalRows || !verifyReady) return [];
+    const worst = { red: 3, yellow: 2, green: 1 };
+    const bySite = new Map();
+    for (const r of finalRows) {
+      const siteId = matchedSiteIdOf(r);
+      if (!siteId) continue;
+      const e = bySite.get(siteId) ?? { siteId, level: "green", allOk: true };
+      if (worst[r.level] > worst[e.level]) e.level = r.level;
+      if (r.level !== "green" && !reviewed[r.idx]) e.allOk = false;
+      if (r.level === "red") e.allOk = false;
+      bySite.set(siteId, e);
+    }
+    return [...bySite.values()];
+  }, [finalRows, verifyReady, reviewed, links]);
+
   async function applyFill() {
     const totalFields = fillPlan.reduce((n, p) => n + p.labels.length, 0);
     const counts = {};
     fillPlan.forEach((p) => p.labels.forEach((l) => { counts[l] = (counts[l] ?? 0) + 1; }));
     const detail = Object.entries(counts).map(([l, n]) => `${l} ${n}곳`).join(", ");
-    if (!(await confirmAsync(`현장 ${fillPlan.length}곳의 비어 있는 칸 ${totalFields}개를 채웁니다.\n(${detail})\n\n이미 값이 있는 칸은 건드리지 않습니다. 진행할까요?`))) return;
+    const statusMsg = verifyReady ? `\n검증 상태(띠 색·인증마크)도 현장 ${statusPlan.length}곳에 저장됩니다.` : "\n(검증 상태 저장은 마이그레이션 083 실행 후 가능)";
+    if (!(await confirmAsync(`현장 ${fillPlan.length}곳의 비어 있는 칸 ${totalFields}개를 채웁니다.\n(${detail})${statusMsg}\n\n이미 값이 있는 칸은 건드리지 않습니다. 진행할까요?`))) return;
     setBusy(true);
+    // 빈칸 채우기 + 검증 상태를 현장별로 합쳐 한 번에 update
+    const now = new Date().toISOString();
+    const merged = new Map();
+    fillPlan.forEach((p) => merged.set(p.siteId, { siteName: p.siteName, patch: { ...p.patch } }));
+    statusPlan.forEach((s) => {
+      const e = merged.get(s.siteId) ?? { siteName: "", patch: {} };
+      e.patch.verify_level = s.level;
+      e.patch.verified_at = s.allOk ? now : null;
+      merged.set(s.siteId, e);
+    });
     let ok = 0;
     const failed = [];
-    for (const p of fillPlan) {
-      const { error } = await supabase.from("sites").update(p.patch).eq("id", p.siteId);
-      if (error) failed.push(`${p.siteName}: ${error.message}`);
+    for (const [siteId, e] of merged) {
+      const { error } = await supabase.from("sites").update(e.patch).eq("id", siteId);
+      if (error) failed.push(`${e.siteName || siteId}: ${error.message}`);
       else ok++;
     }
     // 화면(콘솔 전체 데이터)에도 반영해 새로고침 없이 최신으로
     if (ok && setData) {
-      const camel = { phone: "phone", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType" };
-      const patchById = new Map(fillPlan.map((p) => [p.siteId, p.patch]));
+      const camel = { phone: "phone", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType", verify_level: "verifyLevel", verified_at: "verifiedAt" };
       setData((prev) => ({
         ...prev,
         sites: prev.sites.map((s) => {
-          const patch = patchById.get(s.id);
-          if (!patch) return s;
+          const e = merged.get(s.id);
+          if (!e) return s;
           const mapped = {};
-          for (const [col, v] of Object.entries(patch)) mapped[camel[col]] = v;
+          for (const [col, v] of Object.entries(e.patch)) mapped[camel[col]] = v;
           return { ...s, ...mapped };
         }),
       }));
     }
     setBusy(false);
-    alert(failed.length ? `현장 ${ok}곳 반영, 실패 ${failed.length}곳:\n${failed.slice(0, 5).join("\n")}` : `완료 — 현장 ${ok}곳의 빈칸을 채웠습니다.`);
+    alert(failed.length ? `현장 ${ok}곳 반영, 실패 ${failed.length}곳:\n${failed.slice(0, 5).join("\n")}` : `완료 — 현장 ${ok}곳 반영 (빈칸 ${fillPlan.length}곳 + 검증상태 ${statusPlan.length}곳).`);
   }
 
   const open = openIdx != null ? finalRows?.[openIdx] : null;
@@ -399,9 +428,9 @@ export default function VerifyImport({ data, setData, onClose }) {
               <button onClick={downloadClean} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-white border border-slate-300 rounded-xl px-4 py-2.5">
                 <Download size={15} /> 정리본 다운로드
               </button>
-              <button onClick={applyFill} disabled={busy || !fillPlan.length}
+              <button onClick={applyFill} disabled={busy || (!fillPlan.length && !statusPlan.length)}
                 className="flex items-center gap-2 text-sm font-bold text-white bg-emerald-600 disabled:bg-slate-300 rounded-xl px-4 py-2.5">
-                <DatabaseZap size={15} /> DB 빈칸 채우기 ({fillPlan.length}곳)
+                <DatabaseZap size={15} /> DB 반영 (빈칸 {fillPlan.length} · 상태 {statusPlan.length})
               </button>
             </div>
           )}
