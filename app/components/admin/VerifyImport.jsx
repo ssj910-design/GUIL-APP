@@ -296,6 +296,9 @@ export default function VerifyImport({ data, setData, onClose }) {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null); // DB 반영 진행률 { done, total }
   const [linkQuery, setLinkQuery] = useState(""); // 수동 연결용 현장 검색어
+  const [geoBusy, setGeoBusy] = useState(false);
+  const [geoProg, setGeoProg] = useState(null);   // 좌표 대조 진행 { done, total }
+  const [geoResults, setGeoResults] = useState({}); // idx → { siteId, siteName, dist } (근처 후보, 자동 연결엔 못 미친 것)
 
   async function readSheet(file) {
     const XLSX = await import("xlsx");
@@ -526,6 +529,44 @@ export default function VerifyImport({ data, setData, onClose }) {
     return out;
   }, [finalRows, reviewed, links, data]);
 
+  // 최후의 매칭 수단 — 미매칭 행의 주소를 티맵으로 지오코딩해 DB 현장 좌표와 거리 비교.
+  // 이름이 아무리 달라도(경찰기마대↔74기동대) 좌표가 60m 이내면 같은 건물로 보고 자동 연결한다.
+  async function geoMatch() {
+    const targets = (finalRows ?? []).filter((r) => !r.autoMatched && !links[r.idx] && r.parsed.address && (r.parsed.name || r.contIdx != null));
+    if (!targets.length) { alert("좌표 대조할 미매칭 행이 없습니다"); return; }
+    const sitesWithCoord = (data?.sites ?? []).filter((s) => s.lat && s.lng);
+    if (!sitesWithCoord.length) { alert("DB 현장에 좌표가 없어 대조할 수 없습니다"); return; }
+    setGeoBusy(true);
+    const distM = (la, lo, lb, ln) => { // 하버사인(m)
+      const R = 6371000, rad = Math.PI / 180;
+      const h = Math.sin(((lb - la) * rad) / 2) ** 2 + Math.cos(la * rad) * Math.cos(lb * rad) * Math.sin(((ln - lo) * rad) / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    };
+    let auto = 0, cand = 0, fail = 0;
+    let firstFailReason = null;
+    const newLinks = {}, newGeo = {};
+    for (let i = 0; i < targets.length; i++) {
+      const r = targets[i];
+      setGeoProg({ done: i, total: targets.length });
+      // 내부 엑셀 주소는 시/도가 생략됨 — 구로 시작하면 서울, 시로 시작하면 그대로(티맵이 알아서 찾음)
+      const addr = /^[가-힣]{1,4}구\s/.test(r.parsed.address) ? `서울특별시 ${r.parsed.address}` : r.parsed.address;
+      try {
+        const j = await fetch(`/api/geocode?addr=${encodeURIComponent(addr)}`).then((x) => x.json());
+        if (!j.ok) { fail++; firstFailReason ??= j.reason; continue; }
+        let best = null;
+        for (const s of sitesWithCoord) { const d = distM(j.lat, j.lng, s.lat, s.lng); if (!best || d < best.d) best = { s, d }; }
+        if (best && best.d <= 60) { newLinks[r.idx] = { siteId: best.s.id, siteName: best.s.name, auto: true, score: 0.99, geo: Math.round(best.d) }; auto++; }
+        else if (best && best.d <= 250) { newGeo[r.idx] = { siteId: best.s.id, siteName: best.s.name, dist: Math.round(best.d) }; cand++; }
+        else fail++;
+      } catch { fail++; }
+    }
+    setLinks((p) => ({ ...newLinks, ...p })); // 이미 연결된 건 안 덮음
+    setGeoResults((p) => ({ ...p, ...newGeo }));
+    setGeoProg(null);
+    setGeoBusy(false);
+    alert(`좌표 대조 완료 — 자동 연결 ${auto}곳 · 근처 후보 ${cand}곳(상세에서 확인) · 미확인 ${fail}곳${firstFailReason ? `\n(실패 사유 예: ${firstFailReason})` : ""}`);
+  }
+
   async function applyFill() {
     const totalFields = fillPlan.reduce((n, p) => n + p.labels.length, 0);
     const counts = {};
@@ -606,6 +647,15 @@ export default function VerifyImport({ data, setData, onClose }) {
             <input type="file" accept=".xlsx,.xls" className="hidden" onChange={pickInternal} disabled={busy} />
           </label>
           <span className="self-center text-xs font-semibold text-slate-500">등록된 현장 {dbKeys.size}곳과 자동 대조</span>
+          {finalRows && (() => {
+            const n = finalRows.filter((r) => !r.autoMatched && !links[r.idx] && r.parsed.address && (r.parsed.name || r.contIdx != null)).length;
+            return n > 0 && (
+              <button onClick={geoMatch} disabled={geoBusy || busy}
+                className="flex items-center gap-1.5 text-sm font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5">
+                {geoBusy && geoProg ? `좌표 대조 중… ${geoProg.done}/${geoProg.total}` : `주소 좌표로 대조 (미매칭 ${n}곳)`}
+              </button>
+            );
+          })()}
           {finalRows && (
             <div className="flex gap-2 ml-auto">
               <button onClick={downloadClean} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-white border border-slate-300 rounded-xl px-4 py-2.5">
@@ -699,13 +749,18 @@ export default function VerifyImport({ data, setData, onClose }) {
             {/* DB 매칭 — 자동 실패 시 비슷한 현장 후보를 제시, 사람이 클릭해서 연결 (구주소·별칭 문제 해소) */}
             {links[open.idx] ? (
               <div className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center justify-between">
-                <span>DB 현장과 연결됨: <b>{links[open.idx].siteName}</b>{links[open.idx].auto && ` (자동 ${Math.round(links[open.idx].score * 100)}% — 아니면 해제)`}</span>
+                <span>DB 현장과 연결됨: <b>{links[open.idx].siteName}</b>{links[open.idx].auto && ` (자동 ${links[open.idx].geo != null ? `· 좌표 ${links[open.idx].geo}m` : Math.round(links[open.idx].score * 100) + "%"} — 아니면 해제)`}</span>
                 <button onClick={() => { setLinks((p) => { const n = { ...p }; delete n[open.idx]; return n; }); persistMark(open, (o) => { delete o.link; }); }} className="font-bold text-slate-400">연결 해제</button>
               </div>
             ) : (!open.autoMatched && (open.parsed.name || open.contIdx != null) && dbSites.length > 0 && (
               (() => {
                 // 연속 행(병합 잔재)은 소속 현장 이름을 빌려 후보를 찾는다 — 주소가 달라 별개 현장(공군중앙교회 등)일 수 있어서
                 let cands = candidatesFor(open, open.contIdx != null ? finalRows[open.contIdx]?.parsed.name : "");
+                // 좌표 대조에서 나온 근처 후보를 맨 앞에 (거리 표시)
+                const geo = geoResults[open.idx];
+                if (geo && !cands.some((c) => c.id === geo.siteId)) {
+                  cands = [{ id: geo.siteId, name: geo.siteName, dong: null, score: 0, tags: [`좌표 ${geo.dist}m`] }, ...cands];
+                }
                 const fallback = cands.length === 0;
                 if (fallback) cands = sameDongFallback(open);
                 const qk = linkQuery.trim().length >= 2 ? nameKey(linkQuery) : "";
