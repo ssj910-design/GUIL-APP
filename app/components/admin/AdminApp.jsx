@@ -5,7 +5,7 @@
 // 각 섹션에 props로 내린다 (모바일 App 셸과 같은 관례).
 import { useState, useEffect } from "react";
 import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, CalendarCheck, Users, LayoutDashboard, BarChart3, Menu , Bell, MessageSquare, BookOpen } from "lucide-react";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase, fetchAll } from "@/lib/supabaseClient";
 import {
   mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest,
   mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck, mapFeedPost, mapRestockRequest, mapErrorCode,
@@ -114,7 +114,7 @@ export default function AdminApp() {
           supabase.from("restock_requests").select("*").order("created_at", { ascending: false }),
           supabase.from("todos").select("*").order("created_at", { ascending: false }),
           supabase.from("billings").select("*").order("created_at", { ascending: false }),
-          supabase.from("self_checks").select("*"),
+          fetchAll("self_checks"),
           supabase.from("profiles").select("*").order("name"),
           supabase.from("feed_posts").select("*").order("created_at", { ascending: true }),
           supabase.from("error_codes").select("*"),

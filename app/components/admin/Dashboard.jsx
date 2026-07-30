@@ -6,7 +6,7 @@ import { useState, useMemo } from "react";
 import WeekStrip from "@/app/components/admin/WeekStrip";
 import { AlertOctagon, Plus, MapPin } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, shortDate, parseErrorCode, engineerJobsByName } from "@/lib/utils";
+import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, realInstallPlace, shortDate, parseErrorCode, engineerJobsByName } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
 import { Badge } from "@/app/components/ui";
@@ -17,9 +17,14 @@ import { EngineerLocationMap } from "@/app/components/admin/EngineerLocationMap"
 
 function unitLabel(units, sites, unitId, fallbackSiteName, fallbackLabel) {
   const u = units.find((x) => x.id === unitId);
-  if (!u) return { site: fallbackSiteName ?? "-", unit: formatUnitLabel(fallbackLabel) ?? "-", siteObj: sites.find((x) => x.name === fallbackSiteName) };
+  if (!u) return { site: fallbackSiteName ?? "-", unit: formatUnitLabel(fallbackLabel) ?? "-", siteObj: sites.find((x) => x.name === fallbackSiteName), place: null };
   const s = sites.find((x) => x.id === u.siteId);
-  return { site: s?.name ?? fallbackSiteName ?? "-", unit: u.unitNo, siteObj: s };
+  return { site: s?.name ?? fallbackSiteName ?? "-", unit: u.unitNo, siteObj: s, place: realInstallPlace(u) };
+}
+
+// 호기 표기 뒤에 설치장소를 괄호로 덧붙인다 — "N호기(설치장소)". 장소 없으면 호기만.
+function unitWithPlace(loc) {
+  return `${loc.unit}${loc.place ? `(${loc.place})` : ""}`;
 }
 
 function Kpi({ label, value, tone = "text-slate-900" }) {
@@ -39,7 +44,7 @@ export function FailureDetailContent({ f, units, sites, profiles = [] }) {
   const { faultType, faultDetail } = parseErrorCode(f.errorCode);
   const reporter = profiles.find((p) => p.id === f.createdBy)?.name ?? "-";
   const gridRows = [
-    { label: "현장 · 호기", value: `${loc.site} · ${loc.unit}` },
+    { label: "현장 · 호기", value: `${loc.site} · ${unitWithPlace(loc)}` },
     { label: "현장 주소", value: loc.siteObj?.address ?? "-" },
     { label: "접수일시", value: f.reportedAt },
     { label: "접수자", value: reporter },
@@ -325,7 +330,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
                 return (
                   <tr key={f.id} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setFailureDetail(f)}>
                     <td className="pl-5 pr-2 py-2.5 text-slate-500 whitespace-nowrap">{f.reportedAt}</td>
-                    <td className="px-1 py-2.5 font-semibold whitespace-nowrap">{loc.site} · {loc.unit}</td>
+                    <td className="px-1 py-2.5 font-semibold whitespace-nowrap">{loc.site} · {unitWithPlace(loc)}</td>
                     <td className="px-2 py-2.5 text-slate-600">{f.errorCode}</td>
                     <td className="px-2 py-2.5 whitespace-nowrap">{loc.siteObj?.assignedEngineer || "미배정"}</td>
                     <td className="px-2 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>

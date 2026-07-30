@@ -5,7 +5,7 @@
 // 기사가 완료 처리하면 남은 줄이 곧 누락 후보다. (DESIGN-v2 §7-3)
 import { useEffect, useState } from "react";
 import { Search, Map as MapIcon } from "lucide-react";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase, fetchAll } from "@/lib/supabaseClient";
 import { mapSelfCheck, mapSelfCheckItem } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
 import { shortDate } from "@/lib/utils";
@@ -174,7 +174,7 @@ export default function SelfChecksAdmin({ data, setData }) {
     setBusy(true);
     const { error } = await supabase.rpc("generate_self_checks", { p_ym: ym });
     if (error) { alert("생성 실패: " + error.message); setBusy(false); return; }
-    const { data: fresh } = await supabase.from("self_checks").select("*");
+    const { data: fresh } = await fetchAll("self_checks");
     setData((prev) => ({ ...prev, selfChecks: (fresh ?? []).map(mapSelfCheck) }));
     setBusy(false);
   }

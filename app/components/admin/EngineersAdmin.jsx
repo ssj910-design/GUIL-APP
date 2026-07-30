@@ -13,13 +13,21 @@ import LeavesAdmin from "@/app/components/admin/LeavesAdmin";
 import WorkCalendar from "@/app/components/admin/WorkCalendar";
 import AttendanceAdmin from "@/app/components/admin/AttendanceAdmin";
 
+// 퇴사자 로그인 시도 시각 — "2026-07-30T00:00:00Z" → "26.07.30 00:00" (한국시간).
+function fmtLoginAttempt(iso) {
+  const kst = new Date(new Date(iso).toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+  const p2 = (n) => String(n).padStart(2, "0");
+  return `${String(kst.getFullYear()).slice(2)}.${p2(kst.getMonth() + 1)}.${p2(kst.getDate())} ${p2(kst.getHours())}:${p2(kst.getMinutes())}`;
+}
+
 function EngineerRow({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContract, onResetPassword, canSuper, dragProps }) {
   const [form, setForm] = useState({
     phone: p.phone ?? "", minwonId: p.minwon_id ?? "", hireDate: p.hire_date ?? "",
-    address: p.address ?? "", vehicleNo: p.vehicle_no ?? "",
+    address: p.address ?? "", vehicleNo: p.vehicle_no ?? "", memberType: p.member_type ?? "",
   });
   const dirty = form.phone !== (p.phone ?? "") || form.minwonId !== (p.minwon_id ?? "")
-    || form.hireDate !== (p.hire_date ?? "") || form.address !== (p.address ?? "") || form.vehicleNo !== (p.vehicle_no ?? "");
+    || form.hireDate !== (p.hire_date ?? "") || form.address !== (p.address ?? "") || form.vehicleNo !== (p.vehicle_no ?? "")
+    || form.memberType !== (p.member_type ?? "");
   return (
     <tr
       onDragOver={dragProps.onDragOver}
@@ -37,7 +45,9 @@ function EngineerRow({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContr
       </td>
       <td className="pr-3 py-2.5 whitespace-nowrap">
         <p className="font-bold">{p.name}</p>
-        <p className="text-[10px] text-slate-400 font-semibold">{p.member_type ?? "구분 없음"}</p>
+      </td>
+      <td className="px-3 py-2.5 w-28">
+        <EditableText value={form.memberType} placeholder="직급" onCommit={(v) => setForm({ ...form, memberType: v })} />
       </td>
       <td className="px-3 py-2.5 w-32">
         <EditableDate value={form.hireDate} onCommit={(v) => setForm({ ...form, hireDate: v })} />
@@ -94,10 +104,11 @@ function EngineerCard({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenCont
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     phone: p.phone ?? "", minwonId: p.minwon_id ?? "", hireDate: p.hire_date ?? "",
-    address: p.address ?? "", vehicleNo: p.vehicle_no ?? "",
+    address: p.address ?? "", vehicleNo: p.vehicle_no ?? "", memberType: p.member_type ?? "",
   });
   const dirty = form.phone !== (p.phone ?? "") || form.minwonId !== (p.minwon_id ?? "")
-    || form.hireDate !== (p.hire_date ?? "") || form.address !== (p.address ?? "") || form.vehicleNo !== (p.vehicle_no ?? "");
+    || form.hireDate !== (p.hire_date ?? "") || form.address !== (p.address ?? "") || form.vehicleNo !== (p.vehicle_no ?? "")
+    || form.memberType !== (p.member_type ?? "");
   const Line = ({ k, v }) => (
     <div className="flex justify-between gap-3 py-1 border-b border-slate-50 last:border-0">
       <span className="text-[11px] text-slate-400 shrink-0">{k}</span>
@@ -110,15 +121,13 @@ function EngineerCard({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenCont
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-base font-extrabold text-slate-800">{p.name}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">
-            {p.member_type ?? "구분 미지정"}
-            {p.hire_date && ` · 입사 ${shortDate(p.hire_date)}`}
-          </p>
+          {p.hire_date && <p className="text-[11px] text-slate-400 mt-0.5">입사 {shortDate(p.hire_date)}</p>}
         </div>
         {p.auth_user_id ? <StatusBadge tone="green">계정 연결</StatusBadge> : <StatusBadge tone="slate">계정 없음</StatusBadge>}
       </div>
 
       <div className="mt-3">
+        <Line k="직급" v={p.member_type} />
         <Line k="주소" v={p.address} />
         <Line k="연락처" v={p.phone} />
         <Line k="차량번호" v={p.vehicle_no} />
@@ -128,6 +137,10 @@ function EngineerCard({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenCont
 
       {open && (
         <div className="mt-3 pt-3 border-t border-slate-100 space-y-2.5">
+          <div>
+            <p className="text-[11px] font-bold text-slate-500 mb-1">직급</p>
+            <input className={inputCls} value={form.memberType} onChange={(e) => setForm({ ...form, memberType: e.target.value })} />
+          </div>
           <div>
             <p className="text-[11px] font-bold text-slate-500 mb-1">입사일</p>
             <DateTextInput value={form.hireDate} onChange={(v) => setForm({ ...form, hireDate: v })} />
@@ -187,6 +200,21 @@ function ContractModal({ p, onClose, onSave }) {
         uploadLabel="계약서 사본 첨부 (사진/PDF)"
         height="h-[calc(85vh-9rem)]"
         onUpload={(file) => uploadPhoto(file, `contracts/${p.id}`)}
+        onSave={(urls) => onSave(p, urls)}
+      />
+    </Modal>
+  );
+}
+
+// 사직서 사본 첨부 — 근로계약서와 동일한 방식.
+function ResignationModal({ p, onClose, onSave }) {
+  return (
+    <Modal title={`${p.name} 사직서`} onClose={onClose} wide="xl">
+      <FileCarousel
+        urls={p.resignation_urls ?? []}
+        uploadLabel="사직서 사본 첨부 (사진/PDF)"
+        height="h-[calc(85vh-9rem)]"
+        onUpload={(file) => uploadPhoto(file, `resignations/${p.id}`)}
         onSave={(urls) => onSave(p, urls)}
       />
     </Modal>
@@ -293,7 +321,9 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
   const isSuper = tier === "super"; // 최고관리자만: 관리자 등록·직원 제외·비번초기화
   // 표시 순서(staff_order)대로 정렬 — 순서 없는 사람은 뒤로. 당직 순번(duty_order)과는
   // 별개 컬럼이라 여기서 드래그로 바꿔도 당직 근무표 로직에 영향이 없다.
-  const engineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false)
+  // 중간관리자 이하는 최고관리자를 뺀 관리자 계정 — 기사와 똑같이 이 표에서 입사일·주소·연락처·
+  // 차량번호 등록·비번초기화가 되게 기사 목록에 합친다. 최고관리자만 보호 대상으로 제외.
+  const engineers = profiles.filter((p) => (p.role === "engineer" || (p.role === "admin" && p.admin_tier !== "super")) && p.is_active !== false)
     .slice().sort((a, b) => (a.staff_order ?? 999) - (b.staff_order ?? 999));
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
@@ -302,6 +332,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
   const [addingAdmin, setAddingAdmin] = useState(false);
   const admins = profiles.filter((p) => p.role === "admin" && p.is_active !== false);
   const [contractTarget, setContractTarget] = useState(null);
+  const [resignationTarget, setResignationTarget] = useState(null);
   const [ledgerTarget, setLedgerTarget] = useState(null);
   const [dragIndex, setDragIndex] = useState(null);
   const [overIndex, setOverIndex] = useState(null);
@@ -415,6 +446,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
       hire_date: form.hireDate || null,
       address: form.address || null,
       vehicle_no: form.vehicleNo || null,
+      member_type: form.memberType || null,
     };
     await supabase.from("profiles").update(patch).eq("id", p.id);
     setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, ...patch } : x)) }));
@@ -424,6 +456,12 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
     await supabase.from("profiles").update({ contract_urls: urls }).eq("id", p.id);
     setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, contract_urls: urls } : x)) }));
     setContractTarget((t) => (t && t.id === p.id ? { ...t, contract_urls: urls } : t));
+  }
+
+  async function saveResignation(p, urls) {
+    await supabase.from("profiles").update({ resignation_urls: urls }).eq("id", p.id);
+    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, resignation_urls: urls } : x)) }));
+    setResignationTarget((t) => (t && t.id === p.id ? { ...t, resignation_urls: urls } : t));
   }
 
   async function saveLedgerFile(p, urls) {
@@ -515,7 +553,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
         ))}
       </div>
       <div className="hidden lg:block">
-      <AdminTable minWidth="76rem" head={["", "이름", "입사일", "주소", "연락처", "차량번호", "담당대수", "아이디(민원24)", "로그인", ""]}>
+      <AdminTable minWidth="76rem" head={["", "이름", "직급", "입사일", "주소", "연락처", "차량번호", "담당대수", "아이디(민원24)", "로그인", ""]}>
         {engineers.map((p, i) => (
           <EngineerRow
             key={p.id}
@@ -573,31 +611,51 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
         />
       )}
 
+      {resignationTarget && <ResignationModal p={resignationTarget} onClose={() => setResignationTarget(null)} onSave={saveResignation} />}
+
       {archived.length > 0 && (
         <details className="mt-5 bg-white border border-slate-200 rounded-xl px-4 py-3">
           <summary className="text-xs font-bold text-slate-500 cursor-pointer">
-            제외된 직원 {archived.length}명 — 기록 보관 중
+            퇴사자 {archived.length}명
           </summary>
           <p className="text-[11px] text-slate-400 mt-2 mb-2.5">
             데이터는 지워지지 않습니다. 과거 고장·할일·점검의 담당자 표기가 유지되며,
-            슈퍼관리자 콘솔에서 퇴사·제외 이력으로 집계할 예정입니다.
+            로그인 아이디로는 로그인할 수 없고, 시도하면 아래에 시각이 표시됩니다.
           </p>
           <div className="space-y-1.5">
             {archived.map((p) => (
-              <div key={p.id} className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2">
+              <div key={p.id} className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2 flex-wrap">
                 <p className="text-xs text-slate-600 min-w-0">
                   <span className="font-bold text-slate-800">{p.name}</span>
                   <span className="text-slate-400"> · {p.member_type ?? "구분 없음"}</span>
                   <br />
                   <span className="text-[11px] text-slate-400">
-                    {p.deleted_at ? String(p.deleted_at).slice(0, 10) : "일자 미상"} 제외
+                    {p.deleted_at ? String(p.deleted_at).slice(0, 10) : "일자 미상"} 퇴사
                     {p.delete_reason && ` · ${p.delete_reason}`}
                   </span>
+                  {p.deactivated_login_attempt_at && (
+                    <>
+                      <br />
+                      <span className="text-[11px] font-bold text-red-500">
+                        {fmtLoginAttempt(p.deactivated_login_attempt_at)} 로그인시도
+                      </span>
+                    </>
+                  )}
                 </p>
-                <button onClick={() => restore(p)}
-                  className="shrink-0 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5">
-                  복구
-                </button>
+                <div className="shrink-0 flex items-center gap-1.5">
+                  <button onClick={() => setContractTarget(p)}
+                    className="text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5">
+                    근로계약서
+                  </button>
+                  <button onClick={() => setResignationTarget(p)}
+                    className="text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5">
+                    사직서
+                  </button>
+                  <button onClick={() => restore(p)}
+                    className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5">
+                    복구
+                  </button>
+                </div>
               </div>
             ))}
           </div>

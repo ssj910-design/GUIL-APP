@@ -1,9 +1,8 @@
 import { useState, useContext, useEffect, useRef } from "react";
 import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle, Wrench, ChevronRight, Search, X, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, labelToSeq, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf } from "@/lib/utils";
+import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
-import { useLiveInspections } from "@/app/hooks/useLiveInspections";
 import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
@@ -417,17 +416,14 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
 export function FailureDetailSheet({ failure, failures = [], nested = false, onClose, onDispatch, onArrive, onOpenResult, onAssignOpen }) {
   const { role } = useContext(AuthContext);
   const sites = useContext(SitesContext);
+  const units = useContext(UnitsContext);
   const site = sites.find((s) => s.id === failure.siteId);
   const history = unitHistory(failures, failure);
   const stage = failureStage(failure);
   const { faultType, faultDetail } = parseErrorCode(failure.errorCode);
-  const unitLabel = formatUnitLabel(failure.elevatorNo);
-  const unitIndex = (labelToSeq(failure.elevatorNo) ?? NaN) - 1;
-  const unitGovNo = site?.govElevatorNos?.[unitIndex];
-  const liveInspections = useLiveInspections(
-    unitGovNo ? [{ key: `${failure.siteId}-${unitIndex}`, siteId: failure.siteId, siteName: failure.siteName, govElevatorNo: unitGovNo }] : []
-  );
-  const liveInfo = liveInspections[0];
+  const unit = units.find((u) => u.id === failure.unitId);
+  const place = realInstallPlace(unit);
+  const unitLabel = formatUnitLabel(failure.elevatorNo) + (place ? `(${place})` : "");
   const [photoViewer, setPhotoViewer] = useState(null);
   const [histTarget, setHistTarget] = useState(null); // 이력 행 클릭 → 그 고장 상세를 위에 얹어 보여준다
   return (
@@ -441,15 +437,11 @@ export function FailureDetailSheet({ failure, failures = [], nested = false, onC
       <div className="space-y-2.5 mb-4">
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">구분</span>
-          <span className="font-semibold text-slate-700">{liveInfo?.kindNm || "승객용"}</span>
+          <span className="font-semibold text-slate-700">{unit?.kind || "승객용"}</span>
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">모델명</span>
           <span className="font-semibold text-slate-700">{site?.elevatorModel || "-"}</span>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-400">층수[지상/지하]</span>
-          <span className="font-semibold text-slate-700">{liveInfo ? `${liveInfo.groundFloorCnt} / ${liveInfo.undgrndFloorCnt}` : "-"}</span>
         </div>
         <div className="flex items-center justify-between gap-2 text-sm">
           <span className="text-slate-400 shrink-0">주소</span>
@@ -1039,7 +1031,7 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
 
 // 미배정 접수 카드 — 클릭 없이도 판단할 수 있게 상세를 카드에 박는다:
 // 거리(거리순 정렬)·접수시각·증상·주소·신고자·재발배지 + 카드에서 바로 출동/배정.
-// (모델·층수 같은 라이브 정보는 상세시트 유지 — 여기선 판단에 필요한 것만.)
+// (모델 같은 상세 정보는 상세시트 유지 — 여기선 판단에 필요한 것만.)
 function FailureResponseCard({ f, dist, history = [], site, onOpenDetail, onDispatch, onAssignOpen }) {
   const stage = failureStage(f);
   const { faultType, faultDetail } = parseErrorCode(f.errorCode);
@@ -1193,8 +1185,11 @@ const fmtDist = (km) => (km == null ? null : km < 1 ? `${Math.round(km * 1000)}m
 const fmtMD = (d) => { const x = new Date(d); return `${String(x.getMonth() + 1).padStart(2, "0")}/${String(x.getDate()).padStart(2, "0")}`; };
 export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispatch, onArrive, onOpenResult, onRefuse, onAssignOpen }) {
   const siteOf = useSiteOf();
+  const units = useContext(UnitsContext);
   const stage = failureStage(f);
   const { name: me, role } = useContext(AuthContext);
+  const place = realInstallPlace(units.find((u) => u.id === f.unitId));
+  const unitLabel = formatUnitLabel(f.elevatorNo) + (place ? `(${place})` : "");
   // 상태별 컬러 — 작업중(초록)/출동중(파랑)/응답대기(노랑) 우선, 그다음 미배정을 세분:
   // 운행정지(빨강 심각) / 지원미배정=지원요청에서 넘어옴(주황) / 일반 미배정(빨강)
   const state = stage === "arrived" ? { label: "작업중", bar: "border-l-amber-500", chip: "bg-amber-50 text-amber-600" }
@@ -1208,7 +1203,7 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
       {/* 개요 카드 — 현장명을 윗줄에 통째로 두고, 지도·버튼은 아랫줄로 내려 이름이 눌리지 않게 한다 */}
       <button type="button" onClick={() => onOpenDetail(f)} className="w-full text-left px-3.5 pt-3 pb-2">
         <div className="flex items-center gap-1.5">
-          <p className="font-bold text-slate-800 text-sm truncate flex-1 min-w-0">{f.siteName}{formatUnitLabel(f.elevatorNo) ? ` · ${formatUnitLabel(f.elevatorNo)}` : ""}</p>
+          <p className="font-bold text-slate-800 text-sm truncate flex-1 min-w-0">{f.siteName}{formatUnitLabel(f.elevatorNo) ? ` · ${unitLabel}` : ""}</p>
           <span className={`shrink-0 text-[10px] font-bold rounded-full px-1.5 py-0.5 ${state.chip}`}>{state.label}</span>
           {warnCount >= 3 && <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold rounded-full px-1.5 py-0.5 bg-red-100 text-red-600" title={`최근 30일 ${warnCount}회 고장`}><Repeat size={10} strokeWidth={2.8} />{warnCount}</span>}
         </div>

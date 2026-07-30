@@ -9,7 +9,7 @@ import { Plus, Trash2, Paperclip, FileText } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapUnit } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, govDateToDashed, siteMatchesQuery, formatPhone, shortDate } from "@/lib/utils";
+import { addDays, govDateToDashed, siteMatchesQuery, formatPhone, shortDate, realInstallPlace } from "@/lib/utils";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -133,15 +133,14 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
     ["건물명", site.name],
     ["호기", unit.unitNo],
     ["승강기번호", liveInfo?.govElevatorNo || unitGovNo || "미등록"],
-    ["승강기종류", liveInfo?.kindNm || unit.kind || "-"],
-    ["승강기형식", liveInfo?.form || unit.form || "-"],
+    ["승강기종류", unit.kind || "-"],
+    ["승강기형식", unit.form || "-"],
     ["승강기모델", unit.model || "-"],
     ["제조업체", unit.manufacturer || "-"],
-    ["설치일자", liveInfo?.frstInstallationDe || unit.installDate || "-"],
-    ["운행층수", liveInfo?.groundFloorCnt ? `지상 ${liveInfo.groundFloorCnt} / 지하 ${liveInfo.undgrndFloorCnt ?? 0}` : unit.floors || "-"],
-    ["운행구간", liveInfo?.shuttleSection || unit.runSection || "-"],
-    ["적재하중", liveInfo?.liveLoad ? `${liveInfo.liveLoad}kg` : unit.loadKg ? `${unit.loadKg}kg` : "-"],
-    ["정원", liveInfo?.ratedCap ? `${liveInfo.ratedCap}인승` : unit.capacityPersons ? `${unit.capacityPersons}인승` : "-"],
+    ["설치일자", unit.installDate || "-"],
+    ["운행구간", unit.runSection || "-"],
+    ["적재하중", unit.loadKg ? `${unit.loadKg}kg` : "-"],
+    ["정원", unit.capacityPersons ? `${unit.capacityPersons}인승` : "-"],
     ["정격속도", unit.ratedSpeed ? `${unit.ratedSpeed}m/s` : "-"],
     ["보험", unit.insurer ? `${unit.insurer} (~${unit.insuranceEnd ?? "?"})` : "-"],
   ];
@@ -425,13 +424,6 @@ export default function SitesAdmin({ data, setData }) {
 
   const contacts = siteManagers.filter((m) => m.siteId === selectedId);
 
-  // 읽기전용 "승강기 정보" 표에 국가승강기정보센터 실시간 종류·설치일자를 채워준다.
-  const siteUnitQueries = siteUnits
-    .filter((u) => u.govNo)
-    .map((u) => ({ key: u.id, siteId: u.siteId, siteName: site?.name, govElevatorNo: u.govNo }));
-  const liveUnitInfo = useLiveInspections(siteUnitQueries);
-  const liveOf = (unitId) => liveUnitInfo.find((i) => i.id === `gov-${unitId}`);
-
   const [renew, setRenew] = useState(null); // 재계약 폼 {start, end} (null=닫힘)
 
   function select(s) {
@@ -644,7 +636,7 @@ export default function SitesAdmin({ data, setData }) {
         {/* 현장 등록은 공단 엑셀 업로드로만 — API 단건 등록은 팀 결정으로 제거 (2026-07-17) */}
         <button onClick={() => setImporting(true)}
           className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
-          <Plus size={15} /> 공단 엑셀로 현장 등록
+          <Plus size={15} /> 엑셀로 현장 일괄 등록
         </button>
       </div>
 
@@ -1009,30 +1001,28 @@ export default function SitesAdmin({ data, setData }) {
                   <div className="overflow-x-auto"><table className="w-full min-w-[44rem] text-sm table-fixed">
                     <thead>
                       <tr className="text-xs text-slate-400 border-b border-slate-100">
-                        <th className="text-left px-4 py-2 font-semibold w-14">호기</th>
+                        <th className="text-left px-4 py-2 font-semibold w-40">호기</th>
                         <th className="text-left px-2 py-2 font-semibold w-32">승강기고유번호</th>
                         <th className="text-left px-2 py-2 font-semibold w-28">종류</th>
                         <th className="text-left px-2 py-2 font-semibold">모델</th>
-                        <th className="text-left px-2 py-2 font-semibold w-40">운행층수</th>
                         <th className="text-left px-2 py-2 font-semibold w-32">설치일자</th>
                         <th className="text-left px-2 py-2 font-semibold w-40">EMCALL,통신사,국선/무선</th>
                       </tr>
                     </thead>
                     <tbody>
                       {siteUnits.map((u) => {
-                        const live = liveOf(u.id);
+                        const unitPlaceLabel = `${u.unitNo}${realInstallPlace(u) ? `(${realInstallPlace(u)})` : ""}`;
                         return (
                           <tr
                             key={u.id}
                             onClick={() => setUnitDetail(u)}
                             className={`border-b border-slate-50 cursor-pointer hover:bg-slate-50 ${u.isActive === false ? "opacity-40" : ""}`}
                           >
-                            <td className="px-4 py-2 font-bold whitespace-nowrap text-blue-700">{u.unitNo}</td>
+                            <td className="px-4 py-2 font-bold truncate text-blue-700" title={unitPlaceLabel}>{unitPlaceLabel}</td>
                             <td className="px-2 py-2 whitespace-nowrap">{u.govNo || "미등록"}</td>
-                            <td className="px-2 py-2 truncate" title={live?.kindNm || u.kind || u.unitType}>{live?.kindNm || u.kind || u.unitType}</td>
+                            <td className="px-2 py-2 truncate" title={u.kind || u.unitType}>{u.kind || u.unitType}</td>
                             <td className="px-2 py-2 truncate" title={u.model ?? ""}>{u.model || "-"}</td>
-                            <td className="px-2 py-2 truncate">{live?.groundFloorCnt ? `지상 ${live.groundFloorCnt} / 지하 ${live.undgrndFloorCnt ?? 0}` : u.floors || "-"}</td>
-                            <td className="px-2 py-2 whitespace-nowrap">{live?.frstInstallationDe || u.installDate || "-"}</td>
+                            <td className="px-2 py-2 whitespace-nowrap">{u.installDate || "-"}</td>
                             <td className="px-2 py-2 truncate" title={site.emergencyPhone ?? ""}>{site.emergencyPhone || "-"}</td>
                           </tr>
                         );
@@ -1041,7 +1031,7 @@ export default function SitesAdmin({ data, setData }) {
                   </table></div>
                 )}
                 <p className="px-4 py-2.5 text-[10px] text-slate-400 border-t border-slate-50">
-                  * 호기명을 클릭하면 상세정보(승강기정보·고장·검사·부품교체내역)를 볼 수 있습니다. 승강기고유번호를 등록하면 종류·설치일자가 국가승강기정보센터 실시간 데이터로 전환됩니다.
+                  * 호기명을 클릭하면 상세정보(승강기정보·고장·검사·부품교체내역)를 볼 수 있습니다.
                 </p>
               </div>
             </>

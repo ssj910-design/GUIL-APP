@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Home, AlertTriangle, CalendarCheck, CalendarClock, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound } from "lucide-react";
 import { PullToRefresh } from "@/app/components/PullToRefresh";
-import { supabase, writeOk } from "@/lib/supabaseClient";
+import { supabase, writeOk, fetchAll } from "@/lib/supabaseClient";
 import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
@@ -588,7 +588,7 @@ export default function App() {
         supabase.from("units").select("*").order("seq"),
         supabase.from("error_codes").select("*"),
         supabase.from("kit_stock").select("*"),
-        supabase.from("self_checks").select("*"),
+        fetchAll("self_checks"),
         supabase.from("attendances").select("*").eq("work_date", TODAY_STR),
         supabase.from("duty_schedules").select("*").gte("duty_date", TODAY_STR.slice(0, 8) + "01").order("duty_date"),
         supabase.from("duty_swaps").select("*"),
