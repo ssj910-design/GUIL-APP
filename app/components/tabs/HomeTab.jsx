@@ -1,4 +1,5 @@
 import { useState, useContext, useEffect, useRef } from "react";
+import { Capacitor } from "@capacitor/core";
 import { ShieldCheck, AlertOctagon, X, Map as MapIcon } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
@@ -229,6 +230,11 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
   // 위치 권한 상태를 미리 파악해 둔다 — '아직 안 물어봄(prompt)'이면 안내 카드로 먼저 유도.
   // 확정된 상태는 서버에 보고해 관리자가 '위치 안 켠 사람'을 파악할 수 있게 한다.
   useEffect(() => {
+    // 안드로이드 WebView(Capacitor 네이티브 앱)는 navigator.permissions.query가 상태 변화를
+    // 제대로 반영하지 않아서(권한을 허용해도 "prompt"로 되돌아옴 — 재현 확인됨) 이 안내 카드가
+    // 계속 뜬다. 네이티브에서는 안드로이드 자체 시스템 권한 팝업이 이미 정상 동작하므로
+    // (출근 체크 시 getCurrentPosition이 알아서 띄움) 이 카드 자체를 건너뛴다.
+    if (Capacitor.isNativePlatform()) return;
     if (role === "admin" || typeof navigator === "undefined" || !navigator.permissions?.query) return;
     let p;
     const report = (state) => {
