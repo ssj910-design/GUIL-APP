@@ -17,7 +17,21 @@ import { supabase } from "@/lib/supabaseClient";
 import { Modal } from "@/app/components/admin/adminShared";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 
-const PHONE_RE = /0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4}/g;
+// 실데이터(1,088개) 분석으로 확장: 0시작 정식번호 + 대표번호(15XX·16XX·18XX) + 지역번호 생략 유선(303-4040 등, 02 생략 관행)
+const PHONE_RE = /(?:0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4})|(?:1[5-9]\d{2}[-.\s]?\d{4})|(?:(?<![\d-])\d{3,4}-\d{4}(?![\d-]))/g;
+// 직함 사전 — 긴 것 먼저(관리소장이 소장보다 앞). 이름+직함 붙은 라벨("유철기사장님")에서 직함을 찾아 이름과 분리한다.
+const ROLE_RE = /(관리소장|입주자대표|승강기담당|관리담당자|관리담당|담당과장|담당자|센터장|사무장|주무관|건물주|관리인|관리자|사무실|관리실|경비실|본사|사장|대표|회장|소장|경비|총무|반장|담당|부장|과장|실장|팀장|국장|목사|사모|이사|기사|원장|장로|집사)/;
+// 라벨 → "이름 직함 (괄호정보)" 표시 문자열. 직함 사전에 없으면(아들·딸 등) 원문 그대로 = 기타.
+function labelInfo(raw) {
+  if (!raw) return "";
+  const paren = (/\(([^)]+)\)/.exec(raw) ?? [])[1] ?? "";
+  const base = raw.replace(/\([^)]*\)/g, "").replace(/님$/, "").trim();
+  // 직함은 보통 라벨 끝에 붙는다("유철기사장") — 끝 우선으로 찾아야 "기사"를 먼저 잡는 오류가 없다
+  const m = new RegExp(ROLE_RE.source + "$").exec(base) ?? ROLE_RE.exec(base);
+  const role = m?.[1] ?? "";
+  const name = m ? base.replace(m[1], "").trim() : base;
+  return [name, role, paren && `(${paren})`].filter(Boolean).join(" ");
+}
 const norm = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 const nameKey = (s) => norm(s).replace(/\(.*?\)/g, "").replace(/\s/g, ""); // 괄호 별칭·공백 무시하고 매칭
 // "비젼타워 (스타병원)" → ["비젼타워", "스타병원"] — 본명·별칭 전부 매칭 키로 쓴다
@@ -87,9 +101,17 @@ function validateRow(raw, col, monthCols) {
   const contact = get("contact");
   const phones = [];
   for (const m of contact.matchAll(PHONE_RE)) {
-    const before = contact.slice(0, m.index).replace(/[\s,./·-]+$/, "");
-    const label = (/([가-힣A-Za-z()]{2,10})$/.exec(before) ?? [])[1] ?? "";
-    phones.push({ num: m[0], label, type: m[0].replace(/\D/g, "").startsWith("010") ? "담당자(휴대폰) 추정" : "현장(유선) 추정" });
+    const before = contact.slice(0, m.index).replace(/[\s,./·:-]+$/, "");
+    // 라벨: 괄호 안 숫자 포함("총무(301호)")도 통째로 잡는다
+    const label = (/([가-힣A-Za-z]{0,10}\([가-힣A-Za-z0-9]{1,10}\)|[가-힣A-Za-z]{2,10})$/.exec(before) ?? [])[1] ?? "";
+    const digits = m[0].replace(/\D/g, "");
+    const nearFax = /fax|팩스/i.test(before.slice(-8)) || /팩스|fax/i.test(label);
+    const type = nearFax ? "팩스"
+      : digits.startsWith("01") ? "담당자(휴대폰) 추정"
+      : /^1[5-9]/.test(digits) ? "현장(대표번호) 추정"
+      : digits.startsWith("0") ? "현장(유선) 추정"
+      : "현장(유선·02생략) 추정";
+    phones.push({ num: m[0], label, disp: labelInfo(label), type });
   }
   parsed.phones = phones;
   parsed.contactMemo = contact;
@@ -300,7 +322,7 @@ export default function VerifyImport({ data, setData, onClose }) {
       r.parsed.name, r.contIdx != null ? finalRows[r.contIdx].parsed.name : "",
       r.parsed.address, r.parsed.engineer, r.parsed.unitCount, r.parsed.contractType,
       r.parsed.contractDate ?? "", r.parsed.cost ?? "", r.parsed.balance ?? "", r.parsed.paidMonths,
-      r.parsed.phones.map((p) => `${p.label ? p.label + " " : ""}${p.num}[${p.type.slice(0, 3)}]`).join(", "), r.parsed.email, r.parsed.bizNo, r.parsed.kinds.join(", "),
+      r.parsed.phones.map((p) => `${p.disp ? p.disp + " " : ""}${p.num}[${p.type.replace(" 추정", "")}]`).join(", "), r.parsed.email, r.parsed.bizNo, r.parsed.kinds.join(", "),
       r.parsed.installDate ?? "", r.issues.map((x) => x.msg).join(" / "),
     ]);
     const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
@@ -319,7 +341,8 @@ export default function VerifyImport({ data, setData, onClose }) {
     return dbSites.find((s) => s.keys.some((k) => keys.includes(k)))?.id ?? null;
   };
   const FILL_FIELDS = [
-    ["phone", "전화(현장 유선)", (p) => p.phones.find((x) => x.type.startsWith("현장"))?.num ?? null],
+    ["phone", "전화(현장 유선)", (p) => (p.phones.find((x) => x.type === "현장(유선) 추정") ?? p.phones.find((x) => x.type === "현장(대표번호) 추정") ?? p.phones.find((x) => x.type.startsWith("현장")))?.num ?? null],
+    ["fax", "팩스", (p) => p.phones.find((x) => x.type === "팩스")?.num ?? null],
     ["email", "이메일", (p) => (/^\S+@\S+\.\S+$/.test(p.email) ? p.email : null)],
     ["maintenance_cost", "보수료", (p) => p.cost],
     ["contract_date", "계약일", (p) => p.contractDate],
@@ -331,7 +354,7 @@ export default function VerifyImport({ data, setData, onClose }) {
   const fillPlan = useMemo(() => {
     if (!finalRows) return [];
     const siteById = new Map((data?.sites ?? []).map((s) => [s.id, s]));
-    const camel = { phone: "phone", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType", notes: "notes" };
+    const camel = { phone: "phone", fax: "fax", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType", notes: "notes" };
     const bySite = new Map();
     for (const r of finalRows) {
       if (r.level === "red") continue;
@@ -402,7 +425,7 @@ export default function VerifyImport({ data, setData, onClose }) {
     }
     // 화면(콘솔 전체 데이터)에도 반영해 새로고침 없이 최신으로
     if (ok && setData) {
-      const camel = { phone: "phone", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType", notes: "notes", verify_level: "verifyLevel", verified_at: "verifiedAt", verify_issues: "verifyIssues" };
+      const camel = { phone: "phone", fax: "fax", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType", notes: "notes", verify_level: "verifyLevel", verified_at: "verifiedAt", verify_issues: "verifyIssues" };
       setData((prev) => ({
         ...prev,
         sites: prev.sites.map((s) => {
@@ -545,7 +568,7 @@ export default function VerifyImport({ data, setData, onClose }) {
                   ["보수료", open.parsed.cost != null ? open.parsed.cost.toLocaleString() + "원" : "—"],
                   ["미수잔액", open.parsed.balance != null ? open.parsed.balance.toLocaleString() + "원" : "—"],
                   ["수금 기록", `${open.parsed.paidMonths}개 달에 기록 있음`],
-                  ["전화(추출)", open.parsed.phones.map((p) => `${p.label ? p.label + " · " : ""}${p.num} — ${p.type}`).join("  /  ") || "—"],
+                  ["전화(추출)", open.parsed.phones.map((p) => `${p.disp ? p.disp + " · " : ""}${p.num} — ${p.type}`).join("  /  ") || "—"],
                   ["연락처 원본 메모", open.parsed.contactMemo || "—"],
                   ["이메일", open.parsed.email || "—"], ["사업자번호", open.parsed.bizNo || "—"],
                   ["승강기 종류", open.parsed.kinds.join(", ") || "—"], ["설치일(해석)", open.parsed.installDate ?? "—"],
