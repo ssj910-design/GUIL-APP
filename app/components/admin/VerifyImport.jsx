@@ -364,23 +364,26 @@ export default function VerifyImport({ data, setData, onClose }) {
   const [geoProg, setGeoProg] = useState(null);   // 좌표 대조 진행 { done, total }
   const [geoResults, setGeoResults] = useState({}); // idx → { siteId, siteName, dist } (근처 후보, 자동 연결엔 못 미친 것)
 
-  // 시트 값 + "현장명 열이 실제로 병합된 행 범위"를 함께 읽는다.
-  // 현장명이 비었다고 무조건 연속 행이 아니다 — 이름을 안 적은 별개 현장일 수도 있어서,
-  // 진짜 병합(!merges)인지 확인해야 한다.
-  async function readSheet(file, nameCol = null) {
+  // 시트 값 + "병합으로 묶인 행 덩어리" 정보를 함께 읽는다.
+  //
+  // 이 파일은 한 계약 단위를 여러 행으로 쓰면서 계약일·대표 같은 열만 병합하고
+  // 정작 현장명 열은 병합하지 않은 경우가 있다(예: 23~25행이 한 덩어리인데 이름은 24행에만).
+  // 그래서 "현장명이 비면 윗 행의 연속"이라고 보면 틀린다 — 어느 열이든 병합된 범위를
+  // 한 덩어리로 보고, 그 덩어리 안에 있는 이름을 그 덩어리 전체의 이름으로 쓴다.
+  async function readSheet(file) {
     const XLSX = await import("xlsx");
     const wb = XLSX.read(await file.arrayBuffer());
     const ws = wb.Sheets[wb.SheetNames[0]];
     const values = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
-    const mergedRows = new Set();
-    if (nameCol != null) {
-      for (const m of ws["!merges"] ?? []) {
-        if (m.s.c <= nameCol && nameCol <= m.e.c) {
-          for (let r = m.s.r + 1; r <= m.e.r; r++) mergedRows.add(r); // 병합 구간의 2번째 행부터가 "잔재"
-        }
+    const groupOf = new Map(); // 0-based 시트 행 → 덩어리 시작 행
+    for (const m of ws["!merges"] ?? []) {
+      if (m.e.r === m.s.r) continue; // 세로 병합만 의미 있음
+      for (let r = m.s.r; r <= m.e.r; r++) {
+        const cur = groupOf.get(r);
+        if (cur == null || m.s.r < cur) groupOf.set(r, m.s.r); // 가장 위에서 시작하는 덩어리 기준
       }
     }
-    return { values, mergedRows };
+    return { values, groupOf };
   }
 
   // ① 내부(정리 안 된) 엑셀
@@ -390,12 +393,17 @@ export default function VerifyImport({ data, setData, onClose }) {
     if (!file) return;
     setBusy(true);
     try {
-      const first = await readSheet(file);
-      const header = first.values[0] ?? [];
+      const { values: all, groupOf } = await readSheet(file);
+      const header = all[0] ?? [];
       const col = headerMap(header);
       if (col.name < 0) throw new Error("헤더에서 '현장(건물명)' 열을 못 찾았습니다 — 1행이 제목 행인지 확인");
-      // 현장명 열을 알아낸 뒤 병합 범위를 다시 읽는다
-      const { values: all, mergedRows } = await readSheet(file, col.name);
+      // 병합 덩어리별 대표 이름 — 덩어리 안 아무 행에나 적힌 현장명을 그 덩어리 전체의 이름으로 본다
+      const groupName = new Map();
+      all.forEach((raw, i) => {
+        const start = groupOf.get(i);
+        const nm = col.name >= 0 ? norm(raw[col.name]) : "";
+        if (start != null && nm && !groupName.has(start)) groupName.set(start, nm);
+      });
       // 월별 수금 열: "25년7월" ~ "8월" 같은 열들
       const monthCols = header.map((h, idx) => ({ h: norm(h), idx })).filter((c) => /^(\d{2}년)?\d{1,2}월$/.test(c.h.replace(/\s/g, "")));
       const out = [];
@@ -404,13 +412,14 @@ export default function VerifyImport({ data, setData, onClose }) {
         if (!raw.some((c) => norm(c))) return; // 완전 빈 행 스킵
         const { parsed, issues } = validateRow(raw, col, monthCols);
         const idx = out.length;
-        // 현장명이 비었을 때: 실제로 셀이 병합된 행이면 앞 현장의 연속, 아니면 이름을 안 적은 별개 현장.
+        // 현장명이 비었을 때: 같은 병합 덩어리에 이름이 있으면 그 이름을 쓴다(공군항공안전단처럼
+        // 이름 열만 병합을 안 한 경우). 덩어리가 없으면 이름을 안 적은 별개 현장으로 본다.
         let contIdx = null;
         if (!parsed.name) {
-          const isMerged = mergedRows.has(i + 1); // i+1 = 이 행의 0-based 시트 행번호
-          if (isMerged && lastNamed >= 0) {
-            contIdx = lastNamed;
-            issues.unshift({ level: "yellow", msg: `현장명 병합 — "${out[lastNamed].parsed.name}"의 연속 행으로 해석` });
+          const gname = groupName.get(groupOf.get(i + 1));
+          if (gname) {
+            parsed.groupName = gname;
+            issues.unshift({ level: "yellow", msg: `현장명 칸이 비어 있음 — 같은 병합 묶음의 "${gname}" 건으로 해석` });
           } else {
             issues.unshift({ level: "yellow", msg: "현장명이 비어 있음 — 이름을 적거나, 아래 후보에서 DB 현장을 연결해주세요" });
           }
@@ -467,7 +476,8 @@ export default function VerifyImport({ data, setData, onClose }) {
       // 이름이 같은 현장이 여러 곳일 수 있다("삼성아파트" 사당동·삼전동) — 이름으로 걸리는 DB 현장을
       // 다 모아, 2곳 이상이면 법정동으로 좁힌다. 그래도 못 좁히면 통과로 보지 않고 사람이 고르게 한다.
       // 이름이 없으면 주소 끝 건물 별칭("… 385-1 태성대아파트")을 이름 대신 써서 매칭을 시도한다
-      const effName = r.parsed.name || buildingHintOf(r.parsed.address) || "";
+      // 이름 우선순위: 적힌 이름 → 같은 병합 묶음의 이름 → 주소 끝 건물 별칭
+      const effName = r.parsed.name || r.parsed.groupName || buildingHintOf(r.parsed.address) || "";
       const myKeys = effName ? nameKeys(effName) : [];
       const myDong = dongOf(r.parsed.address);
       // 엄격 키 + 느슨한 키(유형어·동 표기·주소 접두어 제거)를 함께 모은다 — 이름이 비슷한 DB 현장이
@@ -813,7 +823,7 @@ export default function VerifyImport({ data, setData, onClose }) {
                 <span className={`shrink-0 text-[11px] font-bold rounded-full px-2 py-0.5 border ${LV[r.level]}`}>{r.level === "red" ? "빨강" : r.level === "yellow" ? "노랑" : "통과"}</span>
                 <span className="text-sm font-bold text-slate-800 truncate">
                   {r.parsed.name
-                    || (r.contIdx != null ? `(${finalRows[r.contIdx]?.parsed.name ?? "?"} 연속)` : `(이름 없음${buildingHintOf(r.parsed.address) ? ` · ${buildingHintOf(r.parsed.address)}?` : ""})`)}
+                    || (r.parsed.groupName ? `(${r.parsed.groupName} 묶음)` : `(이름 없음${buildingHintOf(r.parsed.address) ? ` · ${buildingHintOf(r.parsed.address)}?` : ""})`)}
                 </span>
                 <span className="text-xs text-slate-400 truncate">{r.parsed.address}</span>
                 <span className="ml-auto shrink-0 flex items-center gap-1.5 text-xs text-slate-400">
@@ -863,7 +873,7 @@ export default function VerifyImport({ data, setData, onClose }) {
               (() => {
                 // 연속 행(병합 잔재)은 소속 현장 이름을 빌려 후보를 찾는다 — 주소가 달라 별개 현장(공군중앙교회 등)일 수 있어서
                 // 이름이 없으면 주소 끝 건물 별칭(태성대아파트)을, 그것도 없으면 소속 현장 이름을 빌려 후보를 찾는다
-                let cands = candidatesFor(open, buildingHintOf(open.parsed.address) || (open.contIdx != null ? finalRows[open.contIdx]?.parsed.name : ""));
+                let cands = candidatesFor(open, open.parsed.groupName || buildingHintOf(open.parsed.address) || "");
                 // 좌표 대조에서 나온 근처 후보를 맨 앞에 (거리 표시)
                 const geo = geoResults[open.idx];
                 if (geo && !cands.some((c) => c.id === geo.siteId)) {
