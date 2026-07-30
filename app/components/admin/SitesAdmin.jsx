@@ -19,7 +19,7 @@ import { confirmAsync } from "@/app/components/ConfirmHost";
 import { uploadPhoto } from "@/lib/photos";
 
 const CONTRACT_TYPES = ["POG(일반계약)", "FM(종합계약)"];
-const CONTACT_ROLES = ["대표", "담당자", "관리소장", "건물주", "경비실", "입주민 대표", "기타"];
+const CONTACT_ROLES = ["대표", "담당자", "관리소장", "건물주", "경비실", "입주민 대표", "총무", "기타"];
 const UNIT_TYPES = ["엘리베이터", "에스컬레이터", "휠체어리프트", "카리프트"];
 const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
 const TERMINATION_BASIS = ["중지공문", "구두통보", "기타"];
