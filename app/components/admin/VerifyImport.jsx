@@ -46,10 +46,44 @@ const norm = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 // 매칭 키: 괄호 별칭 제거 + 특수문자(점·앰퍼샌드·하이픈 등)·공백 전부 무시 + 영문 소문자화
 // → "H.애비뉴호텔"="H애비뉴호텔", "J.J 빌딩"="JJ빌딩", "COSTORY TOWER"="costorytower" 전부 같은 키
 const nameKey = (s) => norm(s).replace(/\(.*?\)/g, "").replace(/[^가-힣A-Za-z0-9]/g, "").toLowerCase();
-// "비젼타워 (스타병원)" → ["비젼타워", "스타병원"] — 본명·별칭 전부 매칭 키로 쓴다
-const nameKeys = (s) => [nameKey(s), ...[...String(s ?? "").matchAll(/\(([^)]+)\)/g)].map((m) => nameKey(m[1]))].filter(Boolean);
+// 영문 상호 → 한글 발음 사전 — 센터엔 "Dream Castle", 내부엔 "드림캐슬"로 적히는 표기 차이를 흡수한다.
+// 영문 조각이 사전 단어로 "완전히" 분해될 때만 변환한다(부분 치환으로 이름이 깨지는 오류 방지).
+const ENG2KOR = [
+  ["officetel", "오피스텔"], ["building", "빌딩"], ["mansion", "맨션"], ["palace", "팰리스"], ["centre", "센터"], ["center", "센터"],
+  ["castle", "캐슬"], ["golden", "골든"], ["valley", "밸리"], ["dream", "드림"], ["tower", "타워"], ["house", "하우스"],
+  ["hills", "힐스"], ["plaza", "플라자"], ["royal", "로얄"], ["grand", "그랜드"], ["white", "화이트"], ["black", "블랙"],
+  ["green", "그린"], ["prime", "프라임"], ["villa", "빌라"], ["ville", "빌"], ["vill", "빌"], ["park", "파크"],
+  ["view", "뷰"], ["city", "시티"], ["gold", "골드"], ["blue", "블루"], ["star", "스타"], ["sky", "스카이"],
+  ["hill", "힐"], ["bldg", "빌딩"], ["the", "더"], ["new", "뉴"], ["hi", "하이"],
+].sort((a, b) => b[0].length - a[0].length);
+function latinRunToKor(run) {
+  let rest = run, out = "";
+  outer: while (rest) {
+    for (const [e, ko] of ENG2KOR) {
+      if (rest.startsWith(e)) { out += ko; rest = rest.slice(e.length); continue outer; }
+    }
+    return null; // 사전으로 끝까지 분해 안 되면(고유명 등) 변환하지 않는다
+  }
+  return out;
+}
+const engToKorKey = (key) => {
+  let changed = false;
+  const converted = key.replace(/[a-z]+/g, (run) => { const k = latinRunToKor(run); if (k) { changed = true; return k; } return run; });
+  return changed ? converted : null;
+};
+// "비젼타워 (스타병원)" → ["비젼타워", "스타병원"] — 본명·별칭 + 영문의 한글 발음 변형까지 전부 매칭 키로 쓴다.
+// "(구. P&P빌딩)"처럼 옛 이름 메모는 "구." 접두어를 벗겨야 상대쪽 "P&P빌딩"과 키가 맞는다.
+const nameKeys = (s) => {
+  const base = [
+    nameKey(s),
+    ...[...String(s ?? "").matchAll(/\(([^)]+)\)/g)].map((m) => nameKey(m[1].replace(/^\s*구[.\s]+/, ""))),
+  ].filter(Boolean);
+  return [...new Set([...base, ...base.map(engToKorKey).filter(Boolean)])];
+};
 // 주소에서 법정동 추출 — 내부 구주소("반포동 701-16")와 DB 신주소 끝 "(반포동)" 모두 잡힌다
 const dongOf = (addr) => (/([가-힣]{1,10}[동가리])(?=\s|\d|\)|$)/.exec(String(addr ?? "")) ?? [])[1] ?? null;
+// 도로명+번지 추출("이태원로 22" → "이태원로22") — 양쪽 다 신주소면 이걸로 정확히 맞춰볼 수 있다
+const roadOf = (addr) => { const m = /([가-힣A-Za-z0-9]+(?:로|길)\s*\d+(?:-\d+)?)/.exec(String(addr ?? "")); return m ? m[1].replace(/\s/g, "") : null; };
 // 싼 유사도: 2글자 조각(bigram) 겹침 비율 0~1 — 라이브러리 없이 이름 비슷함 판단용
 function similarity(a, b) {
   const grams = (s) => { const g = new Set(); for (let i = 0; i < s.length - 1; i++) g.add(s.slice(i, i + 2)); return g; };
@@ -140,6 +174,8 @@ function validateRow(raw, col, monthCols) {
   let biz = get("bizNo");
   if (/^[-–—.\s]*$/.test(biz)) biz = "";                                   // "-" 같은 자리표시는 빈 값으로
   if (/^\d{10}$/.test(biz)) biz = `${biz.slice(0, 3)}-${biz.slice(3, 5)}-${biz.slice(5)}`; // 하이픈 없는 10자리 자동 정규화
+  // 이 열은 입금 방식 겸용이었다 — 은행명·CMS·지로·현금영수증은 형식 오류가 아니라 입금 메모 → 비고로 보낸다
+  if (/은행|농협|새마을|신협|수협|씨티|CMS|지로|현금영수증|카드/i.test(biz)) { parsed.bizMemo = biz; biz = ""; }
   if (/^\d{6}-\d{7}$/.test(biz)) {
     parsed.bizNo = biz.replace(/^(\d{6}-\d)\d{6}$/, "$1******");
     issues.push({ level: "yellow", msg: `주민등록번호 감지 — 개인 계약으로 보임. 자동 마스킹(${parsed.bizNo})으로만 보관·출력` });
@@ -205,7 +241,7 @@ export default function VerifyImport({ data, setData, onClose }) {
   const [links, setLinks] = useState({});         // 수동 매칭: 행 idx → { siteId, siteName }
   // 대조 상대 = 이미 등록된 DB 현장(센터 엑셀로 일괄등록된 것) — 이름 본명+괄호 별칭 전부 키로
   const dbSites = useMemo(() => (data?.sites ?? []).filter((s) => s.name).map((s) => ({
-    id: s.id, name: s.name, keys: nameKeys(s.name), dong: dongOf(s.address),
+    id: s.id, name: s.name, keys: nameKeys(s.name), dong: dongOf(s.address), road: roadOf(s.address),
   })), [data]);
   const dbKeys = useMemo(() => new Set(dbSites.flatMap((s) => s.keys)), [dbSites]);
   // 호기 힌트 — 센터 데이터(units)의 설치일·모델이 내부 엑셀과 일치하면 같은 현장일 확률이 높다
@@ -229,7 +265,11 @@ export default function VerifyImport({ data, setData, onClose }) {
       .map((s) => {
         let score = Math.max(...myKeys.flatMap((a) => s.keys.map((b) => similarity(a, b))), 0);
         const tags = [];
+        // 한쪽 이름이 다른 쪽을 포함하면(국방부 ⊂ 국방부본부) 강한 신호
+        if (myKeys.some((a) => s.keys.some((b) => a.length >= 3 && b.length >= 3 && (a.includes(b) || b.includes(a))))) { score = Math.max(score, 0.75); tags.push("이름 포함"); }
         if (myDong && s.dong && myDong === s.dong) { score += 0.25; tags.push("법정동 일치"); } // 구주소·신주소가 달라도 법정동은 같다
+        const myRoad = roadOf(r.parsed.address);
+        if (myRoad && s.road && myRoad === s.road) { score += 0.25; tags.push("주소 일치"); } // 둘 다 신주소일 땐 도로명+번지로 확정적
         const u = unitsBySite.get(s.id);
         if (u && myDate && u.dates.has(myDate)) { score += 0.2; tags.push("설치일 일치"); }
         if (u && myModel && u.models.has(myModel)) { score += 0.15; tags.push("모델 일치"); }
@@ -399,7 +439,7 @@ export default function VerifyImport({ data, setData, onClose }) {
     ["contract_type", "계약종류", (p) => p.contractType || null],
     // 연락처 원본 메모(담당자 라벨·출입 비번·열쇠 위치 등) → 비어 있는 현장 비고로.
     // 기사 앱 현장정보의 "비고(전달사항)"에 그대로 보인다 — 현장 가서 문 열 때 필요한 정보.
-    ["notes", "비고(연락처 메모)", (p) => p.contactMemo || null],
+    ["notes", "비고(연락처·입금 메모)", (p) => [p.contactMemo, p.bizMemo && `입금: ${p.bizMemo}`].filter(Boolean).join("\n") || null],
   ];
   const fillPlan = useMemo(() => {
     if (!finalRows) return [];
@@ -677,6 +717,7 @@ export default function VerifyImport({ data, setData, onClose }) {
                   ["전화(추출)", open.parsed.phones.map((p) => `${p.disp ? p.disp + " · " : ""}${p.num} — ${p.type}`).join("  /  ") || "—"],
                   ["연락처 원본 메모", open.parsed.contactMemo || "—"],
                   ["이메일", open.parsed.email || "—"], ["사업자번호", open.parsed.bizNo || "—"],
+                  ["입금 방식(사업자번호 열)", open.parsed.bizMemo || "—"],
                   ["승강기 종류", open.parsed.kinds.join(", ") || "—"], ["설치일(해석)", open.parsed.installDate ?? "—"],
                   ["비고", open.parsed.note || "—"],
                 ].map(([k, v]) => (
