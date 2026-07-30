@@ -11,6 +11,10 @@ import { getMessaging } from "firebase-admin/messaging";
 import { createClient } from "@supabase/supabase-js";
 import { NOTIFICATIONS, isEnabled, levelOf } from "@/lib/notifications";
 
+// lib/constants.js는 useEffect 쓰는 다른 코드와 같이 있어 서버 라우트에서 못 불러온다(클라이언트 전용
+// 모듈로 취급됨) — TODAY_STR과 같은 한 줄이라 여기 직접 둔다.
+const TODAY_STR = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
+
 const CATALOG = Object.fromEntries(NOTIFICATIONS.map((n) => [n.key, n]));
 
 // 서비스 계정 JSON 전체를 base64로 감싼 값 하나로 받는다 — 개행이 포함된 private_key를
@@ -76,31 +80,38 @@ async function handlePost(request) {
 
   // 웹 구독자(subs)와 네이티브 앱 사용자(native_push_tokens)는 서로 다른 채널이라, 한쪽이
   // 없어도 다른 쪽엔 보내야 한다 — 그래서 "구독 기기 없음" 판정은 두 채널을 다 조회한 뒤로 미룬다.
-  const [{ data: subs }, { data: nativeTokens }] = await Promise.all([
+  const [{ data: subs }, { data: nativeTokens }, { data: attRows }] = await Promise.all([
     db.from("push_subscriptions").select("*").in("profile_id", targets.map((p) => p.id)),
-    db.from("native_push_tokens").select("token").in("profile_id", targets.map((p) => p.id)),
+    db.from("native_push_tokens").select("token,profile_id").in("profile_id", targets.map((p) => p.id)),
+    db.from("attendances").select("profile_id,status").eq("work_date", TODAY_STR).in("profile_id", targets.map((p) => p.id)),
   ]);
   if (!subs?.length && !nativeTokens?.length) {
     return Response.json({ ok: true, sent: 0, skipped: "구독 기기 없음" });
   }
 
-  const payload = JSON.stringify({
-    title: title || item.label,
-    body: body || "",
-    url: url || "/",
-    // tag를 안 주면 매번 고유하게 — 같은 종류(key) 알림이 안드로이드에서 서로 덮어써(소리 없이 갱신)
-    // 두 번째부터 안 울리는 문제 방지. sendPush()·크론처럼 tag를 안 넘기는 호출까지 서버에서 일괄 커버.
-    tag: tag || `${key}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    level: levelOf(item, org),
-  });
+  // 퇴근한 사람은 급한 알림도 소리·진동 없이 알림함에만 뜨게 한다(그래도 알아야 하니 안 막고 무음으로만).
+  const offDutyIds = new Set((attRows ?? []).filter((a) => a.status === "퇴근").map((a) => a.profile_id));
 
-  // urgent 등급은 FCM에도 높은 우선순위로 알려야, 안드로이드가 절전모드(Doze)일 때도
-  // 즉시 깨워서 전달한다 — 이게 없으면 잠금화면에서 알림이 늦게(화면 켤 때) 도착할 수 있다.
-  const urgency = levelOf(item, org) === "urgent" ? "high" : "normal";
+  const baseLevel = levelOf(item, org);
+  const uniqueTag = tag || `${key}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  function payloadFor(profileId) {
+    const level = baseLevel === "urgent" && offDutyIds.has(profileId) ? "normal" : baseLevel;
+    return { level, urgency: level === "urgent" ? "high" : "normal" };
+  }
 
   let sent = 0;
   const gone = [];
   await Promise.all((subs ?? []).map(async (s) => {
+    const { level, urgency } = payloadFor(s.profile_id);
+    const payload = JSON.stringify({
+      title: title || item.label,
+      body: body || "",
+      url: url || "/",
+      // tag를 안 주면 매번 고유하게 — 같은 종류(key) 알림이 안드로이드에서 서로 덮어써(소리 없이 갱신)
+      // 두 번째부터 안 울리는 문제 방지. sendPush()·크론처럼 tag를 안 넘기는 호출까지 서버에서 일괄 커버.
+      tag: uniqueTag,
+      level,
+    });
     try {
       await webpush.sendNotification(
         { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
@@ -122,12 +133,18 @@ async function handlePost(request) {
       const app = firebaseApp();
       const goneNative = [];
       await Promise.all(nativeTokens.map(async (t) => {
+        const { level, urgency } = payloadFor(t.profile_id);
         try {
           await getMessaging(app).send({
             token: t.token,
             notification: { title: title || item.label, body: body || "" },
-            data: { url: url || "/", tag: tag || key },
-            android: { priority: urgency === "high" ? "high" : "normal" },
+            data: { url: url || "/", tag: uniqueTag },
+            android: {
+              priority: urgency === "high" ? "high" : "normal",
+              // 퇴근 중(무음 처리 대상)은 미리 만들어둔 "silent" 채널로 보낸다 — 안 만들었으면(예: 구버전 앱)
+              // channelId가 무시되고 기본 채널(소리 있음)로 가니 최소한 알림 자체는 항상 도착한다.
+              ...(level !== "urgent" ? { notification: { channelId: "silent" } } : {}),
+            },
           });
           sent++;
         } catch (e) {
