@@ -21,17 +21,27 @@ import { confirmAsync } from "@/app/components/ConfirmHost";
 const PHONE_RE = /(?:0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4})|(?:1[5-9]\d{2}[-.\s]?\d{4})|(?:(?<![\d-])\d{3,4}-\d{4}(?![\d-]))/g;
 // 직함 사전 — 긴 것 먼저(관리소장이 소장보다 앞). 이름+직함 붙은 라벨("유철기사장님")에서 직함을 찾아 이름과 분리한다.
 const ROLE_RE = /(관리소장|입주자대표|승강기담당|관리담당자|관리담당|담당과장|담당자|센터장|사무장|주무관|건물주|관리인|관리자|사무실|관리실|경비실|본사|사장|대표|회장|소장|경비|총무|반장|담당|부장|과장|실장|팀장|국장|목사|사모|이사|기사|원장|장로|집사)/;
-// 라벨 → "이름 직함 (괄호정보)" 표시 문자열. 직함 사전에 없으면(아들·딸 등) 원문 그대로 = 기타.
-function labelInfo(raw) {
-  if (!raw) return "";
+// 라벨 → { name, role, paren } 구조 분리. 직함 사전에 없으면(아들·딸 등) 원문 그대로 = 기타.
+function labelParts(raw) {
+  if (!raw) return { name: "", role: "", paren: "" };
   const paren = (/\(([^)]+)\)/.exec(raw) ?? [])[1] ?? "";
   const base = raw.replace(/\([^)]*\)/g, "").replace(/님$/, "").trim();
   // 직함은 보통 라벨 끝에 붙는다("유철기사장") — 끝 우선으로 찾아야 "기사"를 먼저 잡는 오류가 없다
   const m = new RegExp(ROLE_RE.source + "$").exec(base) ?? ROLE_RE.exec(base);
-  const role = m?.[1] ?? "";
-  const name = m ? base.replace(m[1], "").trim() : base;
-  return [name, role, paren && `(${paren})`].filter(Boolean).join(" ");
+  return { name: m ? base.replace(m[1], "").trim() : base, role: m?.[1] ?? "", paren };
 }
+const labelInfo = (raw) => { const p = labelParts(raw); return [p.name, p.role, p.paren && `(${p.paren})`].filter(Boolean).join(" "); };
+// 직함 사전 → 앱의 현장 담당자 역할(SitesAdmin CONTACT_ROLES) 매핑. 없는 직함·관계(아들 등)는 "기타".
+const ROLE_MAP = {
+  사장: "대표", 대표: "대표", 회장: "대표", 목사: "대표",
+  건물주: "건물주",
+  관리소장: "관리소장", 소장: "관리소장", 관리인: "관리소장", 관리자: "관리소장",
+  경비: "경비실", 경비실: "경비실",
+  입주자대표: "입주민 대표", 총무: "총무",
+  담당자: "담당자", 담당: "담당자", 담당과장: "담당자", 승강기담당: "담당자", 관리담당자: "담당자", 관리담당: "담당자",
+  부장: "담당자", 과장: "담당자", 실장: "담당자", 팀장: "담당자", 국장: "담당자", 주무관: "담당자",
+  사무장: "담당자", 센터장: "담당자", 기사: "담당자", 이사: "담당자", 원장: "담당자",
+};
 const norm = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 // 매칭 키: 괄호 별칭 제거 + 특수문자(점·앰퍼샌드·하이픈 등)·공백 전부 무시 + 영문 소문자화
 // → "H.애비뉴호텔"="H애비뉴호텔", "J.J 빌딩"="JJ빌딩", "COSTORY TOWER"="costorytower" 전부 같은 키
@@ -109,11 +119,6 @@ function validateRow(raw, col, monthCols) {
     const label = (/([가-힣A-Za-z]{0,10}\([가-힣A-Za-z0-9]{1,10}\)|[가-힣A-Za-z]{2,10})$/.exec(before) ?? [])[1] ?? "";
     rawPhones.push({ num: m[0], label, before });
   }
-  // 같은 셀의 정식 유선(0X-) 국번 목록 — "02-2186-1800"이 있으면 "2186-1849"는 내선(유선)으로 본다
-  const landLocals = rawPhones
-    .map((p) => p.num.replace(/\D/g, ""))
-    .filter((d) => d.startsWith("0") && !d.startsWith("01"))
-    .map((d) => (d.startsWith("02") ? d.slice(2) : d.slice(3)));
   const phones = rawPhones.map(({ num, label, before }) => {
     const digits = num.replace(/\D/g, "");
     const nearFax = /fax|팩스/i.test(before.slice(-8)) || /팩스|fax/i.test(label);
@@ -121,23 +126,20 @@ function validateRow(raw, col, monthCols) {
       : digits.startsWith("01") ? "담당자(휴대폰) 추정"
       : /^1[5-9]/.test(digits) ? "현장(대표번호) 추정"
       : digits.startsWith("0") ? "현장(유선) 추정"
-      : digits.length === 7 ? "현장(유선·02생략) 추정"                       // 3자리-4자리는 서울 국번 관행
-      : landLocals.some((l) => l.slice(0, 4) === digits.slice(0, 4)) ? "현장(유선·내선) 추정" // 옆의 정식 유선과 같은 국번
-      : "담당자(휴대폰·010누락?) 추정";                                       // 4-4는 010 빠진 기록 관행이 많음
-    return { num, label, disp: labelInfo(label), type };
+      : "현장(유선·02생략) 추정"; // 0 없는 3-4·4-4자리 전부 — 현장 확인 결과 02 생략 유선 관행으로 확정 (2026-07-30)
+    return { num, label, disp: labelInfo(label), parts: labelParts(label), type };
   });
   parsed.phones = phones;
   parsed.contactMemo = contact;
-  // 전화가 여러 개인 건 정상(자동 분류됨) — 유형이 애매한 번호가 있을 때만 확인 요청
-  const unsure = phones.filter((p) => p.type.includes("010누락"));
-  if (unsure.length) issues.push({ level: "yellow", msg: `유형 불명 전화 ${unsure.length}개(${unsure[0].num} 등) — 010 누락인지 유선인지 확인` });
-  // 출입 정보(공동현관 비번·기계실 열쇠)는 기사가 현장 가서 필요한 운영 정보 — 막지 않고,
-  // 인증완료 후 반영하면 현장 비고(전달사항)로 저장돼 기사들이 현장정보에서 본다. (노랑 = 사람이 한번 보고 확정)
-  if (/비밀번호|비번|열쇠|현관|공동현관/.test(contact)) issues.push({ level: "yellow", msg: "출입 정보(비밀번호·열쇠) 포함 — 인증완료 후 반영하면 현장 비고로 저장되어 기사들이 봅니다" });
+  // 출입 정보(공동현관 비번·기계실 열쇠)는 기사가 현장 가서 필요한 운영 정보 — 이슈가 아니라 데이터.
+  // 390행이 걸려 노랑 소음의 최대 원인이었어서 이슈에서 제외, 상세에 정보로만 표시. 반영 시 빈 비고로 들어간다.
+  parsed.hasAccessInfo = /비밀번호|비번|열쇠|현관|공동현관/.test(contact);
 
   // 사업자번호 — 주민번호가 섞여 있는 열. 개인과의 계약은 사업 특성상 있을 수 있으므로 막지 않고
   // 자동 마스킹(뒤 6자리)해서만 다룬다 — 원본 주민번호는 이 도구 어디에도 저장·출력되지 않는다.
-  const biz = get("bizNo");
+  let biz = get("bizNo");
+  if (/^[-–—.\s]*$/.test(biz)) biz = "";                                   // "-" 같은 자리표시는 빈 값으로
+  if (/^\d{10}$/.test(biz)) biz = `${biz.slice(0, 3)}-${biz.slice(3, 5)}-${biz.slice(5)}`; // 하이픈 없는 10자리 자동 정규화
   if (/^\d{6}-\d{7}$/.test(biz)) {
     parsed.bizNo = biz.replace(/^(\d{6}-\d)\d{6}$/, "$1******");
     issues.push({ level: "yellow", msg: `주민등록번호 감지 — 개인 계약으로 보임. 자동 마스킹(${parsed.bizNo})으로만 보관·출력` });
@@ -206,15 +208,32 @@ export default function VerifyImport({ data, setData, onClose }) {
     id: s.id, name: s.name, keys: nameKeys(s.name), dong: dongOf(s.address),
   })), [data]);
   const dbKeys = useMemo(() => new Set(dbSites.flatMap((s) => s.keys)), [dbSites]);
-  // 자동 매칭 실패 행에 보여줄 후보 — 이름 유사도 + 같은 법정동 보너스로 상위 3곳
+  // 호기 힌트 — 센터 데이터(units)의 설치일·모델이 내부 엑셀과 일치하면 같은 현장일 확률이 높다
+  const unitsBySite = useMemo(() => {
+    const m = new Map();
+    for (const u of data?.units ?? []) {
+      const e = m.get(u.siteId) ?? { dates: new Set(), models: new Set() };
+      if (u.installDate) e.dates.add(String(u.installDate).slice(0, 10));
+      if (u.model) e.models.add(nameKey(u.model));
+      m.set(u.siteId, e);
+    }
+    return m;
+  }, [data]);
+  // 자동 매칭 실패 행에 보여줄 후보 — 이름 유사도 + 법정동·설치일·모델 일치 가산점, 상위 3곳
   function candidatesFor(r) {
     const myKeys = nameKeys(r.parsed.name);
     const myDong = dongOf(r.parsed.address);
+    const myDate = r.parsed.installDate;
+    const myModel = r.parsed.model ? nameKey(r.parsed.model) : "";
     return dbSites
       .map((s) => {
         let score = Math.max(...myKeys.flatMap((a) => s.keys.map((b) => similarity(a, b))), 0);
-        if (myDong && s.dong && myDong === s.dong) score += 0.25; // 구주소·신주소가 달라도 법정동은 같다
-        return { ...s, score };
+        const tags = [];
+        if (myDong && s.dong && myDong === s.dong) { score += 0.25; tags.push("법정동 일치"); } // 구주소·신주소가 달라도 법정동은 같다
+        const u = unitsBySite.get(s.id);
+        if (u && myDate && u.dates.has(myDate)) { score += 0.2; tags.push("설치일 일치"); }
+        if (u && myModel && u.models.has(myModel)) { score += 0.15; tags.push("모델 일치"); }
+        return { ...s, score, tags };
       })
       .filter((s) => s.score >= 0.35)
       .sort((a, b) => b.score - a.score)
@@ -287,6 +306,16 @@ export default function VerifyImport({ data, setData, onClose }) {
         const m = stored[rowKeyOf(r)];
         if (m?.reviewed) rv[r.idx] = true;
         if (m?.link) lk[r.idx] = m.link;
+      });
+      // 고신뢰 자동 연결 — "누가 봐도 첫 번째" 케이스는 클릭 없이 연결한다:
+      // 합산 점수(이름 유사+법정동·설치일·모델) 0.8 이상 + 2위와 0.1 이상 차이. 해제 가능, 브라우저 저장은 안 함(매번 재계산).
+      out.forEach((r) => {
+        if (lk[r.idx] || !r.parsed.name) return;
+        if (nameKeys(r.parsed.name).some((k) => dbKeys.has(k))) return; // 이름으로 이미 매칭
+        const cands = candidatesFor(r);
+        if (cands.length && cands[0].score >= 0.8 && (cands.length === 1 || cands[0].score - cands[1].score >= 0.1)) {
+          lk[r.idx] = { siteId: cands[0].id, siteName: cands[0].name, auto: true, score: cands[0].score };
+        }
       });
       setReviewed(rv);
       setLinks(lk);
@@ -418,13 +447,42 @@ export default function VerifyImport({ data, setData, onClose }) {
     return [...bySite.values()].map((e) => ({ ...e, issuesReady }));
   }, [finalRows, verifyReady, reviewed, links, data]);
 
+  // 현장 담당자 자동 추가 계획 — 추출한 사람(이름·직함 라벨 있는 휴대폰)을 매칭 현장의 담당자로.
+  // 직함사전→역할 드롭다운(대표/담당자/관리소장/건물주/경비실/입주민 대표/총무/기타) 매핑, 같은 번호가 이미 있으면 스킵.
+  const managersPlan = useMemo(() => {
+    if (!finalRows) return [];
+    const existing = new Set((data?.siteManagers ?? []).map((m) => `${m.siteId}|${String(m.phone ?? "").replace(/\D/g, "")}`));
+    const out = [];
+    for (const r of finalRows) {
+      if (r.level === "red") continue;
+      if (r.level !== "green" && !reviewed[r.idx]) continue;
+      const siteId = matchedSiteIdOf(r);
+      if (!siteId) continue;
+      for (const p of r.parsed.phones) {
+        if (!p.type.startsWith("담당자") || !p.label) continue; // 라벨 없는 번호는 누군지 몰라 안 만든다
+        const key = `${siteId}|${p.num.replace(/\D/g, "")}`;
+        if (existing.has(key)) continue;
+        existing.add(key);
+        const parenName = /^[가-힣]{2,4}$/.test(p.parts.paren) ? p.parts.paren : ""; // "소장님(방효순)"의 방효순
+        out.push({
+          siteId,
+          name: p.parts.name || parenName || p.parts.role || p.label,
+          phone: p.num,
+          role: ROLE_MAP[p.parts.role] ?? "기타",
+        });
+      }
+    }
+    return out;
+  }, [finalRows, reviewed, links, data]);
+
   async function applyFill() {
     const totalFields = fillPlan.reduce((n, p) => n + p.labels.length, 0);
     const counts = {};
     fillPlan.forEach((p) => p.labels.forEach((l) => { counts[l] = (counts[l] ?? 0) + 1; }));
     const detail = Object.entries(counts).map(([l, n]) => `${l} ${n}곳`).join(", ");
     const statusMsg = verifyReady ? `\n검증 상태(띠 색·인증마크)도 현장 ${statusPlan.length}곳에 저장됩니다.` : "\n(검증 상태 저장은 마이그레이션 083 실행 후 가능)";
-    if (!(await confirmAsync(`현장 ${fillPlan.length}곳의 비어 있는 칸 ${totalFields}개를 채웁니다.\n(${detail})${statusMsg}\n\n이미 값이 있는 칸은 건드리지 않습니다. 진행할까요?`))) return;
+    const mgrMsg = managersPlan.length ? `\n현장 담당자 ${managersPlan.length}명 추가(이름·직함·전화 — 역할 자동 매핑, 같은 번호 있으면 스킵).` : "";
+    if (!(await confirmAsync(`현장 ${fillPlan.length}곳의 비어 있는 칸 ${totalFields}개를 채웁니다.\n(${detail})${statusMsg}${mgrMsg}\n\n이미 값이 있는 칸은 건드리지 않습니다. 진행할까요?`))) return;
     setBusy(true);
     // 빈칸 채우기 + 검증 상태를 현장별로 합쳐 한 번에 update
     const now = new Date().toISOString();
@@ -447,6 +505,24 @@ export default function VerifyImport({ data, setData, onClose }) {
       else ok++;
       setProgress({ done: ++i, total: merged.size });
     }
+    // 현장 담당자 추가 (50개씩 묶어서)
+    let mgrOk = 0;
+    if (managersPlan.length) {
+      const stamp = Date.now();
+      const mgrRows = managersPlan.map((m, n) => ({ id: `sm-vf-${stamp}-${n}`, site_id: m.siteId, name: m.name, phone: m.phone, role: m.role, is_primary: false }));
+      for (let n = 0; n < mgrRows.length; n += 50) {
+        const chunk = mgrRows.slice(n, n + 50);
+        const { error } = await supabase.from("site_managers").insert(chunk);
+        if (error) failed.push(`담당자 추가 실패: ${error.message}`);
+        else mgrOk += chunk.length;
+      }
+      if (mgrOk && setData) {
+        setData((prev) => ({
+          ...prev,
+          siteManagers: [...prev.siteManagers, ...mgrRows.map((x) => ({ id: x.id, siteId: x.site_id, name: x.name, phone: x.phone, role: x.role, isPrimary: false }))],
+        }));
+      }
+    }
     setProgress(null);
     // 화면(콘솔 전체 데이터)에도 반영해 새로고침 없이 최신으로
     if (ok && setData) {
@@ -463,7 +539,7 @@ export default function VerifyImport({ data, setData, onClose }) {
       }));
     }
     setBusy(false);
-    alert(failed.length ? `현장 ${ok}곳 반영, 실패 ${failed.length}곳:\n${failed.slice(0, 5).join("\n")}` : `완료 — 현장 ${ok}곳 반영 (빈칸 ${fillPlan.length}곳 + 검증상태 ${statusPlan.length}곳).`);
+    alert(failed.length ? `현장 ${ok}곳 반영, 실패 ${failed.length}건:\n${failed.slice(0, 5).join("\n")}` : `완료 — 현장 ${ok}곳 반영 (빈칸 ${fillPlan.length} · 상태 ${statusPlan.length} · 담당자 ${mgrOk}명 추가).`);
   }
 
   const open = openIdx != null ? finalRows?.[openIdx] : null;
@@ -484,9 +560,9 @@ export default function VerifyImport({ data, setData, onClose }) {
               <button onClick={downloadClean} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-white border border-slate-300 rounded-xl px-4 py-2.5">
                 <Download size={15} /> 정리본 다운로드
               </button>
-              <button onClick={applyFill} disabled={busy || (!fillPlan.length && !statusPlan.length)}
+              <button onClick={applyFill} disabled={busy || (!fillPlan.length && !statusPlan.length && !managersPlan.length)}
                 className="flex items-center gap-2 text-sm font-bold text-white bg-emerald-600 disabled:bg-slate-300 rounded-xl px-4 py-2.5">
-                <DatabaseZap size={15} /> {progress ? `반영 중… ${progress.done}/${progress.total}` : `DB 반영 (빈칸 ${fillPlan.length} · 상태 ${statusPlan.length})`}
+                <DatabaseZap size={15} /> {progress ? `반영 중… ${progress.done}/${progress.total}` : `DB 반영 (빈칸 ${fillPlan.length} · 상태 ${statusPlan.length} · 담당자 ${managersPlan.length})`}
               </button>
             </div>
           )}
@@ -534,7 +610,7 @@ export default function VerifyImport({ data, setData, onClose }) {
                 <span className="text-xs text-slate-400 truncate">{r.parsed.address}</span>
                 <span className="ml-auto shrink-0 flex items-center gap-1.5 text-xs text-slate-400">
                   {r.issues.length ? `문제 ${r.issues.length}` : ""}
-                  {links[r.idx] && <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-1.5">연결됨</span>}
+                  {links[r.idx] && <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-1.5">{links[r.idx].auto ? "자동연결" : "연결됨"}</span>}
                   {reviewed[r.idx] && <span className="flex items-center gap-0.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5"><CheckCircle2 size={11} /> 인증완료</span>}
                 </span>
               </button>
@@ -572,7 +648,7 @@ export default function VerifyImport({ data, setData, onClose }) {
             {/* DB 매칭 — 자동 실패 시 비슷한 현장 후보를 제시, 사람이 클릭해서 연결 (구주소·별칭 문제 해소) */}
             {links[open.idx] ? (
               <div className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center justify-between">
-                <span>DB 현장과 연결됨: <b>{links[open.idx].siteName}</b></span>
+                <span>DB 현장과 연결됨: <b>{links[open.idx].siteName}</b>{links[open.idx].auto && ` (자동 ${Math.round(links[open.idx].score * 100)}% — 아니면 해제)`}</span>
                 <button onClick={() => { setLinks((p) => { const n = { ...p }; delete n[open.idx]; return n; }); persistMark(open, (o) => { delete o.link; }); }} className="font-bold text-slate-400">연결 해제</button>
               </div>
             ) : (!open.autoMatched && open.parsed.name && dbSites.length > 0 && (
@@ -583,7 +659,7 @@ export default function VerifyImport({ data, setData, onClose }) {
                     {cands.map((c) => (
                       <button key={c.id} onClick={() => { setLinks((p) => ({ ...p, [open.idx]: { siteId: c.id, siteName: c.name } })); persistMark(open, (o) => { o.link = { siteId: c.id, siteName: c.name }; }); }}
                         className="font-bold px-2.5 py-1 rounded-full bg-white border border-blue-200 text-blue-700 hover:bg-blue-50">
-                        {c.name} {c.dong ? `(${c.dong})` : ""} · {Math.round(c.score * 100)}%
+                        {c.name} {c.dong ? `(${c.dong})` : ""} · {Math.round(c.score * 100)}%{c.tags.length ? ` · ${c.tags.join("·")}` : ""}
                       </button>
                     ))}
                   </div>
