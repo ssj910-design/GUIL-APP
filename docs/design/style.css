@@ -60,3 +60,23 @@ details.history { margin: 8px 0 16px; font-size: 13px; color: var(--sub); backgr
 details.history summary { cursor: pointer; font-weight: 700; color: var(--faint); font-size: 12px; }
 details.history[open] summary { margin-bottom: 6px; }
 mark.changed { background: var(--warn-soft); color: var(--warn-ink); padding: 0 4px; border-radius: 4px; }
+
+/* 유저플로우 — 세로 단계 흐름 (02-userflow.html) */
+:root { --purple-soft: #f5f3ff; --purple-ink: #6d28d9; }
+@media (prefers-color-scheme: dark) { :root { --purple-soft: #4c1d9533; --purple-ink: #a78bfa; } }
+.flow { margin: 16px 0 8px; }
+.step { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+.step + .step, .branch + .step, .step + .branch { margin-top: 24px; }
+.step + .step::before, .branch + .step::before { content: "↓"; position: absolute; top: -22px; left: 24px; color: var(--faint); font-size: 14px; }
+.actor { display: inline-block; font-size: 11px; font-weight: 700; padding: 0 8px; border-radius: 99px; margin-right: 6px; }
+.actor.eng { background: var(--accent-soft); color: var(--accent); }
+.actor.adm { background: var(--purple-soft); color: var(--purple-ink); }
+.actor.sys { background: var(--ok-soft); color: var(--ok-ink); }
+.actor.cust { background: var(--warn-soft); color: var(--warn-ink); }
+.step .note { display: block; color: var(--sub); font-size: 13px; margin-top: 3px; }
+.step .push { display: block; font-size: 12.5px; color: var(--warn-ink); margin-top: 5px; }
+.branch { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; position: relative; }
+.branch::before { content: "↓ 둘 중 하나"; position: absolute; top: -20px; left: 24px; color: var(--faint); font-size: 12px; }
+.branch .step { margin: 0; }
+@media (max-width: 640px) { .branch { grid-template-columns: 1fr; } }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--sub); margin: 8px 0 4px; }

@@ -1,0 +1,107 @@
+<!doctype html>
+<!--
+  ═══ 편집 규칙 — AI 포함, 이 문서를 고치는 누구든 따를 것 ═══
+  1. 의미가 바뀌는 수정은 버전(v0.x)을 올리고 "변경 이력" 표에 한 줄 추가한다.
+  2. 섹션의 기존 내용이 "변경·삭제"되면(단순 추가 말고) 그 섹션 끝에
+     <details class="history"><summary>이전 버전 (vX.X)</summary>예전 내용/요약</details>
+     으로 직전 버전을 남긴다. 직전 1개 버전만 인라인 보존 — 더 오래된 건 git 이력으로.
+  3. 이번 버전에서 바뀐 문구는 <mark class="changed">…</mark>로 표시하고,
+     다음 버전을 만들 때 이전 버전의 mark는 벗긴다.
+  4. 오타·문구 다듬기는 버전·이력 없이 바로 수정.
+  ※ 이 문서는 "실제 앱 동작"이 진실 — 앱 로직이 바뀌면 이 흐름도 같이 고친다.
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>02. 유저플로우</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>유저플로우 <span class="badge doing">v0.1</span></h1>
+  <p class="doc-meta">2026-07-30 · 실제 앱 동작 기준 3개 흐름 · <a href="index.html">← 설계 허브로</a></p>
+
+  <div class="legend">
+    <span><span class="actor eng">기사</span>현장요원이 하는 행동</span>
+    <span><span class="actor adm">관리자</span>중간·최고관리자</span>
+    <span><span class="actor sys">자동</span>앱·서버가 스스로 (알림·크론·자동생성)</span>
+    <span><span class="actor cust">고객</span>건물 담당자·신고자</span>
+  </div>
+
+  <h2>흐름 1. 기사의 하루</h2>
+  <div class="flow">
+    <div class="step"><span class="actor eng">기사</span><b>앱 열기 → 출근 체크</b>
+      <span class="note">위치는 선택 — 허용하면 좌표 기록(가까운 현장 우선 배정에 사용), 미허용이어도 출근 됨(강제는 위법)</span></div>
+    <div class="step"><span class="actor eng">기사</span><b>오늘 할 일 확인 (홈탭)</b>
+      <span class="note">배정된 고장 / 이달 자체점검 계획 / 할일(자재 교체·시공 확인) / 오늘 당직 여부</span></div>
+    <div class="step"><span class="actor eng">기사</span><b>현장 업무 반복</b>
+      <span class="note">고장 출동·처리 (→ 흐름 2), 자체점검 수행·기록, 검사 대응</span></div>
+    <div class="step"><span class="actor eng">기사</span><b>현장에서 부품이 필요해지면</b>
+      <span class="note">자재신청(사진 포함) 또는 견적요청 / 상비부품 쓰면 재고 자동 차감 + 보충 신청</span>
+      <span class="push">알림 → 관리자: 자재·견적 신청 들어옴</span></div>
+    <div class="step"><span class="actor eng">기사</span><b>우리방·알림 확인</b>
+      <span class="note">공지·멘션 확인, 필요하면 글·댓글. 연차 신청·근무 교환은 워크캘린더에서</span></div>
+    <div class="step"><span class="actor eng">기사</span><b>근무 종료</b>
+      <span class="note">17:30 이후 종료 버튼 강조. 당직·숙직이면 그 버튼이 자동으로 뜸 — 숙직은 다음날 아침 마감</span></div>
+  </div>
+
+  <h2>흐름 2. 고장 한 건의 일생 (핵심 흐름)</h2>
+  <div class="flow">
+    <div class="step"><span class="actor cust">고객</span><span class="actor eng">기사</span><span class="actor adm">관리자</span><b>접수</b>
+      <span class="note">경로 3개 — 고객 전화를 받은 관리자가 콘솔 입력 / 기사가 앱에서 접수 / 관리자 모바일 접수. 현장·호기·고장구분(에러코드) 기록</span>
+      <span class="push">알림 → 관리자: 고장 접수(긴급) / 갇힘·운행정지면 "중대 건" 별도 알림</span></div>
+    <div class="branch">
+      <div class="step"><span class="actor adm">관리자</span><b>기사 지정 배정</b>
+        <span class="note">기사 위치·거리·현재 작업을 보고 지정 (배정 시각 기록됨)</span>
+        <span class="push">알림 → 그 기사: 고장이 배정되었습니다</span></div>
+      <div class="step"><span class="actor sys">자동</span><b>미배정 → 선착순</b>
+        <span class="note">기사 전원에게 알림 — 먼저 잡는 사람이 담당 (DB가 한 명만 받아줌, 이중출동 불가)</span>
+        <span class="push">알림 → 기사 전원: 미배정 고장 발생</span></div>
+    </div>
+    <div class="step"><span class="actor sys">자동</span><b>재촉 (pg_cron, 평일 08:00~17:30만)</b>
+      <span class="note">미배정 15분 지속 → 관리자에게 1회 / 배정 후 5분 미응답 → 기사+관리자에게 5분마다(최대 30분)</span></div>
+    <div class="step"><span class="actor eng">기사</span><b>출동 응답 — 도착 예정시간(ETA) 입력</b>
+      <span class="note">상태 진행중으로. 출발 위치 기록. 못 가면 "거부"(사유) → 미배정 환원 + 관리자 알림</span>
+      <span class="push">문자 → 고객: "기사가 N분 후 도착 예정" / 길안내: 티맵·카카오 버튼</span></div>
+    <div class="step"><span class="actor eng">기사</span><b>현장 도착</b>
+      <span class="note">도착 버튼 → 도착시각·위치 기록 (내 마지막 위치가 이 현장으로 갱신)</span></div>
+    <div class="branch">
+      <div class="step"><span class="actor eng">기사</span><b>처리 완료</b>
+        <span class="note">증상·원인·처리내용·사진 기록 → 완료. 부품 교체가 필요했으면 자재신청으로 이어짐</span></div>
+      <div class="step"><span class="actor eng">기사</span><b>혼자 못 끝냄 (지원요청·운행정지)</b>
+        <span class="note">에스컬레이션 → 미배정으로 복귀, 지원 갈 기사가 이어받음</span>
+        <span class="push">알림 → 기사 전원: 지원 필요(미배정 복귀)</span></div>
+    </div>
+    <div class="step"><span class="actor adm">관리자</span><b>사후 정정 (필요시)</b>
+      <span class="note">재배정 — 잘못 배정·중복 출동 정정. 새 기사에겐 배정 알림, 이전 기사에겐 회수 알림</span></div>
+    <div class="step"><span class="actor sys">자동</span><b>기록이 자산으로</b>
+      <span class="note">처리 이력(증상→원인→처리)이 쌓임 — 통계·지식 아카이브(RAG)의 재료</span></div>
+  </div>
+
+  <h2>흐름 3. 관리자의 하루</h2>
+  <div class="flow">
+    <div class="step"><span class="actor adm">관리자</span><b>대시보드 확인 (PC 콘솔 또는 모바일 관리자모드)</b>
+      <span class="note">실시간 고장 현황(미배정·미응답 우선), 기사 위치 지도(관제), 출근 현황</span></div>
+    <div class="step"><span class="actor adm">관리자</span><b>고장 대응</b>
+      <span class="note">전화 접수 입력 → 배정 (거리·작업량 참고) → 미응답이면 재촉 알림이 자동으로 옴 → 필요시 재배정</span></div>
+    <div class="step"><span class="actor adm">관리자</span><b>자재·견적·상비 처리</b>
+      <span class="note">신청 확인 → 지급완료(사진·금액·담당) → 할일이 자동 생성돼 기사에게 감 / 견적 발행 → 고객 이메일 발송</span>
+      <span class="push">알림 → 담당 기사: 지급 완료 — 수령 확인</span></div>
+    <div class="step"><span class="actor adm">관리자</span><b>근태 관리</b>
+      <span class="note">연차 신청 승인·반려(신청자에게 알림), 근무표. 최고관리자만: 당직표 생성·관리자 등록·비번 초기화</span></div>
+    <div class="step"><span class="actor adm">관리자</span><b>비용청구 확인</b>
+      <span class="note">기사가 올린 청구 검토. 최고관리자만: 무상 처리·가격 조정·삭제</span></div>
+    <div class="step"><span class="actor adm">관리자</span><b>소통·설정</b>
+      <span class="note">우리방 공지(전원 알림), 회사 알림 정책(어떤 알림을 켤지 — 개인 설정보다 우선)</span></div>
+  </div>
+
+  <h2>변경 이력</h2>
+  <table>
+    <tr><th>버전</th><th>날짜</th><th>변경</th></tr>
+    <tr><td>v0.1</td><td>2026-07-30</td><td>최초 작성 — 기사의 하루 / 고장 한 건의 일생 / 관리자의 하루</td></tr>
+  </table>
+</main>
+<footer>GUIL-APP 설계 문서 · docs/design/02-userflow.html · 실제 앱 동작이 진실 — 로직이 바뀌면 같이 고친다</footer>
+</body>
+</html>
