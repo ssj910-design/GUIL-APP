@@ -45,8 +45,11 @@ const ROLE_MAP = {
 const norm = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 // 매칭 키: 괄호 별칭 제거 + 특수문자(점·앰퍼샌드·하이픈 등)·공백 전부 무시 + 영문 소문자화
 // → "H.애비뉴호텔"="H애비뉴호텔", "J.J 빌딩"="JJ빌딩", "COSTORY TOWER"="costorytower" 전부 같은 키
+// 법인 표기 제거 — "㈜동성엔지니어링"(합자 기호)과 "(주)동성엔지니어링"을 같은 이름으로 본다.
+// 이걸 안 지우면 키가 "주동성…" vs "동성…"으로 갈려 매칭이 통째로 실패한다.
+const stripCorp = (s) => String(s ?? "").replace(/[㈜㈐㈔]/g, "").replace(/\((주|유|재|사|학)\)/g, "");
 // 첫 괄호 앞까지가 본명 — "(구.(주)에이알)"처럼 괄호가 중첩돼도 본명 키가 오염되지 않게 자른다
-const nameKey = (s) => norm(s).split("(")[0].replace(/[^가-힣A-Za-z0-9]/g, "").toLowerCase();
+const nameKey = (s) => norm(stripCorp(s)).split("(")[0].replace(/[^가-힣A-Za-z0-9]/g, "").toLowerCase();
 // 영문 상호 → 한글 발음 사전 — 센터엔 "Dream Castle", 내부엔 "드림캐슬"로 적히는 표기 차이를 흡수한다.
 // 영문 조각이 사전 단어로 "완전히" 분해될 때만 변환한다(부분 치환으로 이름이 깨지는 오류 방지).
 const ENG2KOR = [
@@ -81,8 +84,8 @@ const stripSuffixKey = (key) => {
 // "비젼타워 (스타병원)" → ["비젼타워", "스타병원"] — 본명·별칭 + 영문의 한글 발음 변형까지 전부 매칭 키로 쓴다.
 // "(구. P&P빌딩)"처럼 옛 이름 메모는 "구." 접두어를 벗겨야 상대쪽 "P&P빌딩"과 키가 맞는다.
 const nameKeys = (s) => {
-  // (주)·(유) 법인 표기를 먼저 지워야 "(구.(주)에이알)" 같은 중첩 괄호에서 별칭이 제대로 나온다
-  const s2 = String(s ?? "").replace(/\((주|유)\)/g, "");
+  // 법인 표기를 먼저 지워야 "(구.(주)에이알)" 같은 중첩 괄호에서 별칭이 제대로 나온다
+  const s2 = stripCorp(s);
   const alias = [...s2.matchAll(/\(([^)]+)\)/g)].map((m) => m[1].replace(/^\s*구[.\s]+/, ""));
   // "대진월드타워1,2"처럼 한 별칭에 여러 동을 합쳐 적은 경우 → 대진월드타워1 / 대진월드타워2로 분해
   const expanded = alias.flatMap((a) => {
@@ -107,6 +110,8 @@ const stripDongPrefix = (key, dong) => {
   const out = key.slice(d.length);
   return out.length >= 2 ? out : null;
 };
+// 주소에서 법정동 추출 — 내부 구주소("반포동 701-16")와 DB 신주소 끝 "(반포동)" 모두 잡힌다
+const dongOf = (addr) => (/([가-힣]{1,10}[동가리])(?=\s|\d|\)|$)/.exec(String(addr ?? "")) ?? [])[1] ?? null;
 // 유형어·동 표기까지 벗긴 "느슨한 키" — 더해피하우스=더해피, 예촌아파트B=예촌아파트.
 // 오매칭(성진빌딩↔성진타워) 위험이 있어 통과 판정에는 쓰지 않고, 후보 제시(유사도)에만 쓴다.
 const looseKeys = (s, addr) => {
@@ -115,8 +120,6 @@ const looseKeys = (s, addr) => {
   // 주소 조각을 뗀 뒤 유형어도 떼는 조합까지 (사당동삼성아파트 → 삼성아파트 → 삼성)
   return [...new Set([...dongStripped, ...dongStripped.map(stripSuffixKey).filter(Boolean)])];
 };
-// 주소에서 법정동 추출 — 내부 구주소("반포동 701-16")와 DB 신주소 끝 "(반포동)" 모두 잡힌다
-const dongOf = (addr) => (/([가-힣]{1,10}[동가리])(?=\s|\d|\)|$)/.exec(String(addr ?? "")) ?? [])[1] ?? null;
 // 도로명+번지 추출("이태원로 22" → "이태원로22") — 양쪽 다 신주소면 이걸로 정확히 맞춰볼 수 있다
 const roadOf = (addr) => { const m = /([가-힣A-Za-z0-9]+(?:로|길)\s*\d+(?:-\d+)?)/.exec(String(addr ?? "")); return m ? m[1].replace(/\s/g, "") : null; };
 // 싼 유사도: 2글자 조각(bigram) 겹침 비율 0~1 — 라이브러리 없이 이름 비슷함 판단용
@@ -434,14 +437,6 @@ export default function VerifyImport({ data, setData, onClose }) {
     setBusy(false);
   }
 
-  // DB(현장정보)에만 있고 내부 엑셀엔 없는 현장 — 내부 파일 누락 후보 (수동 연결된 현장은 제외)
-  const refOnly = useMemo(() => {
-    if (!rows || !dbSites.length) return [];
-    const mine = new Set(rows.filter((r) => r.parsed.name).flatMap((r) => nameKeys(r.parsed.name)));
-    const linked = new Set(Object.values(links).map((l) => l.siteId));
-    return dbSites.filter((s) => !linked.has(s.id) && !s.keys.some((k) => mine.has(k))).map((s) => s.name);
-  }, [rows, dbSites, links]);
-
   // DB 대조 결과를 이슈에 합친 최종 행 목록 — 별칭 포함 자동 매칭 + 수동 연결 반영
   const finalRows = useMemo(() => {
     if (!rows) return null;
@@ -450,9 +445,17 @@ export default function VerifyImport({ data, setData, onClose }) {
       // 이름이 같은 현장이 여러 곳일 수 있다("삼성아파트" 사당동·삼전동) — 이름으로 걸리는 DB 현장을
       // 다 모아, 2곳 이상이면 법정동으로 좁힌다. 그래도 못 좁히면 통과로 보지 않고 사람이 고르게 한다.
       const myKeys = r.parsed.name ? nameKeys(r.parsed.name) : [];
-      const hits = myKeys.length ? dbSites.filter((s) => s.keys.some((k) => myKeys.includes(k))) : [];
       const myDong = dongOf(r.parsed.address);
-      const narrowed = hits.length > 1 && myDong ? hits.filter((s) => s.dong === myDong) : hits;
+      // 엄격 키 + 느슨한 키(유형어·동 표기·주소 접두어 제거)를 함께 모은다 — 이름이 비슷한 DB 현장이
+      // 둘 이상일 수 있어(더나은 하우스 vs 더해피하우스 / 삼성아파트 vs 사당동삼성아파트),
+      // 한쪽만 보고 먼저 걸린 곳을 택하면 엉뚱한 현장에 붙는다. 아래에서 법정동으로 고른다.
+      const strictHits = myKeys.length ? dbSites.filter((s) => s.keys.some((k) => myKeys.includes(k))) : [];
+      const myLoose = r.parsed.name ? looseKeys(r.parsed.name, r.parsed.address).filter((k) => k.length >= 3) : [];
+      const looseHits = myLoose.length ? dbSites.filter((s) => s.loose.some((k) => k.length >= 3 && myLoose.includes(k))) : [];
+      const hits = [...new Map([...strictHits, ...looseHits].map((s) => [s.id, s])).values()];
+      // 후보가 여럿이면 법정동이 같은 곳 우선, 그래도 여럿이면 사람이 고르게 한다
+      const sameDong = myDong ? hits.filter((s) => s.dong === myDong) : [];
+      const narrowed = hits.length > 1 ? (sameDong.length ? sameDong : hits) : hits;
       const autoMatched = narrowed.length === 1;
       if (r.parsed.name && hits.length > 1 && narrowed.length !== 1) {
         issues.push({ level: "yellow", msg: `이름이 같은 DB 현장이 ${hits.length}곳 — 아래 후보에서 맞는 곳을 골라주세요` });
@@ -461,7 +464,9 @@ export default function VerifyImport({ data, setData, onClose }) {
         issues.push({ level: "yellow", msg: "등록된 현장(DB)에 없는 이름 — 아래 후보에서 연결하거나 미등록·해지인지 확인" });
       }
       const level = issues.some((x) => x.level === "red") ? "red" : issues.length ? "yellow" : "green";
-      return { ...r, issues, level, autoMatched, matchedSiteId: narrowed.length === 1 ? narrowed[0].id : null };
+      // hitIds = 이름으로 걸린 DB 현장 전부(동명이현장 포함) — "DB에만 있는 현장" 집계에 쓴다.
+      // matchedSiteId는 유일하게 좁혀졌을 때만(데이터 반영은 확실할 때만 해야 하므로).
+      return { ...r, issues, level, autoMatched, matchedSiteId: narrowed.length === 1 ? narrowed[0].id : null, hitIds: hits.map((s) => s.id) };
     });
   }, [rows, dbKeys, dbSites, links]);
 
@@ -503,6 +508,19 @@ export default function VerifyImport({ data, setData, onClose }) {
   // 그 현장의 "비어 있는" 칸만 채운다 — 이미 값 있는 칸은 절대 덮지 않는다.
   // 반영 대상 현장 = 수동/자동 연결 우선, 없으면 이름으로 유일하게 좁혀진 현장(matchedSiteId)
   const matchedSiteIdOf = (r) => links[r.idx]?.siteId ?? r.matchedSiteId ?? null;
+
+  // DB에만 있고 내부 엑셀엔 없는 현장 — "실제로 어느 현장에 붙었나"(matchedSiteId·수동연결)로 판정해야
+  // 유형어·동 표기·주소 접두어 규칙으로 잡힌 것들이 목록에서 제대로 빠진다.
+  const refOnly = useMemo(() => {
+    if (!finalRows || !dbSites.length) return [];
+    // 이름으로 걸린 현장(hitIds)까지 "엑셀에 있는 것"으로 본다 — 노랑이라 반영 대상이 아니어도 누락은 아니므로
+    const used = new Set(finalRows.flatMap((r) => [matchedSiteIdOf(r), ...(r.hitIds ?? [])]).filter(Boolean));
+    // 같은 단지의 형제 동도 다룬 것으로 본다 — 엑셀 1행("예촌아파트")이 DB의 A·B·C동을 함께 가리키는 경우.
+    // 동 표기를 뗀 키가 같고 법정동도 같으면 형제로 간주.
+    const usedSites = dbSites.filter((s) => used.has(s.id));
+    const isSibling = (s) => usedSites.some((u) => u.dong === s.dong && (stripDongKey(nameKey(u.name)) ?? nameKey(u.name)) === (stripDongKey(nameKey(s.name)) ?? nameKey(s.name)));
+    return dbSites.filter((s) => !used.has(s.id) && !isSibling(s)).map((s) => s.name);
+  }, [finalRows, dbSites, links]);
   const FILL_FIELDS = [
     ["phone", "전화(현장 유선)", (p) => (p.phones.find((x) => x.type === "현장(유선) 추정") ?? p.phones.find((x) => x.type === "현장(대표번호) 추정") ?? p.phones.find((x) => x.type.startsWith("현장")))?.num ?? null],
     ["fax", "팩스", (p) => p.phones.find((x) => x.type === "팩스")?.num ?? null],
