@@ -93,9 +93,28 @@ const nameKeys = (s) => {
   const withEng = [...new Set([...base, ...base.map(engToKorKey).filter(Boolean)])];
   return [...new Set([...withEng, ...withEng.map(korVariantKey).filter(Boolean)])];
 };
-// 유형어까지 벗긴 "느슨한 키" — 더해피하우스=더해피. 오매칭(성진빌딩↔성진타워) 위험이 있어
-// 통과 판정에는 쓰지 않고, 후보 제시(유사도)에만 쓴다.
-const looseKeys = (s) => [...new Set(nameKeys(s).flatMap((k) => [k, stripSuffixKey(k)]).filter(Boolean))];
+// 동(棟) 표기 제거 — "예촌아파트B" "예촌아파트101동" "…A동"의 끝 동 표시를 뗀다.
+// 같은 단지를 A·B·C나 101·102동으로 나눠 적은 경우를 하나로 모으기 위함.
+const stripDongKey = (key) => {
+  const out = key.replace(/(\d{1,3}동|[a-z]동|동$|[a-z])$/, "");
+  return out !== key && out.length >= 2 ? out : null;
+};
+// 주소 조각(법정동)이 이름 앞에 붙은 경우 제거 — "사당동삼성아파트" → "삼성아파트"
+const stripDongPrefix = (key, dong) => {
+  if (!dong) return null;
+  const d = nameKey(dong);
+  if (!d || !key.startsWith(d)) return null;
+  const out = key.slice(d.length);
+  return out.length >= 2 ? out : null;
+};
+// 유형어·동 표기까지 벗긴 "느슨한 키" — 더해피하우스=더해피, 예촌아파트B=예촌아파트.
+// 오매칭(성진빌딩↔성진타워) 위험이 있어 통과 판정에는 쓰지 않고, 후보 제시(유사도)에만 쓴다.
+const looseKeys = (s, addr) => {
+  const base = nameKeys(s);
+  const dongStripped = base.flatMap((k) => [k, stripSuffixKey(k), stripDongKey(k), stripDongPrefix(k, dongOf(addr))]).filter(Boolean);
+  // 주소 조각을 뗀 뒤 유형어도 떼는 조합까지 (사당동삼성아파트 → 삼성아파트 → 삼성)
+  return [...new Set([...dongStripped, ...dongStripped.map(stripSuffixKey).filter(Boolean)])];
+};
 // 주소에서 법정동 추출 — 내부 구주소("반포동 701-16")와 DB 신주소 끝 "(반포동)" 모두 잡힌다
 const dongOf = (addr) => (/([가-힣]{1,10}[동가리])(?=\s|\d|\)|$)/.exec(String(addr ?? "")) ?? [])[1] ?? null;
 // 도로명+번지 추출("이태원로 22" → "이태원로22") — 양쪽 다 신주소면 이걸로 정확히 맞춰볼 수 있다
@@ -277,7 +296,7 @@ export default function VerifyImport({ data, setData, onClose }) {
   const [links, setLinks] = useState({});         // 수동 매칭: 행 idx → { siteId, siteName }
   // 대조 상대 = 이미 등록된 DB 현장(센터 엑셀로 일괄등록된 것) — 이름 본명+괄호 별칭 전부 키로
   const dbSites = useMemo(() => (data?.sites ?? []).filter((s) => s.name).map((s) => ({
-    id: s.id, name: s.name, keys: nameKeys(s.name), loose: looseKeys(s.name), dong: dongOf(s.address), road: roadOf(s.address),
+    id: s.id, name: s.name, keys: nameKeys(s.name), loose: looseKeys(s.name, s.address), dong: dongOf(s.address), road: roadOf(s.address),
   })), [data]);
   const dbKeys = useMemo(() => new Set(dbSites.flatMap((s) => s.keys)), [dbSites]);
   // 호기 힌트 — 센터 데이터(units)의 설치일·모델이 내부 엑셀과 일치하면 같은 현장일 확률이 높다
@@ -293,7 +312,7 @@ export default function VerifyImport({ data, setData, onClose }) {
   }, [data]);
   // 자동 매칭 실패 행에 보여줄 후보 — 이름 유사도 + 법정동·설치일·모델 일치 가산점, 상위 3곳
   function candidatesFor(r, fallbackName = "") {
-    const myKeys = looseKeys(r.parsed.name || fallbackName); // 후보 탐색은 느슨한 키(유형어 제거 포함)로
+    const myKeys = looseKeys(r.parsed.name || fallbackName, r.parsed.address); // 후보 탐색은 느슨한 키(유형어·동 표기·주소 조각 제거 포함)로
     const myDong = dongOf(r.parsed.address);
     const myDate = r.parsed.installDate;
     const myModel = r.parsed.model ? nameKey(r.parsed.model) : "";
@@ -302,7 +321,7 @@ export default function VerifyImport({ data, setData, onClose }) {
         let score = Math.max(...myKeys.flatMap((a) => s.loose.map((b) => similarity(a, b))), 0);
         const tags = [];
         // 유형어를 벗기면 같은 이름(더해피하우스 ↔ 더해피) — 강한 신호로 본다
-        if (myKeys.some((a) => s.loose.includes(a))) { score = Math.max(score, 0.8); tags.push("유형어 제외 일치"); }
+        if (myKeys.some((a) => a.length >= 3 && s.loose.includes(a))) { score = Math.max(score, 0.8); tags.push("이름 핵심 일치"); }
         // 한쪽 이름이 다른 쪽을 포함하면(국방부 ⊂ 국방부본부) 강한 신호
         else if (myKeys.some((a) => s.loose.some((b) => a.length >= 3 && b.length >= 3 && (a.includes(b) || b.includes(a))))) { score = Math.max(score, 0.75); tags.push("이름 포함"); }
         if (myDong && s.dong && myDong === s.dong) { score += 0.25; tags.push("법정동 일치"); } // 구주소·신주소가 달라도 법정동은 같다
@@ -428,14 +447,23 @@ export default function VerifyImport({ data, setData, onClose }) {
     if (!rows) return null;
     return rows.map((r) => {
       const issues = [...r.issues];
-      const autoMatched = r.parsed.name && nameKeys(r.parsed.name).some((k) => dbKeys.has(k));
-      if (dbKeys.size && r.parsed.name && !autoMatched && !links[r.idx]) {
+      // 이름이 같은 현장이 여러 곳일 수 있다("삼성아파트" 사당동·삼전동) — 이름으로 걸리는 DB 현장을
+      // 다 모아, 2곳 이상이면 법정동으로 좁힌다. 그래도 못 좁히면 통과로 보지 않고 사람이 고르게 한다.
+      const myKeys = r.parsed.name ? nameKeys(r.parsed.name) : [];
+      const hits = myKeys.length ? dbSites.filter((s) => s.keys.some((k) => myKeys.includes(k))) : [];
+      const myDong = dongOf(r.parsed.address);
+      const narrowed = hits.length > 1 && myDong ? hits.filter((s) => s.dong === myDong) : hits;
+      const autoMatched = narrowed.length === 1;
+      if (r.parsed.name && hits.length > 1 && narrowed.length !== 1) {
+        issues.push({ level: "yellow", msg: `이름이 같은 DB 현장이 ${hits.length}곳 — 아래 후보에서 맞는 곳을 골라주세요` });
+      }
+      if (dbKeys.size && r.parsed.name && !autoMatched && !links[r.idx] && hits.length === 0) {
         issues.push({ level: "yellow", msg: "등록된 현장(DB)에 없는 이름 — 아래 후보에서 연결하거나 미등록·해지인지 확인" });
       }
       const level = issues.some((x) => x.level === "red") ? "red" : issues.length ? "yellow" : "green";
-      return { ...r, issues, level, autoMatched };
+      return { ...r, issues, level, autoMatched, matchedSiteId: narrowed.length === 1 ? narrowed[0].id : null };
     });
-  }, [rows, dbKeys, links]);
+  }, [rows, dbKeys, dbSites, links]);
 
   const counts = useMemo(() => {
     if (!finalRows) return null;
@@ -473,12 +501,8 @@ export default function VerifyImport({ data, setData, onClose }) {
   // ── DB 빈칸 채우기 계획 ──────────────────────────────────────────
   // 대상: 빨강 아님 + (통과 or 검토완료) + DB 현장과 매칭(자동/수동)된 행.
   // 그 현장의 "비어 있는" 칸만 채운다 — 이미 값 있는 칸은 절대 덮지 않는다.
-  const matchedSiteIdOf = (r) => {
-    if (links[r.idx]) return links[r.idx].siteId;
-    if (!r.parsed.name) return null;
-    const keys = nameKeys(r.parsed.name);
-    return dbSites.find((s) => s.keys.some((k) => keys.includes(k)))?.id ?? null;
-  };
+  // 반영 대상 현장 = 수동/자동 연결 우선, 없으면 이름으로 유일하게 좁혀진 현장(matchedSiteId)
+  const matchedSiteIdOf = (r) => links[r.idx]?.siteId ?? r.matchedSiteId ?? null;
   const FILL_FIELDS = [
     ["phone", "전화(현장 유선)", (p) => (p.phones.find((x) => x.type === "현장(유선) 추정") ?? p.phones.find((x) => x.type === "현장(대표번호) 추정") ?? p.phones.find((x) => x.type.startsWith("현장")))?.num ?? null],
     ["fax", "팩스", (p) => p.phones.find((x) => x.type === "팩스")?.num ?? null],
