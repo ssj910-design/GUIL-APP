@@ -65,9 +65,6 @@ function EngineerRow({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContr
       <td className="px-3 py-2.5 w-32">
         <EditableText value={form.minwonId} placeholder="민원24 점검자 ID" onCommit={(v) => setForm({ ...form, minwonId: v })} />
       </td>
-      <td className="px-3 py-2.5">
-        {p.auth_user_id ? <StatusBadge tone="green">계정 연결됨</StatusBadge> : <StatusBadge tone="slate">계정 없음</StatusBadge>}
-      </td>
       <td className="px-3 py-2.5 text-right pr-4 whitespace-nowrap">
         <button onClick={() => onOpenLedger(p)}
           className="text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5">
@@ -442,7 +439,9 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
   async function save(p, form) {
     const patch = {
       phone: form.phone || null,
+      // 민원24 아이디 = 로그인 아이디 (둘을 항상 동일하게 유지 — 표에서 이 칸만 관리)
       minwon_id: form.minwonId || null,
+      login_id: form.minwonId || null,
       hire_date: form.hireDate || null,
       address: form.address || null,
       vehicle_no: form.vehicleNo || null,
@@ -553,7 +552,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
         ))}
       </div>
       <div className="hidden lg:block">
-      <AdminTable minWidth="76rem" head={["", "이름", "직급", "입사일", "주소", "연락처", "차량번호", "담당대수", "아이디(민원24)", "로그인", ""]}>
+      <AdminTable minWidth="76rem" head={["", "이름", "직급", "입사일", "주소", "연락처", "차량번호", "담당대수", "아이디(민원24)", ""]}>
         {engineers.map((p, i) => (
           <EngineerRow
             key={p.id}

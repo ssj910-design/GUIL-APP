@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { Plus, Trash2, Paperclip, FileText } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { mapUnit } from "@/lib/mappers";
+import { mapUnit, mapSite } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
 import { addDays, govDateToDashed, siteMatchesQuery, formatPhone, shortDate, realInstallPlace } from "@/lib/utils";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
@@ -52,6 +52,67 @@ function SiteBizRegModal({ site, onClose, onSave }) {
         onUpload={(file) => uploadPhoto(file, `business-reg/${site.id}`)}
         onSave={onSave}
       />
+    </Modal>
+  );
+}
+
+// 현장 단건 등록 — 현장정보 수정 화면과 동일한 칸(계약정보·담당기사·연락처·비고)을 전부 여기서 받는다.
+// 호기(승강기 정보)만은 등록 후 상세화면의 "승강기 정보 > 수정하기"에서 추가한다.
+function AddSiteModal({ engineers, onClose, onSave }) {
+  const [form, setForm] = useState({
+    name: "", address: "", contractType: CONTRACT_TYPES[0], maintenanceCost: "",
+    contractDate: "", contractEnd: "", assignedEngineer: "",
+    phone: "", fax: "", email: "", notes: "",
+  });
+  const set = (k) => (v) => setForm({ ...form, [k]: v });
+  return (
+    <Modal title="새 현장 추가" onClose={onClose} wide>
+      <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div><p className="text-xs font-bold text-slate-500 mb-1">현장명</p>
+            <input className={inputCls} placeholder="예: 구일빌딩" value={form.name} onChange={(e) => set("name")(e.target.value)} autoFocus /></div>
+          <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">주소</p>
+            <input className={inputCls} placeholder="예: 서울특별시 강남구 테헤란로 123" value={form.address} onChange={(e) => set("address")(e.target.value)} /></div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div><p className="text-xs font-bold text-slate-500 mb-1">계약구분</p>
+            <select className={inputCls} value={form.contractType} onChange={(e) => set("contractType")(e.target.value)}>
+              {CONTRACT_TYPES.map((t) => <option key={t}>{t}</option>)}
+            </select></div>
+          <div><p className="text-xs font-bold text-slate-500 mb-1">보수료(VAT별도)</p>
+            <input className={inputCls} type="number" placeholder="원" value={form.maintenanceCost} onChange={(e) => set("maintenanceCost")(e.target.value)} /></div>
+          <div><p className="text-xs font-bold text-slate-500 mb-1">계약일자</p>
+            <DateTextInput value={form.contractDate} onChange={set("contractDate")} /></div>
+          <div><p className="text-xs font-bold text-slate-500 mb-1">계약종료일</p>
+            <DateTextInput value={form.contractEnd} onChange={set("contractEnd")} /></div>
+          <div><p className="text-xs font-bold text-slate-500 mb-1">담당 기사</p>
+            <select className={inputCls} value={form.assignedEngineer} onChange={(e) => set("assignedEngineer")(e.target.value)}>
+              <option value="">미배정</option>
+              {engineers.map((p) => <option key={p.id}>{p.name}</option>)}
+            </select></div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div><p className="text-xs font-bold text-slate-500 mb-1">전화번호</p>
+            <input className={inputCls} placeholder="관리사무소 대표번호" value={form.phone} onChange={(e) => set("phone")(formatPhone(e.target.value))} /></div>
+          <div><p className="text-xs font-bold text-slate-500 mb-1">팩스</p>
+            <input className={inputCls} value={form.fax} onChange={(e) => set("fax")(formatPhone(e.target.value))} /></div>
+          <div><p className="text-xs font-bold text-slate-500 mb-1">이메일</p>
+            <input className={inputCls} value={form.email} onChange={(e) => set("email")(e.target.value)} /></div>
+        </div>
+        <div><p className="text-xs font-bold text-slate-500 mb-1">비고(전달사항)</p>
+          <input className={inputCls} value={form.notes} onChange={(e) => set("notes")(e.target.value)} /></div>
+        <p className="text-[11px] text-slate-400">호기(승강기 정보)는 등록 후 상세화면에서 추가하면 됩니다.</p>
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5">취소</button>
+          <button
+            disabled={!form.name.trim()}
+            onClick={() => onSave(form)}
+            className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2.5"
+          >
+            추가
+          </button>
+        </div>
+      </div>
     </Modal>
   );
 }
@@ -390,6 +451,7 @@ export default function SitesAdmin({ data, setData }) {
   const [editingContacts, setEditingContacts] = useState(false);
   const [editingUnits, setEditingUnits] = useState(false);
   const [importing, setImporting] = useState(false); // 공단 엑셀 일괄 등록
+  const [addingSite, setAddingSite] = useState(false); // 현장 단건 추가
   const [unitDetail, setUnitDetail] = useState(null);
   const [contractOpen, setContractOpen] = useState(false);
   const [bizRegOpen, setBizRegOpen] = useState(false);
@@ -438,6 +500,31 @@ export default function SitesAdmin({ data, setData }) {
       phone: s.phone ?? "", fax: s.fax ?? "", email: s.email ?? "",
       contractDate: s.contractDate ?? "", contractEnd: s.contractEnd ?? "", maintenanceCost: s.maintenanceCost ?? "",
     });
+  }
+
+  // 현장 단건 추가 — 현장정보 수정 화면과 동일한 칸을 전부 이 시점에 받아 저장한다.
+  // 담당 기사를 고르면 site_assignments도 같이 채운다 (changeLead와 동일한 듀얼라이트 이유).
+  async function addSite(form) {
+    const id = `site-${Date.now()}`;
+    const { error } = await supabase.from("sites").insert({
+      id, name: form.name, address: form.address || null, contract_type: form.contractType,
+      maintenance_cost: form.maintenanceCost === "" ? null : Number(form.maintenanceCost),
+      contract_date: form.contractDate || null, contract_end: form.contractEnd || null,
+      assigned_engineer: form.assignedEngineer || null,
+      phone: form.phone || null, fax: form.fax || null, email: form.email || null, notes: form.notes || null,
+    });
+    if (error) { alert("현장 추가 실패: " + error.message); return; }
+    if (form.assignedEngineer) {
+      const p = engineers.find((x) => x.name === form.assignedEngineer);
+      if (p) await supabase.from("site_assignments").insert({ site_id: id, tech_id: p.id, is_lead: true });
+    }
+    const { data: created, error: fetchErr } = await supabase.from("sites").select("*").eq("id", id).single();
+    if (fetchErr || !created) { alert("추가는 됐지만 불러오기 실패: " + (fetchErr?.message ?? "")); return; }
+    const mapped = mapSite(created);
+    setData((prev) => ({ ...prev, sites: [...prev.sites, mapped] }));
+    setAddingSite(false);
+    setSearch("");
+    select(mapped);
   }
 
   // 재계약 확정 — 새 기간 저장 + 계약종료 상태였다면 복구
@@ -633,13 +720,19 @@ export default function SitesAdmin({ data, setData }) {
           <h1 className="text-xl font-extrabold">현장정보</h1>
           <p className="text-xs text-slate-500 mt-0.5">호기(승강기 1대) 단위로 모델·설치일·승강기고유번호를 관리합니다</p>
         </div>
-        {/* 현장 등록은 공단 엑셀 업로드로만 — API 단건 등록은 팀 결정으로 제거 (2026-07-17) */}
-        <button onClick={() => setImporting(true)}
-          className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
-          <Plus size={15} /> 엑셀로 현장 일괄 등록
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setAddingSite(true)}
+            className="flex items-center gap-1.5 text-sm font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 whitespace-nowrap">
+            <Plus size={15} /> 새 현장 추가
+          </button>
+          <button onClick={() => setImporting(true)}
+            className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
+            <Plus size={15} /> 엑셀로 현장 일괄 등록
+          </button>
+        </div>
       </div>
 
+      {addingSite && <AddSiteModal engineers={engineers} onClose={() => setAddingSite(false)} onSave={addSite} />}
       {importing && <ImportSites data={data} setData={setData} onClose={() => setImporting(false)} />}
 
       {/* 계약 만료 알림 배너 */}

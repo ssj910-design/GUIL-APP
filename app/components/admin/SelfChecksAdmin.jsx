@@ -146,7 +146,10 @@ export default function SelfChecksAdmin({ data, setData }) {
     .map((c) => {
       const u = data.units.find((x) => x.id === c.unitId);
       const s = u ? data.sites.find((x) => x.id === u.siteId) : null;
-      return { ...c, loc: locOf(data, c.unitId), address: s?.address ?? null, gu: guOf(s?.address) };
+      // 담당자는 출석부 생성 시점 스냅샷(c.assigneeId)이 아니라 현장정보에 지금 배정된 담당
+      // 기사를 실시간으로 따른다 — 점검완료 여부(status·doneDate 등)는 그대로 c에서 유지된다.
+      const currentAssignee = s?.assignedEngineer ? data.profiles.find((p) => p.name === s.assignedEngineer) : null;
+      return { ...c, assigneeId: currentAssignee?.id ?? null, loc: locOf(data, c.unitId), address: s?.address ?? null, gu: guOf(s?.address) };
     })
     .sort((a, b) => a.loc.localeCompare(b.loc, "ko"));
   const done = rows.filter((c) => c.status === "완료");
