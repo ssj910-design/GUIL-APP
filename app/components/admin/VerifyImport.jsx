@@ -174,6 +174,42 @@ function parseContractCell(v) {
   return { date, history: plain ? null : s };
 }
 
+// 주요 포털 이메일 도메인 — 오탈자가 명백하므로 조용히 교정한다(확인 요청 없이).
+// 실데이터에서 실제로 나온 것: "naver,com"(쉼표), "hanmaill.net"(중복 글자), "naver.com,"(끝 쉼표).
+const PORTALS = ["naver.com", "hanmail.net", "daum.net", "gmail.com", "nate.com", "kakao.com", "hotmail.com", "yahoo.com", "yahoo.co.kr", "outlook.com", "icloud.com"];
+const PORTAL_RE = new RegExp(`@(${PORTALS.map((d) => d.replace(/\./g, "\\.")).join("|")})$`, "i");
+// 글자 하나 빠짐·중복·바뀜, 또는 이웃 글자 자리바꿈(gmial→gmail)이면 그 포털의 오타로 본다.
+// 회사·기관 도메인(guil.co.kr, kpetro.or.kr)은 어느 포털과도 안 가까워 그대로 남는다.
+function closePortal(dom) {
+  const d = dom.toLowerCase();
+  for (const p of PORTALS) {
+    if (d === p) return p;
+    if (Math.abs(d.length - p.length) > 1) continue;
+    // 자리바꿈: 한 쌍만 서로 뒤집혀 있으면 오타로 본다
+    if (d.length === p.length) {
+      const diffIdx = [...d].map((ch, k) => (ch === p[k] ? -1 : k)).filter((k) => k >= 0);
+      if (diffIdx.length === 2 && diffIdx[1] === diffIdx[0] + 1 && d[diffIdx[0]] === p[diffIdx[1]] && d[diffIdx[1]] === p[diffIdx[0]]) return p;
+    }
+    let i = 0, j = 0, diff = 0;
+    while (i < d.length && j < p.length) {
+      if (d[i] === p[j]) { i++; j++; continue; }
+      if (++diff > 1) break;
+      if (d.length > p.length) i++; else if (d.length < p.length) j++; else { i++; j++; }
+    }
+    if (diff + (d.length - i) + (p.length - j) <= 1) return p;
+  }
+  return null;
+}
+// "abc@naver,com" / "abc@hanmaill.net" / "abc@naver.com," → "abc@naver.com"
+function fixEmail(e) {
+  const cleaned = e.replace(/[.,;]+$/, "");                  // 끝의 문장부호
+  const at = cleaned.lastIndexOf("@");
+  if (at < 0) return cleaned;
+  const local = cleaned.slice(0, at);
+  const dom = cleaned.slice(at + 1).replace(/,/g, ".");      // "naver,com" → "naver.com"
+  return `${local}@${closePortal(dom) ?? dom}`;
+}
+
 const toMoney = (v) => {
   const n = Number(String(v ?? "").replace(/[^0-9.-]/g, ""));
   return Number.isFinite(n) && String(v).trim() !== "" ? n : null;
@@ -308,7 +344,7 @@ function validateRow(raw, col, monthCols) {
   const emailRaw = parsed.email;
   const EMAIL_RE = /[\w.+-]+@[\w-]+[.,][\w.,-]+/g;
   const rawFound = emailRaw.match(EMAIL_RE) ?? [];
-  const fixed = rawFound.map((e) => e.replace(/@([\w-]+),/, "@$1.")); // "naver,com" → "naver.com"
+  const fixed = rawFound.map(fixEmail);
   const okIdx = fixed.findIndex((e) => /^[\w.+-]+@[\w-]+\.[\w.-]+$/.test(e));
   const valid = fixed.filter((e) => /^[\w.+-]+@[\w-]+\.[\w.-]+$/.test(e));
   parsed.email = valid[0] ?? "";
@@ -321,7 +357,8 @@ function validateRow(raw, col, monthCols) {
     // 이메일이 아예 없는 칸 = 발송 방법 메모(우편·카톡·보내지 말것) — 이슈 아님, 비고로 보낸다
     parsed.emailMemo = norm(emailRaw);
   }
-  if (okIdx >= 0 && rawFound[okIdx] !== valid[0]) {
+  // 주요 포털 오탈자는 명백해서 조용히 교정한다(노랑 안 띄움). 그 외 도메인 교정만 확인 요청.
+  if (okIdx >= 0 && rawFound[okIdx] !== valid[0] && !PORTAL_RE.test(valid[0])) {
     issues.push({ level: "yellow", msg: `이메일 오타 자동교정: "${rawFound[okIdx]}" → "${valid[0]}" — 확인해주세요` });
   }
 
