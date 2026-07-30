@@ -56,20 +56,12 @@ const ENG2KOR = [
   ["view", "뷰"], ["city", "시티"], ["gold", "골드"], ["blue", "블루"], ["star", "스타"], ["sky", "스카이"],
   ["hill", "힐"], ["bldg", "빌딩"], ["the", "더"], ["new", "뉴"], ["hi", "하이"],
 ].sort((a, b) => b[0].length - a[0].length);
-function latinRunToKor(run) {
-  let rest = run, out = "";
-  outer: while (rest) {
-    for (const [e, ko] of ENG2KOR) {
-      if (rest.startsWith(e)) { out += ko; rest = rest.slice(e.length); continue outer; }
-    }
-    return null; // 사전으로 끝까지 분해 안 되면(고유명 등) 변환하지 않는다
-  }
-  return out;
-}
+// 부분 변환 허용 — "costorytower"처럼 고유명+일반단어 조합도 "costory타워"로 바꿔
+// 상대쪽 "코스토리타워"와 유사도가 잡히게 한다 (변형 키가 하나 늘 뿐이라 오매칭 위험 낮음)
 const engToKorKey = (key) => {
-  let changed = false;
-  const converted = key.replace(/[a-z]+/g, (run) => { const k = latinRunToKor(run); if (k) { changed = true; return k; } return run; });
-  return changed ? converted : null;
+  let out = key;
+  for (const [e, ko] of ENG2KOR) out = out.split(e).join(ko);
+  return out !== key ? out : null;
 };
 // "비젼타워 (스타병원)" → ["비젼타워", "스타병원"] — 본명·별칭 + 영문의 한글 발음 변형까지 전부 매칭 키로 쓴다.
 // "(구. P&P빌딩)"처럼 옛 이름 메모는 "구." 접두어를 벗겨야 상대쪽 "P&P빌딩"과 키가 맞는다.
@@ -269,7 +261,8 @@ export default function VerifyImport({ data, setData, onClose }) {
         if (myKeys.some((a) => s.keys.some((b) => a.length >= 3 && b.length >= 3 && (a.includes(b) || b.includes(a))))) { score = Math.max(score, 0.75); tags.push("이름 포함"); }
         if (myDong && s.dong && myDong === s.dong) { score += 0.25; tags.push("법정동 일치"); } // 구주소·신주소가 달라도 법정동은 같다
         const myRoad = roadOf(r.parsed.address);
-        if (myRoad && s.road && myRoad === s.road) { score += 0.25; tags.push("주소 일치"); } // 둘 다 신주소일 땐 도로명+번지로 확정적
+        // 도로명+번지가 정확히 같으면 사실상 같은 건물 — 이름이 아예 달라도(COSTORY TOWER↔ABT타워) 후보에 확실히 올린다
+        if (myRoad && s.road && myRoad === s.road) { score = Math.max(score + 0.25, 0.65); tags.push("주소 일치"); }
         const u = unitsBySite.get(s.id);
         if (u && myDate && u.dates.has(myDate)) { score += 0.2; tags.push("설치일 일치"); }
         if (u && myModel && u.models.has(myModel)) { score += 0.15; tags.push("모델 일치"); }
@@ -279,12 +272,19 @@ export default function VerifyImport({ data, setData, onClose }) {
       .sort((a, b) => b.score - a.score)
       .slice(0, 3);
   }
+  // 이름이 전혀 달라 후보가 없을 때(예: 경찰기마대 ↔ 74기동대) — 같은 법정동 현장을 대신 보여준다
+  function sameDongFallback(r) {
+    const myDong = dongOf(r.parsed.address);
+    if (!myDong) return [];
+    return dbSites.filter((s) => s.dong === myDong).slice(0, 3).map((s) => ({ ...s, score: 0, tags: ["같은 동"] }));
+  }
   const [filter, setFilter] = useState("problem");
   const [fileNotices, setFileNotices] = useState([]); // 파일 전체 공통 형식 문제 (행 목록에서 승격)
   const [openIdx, setOpenIdx] = useState(null);
   const [reviewed, setReviewed] = useState({});   // idx → true
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null); // DB 반영 진행률 { done, total }
+  const [linkQuery, setLinkQuery] = useState(""); // 수동 연결용 현장 검색어
 
   async function readSheet(file) {
     const XLSX = await import("xlsx");
@@ -644,7 +644,7 @@ export default function VerifyImport({ data, setData, onClose }) {
         {visible.length > 0 && (
           <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-[40vh] overflow-y-auto">
             {visible.map((r) => (
-              <button key={r.idx} onClick={() => setOpenIdx(r.idx)} className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center gap-3">
+              <button key={r.idx} onClick={() => { setOpenIdx(r.idx); setLinkQuery(""); }} className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center gap-3">
                 <span className={`shrink-0 text-[11px] font-bold rounded-full px-2 py-0.5 border ${LV[r.level]}`}>{r.level === "red" ? "빨강" : r.level === "yellow" ? "노랑" : "통과"}</span>
                 <span className="text-sm font-bold text-slate-800 truncate">{r.parsed.name || `(${finalRows[r.contIdx]?.parsed.name ?? "?"} 연속)`}</span>
                 <span className="text-xs text-slate-400 truncate">{r.parsed.address}</span>
@@ -692,19 +692,44 @@ export default function VerifyImport({ data, setData, onClose }) {
                 <button onClick={() => { setLinks((p) => { const n = { ...p }; delete n[open.idx]; return n; }); persistMark(open, (o) => { delete o.link; }); }} className="font-bold text-slate-400">연결 해제</button>
               </div>
             ) : (!open.autoMatched && open.parsed.name && dbSites.length > 0 && (
-              (() => { const cands = candidatesFor(open); return cands.length > 0 && (
-                <div className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                  <p className="font-bold text-slate-500 mb-1.5">비슷한 DB 현장 — 같은 곳이면 클릭해서 연결 (법정동 일치는 가산점 반영됨)</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {cands.map((c) => (
-                      <button key={c.id} onClick={() => { setLinks((p) => ({ ...p, [open.idx]: { siteId: c.id, siteName: c.name } })); persistMark(open, (o) => { o.link = { siteId: c.id, siteName: c.name }; }); }}
-                        className="font-bold px-2.5 py-1 rounded-full bg-white border border-blue-200 text-blue-700 hover:bg-blue-50">
-                        {c.name} {c.dong ? `(${c.dong})` : ""} · {Math.round(c.score * 100)}%{c.tags.length ? ` · ${c.tags.join("·")}` : ""}
-                      </button>
-                    ))}
+              (() => {
+                let cands = candidatesFor(open);
+                const fallback = cands.length === 0;
+                if (fallback) cands = sameDongFallback(open);
+                const qk = linkQuery.trim().length >= 2 ? nameKey(linkQuery) : "";
+                const searched = qk ? dbSites.filter((s) => s.keys.some((k) => k.includes(qk))).slice(0, 5) : [];
+                const pick = (c) => { setLinks((p) => ({ ...p, [open.idx]: { siteId: c.id, siteName: c.name } })); persistMark(open, (o) => { o.link = { siteId: c.id, siteName: c.name }; }); setLinkQuery(""); };
+                return (
+                  <div className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 space-y-1.5">
+                    <p className="font-bold text-slate-500">
+                      {fallback ? "이름 비슷한 곳이 없어 같은 법정동 현장을 보여드려요 — 같은 곳이면 클릭해서 연결" : "비슷한 DB 현장 — 같은 곳이면 클릭해서 연결 (법정동·주소·설치일 가산점 반영)"}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {cands.map((c) => (
+                        <button key={c.id} onClick={() => pick(c)}
+                          className="font-bold px-2.5 py-1 rounded-full bg-white border border-blue-200 text-blue-700 hover:bg-blue-50">
+                          {c.name} {c.dong ? `(${c.dong})` : ""}{c.score > 0 ? ` · ${Math.round(c.score * 100)}%` : ""}{c.tags.length ? ` · ${c.tags.join("·")}` : ""}
+                        </button>
+                      ))}
+                      {cands.length === 0 && <span className="text-slate-400">후보 없음 — 아래에서 직접 검색</span>}
+                    </div>
+                    <div className="flex items-center gap-1.5 pt-1 border-t border-slate-200">
+                      <input value={linkQuery} onChange={(e) => setLinkQuery(e.target.value)} placeholder="현장 이름으로 직접 검색해 연결 (2자 이상)"
+                        className="flex-1 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs bg-white" />
+                    </div>
+                    {searched.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {searched.map((c) => (
+                          <button key={c.id} onClick={() => pick(c)}
+                            className="font-bold px-2.5 py-1 rounded-full bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+                            {c.name} {c.dong ? `(${c.dong})` : ""}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ); })()
+                );
+              })()
             ))}
             <table className="w-full text-xs">
               <tbody>
