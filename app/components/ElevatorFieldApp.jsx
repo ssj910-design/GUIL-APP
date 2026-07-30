@@ -11,7 +11,8 @@ import { DutySwapNotice } from "@/app/components/DutyRoster";
 import { WorkCalendarSheet } from "@/app/components/WorkCalendarSheet";
 import { MyPage } from "@/app/components/MyPage";
 import { simulateSms } from "@/lib/sms";
-import { notify } from "@/lib/push";
+import { notify, enablePush } from "@/lib/push";
+import { Capacitor } from "@capacitor/core";
 import { ScreenHeader } from "@/app/components/ui";
 import { ConfirmHost, confirmAsync } from "@/app/components/ConfirmHost";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -223,6 +224,9 @@ export default function App() {
     localStorage.setItem("guilAuthV1", JSON.stringify(sess));
     setSession(sess);
     setAuthSubmitting(false);
+    // 네이티브 앱은 로그인 직후 알림 권한을 바로 물어본다 — 마이페이지까지 찾아가서 직접
+    // 켜야 하는 불편을 없앤다. 이미 허용/거부된 상태면 시스템이 조용히 넘어간다.
+    if (Capacitor.isNativePlatform()) enablePush(row.id).catch(() => {});
   }
 
   const adminIds = () => profilesAll.filter((p) => p.role === "admin" && p.is_active !== false).map((p) => p.id);
