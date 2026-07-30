@@ -139,6 +139,21 @@ function validateRow(raw, col, monthCols) {
   return { parsed, issues };
 }
 
+// 인증(검토완료)·수동연결을 브라우저에 저장 — 파일을 다시 올려도 같은 현장(이름+주소)이면 마크가 유지된다.
+const MARKS_KEY = "guilVerifyMarksV1";
+const rowKeyOf = (r) => `${nameKey(r.parsed.name) || "row" + r.excelRow}|${norm(r.parsed.address)}`;
+const loadMarks = () => { try { return JSON.parse(localStorage.getItem(MARKS_KEY) || "{}"); } catch { return {}; } };
+const persistMark = (r, mutate) => {
+  try {
+    const s = loadMarks();
+    const k = rowKeyOf(r);
+    const obj = s[k] ?? {};
+    mutate(obj);
+    if (!obj.reviewed && !obj.link) delete s[k]; else s[k] = obj;
+    localStorage.setItem(MARKS_KEY, JSON.stringify(s));
+  } catch { /* 저장 실패해도 화면 동작엔 지장 없음 */ }
+};
+
 export default function VerifyImport({ data, setData, onClose }) {
   const [rows, setRows] = useState(null);        // [{idx, raw, parsed, issues, contIdx}]
   const [links, setLinks] = useState({});         // 수동 매칭: 행 idx → { siteId, siteName }
@@ -220,7 +235,16 @@ export default function VerifyImport({ data, setData, onClose }) {
       }
       setFileNotices(notices);
       setRows(out);
-      setReviewed({});
+      // 저장된 인증·연결 마크 복원 (같은 현장명+주소 기준)
+      const stored = loadMarks();
+      const rv = {}, lk = {};
+      out.forEach((r) => {
+        const m = stored[rowKeyOf(r)];
+        if (m?.reviewed) rv[r.idx] = true;
+        if (m?.link) lk[r.idx] = m.link;
+      });
+      setReviewed(rv);
+      setLinks(lk);
       setOpenIdx(null);
     } catch (err) {
       alert("파일을 읽지 못했습니다: " + err.message);
@@ -418,7 +442,11 @@ export default function VerifyImport({ data, setData, onClose }) {
                 <span className={`shrink-0 text-[11px] font-bold rounded-full px-2 py-0.5 border ${LV[r.level]}`}>{r.level === "red" ? "빨강" : r.level === "yellow" ? "노랑" : "통과"}</span>
                 <span className="text-sm font-bold text-slate-800 truncate">{r.parsed.name || `(${finalRows[r.contIdx]?.parsed.name ?? "?"} 연속)`}</span>
                 <span className="text-xs text-slate-400 truncate">{r.parsed.address}</span>
-                <span className="ml-auto shrink-0 text-xs text-slate-400">{r.issues.length ? `문제 ${r.issues.length}` : ""}{reviewed[r.idx] ? " · 검토됨" : ""}</span>
+                <span className="ml-auto shrink-0 flex items-center gap-1.5 text-xs text-slate-400">
+                  {r.issues.length ? `문제 ${r.issues.length}` : ""}
+                  {links[r.idx] && <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-1.5">연결됨</span>}
+                  {reviewed[r.idx] && <span className="flex items-center gap-0.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5"><CheckCircle2 size={11} /> 인증완료</span>}
+                </span>
               </button>
             ))}
           </div>
@@ -431,9 +459,13 @@ export default function VerifyImport({ data, setData, onClose }) {
             <div className="flex items-center justify-between">
               <p className="text-sm font-extrabold text-slate-800">{open.parsed.name || "(현장명 없음)"} <span className="text-xs font-semibold text-slate-400">원본 {open.excelRow}행</span></p>
               <div className="flex gap-2">
-                <button onClick={() => setReviewed((p) => ({ ...p, [open.idx]: !p[open.idx] }))}
+                <button onClick={() => {
+                    const next = !reviewed[open.idx];
+                    setReviewed((p) => ({ ...p, [open.idx]: next }));
+                    persistMark(open, (o) => { if (next) o.reviewed = true; else delete o.reviewed; });
+                  }}
                   className={`flex items-center gap-1 text-xs font-bold rounded-lg px-3 py-1.5 border ${reviewed[open.idx] ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-600 border-slate-300"}`}>
-                  <CheckCircle2 size={13} /> {reviewed[open.idx] ? "검토 완료됨" : "검토 완료로 표시"}
+                  <CheckCircle2 size={13} /> {reviewed[open.idx] ? "인증완료됨" : "인증완료로 표시"}
                 </button>
                 <button onClick={() => setOpenIdx(null)} className="text-xs font-bold text-slate-400 px-2">닫기</button>
               </div>
@@ -451,7 +483,7 @@ export default function VerifyImport({ data, setData, onClose }) {
             {links[open.idx] ? (
               <div className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center justify-between">
                 <span>DB 현장과 연결됨: <b>{links[open.idx].siteName}</b></span>
-                <button onClick={() => setLinks((p) => { const n = { ...p }; delete n[open.idx]; return n; })} className="font-bold text-slate-400">연결 해제</button>
+                <button onClick={() => { setLinks((p) => { const n = { ...p }; delete n[open.idx]; return n; }); persistMark(open, (o) => { delete o.link; }); }} className="font-bold text-slate-400">연결 해제</button>
               </div>
             ) : (!open.autoMatched && open.parsed.name && dbSites.length > 0 && (
               (() => { const cands = candidatesFor(open); return cands.length > 0 && (
@@ -459,7 +491,7 @@ export default function VerifyImport({ data, setData, onClose }) {
                   <p className="font-bold text-slate-500 mb-1.5">비슷한 DB 현장 — 같은 곳이면 클릭해서 연결 (법정동 일치는 가산점 반영됨)</p>
                   <div className="flex flex-wrap gap-1.5">
                     {cands.map((c) => (
-                      <button key={c.id} onClick={() => setLinks((p) => ({ ...p, [open.idx]: { siteId: c.id, siteName: c.name } }))}
+                      <button key={c.id} onClick={() => { setLinks((p) => ({ ...p, [open.idx]: { siteId: c.id, siteName: c.name } })); persistMark(open, (o) => { o.link = { siteId: c.id, siteName: c.name }; }); }}
                         className="font-bold px-2.5 py-1 rounded-full bg-white border border-blue-200 text-blue-700 hover:bg-blue-50">
                         {c.name} {c.dong ? `(${c.dong})` : ""} · {Math.round(c.score * 100)}%
                       </button>
