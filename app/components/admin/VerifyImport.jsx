@@ -112,6 +112,13 @@ const stripDongPrefix = (key, dong) => {
 };
 // 주소에서 법정동 추출 — 내부 구주소("반포동 701-16")와 DB 신주소 끝 "(반포동)" 모두 잡힌다
 const dongOf = (addr) => (/([가-힣]{1,10}[동가리])(?=\s|\d|\)|$)/.exec(String(addr ?? "")) ?? [])[1] ?? null;
+// 주소 끝에 건물 별칭이 붙는 경우가 있다 — "동작구 신대방동 385-1 태성대아파트", "…, 디모데관"
+// 이름 없는 행에서 이걸 이름 대신 쓴다.
+const buildingHintOf = (addr) => {
+  const s = norm(addr);
+  const m = /[,\s]([가-힣A-Za-z][가-힣A-Za-z0-9]{2,})\s*$/.exec(s);
+  return m && !/^\d/.test(m[1]) && !/[동리가]$/.test(m[1]) ? m[1] : null;
+};
 // 유형어·동 표기까지 벗긴 "느슨한 키" — 더해피하우스=더해피, 예촌아파트B=예촌아파트.
 // 오매칭(성진빌딩↔성진타워) 위험이 있어 통과 판정에는 쓰지 않고, 후보 제시(유사도)에만 쓴다.
 const looseKeys = (s, addr) => {
@@ -357,11 +364,23 @@ export default function VerifyImport({ data, setData, onClose }) {
   const [geoProg, setGeoProg] = useState(null);   // 좌표 대조 진행 { done, total }
   const [geoResults, setGeoResults] = useState({}); // idx → { siteId, siteName, dist } (근처 후보, 자동 연결엔 못 미친 것)
 
-  async function readSheet(file) {
+  // 시트 값 + "현장명 열이 실제로 병합된 행 범위"를 함께 읽는다.
+  // 현장명이 비었다고 무조건 연속 행이 아니다 — 이름을 안 적은 별개 현장일 수도 있어서,
+  // 진짜 병합(!merges)인지 확인해야 한다.
+  async function readSheet(file, nameCol = null) {
     const XLSX = await import("xlsx");
     const wb = XLSX.read(await file.arrayBuffer());
     const ws = wb.Sheets[wb.SheetNames[0]];
-    return XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+    const values = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+    const mergedRows = new Set();
+    if (nameCol != null) {
+      for (const m of ws["!merges"] ?? []) {
+        if (m.s.c <= nameCol && nameCol <= m.e.c) {
+          for (let r = m.s.r + 1; r <= m.e.r; r++) mergedRows.add(r); // 병합 구간의 2번째 행부터가 "잔재"
+        }
+      }
+    }
+    return { values, mergedRows };
   }
 
   // ① 내부(정리 안 된) 엑셀
@@ -371,10 +390,12 @@ export default function VerifyImport({ data, setData, onClose }) {
     if (!file) return;
     setBusy(true);
     try {
-      const all = await readSheet(file);
-      const header = all[0] ?? [];
+      const first = await readSheet(file);
+      const header = first.values[0] ?? [];
       const col = headerMap(header);
       if (col.name < 0) throw new Error("헤더에서 '현장(건물명)' 열을 못 찾았습니다 — 1행이 제목 행인지 확인");
+      // 현장명 열을 알아낸 뒤 병합 범위를 다시 읽는다
+      const { values: all, mergedRows } = await readSheet(file, col.name);
       // 월별 수금 열: "25년7월" ~ "8월" 같은 열들
       const monthCols = header.map((h, idx) => ({ h: norm(h), idx })).filter((c) => /^(\d{2}년)?\d{1,2}월$/.test(c.h.replace(/\s/g, "")));
       const out = [];
@@ -383,14 +404,15 @@ export default function VerifyImport({ data, setData, onClose }) {
         if (!raw.some((c) => norm(c))) return; // 완전 빈 행 스킵
         const { parsed, issues } = validateRow(raw, col, monthCols);
         const idx = out.length;
-        // 병합셀 잔재: 현장명이 비면 직전 현장의 연속 행으로 해석
+        // 현장명이 비었을 때: 실제로 셀이 병합된 행이면 앞 현장의 연속, 아니면 이름을 안 적은 별개 현장.
         let contIdx = null;
         if (!parsed.name) {
-          if (lastNamed >= 0) {
+          const isMerged = mergedRows.has(i + 1); // i+1 = 이 행의 0-based 시트 행번호
+          if (isMerged && lastNamed >= 0) {
             contIdx = lastNamed;
-            issues.unshift({ level: "yellow", msg: `현장명 없음(병합 잔재) — "${out[lastNamed].parsed.name}"의 연속 행으로 해석` });
+            issues.unshift({ level: "yellow", msg: `현장명 병합 — "${out[lastNamed].parsed.name}"의 연속 행으로 해석` });
           } else {
-            issues.unshift({ level: "red", msg: "현장명 없음 — 어느 현장인지 알 수 없음" });
+            issues.unshift({ level: "yellow", msg: "현장명이 비어 있음 — 이름을 적거나, 아래 후보에서 DB 현장을 연결해주세요" });
           }
         } else lastNamed = idx;
         out.push({ idx, excelRow: i + 2, raw, parsed, issues, contIdx });
@@ -444,13 +466,15 @@ export default function VerifyImport({ data, setData, onClose }) {
       const issues = [...r.issues];
       // 이름이 같은 현장이 여러 곳일 수 있다("삼성아파트" 사당동·삼전동) — 이름으로 걸리는 DB 현장을
       // 다 모아, 2곳 이상이면 법정동으로 좁힌다. 그래도 못 좁히면 통과로 보지 않고 사람이 고르게 한다.
-      const myKeys = r.parsed.name ? nameKeys(r.parsed.name) : [];
+      // 이름이 없으면 주소 끝 건물 별칭("… 385-1 태성대아파트")을 이름 대신 써서 매칭을 시도한다
+      const effName = r.parsed.name || buildingHintOf(r.parsed.address) || "";
+      const myKeys = effName ? nameKeys(effName) : [];
       const myDong = dongOf(r.parsed.address);
       // 엄격 키 + 느슨한 키(유형어·동 표기·주소 접두어 제거)를 함께 모은다 — 이름이 비슷한 DB 현장이
       // 둘 이상일 수 있어(더나은 하우스 vs 더해피하우스 / 삼성아파트 vs 사당동삼성아파트),
       // 한쪽만 보고 먼저 걸린 곳을 택하면 엉뚱한 현장에 붙는다. 아래에서 법정동으로 고른다.
       const strictHits = myKeys.length ? dbSites.filter((s) => s.keys.some((k) => myKeys.includes(k))) : [];
-      const myLoose = r.parsed.name ? looseKeys(r.parsed.name, r.parsed.address).filter((k) => k.length >= 3) : [];
+      const myLoose = effName ? looseKeys(effName, r.parsed.address).filter((k) => k.length >= 3) : [];
       const looseHits = myLoose.length ? dbSites.filter((s) => s.loose.some((k) => k.length >= 3 && myLoose.includes(k))) : [];
       const hits = [...new Map([...strictHits, ...looseHits].map((s) => [s.id, s])).values()];
       // 후보가 여럿이면 법정동이 같은 곳 우선, 그래도 여럿이면 사람이 고르게 한다
@@ -787,7 +811,10 @@ export default function VerifyImport({ data, setData, onClose }) {
             {visible.map((r) => (
               <button key={r.idx} onClick={() => { setOpenIdx(r.idx); setLinkQuery(""); }} className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center gap-3">
                 <span className={`shrink-0 text-[11px] font-bold rounded-full px-2 py-0.5 border ${LV[r.level]}`}>{r.level === "red" ? "빨강" : r.level === "yellow" ? "노랑" : "통과"}</span>
-                <span className="text-sm font-bold text-slate-800 truncate">{r.parsed.name || `(${finalRows[r.contIdx]?.parsed.name ?? "?"} 연속)`}</span>
+                <span className="text-sm font-bold text-slate-800 truncate">
+                  {r.parsed.name
+                    || (r.contIdx != null ? `(${finalRows[r.contIdx]?.parsed.name ?? "?"} 연속)` : `(이름 없음${buildingHintOf(r.parsed.address) ? ` · ${buildingHintOf(r.parsed.address)}?` : ""})`)}
+                </span>
                 <span className="text-xs text-slate-400 truncate">{r.parsed.address}</span>
                 <span className="ml-auto shrink-0 flex items-center gap-1.5 text-xs text-slate-400">
                   {r.issues.length ? `문제 ${r.issues.length}` : ""}
@@ -835,7 +862,8 @@ export default function VerifyImport({ data, setData, onClose }) {
             ) : (!open.autoMatched && (open.parsed.name || open.contIdx != null) && dbSites.length > 0 && (
               (() => {
                 // 연속 행(병합 잔재)은 소속 현장 이름을 빌려 후보를 찾는다 — 주소가 달라 별개 현장(공군중앙교회 등)일 수 있어서
-                let cands = candidatesFor(open, open.contIdx != null ? finalRows[open.contIdx]?.parsed.name : "");
+                // 이름이 없으면 주소 끝 건물 별칭(태성대아파트)을, 그것도 없으면 소속 현장 이름을 빌려 후보를 찾는다
+                let cands = candidatesFor(open, buildingHintOf(open.parsed.address) || (open.contIdx != null ? finalRows[open.contIdx]?.parsed.name : ""));
                 // 좌표 대조에서 나온 근처 후보를 맨 앞에 (거리 표시)
                 const geo = geoResults[open.idx];
                 if (geo && !cands.some((c) => c.id === geo.siteId)) {
