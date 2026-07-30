@@ -280,8 +280,28 @@ function validateRow(raw, col, monthCols) {
   // 월별 수금 열 — 값이 있는 달 수만 집계 (상세 검증은 반영 단계에서)
   parsed.paidMonths = monthCols.filter((c) => norm(raw[c.idx])).length;
 
-  // 이메일
-  if (parsed.email && !/^\S+@\S+\.\S+$/.test(parsed.email)) issues.push({ level: "yellow", msg: `이메일 형식 이상: "${parsed.email}"` });
+  // 이메일 열은 실제로 "청구서 보내는 방법" 칸이었다 — 주소 여러 개(세금계산서용/대표용)와
+  // 용도 메모("우편발송", "청구서 보내지 말것")가 섞여 있다.
+  // 대표 주소 1개만 sites.email로 쓰고, 나머지 주소·메모는 비고로 보낸다. 오타(,com)는 자동 교정.
+  const emailRaw = parsed.email;
+  const EMAIL_RE = /[\w.+-]+@[\w-]+[.,][\w.,-]+/g;
+  const rawFound = emailRaw.match(EMAIL_RE) ?? [];
+  const fixed = rawFound.map((e) => e.replace(/@([\w-]+),/, "@$1.")); // "naver,com" → "naver.com"
+  const okIdx = fixed.findIndex((e) => /^[\w.+-]+@[\w-]+\.[\w.-]+$/.test(e));
+  const valid = fixed.filter((e) => /^[\w.+-]+@[\w-]+\.[\w.-]+$/.test(e));
+  parsed.email = valid[0] ?? "";
+  // 대표 주소를 뺀 나머지(추가 주소 + 설명 메모)를 비고용 메모로 — 교정 전 원문을 지워야 중복이 안 남는다
+  let emailMemo = emailRaw;
+  if (okIdx >= 0) emailMemo = emailMemo.replace(rawFound[okIdx], "").trim();
+  emailMemo = norm(emailMemo).replace(/^[\/,·-]+|[\/,·-]+$/g, "").trim();
+  parsed.emailMemo = emailMemo || null;
+  if (emailRaw && !valid.length) {
+    // 이메일이 아예 없는 칸 = 발송 방법 메모(우편·카톡·보내지 말것) — 이슈 아님, 비고로 보낸다
+    parsed.emailMemo = norm(emailRaw);
+  }
+  if (okIdx >= 0 && rawFound[okIdx] !== valid[0]) {
+    issues.push({ level: "yellow", msg: `이메일 오타 자동교정: "${rawFound[okIdx]}" → "${valid[0]}" — 확인해주세요` });
+  }
 
   return { parsed, issues };
 }
@@ -578,7 +598,7 @@ export default function VerifyImport({ data, setData, onClose }) {
     ["contract_type", "계약종류", (p) => p.contractType || null],
     // 연락처 원본 메모(담당자 라벨·출입 비번·열쇠 위치 등) → 비어 있는 현장 비고로.
     // 기사 앱 현장정보의 "비고(전달사항)"에 그대로 보인다 — 현장 가서 문 열 때 필요한 정보.
-    ["notes", "비고(연락처·입금·계약이력)", (p) => [p.contactMemo, p.bizMemo && `입금: ${p.bizMemo}`, p.contractHistory && `계약이력: ${p.contractHistory}`].filter(Boolean).join("\n") || null],
+    ["notes", "비고(연락처·입금·계약이력·청구)", (p) => [p.contactMemo, p.bizMemo && `입금: ${p.bizMemo}`, p.contractHistory && `계약이력: ${p.contractHistory}`, p.emailMemo && `청구/메일: ${p.emailMemo}`].filter(Boolean).join("\n") || null],
   ];
   const fillPlan = useMemo(() => {
     if (!finalRows) return [];
@@ -941,7 +961,9 @@ export default function VerifyImport({ data, setData, onClose }) {
                   ["수금 기록", `${open.parsed.paidMonths}개 달에 기록 있음`],
                   ["전화(추출)", open.parsed.phones.map((p) => `${p.disp ? p.disp + " · " : ""}${p.num} — ${p.type}`).join("  /  ") || "—"],
                   ["연락처 원본 메모", open.parsed.contactMemo || "—"],
-                  ["이메일", open.parsed.email || "—"], ["사업자번호", open.parsed.bizNo || "—"],
+                  ["이메일(대표)", open.parsed.email || "—"],
+                  ["청구/메일 메모(비고로)", open.parsed.emailMemo || "—"],
+                  ["사업자번호", open.parsed.bizNo || "—"],
                   ["입금 방식(사업자번호 열)", open.parsed.bizMemo || "—"],
                   ["승강기 종류", open.parsed.kinds.join(", ") || "—"], ["설치일(해석)", open.parsed.installDate ?? "—"],
                   ["비고", open.parsed.note || "—"],
