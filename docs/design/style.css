@@ -54,3 +54,9 @@ th { background: var(--card); font-size: 12px; color: var(--sub); }
 .card p { margin: 0; color: var(--sub); font-size: 13px; }
 .term { border-bottom: 1px dotted var(--faint); cursor: help; }
 footer { max-width: 760px; margin: 64px auto 0; color: var(--faint); font-size: 12px; border-top: 1px solid var(--line); padding-top: 16px; }
+
+/* 섹션 변경 이력 — 바뀐 섹션 바로 아래 직전 버전을 접이식으로 보존 (편집 규칙은 각 문서 상단 주석) */
+details.history { margin: 8px 0 16px; font-size: 13px; color: var(--sub); background: var(--card); border: 1px dashed var(--line); border-radius: 8px; padding: 8px 14px; }
+details.history summary { cursor: pointer; font-weight: 700; color: var(--faint); font-size: 12px; }
+details.history[open] summary { margin-bottom: 6px; }
+mark.changed { background: var(--warn-soft); color: var(--warn-ink); padding: 0 4px; border-radius: 4px; }
