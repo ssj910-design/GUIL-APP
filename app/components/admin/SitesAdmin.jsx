@@ -871,7 +871,7 @@ export default function SitesAdmin({ data, setData }) {
                           setData((prev) => ({ ...prev, sites: prev.sites.map((x) => (x.id === site.id ? { ...x, verifyLevel: "green", verifiedAt: patch.verified_at } : x)) }));
                         }}
                         className="flex items-center gap-1 text-xs font-bold text-white bg-emerald-600 rounded-lg px-3 py-1.5 whitespace-nowrap">
-                        <BadgeCheck size={13} /> 확인했음 — 통과 처리
+                        <BadgeCheck size={13} /> 확인했음 — 인증 표시만
                       </button>
                     ) : (
                       <span className="text-[11px] font-bold text-red-500">원본 엑셀을 고친 뒤 재검증 필요 (주민번호 등)</span>
@@ -882,6 +882,10 @@ export default function SitesAdmin({ data, setData }) {
                       {site.verifyIssues.map((m, i) => <li key={i}>{m}</li>)}
                     </ul>
                   )}
+                  <p className="text-[11px] text-slate-500 mt-2">
+                    이 버튼은 <b>검증 상태만 초록으로</b> 바꿉니다. 빈 칸을 실제로 채우려면
+                    위 <b>「엑셀 검증 업로드」</b>에서 파일을 올리고 <b>「DB 반영」</b>을 누르세요.
+                  </p>
                 </div>
               )}
               <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">

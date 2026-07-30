@@ -96,6 +96,12 @@ const nameKeys = (s) => {
   const withEng = [...new Set([...base, ...base.map(engToKorKey).filter(Boolean)])];
   return [...new Set([...withEng, ...withEng.map(korVariantKey).filter(Boolean)])];
 };
+// 이름 끝의 동(棟) 표기를 꺼낸다 — "서연빌리지 A동"→"a", "이안휴빌101동"→"101".
+// 같은 단지의 여러 동은 주소·좌표가 같아서 이걸로만 구분할 수 있다.
+const unitTagOf = (s) => {
+  const m = /([a-zA-Z]|\d{1,3})\s*동\s*$/.exec(norm(s)) ?? /\s([a-zA-Z])\s*$/.exec(norm(s));
+  return m ? m[1].toLowerCase() : null;
+};
 // 동(棟) 표기 제거 — "예촌아파트B" "예촌아파트101동" "…A동"의 끝 동 표시를 뗀다.
 // 같은 단지를 A·B·C나 101·102동으로 나눠 적은 경우를 하나로 모으기 위함.
 const stripDongKey = (key) => {
@@ -499,6 +505,11 @@ export default function VerifyImport({ data, setData, onClose }) {
         // 이름 열만 병합을 안 한 경우). 덩어리가 없으면 이름을 안 적은 별개 현장으로 본다.
         let contIdx = null;
         if (!parsed.name) {
+          // 승강기가 2대인 현장은 2호기 제원(기종·종류·검사만료)만 다음 줄에 적는다 — 현장 정보가
+          // 아니라 호기 정보라서 검증 대상이 아니다. 주소·연락처·금액이 하나도 없으면 그런 행으로 본다.
+          const hasSiteInfo = [parsed.address, parsed.contactMemo, parsed.email, parsed.owner, parsed.engineer, parsed.contractType, parsed.note].some((v) => norm(v))
+            || parsed.cost != null || parsed.contractDate != null || parsed.balance != null;
+          if (!hasSiteInfo) return; // 목록에서 제외
           const gname = groupName.get(groupOf.get(i + 1));
           if (gname) {
             parsed.groupName = gname;
@@ -576,7 +587,12 @@ export default function VerifyImport({ data, setData, onClose }) {
       const myRoadKey = roadOf(r.parsed.address);
       const sameRoad = myRoadKey ? hits.filter((s) => s.road === myRoadKey) : [];
       const sameDong = myDong ? hits.filter((s) => s.dong === myDong) : [];
-      const narrowed = hits.length > 1 ? (sameRoad.length ? sameRoad : sameDong.length ? sameDong : hits) : hits;
+      // 같은 단지의 A동/B동은 주소·좌표가 같아 주소로 못 가른다 — 이름 끝 동 표기로 정확히 맞춘다
+      const myUnitTag = unitTagOf(effName);
+      const sameUnit = myUnitTag ? hits.filter((s) => unitTagOf(s.name) === myUnitTag) : [];
+      const narrowed = hits.length > 1
+        ? (sameUnit.length ? sameUnit : sameRoad.length ? sameRoad : sameDong.length ? sameDong : hits)
+        : hits;
       // 이름을 빌려온 행(병합 묶음·주소 힌트)은 주소로 확정되지 않으면 자동 매칭하지 않는다
       const borrowedName = !r.parsed.name;
       const autoMatched = narrowed.length === 1 && (!borrowedName || sameRoad.length === 1);
@@ -1008,7 +1024,11 @@ export default function VerifyImport({ data, setData, onClose }) {
             {/* DB 매칭 — 자동 실패 시 비슷한 현장 후보를 제시, 사람이 클릭해서 연결 (구주소·별칭 문제 해소) */}
             {links[open.idx] ? (
               <div className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center justify-between">
-                <span>DB 현장과 연결됨: <b>{links[open.idx].siteName}</b>{links[open.idx].auto && ` (자동 ${links[open.idx].geo != null ? `· 좌표 ${links[open.idx].geo}m` : Math.round(links[open.idx].score * 100) + "%"} — 아니면 해제)`}</span>
+                <span>
+                  DB 현장과 연결됨: <b>{links[open.idx].siteName}</b>
+                  {links[open.idx].auto && ` (자동 ${links[open.idx].geo != null ? `· 좌표 ${links[open.idx].geo}m` : Math.round(links[open.idx].score * 100) + "%"} — 아니면 해제)`}
+                  <span className="block text-[11px] font-normal text-emerald-600/80 mt-0.5">그 현장의 빈 칸만 채웁니다 — 이미 있는 값은 덮어쓰지 않아요</span>
+                </span>
                 <button onClick={() => { setLinks((p) => { const n = { ...p }; delete n[open.idx]; return n; }); persistMark(open, (o) => { delete o.link; }); }} className="font-bold text-slate-400">연결 해제</button>
               </div>
             ) : (!open.autoMatched && dbSites.length > 0 && (
