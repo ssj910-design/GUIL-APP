@@ -18,6 +18,19 @@ import { Modal } from "@/app/components/admin/adminShared";
 const PHONE_RE = /0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4}/g;
 const norm = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 const nameKey = (s) => norm(s).replace(/\(.*?\)/g, "").replace(/\s/g, ""); // 괄호 별칭·공백 무시하고 매칭
+// "비젼타워 (스타병원)" → ["비젼타워", "스타병원"] — 본명·별칭 전부 매칭 키로 쓴다
+const nameKeys = (s) => [nameKey(s), ...[...String(s ?? "").matchAll(/\(([^)]+)\)/g)].map((m) => nameKey(m[1]))].filter(Boolean);
+// 주소에서 법정동 추출 — 내부 구주소("반포동 701-16")와 DB 신주소 끝 "(반포동)" 모두 잡힌다
+const dongOf = (addr) => (/([가-힣]{1,10}[동가리])(?=\s|\d|\)|$)/.exec(String(addr ?? "")) ?? [])[1] ?? null;
+// 싼 유사도: 2글자 조각(bigram) 겹침 비율 0~1 — 라이브러리 없이 이름 비슷함 판단용
+function similarity(a, b) {
+  const grams = (s) => { const g = new Set(); for (let i = 0; i < s.length - 1; i++) g.add(s.slice(i, i + 2)); return g; };
+  const ga = grams(a), gb = grams(b);
+  if (!ga.size || !gb.size) return 0;
+  let hit = 0;
+  ga.forEach((g) => { if (gb.has(g)) hit++; });
+  return hit / Math.max(ga.size, gb.size);
+}
 
 // "12년9월1일" / "2016.10.26" / "20111213" → ISO 날짜. 못 읽으면 null.
 function parseKoreanDate(v) {
@@ -67,12 +80,18 @@ function validateRow(raw, col, monthCols) {
   // 주소
   if (parsed.name && !parsed.address) issues.push({ level: "yellow", msg: "주소 없음" });
 
-  // 연락처 — 자유 메모 셀: 전화 추출 + 보안 메모 감지
+  // 연락처 — 자유 메모 셀: 전화 추출(앞말=역할 라벨) + 유형 추정 + 보안 메모 감지
+  // 010=담당자(사람) 휴대폰 / 지역번호(02 등)=현장(건물) 유선일 확률이 높다 — 추정만 하고 확정은 사람이.
   const contact = get("contact");
-  const phones = contact.match(PHONE_RE) ?? [];
+  const phones = [];
+  for (const m of contact.matchAll(PHONE_RE)) {
+    const before = contact.slice(0, m.index).replace(/[\s,./·-]+$/, "");
+    const label = (/([가-힣A-Za-z()]{2,10})$/.exec(before) ?? [])[1] ?? "";
+    phones.push({ num: m[0], label, type: m[0].replace(/\D/g, "").startsWith("010") ? "담당자(휴대폰) 추정" : "현장(유선) 추정" });
+  }
   parsed.phones = phones;
   parsed.contactMemo = contact;
-  if (phones.length >= 2) issues.push({ level: "yellow", msg: `전화 ${phones.length}개가 한 셀에 — 대표/담당 구분 필요` });
+  if (phones.length >= 2) issues.push({ level: "yellow", msg: `전화 ${phones.length}개가 한 셀에 — 유형 추정을 확인해주세요(010=담당자, 지역번호=현장)` });
   if (/비밀번호|비번|열쇠|현관|공동현관/.test(contact)) issues.push({ level: "yellow", msg: "연락처 셀에 비밀번호·열쇠 메모 — 앱에 그대로 넣으면 안 됨(별도 보관)" });
 
   // 사업자번호 — 주민번호가 섞여 있는 열
@@ -120,8 +139,26 @@ function validateRow(raw, col, monthCols) {
 
 export default function VerifyImport({ data, onClose }) {
   const [rows, setRows] = useState(null);        // [{idx, raw, parsed, issues, contIdx}]
-  // 대조 상대 = 이미 등록된 DB 현장(센터 엑셀로 일괄등록된 것) — 별도 파일 업로드 불필요
-  const dbKeys = useMemo(() => new Set((data?.sites ?? []).map((s) => nameKey(s.name)).filter(Boolean)), [data]);
+  const [links, setLinks] = useState({});         // 수동 매칭: 행 idx → { siteId, siteName }
+  // 대조 상대 = 이미 등록된 DB 현장(센터 엑셀로 일괄등록된 것) — 이름 본명+괄호 별칭 전부 키로
+  const dbSites = useMemo(() => (data?.sites ?? []).filter((s) => s.name).map((s) => ({
+    id: s.id, name: s.name, keys: nameKeys(s.name), dong: dongOf(s.address),
+  })), [data]);
+  const dbKeys = useMemo(() => new Set(dbSites.flatMap((s) => s.keys)), [dbSites]);
+  // 자동 매칭 실패 행에 보여줄 후보 — 이름 유사도 + 같은 법정동 보너스로 상위 3곳
+  function candidatesFor(r) {
+    const myKeys = nameKeys(r.parsed.name);
+    const myDong = dongOf(r.parsed.address);
+    return dbSites
+      .map((s) => {
+        let score = Math.max(...myKeys.flatMap((a) => s.keys.map((b) => similarity(a, b))), 0);
+        if (myDong && s.dong && myDong === s.dong) score += 0.25; // 구주소·신주소가 달라도 법정동은 같다
+        return { ...s, score };
+      })
+      .filter((s) => s.score >= 0.35)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
+  }
   const [filter, setFilter] = useState("problem");
   const [fileNotices, setFileNotices] = useState([]); // 파일 전체 공통 형식 문제 (행 목록에서 승격)
   const [openIdx, setOpenIdx] = useState(null);
@@ -189,25 +226,27 @@ export default function VerifyImport({ data, onClose }) {
     setBusy(false);
   }
 
-  // DB(현장정보)에만 있고 내부 엑셀엔 없는 현장 — 내부 파일 누락 후보
+  // DB(현장정보)에만 있고 내부 엑셀엔 없는 현장 — 내부 파일 누락 후보 (수동 연결된 현장은 제외)
   const refOnly = useMemo(() => {
-    if (!rows || !dbKeys.size) return [];
-    const mine = new Set(rows.filter((r) => r.parsed.name).map((r) => nameKey(r.parsed.name)));
-    return (data?.sites ?? []).map((s) => s.name).filter((n) => n && !mine.has(nameKey(n)));
-  }, [rows, dbKeys, data]);
+    if (!rows || !dbSites.length) return [];
+    const mine = new Set(rows.filter((r) => r.parsed.name).flatMap((r) => nameKeys(r.parsed.name)));
+    const linked = new Set(Object.values(links).map((l) => l.siteId));
+    return dbSites.filter((s) => !linked.has(s.id) && !s.keys.some((k) => mine.has(k))).map((s) => s.name);
+  }, [rows, dbSites, links]);
 
-  // DB 대조 결과를 이슈에 합친 최종 행 목록
+  // DB 대조 결과를 이슈에 합친 최종 행 목록 — 별칭 포함 자동 매칭 + 수동 연결 반영
   const finalRows = useMemo(() => {
     if (!rows) return null;
     return rows.map((r) => {
       const issues = [...r.issues];
-      if (dbKeys.size && r.parsed.name && !dbKeys.has(nameKey(r.parsed.name))) {
-        issues.push({ level: "yellow", msg: "등록된 현장(DB)에 없는 이름 — 표기 다름·미등록·해지 중 뭔지 확인" });
+      const autoMatched = r.parsed.name && nameKeys(r.parsed.name).some((k) => dbKeys.has(k));
+      if (dbKeys.size && r.parsed.name && !autoMatched && !links[r.idx]) {
+        issues.push({ level: "yellow", msg: "등록된 현장(DB)에 없는 이름 — 아래 후보에서 연결하거나 미등록·해지인지 확인" });
       }
       const level = issues.some((x) => x.level === "red") ? "red" : issues.length ? "yellow" : "green";
-      return { ...r, issues, level };
+      return { ...r, issues, level, autoMatched };
     });
-  }, [rows, dbKeys]);
+  }, [rows, dbKeys, links]);
 
   const counts = useMemo(() => {
     if (!finalRows) return null;
@@ -233,7 +272,7 @@ export default function VerifyImport({ data, onClose }) {
       r.parsed.name, r.contIdx != null ? finalRows[r.contIdx].parsed.name : "",
       r.parsed.address, r.parsed.engineer, r.parsed.unitCount, r.parsed.contractType,
       r.parsed.contractDate ?? "", r.parsed.cost ?? "", r.parsed.balance ?? "", r.parsed.paidMonths,
-      r.parsed.phones.join(", "), r.parsed.email, r.parsed.bizNo, r.parsed.kinds.join(", "),
+      r.parsed.phones.map((p) => `${p.label ? p.label + " " : ""}${p.num}[${p.type.slice(0, 3)}]`).join(", "), r.parsed.email, r.parsed.bizNo, r.parsed.kinds.join(", "),
       r.parsed.installDate ?? "", r.issues.map((x) => x.msg).join(" / "),
     ]);
     const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
@@ -324,6 +363,27 @@ export default function VerifyImport({ data, onClose }) {
                 ))}
               </ul>
             )}
+            {/* DB 매칭 — 자동 실패 시 비슷한 현장 후보를 제시, 사람이 클릭해서 연결 (구주소·별칭 문제 해소) */}
+            {links[open.idx] ? (
+              <div className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center justify-between">
+                <span>DB 현장과 연결됨: <b>{links[open.idx].siteName}</b></span>
+                <button onClick={() => setLinks((p) => { const n = { ...p }; delete n[open.idx]; return n; })} className="font-bold text-slate-400">연결 해제</button>
+              </div>
+            ) : (!open.autoMatched && open.parsed.name && dbSites.length > 0 && (
+              (() => { const cands = candidatesFor(open); return cands.length > 0 && (
+                <div className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                  <p className="font-bold text-slate-500 mb-1.5">비슷한 DB 현장 — 같은 곳이면 클릭해서 연결 (법정동 일치는 가산점 반영됨)</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {cands.map((c) => (
+                      <button key={c.id} onClick={() => setLinks((p) => ({ ...p, [open.idx]: { siteId: c.id, siteName: c.name } }))}
+                        className="font-bold px-2.5 py-1 rounded-full bg-white border border-blue-200 text-blue-700 hover:bg-blue-50">
+                        {c.name} {c.dong ? `(${c.dong})` : ""} · {Math.round(c.score * 100)}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ); })()
+            ))}
             <table className="w-full text-xs">
               <tbody>
                 {[
@@ -332,7 +392,7 @@ export default function VerifyImport({ data, onClose }) {
                   ["보수료", open.parsed.cost != null ? open.parsed.cost.toLocaleString() + "원" : "—"],
                   ["미수잔액", open.parsed.balance != null ? open.parsed.balance.toLocaleString() + "원" : "—"],
                   ["수금 기록", `${open.parsed.paidMonths}개 달에 기록 있음`],
-                  ["전화(추출)", open.parsed.phones.join(" / ") || "—"],
+                  ["전화(추출)", open.parsed.phones.map((p) => `${p.label ? p.label + " · " : ""}${p.num} — ${p.type}`).join("  /  ") || "—"],
                   ["연락처 원본 메모", open.parsed.contactMemo || "—"],
                   ["이메일", open.parsed.email || "—"], ["사업자번호", open.parsed.bizNo || "—"],
                   ["승강기 종류", open.parsed.kinds.join(", ") || "—"], ["설치일(해석)", open.parsed.installDate ?? "—"],
