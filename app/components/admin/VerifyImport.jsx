@@ -206,6 +206,9 @@ function validateRow(raw, col, monthCols) {
   // 주소
   if (parsed.name && !parsed.address) issues.push({ level: "yellow", msg: "주소 없음" });
 
+  // 점검자 = 담당기사. "정건의, 최병현"처럼 둘이 나눠 맡는 현장이 있어 목록으로 둔다.
+  parsed.engineers = parsed.engineer ? parsed.engineer.split(/[,·/]/).map(norm).filter(Boolean) : [];
+
   // 연락처 — 자유 메모 셀: 전화 추출(앞말=역할 라벨) + 유형 추정 + 보안 메모 감지
   // 010=담당자(사람) 휴대폰 / 지역번호(02 등)=현장(건물) 유선일 확률이 높다 — 추정만 하고 확정은 사람이.
   const contact = get("contact");
@@ -646,6 +649,32 @@ export default function VerifyImport({ data, setData, onClose }) {
     return [...bySite.values()].map((e) => ({ ...e, issuesReady }));
   }, [finalRows, verifyReady, reviewed, links, data]);
 
+  // 담당기사(점검자) 자동 배정 계획 — 엑셀의 "점검자"가 곧 담당기사다.
+  // 현장의 담당기사가 비어 있을 때만 채운다(기존 배정은 안 덮음). 이름이 기사 명단에 있어야 하고,
+  // 공동 담당("정건의, 최병현")이면 첫 번째를 대표 담당으로 둔다.
+  const engineersByName = useMemo(() => {
+    const m = new Map();
+    for (const p of data?.profiles ?? []) {
+      if (p.role === "engineer" && p.is_active !== false && p.name) m.set(nameKey(p.name), p);
+    }
+    return m;
+  }, [data]);
+  const techPlan = useMemo(() => {
+    if (!finalRows) return [];
+    const siteById = new Map((data?.sites ?? []).map((s) => [s.id, s]));
+    const out = new Map();
+    for (const r of finalRows) {
+      if (r.level === "red") continue;
+      if (r.level !== "green" && !reviewed[r.idx]) continue;
+      const siteId = matchedSiteIdOf(r);
+      const site = siteId ? siteById.get(siteId) : null;
+      if (!site || site.assignedEngineer || out.has(siteId)) continue; // 이미 배정됐으면 건너뜀
+      const tech = r.parsed.engineers.map((n) => engineersByName.get(nameKey(n))).find(Boolean);
+      if (tech) out.set(siteId, { siteId, siteName: site.name, techId: tech.id, techName: tech.name });
+    }
+    return [...out.values()];
+  }, [finalRows, reviewed, links, data, engineersByName]);
+
   // 현장 담당자 자동 추가 계획 — 추출한 사람(이름·직함 라벨 있는 휴대폰)을 매칭 현장의 담당자로.
   // 직함사전→역할 드롭다운(대표/담당자/관리소장/건물주/경비실/입주민 대표/총무/기타) 매핑, 같은 번호가 이미 있으면 스킵.
   const managersPlan = useMemo(() => {
@@ -722,7 +751,8 @@ export default function VerifyImport({ data, setData, onClose }) {
     const detail = Object.entries(counts).map(([l, n]) => `${l} ${n}곳`).join(", ");
     const statusMsg = verifyReady ? `\n검증 상태(띠 색·인증마크)도 현장 ${statusPlan.length}곳에 저장됩니다.` : "\n(검증 상태 저장은 마이그레이션 083 실행 후 가능)";
     const mgrMsg = managersPlan.length ? `\n현장 담당자 ${managersPlan.length}명 추가(이름·직함·전화 — 역할 자동 매핑, 같은 번호 있으면 스킵).` : "";
-    if (!(await confirmAsync(`현장 ${fillPlan.length}곳의 비어 있는 칸 ${totalFields}개를 채웁니다.\n(${detail})${statusMsg}${mgrMsg}\n\n이미 값이 있는 칸은 건드리지 않습니다. 진행할까요?`))) return;
+    const techMsg = techPlan.length ? `\n담당기사(점검자) ${techPlan.length}곳 배정 — 담당기사가 비어 있는 현장만.` : "";
+    if (!(await confirmAsync(`현장 ${fillPlan.length}곳의 비어 있는 칸 ${totalFields}개를 채웁니다.\n(${detail})${statusMsg}${techMsg}${mgrMsg}\n\n이미 값이 있는 칸은 건드리지 않습니다. 진행할까요?`))) return;
     setBusy(true);
     // 빈칸 채우기 + 검증 상태를 현장별로 합쳐 한 번에 update
     const now = new Date().toISOString();
@@ -735,6 +765,12 @@ export default function VerifyImport({ data, setData, onClose }) {
       if (s.issuesReady) e.patch.verify_issues = s.issues;
       merged.set(s.siteId, e);
     });
+    // 담당기사(점검자) — sites.assigned_engineer(표시용)에 함께 넣는다. update 전에 patch를 채워야 반영된다.
+    for (const t of techPlan) {
+      const e = merged.get(t.siteId) ?? { siteName: t.siteName, patch: {} };
+      e.patch.assigned_engineer = t.techName;
+      merged.set(t.siteId, e);
+    }
     let ok = 0;
     const failed = [];
     setProgress({ done: 0, total: merged.size });
@@ -745,6 +781,18 @@ export default function VerifyImport({ data, setData, onClose }) {
       else ok++;
       setProgress({ done: ++i, total: merged.size });
     }
+    // site_assignments(실제 배정 기준)에도 반영 — 둘 중 하나만 넣으면 자체점검 담당자 등에서 안 잡힌다
+    let techOk = 0;
+    if (techPlan.length) {
+      const rows = techPlan.map((t) => ({ site_id: t.siteId, tech_id: t.techId, is_lead: true }));
+      for (let n = 0; n < rows.length; n += 50) {
+        const chunk = rows.slice(n, n + 50);
+        const { error } = await supabase.from("site_assignments").upsert(chunk, { onConflict: "site_id,tech_id" });
+        if (error) failed.push(`담당기사 배정 실패: ${error.message}`);
+        else techOk += chunk.length;
+      }
+    }
+
     // 현장 담당자 추가 (50개씩 묶어서)
     let mgrOk = 0;
     if (managersPlan.length) {
@@ -766,7 +814,7 @@ export default function VerifyImport({ data, setData, onClose }) {
     setProgress(null);
     // 화면(콘솔 전체 데이터)에도 반영해 새로고침 없이 최신으로
     if (ok && setData) {
-      const camel = { phone: "phone", fax: "fax", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType", notes: "notes", verify_level: "verifyLevel", verified_at: "verifiedAt", verify_issues: "verifyIssues" };
+      const camel = { phone: "phone", fax: "fax", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType", notes: "notes", verify_level: "verifyLevel", verified_at: "verifiedAt", verify_issues: "verifyIssues", assigned_engineer: "assignedEngineer" };
       setData((prev) => ({
         ...prev,
         sites: prev.sites.map((s) => {
@@ -779,7 +827,7 @@ export default function VerifyImport({ data, setData, onClose }) {
       }));
     }
     setBusy(false);
-    alert(failed.length ? `현장 ${ok}곳 반영, 실패 ${failed.length}건:\n${failed.slice(0, 5).join("\n")}` : `완료 — 현장 ${ok}곳 반영 (빈칸 ${fillPlan.length} · 상태 ${statusPlan.length} · 담당자 ${mgrOk}명 추가).`);
+    alert(failed.length ? `현장 ${ok}곳 반영, 실패 ${failed.length}건:\n${failed.slice(0, 5).join("\n")}` : `완료 — 현장 ${ok}곳 반영 (빈칸 ${fillPlan.length} · 상태 ${statusPlan.length} · 담당기사 ${techOk} · 담당자 ${mgrOk}명 추가).`);
   }
 
   const open = openIdx != null ? finalRows?.[openIdx] : null;
@@ -809,9 +857,9 @@ export default function VerifyImport({ data, setData, onClose }) {
               <button onClick={downloadClean} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-white border border-slate-300 rounded-xl px-4 py-2.5">
                 <Download size={15} /> 정리본 다운로드
               </button>
-              <button onClick={applyFill} disabled={busy || (!fillPlan.length && !statusPlan.length && !managersPlan.length)}
+              <button onClick={applyFill} disabled={busy || (!fillPlan.length && !statusPlan.length && !managersPlan.length && !techPlan.length)}
                 className="flex items-center gap-2 text-sm font-bold text-white bg-emerald-600 disabled:bg-slate-300 rounded-xl px-4 py-2.5">
-                <DatabaseZap size={15} /> {progress ? `반영 중… ${progress.done}/${progress.total}` : `DB 반영 (빈칸 ${fillPlan.length} · 상태 ${statusPlan.length} · 담당자 ${managersPlan.length})`}
+                <DatabaseZap size={15} /> {progress ? `반영 중… ${progress.done}/${progress.total}` : `DB 반영 (빈칸 ${fillPlan.length} · 상태 ${statusPlan.length} · 기사 ${techPlan.length} · 담당자 ${managersPlan.length})`}
               </button>
             </div>
           )}
