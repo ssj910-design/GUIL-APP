@@ -5,7 +5,7 @@
 // 모바일 앱이 아직 참조하는 sites의 옛 컬럼(unit_count, gov_elevator_nos,
 // elevator_model)도 함께 동기화한다(듀얼라이트).
 import { useState } from "react";
-import { Plus, Trash2, Paperclip } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapUnit } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
@@ -34,6 +34,22 @@ function SiteContractModal({ site, onClose, onSave }) {
         uploadLabel="계약서 사본 첨부 (사진/PDF)"
         height="h-[calc(85vh-9rem)]"
         onUpload={(file) => uploadPhoto(file, `contracts/${site.id}`)}
+        onSave={onSave}
+      />
+    </Modal>
+  );
+}
+
+// 현장 사업자등록증 첨부 — 계약서와 완전히 동일한 방식(다중 첨부, 좌우 넘김).
+function SiteBizRegModal({ site, onClose, onSave }) {
+  const urls = site.businessRegUrls ?? [];
+  return (
+    <Modal title={`${site.name} 사업자등록증`} onClose={onClose} wide="xl">
+      <FileCarousel
+        urls={urls}
+        uploadLabel="사업자등록증 첨부 (사진/PDF)"
+        height="h-[calc(85vh-9rem)]"
+        onUpload={(file) => uploadPhoto(file, `business-reg/${site.id}`)}
         onSave={onSave}
       />
     </Modal>
@@ -377,6 +393,7 @@ export default function SitesAdmin({ data, setData }) {
   const [importing, setImporting] = useState(false); // 공단 엑셀 일괄 등록
   const [unitDetail, setUnitDetail] = useState(null);
   const [contractOpen, setContractOpen] = useState(false);
+  const [bizRegOpen, setBizRegOpen] = useState(false);
   const [terminating, setTerminating] = useState(false);
 
   const site = sites.find((s) => s.id === selectedId);
@@ -612,6 +629,11 @@ export default function SitesAdmin({ data, setData }) {
     setData((prev) => ({ ...prev, sites: prev.sites.map((x) => (x.id === selectedId ? { ...x, contractUrls: urls } : x)) }));
   }
 
+  async function saveSiteBizReg(urls) {
+    await supabase.from("sites").update({ business_reg_urls: urls }).eq("id", selectedId);
+    setData((prev) => ({ ...prev, sites: prev.sites.map((x) => (x.id === selectedId ? { ...x, businessRegUrls: urls } : x)) }));
+  }
+
   return (
     <div className="max-w-[100rem] mx-auto">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -740,6 +762,9 @@ export default function SitesAdmin({ data, setData }) {
                 {!editingInfo ? (
                   <>
                     <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => setBizRegOpen(true)} className="flex items-center gap-1 text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 whitespace-nowrap">
+                        <FileText size={13} /> 사업자등록증
+                      </button>
                       <button onClick={() => setContractOpen(true)} className="flex items-center gap-1 text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 whitespace-nowrap">
                         <Paperclip size={13} /> 계약서
                       </button>
@@ -1038,6 +1063,9 @@ export default function SitesAdmin({ data, setData }) {
 
       {contractOpen && site && (
         <SiteContractModal site={site} onClose={() => setContractOpen(false)} onSave={saveSiteContract} />
+      )}
+      {bizRegOpen && site && (
+        <SiteBizRegModal site={site} onClose={() => setBizRegOpen(false)} onSave={saveSiteBizReg} />
       )}
 
       {terminating && site && (
