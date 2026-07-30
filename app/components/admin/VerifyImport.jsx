@@ -33,7 +33,9 @@ function labelInfo(raw) {
   return [name, role, paren && `(${paren})`].filter(Boolean).join(" ");
 }
 const norm = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
-const nameKey = (s) => norm(s).replace(/\(.*?\)/g, "").replace(/\s/g, ""); // 괄호 별칭·공백 무시하고 매칭
+// 매칭 키: 괄호 별칭 제거 + 특수문자(점·앰퍼샌드·하이픈 등)·공백 전부 무시 + 영문 소문자화
+// → "H.애비뉴호텔"="H애비뉴호텔", "J.J 빌딩"="JJ빌딩", "COSTORY TOWER"="costorytower" 전부 같은 키
+const nameKey = (s) => norm(s).replace(/\(.*?\)/g, "").replace(/[^가-힣A-Za-z0-9]/g, "").toLowerCase();
 // "비젼타워 (스타병원)" → ["비젼타워", "스타병원"] — 본명·별칭 전부 매칭 키로 쓴다
 const nameKeys = (s) => [nameKey(s), ...[...String(s ?? "").matchAll(/\(([^)]+)\)/g)].map((m) => nameKey(m[1]))].filter(Boolean);
 // 주소에서 법정동 추출 — 내부 구주소("반포동 701-16")와 DB 신주소 끝 "(반포동)" 모두 잡힌다
@@ -99,32 +101,50 @@ function validateRow(raw, col, monthCols) {
   // 연락처 — 자유 메모 셀: 전화 추출(앞말=역할 라벨) + 유형 추정 + 보안 메모 감지
   // 010=담당자(사람) 휴대폰 / 지역번호(02 등)=현장(건물) 유선일 확률이 높다 — 추정만 하고 확정은 사람이.
   const contact = get("contact");
-  const phones = [];
+  // 1차 수집(두 번 훑는다 — 같은 셀의 정식 유선 국번을 알아야 "2186-1849"가 내선인지 판단 가능)
+  const rawPhones = [];
   for (const m of contact.matchAll(PHONE_RE)) {
     const before = contact.slice(0, m.index).replace(/[\s,./·:-]+$/, "");
     // 라벨: 괄호 안 숫자 포함("총무(301호)")도 통째로 잡는다
     const label = (/([가-힣A-Za-z]{0,10}\([가-힣A-Za-z0-9]{1,10}\)|[가-힣A-Za-z]{2,10})$/.exec(before) ?? [])[1] ?? "";
-    const digits = m[0].replace(/\D/g, "");
+    rawPhones.push({ num: m[0], label, before });
+  }
+  // 같은 셀의 정식 유선(0X-) 국번 목록 — "02-2186-1800"이 있으면 "2186-1849"는 내선(유선)으로 본다
+  const landLocals = rawPhones
+    .map((p) => p.num.replace(/\D/g, ""))
+    .filter((d) => d.startsWith("0") && !d.startsWith("01"))
+    .map((d) => (d.startsWith("02") ? d.slice(2) : d.slice(3)));
+  const phones = rawPhones.map(({ num, label, before }) => {
+    const digits = num.replace(/\D/g, "");
     const nearFax = /fax|팩스/i.test(before.slice(-8)) || /팩스|fax/i.test(label);
     const type = nearFax ? "팩스"
       : digits.startsWith("01") ? "담당자(휴대폰) 추정"
       : /^1[5-9]/.test(digits) ? "현장(대표번호) 추정"
       : digits.startsWith("0") ? "현장(유선) 추정"
-      : "현장(유선·02생략) 추정";
-    phones.push({ num: m[0], label, disp: labelInfo(label), type });
-  }
+      : digits.length === 7 ? "현장(유선·02생략) 추정"                       // 3자리-4자리는 서울 국번 관행
+      : landLocals.some((l) => l.slice(0, 4) === digits.slice(0, 4)) ? "현장(유선·내선) 추정" // 옆의 정식 유선과 같은 국번
+      : "담당자(휴대폰·010누락?) 추정";                                       // 4-4는 010 빠진 기록 관행이 많음
+    return { num, label, disp: labelInfo(label), type };
+  });
   parsed.phones = phones;
   parsed.contactMemo = contact;
-  if (phones.length >= 2) issues.push({ level: "yellow", msg: `전화 ${phones.length}개가 한 셀에 — 유형 추정을 확인해주세요(010=담당자, 지역번호=현장)` });
+  // 전화가 여러 개인 건 정상(자동 분류됨) — 유형이 애매한 번호가 있을 때만 확인 요청
+  const unsure = phones.filter((p) => p.type.includes("010누락"));
+  if (unsure.length) issues.push({ level: "yellow", msg: `유형 불명 전화 ${unsure.length}개(${unsure[0].num} 등) — 010 누락인지 유선인지 확인` });
   // 출입 정보(공동현관 비번·기계실 열쇠)는 기사가 현장 가서 필요한 운영 정보 — 막지 않고,
   // 인증완료 후 반영하면 현장 비고(전달사항)로 저장돼 기사들이 현장정보에서 본다. (노랑 = 사람이 한번 보고 확정)
   if (/비밀번호|비번|열쇠|현관|공동현관/.test(contact)) issues.push({ level: "yellow", msg: "출입 정보(비밀번호·열쇠) 포함 — 인증완료 후 반영하면 현장 비고로 저장되어 기사들이 봅니다" });
 
-  // 사업자번호 — 주민번호가 섞여 있는 열
+  // 사업자번호 — 주민번호가 섞여 있는 열. 개인과의 계약은 사업 특성상 있을 수 있으므로 막지 않고
+  // 자동 마스킹(뒤 6자리)해서만 다룬다 — 원본 주민번호는 이 도구 어디에도 저장·출력되지 않는다.
   const biz = get("bizNo");
-  parsed.bizNo = biz;
-  if (/^\d{6}-\d{7}$/.test(biz)) issues.push({ level: "red", msg: "주민등록번호로 보임 — 개인정보, DB에 넣으면 안 됨(마스킹·삭제 필요)" });
-  else if (biz && !/^\d{3}-\d{2}-\d{5}$/.test(biz)) issues.push({ level: "yellow", msg: `사업자번호 형식 이상: "${biz}"` });
+  if (/^\d{6}-\d{7}$/.test(biz)) {
+    parsed.bizNo = biz.replace(/^(\d{6}-\d)\d{6}$/, "$1******");
+    issues.push({ level: "yellow", msg: `주민등록번호 감지 — 개인 계약으로 보임. 자동 마스킹(${parsed.bizNo})으로만 보관·출력` });
+  } else {
+    parsed.bizNo = biz;
+    if (biz && !/^\d{3}-\d{2}-\d{5}$/.test(biz)) issues.push({ level: "yellow", msg: `사업자번호 형식 이상: "${biz}"` });
+  }
 
   // 계약일 — 서술형이 많음
   const cd = get("contractDate");
@@ -205,6 +225,7 @@ export default function VerifyImport({ data, setData, onClose }) {
   const [openIdx, setOpenIdx] = useState(null);
   const [reviewed, setReviewed] = useState({});   // idx → true
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(null); // DB 반영 진행률 { done, total }
 
   async function readSheet(file) {
     const XLSX = await import("xlsx");
@@ -418,11 +439,15 @@ export default function VerifyImport({ data, setData, onClose }) {
     });
     let ok = 0;
     const failed = [];
+    setProgress({ done: 0, total: merged.size });
+    let i = 0;
     for (const [siteId, e] of merged) {
       const { error } = await supabase.from("sites").update(e.patch).eq("id", siteId);
       if (error) failed.push(`${e.siteName || siteId}: ${error.message}`);
       else ok++;
+      setProgress({ done: ++i, total: merged.size });
     }
+    setProgress(null);
     // 화면(콘솔 전체 데이터)에도 반영해 새로고침 없이 최신으로
     if (ok && setData) {
       const camel = { phone: "phone", fax: "fax", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType", notes: "notes", verify_level: "verifyLevel", verified_at: "verifiedAt", verify_issues: "verifyIssues" };
@@ -461,13 +486,18 @@ export default function VerifyImport({ data, setData, onClose }) {
               </button>
               <button onClick={applyFill} disabled={busy || (!fillPlan.length && !statusPlan.length)}
                 className="flex items-center gap-2 text-sm font-bold text-white bg-emerald-600 disabled:bg-slate-300 rounded-xl px-4 py-2.5">
-                <DatabaseZap size={15} /> DB 반영 (빈칸 {fillPlan.length} · 상태 {statusPlan.length})
+                <DatabaseZap size={15} /> {progress ? `반영 중… ${progress.done}/${progress.total}` : `DB 반영 (빈칸 ${fillPlan.length} · 상태 ${statusPlan.length})`}
               </button>
             </div>
           )}
         </div>
+        {progress && (
+          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-full bg-emerald-500 transition-all" style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }} />
+          </div>
+        )}
         <p className="text-xs text-slate-400">
-          저장은 <b>"DB 빈칸 채우기"를 눌러야만</b> 됩니다 — 대상은 통과(초록) + 검토완료 체크한 노랑 중 DB 현장과 매칭된 행. 그 현장의 <b>비어 있는 칸만</b> 채우고, 이미 값 있는 칸은 절대 덮지 않습니다. (빨강은 반영 불가)
+          저장은 <b>"DB 반영"을 눌러야만</b> 됩니다 — 대상은 통과(초록) + 인증완료한 노랑 중 DB 현장과 매칭된 행. 그 현장의 <b>비어 있는 칸만</b> 채우고, 이미 값 있는 칸은 절대 덮지 않습니다. (빨강은 반영 불가)
         </p>
 
         {/* 요약 + 필터 */}
