@@ -347,11 +347,15 @@ export default function VerifyImport({ data, setData, onClose }) {
       .sort((a, b) => b.score - a.score)
       .slice(0, 3);
   }
-  // 이름이 전혀 달라 후보가 없을 때(예: 경찰기마대 ↔ 74기동대) — 같은 법정동 현장을 대신 보여준다
+  // 이름이 전혀 달라 후보가 없을 때(예: 경찰기마대 ↔ 74기동대) — 주소로 후보를 찾는다.
+  // 도로명+번지가 같은 곳을 먼저, 없으면 같은 법정동 현장을.
   function sameDongFallback(r) {
+    const myRoad = roadOf(r.parsed.address);
+    const roadHits = myRoad ? dbSites.filter((s) => s.road === myRoad) : [];
+    if (roadHits.length) return roadHits.slice(0, 3).map((s) => ({ ...s, score: 0, tags: ["주소 일치"] }));
     const myDong = dongOf(r.parsed.address);
     if (!myDong) return [];
-    return dbSites.filter((s) => s.dong === myDong).slice(0, 3).map((s) => ({ ...s, score: 0, tags: ["같은 동"] }));
+    return dbSites.filter((s) => s.dong === myDong).slice(0, 5).map((s) => ({ ...s, score: 0, tags: ["같은 동"] }));
   }
   const [filter, setFilter] = useState("problem");
   const [fileNotices, setFileNotices] = useState([]); // 파일 전체 공통 형식 문제 (행 목록에서 승격)
@@ -487,12 +491,20 @@ export default function VerifyImport({ data, setData, onClose }) {
       const myLoose = effName ? looseKeys(effName, r.parsed.address).filter((k) => k.length >= 3) : [];
       const looseHits = myLoose.length ? dbSites.filter((s) => s.loose.some((k) => k.length >= 3 && myLoose.includes(k))) : [];
       const hits = [...new Map([...strictHits, ...looseHits].map((s) => [s.id, s])).values()];
-      // 후보가 여럿이면 법정동이 같은 곳 우선, 그래도 여럿이면 사람이 고르게 한다
+      // 후보 좁히기: 도로명+번지가 같은 곳 → 법정동이 같은 곳 순으로.
+      // 병합 묶음(공군항공안전단 3행)은 이름이 같아도 행마다 주소가 달라 서로 다른 현장이므로
+      // 주소로 갈라야 태성대아파트·디모데관 데이터가 엉뚱한 현장에 덮이지 않는다.
+      const myRoadKey = roadOf(r.parsed.address);
+      const sameRoad = myRoadKey ? hits.filter((s) => s.road === myRoadKey) : [];
       const sameDong = myDong ? hits.filter((s) => s.dong === myDong) : [];
-      const narrowed = hits.length > 1 ? (sameDong.length ? sameDong : hits) : hits;
-      const autoMatched = narrowed.length === 1;
-      if (r.parsed.name && hits.length > 1 && narrowed.length !== 1) {
+      const narrowed = hits.length > 1 ? (sameRoad.length ? sameRoad : sameDong.length ? sameDong : hits) : hits;
+      // 이름을 빌려온 행(병합 묶음·주소 힌트)은 주소로 확정되지 않으면 자동 매칭하지 않는다
+      const borrowedName = !r.parsed.name;
+      const autoMatched = narrowed.length === 1 && (!borrowedName || sameRoad.length === 1);
+      if (hits.length > 1 && narrowed.length !== 1) {
         issues.push({ level: "yellow", msg: `이름이 같은 DB 현장이 ${hits.length}곳 — 아래 후보에서 맞는 곳을 골라주세요` });
+      } else if (borrowedName && narrowed.length === 1 && !autoMatched) {
+        issues.push({ level: "yellow", msg: `현장명이 비어 "${effName}"으로 추정 — 주소가 다르니 아래 후보에서 맞는 현장을 확인해주세요` });
       }
       if (dbKeys.size && r.parsed.name && !autoMatched && !links[r.idx] && hits.length === 0) {
         issues.push({ level: "yellow", msg: "등록된 현장(DB)에 없는 이름 — 아래 후보에서 연결하거나 미등록·해지인지 확인" });
@@ -500,7 +512,7 @@ export default function VerifyImport({ data, setData, onClose }) {
       const level = issues.some((x) => x.level === "red") ? "red" : issues.length ? "yellow" : "green";
       // hitIds = 이름으로 걸린 DB 현장 전부(동명이현장 포함) — "DB에만 있는 현장" 집계에 쓴다.
       // matchedSiteId는 유일하게 좁혀졌을 때만(데이터 반영은 확실할 때만 해야 하므로).
-      return { ...r, issues, level, autoMatched, matchedSiteId: narrowed.length === 1 ? narrowed[0].id : null, hitIds: hits.map((s) => s.id) };
+      return { ...r, issues, level, autoMatched, matchedSiteId: autoMatched ? narrowed[0].id : null, hitIds: hits.map((s) => s.id) };
     });
   }, [rows, dbKeys, dbSites, links]);
 
@@ -513,7 +525,9 @@ export default function VerifyImport({ data, setData, onClose }) {
 
   const visible = (finalRows ?? []).filter((r) =>
     filter === "all" ? true
-    : filter === "problem" ? r.level !== "green" && !reviewed[r.idx]
+    // "남은 문제"에서도 지금 열어 둔 행은 남긴다 — 인증완료를 누른 순간 화면에서 사라져
+    // 무슨 일이 일어났는지 모르게 되는 걸 막는다(닫거나 다른 행을 열면 그때 목록에서 빠진다).
+    : filter === "problem" ? (r.level !== "green" && !reviewed[r.idx]) || r.idx === openIdx
     : filter === "reviewed" ? reviewed[r.idx]
     : r.level === filter
   );
@@ -869,11 +883,11 @@ export default function VerifyImport({ data, setData, onClose }) {
                 <span>DB 현장과 연결됨: <b>{links[open.idx].siteName}</b>{links[open.idx].auto && ` (자동 ${links[open.idx].geo != null ? `· 좌표 ${links[open.idx].geo}m` : Math.round(links[open.idx].score * 100) + "%"} — 아니면 해제)`}</span>
                 <button onClick={() => { setLinks((p) => { const n = { ...p }; delete n[open.idx]; return n; }); persistMark(open, (o) => { delete o.link; }); }} className="font-bold text-slate-400">연결 해제</button>
               </div>
-            ) : (!open.autoMatched && (open.parsed.name || open.contIdx != null) && dbSites.length > 0 && (
+            ) : (!open.autoMatched && dbSites.length > 0 && (
               (() => {
-                // 연속 행(병합 잔재)은 소속 현장 이름을 빌려 후보를 찾는다 — 주소가 달라 별개 현장(공군중앙교회 등)일 수 있어서
-                // 이름이 없으면 주소 끝 건물 별칭(태성대아파트)을, 그것도 없으면 소속 현장 이름을 빌려 후보를 찾는다
-                let cands = candidatesFor(open, open.parsed.groupName || buildingHintOf(open.parsed.address) || "");
+                // 이름이 없으면 주소 끝 건물 별칭(태성대아파트) → 병합 묶음 이름 순으로 빌려 후보를 찾는다.
+                // 묶음이라도 행마다 주소가 다르면 다른 현장이므로 주소 후보(아래 fallback)가 결정적이다.
+                let cands = candidatesFor(open, buildingHintOf(open.parsed.address) || open.parsed.groupName || "");
                 // 좌표 대조에서 나온 근처 후보를 맨 앞에 (거리 표시)
                 const geo = geoResults[open.idx];
                 if (geo && !cands.some((c) => c.id === geo.siteId)) {
