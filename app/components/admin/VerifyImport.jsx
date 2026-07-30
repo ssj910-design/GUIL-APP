@@ -45,7 +45,8 @@ const ROLE_MAP = {
 const norm = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 // 매칭 키: 괄호 별칭 제거 + 특수문자(점·앰퍼샌드·하이픈 등)·공백 전부 무시 + 영문 소문자화
 // → "H.애비뉴호텔"="H애비뉴호텔", "J.J 빌딩"="JJ빌딩", "COSTORY TOWER"="costorytower" 전부 같은 키
-const nameKey = (s) => norm(s).replace(/\(.*?\)/g, "").replace(/[^가-힣A-Za-z0-9]/g, "").toLowerCase();
+// 첫 괄호 앞까지가 본명 — "(구.(주)에이알)"처럼 괄호가 중첩돼도 본명 키가 오염되지 않게 자른다
+const nameKey = (s) => norm(s).split("(")[0].replace(/[^가-힣A-Za-z0-9]/g, "").toLowerCase();
 // 영문 상호 → 한글 발음 사전 — 센터엔 "Dream Castle", 내부엔 "드림캐슬"로 적히는 표기 차이를 흡수한다.
 // 영문 조각이 사전 단어로 "완전히" 분해될 때만 변환한다(부분 치환으로 이름이 깨지는 오류 방지).
 const ENG2KOR = [
@@ -63,14 +64,24 @@ const engToKorKey = (key) => {
   for (const [e, ko] of ENG2KOR) out = out.split(e).join(ko);
   return out !== key ? out : null;
 };
+// 한글 옛 표기·발음 변형 — "공항메디칼센터"(어르신 표기)와 "공항메디컬센터"를 같은 키로
+const KOR_VARIANTS = [["메디칼", "메디컬"], ["센타", "센터"], ["프라자", "플라자"], ["맨숀", "맨션"]];
+const korVariantKey = (key) => {
+  let out = key;
+  for (const [a, b] of KOR_VARIANTS) out = out.split(a).join(b);
+  return out !== key ? out : null;
+};
 // "비젼타워 (스타병원)" → ["비젼타워", "스타병원"] — 본명·별칭 + 영문의 한글 발음 변형까지 전부 매칭 키로 쓴다.
 // "(구. P&P빌딩)"처럼 옛 이름 메모는 "구." 접두어를 벗겨야 상대쪽 "P&P빌딩"과 키가 맞는다.
 const nameKeys = (s) => {
+  // (주)·(유) 법인 표기를 먼저 지워야 "(구.(주)에이알)" 같은 중첩 괄호에서 별칭이 제대로 나온다
+  const s2 = String(s ?? "").replace(/\((주|유)\)/g, "");
   const base = [
     nameKey(s),
-    ...[...String(s ?? "").matchAll(/\(([^)]+)\)/g)].map((m) => nameKey(m[1].replace(/^\s*구[.\s]+/, ""))),
+    ...[...s2.matchAll(/\(([^)]+)\)/g)].map((m) => nameKey(m[1].replace(/^\s*구[.\s]+/, ""))),
   ].filter(Boolean);
-  return [...new Set([...base, ...base.map(engToKorKey).filter(Boolean)])];
+  const withEng = [...new Set([...base, ...base.map(engToKorKey).filter(Boolean)])];
+  return [...new Set([...withEng, ...withEng.map(korVariantKey).filter(Boolean)])];
 };
 // 주소에서 법정동 추출 — 내부 구주소("반포동 701-16")와 DB 신주소 끝 "(반포동)" 모두 잡힌다
 const dongOf = (addr) => (/([가-힣]{1,10}[동가리])(?=\s|\d|\)|$)/.exec(String(addr ?? "")) ?? [])[1] ?? null;
@@ -248,8 +259,8 @@ export default function VerifyImport({ data, setData, onClose }) {
     return m;
   }, [data]);
   // 자동 매칭 실패 행에 보여줄 후보 — 이름 유사도 + 법정동·설치일·모델 일치 가산점, 상위 3곳
-  function candidatesFor(r) {
-    const myKeys = nameKeys(r.parsed.name);
+  function candidatesFor(r, fallbackName = "") {
+    const myKeys = nameKeys(r.parsed.name || fallbackName);
     const myDong = dongOf(r.parsed.address);
     const myDate = r.parsed.installDate;
     const myModel = r.parsed.model ? nameKey(r.parsed.model) : "";
@@ -691,9 +702,10 @@ export default function VerifyImport({ data, setData, onClose }) {
                 <span>DB 현장과 연결됨: <b>{links[open.idx].siteName}</b>{links[open.idx].auto && ` (자동 ${Math.round(links[open.idx].score * 100)}% — 아니면 해제)`}</span>
                 <button onClick={() => { setLinks((p) => { const n = { ...p }; delete n[open.idx]; return n; }); persistMark(open, (o) => { delete o.link; }); }} className="font-bold text-slate-400">연결 해제</button>
               </div>
-            ) : (!open.autoMatched && open.parsed.name && dbSites.length > 0 && (
+            ) : (!open.autoMatched && (open.parsed.name || open.contIdx != null) && dbSites.length > 0 && (
               (() => {
-                let cands = candidatesFor(open);
+                // 연속 행(병합 잔재)은 소속 현장 이름을 빌려 후보를 찾는다 — 주소가 달라 별개 현장(공군중앙교회 등)일 수 있어서
+                let cands = candidatesFor(open, open.contIdx != null ? finalRows[open.contIdx]?.parsed.name : "");
                 const fallback = cands.length === 0;
                 if (fallback) cands = sameDongFallback(open);
                 const qk = linkQuery.trim().length >= 2 ? nameKey(linkQuery) : "";
