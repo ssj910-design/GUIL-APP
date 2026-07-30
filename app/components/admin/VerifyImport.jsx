@@ -71,6 +71,13 @@ const korVariantKey = (key) => {
   for (const [a, b] of KOR_VARIANTS) out = out.split(a).join(b);
   return out !== key ? out : null;
 };
+// 건물 유형어(하우스·빌딩·타워…)는 붙였다 뗐다 하는 장식이다 — "더해피하우스"와 "더해피"를 잇기 위해
+// 끝의 유형어를 벗긴 키를 하나 더 만든다. 남는 이름이 2자 이상일 때만(빌딩→"" 같은 붕괴 방지).
+const BUILDING_SUFFIX = /(하우스|오피스텔|빌라트|빌리지|아파트|맨션|빌딩|타워|플라자|팰리스|캐슬|파크|센터|빌라|타운|힐스|스토어|사옥|본관|별관|빌|관)$/;
+const stripSuffixKey = (key) => {
+  const out = key.replace(BUILDING_SUFFIX, "");
+  return out !== key && out.length >= 2 ? out : null;
+};
 // "비젼타워 (스타병원)" → ["비젼타워", "스타병원"] — 본명·별칭 + 영문의 한글 발음 변형까지 전부 매칭 키로 쓴다.
 // "(구. P&P빌딩)"처럼 옛 이름 메모는 "구." 접두어를 벗겨야 상대쪽 "P&P빌딩"과 키가 맞는다.
 const nameKeys = (s) => {
@@ -86,6 +93,9 @@ const nameKeys = (s) => {
   const withEng = [...new Set([...base, ...base.map(engToKorKey).filter(Boolean)])];
   return [...new Set([...withEng, ...withEng.map(korVariantKey).filter(Boolean)])];
 };
+// 유형어까지 벗긴 "느슨한 키" — 더해피하우스=더해피. 오매칭(성진빌딩↔성진타워) 위험이 있어
+// 통과 판정에는 쓰지 않고, 후보 제시(유사도)에만 쓴다.
+const looseKeys = (s) => [...new Set(nameKeys(s).flatMap((k) => [k, stripSuffixKey(k)]).filter(Boolean))];
 // 주소에서 법정동 추출 — 내부 구주소("반포동 701-16")와 DB 신주소 끝 "(반포동)" 모두 잡힌다
 const dongOf = (addr) => (/([가-힣]{1,10}[동가리])(?=\s|\d|\)|$)/.exec(String(addr ?? "")) ?? [])[1] ?? null;
 // 도로명+번지 추출("이태원로 22" → "이태원로22") — 양쪽 다 신주소면 이걸로 정확히 맞춰볼 수 있다
@@ -267,7 +277,7 @@ export default function VerifyImport({ data, setData, onClose }) {
   const [links, setLinks] = useState({});         // 수동 매칭: 행 idx → { siteId, siteName }
   // 대조 상대 = 이미 등록된 DB 현장(센터 엑셀로 일괄등록된 것) — 이름 본명+괄호 별칭 전부 키로
   const dbSites = useMemo(() => (data?.sites ?? []).filter((s) => s.name).map((s) => ({
-    id: s.id, name: s.name, keys: nameKeys(s.name), dong: dongOf(s.address), road: roadOf(s.address),
+    id: s.id, name: s.name, keys: nameKeys(s.name), loose: looseKeys(s.name), dong: dongOf(s.address), road: roadOf(s.address),
   })), [data]);
   const dbKeys = useMemo(() => new Set(dbSites.flatMap((s) => s.keys)), [dbSites]);
   // 호기 힌트 — 센터 데이터(units)의 설치일·모델이 내부 엑셀과 일치하면 같은 현장일 확률이 높다
@@ -283,16 +293,18 @@ export default function VerifyImport({ data, setData, onClose }) {
   }, [data]);
   // 자동 매칭 실패 행에 보여줄 후보 — 이름 유사도 + 법정동·설치일·모델 일치 가산점, 상위 3곳
   function candidatesFor(r, fallbackName = "") {
-    const myKeys = nameKeys(r.parsed.name || fallbackName);
+    const myKeys = looseKeys(r.parsed.name || fallbackName); // 후보 탐색은 느슨한 키(유형어 제거 포함)로
     const myDong = dongOf(r.parsed.address);
     const myDate = r.parsed.installDate;
     const myModel = r.parsed.model ? nameKey(r.parsed.model) : "";
     return dbSites
       .map((s) => {
-        let score = Math.max(...myKeys.flatMap((a) => s.keys.map((b) => similarity(a, b))), 0);
+        let score = Math.max(...myKeys.flatMap((a) => s.loose.map((b) => similarity(a, b))), 0);
         const tags = [];
+        // 유형어를 벗기면 같은 이름(더해피하우스 ↔ 더해피) — 강한 신호로 본다
+        if (myKeys.some((a) => s.loose.includes(a))) { score = Math.max(score, 0.8); tags.push("유형어 제외 일치"); }
         // 한쪽 이름이 다른 쪽을 포함하면(국방부 ⊂ 국방부본부) 강한 신호
-        if (myKeys.some((a) => s.keys.some((b) => a.length >= 3 && b.length >= 3 && (a.includes(b) || b.includes(a))))) { score = Math.max(score, 0.75); tags.push("이름 포함"); }
+        else if (myKeys.some((a) => s.loose.some((b) => a.length >= 3 && b.length >= 3 && (a.includes(b) || b.includes(a))))) { score = Math.max(score, 0.75); tags.push("이름 포함"); }
         if (myDong && s.dong && myDong === s.dong) { score += 0.25; tags.push("법정동 일치"); } // 구주소·신주소가 달라도 법정동은 같다
         const myRoad = roadOf(r.parsed.address);
         // 도로명+번지가 정확히 같으면 사실상 같은 건물 — 이름이 아예 달라도(COSTORY TOWER↔ABT타워) 후보에 확실히 올린다
