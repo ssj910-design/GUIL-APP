@@ -1,0 +1,56 @@
+/* 설계 문서 공통 스타일 — docs/design/*.html 이 공유한다. 브라우저로 바로 열어 보는 내부 문서용. */
+:root {
+  --ink: #1e293b;
+  --sub: #64748b;
+  --faint: #94a3b8;
+  --line: #e2e8f0;
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --accent: #1d4ed8;
+  --accent-soft: #eff6ff;
+  --warn-soft: #fffbeb;
+  --warn-ink: #b45309;
+  --ok-soft: #ecfdf5;
+  --ok-ink: #047857;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e2e8f0; --sub: #94a3b8; --faint: #64748b; --line: #334155;
+    --bg: #0f172a; --card: #1e293b; --accent: #60a5fa; --accent-soft: #1e3a8a33;
+    --warn-soft: #78350f33; --warn-ink: #fbbf24; --ok-soft: #064e3b33; --ok-ink: #34d399;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  background: var(--bg); color: var(--ink);
+  line-height: 1.7; font-size: 15px;
+  padding: 48px 24px 96px;
+}
+main { max-width: 760px; margin: 0 auto; }
+h1 { font-size: 26px; letter-spacing: -0.5px; margin-bottom: 4px; }
+h2 { font-size: 18px; margin: 40px 0 12px; padding-top: 24px; border-top: 1px solid var(--line); }
+h3 { font-size: 15px; margin: 20px 0 8px; }
+p { margin-bottom: 10px; }
+ul, ol { margin: 0 0 12px 22px; }
+li { margin-bottom: 4px; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.doc-meta { color: var(--faint); font-size: 12px; margin-bottom: 32px; }
+.doc-meta a { color: var(--faint); }
+table { width: 100%; border-collapse: collapse; margin: 12px 0 16px; font-size: 14px; }
+th, td { text-align: left; padding: 8px 10px; border: 1px solid var(--line); vertical-align: top; }
+th { background: var(--card); font-size: 12px; color: var(--sub); }
+.badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 99px; vertical-align: middle; }
+.badge.todo { background: var(--warn-soft); color: var(--warn-ink); }
+.badge.doing { background: var(--accent-soft); color: var(--accent); }
+.badge.done { background: var(--ok-soft); color: var(--ok-ink); }
+.callout { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; padding: 12px 16px; margin: 12px 0 16px; font-size: 14px; }
+.callout.warn { border-left-color: var(--warn-ink); }
+.tbd { background: var(--warn-soft); color: var(--warn-ink); font-weight: 700; padding: 0 6px; border-radius: 4px; font-size: 13px; }
+.card-list { display: grid; gap: 12px; margin: 16px 0; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; }
+.card h3 { margin: 0 0 4px; }
+.card p { margin: 0; color: var(--sub); font-size: 13px; }
+.term { border-bottom: 1px dotted var(--faint); cursor: help; }
+footer { max-width: 760px; margin: 64px auto 0; color: var(--faint); font-size: 12px; border-top: 1px solid var(--line); padding-top: 16px; }

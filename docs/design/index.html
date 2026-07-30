@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>설계 허브 — GUIL-APP</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>설계 허브</h1>
+  <p class="doc-meta">승강기 유지보수 현장관리 서비스 — 기획·화면설계·화이트라벨 설계도의 목차. 브라우저로 열어 보는 내부 문서(배포 안 됨).</p>
+
+  <div class="card-list">
+    <div class="card">
+      <h3><a href="01-prd.html">01. PRD — 제품 정의서</a> <span class="badge doing">v0.1 초안</span></h3>
+      <p>이 제품이 뭔지, 누구를 위한 건지, 어디로 가는지. 모든 문서의 기준.</p>
+    </div>
+    <div class="card">
+      <h3>02. 유저플로우 <span class="badge todo">예정</span></h3>
+      <p>기사의 하루 / 고장 한 건의 일생 / 관리자의 하루 — 3개 흐름부터.</p>
+    </div>
+    <div class="card">
+      <h3>03. 화면 지도 (사이트맵) <span class="badge todo">예정</span></h3>
+      <p>전체 화면 목록과 화면 간 이동 구조.</p>
+    </div>
+    <div class="card">
+      <h3>screens/ — 화면설계서 <span class="badge todo">예정</span></h3>
+      <p>화면당 1페이지: 실제 스크린샷+주석, 필요 요소, QA 체크포인트, 화이트라벨 표시. (docs/QA-RULES.md를 여기로 흡수)</p>
+    </div>
+  </div>
+
+  <h2>관련 문서 (마크다운)</h2>
+  <ul>
+    <li><a href="../MULTITENANT-PLAN.md">MULTITENANT-PLAN.md</a> — 타사 입주(테넌트 분리) 기술 계획</li>
+    <li><a href="../QA-RULES.md">QA-RULES.md</a> — 화면별 QA 규칙 (→ screens/로 흡수 예정)</li>
+    <li><a href="../APK-PLAN.md">APK-PLAN.md</a> — 안드로이드 APK 배포 계획</li>
+    <li><a href="../HANDOFF.md">HANDOFF.md</a> — 두 사람 간 처리 요청</li>
+  </ul>
+
+  <h2>이 폴더의 규칙</h2>
+  <ul>
+    <li>여기는 <b>내부 기준서</b> — 독자는 차호근·ssj910. 쉬운 말로, 용어는 PRD 9장 용어집 기준.</li>
+    <li>확정 안 된 건 <span class="tbd">미정</span>으로 표시하고 넘어간다 — 거짓 확정 금지.</li>
+    <li>화면설계는 실물(스크린샷)이 진실 — 앱이 바뀌면 재캡처. 변경 예정(화이트라벨)만 와이어프레임.</li>
+    <li>수정은 git 커밋으로 — 문서도 코드처럼 이력을 남긴다.</li>
+  </ul>
+</main>
+<footer>GUIL-APP 설계 문서 · docs/design/index.html</footer>
+</body>
+</html>
