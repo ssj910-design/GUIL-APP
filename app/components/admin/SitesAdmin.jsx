@@ -855,6 +855,35 @@ export default function SitesAdmin({ data, setData }) {
             </div>
           ) : (
             <>
+              {/* 엑셀 검증 결과 — 노랑/빨강이면 무엇이 문제였는지 보여주고, 확인했으면 여기서 바로 통과 처리 */}
+              {(site.verifyLevel === "yellow" || site.verifyLevel === "red") && (
+                <div className={`rounded-xl border p-4 ${site.verifyLevel === "red" ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"}`}>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <p className={`text-sm font-extrabold ${site.verifyLevel === "red" ? "text-red-700" : "text-amber-700"}`}>
+                      엑셀 검증 {site.verifyLevel === "red" ? "빨강 — 원본 데이터 문제" : "노랑 — 확인 필요"}
+                    </p>
+                    {site.verifyLevel === "yellow" ? (
+                      <button
+                        onClick={async () => {
+                          const patch = { verify_level: "green", verified_at: new Date().toISOString() };
+                          const { error } = await supabase.from("sites").update(patch).eq("id", site.id);
+                          if (error) { alert("처리 실패: " + error.message); return; }
+                          setData((prev) => ({ ...prev, sites: prev.sites.map((x) => (x.id === site.id ? { ...x, verifyLevel: "green", verifiedAt: patch.verified_at } : x)) }));
+                        }}
+                        className="flex items-center gap-1 text-xs font-bold text-white bg-emerald-600 rounded-lg px-3 py-1.5 whitespace-nowrap">
+                        <BadgeCheck size={13} /> 확인했음 — 통과 처리
+                      </button>
+                    ) : (
+                      <span className="text-[11px] font-bold text-red-500">원본 엑셀을 고친 뒤 재검증 필요 (주민번호 등)</span>
+                    )}
+                  </div>
+                  {(site.verifyIssues ?? []).length > 0 && (
+                    <ul className="list-disc ml-4 space-y-0.5 text-xs text-slate-600">
+                      {site.verifyIssues.map((m, i) => <li key={i}>{m}</li>)}
+                    </ul>
+                  )}
+                </div>
+              )}
               <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
                 {!editingInfo ? (
                   <>

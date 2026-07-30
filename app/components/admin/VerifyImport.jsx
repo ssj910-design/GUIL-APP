@@ -359,18 +359,20 @@ export default function VerifyImport({ data, setData, onClose }) {
   const statusPlan = useMemo(() => {
     if (!finalRows || !verifyReady) return [];
     const worst = { red: 3, yellow: 2, green: 1 };
+    const issuesReady = (data?.sites ?? []).some((s) => s.verifyIssues !== undefined); // 084 실행 여부
     const bySite = new Map();
     for (const r of finalRows) {
       const siteId = matchedSiteIdOf(r);
       if (!siteId) continue;
-      const e = bySite.get(siteId) ?? { siteId, level: "green", allOk: true };
+      const e = bySite.get(siteId) ?? { siteId, level: "green", allOk: true, issues: [] };
       if (worst[r.level] > worst[e.level]) e.level = r.level;
       if (r.level !== "green" && !reviewed[r.idx]) e.allOk = false;
       if (r.level === "red") e.allOk = false;
+      if (issuesReady) e.issues = [...new Set([...e.issues, ...r.issues.map((x) => x.msg)])].slice(0, 12);
       bySite.set(siteId, e);
     }
-    return [...bySite.values()];
-  }, [finalRows, verifyReady, reviewed, links]);
+    return [...bySite.values()].map((e) => ({ ...e, issuesReady }));
+  }, [finalRows, verifyReady, reviewed, links, data]);
 
   async function applyFill() {
     const totalFields = fillPlan.reduce((n, p) => n + p.labels.length, 0);
@@ -388,6 +390,7 @@ export default function VerifyImport({ data, setData, onClose }) {
       const e = merged.get(s.siteId) ?? { siteName: "", patch: {} };
       e.patch.verify_level = s.level;
       e.patch.verified_at = s.allOk ? now : null;
+      if (s.issuesReady) e.patch.verify_issues = s.issues;
       merged.set(s.siteId, e);
     });
     let ok = 0;
@@ -399,7 +402,7 @@ export default function VerifyImport({ data, setData, onClose }) {
     }
     // 화면(콘솔 전체 데이터)에도 반영해 새로고침 없이 최신으로
     if (ok && setData) {
-      const camel = { phone: "phone", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType", notes: "notes", verify_level: "verifyLevel", verified_at: "verifiedAt" };
+      const camel = { phone: "phone", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType", notes: "notes", verify_level: "verifyLevel", verified_at: "verifiedAt", verify_issues: "verifyIssues" };
       setData((prev) => ({
         ...prev,
         sites: prev.sites.map((s) => {
