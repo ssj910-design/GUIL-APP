@@ -3,7 +3,7 @@
 // 엑셀 검증 업로드 — "정리 안 된 내부 관리 엑셀"을 DB에 넣기 전에 검사하는 프로그램.
 // (현장 일괄등록 ImportSites 옆의 별도 도구 — 여기서는 DB에 아무것도 쓰지 않는다)
 //
-// 흐름: ① 내부 엑셀 업로드(필수) + 대조 엑셀 업로드(선택, 센터 다운로드본이나 일괄등록 양식)
+// 흐름: ① 내부 엑셀 업로드 → 이미 등록된 DB 현장(현장정보)과 자동 대조
 //      ② 자동 검증 — 행마다 문제를 빨강(막아야 함)/노랑(확인 필요)으로 표시
 //      ③ 한 건씩 클릭해 원본 vs 해석값을 보고 "검토 완료" 체크
 //      ④ 정리본 엑셀 다운로드 → 손보고 나서 일괄등록으로 진행 (DB 반영은 다음 단계)
@@ -120,8 +120,8 @@ function validateRow(raw, col, monthCols) {
 
 export default function VerifyImport({ data, onClose }) {
   const [rows, setRows] = useState(null);        // [{idx, raw, parsed, issues, contIdx}]
-  const [refNames, setRefNames] = useState(null); // 대조 파일의 현장명 키 집합
-  const [refOnly, setRefOnly] = useState([]);     // 대조본에만 있는 현장
+  // 대조 상대 = 이미 등록된 DB 현장(센터 엑셀로 일괄등록된 것) — 별도 파일 업로드 불필요
+  const dbKeys = useMemo(() => new Set((data?.sites ?? []).map((s) => nameKey(s.name)).filter(Boolean)), [data]);
   const [filter, setFilter] = useState("problem");
   const [fileNotices, setFileNotices] = useState([]); // 파일 전체 공통 형식 문제 (행 목록에서 승격)
   const [openIdx, setOpenIdx] = useState(null);
@@ -138,6 +138,7 @@ export default function VerifyImport({ data, onClose }) {
   // ① 내부(정리 안 된) 엑셀
   async function pickInternal(e) {
     const file = e.target.files?.[0];
+    e.target.value = ""; // 같은 파일을 다시 골라도 onChange가 울리게 리셋 — 안 하면 두 번째 업로드가 조용히 무시된다
     if (!file) return;
     setBusy(true);
     try {
@@ -188,40 +189,25 @@ export default function VerifyImport({ data, onClose }) {
     setBusy(false);
   }
 
-  // ② 대조 엑셀(선택) — 현장명 존재 여부만 상호 대조 (센터본·일괄등록 양식 모두 허용)
-  async function pickReference(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setBusy(true);
-    try {
-      const all = await readSheet(file);
-      const header = all[0] ?? [];
-      const nameCol = header.findIndex((h) => /현장|건물명|건물|빌딩명/.test(norm(h)));
-      if (nameCol < 0) throw new Error("대조 파일 헤더에서 현장/건물명 열을 못 찾았습니다");
-      const keys = new Set(all.slice(1).map((r) => nameKey(r[nameCol])).filter(Boolean));
-      setRefNames(keys);
-      if (rows) {
-        const mine = new Set(rows.filter((r) => r.parsed.name).map((r) => nameKey(r.parsed.name)));
-        setRefOnly([...new Set(all.slice(1).map((r) => norm(r[nameCol])).filter((n) => n && !mine.has(nameKey(n))))]);
-      }
-    } catch (err) {
-      alert("대조 파일을 읽지 못했습니다: " + err.message);
-    }
-    setBusy(false);
-  }
+  // DB(현장정보)에만 있고 내부 엑셀엔 없는 현장 — 내부 파일 누락 후보
+  const refOnly = useMemo(() => {
+    if (!rows || !dbKeys.size) return [];
+    const mine = new Set(rows.filter((r) => r.parsed.name).map((r) => nameKey(r.parsed.name)));
+    return (data?.sites ?? []).map((s) => s.name).filter((n) => n && !mine.has(nameKey(n)));
+  }, [rows, dbKeys, data]);
 
-  // 대조 결과를 이슈에 합친 최종 행 목록
+  // DB 대조 결과를 이슈에 합친 최종 행 목록
   const finalRows = useMemo(() => {
     if (!rows) return null;
     return rows.map((r) => {
       const issues = [...r.issues];
-      if (refNames && r.parsed.name && !refNames.has(nameKey(r.parsed.name))) {
-        issues.push({ level: "yellow", msg: "대조 파일에 없는 현장 — 이름 확인 또는 해지 현장인지 확인" });
+      if (dbKeys.size && r.parsed.name && !dbKeys.has(nameKey(r.parsed.name))) {
+        issues.push({ level: "yellow", msg: "등록된 현장(DB)에 없는 이름 — 표기 다름·미등록·해지 중 뭔지 확인" });
       }
       const level = issues.some((x) => x.level === "red") ? "red" : issues.length ? "yellow" : "green";
       return { ...r, issues, level };
     });
-  }, [rows, refNames]);
+  }, [rows, dbKeys]);
 
   const counts = useMemo(() => {
     if (!finalRows) return null;
@@ -265,13 +251,10 @@ export default function VerifyImport({ data, onClose }) {
         {/* 업로드 2개 */}
         <div className="flex flex-wrap gap-3">
           <label className="flex items-center gap-2 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 cursor-pointer">
-            <Upload size={15} /> ① 내부 관리 엑셀 {rows ? `(${rows.length}행 읽음)` : "(필수)"}
+            <Upload size={15} /> 내부 관리 엑셀 올리기 {rows ? `(${rows.length}행 읽음)` : ""}
             <input type="file" accept=".xlsx,.xls" className="hidden" onChange={pickInternal} disabled={busy} />
           </label>
-          <label className={`flex items-center gap-2 text-sm font-bold rounded-xl px-4 py-2.5 cursor-pointer border ${refNames ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-white border-slate-300 text-slate-600"}`}>
-            <Upload size={15} /> ② 대조 엑셀 {refNames ? `(${refNames.size}곳)` : "(선택 — 센터본·등록양식)"}
-            <input type="file" accept=".xlsx,.xls" className="hidden" onChange={pickReference} disabled={busy || !rows} />
-          </label>
+          <span className="self-center text-xs font-semibold text-slate-500">등록된 현장 {dbKeys.size}곳과 자동 대조</span>
           {finalRows && (
             <button onClick={downloadClean} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-white border border-slate-300 rounded-xl px-4 py-2.5 ml-auto">
               <Download size={15} /> 정리본 다운로드
@@ -297,10 +280,10 @@ export default function VerifyImport({ data, onClose }) {
           <div key={i} className="text-xs bg-blue-50 border border-blue-200 rounded-xl p-3 text-blue-700"><b>파일 전체:</b> {n}</div>
         ))}
 
-        {/* 대조본에만 있는 현장 */}
-        {refOnly.length > 0 && (
+        {/* DB에만 있는 현장 */}
+        {rows && refOnly.length > 0 && (
           <div className="text-xs bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-700">
-            <b>대조 파일에만 있는 현장 {refOnly.length}곳</b> (내부 엑셀에 누락 가능): {refOnly.slice(0, 10).join(", ")}{refOnly.length > 10 ? ` 외 ${refOnly.length - 10}곳` : ""}
+            <b>등록된 현장(DB)에만 있고 이 엑셀엔 없는 현장 {refOnly.length}곳</b>: {refOnly.slice(0, 10).join(", ")}{refOnly.length > 10 ? ` 외 ${refOnly.length - 10}곳` : ""}
           </div>
         )}
 
