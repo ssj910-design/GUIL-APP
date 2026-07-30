@@ -83,3 +83,10 @@ mark.changed { background: var(--warn-soft); color: var(--warn-ink); padding: 0 
 .branch.three { grid-template-columns: 1fr 1fr 1fr; }
 .branch.three::before { content: "↓ 셋 중 하나"; }
 @media (max-width: 640px) { .branch.three { grid-template-columns: 1fr; } }
+
+/* 화면 지도 트리 (03-sitemap.html) */
+.tree { list-style: none; margin: 12px 0 20px; }
+.tree ul { list-style: none; margin: 4px 0 8px 10px; padding-left: 14px; border-left: 2px solid var(--line); }
+.tree li { margin: 5px 0; font-size: 14px; }
+.tree .d { color: var(--sub); font-size: 12.5px; }
+.badge.gate { background: var(--purple-soft); color: var(--purple-ink); }
