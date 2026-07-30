@@ -112,6 +112,25 @@ function parseKoreanDate(v) {
   return null;
 }
 
+// 계약일 열은 실제로는 "계약 이력 메모"다 — 재계약·건물주 변경 이력이 한 칸에 줄줄이 적혀 있다.
+//   "16년10월26일(1년계약) / 20년11월26일 (FM으로 변경 재계약)" → 최신 20-11-26이 현재 계약
+//   "15년11월"처럼 일(日)이 없으면 1일로 본다.
+// 반환: { date: 최신 계약일(ISO|null), history: 원문(여러 날짜·설명이 있을 때만) }
+function parseContractCell(v) {
+  const s = norm(v);
+  if (!s) return { date: null, history: null };
+  const dates = [];
+  for (const m of s.matchAll(/(\d{2,4})\s*년\s*(\d{1,2})\s*월(?:\s*(\d{1,2})\s*일?)?/g)) {
+    const y = m[1].length === 2 ? `20${m[1]}` : m[1];
+    dates.push(`${y}-${String(m[2]).padStart(2, "0")}-${String(m[3] ?? 1).padStart(2, "0")}`);
+  }
+  for (const m of s.matchAll(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/g)) dates.push(`${m[1]}-${String(m[2]).padStart(2, "0")}-${String(m[3]).padStart(2, "0")}`);
+  if (/^\d{8}$/.test(s)) dates.push(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6)}`);
+  const date = dates.length ? dates.sort().at(-1) : null;             // 최신 = 현재 유효한 계약
+  const plain = dates.length === 1 && /^[\d년월일.\s/-]+$/.test(s);   // 날짜 하나에 설명 없으면 이력 아님
+  return { date, history: plain ? null : s };
+}
+
 const toMoney = (v) => {
   const n = Number(String(v ?? "").replace(/[^0-9.-]/g, ""));
   return Number.isFinite(n) && String(v).trim() !== "" ? n : null;
@@ -187,11 +206,12 @@ function validateRow(raw, col, monthCols) {
     if (biz && !/^\d{3}-\d{2}-\d{5}$/.test(biz)) issues.push({ level: "yellow", msg: `사업자번호 형식 이상: "${biz}"` });
   }
 
-  // 계약일 — 서술형이 많음
+  // 계약일 — 실제로는 계약 이력 메모장. 최신 날짜를 계약일로 쓰고, 이력 원문은 비고로 보존한다.
   const cd = get("contractDate");
-  parsed.contractDate = parseKoreanDate(cd);
-  if (cd && /\/|재계약|변경/.test(cd)) issues.push({ level: "yellow", msg: "계약일이 이력 서술형 — 첫 날짜만 해석, 이력은 비고로" });
-  else if (cd && !parsed.contractDate) issues.push({ level: "yellow", msg: `계약일 해석 불가: "${cd.slice(0, 30)}"` });
+  const contract = parseContractCell(cd);
+  parsed.contractDate = contract.date;
+  parsed.contractHistory = contract.history;
+  if (cd && !contract.date) issues.push({ level: "yellow", msg: `계약일에서 날짜를 못 찾음: "${cd.slice(0, 30)}"` });
 
   // 검사만료 "3. 28" — 연도 없음 (key: 파일 전체 공통이면 파일 공지로 승격)
   const ie = get("inspExpire");
@@ -453,7 +473,7 @@ export default function VerifyImport({ data, setData, onClose }) {
     ["contract_type", "계약종류", (p) => p.contractType || null],
     // 연락처 원본 메모(담당자 라벨·출입 비번·열쇠 위치 등) → 비어 있는 현장 비고로.
     // 기사 앱 현장정보의 "비고(전달사항)"에 그대로 보인다 — 현장 가서 문 열 때 필요한 정보.
-    ["notes", "비고(연락처·입금 메모)", (p) => [p.contactMemo, p.bizMemo && `입금: ${p.bizMemo}`].filter(Boolean).join("\n") || null],
+    ["notes", "비고(연락처·입금·계약이력)", (p) => [p.contactMemo, p.bizMemo && `입금: ${p.bizMemo}`, p.contractHistory && `계약이력: ${p.contractHistory}`].filter(Boolean).join("\n") || null],
   ];
   const fillPlan = useMemo(() => {
     if (!finalRows) return [];
@@ -802,7 +822,8 @@ export default function VerifyImport({ data, setData, onClose }) {
               <tbody>
                 {[
                   ["주소", open.parsed.address], ["점검자", open.parsed.engineer], ["대수", open.parsed.unitCount],
-                  ["계약종류", open.parsed.contractType], ["계약일(해석)", open.parsed.contractDate ?? "—"],
+                  ["계약종류", open.parsed.contractType], ["계약일(최신)", open.parsed.contractDate ?? "—"],
+                  ["계약 이력(비고로 보존)", open.parsed.contractHistory || "—"],
                   ["보수료", open.parsed.cost != null ? open.parsed.cost.toLocaleString() + "원" : "—"],
                   ["미수잔액", open.parsed.balance != null ? open.parsed.balance.toLocaleString() + "원" : "—"],
                   ["수금 기록", `${open.parsed.paidMonths}개 달에 기록 있음`],
