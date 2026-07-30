@@ -20,7 +20,7 @@ import { confirmAsync } from "@/app/components/ConfirmHost";
 // 실데이터(1,088개) 분석으로 확장: 0시작 정식번호 + 대표번호(15XX·16XX·18XX) + 지역번호 생략 유선(303-4040 등, 02 생략 관행)
 const PHONE_RE = /(?:0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4})|(?:1[5-9]\d{2}[-.\s]?\d{4})|(?:(?<![\d-])\d{3,4}-\d{4}(?![\d-]))/g;
 // 직함 사전 — 긴 것 먼저(관리소장이 소장보다 앞). 이름+직함 붙은 라벨("유철기사장님")에서 직함을 찾아 이름과 분리한다.
-const ROLE_RE = /(관리소장|입주자대표|승강기담당|관리담당자|관리담당|담당과장|담당자|센터장|사무장|주무관|건물주|관리인|관리자|사무실|관리실|경비실|본사|사장|대표|회장|소장|경비|총무|반장|담당|부장|과장|실장|팀장|국장|목사|사모|이사|기사|원장|장로|집사)/;
+const ROLE_RE = /(관리소장|입주자대표|승강기담당|관리담당자|관리담당|담당과장|담당자|센터장|사무장|주무관|건물주|관리인|관리자|사무실|관리실|경비실|본사|사장|대표|회장|소장|경비|총무|반장|담당|부장|차장|과장|대리|주임|실장|팀장|국장|목사|사모|이사|기사|원장|장로|집사)/;
 // 라벨 → { name, role, paren } 구조 분리. 직함 사전에 없으면(아들·딸 등) 원문 그대로 = 기타.
 function labelParts(raw) {
   if (!raw) return { name: "", role: "", paren: "" };
@@ -38,8 +38,8 @@ const ROLE_MAP = {
   관리소장: "관리소장", 소장: "관리소장", 관리인: "관리소장", 관리자: "관리소장",
   경비: "경비실", 경비실: "경비실",
   입주자대표: "입주민 대표", 총무: "총무",
-  담당자: "담당자", 담당: "담당자", 담당과장: "담당자", 승강기담당: "담당자", 관리담당자: "담당자", 관리담당: "담당자",
-  부장: "담당자", 과장: "담당자", 실장: "담당자", 팀장: "담당자", 국장: "담당자", 주무관: "담당자",
+  담당자: "담당자", 담당: "담당자", 담당과장: "담당자", 승강기담당: "담당자", 관리담당자: "담당자", 관리담당: "담당자", 대리: "담당자", 주임: "담당자", 사원: "담당자",
+  부장: "담당자", 차장: "담당자", 과장: "담당자", 실장: "담당자", 팀장: "담당자", 국장: "담당자", 주무관: "담당자",
   사무장: "담당자", 센터장: "담당자", 기사: "담당자", 이사: "담당자", 원장: "담당자",
 };
 const norm = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
@@ -167,7 +167,8 @@ function parseContractCell(v) {
     dates.push(`${y}-${String(m[2]).padStart(2, "0")}-${String(m[3] ?? 1).padStart(2, "0")}`);
   }
   for (const m of s.matchAll(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/g)) dates.push(`${m[1]}-${String(m[2]).padStart(2, "0")}-${String(m[3]).padStart(2, "0")}`);
-  if (/^\d{8}$/.test(s)) dates.push(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6)}`);
+  // "20111213", "19850101 19880101"(공백으로 여러 개 나열)
+  for (const m of s.matchAll(/(?<!\d)(\d{4})(\d{2})(\d{2})(?!\d)/g)) dates.push(`${m[1]}-${m[2]}-${m[3]}`);
   const date = dates.length ? dates.sort().at(-1) : null;             // 최신 = 현재 유효한 계약
   const plain = dates.length === 1 && /^[\d년월일.\s/-]+$/.test(s);   // 날짜 하나에 설명 없으면 이력 아님
   return { date, history: plain ? null : s };
@@ -232,9 +233,24 @@ function validateRow(raw, col, monthCols) {
   });
   parsed.phones = phones;
   parsed.contactMemo = contact;
-  // 출입 정보(공동현관 비번·기계실 열쇠)는 기사가 현장 가서 필요한 운영 정보 — 이슈가 아니라 데이터.
-  // 390행이 걸려 노랑 소음의 최대 원인이었어서 이슈에서 제외, 상세에 정보로만 표시. 반영 시 빈 비고로 들어간다.
-  parsed.hasAccessInfo = /비밀번호|비번|열쇠|현관|공동현관/.test(contact);
+  // 출입 정보(공동현관 비번·기계실 열쇠 위치) — 760곳 중 390곳에 있는 핵심 운영 정보.
+  // 연락처 메모에서 이 부분만 뽑아 전용 칸(sites.access_info)으로 보낸다.
+  // 문장 단위(공백 2칸 이상·쉼표·슬래시로 나뉨)로 잘라 관련 조각만 모은다.
+  // "담당자 010-… 현관비번 - 종6060"처럼 한 덩어리에 전화와 섞여 있으므로, 출입 키워드가
+  // 나오는 지점부터 잘라내고 앞쪽(사람·전화)은 버린다.
+  const ACCESS_KW = /(공동현관|현관|기계실|옥상|경비실|비밀번호|비번|열쇠|열쇄|번호키|도어락|자물쇠)/;
+  const accessParts = contact
+    .split(/\s{2,}|\s*[/,]\s*/)
+    .map(norm)
+    .filter(Boolean)
+    .map((p) => {
+      const m = ACCESS_KW.exec(p);
+      if (!m) return null;
+      const seg = p.slice(m.index).trim();          // 키워드부터 끝까지
+      return /비밀번호|비번|열쇠|열쇄|번호키|도어락|자물쇠|\d/.test(seg) ? seg : null; // 값이 있는 것만
+    })
+    .filter(Boolean);
+  parsed.accessInfo = [...new Set(accessParts)].join(" / ") || null;
 
   // 사업자번호 — 주민번호가 섞여 있는 열. 개인과의 계약은 사업 특성상 있을 수 있으므로 막지 않고
   // 자동 마스킹(뒤 6자리)해서만 다룬다 — 원본 주민번호는 이 도구 어디에도 저장·출력되지 않는다.
@@ -263,10 +279,13 @@ function validateRow(raw, col, monthCols) {
   parsed.inspExpire = ie;
   if (ie && !/\d{4}/.test(ie)) issues.push({ level: "yellow", key: "insp-no-year", msg: `검사만료에 연도 없음("${ie}") — 센터 데이터로 보완 필요` });
 
-  // 설치년도 YYYYMMDD
+  // 설치년도 — "20111213" 외에 "2003.07.01"(점 표기), "최초설치 1991.06.01 / 설치 2020.12.21"(이력),
+  // "19850101 19880101"(두 개 나열)이 섞여 있다. 계약일과 같은 방식으로 최신 날짜를 취한다.
   const iy = get("installYear");
-  parsed.installDate = parseKoreanDate(iy);
-  if (iy && !parsed.installDate) issues.push({ level: "yellow", msg: `설치년도 해석 불가: "${iy}"` });
+  const inst = parseContractCell(iy);
+  parsed.installDate = inst.date ?? parseKoreanDate(iy);
+  parsed.installHistory = inst.history && inst.date ? inst.history : null;
+  if (iy && !parsed.installDate) issues.push({ level: "yellow", msg: `설치년도에서 날짜를 못 찾음: "${iy}"` });
 
   // 승강기 종류 다중값 ("전망용,   장애/침대용")
   const kind = get("kind");
@@ -601,12 +620,15 @@ export default function VerifyImport({ data, setData, onClose }) {
     ["contract_type", "계약종류", (p) => p.contractType || null],
     // 연락처 원본 메모(담당자 라벨·출입 비번·열쇠 위치 등) → 비어 있는 현장 비고로.
     // 기사 앱 현장정보의 "비고(전달사항)"에 그대로 보인다 — 현장 가서 문 열 때 필요한 정보.
-    ["notes", "비고(연락처·입금·계약이력·청구)", (p) => [p.contactMemo, p.bizMemo && `입금: ${p.bizMemo}`, p.contractHistory && `계약이력: ${p.contractHistory}`, p.emailMemo && `청구/메일: ${p.emailMemo}`].filter(Boolean).join("\n") || null],
+    ["notes", "비고(연락처·입금·계약이력·청구)", (p) => [p.contactMemo, p.bizMemo && `입금: ${p.bizMemo}`, p.contractHistory && `계약이력: ${p.contractHistory}`, p.installHistory && `설치이력: ${p.installHistory}`, p.emailMemo && `청구/메일: ${p.emailMemo}`].filter(Boolean).join("\n") || null],
+    // 출입 정보는 기사가 현장에서 바로 쓰는 정보 — 비고에 묻히지 않게 전용 칸으로 (085 미실행이면 자동 스킵)
+    ["access_info", "출입정보(비번·열쇠)", (p) => p.accessInfo],
   ];
   const fillPlan = useMemo(() => {
     if (!finalRows) return [];
     const siteById = new Map((data?.sites ?? []).map((s) => [s.id, s]));
-    const camel = { phone: "phone", fax: "fax", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType", notes: "notes" };
+    const camel = { phone: "phone", fax: "fax", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType", notes: "notes", access_info: "accessInfo" };
+    const accessReady = (data?.sites ?? []).some((s) => s.accessInfo !== undefined); // 085 실행 여부
     const bySite = new Map();
     for (const r of finalRows) {
       if (r.level === "red") continue;
@@ -616,6 +638,7 @@ export default function VerifyImport({ data, setData, onClose }) {
       if (!site) continue;
       const entry = bySite.get(siteId) ?? { siteId, siteName: site.name, patch: {}, labels: [] };
       for (const [col, label, pick] of FILL_FIELDS) {
+        if (col === "access_info" && !accessReady) continue; // 085 마이그 전이면 건너뜀
         const cur = site[camel[col]];
         const val = pick(r.parsed);
         if ((cur == null || cur === "") && val != null && val !== "" && entry.patch[col] === undefined) {
@@ -814,7 +837,7 @@ export default function VerifyImport({ data, setData, onClose }) {
     setProgress(null);
     // 화면(콘솔 전체 데이터)에도 반영해 새로고침 없이 최신으로
     if (ok && setData) {
-      const camel = { phone: "phone", fax: "fax", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType", notes: "notes", verify_level: "verifyLevel", verified_at: "verifiedAt", verify_issues: "verifyIssues", assigned_engineer: "assignedEngineer" };
+      const camel = { phone: "phone", fax: "fax", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType", notes: "notes", verify_level: "verifyLevel", verified_at: "verifiedAt", verify_issues: "verifyIssues", assigned_engineer: "assignedEngineer", access_info: "accessInfo" };
       setData((prev) => ({
         ...prev,
         sites: prev.sites.map((s) => {
@@ -1008,6 +1031,7 @@ export default function VerifyImport({ data, setData, onClose }) {
                   ["미수잔액", open.parsed.balance != null ? open.parsed.balance.toLocaleString() + "원" : "—"],
                   ["수금 기록", `${open.parsed.paidMonths}개 달에 기록 있음`],
                   ["전화(추출)", open.parsed.phones.map((p) => `${p.disp ? p.disp + " · " : ""}${p.num} — ${p.type}`).join("  /  ") || "—"],
+                  ["출입정보(전용 칸으로)", open.parsed.accessInfo || "—"],
                   ["연락처 원본 메모", open.parsed.contactMemo || "—"],
                   ["이메일(대표)", open.parsed.email || "—"],
                   ["청구/메일 메모(비고로)", open.parsed.emailMemo || "—"],

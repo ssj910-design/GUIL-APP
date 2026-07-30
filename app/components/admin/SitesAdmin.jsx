@@ -928,6 +928,9 @@ export default function SitesAdmin({ data, setData }) {
                         <div><p className="text-xs font-bold text-slate-400 mb-1">전화번호</p><p className="font-semibold text-slate-800">{site.phone || "-"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">팩스</p><p className="font-semibold text-slate-800">{site.fax || "-"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">이메일</p><p className="font-semibold text-slate-800">{site.email || "-"}</p></div>
+                        {site.accessInfo && (
+                          <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">출입 정보(비번·열쇠)</p><p className="font-semibold text-slate-700 whitespace-pre-wrap">{site.accessInfo}</p></div>
+                        )}
                         <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(전달사항)</p><p className="text-slate-700 whitespace-pre-wrap">{site.notes || "-"}</p></div>
                       </div>
                     </div>

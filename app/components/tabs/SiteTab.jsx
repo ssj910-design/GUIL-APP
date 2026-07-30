@@ -1,5 +1,5 @@
 import React, { useState, useContext, useRef } from "react";
-import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Flame, Download } from "lucide-react";
+import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Flame, Download, KeyRound } from "lucide-react";
 import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, formatShortDate, recentFailuresBySite, siteMatchesQuery } from "@/lib/utils";
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
@@ -486,6 +486,10 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
             );
           })}
           {siteManagers.length === 0 && <TimelineRow icon={User} label="담당자" value="등록된 담당자가 없습니다" />}
+          {/* 출입 정보 — 공동현관 비번·기계실 열쇠 위치. 갇힘 출동 때 바로 봐야 하는 정보라 별도 줄로 */}
+          {site.accessInfo && (
+            <TimelineRow icon={KeyRound} label="출입 정보" value={site.accessInfo} valueColor="text-slate-700" />
+          )}
           <TimelineRow
             icon={ClipboardCheck}
             label="비고(전달사항)"
