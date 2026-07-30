@@ -19,7 +19,7 @@
 </head>
 <body>
 <main>
-  <h1>유저플로우 <span class="badge doing">v0.1</span></h1>
+  <h1>유저플로우 <span class="badge doing">v0.2</span></h1>
   <p class="doc-meta">2026-07-30 · 실제 앱 동작 기준 3개 흐름 · <a href="index.html">← 설계 허브로</a></p>
 
   <div class="legend">
@@ -51,10 +51,12 @@
     <div class="step"><span class="actor cust">고객</span><span class="actor eng">기사</span><span class="actor adm">관리자</span><b>접수</b>
       <span class="note">경로 3개 — 고객 전화를 받은 관리자가 콘솔 입력 / 기사가 앱에서 접수 / 관리자 모바일 접수. 현장·호기·고장구분(에러코드) 기록</span>
       <span class="push">알림 → 관리자: 고장 접수(긴급) / 갇힘·운행정지면 "중대 건" 별도 알림</span></div>
-    <div class="branch">
+    <div class="branch three">
       <div class="step"><span class="actor adm">관리자</span><b>기사 지정 배정</b>
         <span class="note">기사 위치·거리·현재 작업을 보고 지정 (배정 시각 기록됨)</span>
         <span class="push">알림 → 그 기사: 고장이 배정되었습니다</span></div>
+      <div class="step"><span class="actor eng">기사</span><b><mark class="changed">접수한 기사 본인이 즉시 출동</mark></b>
+        <span class="note">기사가 접수하면 기본 배정=본인 — ETA까지 같이 넣으면 접수와 동시에 출동 처리(따로 응답 불필요). 이미 진행중 건이 있으면 기본 미배정</span></div>
       <div class="step"><span class="actor sys">자동</span><b>미배정 → 선착순</b>
         <span class="note">기사 전원에게 알림 — 먼저 잡는 사람이 담당 (DB가 한 명만 받아줌, 이중출동 불가)</span>
         <span class="push">알림 → 기사 전원: 미배정 고장 발생</span></div>
@@ -78,6 +80,9 @@
     <div class="step"><span class="actor sys">자동</span><b>기록이 자산으로</b>
       <span class="note">처리 이력(증상→원인→처리)이 쌓임 — 통계·지식 아카이브(RAG)의 재료</span></div>
   </div>
+  <details class="history"><summary>이전 버전 (v0.1)</summary>
+    배정 분기가 "둘 중 하나(관리자 지정 / 미배정 선착순)"였음 → v0.2에서 "접수한 기사 본인이 즉시 출동" 경로 추가(기사 접수 시 기본 배정=본인, ETA 동시 입력 시 접수=출동).
+  </details>
 
   <h2>흐름 3. 관리자의 하루</h2>
   <div class="flow">
@@ -99,6 +104,7 @@
   <h2>변경 이력</h2>
   <table>
     <tr><th>버전</th><th>날짜</th><th>변경</th></tr>
+    <tr><td>v0.2</td><td>2026-07-30</td><td>차호근 피드백 — 흐름 2 배정 분기에 "기사 본인 즉시 출동" 경로 추가 (기사 접수 시 기본 본인 배정, ETA 동시 입력이면 접수=출동)</td></tr>
     <tr><td>v0.1</td><td>2026-07-30</td><td>최초 작성 — 기사의 하루 / 고장 한 건의 일생 / 관리자의 하루</td></tr>
   </table>
 </main>
