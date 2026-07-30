@@ -5,7 +5,7 @@
 // 모바일 앱이 아직 참조하는 sites의 옛 컬럼(unit_count, gov_elevator_nos,
 // elevator_model)도 함께 동기화한다(듀얼라이트).
 import { useState } from "react";
-import { Plus, Trash2, Paperclip, FileText } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapUnit, mapSite } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
@@ -15,6 +15,7 @@ import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { Modal, StatusBadge, DateTextInput, EditableDate, FileCarousel, sentHistory } from "@/app/components/admin/adminShared";
 import ImportSites from "@/app/components/admin/ImportSites";
+import VerifyImport from "@/app/components/admin/VerifyImport";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { uploadPhoto } from "@/lib/photos";
 
@@ -452,6 +453,7 @@ export default function SitesAdmin({ data, setData }) {
   const [editingUnits, setEditingUnits] = useState(false);
   const [importing, setImporting] = useState(false); // 공단 엑셀 일괄 등록
   const [addingSite, setAddingSite] = useState(false); // 현장 단건 추가
+  const [verifying, setVerifying] = useState(false); // 정리 안 된 내부 엑셀 검증(DB 반영 없음)
   const [unitDetail, setUnitDetail] = useState(null);
   const [contractOpen, setContractOpen] = useState(false);
   const [bizRegOpen, setBizRegOpen] = useState(false);
@@ -725,6 +727,10 @@ export default function SitesAdmin({ data, setData }) {
             className="flex items-center gap-1.5 text-sm font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 whitespace-nowrap">
             <Plus size={15} /> 새 현장 추가
           </button>
+          <button onClick={() => setVerifying(true)}
+            className="flex items-center gap-1.5 text-sm font-bold text-slate-700 bg-white border border-slate-300 rounded-xl px-4 py-2.5 whitespace-nowrap">
+            <ShieldCheck size={15} /> 엑셀 검증 업로드
+          </button>
           <button onClick={() => setImporting(true)}
             className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
             <Plus size={15} /> 엑셀로 현장 일괄 등록
@@ -734,6 +740,7 @@ export default function SitesAdmin({ data, setData }) {
 
       {addingSite && <AddSiteModal engineers={engineers} onClose={() => setAddingSite(false)} onSave={addSite} />}
       {importing && <ImportSites data={data} setData={setData} onClose={() => setImporting(false)} />}
+      {verifying && <VerifyImport data={data} onClose={() => setVerifying(false)} />}
 
       {/* 계약 만료 알림 배너 */}
       {expiringSites.length > 0 && contractFilter !== "expiring" && (
