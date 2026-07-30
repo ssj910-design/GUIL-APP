@@ -740,7 +740,7 @@ export default function SitesAdmin({ data, setData }) {
 
       {addingSite && <AddSiteModal engineers={engineers} onClose={() => setAddingSite(false)} onSave={addSite} />}
       {importing && <ImportSites data={data} setData={setData} onClose={() => setImporting(false)} />}
-      {verifying && <VerifyImport data={data} onClose={() => setVerifying(false)} />}
+      {verifying && <VerifyImport data={data} setData={setData} onClose={() => setVerifying(false)} />}
 
       {/* 계약 만료 알림 배너 */}
       {expiringSites.length > 0 && contractFilter !== "expiring" && (

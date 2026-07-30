@@ -12,8 +12,10 @@
 // 병합셀 잔재(현장명 빈 행), 한 셀에 전화 여러 개, 연락처 셀의 비밀번호·열쇠 메모,
 // 사업자번호 열의 주민번호, 서술형 계약일("16년…/20년… 재계약"), 연도 없는 검사만료("3. 28") 등.
 import { useMemo, useState } from "react";
-import { Upload, Download, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Upload, Download, AlertTriangle, CheckCircle2, DatabaseZap } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
 import { Modal } from "@/app/components/admin/adminShared";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 
 const PHONE_RE = /0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4}/g;
 const norm = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
@@ -137,7 +139,7 @@ function validateRow(raw, col, monthCols) {
   return { parsed, issues };
 }
 
-export default function VerifyImport({ data, onClose }) {
+export default function VerifyImport({ data, setData, onClose }) {
   const [rows, setRows] = useState(null);        // [{idx, raw, parsed, issues, contIdx}]
   const [links, setLinks] = useState({});         // 수동 매칭: 행 idx → { siteId, siteName }
   // 대조 상대 = 이미 등록된 DB 현장(센터 엑셀로 일괄등록된 것) — 이름 본명+괄호 별칭 전부 키로
@@ -281,6 +283,80 @@ export default function VerifyImport({ data, onClose }) {
     XLSX.writeFile(wb, "검증결과_정리본.xlsx");
   }
 
+  // ── DB 빈칸 채우기 계획 ──────────────────────────────────────────
+  // 대상: 빨강 아님 + (통과 or 검토완료) + DB 현장과 매칭(자동/수동)된 행.
+  // 그 현장의 "비어 있는" 칸만 채운다 — 이미 값 있는 칸은 절대 덮지 않는다.
+  const matchedSiteIdOf = (r) => {
+    if (links[r.idx]) return links[r.idx].siteId;
+    if (!r.parsed.name) return null;
+    const keys = nameKeys(r.parsed.name);
+    return dbSites.find((s) => s.keys.some((k) => keys.includes(k)))?.id ?? null;
+  };
+  const FILL_FIELDS = [
+    ["phone", "전화(현장 유선)", (p) => p.phones.find((x) => x.type.startsWith("현장"))?.num ?? null],
+    ["email", "이메일", (p) => (/^\S+@\S+\.\S+$/.test(p.email) ? p.email : null)],
+    ["maintenance_cost", "보수료", (p) => p.cost],
+    ["contract_date", "계약일", (p) => p.contractDate],
+    ["contract_type", "계약종류", (p) => p.contractType || null],
+  ];
+  const fillPlan = useMemo(() => {
+    if (!finalRows) return [];
+    const siteById = new Map((data?.sites ?? []).map((s) => [s.id, s]));
+    const camel = { phone: "phone", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType" };
+    const bySite = new Map();
+    for (const r of finalRows) {
+      if (r.level === "red") continue;
+      if (r.level !== "green" && !reviewed[r.idx]) continue;
+      const siteId = matchedSiteIdOf(r);
+      const site = siteId ? siteById.get(siteId) : null;
+      if (!site) continue;
+      const entry = bySite.get(siteId) ?? { siteId, siteName: site.name, patch: {}, labels: [] };
+      for (const [col, label, pick] of FILL_FIELDS) {
+        const cur = site[camel[col]];
+        const val = pick(r.parsed);
+        if ((cur == null || cur === "") && val != null && val !== "" && entry.patch[col] === undefined) {
+          entry.patch[col] = val;
+          entry.labels.push(label);
+        }
+      }
+      if (entry.labels.length) bySite.set(siteId, entry);
+    }
+    return [...bySite.values()];
+  }, [finalRows, reviewed, links, data]);
+
+  async function applyFill() {
+    const totalFields = fillPlan.reduce((n, p) => n + p.labels.length, 0);
+    const counts = {};
+    fillPlan.forEach((p) => p.labels.forEach((l) => { counts[l] = (counts[l] ?? 0) + 1; }));
+    const detail = Object.entries(counts).map(([l, n]) => `${l} ${n}곳`).join(", ");
+    if (!(await confirmAsync(`현장 ${fillPlan.length}곳의 비어 있는 칸 ${totalFields}개를 채웁니다.\n(${detail})\n\n이미 값이 있는 칸은 건드리지 않습니다. 진행할까요?`))) return;
+    setBusy(true);
+    let ok = 0;
+    const failed = [];
+    for (const p of fillPlan) {
+      const { error } = await supabase.from("sites").update(p.patch).eq("id", p.siteId);
+      if (error) failed.push(`${p.siteName}: ${error.message}`);
+      else ok++;
+    }
+    // 화면(콘솔 전체 데이터)에도 반영해 새로고침 없이 최신으로
+    if (ok && setData) {
+      const camel = { phone: "phone", email: "email", maintenance_cost: "maintenanceCost", contract_date: "contractDate", contract_type: "contractType" };
+      const patchById = new Map(fillPlan.map((p) => [p.siteId, p.patch]));
+      setData((prev) => ({
+        ...prev,
+        sites: prev.sites.map((s) => {
+          const patch = patchById.get(s.id);
+          if (!patch) return s;
+          const mapped = {};
+          for (const [col, v] of Object.entries(patch)) mapped[camel[col]] = v;
+          return { ...s, ...mapped };
+        }),
+      }));
+    }
+    setBusy(false);
+    alert(failed.length ? `현장 ${ok}곳 반영, 실패 ${failed.length}곳:\n${failed.slice(0, 5).join("\n")}` : `완료 — 현장 ${ok}곳의 빈칸을 채웠습니다.`);
+  }
+
   const open = openIdx != null ? finalRows?.[openIdx] : null;
   const LV = { red: "bg-red-50 text-red-600 border-red-200", yellow: "bg-amber-50 text-amber-700 border-amber-200", green: "bg-emerald-50 text-emerald-700 border-emerald-200" };
 
@@ -295,12 +371,20 @@ export default function VerifyImport({ data, onClose }) {
           </label>
           <span className="self-center text-xs font-semibold text-slate-500">등록된 현장 {dbKeys.size}곳과 자동 대조</span>
           {finalRows && (
-            <button onClick={downloadClean} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-white border border-slate-300 rounded-xl px-4 py-2.5 ml-auto">
-              <Download size={15} /> 정리본 다운로드
-            </button>
+            <div className="flex gap-2 ml-auto">
+              <button onClick={downloadClean} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-white border border-slate-300 rounded-xl px-4 py-2.5">
+                <Download size={15} /> 정리본 다운로드
+              </button>
+              <button onClick={applyFill} disabled={busy || !fillPlan.length}
+                className="flex items-center gap-2 text-sm font-bold text-white bg-emerald-600 disabled:bg-slate-300 rounded-xl px-4 py-2.5">
+                <DatabaseZap size={15} /> DB 빈칸 채우기 ({fillPlan.length}곳)
+              </button>
+            </div>
           )}
         </div>
-        <p className="text-xs text-slate-400">여기서는 DB에 아무것도 저장하지 않습니다 — 검증·정리 후 "엑셀로 현장 일괄 등록"으로 진행하세요.</p>
+        <p className="text-xs text-slate-400">
+          저장은 <b>"DB 빈칸 채우기"를 눌러야만</b> 됩니다 — 대상은 통과(초록) + 검토완료 체크한 노랑 중 DB 현장과 매칭된 행. 그 현장의 <b>비어 있는 칸만</b> 채우고, 이미 값 있는 칸은 절대 덮지 않습니다. (빨강은 반영 불가)
+        </p>
 
         {/* 요약 + 필터 */}
         {counts && (
