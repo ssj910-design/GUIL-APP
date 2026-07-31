@@ -1568,6 +1568,23 @@ export default function App() {
     setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, reassignRequested: false, reassignReason: null, reassignTo: null } : t)));
   }
 
+  // ★ 직원 비밀번호 초기화(1234로) — 모바일 관리자 모드에서도 PC 관리자 콘솔과 동일하게
+  // 최고관리자만 쓸 수 있다(버튼 자체는 AdminTab에서 adminTier==='super'일 때만 보임).
+  // 그것만으로는 부족해서(화면 노출만 막는 건 우회 가능) RPC 안에서 호출자의 최고관리자
+  // 아이디·비번을 다시 확인한다 — PC 콘솔(EngineersAdmin.jsx superReset)과 같은 방식.
+  async function handleResetEngineerPassword(targetId) {
+    const aid = prompt("본인 확인 — 최고관리자 아이디를 입력하세요");
+    if (aid === null) return;
+    const pw = prompt("최고관리자 비밀번호를 입력하세요");
+    if (pw === null) return;
+    const { data, error } = await supabase.rpc("admin_reset_password", {
+      p_admin_login_id: aid.trim(), p_admin_password: pw, p_target_id: targetId,
+    });
+    if (error) { alert("처리 실패: " + error.message); return; }
+    if (data) { alert(data); return; } // 인증 실패 사유
+    alert("비밀번호가 1234로 초기화됐습니다. 다음 로그인 때 새 비밀번호를 정하게 됩니다.");
+  }
+
   // ★ 관리자가 할 일에 설명(내용)을 추가/수정합니다.
   async function handleUpdateTodoDescription(todoId, description) {
     await supabase.from("todos").update({ description }).eq("id", todoId);
@@ -1957,7 +1974,7 @@ export default function App() {
               onEngineersChange={setEngineers}
             />
           )}
-          {tab === "admin" && profile.role === "admin" && <AdminTab materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onClearReassignRequest={handleClearReassignRequest} onAssignTodo={handleAssignTodo} />}
+          {tab === "admin" && profile.role === "admin" && <AdminTab materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onClearReassignRequest={handleClearReassignRequest} onAssignTodo={handleAssignTodo} onResetEngineerPassword={handleResetEngineerPassword} />}
           </PullToRefresh>
 
           {/* 우리방 플로팅 버튼 — 어느 탭에서든 즉시 게시판으로 이동 (우리방 탭에서는 숨김) */}

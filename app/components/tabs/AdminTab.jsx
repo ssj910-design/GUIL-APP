@@ -1,7 +1,8 @@
 import { useState, useContext, useRef, useEffect } from "react";
-import { Package, Receipt, ChevronRight, ChevronLeft, ChevronDown, FileText, PackageCheck, RotateCcw, PackageX, Search, Repeat } from "lucide-react";
+import { Package, Receipt, ChevronRight, ChevronLeft, ChevronDown, FileText, PackageCheck, RotateCcw, PackageX, Search, Repeat, KeyRound } from "lucide-react";
 import { Badge, PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { AuthContext } from "@/app/components/context";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
 import { parsePartQty, formatPhone, addDays } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
@@ -563,6 +564,30 @@ function ReassignPanel({ todos, engineerNames, onReassignTodo, onClearReassignRe
   );
 }
 
+// 직원 비밀번호 초기화 — 최고관리자만 접근 가능(호출부에서 이미 걸러지지만, RPC 쪽에서도
+// 최고관리자 아이디·비번을 다시 확인하므로 화면 노출만으로 뚫리지 않는다).
+function AccountsPanel({ accounts, onResetPassword }) {
+  if (!accounts.length) return <p className="text-xs text-slate-400 text-center py-6">계정이 없습니다</p>;
+  return (
+    <div className="divide-y divide-slate-100">
+      {accounts.map((p) => (
+        <div key={p.id} className="flex items-center justify-between py-2.5">
+          <p className="text-sm font-bold text-slate-700">{p.name}</p>
+          <button
+            onClick={async () => {
+              if (!(await confirmAsync(`${p.name} 님의 비밀번호를 1234로 초기화할까요?\n다음 로그인 때 새 비밀번호를 정하게 됩니다.`))) return;
+              onResetPassword(p.id);
+            }}
+            className="flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-1.5"
+          >
+            <KeyRound size={12} /> 비번초기화
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ---------- 지급완료 내역 (전체보기 페이지) ---------- */
 
 // 지급완료된 자재신청 한 건을 수정하는 폼 — 담당기사·부품별 금액·할 일 기한·내용을 기존 할 일 값으로
@@ -876,8 +901,11 @@ function DashStat({ label, n, tone }) {
 }
 
 
-export function AdminTab({ materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onClearReassignRequest }) {
-  const { engineerNames } = useContext(AuthContext);
+export function AdminTab({ materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onClearReassignRequest, onResetEngineerPassword }) {
+  const { engineerNames, adminTier, profiles } = useContext(AuthContext);
+  // PC 관리자 콘솔(EngineersAdmin)과 동일한 대상 — 기사 전체 + 최고관리자를 뺀 관리자 계정.
+  const resettableAccounts = (profiles ?? [])
+    .filter((p) => (p.role === "engineer" || (p.role === "admin" && p.admin_tier !== "super")) && p.is_active !== false);
   const [page, setPage] = useState(null); // null | "billing" | "materialHistory" | "quoteHistory"
   const [expanded, setExpanded] = useState(null); // "materials" | "restock" | "quotes" | "reassign" | null
 
@@ -981,6 +1009,12 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
               onClearReassignRequest={onClearReassignRequest}
             />
           </AccordionRow>
+
+          {adminTier === "super" && (
+            <AccordionRow icon={KeyRound} label="직원 계정 관리" open={expanded === "accounts"} onToggle={() => toggle("accounts")}>
+              <AccountsPanel accounts={resettableAccounts} onResetPassword={onResetEngineerPassword} />
+            </AccordionRow>
+          )}
 
           <AdminMenuRow icon={Receipt} label="비용청구 내역" badge={billings.length} onClick={() => setPage("billing")} />
         </div>
