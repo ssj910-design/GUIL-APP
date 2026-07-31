@@ -565,6 +565,7 @@ export default function SitesAdmin({ data, setData }) {
       ...prev,
       sites: prev.sites.map((x) => (checkedIds.has(x.id) ? { ...x, assignedEngineer: bulkEngineer } : x)),
     }));
+    await syncInspectionTodoAssignee(ids, bulkEngineer);
     setBulkBusy(false);
     setCheckedIds(new Set());
     setAssignMode(false);
@@ -656,6 +657,24 @@ export default function SitesAdmin({ data, setData }) {
     if (p) await supabase.from("site_assignments").insert({ site_id: selectedId, tech_id: p.id, is_lead: true });
     await supabase.from("sites").update({ assigned_engineer: engineerName || null }).eq("id", selectedId); // 듀얼라이트
     setData((prev) => ({ ...prev, sites: prev.sites.map((s) => (s.id === selectedId ? { ...s, assignedEngineer: engineerName || null } : s)) }));
+    await syncInspectionTodoAssignee([selectedId], engineerName);
+  }
+
+  // 정기검사 보완조치 할일(source: inspection) 중 아직 안 끝난 건은 현장 담당자가 바뀌면 담당자도 같이 바꿔준다.
+  // (자재/견적/수동 할일은 손대지 않는다 — 검사 보완조치만 현장 담당자와 자동으로 맞춰두는 규칙.)
+  async function syncInspectionTodoAssignee(siteIds, engineerName) {
+    const unitIds = units.filter((u) => siteIds.includes(u.siteId)).map((u) => u.id);
+    if (!unitIds.length) return;
+    const p = profiles.find((x) => x.name === engineerName);
+    const patch = { assignee: engineerName || null, assignee_id: p?.id ?? null };
+    const { error } = await supabase.from("todos").update(patch).in("unit_id", unitIds).eq("source", "inspection").eq("done", false);
+    if (error) return;
+    setData((prev) => ({
+      ...prev,
+      todos: prev.todos.map((t) =>
+        t.source === "inspection" && !t.done && unitIds.includes(t.unitId) ? { ...t, assignee: patch.assignee, assigneeId: patch.assignee_id } : t
+      ),
+    }));
   }
 
   // ---- 현장 담당자(연락처부) ----
