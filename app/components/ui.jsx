@@ -125,7 +125,7 @@ export function TimelineRow({ icon: Icon, label, value, valueColor = "text-slate
           className={`flex-1 py-3 text-left ${last ? "" : "border-b border-slate-100"} ${onClick ? "active:bg-slate-50" : ""}`}
         >
           <span className={`text-sm ${highlight ? "text-white font-bold" : "text-slate-500"}`}>{label}</span>
-          <p className={`text-sm font-bold mt-1 whitespace-pre-wrap ${highlight ? "text-white" : valueColor}`}>{value}</p>
+          <p className={`text-sm font-bold mt-1 text-right whitespace-pre-wrap ${highlight ? "text-white" : valueColor}`}>{value}</p>
         </Wrapper>
       ) : (
         <Wrapper
