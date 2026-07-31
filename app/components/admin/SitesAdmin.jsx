@@ -63,7 +63,7 @@ function AddSiteModal({ engineers, onClose, onSave }) {
   const [form, setForm] = useState({
     name: "", address: "", contractType: CONTRACT_TYPES[0], maintenanceCost: "",
     contractDate: "", contractEnd: "", assignedEngineer: "",
-    phone: "", fax: "", email: "", notes: "",
+    phone: "", fax: "", email: "", accessInfo: "", notes: "",
   });
   const set = (k) => (v) => setForm({ ...form, [k]: v });
   return (
@@ -100,6 +100,8 @@ function AddSiteModal({ engineers, onClose, onSave }) {
           <div><p className="text-xs font-bold text-slate-500 mb-1">이메일</p>
             <input className={inputCls} value={form.email} onChange={(e) => set("email")(e.target.value)} /></div>
         </div>
+        <div><p className="text-xs font-bold text-slate-500 mb-1">출입 정보(비번·열쇠)</p>
+          <textarea className={inputCls + " resize-y"} rows={2} value={form.accessInfo} onChange={(e) => set("accessInfo")(e.target.value)} /></div>
         <div><p className="text-xs font-bold text-slate-500 mb-1">비고(전달사항)</p>
           <input className={inputCls} value={form.notes} onChange={(e) => set("notes")(e.target.value)} /></div>
         <p className="text-[11px] text-slate-400">호기(승강기 정보)는 등록 후 상세화면에서 추가하면 됩니다.</p>
@@ -499,7 +501,7 @@ export default function SitesAdmin({ data, setData }) {
     setSiteForm({
       name: s.name, address: s.address ?? "", contractType: s.contractType ?? CONTRACT_TYPES[0],
       notes: s.notes ?? "", assignedEngineer: s.assignedEngineer ?? "",
-      phone: s.phone ?? "", fax: s.fax ?? "", email: s.email ?? "",
+      phone: s.phone ?? "", fax: s.fax ?? "", email: s.email ?? "", accessInfo: s.accessInfo ?? "",
       contractDate: s.contractDate ?? "", contractEnd: s.contractEnd ?? "", maintenanceCost: s.maintenanceCost ?? "",
     });
   }
@@ -514,6 +516,7 @@ export default function SitesAdmin({ data, setData }) {
       contract_date: form.contractDate || null, contract_end: form.contractEnd || null,
       assigned_engineer: form.assignedEngineer || null,
       phone: form.phone || null, fax: form.fax || null, email: form.email || null, notes: form.notes || null,
+      access_info: form.accessInfo || null,
     });
     if (error) { alert("현장 추가 실패: " + error.message); return; }
     if (form.assignedEngineer) {
@@ -622,6 +625,7 @@ export default function SitesAdmin({ data, setData }) {
     await supabase.from("sites").update({
       name: siteForm.name, address: siteForm.address, contract_type: siteForm.contractType, notes: siteForm.notes || null,
       phone: siteForm.phone || null, fax: siteForm.fax || null, email: siteForm.email || null,
+      access_info: siteForm.accessInfo || null,
       ...(contractDateReady ? { contract_date: siteForm.contractDate || null } : {}),
       contract_end: siteForm.contractEnd || null,
       ...(maintenanceCostReady ? { maintenance_cost: siteForm.maintenanceCost === "" ? null : Number(siteForm.maintenanceCost) } : {}),
@@ -932,9 +936,7 @@ export default function SitesAdmin({ data, setData }) {
                         <div><p className="text-xs font-bold text-slate-400 mb-1">전화번호</p><p className="font-semibold text-slate-800">{site.phone || "-"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">팩스</p><p className="font-semibold text-slate-800">{site.fax || "-"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">이메일</p><p className="font-semibold text-slate-800">{site.email || "-"}</p></div>
-                        {site.accessInfo && (
-                          <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">출입 정보(비번·열쇠)</p><p className="font-semibold text-slate-700 whitespace-pre-wrap">{site.accessInfo}</p></div>
-                        )}
+                        <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">출입 정보(비번·열쇠)</p><p className="font-semibold text-slate-700 whitespace-pre-wrap">{site.accessInfo || "-"}</p></div>
                         <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(전달사항)</p><p className="text-slate-700 whitespace-pre-wrap">{site.notes || "-"}</p></div>
                       </div>
                     </div>
@@ -1025,6 +1027,10 @@ export default function SitesAdmin({ data, setData }) {
                       <div><p className="text-xs font-bold text-slate-500 mb-1">전화번호</p><input className={inputCls} placeholder="관리사무소 대표번호" value={siteForm.phone} onChange={(e) => setSiteForm({ ...siteForm, phone: formatPhone(e.target.value) })} /></div>
                       <div><p className="text-xs font-bold text-slate-500 mb-1">팩스</p><input className={inputCls} value={siteForm.fax} onChange={(e) => setSiteForm({ ...siteForm, fax: formatPhone(e.target.value) })} /></div>
                       <div><p className="text-xs font-bold text-slate-500 mb-1">이메일</p><input className={inputCls} value={siteForm.email} onChange={(e) => setSiteForm({ ...siteForm, email: e.target.value })} /></div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-500 mb-1">출입 정보(비번·열쇠)</p>
+                      <textarea className={inputCls + " resize-y"} rows={2} value={siteForm.accessInfo} onChange={(e) => setSiteForm({ ...siteForm, accessInfo: e.target.value })} />
                     </div>
                     <div>
                       <p className="text-xs font-bold text-slate-500 mb-1">비고(전달사항)</p>
