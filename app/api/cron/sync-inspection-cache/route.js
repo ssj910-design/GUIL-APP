@@ -10,8 +10,24 @@
 // 라이브로 부적합상세를 조회하느라 느렸던 문제 해결(이제 이 캐시만 읽어서 즉시 뜬다).
 import { createClient } from "@supabase/supabase-js";
 import { resolveLatestFailItems } from "@/lib/govFailApi";
+import { addDays, formatUnitLabel } from "@/lib/utils";
+import { TODAY_STR } from "@/lib/constants";
 
 export const maxDuration = 300;
+
+// 부적합 상세 항목을 사람이 읽을 수 있는 할일 설명으로 정리한다.
+function describeFailItems(failItems, failReason) {
+  if (failItems?.length) {
+    return failItems
+      .map((it, i) => {
+        const head = `${i + 1}. ${it.standardArticle ? `[${it.standardArticle}] ` : ""}${it.failDesc || it.standardTitle1 || "상세 미상"}`;
+        return it.failDescInspector ? `${head}\n   검사원 의견: ${it.failDescInspector}` : head;
+      })
+      .join("\n");
+  }
+  if (failReason === "no_fail_code") return "검사이력은 확인됐지만 부적합 상세코드가 등록되어 있지 않습니다. 검사관리에서 확인해주세요.";
+  return "부적합 상세를 아직 확인할 수 없습니다. 검사관리 화면에서 확인해주세요.";
+}
 
 const GOV_API_URL = "https://apis.data.go.kr/B553664/BuldElevatorService/getBuldElvtrList";
 const CONCURRENCY = 10;
@@ -56,12 +72,20 @@ export async function GET(request) {
 
   const { data: units, error } = await supabase
     .from("units")
-    .select("id, site_id, gov_no")
+    .select("id, site_id, gov_no, unit_no")
     .eq("is_active", true)
     .not("gov_no", "is", null);
   if (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
+
+  // 조건부합격/불합격 보완조치 할일을 만들 때 현장명·담당기사를 채우기 위해 미리 불러둔다.
+  const [{ data: sites }, { data: profiles }] = await Promise.all([
+    supabase.from("sites").select("id, name, assigned_engineer"),
+    supabase.from("profiles").select("id, name"),
+  ]);
+  const siteById = new Map((sites ?? []).map((s) => [s.id, s]));
+  const profileIdByName = new Map((profiles ?? []).map((p) => [p.name, p.id]));
 
   const unitsBySite = new Map();
   for (const u of units) {
@@ -102,6 +126,39 @@ export async function GET(request) {
             }
             const { error: updateError } = await supabase.from("units").update(patch).eq("id", u.id);
             if (!updateError) unitsUpdated++;
+
+            // 조건부합격/불합격 보완조치 할일 자동 생성 — 이미 열려있는(미완료) 보완조치 할일이 있으면
+            // 같은 건이 계속되는 중이니 새로 안 만든다. 완료 처리된 뒤 다음 검사에서 또 걸리면 그때
+            // 새 할일이 만들어진다(완료 여부로만 판단 — 매일 도는 크론이 중복 생성하지 않게).
+            if (!updateError && (item.resultNm === "조건부합격" || item.resultNm === "불합격")) {
+              const { data: openTodo } = await supabase
+                .from("todos").select("id").eq("unit_id", u.id).eq("source", "inspection").eq("done", false).limit(1);
+              if (!openTodo?.length) {
+                const site = siteById.get(u.site_id);
+                // 조건부합격은 검사유효기간(=자동으로 불러온 보완기한)을 그대로 쓰고, 없으면(또는 불합격은
+                // 항상) 한 달 뒤로 — 불합격은 최종 승인 전이라 유효기간이 아직 안 잡힌 경우가 많다.
+                const dueDate = item.resultNm === "조건부합격" && patch.inspection_end
+                  ? patch.inspection_end
+                  : addDays(TODAY_STR, 30);
+                const assigneeName = site?.assigned_engineer || null;
+                const unitLabel = formatUnitLabel(u.unit_no);
+                await supabase.from("todos").insert({
+                  id: `todo-inspection-${u.id}-${Date.now()}`,
+                  source: "inspection",
+                  title: `${site?.name ?? "-"}${unitLabel ? ` ${unitLabel}` : ""} 정기검사 ${item.resultNm} — 보완조치 필요`,
+                  site_name: site?.name ?? null,
+                  elevator_no: u.unit_no ?? null,
+                  unit_id: u.id,
+                  part: "정기검사 보완",
+                  assignee: assigneeName,
+                  assignee_id: assigneeName ? (profileIdByName.get(assigneeName) ?? null) : null,
+                  assigned_date: TODAY_STR,
+                  due_date: dueDate,
+                  done: false,
+                  description: describeFailItems(patch.fail_items, patch.fail_reason),
+                });
+              }
+            }
           })
         );
       })

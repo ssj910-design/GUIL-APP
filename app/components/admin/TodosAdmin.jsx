@@ -14,7 +14,7 @@ import {
   Modal, SortableTh, sortRows, inputCls, DateTextInput,
 } from "@/app/components/admin/adminShared";
 
-const SOURCE_LABEL = { material: "자재", quote: "견적", manual: "수동" };
+const SOURCE_LABEL = { material: "자재", quote: "견적", manual: "수동", inspection: "검사보완" };
 
 // 자재/견적 연동 할일은 title이 "현장명[ 호기] ..." 형태로 저장되는데, 목록에는 이미
 // "현장·호기" 열이 있으니 중복을 피하려고 그 앞부분을 잘라서 보여준다.
@@ -378,6 +378,7 @@ export default function TodosAdmin({ data, setData }) {
                 { value: "material", label: "자재", count: viewFiltered.filter((t) => t.source === "material").length },
                 { value: "quote", label: "견적", count: viewFiltered.filter((t) => t.source === "quote").length },
                 { value: "manual", label: "수동", count: viewFiltered.filter((t) => t.source === "manual").length },
+                { value: "inspection", label: "검사보완", count: viewFiltered.filter((t) => t.source === "inspection").length },
               ]}
             />
           </div>

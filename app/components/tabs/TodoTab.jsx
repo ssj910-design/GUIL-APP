@@ -46,7 +46,7 @@ export function getSupplyPhotos(todo, materialRequests, quoteRequests) {
 // 자재/견적 연동 할 일은 제목에 이미 현장명이 들어있어("OO빌딩 부품 교체 및..." 등) 상세에서는
 // 현장명 대신 주소를 보여준다. 관리자 부여 할 일은 제목에 현장명이 없으므로 그대로 현장명을 쓴다.
 export function getTodoSiteAddress(todo, materialRequests, quoteRequests, sites) {
-  if (todo.source === "manual") return null;
+  if (todo.source === "manual" || todo.source === "inspection") return null;
   const req = todo.source === "material"
     ? materialRequests?.find((r) => r.id === todo.materialRequestId)
     : quoteRequests?.find((q) => q.id === todo.quoteRequestId);
@@ -146,7 +146,9 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
           <p className="text-xs text-slate-400 text-center py-10">완료되지 않은 할 일이 없습니다</p>
         )}
         {visible.map((t, i) => {
-          const isManual = t.source === "manual";
+          // 자재/견적 연동 할 일은 비용청구가 완료되어야 자동으로 끝나지만, 관리자가 직접 부여한
+          // 할 일과 정기검사 보완조치 할 일은 그런 연결고리가 없어 본인이 직접 완료 처리해야 한다.
+          const isManual = t.source === "manual" || t.source === "inspection";
           const overdue = !t.done && new Date(t.dueDate) < new Date(TODAY_STR);
           const requester = getRequesterName(t, materialRequests, quoteRequests);
           const expanded = expandedId === t.id;
@@ -225,7 +227,7 @@ function TodoRow({ t, onToggle, onOpenDetail }) {
         <div className="flex-1">
           <p className={`text-sm font-bold text-slate-800 ${t.done ? "line-through" : ""}`}>{t.title}</p>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            {t.assignee} 담당 · {t.siteName} · {t.source === "manual" ? "관리자 부여" : t.source === "quote" ? "견적 연동" : "자재 연동"}
+            {t.assignee} 담당 · {t.siteName} · {t.source === "manual" ? "관리자 부여" : t.source === "quote" ? "견적 연동" : t.source === "inspection" ? "검사 보완" : "자재 연동"}
           </p>
         </div>
         {!t.done && <DDay dueDate={t.dueDate} />}
@@ -260,7 +262,7 @@ export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoU
   const [extending, setExtending] = useState(false);
   const [extendDate, setExtendDate] = useState(todo.dueDate ?? "");
   const [extendReason, setExtendReason] = useState("");
-  const sourceLabel = todo.source === "manual" ? "관리자 부여" : todo.source === "quote" ? "견적 연동" : "자재 연동";
+  const sourceLabel = todo.source === "manual" ? "관리자 부여" : todo.source === "quote" ? "견적 연동" : todo.source === "inspection" ? "검사 보완" : "자재 연동";
   const allAssignees = [todo.assignee, ...coAssignees];
 
   return (
@@ -638,7 +640,7 @@ export function TodoManageScreen({ todos, onToggle, onAssignTodo, onReassignTodo
   const [source, setSource] = useState("전체");
   const [assignOpen, setAssignOpen] = useState(false);
   const [detailTarget, setDetailTarget] = useState(null);
-  const sourceMatch = { 전체: null, 자재연동: "material", 견적연동: "quote", 관리자부여: "manual" };
+  const sourceMatch = { 전체: null, 자재연동: "material", 견적연동: "quote", 관리자부여: "manual", 검사보완: "inspection" };
 
   const filtered = todos.filter((t) => {
     const matchesSource = source === "전체" || t.source === sourceMatch[source];
@@ -676,7 +678,7 @@ export function TodoManageScreen({ todos, onToggle, onAssignTodo, onReassignTodo
           />
         </div>
         <div className="flex gap-2 overflow-x-auto">
-          {["전체", "자재연동", "견적연동", "관리자부여"].map((s) => (
+          {["전체", "자재연동", "견적연동", "관리자부여", "검사보완"].map((s) => (
             <button
               key={s}
               onClick={() => setSource(s)}
