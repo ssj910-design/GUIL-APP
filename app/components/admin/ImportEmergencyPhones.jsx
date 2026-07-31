@@ -15,7 +15,7 @@ import { Upload, DatabaseZap, Download } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { Modal } from "@/app/components/admin/adminShared";
 import { confirmAsync } from "@/app/components/ConfirmHost";
-import { norm, nameKey, nameKeys, looseKeys, dongOf, similarity } from "@/lib/siteMatch";
+import { norm, nameKey, nameKeys, looseKeys, dongOf, nameSimilarity } from "@/lib/siteMatch";
 
 // "강변타운아파트 1호기" / "대진인더스 (2호기)" → { base: "강변타운아파트", seq: 1 }
 function splitUnit(raw) {
@@ -133,7 +133,7 @@ export default function ImportEmergencyPhones({ data, setData, onClose }) {
     const h = hint ? nameKey(hint) : "";
     return dbSites
       .map((s) => {
-        let score = Math.max(...myKeys.flatMap((a) => s.loose.map((b) => similarity(a, b))), 0);
+        let score = Math.max(...myKeys.flatMap((a) => s.loose.map((b) => nameSimilarity(a, b))), 0);
         const tags = [];
         if (myKeys.some((a) => a.length >= 3 && s.loose.includes(a))) { score = Math.max(score, 0.8); tags.push("이름 핵심 일치"); }
         if (h && (nameKey(s.dong ?? "") === h || nameKey(s.address ?? "").includes(h))) { score += 0.2; tags.push("지역 일치"); }

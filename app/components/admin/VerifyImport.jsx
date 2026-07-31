@@ -16,6 +16,7 @@ import { Upload, Download, AlertTriangle, CheckCircle2, DatabaseZap } from "luci
 import { supabase } from "@/lib/supabaseClient";
 import { Modal } from "@/app/components/admin/adminShared";
 import { confirmAsync } from "@/app/components/ConfirmHost";
+import { nameSimilarity } from "@/lib/siteMatch";
 
 // 실데이터(1,088개) 분석으로 확장: 0시작 정식번호 + 대표번호(15XX·16XX·18XX) + 지역번호 생략 유선(303-4040 등, 02 생략 관행)
 const PHONE_RE = /(?:0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4})|(?:1[5-9]\d{2}[-.\s]?\d{4})|(?:(?<![\d-])\d{3,4}-\d{4}(?![\d-]))/g;
@@ -422,7 +423,7 @@ export default function VerifyImport({ data, setData, onClose }) {
     const myModel = r.parsed.model ? nameKey(r.parsed.model) : "";
     return dbSites
       .map((s) => {
-        let score = Math.max(...myKeys.flatMap((a) => s.loose.map((b) => similarity(a, b))), 0);
+        let score = Math.max(...myKeys.flatMap((a) => s.loose.map((b) => nameSimilarity(a, b))), 0);
         const tags = [];
         // 유형어를 벗기면 같은 이름(더해피하우스 ↔ 더해피) — 강한 신호로 본다
         if (myKeys.some((a) => a.length >= 3 && s.loose.includes(a))) { score = Math.max(score, 0.8); tags.push("이름 핵심 일치"); }
