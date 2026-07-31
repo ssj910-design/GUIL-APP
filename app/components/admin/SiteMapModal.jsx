@@ -18,12 +18,18 @@ function guOf(address) {
   return null;
 }
 
-// 담당자 이름을 해시로 돌려 고유한 색을 뽑는다 — 사람 수가 늘어도 팔레트를 따로 관리할 필요가 없다.
-function colorForEngineer(name) {
-  if (!name) return "#94a3b8"; // 미배정 = 회색
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) % 360;
-  return `hsl(${hash}, 70%, 45%)`;
+// 담당자 이름 전체를 색상환에 고르게 나눠 배정한다 — 이름 해시로 각자 따로 색을 뽑으면
+// 사람 수가 적어도 우연히 색상값이 가까워(예: 색상각 10도 차이) 서로 구분이 안 되는 경우가
+// 생긴다. 지금 화면에 등장하는 인원 전체를 한 번에 보고 360도를 균등 분할해야
+// 최대한 서로 멀리 떨어진 색이 배정된다.
+function buildEngineerColors(names) {
+  const uniq = [...new Set(names.filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko"));
+  const map = new Map();
+  uniq.forEach((name, i) => {
+    const hue = Math.round((360 / uniq.length) * i);
+    map.set(name, `hsl(${hue}, 70%, 45%)`);
+  });
+  return map;
 }
 
 // Google 지도류의 물방울 핀 모양 — 기본 원형 마커보다 배경 지도 위에서 훨씬 잘 보인다.
@@ -48,6 +54,9 @@ export function SiteMapModal({ sites, units = [], onClose }) {
   const containerRef = useRef(null);
   const mapObjRef = useRef(null);
   const [loading, setLoading] = useState(true);
+  const engineerNames = [...new Set(sites.map((s) => s.assignedEngineer).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko"));
+  const engineerColors = buildEngineerColors(engineerNames);
+  const colorForEngineer = (name) => (name ? (engineerColors.get(name) ?? "#94a3b8") : "#94a3b8"); // 미배정 = 회색
 
   useEffect(() => {
     let cancelled = false;
@@ -148,7 +157,6 @@ export function SiteMapModal({ sites, units = [], onClose }) {
   }, []);
 
   const withCoordsCount = sites.filter((s) => s.lat != null && s.lng != null).length;
-  const engineerNames = [...new Set(sites.map((s) => s.assignedEngineer).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko"));
 
   // 담당자별 관리 대수 — 배정 현장의 활성 호기 수를 합산.
   const unitCountByEngineer = new Map();
