@@ -572,7 +572,10 @@ function AccountsPanel({ accounts, onResetPassword }) {
     <div className="divide-y divide-slate-100">
       {accounts.map((p) => (
         <div key={p.id} className="flex items-center justify-between py-2.5">
-          <p className="text-sm font-bold text-slate-700">{p.name}</p>
+          <p className="text-sm font-bold text-slate-700">
+            {p.name}
+            {p.login_id && <span className="ml-1.5 text-xs font-semibold text-slate-400">- {p.login_id}</span>}
+          </p>
           <button
             onClick={async () => {
               if (!(await confirmAsync(`${p.name} 님의 비밀번호를 1234로 초기화할까요?\n다음 로그인 때 새 비밀번호를 정하게 됩니다.`))) return;
