@@ -34,7 +34,15 @@ export default function RootLayout({ children }) {
       lang="ko"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {/* JS가 뜨기 전 흰 화면이 보이지 않도록 정적 HTML로 로고를 먼저 그려둔다.
+            각 앱(ElevatorFieldApp/AdminApp)이 마운트되는 즉시 이 엘리먼트를 제거해
+            같은 로고를 보여주는 BrandSplash(ui.jsx)로 깜빡임 없이 넘어간다. */}
+        <div id="app-splash" className="fixed inset-0 z-[999] bg-blue-950 flex items-center justify-center">
+          <img src="/icon-512.png" alt="구일엘리베이터" width={96} height={96} className="rounded-2xl shadow-lg" />
+        </div>
+        {children}
+      </body>
     </html>
   );
 }

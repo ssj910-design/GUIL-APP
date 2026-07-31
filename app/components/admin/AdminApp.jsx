@@ -27,6 +27,7 @@ import { ConfirmHost } from "@/app/components/ConfirmHost";
 import { LoginScreen } from "@/app/components/LoginScreen";
 import { PasswordChangeForm } from "@/app/components/PasswordChangeForm";
 import { AdminAuthContext } from "@/app/components/admin/adminShared";
+import { BrandSplash } from "@/app/components/ui";
 
 // 로그인 강제 스위치 — 모바일 앱과 동일. 기본 꺼짐(배포본은 지금처럼 열림), 로컬 .env.local에서 켠다.
 const SKIP_LOGIN = process.env.NEXT_PUBLIC_SKIP_LOGIN !== "false";
@@ -64,6 +65,10 @@ export default function AdminApp() {
   const [authError, setAuthError] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
+
+  // layout.js가 JS 뜨기 전 흰 화면 방지용으로 그려둔 정적 로고 스플래시를, 이 앱이 마운트되는
+  // 즉시 치운다 — 아래 BrandSplash 로딩화면이 같은 로고를 이어서 보여주므로 깜빡임이 없다.
+  useEffect(() => { document.getElementById("app-splash")?.remove(); }, []);
 
   useEffect(() => {
     if (SKIP_LOGIN) { setAuthChecked(true); return; }
@@ -142,7 +147,7 @@ export default function AdminApp() {
 
   // ── 접근 통제 (로그인 켜졌을 때만) ──
   if (!SKIP_LOGIN && !authChecked) {
-    return <div className="min-h-screen flex items-center justify-center bg-slate-100 text-sm font-bold text-slate-400">확인 중...</div>;
+    return <BrandSplash />;
   }
   if (!SKIP_LOGIN && !me) {
     return <LoginScreen onLogin={handleAdminLogin} error={authError} submitting={authSubmitting} demo={false} />;

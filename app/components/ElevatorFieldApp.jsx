@@ -13,7 +13,7 @@ import { MyPage } from "@/app/components/MyPage";
 import { simulateSms } from "@/lib/sms";
 import { notify, enablePush } from "@/lib/push";
 import { Capacitor } from "@capacitor/core";
-import { ScreenHeader } from "@/app/components/ui";
+import { ScreenHeader, BrandSplash } from "@/app/components/ui";
 import { ConfirmHost, confirmAsync } from "@/app/components/ConfirmHost";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { LoginScreen } from "@/app/components/LoginScreen";
@@ -97,6 +97,10 @@ export default function App() {
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [engineers, setEngineers] = useState([]);
   const engineerNames = engineers.map((e) => e.name);
+
+  // layout.js가 JS 뜨기 전 흰 화면 방지용으로 그려둔 정적 로고 스플래시를, 이 앱이 마운트되는
+  // 즉시 치운다 — 아래 BrandSplash 로딩화면들이 같은 로고를 이어서 보여주므로 깜빡임이 없다.
+  useEffect(() => { document.getElementById("app-splash")?.remove(); }, []);
 
   const [tab, setTab] = useState("home");
   const [failureFocusTab, setFailureFocusTab] = useState(null); // 고장접수 탭 진입 시 열 서브탭 (홈 "모두 보기" 등)
@@ -1675,11 +1679,7 @@ export default function App() {
   const totalNotifCnt = notifPosts.length + notifFailures.length + notifCompletedFailures.length + notifTodos.length + notifSupplyCnt;
 
   if (!skipLogin && session === undefined) {
-    return (
-      <div className="h-dvh w-screen bg-slate-50 flex items-center justify-center">
-        <p className="text-sm font-bold text-slate-400">로그인 확인 중...</p>
-      </div>
-    );
+    return <BrandSplash />;
   }
 
   if (!skipLogin && !session) {
@@ -1687,11 +1687,7 @@ export default function App() {
   }
 
   if (loading || !profile) {
-    return (
-      <div className="h-dvh w-screen bg-slate-50 flex items-center justify-center">
-        <p className="text-sm font-bold text-slate-400">데이터를 불러오는 중...</p>
-      </div>
-    );
+    return <BrandSplash label="데이터를 불러오는 중..." />;
   }
 
   // 첫 로그인(초기 비번 1234) 또는 관리자 초기화 후에는 비밀번호를 바꿔야 앱에 들어갈 수 있다.

@@ -43,6 +43,18 @@ export function MapLinkButtons({ site, className = "", size = 30 }) {
   );
 }
 
+// 앱 최초 진입 시 로딩 화면 — 텍스트만 뜨던 자리에 회사 로고를 보여준다.
+// layout.js의 정적 스플래시(#app-splash, JS 뜨기 전 흰 화면 방지용)와 배경색·로고를 맞춰서,
+// 그 정적 화면이 사라진 뒤 이 컴포넌트로 넘어와도 깜빡임 없이 이어지게 한다.
+export function BrandSplash({ label }) {
+  return (
+    <div className="h-dvh w-screen bg-blue-950 flex flex-col items-center justify-center gap-4">
+      <img src="/icon-512.png" alt="구일엘리베이터" className="w-20 h-20 rounded-2xl shadow-lg" />
+      {label && <p className="text-xs font-bold text-blue-200">{label}</p>}
+    </div>
+  );
+}
+
 export function ScreenHeader({ title, right }) {
   return (
     <div className="px-5 pt-3 pb-2.5 bg-blue-950 text-white shrink-0">
