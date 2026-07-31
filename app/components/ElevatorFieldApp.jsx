@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Home, AlertTriangle, CalendarCheck, CalendarClock, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound } from "lucide-react";
 import { PullToRefresh } from "@/app/components/PullToRefresh";
-import { supabase, writeOk, fetchAll } from "@/lib/supabaseClient";
+import { supabase, writeOk, fetchAll, loginFailReason } from "@/lib/supabaseClient";
 import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
@@ -220,7 +220,7 @@ export default function App() {
     const { data, error } = await supabase.rpc("verify_login", { p_login_id: (loginId || "").trim(), p_password: password });
     const row = Array.isArray(data) ? data[0] : data;
     if (error || !row) {
-      setAuthError("아이디 또는 비밀번호가 올바르지 않습니다.");
+      setAuthError(await loginFailReason(loginId));
       setAuthSubmitting(false);
       return;
     }

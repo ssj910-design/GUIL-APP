@@ -5,7 +5,7 @@
 // 각 섹션에 props로 내린다 (모바일 App 셸과 같은 관례).
 import { useState, useEffect } from "react";
 import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, CalendarCheck, Users, LayoutDashboard, BarChart3, Menu , Bell, MessageSquare, BookOpen } from "lucide-react";
-import { supabase, fetchAll } from "@/lib/supabaseClient";
+import { supabase, fetchAll, loginFailReason } from "@/lib/supabaseClient";
 import {
   mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest,
   mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck, mapFeedPost, mapRestockRequest, mapErrorCode,
@@ -93,7 +93,7 @@ export default function AdminApp() {
     setAuthSubmitting(true); setAuthError("");
     const { data, error } = await supabase.rpc("verify_login", { p_login_id: (loginId || "").trim(), p_password: password });
     const row = Array.isArray(data) ? data[0] : data;
-    if (error || !row) { setAuthError("아이디 또는 비밀번호가 올바르지 않습니다."); setAuthSubmitting(false); return; }
+    if (error || !row) { setAuthError(await loginFailReason(loginId)); setAuthSubmitting(false); return; }
     if (row.role !== "admin") { setAuthError("관리자만 접근할 수 있는 페이지입니다."); setAuthSubmitting(false); return; }
     localStorage.setItem("guilAuthV1", JSON.stringify({ id: row.id, name: row.name, role: row.role, mustChange: row.must_change }));
     const { data: p } = await supabase.from("profiles").select("admin_tier").eq("id", row.id).single();
