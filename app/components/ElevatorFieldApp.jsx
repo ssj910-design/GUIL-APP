@@ -667,6 +667,12 @@ export default function App() {
     setSites((prev) => prev.map((s) => (s.id === siteId ? { ...s, notes } : s)));
   }
 
+  // ★ 기사·관리자 누구나 현장정보의 "출입 정보(비번·열쇠)"를 수정
+  async function handleUpdateSiteAccessInfo(siteId, accessInfo) {
+    if (!(await writeOk(supabase.from("sites").update({ access_info: accessInfo }).eq("id", siteId), "출입 정보 저장 실패"))) return;
+    setSites((prev) => prev.map((s) => (s.id === siteId ? { ...s, accessInfo } : s)));
+  }
+
   // ★ 고장 출동 응답/내가 출동하기 → ETA 확정 (홈, 고장접수 탭 공용)
   function notifyFailure(message) {
     setFailureToast(message);
@@ -1896,7 +1902,7 @@ export default function App() {
               toast={failureToast}
             />
           )}
-          {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} quoteRequests={quoteRequests} todos={todos} siteManagers={siteManagers} onUpdateSiteNotes={handleUpdateSiteNotes} />}
+          {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} quoteRequests={quoteRequests} todos={todos} siteManagers={siteManagers} onUpdateSiteNotes={handleUpdateSiteNotes} onUpdateSiteAccessInfo={handleUpdateSiteAccessInfo} />}
           {tab === "failure" && (
             <FailureTab
               onReported={handleFailureReported}

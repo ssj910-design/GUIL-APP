@@ -446,12 +446,14 @@ export function PhotoViewerSheet({ urls, index, siteName, date, onClose }) {
 
 
 /* ---- 현장정보 화면 ---- */
-function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUpdateSiteNotes }) {
+function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUpdateSiteNotes, onUpdateSiteAccessInfo }) {
   const allUnits = useContext(UnitsContext);
   const units = siteUnitList(site, allUnits); // 실제 호기(개수로 1..N 합성 금지)
   const { engineers } = useContext(AuthContext);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState(site.notes ?? "");
+  const [editingAccessInfo, setEditingAccessInfo] = useState(false);
+  const [accessInfoDraft, setAccessInfoDraft] = useState(site.accessInfo ?? "");
   const assignedEngineerProfile = engineers.find((e) => e.name === site.assignedEngineer) ?? null;
 
   return (
@@ -486,10 +488,17 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
             );
           })}
           {siteManagers.length === 0 && <TimelineRow icon={User} label="담당자" value="등록된 담당자가 없습니다" />}
-          {/* 출입 정보 — 공동현관 비번·기계실 열쇠 위치. 갇힘 출동 때 바로 봐야 하는 정보라 별도 줄로 */}
-          {site.accessInfo && (
-            <TimelineRow icon={KeyRound} label="출입 정보" value={site.accessInfo} valueColor="text-slate-700" />
-          )}
+          {/* 출입 정보 — 공동현관 비번·기계실 열쇠 위치. 갇힘 출동 때 바로 봐야 하는 정보라 별도 줄로, 비고 위에 고정 */}
+          <TimelineRow
+            icon={KeyRound}
+            label="출입 정보"
+            value={site.accessInfo ? site.accessInfo : "터치해서 입력"}
+            valueColor={site.accessInfo ? "text-slate-700" : "text-slate-400"}
+            onClick={() => {
+              setAccessInfoDraft(site.accessInfo ?? "");
+              setEditingAccessInfo(true);
+            }}
+          />
           <TimelineRow
             icon={ClipboardCheck}
             label="비고(전달사항)"
@@ -537,6 +546,28 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
         </div>
       </div>
 
+      {editingAccessInfo && (
+        <Sheet title="출입 정보" onClose={() => setEditingAccessInfo(false)}>
+          <Field label="공동현관 비번·기계실 열쇠 위치">
+            <textarea
+              className={inputCls}
+              rows={4}
+              placeholder="예: 공동현관 1234#, 기계실 열쇠는 경비실"
+              value={accessInfoDraft}
+              onChange={(e) => setAccessInfoDraft(e.target.value)}
+            />
+          </Field>
+          <PrimaryButton
+            onClick={async () => {
+              await onUpdateSiteAccessInfo(site.id, accessInfoDraft.trim());
+              setEditingAccessInfo(false);
+            }}
+          >
+            저장
+          </PrimaryButton>
+        </Sheet>
+      )}
+
       {editingNotes && (
         <Sheet title="비고(전달사항)" onClose={() => setEditingNotes(false)}>
           <Field label="현장 전달사항">
@@ -563,7 +594,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
 }
 
 
-export function SiteTab({ inspections, failures, billings, quoteRequests, todos, siteManagers, onUpdateSiteNotes }) {
+export function SiteTab({ inspections, failures, billings, quoteRequests, todos, siteManagers, onUpdateSiteNotes, onUpdateSiteAccessInfo }) {
   const allSites = useContext(SitesContext);
   const allUnits = useContext(UnitsContext);
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
@@ -624,6 +655,7 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
         onBack={backToList}
         onHome={backToList}
         onUpdateSiteNotes={onUpdateSiteNotes}
+        onUpdateSiteAccessInfo={onUpdateSiteAccessInfo}
         onOpenUnit={(u) => {
           setSelectedUnit(u);
           setElevatorSubTab("정보");
