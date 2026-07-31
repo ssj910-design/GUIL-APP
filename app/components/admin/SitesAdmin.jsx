@@ -419,13 +419,14 @@ function UnitRow({ unit, emergencyPhone, onSave, onSaveEmergencyPhone, onToggleA
 }
 
 // 현장 담당자(관리소장·건물주 등) 한 명 — 인라인 편집 행
-function ContactRow({ c, onSave, onDelete, onSetPrimary }) {
+function ContactRow({ c, onSave, onDelete, onSetPrimary, isDefault }) {
   const [form, setForm] = useState({ name: c.name ?? "", phone: c.phone ?? "", email: c.email ?? "", fax: c.fax ?? "", role: c.role ?? CONTACT_ROLES[0] });
   const dirty = ["name", "phone", "email", "fax", "role"].some((k) => form[k] !== (c[k] ?? (k === "role" ? CONTACT_ROLES[0] : "")));
   return (
     <tr className="border-b border-slate-50">
       <td className="pl-4 py-2 w-8 text-center">
-        <button title="대표 담당자로 지정" onClick={() => onSetPrimary(c)} className={c.isPrimary ? "text-amber-500" : "text-slate-200 hover:text-slate-400"}>★</button>
+        {/* 대표로 지정된 담당자가 없으면 맨 위(첫 번째) 담당자를 기본값으로 별표 표시 */}
+        <button title="대표 담당자로 지정" onClick={() => onSetPrimary(c)} className={c.isPrimary || isDefault ? "text-amber-500" : "text-slate-200 hover:text-slate-400"}>★</button>
       </td>
       <td className="px-2 py-2">
         <select className={inputCls} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
@@ -1073,7 +1074,14 @@ export default function SitesAdmin({ data, setData }) {
                     </thead>
                     <tbody>
                       {contacts.map((c) => (
-                        <ContactRow key={c.id} c={c} onSave={saveContact} onDelete={deleteContact} onSetPrimary={setPrimary} />
+                        <ContactRow
+                          key={c.id}
+                          c={c}
+                          onSave={saveContact}
+                          onDelete={deleteContact}
+                          onSetPrimary={setPrimary}
+                          isDefault={!contacts.some((x) => x.isPrimary) && c.id === contacts[0]?.id}
+                        />
                       ))}
                     </tbody>
                   </table></div>
@@ -1091,7 +1099,8 @@ export default function SitesAdmin({ data, setData }) {
                     <tbody>
                       {contacts.map((c) => (
                         <tr key={c.id} className="border-b border-slate-50">
-                          <td className="pl-4 py-2 w-8 text-center">{c.isPrimary && <span className="text-amber-500">★</span>}</td>
+                          {/* 대표로 지정된 담당자가 없으면 맨 위(첫 번째) 담당자를 기본값으로 표시 */}
+                          <td className="pl-4 py-2 w-8 text-center">{(c.isPrimary || (!contacts.some((x) => x.isPrimary) && c.id === contacts[0]?.id)) && <span className="text-amber-500">★</span>}</td>
                           <td className="px-2 py-2">{c.role}</td>
                           <td className="px-2 py-2">{c.name || "-"}</td>
                           <td className="px-2 py-2">{c.phone || "-"}</td>
