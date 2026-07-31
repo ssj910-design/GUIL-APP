@@ -109,7 +109,7 @@ export function PhotoThumb({ caption }) {
 
 
 /* 엘맨PRO 스타일 타임라인 항목 (아이콘-라벨-값, 세로 연결선) */
-export function TimelineRow({ icon: Icon, label, value, valueColor = "text-slate-700", highlight, last, onClick }) {
+export function TimelineRow({ icon: Icon, label, value, valueColor = "text-slate-700", highlight, last, onClick, multiline }) {
   const Wrapper = onClick ? "button" : "div";
   return (
     <div className={`flex px-5 ${highlight ? "bg-red-600" : ""}`}>
@@ -119,13 +119,23 @@ export function TimelineRow({ icon: Icon, label, value, valueColor = "text-slate
         </div>
         {!last && <div className={`w-px flex-1 mt-1 ${highlight ? "bg-red-400" : "bg-slate-200"}`} />}
       </div>
-      <Wrapper
-        onClick={onClick}
-        className={`flex-1 flex items-center justify-between py-3 text-left ${last ? "" : "border-b border-slate-100"} ${onClick ? "active:bg-slate-50" : ""}`}
-      >
-        <span className={`text-sm ${highlight ? "text-white font-bold" : "text-slate-500"}`}>{label}</span>
-        <span className={`text-sm font-bold text-right ${highlight ? "text-white" : valueColor}`}>{value}</span>
-      </Wrapper>
+      {multiline ? (
+        <Wrapper
+          onClick={onClick}
+          className={`flex-1 py-3 text-left ${last ? "" : "border-b border-slate-100"} ${onClick ? "active:bg-slate-50" : ""}`}
+        >
+          <span className={`text-sm ${highlight ? "text-white font-bold" : "text-slate-500"}`}>{label}</span>
+          <p className={`text-sm font-bold mt-1 whitespace-pre-wrap ${highlight ? "text-white" : valueColor}`}>{value}</p>
+        </Wrapper>
+      ) : (
+        <Wrapper
+          onClick={onClick}
+          className={`flex-1 flex items-center justify-between py-3 text-left ${last ? "" : "border-b border-slate-100"} ${onClick ? "active:bg-slate-50" : ""}`}
+        >
+          <span className={`text-sm ${highlight ? "text-white font-bold" : "text-slate-500"}`}>{label}</span>
+          <span className={`text-sm font-bold text-right ${highlight ? "text-white" : valueColor}`}>{value}</span>
+        </Wrapper>
+      )}
     </div>
   );
 }

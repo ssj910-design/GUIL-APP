@@ -494,6 +494,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
             label="출입 정보"
             value={site.accessInfo ? site.accessInfo : "터치해서 입력"}
             valueColor={site.accessInfo ? "text-slate-700" : "text-slate-400"}
+            multiline
             onClick={() => {
               setAccessInfoDraft(site.accessInfo ?? "");
               setEditingAccessInfo(true);
@@ -504,6 +505,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
             label="비고(전달사항)"
             value={site.notes ? site.notes : "터치해서 입력"}
             valueColor={site.notes ? "text-slate-700" : "text-slate-400"}
+            multiline
             last
             onClick={() => {
               setNotesDraft(site.notes ?? "");
