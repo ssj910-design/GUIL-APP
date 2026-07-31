@@ -20,7 +20,7 @@ function describeFailItems(failItems, failReason) {
   if (failItems?.length) {
     return failItems
       .map((it, i) => {
-        const head = `${i + 1}. ${it.standardArticle ? `[${it.standardArticle}] ` : ""}${it.failDesc || it.standardTitle1 || "상세 미상"}`;
+        const head = `${i + 1}. ${it.failDesc || it.standardTitle1 || "상세 미상"}`;
         return it.failDescInspector ? `${head}\n   검사원 의견: ${it.failDescInspector}` : head;
       })
       .join("\n");
