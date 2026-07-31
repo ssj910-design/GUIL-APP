@@ -164,6 +164,14 @@ function parseKoreanDate(v) {
 //   "16년10월26일(1년계약) / 20년11월26일 (FM으로 변경 재계약)" → 최신 20-11-26이 현재 계약
 //   "15년11월"처럼 일(日)이 없으면 1일로 본다.
 // 반환: { date: 최신 계약일(ISO|null), history: 원문(여러 날짜·설명이 있을 때만) }
+// 달력에 실제로 있는 날짜인지 — 원본에 "18년3월34일" 같은 오타가 있어 DB가 거부한다(2018-03-34).
+const isRealDate = (iso) => {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d || m > 12 || d > 31) return false;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+};
+
 function parseContractCell(v) {
   const s = norm(v);
   if (!s) return { date: null, history: null };
@@ -175,8 +183,9 @@ function parseContractCell(v) {
   for (const m of s.matchAll(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/g)) dates.push(`${m[1]}-${String(m[2]).padStart(2, "0")}-${String(m[3]).padStart(2, "0")}`);
   // "20111213", "19850101 19880101"(공백으로 여러 개 나열)
   for (const m of s.matchAll(/(?<!\d)(\d{4})(\d{2})(\d{2})(?!\d)/g)) dates.push(`${m[1]}-${m[2]}-${m[3]}`);
-  const date = dates.length ? dates.sort().at(-1) : null;             // 최신 = 현재 유효한 계약
-  const plain = dates.length === 1 && /^[\d년월일.\s/-]+$/.test(s);   // 날짜 하나에 설명 없으면 이력 아님
+  const ok = dates.filter(isRealDate);                                 // 달력에 없는 날짜(3월 34일)는 버린다
+  const date = ok.length ? ok.sort().at(-1) : null;                    // 최신 = 현재 유효한 계약
+  const plain = ok.length === 1 && dates.length === 1 && /^[\d년월일.\s/-]+$/.test(s); // 날짜 하나에 설명 없으면 이력 아님
   return { date, history: plain ? null : s };
 }
 
@@ -325,7 +334,7 @@ function validateRow(raw, col, monthCols) {
   // "19850101 19880101"(두 개 나열)이 섞여 있다. 계약일과 같은 방식으로 최신 날짜를 취한다.
   const iy = get("installYear");
   const inst = parseContractCell(iy);
-  parsed.installDate = inst.date ?? parseKoreanDate(iy);
+  parsed.installDate = inst.date ?? (parseKoreanDate(iy) && isRealDate(parseKoreanDate(iy)) ? parseKoreanDate(iy) : null);
   parsed.installHistory = inst.history && inst.date ? inst.history : null;
   if (iy && !parsed.installDate) issues.push({ level: "yellow", msg: `설치년도에서 날짜를 못 찾음: "${iy}"` });
 
@@ -426,7 +435,7 @@ export default function VerifyImport({ data, setData, onClose }) {
         const u = unitsBySite.get(s.id);
         if (u && myDate && u.dates.has(myDate)) { score += 0.2; tags.push("설치일 일치"); }
         if (u && myModel && u.models.has(myModel)) { score += 0.15; tags.push("모델 일치"); }
-        return { ...s, score, tags };
+        return { ...s, score: Math.min(score, 1), tags }; // 가산점이 겹쳐도 100%를 넘기지 않게
       })
       .filter((s) => s.score >= 0.35)
       .sort((a, b) => b.score - a.score)
@@ -628,23 +637,6 @@ export default function VerifyImport({ data, setData, onClose }) {
   );
 
   // ④ 정리본 다운로드 — 해석값 + 남은 문제를 열로 붙여서
-  async function downloadClean() {
-    const XLSX = await import("xlsx");
-    const header = ["원본행", "상태", "검토", "현장명", "연속행(소속)", "주소", "점검자", "대수", "계약종류", "계약일(해석)", "보수료", "미수잔액", "수금기록달수", "전화(추출)", "이메일", "사업자번호", "승강기종류", "설치일(해석)", "남은 문제"];
-    const body = finalRows.map((r) => [
-      r.excelRow, r.level === "red" ? "빨강" : r.level === "yellow" ? "노랑" : "통과",
-      reviewed[r.idx] ? "완료" : "",
-      r.parsed.name, r.contIdx != null ? finalRows[r.contIdx].parsed.name : "",
-      r.parsed.address, r.parsed.engineer, r.parsed.unitCount, r.parsed.contractType,
-      r.parsed.contractDate ?? "", r.parsed.cost ?? "", r.parsed.balance ?? "", r.parsed.paidMonths,
-      r.parsed.phones.map((p) => `${p.disp ? p.disp + " " : ""}${p.num}[${p.type.replace(" 추정", "")}]`).join(", "), r.parsed.email, r.parsed.bizNo, r.parsed.kinds.join(", "),
-      r.parsed.installDate ?? "", r.issues.map((x) => x.msg).join(" / "),
-    ]);
-    const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "검증결과");
-    XLSX.writeFile(wb, "검증결과_정리본.xlsx");
-  }
 
   // ── DB 빈칸 채우기 계획 ──────────────────────────────────────────
   // 대상: 빨강 아님 + (통과 or 검토완료) + DB 현장과 매칭(자동/수동)된 행.
@@ -781,6 +773,56 @@ export default function VerifyImport({ data, setData, onClose }) {
 
   // 최후의 매칭 수단 — 미매칭 행의 주소를 티맵으로 지오코딩해 DB 현장 좌표와 거리 비교.
   // 이름이 아무리 달라도(경찰기마대↔74기동대) 좌표가 60m 이내면 같은 건물로 보고 자동 연결한다.
+  // ④ 정리본 다운로드 — 해석값 + "어느 DB 현장에 붙었는지"(매칭 결과·근거·채울 항목)까지 담는다.
+  //   fillPlan/statusPlan 뒤에 두어야 채울 항목을 함께 쓸 수 있다.
+  async function downloadClean() {
+    const XLSX = await import("xlsx");
+    const siteById = new Map((data?.sites ?? []).map((s) => [s.id, s]));
+    const fillBySite = new Map(fillPlan.map((p) => [p.siteId, p.labels.join(", ")]));
+    const techBySite = new Map(techPlan.map((t) => [t.siteId, t.techName]));
+    const mgrCount = new Map();
+    managersPlan.forEach((m) => mgrCount.set(m.siteId, (mgrCount.get(m.siteId) ?? 0) + 1));
+
+    const header = [
+      "원본행", "상태", "검토", "현장명", "묶음소속", "주소", "점검자", "대수",
+      "매칭 현장(DB)", "매칭 주소(DB)", "매칭 방법", "채울 항목", "배정할 기사", "추가할 담당자수",
+      "계약종류", "계약일(해석)", "보수료", "미수잔액", "수금기록달수",
+      "전화(추출)", "이메일(대표)", "청구/메일 메모", "출입정보", "사업자번호", "승강기종류", "설치일(해석)", "남은 문제",
+    ];
+    const body = finalRows.map((r) => {
+      const sid = matchedSiteIdOf(r);
+      const site = sid ? siteById.get(sid) : null;
+      const how = links[r.idx]
+        ? (links[r.idx].auto ? (links[r.idx].geo != null ? `자동(좌표 ${links[r.idx].geo}m)` : `자동(이름 ${Math.round(links[r.idx].score * 100)}%)`) : "수동 연결")
+        : sid ? "이름·주소 자동" : (geoResults[r.idx] ? `후보만(좌표 ${geoResults[r.idx].dist}m)` : "미매칭");
+      return [
+        r.excelRow, r.level === "red" ? "빨강" : r.level === "yellow" ? "노랑" : "통과",
+        reviewed[r.idx] ? "완료" : "",
+        r.parsed.name, r.parsed.groupName ?? "",
+        r.parsed.address, r.parsed.engineer, r.parsed.unitCount,
+        site?.name ?? (geoResults[r.idx]?.siteName ? `(후보) ${geoResults[r.idx].siteName}` : ""),
+        site?.address ?? "", how,
+        sid ? (fillBySite.get(sid) ?? "채울 빈칸 없음") : "",
+        sid ? (techBySite.get(sid) ?? "") : "",
+        sid ? (mgrCount.get(sid) ?? 0) : "",
+        r.parsed.contractType, r.parsed.contractDate ?? "", r.parsed.cost ?? "", r.parsed.balance ?? "", r.parsed.paidMonths,
+        r.parsed.phones.map((p) => `${p.disp ? p.disp + " " : ""}${p.num}[${p.type.replace(" 추정", "")}]`).join(", "),
+        r.parsed.email, r.parsed.emailMemo ?? "", r.parsed.accessInfo ?? "", r.parsed.bizNo, r.parsed.kinds.join(", "),
+        r.parsed.installDate ?? "", r.issues.map((x) => x.msg).join(" / "),
+      ];
+    });
+    const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
+    ws["!cols"] = header.map((h) => ({ wch: /현장명|주소|채울 항목|전화|남은 문제|출입정보|메모/.test(h) ? 28 : 12 }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "검증결과");
+    // 두 번째 시트: DB에만 있고 엑셀엔 없는 현장 — 누락 점검용
+    if (refOnly.length) {
+      const ws2 = XLSX.utils.aoa_to_sheet([["엑셀에 없는 DB 현장"], ...refOnly.map((n) => [n])]);
+      XLSX.utils.book_append_sheet(wb, ws2, "엑셀에 없는 현장");
+    }
+    XLSX.writeFile(wb, "검증결과_정리본.xlsx");
+  }
+
   async function geoMatch() {
     const targets = (finalRows ?? []).filter((r) => !r.autoMatched && !links[r.idx] && r.parsed.address && (r.parsed.name || r.contIdx != null));
     if (!targets.length) { alert("좌표 대조할 미매칭 행이 없습니다"); return; }
