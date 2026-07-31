@@ -15,7 +15,7 @@ import { Upload, DatabaseZap, Download } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { Modal } from "@/app/components/admin/adminShared";
 import { confirmAsync } from "@/app/components/ConfirmHost";
-import { norm, nameKey, nameKeys, looseKeys, dongOf } from "@/lib/siteMatch";
+import { norm, nameKey, nameKeys, looseKeys, dongOf, similarity } from "@/lib/siteMatch";
 
 // "강변타운아파트 1호기" / "대진인더스 (2호기)" → { base: "강변타운아파트", seq: 1 }
 function splitUnit(raw) {
@@ -32,6 +32,9 @@ export default function ImportEmergencyPhones({ data, setData, onClose }) {
   const [rows, setRows] = useState(null); // [{ raw, base, seq, phone, siteId, siteName, unitId, unitNo, how }]
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null);
+  const [links, setLinks] = useState({});     // 미매칭 행 idx → { siteId, siteName } (사람이 고른 연결)
+  const [openIdx, setOpenIdx] = useState(null); // 후보를 펼쳐 볼 행
+  const [query, setQuery] = useState("");      // 직접 검색어
 
   const dbSites = useMemo(() => (data?.sites ?? []).filter((s) => s.name).map((s) => ({
     id: s.id, name: s.name, keys: nameKeys(s.name), loose: looseKeys(s.name, s.address), dong: dongOf(s.address),
@@ -103,13 +106,14 @@ export default function ImportEmergencyPhones({ data, setData, onClose }) {
           let unit = null;
           if (site && seq) unit = units.find((u) => u.siteId === site.id && u.seq === seq) ?? null;
           out.push({
-            excelRow: i + 2, raw, base, seq, phone,
+            idx: out.length, excelRow: i + 2, raw, base, seq, phone,
             siteId: site?.id ?? null, siteName: site?.name ?? null,
             unitId: unit?.id ?? null, unitNo: unit?.unitNo ?? null,
             multi: hits.length > 1 ? hits.length : 0,
             how: !phone ? "번호 없음"
-              : !site ? (hits.length > 1 ? `이름이 같은 현장 ${hits.length}곳` : "현장 못 찾음")
-              : seq && !unit ? `${seq}호기가 DB에 없음`
+              : !site ? (hits.length > 1 ? `이름이 같은 현장 ${hits.length}곳 — 골라주세요` : "현장 못 찾음 — 후보에서 고르거나 검색")
+              // 호기가 DB에 없으면(대표번호로 통합 운영하는 현장) 현장 대표번호로 넣는다
+              : seq && !unit ? `${seq}호기가 DB에 없음 → 현장 대표번호로`
               : unit ? `${unit.unitNo} 지정` : "현장 대표번호",
           });
         }
@@ -121,20 +125,56 @@ export default function ImportEmergencyPhones({ data, setData, onClose }) {
     setBusy(false);
   }
 
+  // 미매칭 행에 보여줄 후보 — 이름 유사도(느슨한 키 포함) + 지역 힌트 가산점, 상위 4곳.
+  // 검증 업로드와 같은 방식으로, 이름 표기가 달라도(코킴하우스 ↔ KOKIM HOUSE) 사람이 클릭해 연결할 수 있게.
+  function candidatesFor(r) {
+    const myKeys = looseKeys(stripRegion(r.base), "");
+    const hint = regionHintOf(r.raw);
+    const h = hint ? nameKey(hint) : "";
+    return dbSites
+      .map((s) => {
+        let score = Math.max(...myKeys.flatMap((a) => s.loose.map((b) => similarity(a, b))), 0);
+        const tags = [];
+        if (myKeys.some((a) => a.length >= 3 && s.loose.includes(a))) { score = Math.max(score, 0.8); tags.push("이름 핵심 일치"); }
+        if (h && (nameKey(s.dong ?? "") === h || nameKey(s.address ?? "").includes(h))) { score += 0.2; tags.push("지역 일치"); }
+        return { ...s, score: Math.min(score, 1), tags };
+      })
+      .filter((s) => s.score >= 0.35)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 4);
+  }
+  // 사람이 고른 연결을 반영한 최종 행
+  const finalRows = useMemo(() => {
+    if (!rows) return null;
+    const units = data?.units ?? [];
+    return rows.map((r) => {
+      const link = links[r.idx];
+      if (!link) return r;
+      const unit = r.seq ? units.find((u) => u.siteId === link.siteId && u.seq === r.seq) ?? null : null;
+      return {
+        ...r, siteId: link.siteId, siteName: link.siteName,
+        unitId: unit?.id ?? null, unitNo: unit?.unitNo ?? null,
+        how: r.seq && !unit ? `${r.seq}호기가 DB에 없음 → 현장 대표번호로` : unit ? `${unit.unitNo} 지정(수동 연결)` : "현장 대표번호(수동 연결)",
+      };
+    });
+  }, [rows, links, data]);
+
   // 반영 계획 — 번호가 있고 현장이 확정된 것만. 이미 같은 번호면 건너뛴다.
   const plan = useMemo(() => {
-    if (!rows) return { units: [], sites: [], skip: 0 };
+    if (!finalRows) return { units: [], sites: [], skip: 0 };
     const unitRows = [], siteRows = [];
     let skip = 0;
     const seen = new Set();
-    for (const r of rows) {
+    for (const r of finalRows) {
       if (!r.phone || !r.siteId) continue;
       if (r.unitId) {
         const u = (data?.units ?? []).find((x) => x.id === r.unitId);
         if (u?.emergencyPhone === r.phone) { skip++; continue; }
         unitRows.push(r);
-      } else if (!r.seq) {
-        if (seen.has(r.siteId)) continue;          // 한 현장에 여러 줄이면 첫 번째만
+      } else {
+        // 호기가 안 적혔거나(대표번호로 통합 운영) 그 호기가 DB에 없으면 현장 대표번호로 넣는다.
+        // 한 현장에 여러 줄이면 첫 줄만 — 뒤 줄이 앞 줄을 덮어쓰지 않게.
+        if (seen.has(r.siteId)) continue;
         seen.add(r.siteId);
         const s = dbSites.find((x) => x.id === r.siteId);
         if (s?.emergencyPhone === r.phone) { skip++; continue; }
@@ -142,10 +182,9 @@ export default function ImportEmergencyPhones({ data, setData, onClose }) {
       }
     }
     return { units: unitRows, sites: siteRows, skip };
-  }, [rows, data, dbSites]);
+  }, [finalRows, data, dbSites]);
 
-  const unmatched = (rows ?? []).filter((r) => r.phone && !r.siteId);
-  const unitMissing = (rows ?? []).filter((r) => r.phone && r.siteId && r.seq && !r.unitId);
+  const unmatched = (finalRows ?? []).filter((r) => r.phone && !r.siteId);
 
   async function apply() {
     const total = plan.units.length + plan.sites.length;
@@ -184,7 +223,7 @@ export default function ImportEmergencyPhones({ data, setData, onClose }) {
 
   async function downloadUnmatched() {
     const XLSX = await import("xlsx");
-    const body = [...unmatched, ...unitMissing].map((r) => [r.excelRow, r.raw, r.phone, r.how, r.siteName ?? ""]);
+    const body = unmatched.map((r) => [r.excelRow, r.raw, r.phone, r.how, r.siteName ?? ""]);
     const ws = XLSX.utils.aoa_to_sheet([["원본행", "엑셀 이름", "번호", "사유", "매칭된 현장"], ...body]);
     ws["!cols"] = [{ wch: 8 }, { wch: 30 }, { wch: 16 }, { wch: 22 }, { wch: 24 }];
     const wb = XLSX.utils.book_new();
@@ -197,7 +236,7 @@ export default function ImportEmergencyPhones({ data, setData, onClose }) {
     unit: plan.units.length,
     site: plan.sites.length,
     skip: plan.skip,
-    bad: unmatched.length + unitMissing.length,
+    bad: unmatched.length,
   };
 
   return (
@@ -244,14 +283,59 @@ export default function ImportEmergencyPhones({ data, setData, onClose }) {
         )}
 
         {counts?.bad > 0 && (
-          <div className="border border-amber-200 rounded-xl divide-y divide-amber-100 max-h-[45vh] overflow-y-auto">
-            {[...unmatched, ...unitMissing].map((r, i) => (
-              <div key={i} className="px-4 py-2 flex items-center gap-3 text-sm">
-                <span className="font-bold text-slate-800 truncate">{r.raw || "(이름 없음)"}</span>
-                <span className="text-slate-400 shrink-0">{r.phone}</span>
-                <span className="ml-auto text-xs font-bold text-amber-700 shrink-0">{r.how}</span>
-              </div>
-            ))}
+          <>
+            <p className="text-xs font-bold text-slate-500">확인 필요 — 줄을 눌러 후보에서 고르거나 직접 검색해 연결하세요</p>
+            <div className="border border-amber-200 rounded-xl divide-y divide-amber-100 max-h-[45vh] overflow-y-auto">
+              {unmatched.map((r) => {
+                const open = openIdx === r.idx;
+                const cands = open ? candidatesFor(r) : [];
+                const qk = query.trim().length >= 2 ? nameKey(query) : "";
+                const searched = open && qk ? dbSites.filter((s) => s.keys.some((k) => k.includes(qk))).slice(0, 5) : [];
+                const pick = (s) => { setLinks((p) => ({ ...p, [r.idx]: { siteId: s.id, siteName: s.name } })); setOpenIdx(null); setQuery(""); };
+                return (
+                  <div key={r.idx}>
+                    <button onClick={() => { setOpenIdx(open ? null : r.idx); setQuery(""); }}
+                      className="w-full px-4 py-2 flex items-center gap-3 text-sm text-left hover:bg-amber-50/50">
+                      <span className="font-bold text-slate-800 truncate">{r.raw || "(이름 없음)"}</span>
+                      <span className="text-slate-400 shrink-0">{r.phone}</span>
+                      <span className="ml-auto text-xs font-bold text-amber-700 shrink-0">{r.how}</span>
+                    </button>
+                    {open && (
+                      <div className="px-4 pb-3 space-y-2 bg-white">
+                        <div className="flex flex-wrap gap-1.5">
+                          {cands.map((c) => (
+                            <button key={c.id} onClick={() => pick(c)}
+                              className="text-xs font-bold px-2.5 py-1 rounded-full bg-white border border-blue-200 text-blue-700 hover:bg-blue-50">
+                              {c.name} {c.dong ? `(${c.dong})` : ""} · {Math.round(c.score * 100)}%{c.tags.length ? ` · ${c.tags.join("·")}` : ""}
+                            </button>
+                          ))}
+                          {cands.length === 0 && <span className="text-xs text-slate-400">비슷한 이름 없음 — 아래에서 검색</span>}
+                        </div>
+                        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="현장 이름으로 직접 검색 (2자 이상)"
+                          className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs bg-white" />
+                        {searched.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {searched.map((s) => (
+                              <button key={s.id} onClick={() => pick(s)}
+                                className="text-xs font-bold px-2.5 py-1 rounded-full bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+                                {s.name} {s.dong ? `(${s.dong})` : ""}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+        {/* 사람이 연결한 건 목록 */}
+        {Object.keys(links).length > 0 && (
+          <div className="text-xs bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-emerald-700">
+            <b>수동 연결 {Object.keys(links).length}건</b> — 반영 대상에 포함됩니다.
+            <button onClick={() => setLinks({})} className="ml-2 font-bold text-slate-400">모두 해제</button>
           </div>
         )}
       </div>
