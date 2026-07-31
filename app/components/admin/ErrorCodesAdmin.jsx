@@ -252,8 +252,15 @@ export default function ErrorCodesAdmin({ data, setData }) {
         alert("가져올 수 있는 행이 없습니다 — '기종'·'코드' 열이 채워진 행이 있는지 확인해주세요.");
         return;
       }
-      if (!(await confirmAsync(`${parsed.length}건을 코드집에 등록할까요? 이미 있는 (기종, 코드) 조합은 덮어씁니다.`))) return;
-      const payload = parsed.map((r) => ({
+      // 같은 파일 안에 (기종,코드)가 중복되면 upsert 한 번이 같은 대상 행을 두 번 건드리게 돼
+      // "ON CONFLICT DO UPDATE command cannot affect row a second time" 에러로 전체가 실패한다
+      // (Postgres 제약) — 파일 안에서부터 미리 걸러내고, 나중에 나온 행을 최종값으로 남긴다.
+      const dedupMap = new Map();
+      for (const r of parsed) dedupMap.set(`${r.model}::${r.code}`, r);
+      const deduped = [...dedupMap.values()];
+      const dupCount = parsed.length - deduped.length;
+      if (!(await confirmAsync(`${deduped.length}건을 코드집에 등록할까요? 이미 있는 (기종, 코드) 조합은 덮어씁니다.${dupCount > 0 ? `\n(파일 안에서 중복된 ${dupCount}건은 마지막 값으로 합쳐서 등록됩니다)` : ""}`))) return;
+      const payload = deduped.map((r) => ({
         model: r.model,
         code: r.code,
         meaning: r.meaning || null,
