@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { TODAY_STR } from "@/lib/constants";
 import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed } from "@/lib/utils";
-import { Badge, DDay, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
+import { Badge, DDay, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, inputCls } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { usePriorFlaggedBadge, useInspectionFailItems } from "@/app/hooks/useLiveInspections";
@@ -96,6 +96,7 @@ export function InspectionTab({ inspections }) {
   const [subTab, setSubTab] = useState("검사도래현장");
   const [inspectionFailTarget, setInspectionFailTarget] = useState(null);
   const [flagSort, setFlagSort] = useState("imminent"); // 조건부/불합격 정렬: imminent(재검 임박순) | severity(불합격순)
+  const [search, setSearch] = useState("");
 
   // 검사유효기간은 units의 DB 캐시를 쓴다 (전 호기 실시간 API 호출 금지 — 트래픽 한도).
   // 도래현장·조건부/불합격 현장 둘 다 담당현장만(관리자는 전체) — 홈 화면과 동일 기준.
@@ -104,11 +105,12 @@ export function InspectionTab({ inspections }) {
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
   const combined = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId) && mySiteIds.has(i.siteId))];
 
-  // 도래현장: 관리자가 수기입력한 검사일자(inspections.due_date)가 있는 담당현장 전부 (기간 제한 없음,
-  // 국가승강기정보센터 API 연동 현장은 제외) — 검사일이 지나면(daysLeft < 0) 자동으로 빠진다.
+  // 도래현장: 담당현장 전부(관리자는 전체) 중 검사예정일(수기입력 또는 국가승강기정보센터 API
+  // 유효기간)이 있는 곳 — 기간 제한 없음. 검사일이 지나면(daysLeft < 0) 자동으로 빠진다.
   const dueSoon = groupBySite(
-    inspections
+    combined
       .filter((i) => mySiteIds.has(i.siteId) && i.dueDate && !i.result)
+      .filter((i) => !search || (i.siteName ?? "").toLowerCase().includes(search.toLowerCase()))
       .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) }))
       .filter((i) => i.daysLeft >= 0)
       .sort((a, b) => a.daysLeft - b.daysLeft)
@@ -126,6 +128,7 @@ export function InspectionTab({ inspections }) {
     combined
       .filter((i) => i.result === "conditional" || i.result === "fail")
       .filter((i) => !i.dueDate || Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) <= 60)
+      .filter((i) => !search || (i.siteName ?? "").toLowerCase().includes(search.toLowerCase()))
   ).sort(flagCmp);
 
   const inspectionSubTabs = ["검사도래현장", "조건부/불합격 현장"];
@@ -217,6 +220,15 @@ export function InspectionTab({ inspections }) {
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-sky-400 inline-block" /> 도래 {dueSoon.length}</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> 조건부/불합격 {flagged.length}</span>
         </div>
+      </div>
+
+      <div className="px-5 pb-2 shrink-0">
+        <input
+          className={inputCls}
+          placeholder="현장명 검색"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </div>
 
       {subTab === "조건부/불합격 현장" && (
