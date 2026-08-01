@@ -11,7 +11,7 @@ import { DutySwapNotice } from "@/app/components/DutyRoster";
 import { WorkCalendarSheet } from "@/app/components/WorkCalendarSheet";
 import { MyPage } from "@/app/components/MyPage";
 import { simulateSms } from "@/lib/sms";
-import { notify, enablePush, onPushNotificationOpened } from "@/lib/push";
+import { notify, enablePush, onPushNotificationOpened, onPushNotificationReceived } from "@/lib/push";
 import { Capacitor } from "@capacitor/core";
 import { ScreenHeader, BrandSplash } from "@/app/components/ui";
 import { ConfirmHost, confirmAsync } from "@/app/components/ConfirmHost";
@@ -148,6 +148,7 @@ export default function App() {
   const [openFailureId, setOpenFailureId] = useState(null); // 알림에서 특정 고장 건을 눌러 상세를 바로 연다 (탭 이동 없이 현재 화면 위에 띄움)
   const [openTodoId, setOpenTodoId] = useState(null); // 알림에서 특정 할일을 눌러 상세를 바로 연다
   const [openFeedPostId, setOpenFeedPostId] = useState(null); // 알림/푸시에서 특정 게시글을 눌러 게시판 탭에서 바로 그 글 화면으로 들어간다
+  const [pushBanner, setPushBanner] = useState(null); // 네이티브 앱 포그라운드 중 도착한 푸시 — 상단 배너로 직접 보여준다 { title, body, url }
   const [materialFocusId, setMaterialFocusId] = useState(null); // 알림/푸시에서 특정 자재신청을 눌러 관리자 모드 자재출하관리에서 바로 상세를 연다
   const [quoteFocusId, setQuoteFocusId] = useState(null); // 알림/푸시에서 특정 견적신청을 눌러 관리자 모드 견적요청관리에서 바로 상세를 연다
   const [notifDispatchTarget, setNotifDispatchTarget] = useState(null);
@@ -262,6 +263,28 @@ export default function App() {
       } catch {}
     });
   }, []);
+
+  // 네이티브 앱 — 화면 켜짐+포그라운드 상태에서 푸시가 도착한 순간. OS가 이 상태에선 알림함에만
+  // 조용히 쌓고 배너·소리를 안 띄워주는 게 안드로이드 기본 정책이라(코드로 못 바꿈), 앱이 직접
+  // 상단 배너로 대신 알려준다. 탭하면 그 알림의 화면으로 바로 이동.
+  useEffect(() => {
+    return onPushNotificationReceived((n) => {
+      setPushBanner({ title: n.title, body: n.body, url: n.data?.url });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!pushBanner) return;
+    const t = setTimeout(() => setPushBanner(null), 5000);
+    return () => clearTimeout(t);
+  }, [pushBanner]);
+
+  function openPushBanner() {
+    if (pushBanner?.url) {
+      try { applyOpenParams(new URL(pushBanner.url, window.location.origin).searchParams); } catch {}
+    }
+    setPushBanner(null);
+  }
 
   async function handleLogin(loginId, password) {
     setAuthSubmitting(true);
@@ -1870,6 +1893,16 @@ export default function App() {
     <UnitsContext.Provider value={units}>
       <div className="h-dvh w-screen bg-slate-50 flex flex-col overflow-hidden relative">
           <ConfirmHost />
+          {pushBanner && (
+            <button
+              onClick={openPushBanner}
+              className="absolute left-2 right-2 z-50 bg-blue-950 text-white rounded-2xl shadow-2xl px-4 py-3 text-left active:scale-[0.98] transition-transform"
+              style={{ top: "max(0.5rem, env(safe-area-inset-top))" }}
+            >
+              <p className="text-xs font-extrabold truncate">{pushBanner.title || "새 알림"}</p>
+              {pushBanner.body && <p className="text-[11px] text-blue-200 truncate mt-0.5">{pushBanner.body}</p>}
+            </button>
+          )}
           <ScreenHeader
             title={tab === "home" ? "구일엘리베이터(주)" : tabTitle}
             right={
