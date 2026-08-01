@@ -4,10 +4,10 @@
 // 여기서 끈 알림은 개인이 켜도 안 간다. 개인은 회사가 켜둔 것 중에서만 끌 수 있다.
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { NOTIFICATIONS, GROUPS, LEVELS, levelOf, audienceTierOf } from "@/lib/notifications";
+import { NOTIFICATIONS, GROUPS, LEVELS, levelOf, audienceTiersOf } from "@/lib/notifications";
 
 const AUDIENCE = { engineer: "기사", admin: "관리자", all: "전원" };
-const ADMIN_TIERS = { "": "전체관리자", super: "최고관리자", manager: "중간관리자", material: "자재담당관리자" };
+const ADMIN_TIER_CHIPS = { super: "최고", manager: "중간", material: "자재담당" };
 const TRIGGER = { instant: "즉시", scheduled: "정해진 시각" };
 
 export default function NotifySettings() {
@@ -17,7 +17,7 @@ export default function NotifySettings() {
   useEffect(() => {
     supabase.from("notify_settings").select("*").then(({ data }) => {
       const m = {};
-      for (const r of data ?? []) m[r.key] = { enabled: r.enabled, level: r.level, audienceTier: r.audience_tier };
+      for (const r of data ?? []) m[r.key] = { enabled: r.enabled, level: r.level, audienceTiers: r.audience_tiers ?? [] };
       setSettings(m);
       setLoaded(true);
     });
@@ -27,7 +27,7 @@ export default function NotifySettings() {
     const next = { ...(settings[key] ?? {}), ...patch };
     setSettings((prev) => ({ ...prev, [key]: next }));
     await supabase.from("notify_settings")
-      .upsert({ key, enabled: next.enabled ?? true, level: next.level ?? null, audience_tier: next.audienceTier ?? null, updated_at: new Date().toISOString() }, { onConflict: "key" });
+      .upsert({ key, enabled: next.enabled ?? true, level: next.level ?? null, audience_tiers: next.audienceTiers?.length ? next.audienceTiers : null, updated_at: new Date().toISOString() }, { onConflict: "key" });
   }
 
   const on = (item) => settings[item.key]?.enabled !== false;
@@ -74,7 +74,7 @@ export default function NotifySettings() {
               <thead>
                 <tr className="text-xs text-slate-400 border-b border-slate-100">
                   <th className="pl-5 pr-3 py-2.5 font-semibold text-left">상황</th>
-                  <th className="px-3 py-2.5 font-semibold text-left w-20">받는 사람</th>
+                  <th className="px-3 py-2.5 font-semibold text-left w-36">받는 사람</th>
                   <th className="px-3 py-2.5 font-semibold text-left w-24">발송 시점</th>
                   <th className="px-3 py-2.5 font-semibold text-left w-56">알림 방식</th>
                   <th className="px-3 py-2.5 font-semibold text-right w-20">사용</th>
@@ -84,7 +84,7 @@ export default function NotifySettings() {
                 {NOTIFICATIONS.filter((n) => n.group === g).map((n) => {
                   const enabled = on(n);
                   const lv = levelOf(n, settings);
-                  const tier = audienceTierOf(n, settings);
+                  const tiers = audienceTiersOf(n, settings);
                   return (
                     <tr key={n.key} className={`border-b border-slate-50 ${enabled ? "" : "opacity-45"}`}>
                       <td className="pl-5 pr-3 py-2.5">
@@ -93,16 +93,25 @@ export default function NotifySettings() {
                       </td>
                       <td className="px-3 py-2.5 text-slate-500 text-[11px] whitespace-nowrap">
                         {n.audience === "admin" ? (
-                          <select
-                            disabled={!enabled}
-                            value={tier ?? ""}
-                            onChange={(e) => save(n.key, { audienceTier: e.target.value || null })}
-                            className="border border-slate-200 rounded-md px-1.5 py-1 text-[11px] disabled:cursor-not-allowed disabled:bg-slate-50"
-                          >
-                            {Object.entries(ADMIN_TIERS).map(([v, label]) => (
-                              <option key={v} value={v}>{label}</option>
-                            ))}
-                          </select>
+                          <div className="flex gap-1 items-center flex-wrap">
+                            {Object.entries(ADMIN_TIER_CHIPS).map(([v, label]) => {
+                              const active = tiers.includes(v);
+                              return (
+                                <button
+                                  key={v}
+                                  type="button"
+                                  disabled={!enabled}
+                                  onClick={() => save(n.key, { audienceTiers: active ? tiers.filter((t) => t !== v) : [...tiers, v] })}
+                                  className={`text-[10px] font-bold rounded-full px-2 py-1 border disabled:cursor-not-allowed ${
+                                    active ? "bg-indigo-600 text-white border-indigo-600" : "text-slate-400 border-slate-200"
+                                  }`}
+                                >
+                                  {label}
+                                </button>
+                              );
+                            })}
+                            {tiers.length === 0 && <span className="text-slate-400">(전체)</span>}
+                          </div>
                         ) : AUDIENCE[n.audience]}
                       </td>
                       <td className="px-3 py-2.5 text-slate-500 text-[11px] whitespace-nowrap">{TRIGGER[n.trigger]}</td>

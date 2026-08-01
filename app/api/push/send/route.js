@@ -70,13 +70,14 @@ async function handlePost(request) {
   // audience 자동 대상은 비활성·삭제 계정을 뺀다 (명시 id는 호출자가 책임진다)
   let profiles = hasIds ? (profRows ?? []) : (profRows ?? []).filter((p) => p.is_active !== false && !p.deleted_at);
   const org = {};
-  for (const r of settingRows ?? []) org[r.key] = { enabled: r.enabled, level: r.level, audienceTier: r.audience_tier };
+  for (const r of settingRows ?? []) org[r.key] = { enabled: r.enabled, level: r.level, audienceTiers: r.audience_tiers };
 
-  // 관리자 대상 알림은 최고관리자가 "알림 설정"에서 받는 사람을 등급으로 더 좁힐 수 있다
-  // (전체관리자/최고관리자/중간관리자/자재담당관리자). profileIds를 직접 넘긴 호출은 호출자가
-  // 대상을 이미 정한 것이므로 여기서 더 거르지 않는다.
-  if (!hasIds && item.audience === "admin" && org[key]?.audienceTier) {
-    profiles = profiles.filter((p) => p.admin_tier === org[key].audienceTier);
+  // 관리자 대상 알림은 최고관리자가 "알림 설정"에서 받는 사람을 등급으로 더 좁힐 수 있다 — 여러
+  // 등급을 동시에 고를 수 있다(예: 최고+중간만). 비어있으면 전체 관리자. profileIds를 직접 넘긴
+  // 호출은 호출자가 대상을 이미 정한 것이므로 여기서 더 거르지 않는다.
+  const tiers = org[key]?.audienceTiers;
+  if (!hasIds && item.audience === "admin" && tiers?.length) {
+    profiles = profiles.filter((p) => tiers.includes(p.admin_tier));
   }
 
   // 회사 설정에서 꺼둔 알림이면 여기서 끝
