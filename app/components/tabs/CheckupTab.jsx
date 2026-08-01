@@ -57,13 +57,14 @@ function siteFlagResult(site, units) {
   return null;
 }
 
-// 검사관리-검사도래현장과 같은 기준(관리자 수기입력 검사일정, 30일 이내, 판정 전)으로
-// 이 현장에 도래한 검사가 있으면 "정기검사 8월 26일" 형태로 보여준다(시간은 뺌).
+// 검사관리-검사도래현장과 같은 기준(관리자 수기입력 검사일정, 기간 제한 없음, 판정 전)으로
+// 이 현장에 도래한 검사가 있으면 "정기검사 8월 26일" 형태로 보여준다(시간은 뺌). 검사일이
+// 지나면(daysLeft < 0) 자동으로 빠진다.
 function siteDueSoonLabel(site, inspections, todayStr) {
   const upcoming = inspections
     .filter((i) => i.siteId === site.id && i.dueDate && !i.result)
     .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(todayStr)) / 86400000) }))
-    .filter((i) => i.daysLeft >= 0 && i.daysLeft <= 30)
+    .filter((i) => i.daysLeft >= 0)
     .sort((a, b) => a.daysLeft - b.daysLeft)[0];
   return upcoming ? `${upcoming.type} ${formatMonthDay(upcoming.dueDate)}` : null;
 }

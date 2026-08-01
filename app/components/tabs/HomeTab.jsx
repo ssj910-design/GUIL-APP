@@ -626,12 +626,13 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
   const combinedInspections = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId) && mySiteIds.has(i.siteId))];
 
-  // 도래현장: 관리자가 수기입력한 검사일자(inspections.due_date) 기준으로 검사일이 30일 이내로 남은 담당현장만 (국가승강기정보센터 API 연동 현장은 제외)
+  // 도래현장: 관리자가 수기입력한 검사일자(inspections.due_date)가 있는 담당현장 전부 (기간 제한 없음,
+  // 국가승강기정보센터 API 연동 현장은 제외) — 검사일이 지나면(daysLeft < 0) 자동으로 빠진다.
   const dueSoon = groupBySite(
     inspections
       .filter((i) => mySiteIds.has(i.siteId) && i.dueDate && !i.result)
       .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) }))
-      .filter((i) => i.daysLeft >= 0 && i.daysLeft <= 30)
+      .filter((i) => i.daysLeft >= 0)
       .sort((a, b) => a.daysLeft - b.daysLeft)
   );
 
@@ -801,10 +802,10 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
 
           <div className="px-4 pt-3 pb-3.5">
             <p className="text-xs font-bold text-blue-700 mb-2 flex items-center gap-1.5">
-              <ShieldCheck size={13} /> 검사도래현장 · 30일 이내
+              <ShieldCheck size={13} /> 검사도래현장
             </p>
             {dueSoon.length === 0 ? (
-              <p className="text-xs text-slate-400 py-1.5">30일 이내 검사 도래 현장이 없습니다.</p>
+              <p className="text-xs text-slate-400 py-1.5">검사 도래 현장이 없습니다.</p>
             ) : (
               <div className="space-y-1.5">
                 {dueSoon.map((i) => {

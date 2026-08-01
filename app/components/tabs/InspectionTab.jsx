@@ -104,12 +104,13 @@ export function InspectionTab({ inspections }) {
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
   const combined = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId) && mySiteIds.has(i.siteId))];
 
-  // 도래현장: 관리자가 수기입력한 검사일자(inspections.due_date) 기준, 검사일이 30일 이내로 남은 담당현장만 (국가승강기정보센터 API 연동 현장은 제외)
+  // 도래현장: 관리자가 수기입력한 검사일자(inspections.due_date)가 있는 담당현장 전부 (기간 제한 없음,
+  // 국가승강기정보센터 API 연동 현장은 제외) — 검사일이 지나면(daysLeft < 0) 자동으로 빠진다.
   const dueSoon = groupBySite(
     inspections
       .filter((i) => mySiteIds.has(i.siteId) && i.dueDate && !i.result)
       .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) }))
-      .filter((i) => i.daysLeft >= 0 && i.daysLeft <= 30)
+      .filter((i) => i.daysLeft >= 0)
       .sort((a, b) => a.daysLeft - b.daysLeft)
   );
   // 보완기한이 61일 이상 남은 건 아직 급하지 않으니 목록에서 뺀다(60일은 노출) — 기한 미정은 계속 노출.
