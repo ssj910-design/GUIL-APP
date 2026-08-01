@@ -394,6 +394,14 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
     }
   }
 
+  // 이미 관리자인 사람의 등급만 바꾼다 — 등록 폼은 "새로 만들 때" 등급을 고르는 것뿐이라, 등록 후
+  // 등급을 잘못 골랐거나 나중에 바꿔야 할 때 여기 말고는 고칠 방법이 없었다.
+  async function updateAdminTier(id, tier) {
+    const { data: rows, error } = await supabase.from("profiles").update({ admin_tier: tier }).eq("id", id).select();
+    if (error || !rows?.[0]) { alert("등급 변경 실패: " + (error?.message ?? "")); return; }
+    setData((prev) => ({ ...prev, profiles: prev.profiles.map((p) => (p.id === rows[0].id ? rows[0] : p)) }));
+  }
+
   // 드래그로 목록 순서를 바꾸면 전체 순서를 1..N으로 다시 매겨 staff_order에 저장한다.
   async function handleDrop(targetIndex) {
     if (dragIndex === null || dragIndex === targetIndex) { setDragIndex(null); setOverIndex(null); return; }
@@ -572,9 +580,25 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
             </button>
           </div>
           {admins.length > 0 && (
-            <p className="text-[11px] text-slate-400 mt-2.5">
-              현재 관리자: {admins.map((a) => `${a.name}(${a.admin_tier === "super" ? "최고" : a.admin_tier === "material" ? "자재담당" : "중간"})`).join(" · ")}
-            </p>
+            <div className="mt-2.5">
+              <p className="text-[11px] font-bold text-slate-400 mb-1">현재 관리자 (등급 클릭해서 바로 변경 가능)</p>
+              <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+                {admins.map((a) => (
+                  <span key={a.id} className="text-[11px] text-slate-500 inline-flex items-center gap-1">
+                    {a.name}
+                    <select
+                      value={a.admin_tier ?? "manager"}
+                      onChange={(e) => updateAdminTier(a.id, e.target.value)}
+                      className="border border-slate-200 rounded px-1 py-0.5 text-[11px]"
+                    >
+                      <option value="manager">중간관리자</option>
+                      <option value="material">자재담당관리자</option>
+                      <option value="super">최고관리자</option>
+                    </select>
+                  </span>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       )}
