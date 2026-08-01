@@ -345,8 +345,12 @@ function ReassignCard({ t, engineerNames, onReassignTodo, onClearReassignRequest
 
 /* ---------- 아코디언 패널 ---------- */
 
-function MaterialsPanel({ pending, rejected, suppliedCount, engineerNames, onSupplyComplete, onAttachPhoto, onRemoveSupplyPhoto, onReprocess, onOpenHistory }) {
+function MaterialsPanel({ pending, rejected, suppliedCount, engineerNames, onSupplyComplete, onAttachPhoto, onRemoveSupplyPhoto, onReprocess, onOpenHistory, focusId, onFocusHandled }) {
   const [detail, setDetail] = useState(null);
+  // 알림/푸시로 특정 건이 지정되면(focusId) 그 건 상세를 바로 연다 — openFailureId와 동일하게
+  // effect 없이 렌더 시점에 바로 찾아서 보여준다.
+  const shownDetail = detail ?? (focusId ? pending.find((r) => r.id === focusId) : null);
+  const closeDetail = () => { setDetail(null); if (focusId) onFocusHandled?.(); };
   return (
     <div>
       {rejected.length > 0 && (
@@ -393,45 +397,45 @@ function MaterialsPanel({ pending, rejected, suppliedCount, engineerNames, onSup
         </button>
       )}
 
-      {detail && (
-        <Sheet title="자재 신청 상세" onClose={() => setDetail(null)}>
+      {shownDetail && (
+        <Sheet title="자재 신청 상세" onClose={closeDetail}>
           <div className="space-y-3">
             <div className="bg-slate-100 rounded-xl p-3">
               <p className="text-[11px] text-slate-500">현장</p>
-              <p className="font-bold text-slate-800">{detail.siteName}</p>
+              <p className="font-bold text-slate-800">{shownDetail.siteName}</p>
             </div>
             <div className="bg-slate-100 rounded-xl p-3">
               <p className="text-[11px] text-slate-500">부품 내역 (부품명, 수량)</p>
-              <p className="font-bold text-slate-800 whitespace-pre-wrap">{detail.part}</p>
+              <p className="font-bold text-slate-800 whitespace-pre-wrap">{shownDetail.part}</p>
             </div>
             <div className="grid grid-cols-2 gap-2.5">
               <div className="bg-slate-100 rounded-xl p-3">
                 <p className="text-[11px] text-slate-500">긴급도</p>
-                <p className="font-bold text-slate-800">{detail.urgency}</p>
+                <p className="font-bold text-slate-800">{shownDetail.urgency}</p>
               </div>
               <div className="bg-slate-100 rounded-xl p-3">
                 <p className="text-[11px] text-slate-500">신청 기사</p>
-                <p className="font-bold text-slate-800">{detail.engineer}</p>
+                <p className="font-bold text-slate-800">{shownDetail.engineer}</p>
               </div>
               <div className="bg-slate-100 rounded-xl p-3 col-span-2">
                 <p className="text-[11px] text-slate-500">신청일</p>
-                <p className="font-bold text-slate-800">{detail.requestedDate}</p>
+                <p className="font-bold text-slate-800">{shownDetail.requestedDate}</p>
               </div>
             </div>
-            {detail.note && (
+            {shownDetail.note && (
               <div className="bg-slate-100 rounded-xl p-3">
                 <p className="text-[11px] text-slate-500">기사 의견 (교체 사유 및 특이사항)</p>
-                <p className="text-sm text-slate-700 mt-0.5 whitespace-pre-wrap">{detail.note}</p>
+                <p className="text-sm text-slate-700 mt-0.5 whitespace-pre-wrap">{shownDetail.note}</p>
               </div>
             )}
             <div>
-              <p className="text-xs font-bold text-slate-500 mb-2">기사가 첨부한 부품 규격 사진 ({detail.photoCount ?? 1}장)</p>
+              <p className="text-xs font-bold text-slate-500 mb-2">기사가 첨부한 부품 규격 사진 ({shownDetail.photoCount ?? 1}장)</p>
               <div className="grid grid-cols-3 gap-2">
-                {detail.photoUrls?.length > 0
-                  ? detail.photoUrls.map((url, i) => (
+                {shownDetail.photoUrls?.length > 0
+                  ? shownDetail.photoUrls.map((url, i) => (
                       <img key={i} src={url} alt="" className="w-full aspect-square rounded-xl object-cover border border-slate-200" />
                     ))
-                  : Array.from({ length: detail.photoCount ?? 1 }).map((_, i) => <PhotoThumb key={i} />)}
+                  : Array.from({ length: shownDetail.photoCount ?? 1 }).map((_, i) => <PhotoThumb key={i} />)}
               </div>
             </div>
           </div>
@@ -441,8 +445,10 @@ function MaterialsPanel({ pending, rejected, suppliedCount, engineerNames, onSup
   );
 }
 
-function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onOpenHistory }) {
+function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onOpenHistory, focusId, onFocusHandled }) {
   const [detail, setDetail] = useState(null);
+  const shownDetail = detail ?? (focusId ? active.find((q) => q.id === focusId) : null);
+  const closeDetail = () => { setDetail(null); if (focusId) onFocusHandled?.(); };
   return (
     <div>
       <SwipeCarousel
@@ -467,45 +473,45 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
         </button>
       )}
 
-      {detail && (
-        <Sheet title="견적 요청 상세" onClose={() => setDetail(null)}>
+      {shownDetail && (
+        <Sheet title="견적 요청 상세" onClose={closeDetail}>
           <div className="space-y-3">
             <div className="bg-slate-100 rounded-xl p-3">
               <p className="text-[11px] text-slate-500">현장</p>
-              <p className="font-bold text-slate-800">{detail.siteName}</p>
+              <p className="font-bold text-slate-800">{shownDetail.siteName}</p>
             </div>
             <div className="bg-slate-100 rounded-xl p-3">
               <p className="text-[11px] text-slate-500">견적 내역 (부품명, 수량)</p>
-              <p className="font-bold text-slate-800 whitespace-pre-wrap">{detail.constructionType}</p>
+              <p className="font-bold text-slate-800 whitespace-pre-wrap">{shownDetail.constructionType}</p>
             </div>
             <div className="grid grid-cols-2 gap-2.5">
               <div className="bg-slate-100 rounded-xl p-3">
                 <p className="text-[11px] text-slate-500">현장 견적 담당자 연락처</p>
-                <p className="font-bold text-slate-800">{detail.contactPhone}</p>
+                <p className="font-bold text-slate-800">{shownDetail.contactPhone}</p>
               </div>
               <div className="bg-slate-100 rounded-xl p-3">
                 <p className="text-[11px] text-slate-500">신청 기사</p>
-                <p className="font-bold text-slate-800">{detail.engineer}</p>
+                <p className="font-bold text-slate-800">{shownDetail.engineer}</p>
               </div>
               <div className="bg-slate-100 rounded-xl p-3 col-span-2">
                 <p className="text-[11px] text-slate-500">신청일</p>
-                <p className="font-bold text-slate-800">{detail.requestedDate}</p>
+                <p className="font-bold text-slate-800">{shownDetail.requestedDate}</p>
               </div>
             </div>
-            {detail.note && (
+            {shownDetail.note && (
               <div className="bg-slate-100 rounded-xl p-3">
                 <p className="text-[11px] text-slate-500">기사 의견 (견적 사유 및 특이사항)</p>
-                <p className="text-sm text-slate-700 mt-0.5 whitespace-pre-wrap">{detail.note}</p>
+                <p className="text-sm text-slate-700 mt-0.5 whitespace-pre-wrap">{shownDetail.note}</p>
               </div>
             )}
             <div>
-              <p className="text-xs font-bold text-slate-500 mb-2">기사가 첨부한 현장 상태 사진 ({detail.photoCount ?? 1}장)</p>
+              <p className="text-xs font-bold text-slate-500 mb-2">기사가 첨부한 현장 상태 사진 ({shownDetail.photoCount ?? 1}장)</p>
               <div className="grid grid-cols-3 gap-2">
-                {detail.photoUrls?.length > 0
-                  ? detail.photoUrls.map((url, i) => (
+                {shownDetail.photoUrls?.length > 0
+                  ? shownDetail.photoUrls.map((url, i) => (
                       <img key={i} src={url} alt="" className="w-full aspect-square rounded-xl object-cover border border-slate-200" />
                     ))
-                  : Array.from({ length: detail.photoCount ?? 1 }).map((_, i) => <PhotoThumb key={i} />)}
+                  : Array.from({ length: shownDetail.photoCount ?? 1 }).map((_, i) => <PhotoThumb key={i} />)}
               </div>
             </div>
           </div>
@@ -904,13 +910,17 @@ function DashStat({ label, n, tone }) {
 }
 
 
-export function AdminTab({ materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onClearReassignRequest, onResetEngineerPassword }) {
+export function AdminTab({ materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onClearReassignRequest, onResetEngineerPassword, materialFocusId, onMaterialFocusHandled, quoteFocusId, onQuoteFocusHandled }) {
   const { engineerNames, adminTier, profiles } = useContext(AuthContext);
   // PC 관리자 콘솔(EngineersAdmin)과 동일한 대상 — 기사 전체 + 최고관리자를 뺀 관리자 계정.
   const resettableAccounts = (profiles ?? [])
     .filter((p) => (p.role === "engineer" || (p.role === "admin" && p.admin_tier !== "super")) && p.is_active !== false);
   const [page, setPage] = useState(null); // null | "billing" | "materialHistory" | "quoteHistory"
   const [expanded, setExpanded] = useState(null); // "materials" | "restock" | "quotes" | "reassign" | null
+  // 알림/푸시로 특정 자재·견적 신청이 지정되면(materialFocusId/quoteFocusId) 해당 아코디언을 자동으로
+  // 펼친다 — effect 없이 open 조건에 바로 반영(상세 시트는 MaterialsPanel/QuotesPanel이 focusId로 직접 연다).
+  const materialsOpen = expanded === "materials" || Boolean(materialFocusId);
+  const quotesOpen = expanded === "quotes" || Boolean(quoteFocusId);
 
   const materialPending = materialRequests.filter((r) => r.status === "승인대기");
   const materialRejected = materialRequests.filter((r) => r.status === "반려");
@@ -967,7 +977,7 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
-          <AccordionRow icon={PackageCheck} label="자재출하관리" badge={materialPending.length} open={expanded === "materials"} onToggle={() => toggle("materials")}>
+          <AccordionRow icon={PackageCheck} label="자재출하관리" badge={materialPending.length} open={materialsOpen} onToggle={() => toggle("materials")}>
             <MaterialsPanel
               pending={materialPending}
               rejected={materialRejected}
@@ -978,6 +988,8 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
               onRemoveSupplyPhoto={onRemoveSupplyPhoto}
               onReprocess={onReprocess}
               onOpenHistory={() => setPage("materialHistory")}
+              focusId={materialFocusId}
+              onFocusHandled={onMaterialFocusHandled}
             />
           </AccordionRow>
 
@@ -991,7 +1003,7 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
             />
           </AccordionRow>
 
-          <AccordionRow icon={FileText} label="견적 요청 관리" badge={quoteActive.length} open={expanded === "quotes"} onToggle={() => toggle("quotes")}>
+          <AccordionRow icon={FileText} label="견적 요청 관리" badge={quoteActive.length} open={quotesOpen} onToggle={() => toggle("quotes")}>
             <QuotesPanel
               active={quoteActive}
               completedCount={completed.length}
@@ -1001,6 +1013,8 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
               onAttachQuotePhoto={onAttachQuotePhoto}
               onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
               onOpenHistory={() => setPage("quoteHistory")}
+              focusId={quoteFocusId}
+              onFocusHandled={onQuoteFocusHandled}
             />
           </AccordionRow>
 

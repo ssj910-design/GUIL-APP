@@ -148,6 +148,8 @@ export default function App() {
   const [openFailureId, setOpenFailureId] = useState(null); // 알림에서 특정 고장 건을 눌러 상세를 바로 연다 (탭 이동 없이 현재 화면 위에 띄움)
   const [openTodoId, setOpenTodoId] = useState(null); // 알림에서 특정 할일을 눌러 상세를 바로 연다
   const [openFeedPostId, setOpenFeedPostId] = useState(null); // 알림에서 특정 게시글을 눌러 그 글만 팝업으로 연다 (게시판 전체를 열어 안읽음을 한번에 지우지 않도록)
+  const [materialFocusId, setMaterialFocusId] = useState(null); // 알림/푸시에서 특정 자재신청을 눌러 관리자 모드 자재출하관리에서 바로 상세를 연다
+  const [quoteFocusId, setQuoteFocusId] = useState(null); // 알림/푸시에서 특정 견적신청을 눌러 관리자 모드 견적요청관리에서 바로 상세를 연다
   const [notifDispatchTarget, setNotifDispatchTarget] = useState(null);
   const [notifResultTarget, setNotifResultTarget] = useState(null);
 
@@ -212,6 +214,24 @@ export default function App() {
     })();
     return () => { alive = false; };
   }, [session, skipLogin]);
+
+  // 자재·견적 신청 푸시알림(url=/?openMaterial=id 또는 ?openQuote=id)을 눌러 앱이 열렸을 때,
+  // 관리자 모드 자재출하관리/견적요청관리에서 그 건 상세를 바로 띄운다. 종(🔔) 알림 클릭도 같은
+  // materialFocusId/quoteFocusId state를 써서 동일하게 동작한다(그쪽은 URL 없이 바로 state만 설정).
+  useEffect(() => {
+    if (!profile || profile.role !== "admin") return;
+    const params = new URLSearchParams(window.location.search);
+    const openMaterial = params.get("openMaterial");
+    const openQuote = params.get("openQuote");
+    if (!openMaterial && !openQuote) return;
+    setTab("admin");
+    if (openMaterial) setMaterialFocusId(openMaterial);
+    if (openQuote) setQuoteFocusId(openQuote);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("openMaterial");
+    url.searchParams.delete("openQuote");
+    window.history.replaceState({}, "", url);
+  }, [profile]);
 
   async function handleLogin(loginId, password) {
     setAuthSubmitting(true);
@@ -1090,7 +1110,7 @@ export default function App() {
   async function handleAddMaterialRequest(newRequests, dbRows) {
     if (!(await writeOk(supabase.from("material_requests").insert(dbRows), "자재 신청 실패"))) return false;
     setMaterialRequests((prev) => [...newRequests, ...prev]);
-    notify("supply_requested", { title: "자재 신청이 들어왔어요", body: `${newRequests[0]?.engineer ?? ""} · ${newRequests[0]?.siteName ?? ""} ${newRequests.length}건` });
+    notify("supply_requested", { title: "자재 신청이 들어왔어요", body: `${newRequests[0]?.engineer ?? ""} · ${newRequests[0]?.siteName ?? ""} ${newRequests.length}건`, url: `/?openMaterial=${newRequests[0]?.id}` });
     return true;
   }
 
@@ -1098,7 +1118,7 @@ export default function App() {
   async function handleAddQuoteRequest(newQuotes, dbRows) {
     if (!(await writeOk(supabase.from("quote_requests").insert(dbRows), "견적 요청 실패"))) return false;
     setQuoteRequests((prev) => [...newQuotes, ...prev]);
-    notify("supply_requested", { title: "견적 신청이 들어왔어요", body: `${newQuotes[0]?.engineer ?? ""} · ${newQuotes[0]?.siteName ?? ""} ${newQuotes.length}건` });
+    notify("supply_requested", { title: "견적 신청이 들어왔어요", body: `${newQuotes[0]?.engineer ?? ""} · ${newQuotes[0]?.siteName ?? ""} ${newQuotes.length}건`, url: `/?openQuote=${newQuotes[0]?.id}` });
     return true;
   }
 
@@ -1753,10 +1773,14 @@ export default function App() {
   const notifQuotes = quoteRequests.filter((q) => q.engineer === myName && q.status === "자재지급완료" && !todos.some((t) => t.quoteRequestId === q.id) && !dismissedIds.has("quote:" + q.id));
   const notifRestock = restockRequests.filter((r) => r.engineer === myName && r.status === "완료" && !r.receivedAt && !dismissedIds.has("restock:" + r.id));
   const notifSupplyCnt = notifMaterials.length + notifQuotes.length + notifRestock.length;
+  // 관리자용 — 새로 들어온(아직 아무도 처리 안 한) 자재·견적 신청. 지금까지는 푸시로만 갔고
+  // 종(🔔) 알림 목록엔 안 떴다.
+  const notifNewMaterials = profile?.role === "admin" ? materialRequests.filter((r) => r.status === "승인대기" && !dismissedIds.has("newmat:" + r.id)) : [];
+  const notifNewQuotes = profile?.role === "admin" ? quoteRequests.filter((q) => q.status === "요청접수" && !dismissedIds.has("newquote:" + q.id)) : [];
   // 게시판 알림은 글 하나를 눌러도(팝업으로만 확인) feedReadAt 전체읽음은 건드리지 않고, 그 글만 지운 것으로 처리한다
   // — 그래야 나머지 안읽은 글 알림이 같이 사라지지 않는다.
   const notifPosts = unreadPosts.filter((p) => !dismissedIds.has("post:" + p.id));
-  const totalNotifCnt = notifPosts.length + notifFailures.length + notifCompletedFailures.length + notifTodos.length + notifSupplyCnt;
+  const totalNotifCnt = notifPosts.length + notifFailures.length + notifCompletedFailures.length + notifTodos.length + notifSupplyCnt + notifNewMaterials.length + notifNewQuotes.length;
 
   if (!skipLogin && session === undefined) {
     return <BrandSplash />;
@@ -1901,6 +1925,29 @@ export default function App() {
                               ))}
                             </div>
                           )}
+                          {(notifNewMaterials.length > 0 || notifNewQuotes.length > 0) && (
+                            <div>
+                              <p className="px-4 pt-2.5 pb-1 text-[10px] font-bold text-slate-400">새 자재·견적 신청</p>
+                              {notifNewMaterials.map((r) => (
+                                <NotifRow
+                                  key={r.id}
+                                  onClick={() => { setNotifOpen(false); setTab("admin"); setMaterialFocusId(r.id); }}
+                                  onDismiss={() => handleDismissNotif("newmat:" + r.id)}
+                                  title={r.part}
+                                  subtitle={`${r.siteName ?? ""} · ${r.engineer} 신청`}
+                                />
+                              ))}
+                              {notifNewQuotes.map((q) => (
+                                <NotifRow
+                                  key={q.id}
+                                  onClick={() => { setNotifOpen(false); setTab("admin"); setQuoteFocusId(q.id); }}
+                                  onDismiss={() => handleDismissNotif("newquote:" + q.id)}
+                                  title={q.constructionType}
+                                  subtitle={`${q.siteName ?? ""} · ${q.engineer} 신청`}
+                                />
+                              ))}
+                            </div>
+                          )}
                           {notifPosts.length > 0 && (
                             <div>
                               <p className="px-4 pt-2.5 pb-1 text-[10px] font-bold text-slate-400">게시판</p>
@@ -2031,7 +2078,7 @@ export default function App() {
               onEngineersChange={setEngineers}
             />
           )}
-          {tab === "admin" && profile.role === "admin" && <AdminTab materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onClearReassignRequest={handleClearReassignRequest} onAssignTodo={handleAssignTodo} onResetEngineerPassword={handleResetEngineerPassword} />}
+          {tab === "admin" && profile.role === "admin" && <AdminTab materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onClearReassignRequest={handleClearReassignRequest} onAssignTodo={handleAssignTodo} onResetEngineerPassword={handleResetEngineerPassword} materialFocusId={materialFocusId} onMaterialFocusHandled={() => setMaterialFocusId(null)} quoteFocusId={quoteFocusId} onQuoteFocusHandled={() => setQuoteFocusId(null)} />}
           </PullToRefresh>
 
           {/* 우리방 플로팅 버튼 — 어느 탭에서든 즉시 게시판으로 이동 (우리방 탭에서는 숨김) */}
