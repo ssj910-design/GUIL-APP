@@ -102,12 +102,7 @@ export default function App() {
   // 즉시 치운다 — 아래 BrandSplash 로딩화면들이 같은 로고를 이어서 보여주므로 깜빡임이 없다.
   useEffect(() => { document.getElementById("app-splash")?.remove(); }, []);
 
-  const [rawTab, setTab] = useState("home");
-  // 자재담당관리자는 자재·견적 탭과 관리자모드(자재출하관리·상비부품보충)만 쓴다 — 하단 탭엔
-  // 자재·견적만 노출하므로(아래 visibleTabs), 기본 진입화면인 "home"이나 예전에 남아있던 다른
-  // 탭 상태로는 못 들어가게 여기서 되돌린다. 관리자모드·우리방(플로팅버튼)은 계속 허용.
-  const isMaterialTierAdmin = profile?.role === "admin" && profile?.adminTier === "material";
-  const tab = isMaterialTierAdmin && !["material", "admin", "room"].includes(rawTab) ? "material" : rawTab;
+  const [tab, setTab] = useState("home");
   const [failureFocusTab, setFailureFocusTab] = useState(null); // 고장접수 탭 진입 시 열 서브탭 (홈 "모두 보기" 등)
   const [sites, setSites] = useState([]);
   const [units, setUnits] = useState([]); // v2: 호기 목록 (마이그레이션 전 DB에서는 빈 배열)
@@ -1758,9 +1753,7 @@ export default function App() {
   }
 
   const tabTitle = tab === "room" ? "게시판" : TABS.find((t) => t.id === tab)?.label ?? "";
-  const visibleTabs = isMaterialTierAdmin
-    ? TABS.filter((t) => t.id === "material")
-    : TABS.filter((t) => t.id !== "admin" || profile?.role === "admin");
+  const visibleTabs = TABS.filter((t) => t.id !== "admin" || profile?.role === "admin");
 
   // 우리방 안읽음/멘션 — 세션 로컬 읽음 시각이 있으면 그걸, 없으면 DB(profiles.feed_read_at) 기준
   const myName = profile?.name ?? "";
@@ -1844,8 +1837,15 @@ export default function App() {
     );
   }
 
+  // 자재담당관리자는 기사앱을 기사와 똑같이 쓴다(현장·고장·점검·워크캘린더 등 전부 본인 담당
+  // 기준으로만 — 전체 데이터·관리자 전용 기능 없음). 관리자모드(⚙️)로 들어가는 자재출하관리·
+  // 상비부품보충만 별도로 추가된다. 관리자모드 진입 버튼·라우팅은 profile.role(실제 값)을 그대로
+  // 쓰므로 이 대체는 하위 탭 컴포넌트들이 보는 AuthContext의 role에만 영향을 준다.
+  const isMaterialTierAdmin = profile.role === "admin" && profile.adminTier === "material";
+  const scopedRole = isMaterialTierAdmin ? "engineer" : profile.role;
+
   return (
-    <AuthContext.Provider value={{ name: profile.name, role: profile.role, adminTier: skipLogin ? "super" : profile.adminTier, engineerNames, engineers, profiles: profilesAll, selfId: profile.id ?? profileIdByName(profilesAll, profile.name), signOut: handleLogout }}>
+    <AuthContext.Provider value={{ name: profile.name, role: scopedRole, adminTier: skipLogin ? "super" : profile.adminTier, engineerNames, engineers, profiles: profilesAll, selfId: profile.id ?? profileIdByName(profilesAll, profile.name), signOut: handleLogout }}>
     <SitesContext.Provider value={sites}>
     <UnitsContext.Provider value={units}>
       <div className="h-dvh w-screen bg-slate-50 flex flex-col overflow-hidden relative">
