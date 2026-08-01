@@ -474,7 +474,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
 
 
 /* ------------------------------------------------------------------ */
-/* ROOM (우리방) incl. admin dashboard                                  */
+/* ROOM (게시판) incl. admin dashboard                                  */
 /* ------------------------------------------------------------------ */
 
 export function BillingCard({ b, onPhotoClick }) {

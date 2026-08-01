@@ -25,7 +25,7 @@ const isoOf = (y, m, d) => `${ymOf(y, m)}-${String(d).padStart(2, "0")}`;
 
 /**
  * 근무 교환 알림 팝업 — 당사자 둘에게만 뜬다.
- * 교환 내용은 우리방(피드)에 올리지 않는다: 전 직원이 볼 필요가 없는 개인 일정이라서.
+ * 교환 내용은 게시판(피드)에 올리지 않는다: 전 직원이 볼 필요가 없는 개인 일정이라서.
  */
 export function DutySwapNotice({ swaps, schedules, onSeen }) {
   const { selfId, engineers } = useContext(AuthContext);

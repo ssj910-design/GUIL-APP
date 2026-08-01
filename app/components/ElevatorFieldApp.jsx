@@ -40,7 +40,7 @@ const TABS = [
   { id: "billing", label: "비용청구", icon: Receipt },
   { id: "todo", label: "할일관리", icon: ListTodo },
   { id: "workcalendar", label: "워크캘린더", icon: CalendarClock },
-  // 관리자 모드는 하단 탭에서 제외 — 관리자 전용 퀵버튼(우리방 FAB 위)으로만 진입
+  // 관리자 모드는 하단 탭에서 제외 — 관리자 전용 퀵버튼(게시판 FAB 위)으로만 진입
 ];
 
 
@@ -142,7 +142,7 @@ export default function App() {
   const refusingFailureIdsRef = useRef(new Set());
   const [failureToast, setFailureToast] = useState("");
   const [loading, setLoading] = useState(true);
-  const [feedReadAt, setFeedReadAt] = useState(null); // 이번 세션에서 우리방을 마지막으로 읽은 시각
+  const [feedReadAt, setFeedReadAt] = useState(null); // 이번 세션에서 게시판을 마지막으로 읽은 시각
   const [notifOpen, setNotifOpen] = useState(false); // 우측상단 알림(종) 드롭다운
   const notifRef = useRef(null);
   const [openFailureId, setOpenFailureId] = useState(null); // 알림에서 특정 고장 건을 눌러 상세를 바로 연다 (탭 이동 없이 현재 화면 위에 띄움)
@@ -571,7 +571,7 @@ export default function App() {
     });
   }
 
-  // 교환 알림 팝업을 확인하면 다시 뜨지 않도록 표시한다 (우리방에는 아무것도 올리지 않는다)
+  // 교환 알림 팝업을 확인하면 다시 뜨지 않도록 표시한다 (게시판에는 아무것도 올리지 않는다)
   async function handleSeenDutySwap(swap, as) {
     const myId = profileIdByName(profilesAll, profile.name);
     const expectedId = as === "requester" ? swap.requesterId : swap.targetId;
@@ -686,7 +686,7 @@ export default function App() {
     return () => clearInterval(t);
   }, [session, skipLogin]);
 
-  // 우리방을 보는 순간(보는 동안 새 글이 와도) 읽음 처리
+  // 게시판을 보는 순간(보는 동안 새 글이 와도) 읽음 처리
   useEffect(() => {
     if (tab !== "room" || !profile) return;
     const now = new Date().toISOString();
@@ -775,7 +775,7 @@ export default function App() {
     notifyFailure(engineerName ? `${engineerName}(으)로 재배정 완료` : "미배정으로 되돌림");
   }
 
-  // ★ 출동 거부 — 배정 해제(미배정 환원) + 우리방에 관리자 멘션 알림 (동시 2건 배정 등 못 가는 상황용)
+  // ★ 출동 거부 — 배정 해제(미배정 환원) + 게시판에 관리자 멘션 알림 (동시 2건 배정 등 못 가는 상황용)
   // 고장 접수 직후 — 관리자에게는 항상, 미배정이면 기사 전원에게(선착순으로 잡으라고)
   function handleFailureReported(created) {
     const first = created[0];
@@ -1044,7 +1044,7 @@ export default function App() {
     return true;
   }
 
-  // ★ 우리방 피드에 새 글 등록 (extra: photoUrls 첨부, replyToId 답장)
+  // ★ 게시판 피드에 새 글 등록 (extra: photoUrls 첨부, replyToId 답장)
   async function handleSendFeedPost(text, extra = {}) {
     const newPost = {
       id: "p" + Date.now(),
@@ -1068,7 +1068,7 @@ export default function App() {
     }), "글 등록 실패 — 다시 시도해주세요");
     if (!posted) return false; // 글이 조용히 사라지지 않도록 (P1-7)
     setFeed((prev) => [...prev, newPost]);
-    // 우리방 알림 — @멘션 대상에겐 멘션 알림, 공지글이면 전원에게 공지 알림 (본인은 제외).
+    // 게시판 알림 — @멘션 대상에겐 멘션 알림, 공지글이면 전원에게 공지 알림 (본인은 제외).
     const myId = profileIdByName(profilesAll, profile.name);
     const tags = [...text.matchAll(/@([가-힣a-zA-Z0-9()]+)/g)].map((m) => m[1]);
     const mentionIds = tags.includes("모두")
@@ -1079,7 +1079,7 @@ export default function App() {
     return true;
   }
 
-  // ★ 우리방 좋아요 토글
+  // ★ 게시판 좋아요 토글
   // ponytail: 마지막 쓰기 승리 — 두 명이 동시에 누르면 한쪽이 덮일 수 있음(소규모 팀 허용), 문제되면 RPC로
   async function handleToggleLike(postId) {
     const me = profile.name;
@@ -1092,7 +1092,7 @@ export default function App() {
     await supabase.from("feed_posts").update({ reactions }).eq("id", postId);
   }
 
-  // ★ 우리방 글 수정 (본인 글만 — RoomTab에서 작성자 확인 후 호출)
+  // ★ 게시판 글 수정 (본인 글만 — RoomTab에서 작성자 확인 후 호출)
   async function handleUpdateFeedPost(postId, text) {
     const prevText = feed.find((p) => p.id === postId)?.text;
     setFeed((prev) => prev.map((p) => (p.id === postId ? { ...p, text } : p)));
@@ -1102,14 +1102,14 @@ export default function App() {
     }
   }
 
-  // ★ 우리방 글 삭제 — 그 글의 댓글도 함께 삭제
+  // ★ 게시판 글 삭제 — 그 글의 댓글도 함께 삭제
   async function handleDeleteFeedPost(postId) {
     setFeed((prev) => prev.filter((p) => p.id !== postId && p.replyToId !== postId));
     await supabase.from("feed_posts").delete().eq("reply_to_id", postId);
     await supabase.from("feed_posts").delete().eq("id", postId);
   }
 
-  // ★ 우리방 공지 등록/해제 — is_notice 컬럼 없으면(마이그레이션 전) 조용히 건너뜀
+  // ★ 게시판 공지 등록/해제 — is_notice 컬럼 없으면(마이그레이션 전) 조용히 건너뜀
   async function handleSetFeedNotice(postId, isNotice) {
     if (!feedNoticeReady) return;
     setFeed((prev) => prev.map((p) => (p.id === postId ? { ...p, isNotice } : p)));
@@ -1755,7 +1755,7 @@ export default function App() {
   const tabTitle = tab === "room" ? "게시판" : TABS.find((t) => t.id === tab)?.label ?? "";
   const visibleTabs = TABS.filter((t) => t.id !== "admin" || profile?.role === "admin");
 
-  // 우리방 안읽음/멘션 — 세션 로컬 읽음 시각이 있으면 그걸, 없으면 DB(profiles.feed_read_at) 기준
+  // 게시판 안읽음/멘션 — 세션 로컬 읽음 시각이 있으면 그걸, 없으면 DB(profiles.feed_read_at) 기준
   const myName = profile?.name ?? "";
   const selfDbReadAt = profilesAll.find((p) => p.id === profileIdByName(profilesAll, myName))?.feed_read_at;
   const readMs = Date.parse(feedReadAt ?? selfDbReadAt ?? "") || 0;
@@ -2109,7 +2109,7 @@ export default function App() {
           {tab === "admin" && profile.role === "admin" && <AdminTab materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onClearReassignRequest={handleClearReassignRequest} onAssignTodo={handleAssignTodo} onResetEngineerPassword={handleResetEngineerPassword} materialFocusId={materialFocusId} onMaterialFocusHandled={() => setMaterialFocusId(null)} quoteFocusId={quoteFocusId} onQuoteFocusHandled={() => setQuoteFocusId(null)} />}
           </PullToRefresh>
 
-          {/* 우리방 플로팅 버튼 — 어느 탭에서든 즉시 게시판으로 이동 (우리방 탭에서는 숨김) */}
+          {/* 게시판 플로팅 버튼 — 어느 탭에서든 즉시 게시판으로 이동 (게시판 탭에서는 숨김) */}
           {tab !== "room" && (
           <button
             onClick={() => setTab("room")}

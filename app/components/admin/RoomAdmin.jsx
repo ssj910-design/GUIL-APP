@@ -1,6 +1,6 @@
 "use client";
 
-// 게시판(우리방) — 관리자 콘솔용 데스크톱 화면.
+// 게시판 — 관리자 콘솔용 데스크톱 화면.
 // 모바일 앱 RoomTab과 데이터(feed_posts)를 공유하지만 화면은 완전히 새로 짠다:
 // 하단시트/채팅형 UI 대신 가운데 정렬된 카드 목록 + 작성창 상단 고정 + 상세는
 // 중앙 모달(adminShared의 Modal)로 — PC 게시판에 맞는 레이아웃.
@@ -92,7 +92,7 @@ function ComposeBox({ onSubmit, placeholder, compact, members = [] }) {
     setNotice(false);
   }
 
-  // @멘션 자동완성 — 입력 끝이 "@..."면 후보를 띄우고, 고르면 "@이름 "으로 채운다 (모바일 우리방과 동일).
+  // @멘션 자동완성 — 입력 끝이 "@..."면 후보를 띄우고, 고르면 "@이름 "으로 채운다 (모바일 게시판과 동일).
   const tagMatch = /@([가-힣a-zA-Z0-9()]*)$/.exec(text);
   const tagCands = tagMatch ? ["모두", ...members].filter((n) => n.toLowerCase().includes(tagMatch[1].toLowerCase())).slice(0, 8) : [];
   const pickTag = (n) => setText(text.replace(/@[가-힣a-zA-Z0-9()]*$/, "@" + n + " "));
@@ -202,7 +202,7 @@ export default function RoomAdmin({ data, setData }) {
       is_notice: newPost.isNotice,
     });
     setData((prev) => ({ ...prev, feed: [...(prev.feed ?? []), newPost] }));
-    // 우리방 알림 — 앱과 동일하게 @멘션 대상·공지 전원에게 (콘솔에서 쓴 글도 기사 폰에 뜨게).
+    // 게시판 알림 — 앱과 동일하게 @멘션 대상·공지 전원에게 (콘솔에서 쓴 글도 기사 폰에 뜨게).
     const myId = profileIdByName(data.profiles, ADMIN_NAME);
     const tags = [...text.matchAll(/@([가-힣a-zA-Z0-9()]+)/g)].map((m) => m[1]);
     const mentionIds = tags.includes("모두")
