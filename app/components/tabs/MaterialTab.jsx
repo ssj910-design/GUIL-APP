@@ -8,7 +8,6 @@ import { SitesContext, UnitsContext, AuthContext } from "@/app/components/contex
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
-import { notify } from "@/lib/push";
 
 
 // 자재 신청/견적 요청/상비부품 보충 각각의 상세보기(신청 사진 포함)에 공용으로 쓰는 시트.
@@ -612,10 +611,34 @@ export function UnitPickGrid({ site, selected, onToggle }) {
   );
 }
 
+// 중복 신청 경고 — 자재신청·견적신청 공용. 시스템이 자동으로 중복 여부를 판단해 막지 않고,
+// 같은 현장의 진행 중인 신청을 그대로 보여줘서 기사가 직접 보고 판단·진행하게 한다.
+function DuplicateWarningSheet({ items, onCancel, onConfirm }) {
+  return (
+    <Sheet title="중복 신청 확인" onClose={onCancel}>
+      <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5 mb-3">
+        해당 현장에 최근 신청내역이 있습니다. 중복신청이 아닌지 확인 후 신청바랍니다.
+      </p>
+      <div className="space-y-2 mb-4 max-h-[50vh] overflow-y-auto">
+        {items.map((it) => (
+          <div key={it.id} className="border border-slate-200 rounded-xl px-3 py-2.5">
+            <p className="text-sm font-bold text-slate-800">{it.elevatorNo ? `${it.elevatorNo} · ` : ""}{it.part ?? it.constructionType}</p>
+            <p className="text-[11px] text-amber-600 font-semibold mt-0.5">{it.status}</p>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <button onClick={onCancel} className="flex-1 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl py-3">취소</button>
+        <button onClick={onConfirm} className="flex-1 text-sm font-bold text-white bg-blue-700 rounded-xl py-3">그래도 신청</button>
+      </div>
+    </Sheet>
+  );
+}
+
 const MAT_STEP_TITLES = ["현장·호기·긴급도", "부품·사진·의견"];
 const QUOTE_STEP_TITLES = ["현장·호기·담당자", "견적·사진·의견"];
 
-export function MaterialTab({ requests, setRequests, todos, onReject, quoteRequests, setQuoteRequests, restockRequests, kitStock = [], onReceiveRestock }) {
+export function MaterialTab({ requests, onAddMaterialRequest, todos, onReject, quoteRequests, onAddQuoteRequest, restockRequests, kitStock = [], onReceiveRestock }) {
   const sites = useContext(SitesContext);
   const { name: CURRENT_ENGINEER, selfId } = useContext(AuthContext);
   const units = useContext(UnitsContext);
@@ -637,11 +660,21 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
   const [showMaterialHistory, setShowMaterialHistory] = useState(false);
   const [showQuoteHistory, setShowQuoteHistory] = useState(false);
   const [showRestockHistory, setShowRestockHistory] = useState(false);
+  const [dupWarning, setDupWarning] = useState(null); // { items } — 중복 신청 경고 (자재·견적 공용)
 
   const formPartText = formatPartRows(form.parts);
 
-  async function addRequest() {
+  function addRequest() {
     if (!form.siteId || !formPartText || form.photos.length === 0) return;
+    // 같은 현장에 승인대기 중인 자재신청이 있으면 접수 전에 보여주고 기사가 직접 중복 여부를 판단하게 한다
+    // (부품명이 자유텍스트라 정확매칭은 표기차이로 놓칠 수 있어, 현장 단위로 넓게 걸고 사람이 보게 함).
+    const pending = requests.filter((r) => r.siteId === form.siteId && r.status === "승인대기");
+    if (pending.length > 0) { setDupWarning({ items: pending, onConfirm: submitMaterialRequest }); return; }
+    submitMaterialRequest();
+  }
+
+  async function submitMaterialRequest() {
+    setDupWarning(null);
     const site = sites.find((s) => s.id === form.siteId);
     if (!site) return;
     // 선택한 호기마다 신청 1건씩 생성 (지급·비용청구가 호기 단위라 데이터도 호기별로 쪼갠다)
@@ -663,7 +696,7 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
       suppliedDate: null,
       rejectReason: null,
     }));
-    await supabase.from("material_requests").insert(newRequests.map((r) => ({
+    const dbRows = newRequests.map((r) => ({
       id: r.id,
       site_id: r.siteId,
       site_name: r.siteName,
@@ -680,9 +713,8 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
         unit_id: unitIdFor(units, r.siteId, r.elevatorNo),
         requester_id: selfId,
       } : {}),
-    })));
-    setRequests((prev) => [...newRequests, ...prev]);
-    notify("supply_requested", { title: "자재 신청이 들어왔어요", body: `${CURRENT_ENGINEER} · ${newRequests[0]?.siteName ?? ""} ${newRequests.length}건` });
+    }));
+    if (!(await onAddMaterialRequest(newRequests, dbRows))) return;
     setForm({ siteId: "", units: [], parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
     setMatStep(0);
     toastForm(newRequests.length > 1 ? `자재 신청 ${newRequests.length}건이 접수되었습니다` : "자재 신청이 접수되었습니다", true);
@@ -735,8 +767,17 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
     return null;
   }
 
-  async function submitQuote() {
+  function submitQuote() {
     if (!quoteValid) return;
+    // 같은 현장에 아직 지급완료 전(요청접수/견적발행/승인 어느 단계든)인 견적요청이 있으면 경고 —
+    // 견적은 완료 전까지 여러 단계를 거치므로 승인대기 하나만 보는 자재신청보다 범위를 넓게 잡는다.
+    const pending = quoteRequests.filter((q) => q.siteId === quoteForm.siteId && q.status !== "자재지급완료");
+    if (pending.length > 0) { setDupWarning({ items: pending, onConfirm: submitQuoteRequest }); return; }
+    submitQuoteRequest();
+  }
+
+  async function submitQuoteRequest() {
+    setDupWarning(null);
     const site = sites.find((s) => s.id === quoteForm.siteId);
     if (!site) return;
     const targets = quoteForm.units.length ? quoteForm.units : [null];
@@ -759,7 +800,7 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
       suppliedDate: null,
       hasSupplyPhoto: false,
     }));
-    await supabase.from("quote_requests").insert(newQuotes.map((q) => ({
+    const dbRows = newQuotes.map((q) => ({
       id: q.id,
       site_id: q.siteId,
       site_name: q.siteName,
@@ -776,9 +817,8 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
         unit_id: unitIdFor(units, q.siteId, q.elevatorNo),
         requester_id: selfId,
       } : {}),
-    })));
-    setQuoteRequests((prev) => [...newQuotes, ...prev]);
-    notify("supply_requested", { title: "견적 신청이 들어왔어요", body: `${CURRENT_ENGINEER} · ${newQuotes[0]?.siteName ?? ""} ${newQuotes.length}건` });
+    }));
+    if (!(await onAddQuoteRequest(newQuotes, dbRows))) return;
     setQuoteForm({ siteId: "", units: [], parts: [emptyPartRow(), emptyPartRow(), emptyPartRow()], contactPhone: "", photos: [], note: "" });
     setQuoteStep(0);
     toastForm(newQuotes.length > 1 ? `견적 요청 ${newQuotes.length}건이 접수되었습니다` : "견적 요청이 접수되었습니다", true);
@@ -1221,6 +1261,14 @@ export function MaterialTab({ requests, setRequests, todos, onReject, quoteReque
           {formToast.ok ? <Check size={14} className="shrink-0" /> : <AlertTriangle size={14} className="text-amber-400 shrink-0" />}
           {formToast.msg}
         </div>
+      )}
+
+      {dupWarning && (
+        <DuplicateWarningSheet
+          items={dupWarning.items}
+          onCancel={() => setDupWarning(null)}
+          onConfirm={dupWarning.onConfirm}
+        />
       )}
     </div>
   );

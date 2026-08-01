@@ -1085,6 +1085,23 @@ export default function App() {
     }
   }
 
+  // ★ 자재 신청 등록 — 탭에서 폼만 만들고 실제 DB 쓰기·에러체크는 여기서 한다(다른 handleXxx와 동일 패턴).
+  // 중복 신청 경고(같은 현장 승인대기건 존재 여부) 판단은 MaterialTab에서 미리 하고, 여기는 쓰기만 담당.
+  async function handleAddMaterialRequest(newRequests, dbRows) {
+    if (!(await writeOk(supabase.from("material_requests").insert(dbRows), "자재 신청 실패"))) return false;
+    setMaterialRequests((prev) => [...newRequests, ...prev]);
+    notify("supply_requested", { title: "자재 신청이 들어왔어요", body: `${newRequests[0]?.engineer ?? ""} · ${newRequests[0]?.siteName ?? ""} ${newRequests.length}건` });
+    return true;
+  }
+
+  // ★ 견적 신청 등록 — handleAddMaterialRequest와 동일한 이유로 App 셸로 옮김.
+  async function handleAddQuoteRequest(newQuotes, dbRows) {
+    if (!(await writeOk(supabase.from("quote_requests").insert(dbRows), "견적 요청 실패"))) return false;
+    setQuoteRequests((prev) => [...newQuotes, ...prev]);
+    notify("supply_requested", { title: "견적 신청이 들어왔어요", body: `${newQuotes[0]?.engineer ?? ""} · ${newQuotes[0]?.siteName ?? ""} ${newQuotes.length}건` });
+    return true;
+  }
+
   // ★ 자재 담당자가 지급할 자재 사진을 한 장 추가하는 순간 (지급완료 체크의 선행 조건)
   // 여러 장을 연달아 올릴 때 setState 업데이터만으로는 React 렌더링 타이밍에 따라 아직 반영되지
   // 않은 상태를 기준으로 계산될 수 있어(경쟁 상태), ref에 최신 배열을 직접 동기적으로 보관합니다.
@@ -1942,7 +1959,7 @@ export default function App() {
           )}
           {tab === "checkup" && <CheckupTab selfChecks={selfChecks} setSelfChecks={setSelfChecks} siteManagers={siteManagers} profilesAll={profilesAll} inspections={inspections} />}
           {tab === "inspection" && <InspectionTab inspections={inspections} />}
-          {tab === "material" && <MaterialTab requests={materialRequests} setRequests={setMaterialRequests} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} setQuoteRequests={setQuoteRequests} restockRequests={restockRequests} kitStock={kitStock} onReceiveRestock={handleReceiveRestock} />}
+          {tab === "material" && <MaterialTab requests={materialRequests} onAddMaterialRequest={handleAddMaterialRequest} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} onAddQuoteRequest={handleAddQuoteRequest} restockRequests={restockRequests} kitStock={kitStock} onReceiveRestock={handleReceiveRestock} />}
           {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} />}
           {tab === "todo" && (
             <TodoTab
