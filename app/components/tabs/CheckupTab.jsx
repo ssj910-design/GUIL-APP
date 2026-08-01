@@ -6,7 +6,7 @@ import { useHolidays } from "@/app/hooks/useHolidays";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 import { siteUnitList, distanceKm } from "@/lib/utils";
 import { mapSelfCheck, mapSelfCheckItem, mapSelfCheckItemState } from "@/lib/mappers";
-import { PrimaryButton, Sheet, Field, inputCls, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
+import { PrimaryButton, Sheet, Field, inputCls, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, Badge } from "@/app/components/ui";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import SELF_CHECK_ITEM_CODES from "@/lib/data/selfCheckItemCodes.json";
@@ -46,6 +46,15 @@ function formatDateTime(iso) {
   const d = new Date(iso);
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// 현장의 호기 중 하나라도 조건부합격/불합격이면 그 결과를 현장카드에 배지로 보여준다
+// (검사관리-조건부/불합격 현장 카드와 같은 Badge 재사용). 불합격이 하나라도 있으면 불합격 우선.
+function siteFlagResult(site, units) {
+  const real = siteUnitList(site, units).filter((u) => u.id);
+  if (real.some((u) => u.inspectionResult === "불합격")) return "fail";
+  if (real.some((u) => u.inspectionResult === "조건부합격")) return "conditional";
+  return null;
 }
 
 const CHECKUP_STEP_TITLES = ["점검 정보", "점검 항목", "특이사항·제출"];
@@ -401,10 +410,13 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
                   {/* 윗줄: 현장명·대수 + 예정일 배지 / 거리·주소 — 개요라 정보 먼저 */}
                   <div className="p-3.5 pb-2.5">
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <p className="font-bold text-slate-800 text-sm truncate">{s.name} · {siteUnitList(s, units).length}대</p>
-                      {planned
-                        ? <span className="shrink-0 text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">예정 {fmtMD(planned)}</span>
-                        : <span className="shrink-0 text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">미정</span>}
+                      <p className="font-bold text-slate-800 text-sm truncate min-w-0">{s.name} · {siteUnitList(s, units).length}대</p>
+                      <span className="shrink-0 flex items-center gap-1.5">
+                        <Badge result={siteFlagResult(s, units)} />
+                        {planned
+                          ? <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">예정 {fmtMD(planned)}</span>
+                          : <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">미정</span>}
+                      </span>
                     </div>
                     <p className="text-[11px] text-slate-400 flex items-center gap-1 min-w-0">
                       {dist != null && <span className="inline-flex items-center gap-0.5 font-bold text-blue-600 shrink-0"><MapPin size={11} strokeWidth={2.5} />{fmtDist(dist)} ·</span>}
