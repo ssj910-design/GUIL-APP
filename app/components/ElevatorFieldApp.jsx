@@ -27,7 +27,7 @@ import { MaterialTab } from "@/app/components/tabs/MaterialTab";
 import { BillingTab } from "@/app/components/tabs/BillingTab";
 import { TodoTab, TodoDetailSheet, getRequesterName, getCoAssignees, getSupplyPhotos, getTodoSiteAddress } from "@/app/components/tabs/TodoTab";
 import { AdminTab } from "@/app/components/tabs/AdminTab";
-import { RoomTab, PostDetailOverlay } from "@/app/components/tabs/RoomTab";
+import { RoomTab } from "@/app/components/tabs/RoomTab";
 
 
 const TABS = [
@@ -147,7 +147,7 @@ export default function App() {
   const notifRef = useRef(null);
   const [openFailureId, setOpenFailureId] = useState(null); // 알림에서 특정 고장 건을 눌러 상세를 바로 연다 (탭 이동 없이 현재 화면 위에 띄움)
   const [openTodoId, setOpenTodoId] = useState(null); // 알림에서 특정 할일을 눌러 상세를 바로 연다
-  const [openFeedPostId, setOpenFeedPostId] = useState(null); // 알림에서 특정 게시글을 눌러 그 글만 팝업으로 연다 (게시판 전체를 열어 안읽음을 한번에 지우지 않도록)
+  const [openFeedPostId, setOpenFeedPostId] = useState(null); // 알림/푸시에서 특정 게시글을 눌러 게시판 탭에서 바로 그 글 화면으로 들어간다
   const [materialFocusId, setMaterialFocusId] = useState(null); // 알림/푸시에서 특정 자재신청을 눌러 관리자 모드 자재출하관리에서 바로 상세를 연다
   const [quoteFocusId, setQuoteFocusId] = useState(null); // 알림/푸시에서 특정 견적신청을 눌러 관리자 모드 견적요청관리에서 바로 상세를 연다
   const [notifDispatchTarget, setNotifDispatchTarget] = useState(null);
@@ -218,7 +218,7 @@ export default function App() {
   // 자재·견적 신청 푸시알림(url=/?openMaterial=id 또는 ?openQuote=id)을 눌러 앱이 열렸을 때,
   // 관리자 모드 자재출하관리/견적요청관리에서 그 건 상세를 바로 띄운다. 종(🔔) 알림 클릭도 같은
   // materialFocusId/quoteFocusId state를 써서 동일하게 동작한다(그쪽은 URL 없이 바로 state만 설정).
-  // 게시판 @멘션·공지 푸시(url=/?openPost=id)도 같은 방식 — 게시판 탭을 여는 대신 그 글만 바로 띄운다.
+  // 게시판 @멘션·공지 푸시(url=/?openPost=id)도 같은 방식 — 게시판 탭으로 실제 이동해서 그 글 화면을 띄운다.
   function applyOpenParams(params) {
     const openMaterial = params.get("openMaterial");
     const openQuote = params.get("openQuote");
@@ -227,7 +227,7 @@ export default function App() {
     if (openMaterial || openQuote) setTab("admin");
     if (openMaterial) setMaterialFocusId(openMaterial);
     if (openQuote) setQuoteFocusId(openQuote);
-    if (openPost) { setOpenFeedPostId(openPost); handleDismissNotif("post:" + openPost); }
+    if (openPost) { setTab("room"); setOpenFeedPostId(openPost); handleDismissNotif("post:" + openPost); }
     return true;
   }
 
@@ -1990,7 +1990,7 @@ export default function App() {
                               {[...notifPosts].reverse().map((p) => (
                                 <div key={p.id} className="flex items-center border-b border-slate-50 last:border-0 active:bg-slate-50">
                                   <button
-                                    onClick={() => { setNotifOpen(false); setOpenFeedPostId(p.id); handleDismissNotif("post:" + p.id); }}
+                                    onClick={() => { setNotifOpen(false); setTab("room"); setOpenFeedPostId(p.id); handleDismissNotif("post:" + p.id); }}
                                     className="flex-1 min-w-0 text-left px-4 py-2.5"
                                   >
                                     <p className="text-xs font-bold text-slate-700">
@@ -2103,6 +2103,8 @@ export default function App() {
                   onDeletePost={handleDeleteFeedPost}
                   onSetNotice={feedNoticeReady ? handleSetFeedNotice : null}
                   onDismissNotif={handleDismissNotif}
+                  focusPostId={openFeedPostId}
+                  onFocusHandled={() => setOpenFeedPostId(null)}
                 />}
           {tab === "workcalendar" && (
             <WorkCalendarSheet
@@ -2200,19 +2202,6 @@ export default function App() {
               />
             );
           })()}
-          {openFeedPostId && (
-            <PostDetailOverlay
-              feed={feed}
-              postId={openFeedPostId}
-              onSendChat={handleSendFeedPost}
-              onToggleLike={handleToggleLike}
-              onUpdatePost={handleUpdateFeedPost}
-              onDeletePost={handleDeleteFeedPost}
-              onSetNotice={feedNoticeReady ? handleSetFeedNotice : null}
-              onClose={() => setOpenFeedPostId(null)}
-            />
-          )}
-
           {/* bottom nav — 기존 형태(전체 탭 가로 스크롤), 팀 합의로 원복 (2026-07-17) */}
           <div
             className="shrink-0 bg-slate-50 border-t-2 border-slate-300 flex overflow-x-auto"

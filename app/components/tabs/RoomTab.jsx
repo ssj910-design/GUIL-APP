@@ -99,131 +99,6 @@ function PostHeader({ p, canManage, canNotice, menuOpen, onToggleMenu, onCloseMe
   );
 }
 
-// 알림(종)에서 게시글 하나를 눌렀을 때 — 게시판 전체를 열지 않고 그 글만 팝업으로 보여준다
-// (게시판을 열면 전체 안읽음이 한번에 읽음 처리되는데, 다른 안읽은 글 알림까지 사라지는 걸 막기 위함).
-export function PostDetailOverlay({ feed, postId, onSendChat, onToggleLike, onUpdatePost, onDeletePost, onSetNotice, onClose }) {
-  const { name: CURRENT_ENGINEER, role, selfId } = useContext(AuthContext);
-  const isAdmin = role === "admin";
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [editText, setEditText] = useState("");
-  const [commentDraft, setCommentDraft] = useState("");
-  const [viewerUrl, setViewerUrl] = useState(null);
-
-  const post = feed.find((p) => p.id === postId);
-  if (!post) return null;
-  const comments = feed.filter((p) => p.replyToId === postId).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-  const likes = post.reactions?.["👍"] ?? [];
-  const liked = likes.includes(CURRENT_ENGINEER);
-  // 이름이 같은 계정이 둘 이상이면 이름만으로는 남의 글도 내 글로 오판될 수 있어, 아이디가 있으면
-  // 아이디로 판단하고(authorId가 없는 옛 글만 이름으로 대체 판단).
-  const canManage = isAdmin || (post.authorId != null ? post.authorId === selfId : post.author === CURRENT_ENGINEER);
-
-  function submitComment() {
-    const text = commentDraft.trim();
-    if (!text) return;
-    onSendChat(text, { replyToId: postId });
-    setCommentDraft("");
-  }
-  function saveEdit() {
-    if (!editText.trim()) return;
-    onUpdatePost?.(postId, editText.trim());
-    setEditing(false);
-  }
-  async function doDelete() {
-    if (!(await confirmAsync("이 글을 삭제할까요? 댓글도 함께 삭제됩니다."))) return;
-    onDeletePost?.(postId);
-    onClose();
-  }
-
-  return (
-    <div className="fixed inset-0 z-40 flex flex-col bg-black/40" onClick={onClose}>
-      <div className="mt-auto" />
-      <div className="bg-white rounded-t-3xl h-[85%] flex flex-col shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <div className="px-4 pt-4 pb-2.5 flex items-center justify-between shrink-0 border-b border-slate-100">
-          <p className="text-sm font-bold text-slate-800">게시글</p>
-          <button onClick={onClose} className="p-1 text-slate-400 active:text-slate-700" aria-label="닫기"><X size={20} /></button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-4 py-3">
-          <PostHeader
-            p={post} canManage={canManage} canNotice={!!onSetNotice}
-            menuOpen={menuOpen}
-            onToggleMenu={() => setMenuOpen((v) => !v)}
-            onCloseMenu={() => setMenuOpen(false)}
-            onNotice={() => onSetNotice?.(postId, !post.isNotice)}
-            onEdit={() => { setEditing(true); setEditText(post.text ?? ""); setMenuOpen(false); }}
-            onDelete={doDelete}
-          />
-          {editing ? (
-            <div className="mb-2">
-              <textarea className="w-full text-sm border border-slate-200 rounded-xl p-2.5 resize-none focus:outline-none" rows={3} value={editText} onChange={(e) => setEditText(e.target.value)} />
-              <div className="flex justify-end gap-2 mt-1.5">
-                <button onClick={saveEdit} className="text-xs font-bold text-white bg-blue-700 rounded-full px-3.5 py-1.5">저장</button>
-                <button onClick={() => setEditing(false)} className="text-xs font-bold text-slate-400 px-2.5 py-1.5">취소</button>
-              </div>
-            </div>
-          ) : (
-            <div className="mb-2">
-              {post.text && <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{renderText(post.text)}</p>}
-              {(post.photoUrls ?? []).length > 0 && (
-                <div className="space-y-1.5 mt-2">
-                  {post.photoUrls.map((u) =>
-                    isVideo(u)
-                      ? <video key={u} src={u} controls playsInline className="rounded-lg w-full" />
-                      : <img key={u} src={u} alt="첨부 사진" className="rounded-lg w-full object-cover" onClick={() => setViewerUrl(u)} />
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-          <div className="flex items-center gap-4 py-2.5 border-t border-b border-slate-100">
-            <button onClick={() => onToggleLike?.(postId)} className={`flex items-center gap-1 text-xs font-bold ${liked ? "text-blue-600" : "text-slate-500"}`}>
-              <ThumbsUp size={14} className={liked ? "fill-blue-600" : ""} /> 좋아요{likes.length > 0 ? ` ${likes.length}` : ""}
-            </button>
-            <span className="flex items-center gap-1 text-xs font-bold text-slate-500">
-              <MessageCircle size={14} /> 댓글 {comments.length}
-            </span>
-          </div>
-          <div className="pt-1 divide-y divide-slate-100">
-            {comments.length === 0
-              ? <p className="text-xs text-slate-400 text-center py-6">첫 댓글을 남겨보세요</p>
-              : comments.map((c) => {
-                  const cLikes = c.reactions?.["👍"] ?? [];
-                  return <CommentRow key={c.id} c={c} onLike={() => onToggleLike?.(c.id)} liked={cLikes.includes(CURRENT_ENGINEER)} likeCount={cLikes.length} />;
-                })}
-          </div>
-        </div>
-        <div className="shrink-0 border-t border-slate-100 bg-white px-4 py-3 flex items-center gap-2">
-          <input
-            className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
-            placeholder="댓글을 입력하세요"
-            value={commentDraft}
-            onChange={(e) => setCommentDraft(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submitComment()}
-          />
-          <button onClick={submitComment} disabled={!commentDraft.trim()} className="w-9 h-9 rounded-full bg-blue-700 disabled:bg-slate-300 text-white flex items-center justify-center shrink-0">
-            <Send size={14} />
-          </button>
-        </div>
-        {viewerUrl && (
-          <div className="fixed inset-0 z-50 bg-black/90 flex flex-col" onClick={() => setViewerUrl(null)}>
-            <div className="flex justify-end gap-2 p-4 shrink-0">
-              <button onClick={(e) => { e.stopPropagation(); downloadPhoto(viewerUrl, "게시판-사진"); }} className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="사진 저장">
-                <Download size={18} />
-              </button>
-              <button className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="닫기" onClick={() => setViewerUrl(null)}><X size={18} /></button>
-            </div>
-            <div className="flex-1 flex items-center justify-center p-2 overflow-hidden">
-              <img src={viewerUrl} alt="확대 사진" className="max-w-full max-h-full object-contain" onClick={(e) => e.stopPropagation()} />
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-
 // 게시글 본문(텍스트 수정폼 포함) — 목록 카드/상세화면 공용.
 // ★ 반드시 모듈 최상위에 둘 것: RoomTab 렌더 함수 안에 정의하면 매 렌더마다 새 컴포넌트 타입이 되어
 // 서브트리가 통째로 리마운트된다(수정 textarea가 키 입력마다 포커스를 잃고, 사진·영상이 깜빡임). (P1-3)
@@ -266,7 +141,7 @@ function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEdit
   );
 }
 
-export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDeletePost, onSetNotice, onDismissNotif }) {
+export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDeletePost, onSetNotice, onDismissNotif, focusPostId, onFocusHandled }) {
   const { name: CURRENT_ENGINEER, role, profiles, selfId } = useContext(AuthContext);
   const [composing, setComposing] = useState(false);
   const [postInput, setPostInput] = useState("");
@@ -356,16 +231,24 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
     onUpdatePost?.(editingId, editText.trim());
     setEditingId(null);
   }
+  // 알림/푸시로 특정 글이 지정되면(focusPostId) 게시판 탭 안에서 바로 그 글 화면으로 들어간다 —
+  // materialFocusId/quoteFocusId와 동일한 방식(effect 없이 렌더 시점에 반영, 로컬 openPostId가 우선).
+  const shownPostId = openPostId ?? focusPostId;
+  function closePost() {
+    setMenuFor(null);
+    setOpenPostId(null);
+    if (focusPostId) onFocusHandled?.();
+  }
   async function deletePost(p) {
     if (!(await confirmAsync("이 글을 삭제할까요? 댓글도 함께 삭제됩니다."))) return;
     onDeletePost?.(p.id);
-    if (openPostId === p.id) setOpenPostId(null);
+    if (shownPostId === p.id) closePost();
   }
 
   // 모듈 최상위 PostBody에 넘길 편집·뷰어 상태 묶음 (P1-3)
   const bodyProps = { editingId, editText, setEditText, saveEdit, setEditingId, setViewerUrl };
 
-  const openPost = openPostId ? feed.find((p) => p.id === openPostId) : null;
+  const openPost = shownPostId ? feed.find((p) => p.id === shownPostId) : null;
 
   // ---- 게시글 상세화면 (첨부파일처럼 게시글을 누르면 진입) ----
   if (openPost) {
@@ -376,7 +259,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
     return (
       <div className="flex-1 flex flex-col overflow-hidden bg-white">
         <div className="px-4 pt-4 pb-2.5 flex items-center gap-2 shrink-0 border-b border-slate-100">
-          <button onClick={() => { setMenuFor(null); setOpenPostId(null); }} className="p-1 text-slate-500 active:text-slate-800" aria-label="뒤로">
+          <button onClick={closePost} className="p-1 text-slate-500 active:text-slate-800" aria-label="뒤로">
             <ChevronLeft size={20} />
           </button>
           <p className="text-sm font-bold text-slate-800">게시글</p>
