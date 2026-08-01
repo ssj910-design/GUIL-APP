@@ -1125,7 +1125,7 @@ export default function App() {
   async function handleAddMaterialRequest(newRequests, dbRows) {
     if (!(await writeOk(supabase.from("material_requests").insert(dbRows), "자재 신청 실패"))) return false;
     setMaterialRequests((prev) => [...newRequests, ...prev]);
-    notify("supply_requested", { title: "자재 신청이 들어왔어요", body: `${newRequests[0]?.engineer ?? ""} · ${newRequests[0]?.siteName ?? ""} ${newRequests.length}건`, url: `/?openMaterial=${newRequests[0]?.id}` });
+    notify("material_requested", { title: "자재 신청이 들어왔어요", body: `${newRequests[0]?.engineer ?? ""} · ${newRequests[0]?.siteName ?? ""} ${newRequests.length}건`, url: `/?openMaterial=${newRequests[0]?.id}` });
     return true;
   }
 
@@ -1133,7 +1133,7 @@ export default function App() {
   async function handleAddQuoteRequest(newQuotes, dbRows) {
     if (!(await writeOk(supabase.from("quote_requests").insert(dbRows), "견적 요청 실패"))) return false;
     setQuoteRequests((prev) => [...newQuotes, ...prev]);
-    notify("supply_requested", { title: "견적 신청이 들어왔어요", body: `${newQuotes[0]?.engineer ?? ""} · ${newQuotes[0]?.siteName ?? ""} ${newQuotes.length}건`, url: `/?openQuote=${newQuotes[0]?.id}` });
+    notify("quote_requested", { title: "견적 신청이 들어왔어요", body: `${newQuotes[0]?.engineer ?? ""} · ${newQuotes[0]?.siteName ?? ""} ${newQuotes.length}건`, url: `/?openQuote=${newQuotes[0]?.id}` });
     return true;
   }
 
@@ -1321,7 +1321,9 @@ export default function App() {
       ...(kitStockReady ? { quantity: usedQty } : {}),
     });
     setRestockRequests((prev) => [newRestock, ...prev]);
-    sendPush("supply_requested", adminIds(), {
+    // sendPush(로컬 헬퍼)는 항상 profileIds를 직접 넘겨야 해서 알림 설정의 "받는 사람" 좁히기가
+    // 안 먹는다 — 자재 신청과 같은 대상 규칙을 타야 하니 notify()로 관리자 대상 자동 해석을 쓴다.
+    notify("material_requested", {
       title: "상비부품 보충 신청",
       body: `${profile.name} · ${part}${siteName ? ` (${siteName})` : ""}`,
     });
@@ -1791,7 +1793,11 @@ export default function App() {
   // 관리자용 — 새로 들어온(아직 아무도 처리 안 한) 자재·견적 신청. 지금까지는 푸시로만 갔고
   // 종(🔔) 알림 목록엔 안 떴다.
   const notifNewMaterials = profile?.role === "admin" ? materialRequests.filter((r) => r.status === "승인대기" && !dismissedIds.has("newmat:" + r.id)) : [];
-  const notifNewQuotes = profile?.role === "admin" ? quoteRequests.filter((q) => q.status === "요청접수" && !dismissedIds.has("newquote:" + q.id)) : [];
+  // 자재담당관리자는 관리자 모드에 견적요청관리 화면 자체가 없어(자재출하관리·상비부품보충만
+  // 볼 수 있음) 여기 떠도 눌러봤자 갈 곳이 없다 — 처음부터 안 보이게 뺀다.
+  const notifNewQuotes = profile?.role === "admin" && profile?.adminTier !== "material"
+    ? quoteRequests.filter((q) => q.status === "요청접수" && !dismissedIds.has("newquote:" + q.id))
+    : [];
   // 게시판 알림은 글 하나를 눌러도(팝업으로만 확인) feedReadAt 전체읽음은 건드리지 않고, 그 글만 지운 것으로 처리한다
   // — 그래야 나머지 안읽은 글 알림이 같이 사라지지 않는다.
   const notifPosts = unreadPosts.filter((p) => !dismissedIds.has("post:" + p.id));

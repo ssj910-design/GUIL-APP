@@ -57,7 +57,7 @@ async function handlePost(request) {
   // 받는 사람 결정: profileIds를 주면 그대로, 안 주면 알림 종류의 audience(admin/engineer/all)로 서버가 정한다.
   // 이러면 관리자 전체·기사 전체·전원 대상 알림은 호출자가 대상 목록을 몰라도 key만으로 보낼 수 있다.
   const hasIds = Array.isArray(profileIds) && profileIds.length > 0;
-  let profQ = db.from("profiles").select("id,name,role,notify_prefs,is_active,deleted_at");
+  let profQ = db.from("profiles").select("id,name,role,admin_tier,notify_prefs,is_active,deleted_at");
   if (hasIds) profQ = profQ.in("id", profileIds);
   else if (item.audience === "admin") profQ = profQ.eq("role", "admin");
   else if (item.audience === "engineer") profQ = profQ.eq("role", "engineer");
@@ -68,9 +68,15 @@ async function handlePost(request) {
     profQ,
   ]);
   // audience 자동 대상은 비활성·삭제 계정을 뺀다 (명시 id는 호출자가 책임진다)
-  const profiles = hasIds ? (profRows ?? []) : (profRows ?? []).filter((p) => p.is_active !== false && !p.deleted_at);
+  let profiles = hasIds ? (profRows ?? []) : (profRows ?? []).filter((p) => p.is_active !== false && !p.deleted_at);
   const org = {};
-  for (const r of settingRows ?? []) org[r.key] = { enabled: r.enabled, level: r.level };
+  for (const r of settingRows ?? []) org[r.key] = { enabled: r.enabled, level: r.level, audienceTier: r.audience_tier };
+
+  // 관리자 대상 알림은 최고관리자가 "알림 설정"에서 받는 사람을 더 좁힐 수 있다(예: 최고관리자만).
+  // profileIds를 직접 넘긴 호출은 호출자가 대상을 이미 정한 것이므로 여기서 더 거르지 않는다.
+  if (!hasIds && item.audience === "admin" && org[key]?.audienceTier === "super") {
+    profiles = profiles.filter((p) => p.admin_tier === "super");
+  }
 
   // 회사 설정에서 꺼둔 알림이면 여기서 끝
   if (org[key]?.enabled === false) return Response.json({ ok: true, sent: 0, skipped: "회사 설정에서 꺼짐" });

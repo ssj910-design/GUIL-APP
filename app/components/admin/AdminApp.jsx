@@ -95,8 +95,15 @@ export default function AdminApp() {
     const row = Array.isArray(data) ? data[0] : data;
     if (error || !row) { setAuthError(await loginFailReason(loginId)); setAuthSubmitting(false); return; }
     if (row.role !== "admin") { setAuthError("관리자만 접근할 수 있는 페이지입니다."); setAuthSubmitting(false); return; }
-    localStorage.setItem("guilAuthV1", JSON.stringify({ id: row.id, name: row.name, role: row.role, mustChange: row.must_change }));
     const { data: p } = await supabase.from("profiles").select("admin_tier").eq("id", row.id).single();
+    // 자재담당관리자는 모바일 앱 관리자 모드(자재출하관리·상비부품보충)만 쓰고 PC 콘솔은 못 들어온다 —
+    // 기사가 role!=='admin'이라 못 들어오는 것과 같은 구조(로그인 성공 직후 클라이언트에서 차단).
+    if (p?.admin_tier === "material") {
+      setAuthError("이 계정은 PC 관리자 콘솔에 접근할 수 없습니다. 모바일 앱을 이용해주세요.");
+      setAuthSubmitting(false);
+      return;
+    }
+    localStorage.setItem("guilAuthV1", JSON.stringify({ id: row.id, name: row.name, role: row.role, mustChange: row.must_change }));
     setMe({ id: row.id, name: row.name, role: row.role, adminTier: p?.admin_tier, mustChange: row.must_change });
     setAuthSubmitting(false);
   }

@@ -529,6 +529,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
               <p className="text-[11px] font-bold text-slate-500 mb-1">등급</p>
               <select className={inputCls} value={adminForm.tier} onChange={(e) => setAdminForm({ ...adminForm, tier: e.target.value })}>
                 <option value="manager">중간관리자</option>
+                <option value="material">자재담당관리자</option>
                 <option value="super">최고관리자</option>
               </select>
             </div>
@@ -539,7 +540,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
           </div>
           {admins.length > 0 && (
             <p className="text-[11px] text-slate-400 mt-2.5">
-              현재 관리자: {admins.map((a) => `${a.name}(${a.admin_tier === "super" ? "최고" : "중간"})`).join(" · ")}
+              현재 관리자: {admins.map((a) => `${a.name}(${a.admin_tier === "super" ? "최고" : a.admin_tier === "material" ? "자재담당" : "중간"})`).join(" · ")}
             </p>
           )}
         </div>

@@ -912,6 +912,8 @@ function DashStat({ label, n, tone }) {
 
 export function AdminTab({ materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onClearReassignRequest, onResetEngineerPassword, materialFocusId, onMaterialFocusHandled, quoteFocusId, onQuoteFocusHandled }) {
   const { engineerNames, adminTier, profiles } = useContext(AuthContext);
+  // 자재담당관리자는 자재출하관리·상비부품보충만 본다 (견적·재배정·비용청구·계정관리는 다른 관리자 담당).
+  const isMaterialTier = adminTier === "material";
   // PC 관리자 콘솔(EngineersAdmin)과 동일한 대상 — 기사 전체 + 최고관리자를 뺀 관리자 계정.
   const resettableAccounts = (profiles ?? [])
     .filter((p) => (p.role === "engineer" || (p.role === "admin" && p.admin_tier !== "super")) && p.is_active !== false);
@@ -968,11 +970,11 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
       <div className="flex-1 overflow-y-auto px-5 pt-4 pb-4">
         <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
           <p className="text-xs font-bold text-slate-500 mb-2.5">지금 처리할 것</p>
-          <div className="grid grid-cols-4 gap-2">
+          <div className={`grid gap-2 ${isMaterialTier ? "grid-cols-2" : "grid-cols-4"}`}>
             <DashStat label="자재" n={materialPending.length} tone="amber" />
             <DashStat label="반려" n={materialRejected.length} tone="red" />
-            <DashStat label="견적" n={quoteActive.length} tone="indigo" />
-            <DashStat label="재배정" n={reassignTodos.length} tone="amber" />
+            {!isMaterialTier && <DashStat label="견적" n={quoteActive.length} tone="indigo" />}
+            {!isMaterialTier && <DashStat label="재배정" n={reassignTodos.length} tone="amber" />}
           </div>
         </div>
 
@@ -1003,29 +1005,33 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
             />
           </AccordionRow>
 
-          <AccordionRow icon={FileText} label="견적 요청 관리" badge={quoteActive.length} open={quotesOpen} onToggle={() => toggle("quotes")}>
-            <QuotesPanel
-              active={quoteActive}
-              completedCount={completed.length}
-              engineerNames={engineerNames}
-              onAdvanceQuote={onAdvanceQuote}
-              onCompleteQuoteSupply={onCompleteQuoteSupply}
-              onAttachQuotePhoto={onAttachQuotePhoto}
-              onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
-              onOpenHistory={() => setPage("quoteHistory")}
-              focusId={quoteFocusId}
-              onFocusHandled={onQuoteFocusHandled}
-            />
-          </AccordionRow>
+          {!isMaterialTier && (
+            <AccordionRow icon={FileText} label="견적 요청 관리" badge={quoteActive.length} open={quotesOpen} onToggle={() => toggle("quotes")}>
+              <QuotesPanel
+                active={quoteActive}
+                completedCount={completed.length}
+                engineerNames={engineerNames}
+                onAdvanceQuote={onAdvanceQuote}
+                onCompleteQuoteSupply={onCompleteQuoteSupply}
+                onAttachQuotePhoto={onAttachQuotePhoto}
+                onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
+                onOpenHistory={() => setPage("quoteHistory")}
+                focusId={quoteFocusId}
+                onFocusHandled={onQuoteFocusHandled}
+              />
+            </AccordionRow>
+          )}
 
-          <AccordionRow icon={Repeat} label="재배정 요청 처리" badge={reassignTodos.length} open={expanded === "reassign"} onToggle={() => toggle("reassign")}>
-            <ReassignPanel
-              todos={reassignTodos}
-              engineerNames={engineerNames}
-              onReassignTodo={onReassignTodo}
-              onClearReassignRequest={onClearReassignRequest}
-            />
-          </AccordionRow>
+          {!isMaterialTier && (
+            <AccordionRow icon={Repeat} label="재배정 요청 처리" badge={reassignTodos.length} open={expanded === "reassign"} onToggle={() => toggle("reassign")}>
+              <ReassignPanel
+                todos={reassignTodos}
+                engineerNames={engineerNames}
+                onReassignTodo={onReassignTodo}
+                onClearReassignRequest={onClearReassignRequest}
+              />
+            </AccordionRow>
+          )}
 
           {adminTier === "super" && (
             <AccordionRow icon={KeyRound} label="직원 계정 관리" open={expanded === "accounts"} onToggle={() => toggle("accounts")}>
@@ -1033,7 +1039,9 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
             </AccordionRow>
           )}
 
-          <AdminMenuRow icon={Receipt} label="비용청구 내역" badge={billings.length} onClick={() => setPage("billing")} />
+          {!isMaterialTier && (
+            <AdminMenuRow icon={Receipt} label="비용청구 내역" badge={billings.length} onClick={() => setPage("billing")} />
+          )}
         </div>
       </div>
     </div>
