@@ -1102,6 +1102,41 @@ export default function App() {
     return true;
   }
 
+  // ★ 자재 신청 취소 — 아직 관리자가 처리 전(승인대기)일 때만. eq("status", "승인대기")를 조건에
+  // 같이 걸어서, 그 사이 관리자가 이미 지급완료 등으로 바꿨으면(동시성) 0행 적용되고 실패로 안내한다.
+  async function handleCancelMaterialRequest(requestId) {
+    const target = materialRequests.find((r) => r.id === requestId);
+    const nowIso = new Date().toISOString();
+    const { data, error } = await supabase.from("material_requests")
+      .update({ status: "취소", cancelled_at: nowIso, cancelled_by: profile.name })
+      .eq("id", requestId).eq("status", "승인대기").select();
+    if (error) { alert("취소 실패: " + error.message); return false; }
+    if (!data?.length) { alert("이미 관리자가 처리를 시작해서 취소할 수 없습니다. 새로고침 후 확인해주세요."); return false; }
+    setMaterialRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, status: "취소", cancelledAt: nowIso, cancelledBy: profile.name } : r)));
+    sendPush("supply_request_cancelled", adminIds(), {
+      title: "자재 신청이 취소됐어요",
+      body: `${profile.name}님이 ${target?.siteName ?? ""} · ${target?.part ?? ""} 신청을 취소했습니다`,
+    });
+    return true;
+  }
+
+  // ★ 견적 신청 취소 — handleCancelMaterialRequest와 동일한 이유로 요청접수 단계에서만.
+  async function handleCancelQuoteRequest(requestId) {
+    const target = quoteRequests.find((q) => q.id === requestId);
+    const nowIso = new Date().toISOString();
+    const { data, error } = await supabase.from("quote_requests")
+      .update({ status: "취소", cancelled_at: nowIso, cancelled_by: profile.name })
+      .eq("id", requestId).eq("status", "요청접수").select();
+    if (error) { alert("취소 실패: " + error.message); return false; }
+    if (!data?.length) { alert("이미 관리자가 처리를 시작해서 취소할 수 없습니다. 새로고침 후 확인해주세요."); return false; }
+    setQuoteRequests((prev) => prev.map((q) => (q.id === requestId ? { ...q, status: "취소", cancelledAt: nowIso, cancelledBy: profile.name } : q)));
+    sendPush("supply_request_cancelled", adminIds(), {
+      title: "견적 신청이 취소됐어요",
+      body: `${profile.name}님이 ${target?.siteName ?? ""} · ${target?.constructionType ?? ""} 신청을 취소했습니다`,
+    });
+    return true;
+  }
+
   // ★ 자재 담당자가 지급할 자재 사진을 한 장 추가하는 순간 (지급완료 체크의 선행 조건)
   // 여러 장을 연달아 올릴 때 setState 업데이터만으로는 React 렌더링 타이밍에 따라 아직 반영되지
   // 않은 상태를 기준으로 계산될 수 있어(경쟁 상태), ref에 최신 배열을 직접 동기적으로 보관합니다.
@@ -1959,7 +1994,7 @@ export default function App() {
           )}
           {tab === "checkup" && <CheckupTab selfChecks={selfChecks} setSelfChecks={setSelfChecks} siteManagers={siteManagers} profilesAll={profilesAll} inspections={inspections} />}
           {tab === "inspection" && <InspectionTab inspections={inspections} />}
-          {tab === "material" && <MaterialTab requests={materialRequests} onAddMaterialRequest={handleAddMaterialRequest} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} onAddQuoteRequest={handleAddQuoteRequest} restockRequests={restockRequests} kitStock={kitStock} onReceiveRestock={handleReceiveRestock} />}
+          {tab === "material" && <MaterialTab requests={materialRequests} onAddMaterialRequest={handleAddMaterialRequest} onCancelMaterialRequest={handleCancelMaterialRequest} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} onAddQuoteRequest={handleAddQuoteRequest} onCancelQuoteRequest={handleCancelQuoteRequest} restockRequests={restockRequests} kitStock={kitStock} onReceiveRestock={handleReceiveRestock} />}
           {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} />}
           {tab === "todo" && (
             <TodoTab

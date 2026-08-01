@@ -8,11 +8,14 @@ import { SitesContext, UnitsContext, AuthContext } from "@/app/components/contex
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 
 
 // 자재 신청/견적 요청/상비부품 보충 각각의 상세보기(신청 사진 포함)에 공용으로 쓰는 시트.
 // target = { type: "material" | "quote" | "restock", data }
-function RequestDetailSheet({ target, onClose, onPhotoClick, todos }) {
+// 취소는 관리자가 아직 처리 전(자재: 승인대기, 견적: 요청접수)일 때만 — 그 이후엔 버튼 자체가 안 뜬다.
+function RequestDetailSheet({ target, onClose, onPhotoClick, todos, onCancelMaterialRequest, onCancelQuoteRequest }) {
+  const [cancelling, setCancelling] = useState(false);
   if (!target) return null;
   const { type, data } = target;
   const title = type === "material" ? "자재 신청 상세" : type === "quote" ? "견적 요청 상세" : "상비부품 보충 상세";
@@ -25,6 +28,15 @@ function RequestDetailSheet({ target, onClose, onPhotoClick, todos }) {
   const supplyPhotos = type !== "restock"
     ? (data.supplyPhotoUrls?.length ? data.supplyPhotoUrls : data.supplyPhotoUrl ? [data.supplyPhotoUrl] : [])
     : [];
+  const cancelHandler = type === "material" ? onCancelMaterialRequest : type === "quote" ? onCancelQuoteRequest : null;
+  const cancelable = cancelHandler && ((type === "material" && data.status === "승인대기") || (type === "quote" && data.status === "요청접수"));
+  async function handleCancelClick() {
+    if (!(await confirmAsync("이 신청을 취소할까요? 취소 후엔 되돌릴 수 없습니다."))) return;
+    setCancelling(true);
+    const ok = await cancelHandler(data.id);
+    setCancelling(false);
+    if (ok) onClose();
+  }
 
   return (
     <Sheet title={title} onClose={onClose}>
@@ -122,12 +134,21 @@ function RequestDetailSheet({ target, onClose, onPhotoClick, todos }) {
           </div>
         </div>
       )}
+      {cancelable && (
+        <button
+          onClick={handleCancelClick}
+          disabled={cancelling}
+          className="w-full mt-4 flex items-center justify-center gap-1.5 border border-red-300 text-red-600 disabled:opacity-50 text-sm font-bold py-3 rounded-xl active:bg-red-50"
+        >
+          <X size={14} /> {cancelling ? "취소 처리 중..." : "신청 취소"}
+        </button>
+      )}
     </Sheet>
   );
 }
 
 
-function MaterialHistoryScreen({ requests, todos, isBilled, onBack }) {
+function MaterialHistoryScreen({ requests, todos, isBilled, onBack, onCancelMaterialRequest }) {
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState("전체");
   const [detailTarget, setDetailTarget] = useState(null);
@@ -211,6 +232,7 @@ function MaterialHistoryScreen({ requests, todos, isBilled, onBack }) {
         todos={todos}
         onClose={() => setDetailTarget(null)}
         onPhotoClick={(urls, i) => setPhotoViewer({ urls, index: i, siteName: detailTarget?.data.siteName, date: detailTarget?.data.requestedDate })}
+        onCancelMaterialRequest={onCancelMaterialRequest}
       />
       {photoViewer && (
         <PhotoViewerSheet
@@ -226,7 +248,7 @@ function MaterialHistoryScreen({ requests, todos, isBilled, onBack }) {
 }
 
 
-function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack }) {
+function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack, onCancelQuoteRequest }) {
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState("전체");
   const [detailTarget, setDetailTarget] = useState(null);
@@ -330,6 +352,7 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack }) {
         target={detailTarget}
         onClose={() => setDetailTarget(null)}
         onPhotoClick={(urls, i) => setPhotoViewer({ urls, index: i, siteName: detailTarget ? `${detailTarget.data.siteName} · ${detailTarget.data.constructionType}` : "", date: detailTarget?.data.requestedDate })}
+        onCancelQuoteRequest={onCancelQuoteRequest}
       />
       {photoViewer && (
         <PhotoViewerSheet
@@ -639,7 +662,7 @@ function DuplicateWarningSheet({ items, onCancel, onConfirm }) {
 const MAT_STEP_TITLES = ["현장·호기·긴급도", "부품·사진·의견"];
 const QUOTE_STEP_TITLES = ["현장·호기·담당자", "견적·사진·의견"];
 
-export function MaterialTab({ requests, onAddMaterialRequest, todos, onReject, quoteRequests, onAddQuoteRequest, restockRequests, kitStock = [], onReceiveRestock }) {
+export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRequest, todos, onReject, quoteRequests, onAddQuoteRequest, onCancelQuoteRequest, restockRequests, kitStock = [], onReceiveRestock }) {
   const sites = useContext(SitesContext);
   const { name: CURRENT_ENGINEER, selfId } = useContext(AuthContext);
   const units = useContext(UnitsContext);
@@ -670,7 +693,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, todos, onReject, q
     // 같은 현장에 비용청구 전 단계(승인대기·지급완료 — 반려는 끝난 건이라 제외)인 자재신청이
     // 있으면 접수 전에 보여주고 기사가 직접 중복 여부를 판단하게 한다 (부품명이 자유텍스트라
     // 정확매칭은 표기차이로 놓칠 수 있어, 현장 단위로 넓게 걸고 사람이 보게 함).
-    const pending = requests.filter((r) => r.siteId === form.siteId && r.status !== "반려" && !isBilled(r.id));
+    const pending = requests.filter((r) => r.siteId === form.siteId && r.status !== "반려" && r.status !== "취소" && !isBilled(r.id));
     if (pending.length > 0) { setDupWarning({ items: pending, onConfirm: submitMaterialRequest }); return; }
     submitMaterialRequest();
   }
@@ -773,7 +796,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, todos, onReject, q
     if (!quoteValid) return;
     // 같은 현장에 비용청구 전 단계(요청접수~자재지급완료 어디든, 아직 비용청구 안 된 건)인
     // 견적요청이 있으면 경고 — 자재신청과 같은 기준(비용청구 완료 전이면 전부 대상).
-    const pending = quoteRequests.filter((q) => q.siteId === quoteForm.siteId && !isQuoteBilled(q.id));
+    const pending = quoteRequests.filter((q) => q.siteId === quoteForm.siteId && q.status !== "취소" && !isQuoteBilled(q.id));
     if (pending.length > 0) { setDupWarning({ items: pending, onConfirm: submitQuoteRequest }); return; }
     submitQuoteRequest();
   }
@@ -833,6 +856,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, todos, onReject, q
         todos={todos}
         isBilled={isBilled}
         onBack={() => setShowMaterialHistory(false)}
+        onCancelMaterialRequest={onCancelMaterialRequest}
       />
     );
   }
@@ -843,6 +867,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, todos, onReject, q
         quoteRequests={quoteRequests.filter((q) => q.engineer === CURRENT_ENGINEER)}
         isQuoteBilled={isQuoteBilled}
         onBack={() => setShowQuoteHistory(false)}
+        onCancelQuoteRequest={onCancelQuoteRequest}
       />
     );
   }
@@ -1245,6 +1270,8 @@ export function MaterialTab({ requests, onAddMaterialRequest, todos, onReject, q
         todos={todos}
         onClose={() => setReqDetailTarget(null)}
         onPhotoClick={(urls, i) => setPhotoViewer({ urls, index: i, siteName: reqDetailTarget?.data.siteName, date: reqDetailTarget?.data.requestedDate })}
+        onCancelMaterialRequest={onCancelMaterialRequest}
+        onCancelQuoteRequest={onCancelQuoteRequest}
       />
 
       {photoViewer && (
