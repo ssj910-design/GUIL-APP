@@ -49,6 +49,39 @@
 
 ## 🔴 대기 중
 
+- **네이티브 앱 — 푸시알림 눌러도 해당 화면으로 안 감 (안드로이드 관리자 확인 필요)** (2026-08-01)
+
+  **증상**: 설치된 안드로이드 앱에서 푸시알림(예: 게시판 @멘션)을 누르면, 앱이 켜져 있든
+  꺼져 있든 그 알림에 해당하는 화면(예: 그 게시글)으로 안 가고 **그냥 마지막으로 보고 있던
+  탭 그대로** 뜬다. 예: 검사관리 탭을 마지막으로 켰었으면, 게시판 알림을 눌러도 검사관리
+  탭인 채로 앱만 열림.
+
+  **웹(PWA) 쪽은 이미 확인·수정·배포 완료**입니다 — 아래 커밋에서 딥링크 처리 로직 자체의
+  버그 2개(관리자 계정에서만 동작하던 것, 앱이 이미 떠 있을 때 재확인을 안 하던 것)를 고쳤고,
+  이건 웹 경로에선 정상 동작을 확인했습니다.
+  - `푸시알림 딥링크가 실제로 안 먹던 근본 원인 두 가지 수정` 커밋 (app/components/ElevatorFieldApp.jsx, public/sw.js)
+
+  **네이티브(설치 앱) 쪽만 여전히 안 됨** — 앱이 이미 켜져 있는 상태(포그라운드)에서도 안
+  되는 걸로 봐서, `pushNotificationActionPerformed` 이벤트 자체가 안 불리거나
+  (`lib/push.js`의 `onPushNotificationOpened`), 불려도 `action.notification.data.url`이
+  비어있을 가능성이 있습니다. 저는 이 세션에서 안드로이드 빌드·기기 로그(`adb logcat`)를
+  볼 방법이 없어 여기까지만 확인했습니다.
+
+  **부탁드리는 것**: 실제 기기에서 알림을 눌렀을 때 `adb logcat`으로
+  `pushNotificationActionPerformed`가 호출되는지, `action.notification.data`에 `url`이
+  제대로 들어있는지 확인 부탁드립니다. 관련 파일:
+  - `android/app/src/main/AndroidManifest.xml` — `MainActivity`는 `launchMode="singleTask"`로
+    이미 설정돼 있어 백그라운드 상태에서도 `onNewIntent`가 불려야 정상입니다.
+  - `android/app/src/main/java/com/guilelevator/app/MainActivity.java` — `onNewIntent`를
+    따로 오버라이드하지 않고 `BridgeActivity` 기본 동작에 의존 중 (Capacitor가 자동으로
+    플러그인에 전달해줘야 함).
+  - `lib/push.js`의 `onPushNotificationOpened`/`onPushNotificationReceived` — FCM
+    `notification.data.url`을 그대로 받아서 처리하는 JS 쪽 코드(이쪽은 정상으로 보임).
+
+  원인 찾으시면 네이티브 코드 수정 + APK 재빌드·재배포가 필요할 것 같습니다(웹 배포만으론
+  안 됨). 참고로 임시 완화책으로, 앱이 포그라운드 중 받은 푸시는 상단 배너로 직접 보여주는
+  기능은 이미 추가·배포했습니다(딥링크 문제와 별개로 "못 보고 넘어가는" 문제는 줄임).
+
 - **카카오 알림톡 템플릿에 "안내메시지" 변수 추가 신청** (2026-07-28) — 견적 발송에
   안내메시지(자유 텍스트) 기능을 추가했는데, 지금 승인된 알리고 템플릿은 변수 4개
   (현장명/견적명/견적일/링크)만 허용하고 나머지는 고정 문구라 카카오에는 반영 못 함(이메일에는
