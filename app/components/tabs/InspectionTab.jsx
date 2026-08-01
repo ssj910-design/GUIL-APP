@@ -105,10 +105,10 @@ export function InspectionTab({ inspections }) {
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
   const combined = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId) && mySiteIds.has(i.siteId))];
 
-  // 도래현장: 담당현장 전부(관리자는 전체) 중 검사예정일(수기입력 또는 국가승강기정보센터 API
-  // 유효기간)이 있는 곳 — 기간 제한 없음. 검사일이 지나면(daysLeft < 0) 자동으로 빠진다.
+  // 도래현장: 관리자가 수기입력한 검사일자(inspections.due_date)가 있는 담당현장 전부 (기간 제한 없음,
+  // 국가승강기정보센터 API 연동 현장은 제외 — 홈 화면 검사도래현장과 동일 기준) — 검사일이 지나면(daysLeft < 0) 자동으로 빠진다.
   const dueSoon = groupBySite(
-    combined
+    inspections
       .filter((i) => mySiteIds.has(i.siteId) && i.dueDate && !i.result)
       .filter((i) => !search || (i.siteName ?? "").toLowerCase().includes(search.toLowerCase()))
       .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) }))
