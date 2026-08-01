@@ -4,7 +4,7 @@ import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findU
 import { Badge, DDay, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
-import { usePriorFlaggedInspection, useInspectionFailItems } from "@/app/hooks/useLiveInspections";
+import { usePriorFlaggedBadge, useInspectionFailItems } from "@/app/hooks/useLiveInspections";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 
 
@@ -13,8 +13,8 @@ import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 /* ------------------------------------------------------------------ */
 
 // 검사도래현장 카드 한 장: 직전 검사가 조건부합격/조건후합격이면 현장명을 눌러 당시 부적합내역을 볼 수 있다.
-function DueSoonCard({ insp, address, govElevatorNo, onOpenFail, site }) {
-  const { latest, detailRecord } = usePriorFlaggedInspection(govElevatorNo);
+function DueSoonCard({ insp, address, govElevatorNo, onOpenFail, site, priorUnit }) {
+  const { latest, detailRecord } = usePriorFlaggedBadge(priorUnit);
   const clickable = Boolean(latest);
   return (
     <div
@@ -146,6 +146,7 @@ export function InspectionTab({ inspections }) {
               address={stripCityPrefix(siteById.get(insp.siteId)?.address)}
               site={siteById.get(insp.siteId)}
               govElevatorNo={priorUnit?.govNo}
+              priorUnit={priorUnit}
               onOpenFail={setInspectionFailTarget}
             />
           );

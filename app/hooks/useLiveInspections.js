@@ -198,3 +198,18 @@ export function usePriorFlaggedInspection(govElevatorNo) {
     : latest;
   return { latest, detailRecord };
 }
+
+// 검사도래현장 카드용 — sync-inspection-cache 크론이 매일 도래현장 호기만 골라 미리
+// 조회해둔 units.prior_flagged_* 캐시를 우선 쓴다(즉시 표시, API 호출 없음). 캐싱 전(오늘
+// 새로 도래 목록에 들어온 경우 등, checkedAt이 아직 없음)이면 usePriorFlaggedInspection으로
+// 실시간 조회한다. 반환 형태는 usePriorFlaggedInspection과 동일하게 맞춰 호출부 변경을 줄인다.
+export function usePriorFlaggedBadge(priorUnit) {
+  const hasCached = Boolean(priorUnit?.priorFlaggedCheckedAt);
+  const live = usePriorFlaggedInspection(!hasCached ? priorUnit?.govNo : null);
+  if (!hasCached) return live;
+  if (!priorUnit.priorFlaggedLabel) return { latest: null, detailRecord: null };
+  return {
+    latest: { dispWords: priorUnit.priorFlaggedLabel },
+    detailRecord: { inspctDe: (priorUnit.priorFlaggedAnchorDate ?? "").replace(/-/g, "") },
+  };
+}

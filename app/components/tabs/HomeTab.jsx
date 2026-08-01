@@ -7,14 +7,14 @@ import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findU
 import { Badge, DDay, SmsToast, Sheet } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
-import { usePriorFlaggedInspection } from "@/app/hooks/useLiveInspections";
+import { usePriorFlaggedBadge } from "@/app/hooks/useLiveInspections";
 import { FailureDetailSheet, DispatchEtaModal, ArrivalResultModal, FailureMiniCard, AssignEngineerSheet } from "@/app/components/tabs/FailureTab";
 import { EngineerLocationMap } from "@/app/components/admin/EngineerLocationMap";
 
 
 // 검사도래현장 한 줄: 직전 검사가 조건부합격/조건후합격이면 현장명을 눌러 당시 부적합내역을 볼 수 있다.
-function DueSoonRow({ i, address, govElevatorNo, onOpenFail }) {
-  const { latest, detailRecord } = usePriorFlaggedInspection(govElevatorNo);
+function DueSoonRow({ i, address, govElevatorNo, onOpenFail, priorUnit }) {
+  const { latest, detailRecord } = usePriorFlaggedBadge(priorUnit);
   const clickable = Boolean(latest);
   return (
     <div
@@ -815,6 +815,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
                       i={i}
                       address={stripCityPrefix(siteById.get(i.siteId)?.address)}
                       govElevatorNo={priorUnit?.govNo}
+                      priorUnit={priorUnit}
                       onOpenFail={setInspectionFailTarget}
                     />
                   );

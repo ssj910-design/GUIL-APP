@@ -9,8 +9,8 @@
 // 여기서 같이 가져와 units.fail_items에 캐싱해둔다 — 검사관리 조건부·불합격 탭이 페이지 열 때마다
 // 라이브로 부적합상세를 조회하느라 느렸던 문제 해결(이제 이 캐시만 읽어서 즉시 뜬다).
 import { createClient } from "@supabase/supabase-js";
-import { resolveLatestFailItems } from "@/lib/govFailApi";
-import { addDays, formatUnitLabel } from "@/lib/utils";
+import { resolveLatestFailItems, fetchInspectionHistory, PRIOR_FLAGGED_WORDS } from "@/lib/govFailApi";
+import { addDays, formatUnitLabel, govDateToDashed } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 
 export const maxDuration = 300;
@@ -165,11 +165,48 @@ export async function GET(request) {
     );
   }
 
+  // 검사도래현장 카드의 "직전검사 조건부합격/조건후합격" 배지 — 지금까지는 카드 렌더될 때마다
+  // 실시간으로 조회해 느렸다. 도래현장(관리자 수기입력 검사일정, 30일 이내)에 걸린 호기만
+  // 골라 미리 조회해 units에 캐싱해두면 화면은 이 값만 읽어서 즉시 뜬다.
+  const soon = addDays(TODAY_STR, 30);
+  const { data: dueSoonInspections } = await supabase
+    .from("inspections")
+    .select("unit_id")
+    .not("unit_id", "is", null)
+    .not("due_date", "is", null)
+    .is("result", null)
+    .gte("due_date", TODAY_STR)
+    .lte("due_date", soon);
+  const dueSoonUnitIds = new Set((dueSoonInspections ?? []).map((r) => r.unit_id));
+  const dueSoonUnits = units.filter((u) => dueSoonUnitIds.has(u.id));
+
+  let priorFlaggedChecked = 0;
+  for (let i = 0; i < dueSoonUnits.length; i += CONCURRENCY) {
+    const batch = dueSoonUnits.slice(i, i + CONCURRENCY);
+    await Promise.all(
+      batch.map(async (u) => {
+        const records = await fetchInspectionHistory(u.gov_no);
+        const latest = records?.[0];
+        const patch = { prior_flagged_checked_at: new Date().toISOString(), prior_flagged_label: null, prior_flagged_anchor_date: null };
+        if (latest && PRIOR_FLAGGED_WORDS.includes(latest.dispWords)) {
+          const detailRecord = latest.dispWords === "조건후합격"
+            ? (records.slice(1).find((r) => r.dispWords === "조건부합격" || r.dispWords === "불합격") ?? latest)
+            : latest;
+          patch.prior_flagged_label = latest.dispWords;
+          patch.prior_flagged_anchor_date = govDateToDashed(detailRecord.inspctDe);
+        }
+        const { error: updateError } = await supabase.from("units").update(patch).eq("id", u.id);
+        if (!updateError) priorFlaggedChecked++;
+      })
+    );
+  }
+
   return Response.json({
     totalUnits: units.length,
     sitesQueried,
     sitesFailed,
     unitsUpdated,
     failItemsCached,
+    priorFlaggedChecked,
   });
 }
