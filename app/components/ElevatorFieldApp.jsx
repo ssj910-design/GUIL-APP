@@ -11,7 +11,7 @@ import { DutySwapNotice } from "@/app/components/DutyRoster";
 import { WorkCalendarSheet } from "@/app/components/WorkCalendarSheet";
 import { MyPage } from "@/app/components/MyPage";
 import { simulateSms } from "@/lib/sms";
-import { notify, enablePush } from "@/lib/push";
+import { notify, enablePush, onPushNotificationOpened } from "@/lib/push";
 import { Capacitor } from "@capacitor/core";
 import { ScreenHeader, BrandSplash } from "@/app/components/ui";
 import { ConfirmHost, confirmAsync } from "@/app/components/ConfirmHost";
@@ -218,20 +218,35 @@ export default function App() {
   // 자재·견적 신청 푸시알림(url=/?openMaterial=id 또는 ?openQuote=id)을 눌러 앱이 열렸을 때,
   // 관리자 모드 자재출하관리/견적요청관리에서 그 건 상세를 바로 띄운다. 종(🔔) 알림 클릭도 같은
   // materialFocusId/quoteFocusId state를 써서 동일하게 동작한다(그쪽은 URL 없이 바로 state만 설정).
-  useEffect(() => {
-    if (!profile || profile.role !== "admin") return;
-    const params = new URLSearchParams(window.location.search);
+  function applyOpenParams(params) {
     const openMaterial = params.get("openMaterial");
     const openQuote = params.get("openQuote");
-    if (!openMaterial && !openQuote) return;
+    if (!openMaterial && !openQuote) return false;
     setTab("admin");
     if (openMaterial) setMaterialFocusId(openMaterial);
     if (openQuote) setQuoteFocusId(openQuote);
+    return true;
+  }
+
+  // 웹(PWA) — 주소창 쿼리로 들어온 경우(sw.js의 notificationclick이 이 URL로 이동시킴).
+  useEffect(() => {
+    if (!profile || profile.role !== "admin") return;
     const url = new URL(window.location.href);
-    url.searchParams.delete("openMaterial");
-    url.searchParams.delete("openQuote");
-    window.history.replaceState({}, "", url);
+    if (applyOpenParams(url.searchParams)) {
+      url.searchParams.delete("openMaterial");
+      url.searchParams.delete("openQuote");
+      window.history.replaceState({}, "", url);
+    }
   }, [profile]);
+
+  // 네이티브 앱 — 백그라운드/종료 상태에서 푸시를 탭해 앱이 열린 경우. 주소 이동이 없어 별도로 받는다.
+  useEffect(() => {
+    return onPushNotificationOpened((urlStr) => {
+      try {
+        applyOpenParams(new URL(urlStr, window.location.origin).searchParams);
+      } catch {}
+    });
+  }, []);
 
   async function handleLogin(loginId, password) {
     setAuthSubmitting(true);
