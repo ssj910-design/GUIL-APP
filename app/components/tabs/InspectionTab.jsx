@@ -4,7 +4,7 @@ import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findU
 import { Badge, DDay, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
-import { usePriorFlaggedInspection } from "@/app/hooks/useLiveInspections";
+import { usePriorFlaggedInspection, useInspectionFailItems } from "@/app/hooks/useLiveInspections";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 
 
@@ -50,6 +50,39 @@ function DueSoonCard({ insp, address, govElevatorNo, onOpenFail, site }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// 조건부/불합격 카드의 부적합 내용 — 관리자 웹(InspectionsAdmin FlaggedRow)과 동일하게 클릭 없이
+// 바로 보여준다. 기준조항 설명 줄은 빼고 실제 부적합 내용·검사원 의견만 표시.
+function FlaggedFailInline({ insp }) {
+  // sync-inspection-cache 크론이 매일 캐싱해둔 값을 우선 쓴다(즉시 표시). 아직 캐싱 전이면 실시간 조회로 대신한다.
+  const hasCached = Array.isArray(insp.failItems);
+  const live = useInspectionFailItems(!hasCached ? insp.govElevatorNo : null, insp.startDate);
+  const loading = hasCached ? false : live.loading;
+  const items = hasCached ? insp.failItems : live.items;
+  const reason = hasCached ? insp.failReason : live.reason;
+
+  if (loading) return <p className="text-[11px] text-slate-400 mt-2">부적합 상세 조회 중...</p>;
+  if (!items?.length) {
+    return (
+      <p className="text-[11px] text-slate-400 mt-2">
+        {reason === "no_record" ? "검사이력 없음"
+          : reason === "no_fail_code" ? "부적합코드 없음"
+          : reason === "fetch_failed" ? "조회 실패"
+          : "부적합 상세 없음"}
+      </p>
+    );
+  }
+  return (
+    <div className="mt-2 space-y-1.5">
+      {items.map((item, idx) => (
+        <div key={idx} className="bg-red-50 rounded-lg px-2.5 py-1.5">
+          <p className="text-[11px] font-semibold text-red-700">{item.failDesc}</p>
+          {item.failDescInspector && <p className="text-[11px] text-slate-500 mt-0.5">검사원 의견: {item.failDescInspector}</p>}
+        </div>
+      ))}
     </div>
   );
 }
@@ -129,8 +162,7 @@ export function InspectionTab({ inspections }) {
         return (
           <div
             key={insp.id}
-            onClick={isLive ? () => setInspectionFailTarget(insp) : undefined}
-            className={`bg-white rounded-xl border border-slate-200 border-l-4 ${bar} overflow-hidden touch-manipulation ${isLive ? "active:bg-slate-50 cursor-pointer" : ""}`}
+            className={`bg-white rounded-xl border border-slate-200 border-l-4 ${bar} overflow-hidden touch-manipulation`}
           >
             <div className="p-3.5">
               {/* 우측엔 결과 배지 1개만 — 정기검사는 아래 주소 앞으로 빼서 우측 혼잡 해소 */}
@@ -148,8 +180,12 @@ export function InspectionTab({ inspections }) {
                   <DDay dueDate={insp.dueDate} />
                 </span>
               </div>
-              {insp.notes && (
-                <p className="text-[11px] text-red-600 leading-relaxed bg-red-50 rounded-lg px-2.5 py-1.5 mt-2">지적사항: {insp.notes}</p>
+              {isLive ? (
+                <FlaggedFailInline insp={insp} />
+              ) : (
+                insp.notes && (
+                  <p className="text-[11px] text-red-600 leading-relaxed bg-red-50 rounded-lg px-2.5 py-1.5 mt-2">지적사항: {insp.notes}</p>
+                )
               )}
             </div>
           </div>
