@@ -1148,7 +1148,7 @@ export default function App() {
     if (error) { alert("취소 실패: " + error.message); return false; }
     if (!data?.length) { alert("이미 관리자가 처리를 시작해서 취소할 수 없습니다. 새로고침 후 확인해주세요."); return false; }
     setMaterialRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, status: "취소", cancelledAt: nowIso, cancelledBy: profile.name } : r)));
-    sendPush("supply_request_cancelled", adminIds(), {
+    notify("material_request_cancelled", {
       title: "자재 신청이 취소됐어요",
       body: `${profile.name}님이 ${target?.siteName ?? ""} · ${target?.part ?? ""} 신청을 취소했습니다`,
     });
@@ -1165,7 +1165,7 @@ export default function App() {
     if (error) { alert("취소 실패: " + error.message); return false; }
     if (!data?.length) { alert("이미 관리자가 처리를 시작해서 취소할 수 없습니다. 새로고침 후 확인해주세요."); return false; }
     setQuoteRequests((prev) => prev.map((q) => (q.id === requestId ? { ...q, status: "취소", cancelledAt: nowIso, cancelledBy: profile.name } : q)));
-    sendPush("supply_request_cancelled", adminIds(), {
+    notify("quote_request_cancelled", {
       title: "견적 신청이 취소됐어요",
       body: `${profile.name}님이 ${target?.siteName ?? ""} · ${target?.constructionType ?? ""} 신청을 취소했습니다`,
     });
