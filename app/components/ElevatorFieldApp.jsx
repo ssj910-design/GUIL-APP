@@ -218,13 +218,16 @@ export default function App() {
   // 자재·견적 신청 푸시알림(url=/?openMaterial=id 또는 ?openQuote=id)을 눌러 앱이 열렸을 때,
   // 관리자 모드 자재출하관리/견적요청관리에서 그 건 상세를 바로 띄운다. 종(🔔) 알림 클릭도 같은
   // materialFocusId/quoteFocusId state를 써서 동일하게 동작한다(그쪽은 URL 없이 바로 state만 설정).
+  // 게시판 @멘션·공지 푸시(url=/?openPost=id)도 같은 방식 — 게시판 탭을 여는 대신 그 글만 바로 띄운다.
   function applyOpenParams(params) {
     const openMaterial = params.get("openMaterial");
     const openQuote = params.get("openQuote");
-    if (!openMaterial && !openQuote) return false;
-    setTab("admin");
+    const openPost = params.get("openPost");
+    if (!openMaterial && !openQuote && !openPost) return false;
+    if (openMaterial || openQuote) setTab("admin");
     if (openMaterial) setMaterialFocusId(openMaterial);
     if (openQuote) setQuoteFocusId(openQuote);
+    if (openPost) setOpenFeedPostId(openPost);
     return true;
   }
 
@@ -1074,8 +1077,8 @@ export default function App() {
     const mentionIds = tags.includes("모두")
       ? profilesAll.filter((p) => p.is_active !== false && p.id !== myId).map((p) => p.id)
       : profilesAll.filter((p) => tags.includes(p.name) && p.id !== myId).map((p) => p.id);
-    if (mentionIds.length) sendPush("room_mention", mentionIds, { title: `${profile.name}님이 회원님을 언급했어요`, body: text.slice(0, 60) });
-    if (newPost.isNotice) notify("room_notice", { title: "새 공지가 등록됐어요", body: text.slice(0, 60) });
+    if (mentionIds.length) sendPush("room_mention", mentionIds, { title: `${profile.name}님이 회원님을 언급했어요`, body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
+    if (newPost.isNotice) notify("room_notice", { title: "새 공지가 등록됐어요", body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
     return true;
   }
 
