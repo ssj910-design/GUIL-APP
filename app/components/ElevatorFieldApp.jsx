@@ -102,7 +102,12 @@ export default function App() {
   // 즉시 치운다 — 아래 BrandSplash 로딩화면들이 같은 로고를 이어서 보여주므로 깜빡임이 없다.
   useEffect(() => { document.getElementById("app-splash")?.remove(); }, []);
 
-  const [tab, setTab] = useState("home");
+  const [rawTab, setTab] = useState("home");
+  // 자재담당관리자는 자재·견적 탭과 관리자모드(자재출하관리·상비부품보충)만 쓴다 — 하단 탭엔
+  // 자재·견적만 노출하므로(아래 visibleTabs), 기본 진입화면인 "home"이나 예전에 남아있던 다른
+  // 탭 상태로는 못 들어가게 여기서 되돌린다. 관리자모드·우리방(플로팅버튼)은 계속 허용.
+  const isMaterialTierAdmin = profile?.role === "admin" && profile?.adminTier === "material";
+  const tab = isMaterialTierAdmin && !["material", "admin", "room"].includes(rawTab) ? "material" : rawTab;
   const [failureFocusTab, setFailureFocusTab] = useState(null); // 고장접수 탭 진입 시 열 서브탭 (홈 "모두 보기" 등)
   const [sites, setSites] = useState([]);
   const [units, setUnits] = useState([]); // v2: 호기 목록 (마이그레이션 전 DB에서는 빈 배열)
@@ -1753,7 +1758,9 @@ export default function App() {
   }
 
   const tabTitle = tab === "room" ? "게시판" : TABS.find((t) => t.id === tab)?.label ?? "";
-  const visibleTabs = TABS.filter((t) => t.id !== "admin" || profile?.role === "admin");
+  const visibleTabs = isMaterialTierAdmin
+    ? TABS.filter((t) => t.id === "material")
+    : TABS.filter((t) => t.id !== "admin" || profile?.role === "admin");
 
   // 우리방 안읽음/멘션 — 세션 로컬 읽음 시각이 있으면 그걸, 없으면 DB(profiles.feed_read_at) 기준
   const myName = profile?.name ?? "";
