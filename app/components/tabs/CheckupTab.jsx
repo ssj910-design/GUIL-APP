@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { useHolidays } from "@/app/hooks/useHolidays";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
-import { siteUnitList, distanceKm } from "@/lib/utils";
+import { siteUnitList, distanceKm, formatMonthDay } from "@/lib/utils";
 import { mapSelfCheck, mapSelfCheckItem, mapSelfCheckItemState } from "@/lib/mappers";
 import { PrimaryButton, Sheet, Field, inputCls, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, Badge } from "@/app/components/ui";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
@@ -57,11 +57,22 @@ function siteFlagResult(site, units) {
   return null;
 }
 
+// 검사관리-검사도래현장과 같은 기준(관리자 수기입력 검사일정, 30일 이내, 판정 전)으로
+// 이 현장에 도래한 검사가 있으면 "정기검사 8월 26일" 형태로 보여준다(시간은 뺌).
+function siteDueSoonLabel(site, inspections, todayStr) {
+  const upcoming = inspections
+    .filter((i) => i.siteId === site.id && i.dueDate && !i.result)
+    .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(todayStr)) / 86400000) }))
+    .filter((i) => i.daysLeft >= 0 && i.daysLeft <= 30)
+    .sort((a, b) => a.daysLeft - b.daysLeft)[0];
+  return upcoming ? `${upcoming.type} ${formatMonthDay(upcoming.dueDate)}` : null;
+}
+
 const CHECKUP_STEP_TITLES = ["점검 정보", "점검 항목", "특이사항·제출"];
 const fmtMD = (d) => (d ? `${d.slice(5, 7)}/${d.slice(8, 10)}` : ""); // "2026-07-25" → "07/25"
 const fmtDist = (km) => (km == null ? null : km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`);
 
-export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profilesAll = [] }) {
+export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profilesAll = [], inspections = [] }) {
   const sites = useContext(SitesContext);
   const units = useContext(UnitsContext);
   const { name: CURRENT_ENGINEER, selfId, engineers = [] } = useContext(AuthContext);
@@ -405,6 +416,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
               const hasUnits = siteUnitList(s, units).filter((u) => u.id).length > 0;
               const planned = plannedDateOf(s);
               const dist = distOf(s);
+              const dueSoonLabel = siteDueSoonLabel(s, inspections, TODAY_STR);
               return (
                 <div key={s.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                   {/* 윗줄: 현장명·대수 + 예정일 배지 / 거리·주소 — 개요라 정보 먼저 */}
@@ -413,6 +425,11 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
                       <p className="font-bold text-slate-800 text-sm truncate min-w-0">{s.name} · {siteUnitList(s, units).length}대</p>
                       <span className="shrink-0 flex items-center gap-1.5">
                         <Badge result={siteFlagResult(s, units)} />
+                        {dueSoonLabel && (
+                          <span className="text-xs font-bold px-2 py-1 rounded-full border bg-sky-100 text-sky-700 border-sky-300">
+                            {dueSoonLabel}
+                          </span>
+                        )}
                         {planned
                           ? <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">예정 {fmtMD(planned)}</span>
                           : <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">미정</span>}
