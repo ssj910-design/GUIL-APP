@@ -273,7 +273,7 @@ export default function TodosAdmin({ data, setData }) {
   const [detail, setDetail] = useState(null);
   const [assigning, setAssigning] = useState(false);
 
-  const viewFiltered = todos.filter((t) => (view === "open" ? !t.done : true));
+  const viewFiltered = todos.filter((t) => (view === "open" ? !t.done : view === "reassign" ? (t.reassignRequested && !t.done) : true));
   const q = search.trim().toLowerCase();
   const rows = viewFiltered
     .filter((t) => sourceFilter === "all" || t.source === sourceFilter)
@@ -365,6 +365,7 @@ export default function TodosAdmin({ data, setData }) {
               options={[
                 { value: "open", label: "미완료", count: todos.filter((t) => !t.done).length },
                 { value: "all", label: "전체", count: todos.length },
+                { value: "reassign", label: "재배정요청", count: todos.filter((t) => t.reassignRequested && !t.done).length },
               ]}
             />
           </div>

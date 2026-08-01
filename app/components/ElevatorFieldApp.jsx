@@ -1560,6 +1560,11 @@ export default function App() {
   async function handleRequestReassignTodo(todoId, reason, to) {
     await supabase.from("todos").update({ reassign_requested: true, reassign_reason: reason || null, reassign_to: to || null }).eq("id", todoId);
     setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, reassignRequested: true, reassignReason: reason || null, reassignTo: to || null } : t)));
+    const todo = todos.find((t) => t.id === todoId);
+    sendPush("todo_reassign_requested", adminIds(), {
+      title: "할일 재배정 요청",
+      body: `${profile.name}님이 "${todo?.title ?? "할일"}"을(를) 넘겨달라고 요청했습니다${to ? ` (희망 담당자: ${to})` : ""}`,
+    });
   }
 
   // ★ 재배정 요청 해제 — 관리자가 반려하거나 기사가 요청 취소.
