@@ -624,6 +624,7 @@ function DuplicateWarningSheet({ items, onCancel, onConfirm }) {
           <div key={it.id} className="border border-slate-200 rounded-xl px-3 py-2.5">
             <p className="text-sm font-bold text-slate-800">{it.elevatorNo ? `${it.elevatorNo} · ` : ""}{it.part ?? it.constructionType}</p>
             <p className="text-[11px] text-amber-600 font-semibold mt-0.5">{it.status}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">{it.requestedDate} 신청 · {it.engineer}</p>
           </div>
         ))}
       </div>
