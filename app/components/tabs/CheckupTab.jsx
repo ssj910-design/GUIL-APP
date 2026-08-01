@@ -6,6 +6,7 @@ import { useHolidays } from "@/app/hooks/useHolidays";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 import { siteUnitList, distanceKm, formatMonthDay } from "@/lib/utils";
 import { mapSelfCheck, mapSelfCheckItem, mapSelfCheckItemState } from "@/lib/mappers";
+import { notify } from "@/lib/push";
 import { PrimaryButton, Sheet, Field, inputCls, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, Badge } from "@/app/components/ui";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -379,6 +380,14 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
       setSelfChecks((prev) => prev.map((x) => (x.id === mapped.id
         ? { ...x, govCompanyUniqueNo: companyUniqueNo, govSubmittedAt: submittedAt, govResultCode: data.resultCode ?? null, govResultMsg: data.resultMsg ?? data.error ?? null }
         : x)));
+      // 공단 제출 실패(성공코드 "000"이 아님) — 본인(방금 제출한 담당자)에게 바로 알림.
+      if (data.resultCode !== "000") {
+        notify("selfcheck_gov_failed", {
+          profileIds: [selfId],
+          title: "자체점검 공단 제출 실패",
+          body: `${checkupTarget.name} — ${data.resultMsg ?? data.error ?? "제출 실패"}`,
+        });
+      }
     } catch (err) {
       setCheckupResult({ error: err.message });
     }

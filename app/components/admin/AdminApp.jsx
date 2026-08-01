@@ -182,7 +182,7 @@ export default function AdminApp() {
   }
 
   return (
-    <AdminAuthContext.Provider value={{ tier, name: me?.name ?? "관리자", signOut: adminLogout }}>
+    <AdminAuthContext.Provider value={{ tier, name: me?.name ?? "관리자", id: me?.id, signOut: adminLogout }}>
     <div className="min-h-screen lg:flex bg-slate-100 text-slate-900">
       <ConfirmHost />
       {/* 모바일 상단바 */}

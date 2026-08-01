@@ -2,17 +2,41 @@
 
 // 알림 설정 (회사 기본값) — 어떤 상황에 알림을 보낼지, 얼마나 급하게 보낼지 관리자가 정한다.
 // 여기서 끈 알림은 개인이 켜도 안 간다. 개인은 회사가 켜둔 것 중에서만 끌 수 있다.
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { NOTIFICATIONS, GROUPS, LEVELS, levelOf, audienceTiersOf } from "@/lib/notifications";
+import { AdminAuthContext } from "@/app/components/admin/adminShared";
 
 const AUDIENCE = { engineer: "기사", admin: "관리자", all: "전원" };
 const ADMIN_TIER_CHIPS = { super: "최고", manager: "중간", material: "자재담당" };
 const TRIGGER = { instant: "즉시", scheduled: "정해진 시각" };
 
 export default function NotifySettings() {
+  const { id: myId } = useContext(AdminAuthContext);
   const [settings, setSettings] = useState({});
   const [loaded, setLoaded] = useState(false);
+  const [testing, setTesting] = useState(null); // 지금 테스트 발송 중인 key
+
+  // 실제 발송 시점(크론·스케줄)을 안 기다리고 본인 기기로 바로 받아서 확인해볼 수 있는 테스트 발송.
+  // profileIds를 본인 하나로 못박아서 받는사람 설정과 무관하게 나에게만 간다 — 단, "사용" 꺼짐은 그대로 존중한다.
+  async function testSend(n) {
+    if (!myId) { alert("로그인 계정 정보가 없어 테스트 발송을 보낼 수 없습니다."); return; }
+    setTesting(n.key);
+    try {
+      const res = await fetch("/api/push/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: n.key, profileIds: [myId], title: `[테스트] ${n.label}`, body: "알림 설정 화면에서 보낸 테스트 알림입니다." }),
+      });
+      const data = await res.json();
+      if (data.ok && data.sent > 0) alert("테스트 알림을 보냈습니다 — 이 기기에서 확인해보세요.");
+      else if (data.ok) alert("발송은 됐지만 이 계정에 등록된 알림 기기가 없습니다 (마이페이지에서 알림 받기를 켜주세요).");
+      else alert("테스트 발송 실패: " + (data.reason ?? "알 수 없는 오류"));
+    } catch (e) {
+      alert("테스트 발송 실패: " + e.message);
+    }
+    setTesting(null);
+  }
 
   useEffect(() => {
     supabase.from("notify_settings").select("*").then(({ data }) => {
@@ -56,14 +80,6 @@ export default function NotifySettings() {
         ))}
       </div>
 
-      <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-5">
-        <p className="text-xs font-bold text-amber-800">아직 실제 푸시는 나가지 않습니다</p>
-        <p className="text-[11px] text-amber-700 mt-1 leading-relaxed">
-          웹 푸시(서비스워커·구독)가 붙기 전이라, 지금 설정은 저장만 됩니다.
-          푸시가 연결되면 이 값이 그대로 적용됩니다. 앱 안 종 알림은 설정과 무관하게 계속 표시됩니다.
-        </p>
-      </div>
-
       {!loaded ? (
         <p className="text-xs text-slate-400">불러오는 중…</p>
       ) : GROUPS.map((g) => (
@@ -78,6 +94,7 @@ export default function NotifySettings() {
                   <th className="px-3 py-2.5 font-semibold text-left w-24">발송 시점</th>
                   <th className="px-3 py-2.5 font-semibold text-left w-56">알림 방식</th>
                   <th className="px-3 py-2.5 font-semibold text-right w-20">사용</th>
+                  <th className="px-3 py-2.5 font-semibold text-right w-16">테스트</th>
                 </tr>
               </thead>
               <tbody>
@@ -139,6 +156,15 @@ export default function NotifySettings() {
                           aria-label={`${n.label} ${enabled ? "끄기" : "켜기"}`}
                         >
                           <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${enabled ? "left-[22px]" : "left-0.5"}`} />
+                        </button>
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        <button
+                          onClick={() => testSend(n)}
+                          disabled={!enabled || testing === n.key}
+                          className="text-[10px] font-bold text-indigo-600 border border-indigo-200 rounded-lg px-2 py-1.5 disabled:text-slate-300 disabled:border-slate-100 disabled:cursor-not-allowed"
+                        >
+                          {testing === n.key ? "발송중…" : "테스트"}
                         </button>
                       </td>
                     </tr>
