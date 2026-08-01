@@ -44,7 +44,7 @@ function DueSoonCard({ insp, address, govElevatorNo, onOpenFail, site }) {
         <div className="flex items-center gap-2">
           {site && <MapLinkButtons site={site} />}
           {latest && (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-300">
+            <span className="ml-auto shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-300">
               직전검사 {latest.dispWords}
             </span>
           )}
@@ -98,16 +98,16 @@ export function InspectionTab({ inspections }) {
   const [flagSort, setFlagSort] = useState("imminent"); // 조건부/불합격 정렬: imminent(재검 임박순) | severity(불합격순)
 
   // 검사유효기간은 units의 DB 캐시를 쓴다 (전 호기 실시간 API 호출 금지 — 트래픽 한도).
-  // 조건부/불합격 현장은 담당현장만(관리자는 전체) — 도래현장 탭은 기존대로 전체 유지.
+  // 도래현장·조건부/불합격 현장 둘 다 담당현장만(관리자는 전체) — 홈 화면과 동일 기준.
   const allUnits = useContext(UnitsContext);
   const liveInspections = unitsToInspections(allUnits, mySites).filter((i) => mySiteIds.has(i.siteId));
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
   const combined = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId) && mySiteIds.has(i.siteId))];
 
-  // 도래현장: 관리자가 수기입력한 검사일자(inspections.due_date) 기준, 검사일이 30일 이내로 남은 현장만 (국가승강기정보센터 API 연동 현장은 제외)
+  // 도래현장: 관리자가 수기입력한 검사일자(inspections.due_date) 기준, 검사일이 30일 이내로 남은 담당현장만 (국가승강기정보센터 API 연동 현장은 제외)
   const dueSoon = groupBySite(
     inspections
-      .filter((i) => i.dueDate && !i.result)
+      .filter((i) => mySiteIds.has(i.siteId) && i.dueDate && !i.result)
       .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) }))
       .filter((i) => i.daysLeft >= 0 && i.daysLeft <= 30)
       .sort((a, b) => a.daysLeft - b.daysLeft)
