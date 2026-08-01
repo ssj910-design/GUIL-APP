@@ -227,7 +227,7 @@ export default function App() {
     if (openMaterial || openQuote) setTab("admin");
     if (openMaterial) setMaterialFocusId(openMaterial);
     if (openQuote) setQuoteFocusId(openQuote);
-    if (openPost) setOpenFeedPostId(openPost);
+    if (openPost) { setOpenFeedPostId(openPost); handleDismissNotif("post:" + openPost); }
     return true;
   }
 
@@ -1801,9 +1801,14 @@ export default function App() {
   const notifNewQuotes = profile?.role === "admin" && profile?.adminTier !== "material"
     ? quoteRequests.filter((q) => q.status === "요청접수" && !dismissedIds.has("newquote:" + q.id))
     : [];
-  // 게시판 알림은 글 하나를 눌러도(팝업으로만 확인) feedReadAt 전체읽음은 건드리지 않고, 그 글만 지운 것으로 처리한다
-  // — 그래야 나머지 안읽은 글 알림이 같이 사라지지 않는다.
-  const notifPosts = unreadPosts.filter((p) => !dismissedIds.has("post:" + p.id));
+  // 게시판 알림(종)은 게시판 탭을 그냥 열기만 해도 통째로 사라지면 안 된다 — 실제로 그 글을 열어봤을
+  // 때만(dismissedIds) 없어지게, feedReadAt(전체 읽음 시각)과 무관하게 독립적으로 계산한다.
+  // 대상도 푸시가 실제로 가는 것과 맞춰 @멘션·공지 글만(전체 새 글이 아니라).
+  const notifPosts = feed.filter((p) =>
+    p.author !== myName
+    && ((p.text ?? "").includes("@" + myName) || (p.text ?? "").includes("@모두") || p.isNotice)
+    && !dismissedIds.has("post:" + p.id)
+  );
   const totalNotifCnt = notifPosts.length + notifFailures.length + notifCompletedFailures.length + notifTodos.length + notifSupplyCnt + notifNewMaterials.length + notifNewQuotes.length;
 
   if (!skipLogin && session === undefined) {
@@ -2097,6 +2102,7 @@ export default function App() {
                   onUpdatePost={handleUpdateFeedPost}
                   onDeletePost={handleDeleteFeedPost}
                   onSetNotice={feedNoticeReady ? handleSetFeedNotice : null}
+                  onDismissNotif={handleDismissNotif}
                 />}
           {tab === "workcalendar" && (
             <WorkCalendarSheet

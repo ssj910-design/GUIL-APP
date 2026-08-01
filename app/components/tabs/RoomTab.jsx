@@ -266,7 +266,7 @@ function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEdit
   );
 }
 
-export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDeletePost, onSetNotice }) {
+export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDeletePost, onSetNotice, onDismissNotif }) {
   const { name: CURRENT_ENGINEER, role, profiles, selfId } = useContext(AuthContext);
   const [composing, setComposing] = useState(false);
   const [postInput, setPostInput] = useState("");
@@ -286,6 +286,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   function goToPost(id) {
     setMenuFor(null);
     setOpenPostId(id);
+    onDismissNotif?.("post:" + id);
   }
 
   const posts = [...feed]
