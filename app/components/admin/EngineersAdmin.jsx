@@ -325,7 +325,10 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [adminForm, setAdminForm] = useState({ name: "", loginId: "", tier: "manager" });
+  const [adminForm, setAdminForm] = useState({ name: "", loginId: "", tier: "manager", existingId: "" });
+  // 관리자 등록 폼에서 "기존 직원을 관리자로" 고를 때 보여줄 후보 — 이미 관리자인 사람은 뺀다.
+  const promotableEngineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false)
+    .slice().sort((a, b) => a.name.localeCompare(b.name, "ko"));
   const [addingAdmin, setAddingAdmin] = useState(false);
   const admins = profiles.filter((p) => p.role === "admin" && p.is_active !== false);
   const [contractTarget, setContractTarget] = useState(null);
@@ -356,22 +359,34 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
     setNewName("");
   }
 
-  // 관리자 등록 (최고관리자만) — 프로필(role=admin, 등급, 로그인아이디) 생성 후 비번을 1234로 심는다.
+  // 관리자 등록 (최고관리자만) — 새 이름이면 프로필을 새로 만들고, 기존 직원을 골랐으면 그
+  // 프로필을 그대로 관리자로 승격한다(입사일·주소·연락처·차량번호 등 기존 정보 유지). 두 경우 다
+  // 초기 비번 1234를 심는다.
   async function addAdmin() {
     const name = adminForm.name.trim();
     const loginId = adminForm.loginId.trim();
+    const existingId = adminForm.existingId || null;
     if (!name || !loginId) { alert("이름과 로그인 아이디를 입력해주세요."); return; }
-    if (profiles.some((p) => p.name === name)) { alert("같은 이름의 직원/관리자가 이미 있습니다."); return; }
-    if (profiles.some((p) => p.login_id === loginId)) { alert("이미 쓰는 로그인 아이디입니다."); return; }
+    if (!existingId && profiles.some((p) => p.name === name)) { alert("같은 이름의 직원/관리자가 이미 있습니다."); return; }
+    if (profiles.some((p) => p.login_id === loginId && p.id !== existingId)) { alert("이미 쓰는 로그인 아이디입니다."); return; }
     setAddingAdmin(true);
-    const { data: rows, error } = await supabase.from("profiles")
-      .insert({ name, role: "admin", admin_tier: adminForm.tier, login_id: loginId }).select();
+    const { data: rows, error } = existingId
+      ? await supabase.from("profiles")
+          .update({ role: "admin", admin_tier: adminForm.tier, login_id: loginId })
+          .eq("id", existingId).select()
+      : await supabase.from("profiles")
+          .insert({ name, role: "admin", admin_tier: adminForm.tier, login_id: loginId }).select();
     if (error || !rows?.[0]) { setAddingAdmin(false); alert("등록 실패: " + (error?.message ?? "")); return; }
     // 초기 비번 1234 심기 — 최고관리자 재확인을 거친다(아무나 못 부르게).
     const ok = await superReset(rows[0].id);
     setAddingAdmin(false);
-    setData((prev) => ({ ...prev, profiles: [...prev.profiles, rows[0]] }));
-    setAdminForm({ name: "", loginId: "", tier: "manager" });
+    setData((prev) => ({
+      ...prev,
+      profiles: existingId
+        ? prev.profiles.map((p) => (p.id === rows[0].id ? rows[0] : p))
+        : [...prev.profiles, rows[0]],
+    }));
+    setAdminForm({ name: "", loginId: "", tier: "manager", existingId: "" });
     if (ok) {
       alert(`${name} 관리자 계정이 만들어졌습니다.\n아이디: ${loginId} · 초기 비밀번호: 1234 (첫 로그인 때 변경)`);
     } else {
@@ -518,8 +533,26 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
           <p className="text-xs font-extrabold text-indigo-700 flex items-center gap-1.5 mb-2"><ShieldCheck size={14} /> 관리자 계정 등록 <span className="font-semibold text-slate-400">(최고관리자 전용)</span></p>
           <div className="flex items-end gap-2 flex-wrap">
             <div>
+              <p className="text-[11px] font-bold text-slate-500 mb-1">기존 직원에서 선택</p>
+              <select
+                className={inputCls}
+                value={adminForm.existingId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const p = promotableEngineers.find((x) => x.id === id);
+                  setAdminForm({ ...adminForm, existingId: id, name: p ? p.name : "" });
+                }}
+              >
+                <option value="">— 새로 등록 —</option>
+                {promotableEngineers.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
               <p className="text-[11px] font-bold text-slate-500 mb-1">이름</p>
-              <input className={inputCls} placeholder="예: 홍길동" value={adminForm.name} onChange={(e) => setAdminForm({ ...adminForm, name: e.target.value })} />
+              <input className={inputCls} placeholder="예: 홍길동" value={adminForm.name} disabled={!!adminForm.existingId}
+                onChange={(e) => setAdminForm({ ...adminForm, name: e.target.value })} />
             </div>
             <div>
               <p className="text-[11px] font-bold text-slate-500 mb-1">로그인 아이디</p>
