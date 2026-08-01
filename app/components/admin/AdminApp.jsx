@@ -8,7 +8,7 @@ import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, Cale
 import { supabase, fetchAll, loginFailReason } from "@/lib/supabaseClient";
 import {
   mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest,
-  mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck, mapFeedPost, mapRestockRequest, mapErrorCode,
+  mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck, mapSelfCheckItem, mapFeedPost, mapRestockRequest, mapErrorCode,
 } from "@/lib/mappers";
 import Dashboard from "@/app/components/admin/Dashboard";
 import SitesAdmin from "@/app/components/admin/SitesAdmin";
@@ -56,7 +56,7 @@ export default function AdminApp() {
   const [data, setData] = useState({
     sites: [], units: [], siteManagers: [], failures: [], inspections: [],
     materialRequests: [], quoteRequests: [], restockRequests: [], todos: [], billings: [],
-    selfChecks: [], profiles: [], feed: [], errorCodes: [],
+    selfChecks: [], selfCheckItems: [], profiles: [], feed: [], errorCodes: [],
   });
 
   // ── 콘솔 로그인 (관리자만) ──
@@ -107,7 +107,7 @@ export default function AdminApp() {
 
   useEffect(() => {
     async function load() {
-      const [sites, units, siteManagers, failures, inspections, materials, quotes, restock, todos, billings, selfChecks, profiles, feed, errorCodes] =
+      const [sites, units, siteManagers, failures, inspections, materials, quotes, restock, todos, billings, selfChecks, selfCheckItems, profiles, feed, errorCodes] =
         await Promise.all([
           supabase.from("sites").select("*").order("name"),
           supabase.from("units").select("*").order("seq"),
@@ -120,6 +120,8 @@ export default function AdminApp() {
           supabase.from("todos").select("*").order("created_at", { ascending: false }),
           supabase.from("billings").select("*").order("created_at", { ascending: false }),
           fetchAll("self_checks"),
+          // B/C(주의관찰·긴급수리)만 — 나머지(A/D/E)는 자체점검 지적사항 화면에 필요 없어 뺀다(전체는 수백~수천행).
+          supabase.from("self_check_items").select("*").in("result", ["B", "C"]),
           supabase.from("profiles").select("*").order("name"),
           supabase.from("feed_posts").select("*").order("created_at", { ascending: true }),
           supabase.from("error_codes").select("*"),
@@ -136,6 +138,7 @@ export default function AdminApp() {
         todos: (todos.data ?? []).map(mapTodo),
         billings: (billings.data ?? []).map(mapBilling),
         selfChecks: (selfChecks.data ?? []).map(mapSelfCheck),
+        selfCheckItems: (selfCheckItems.data ?? []).map(mapSelfCheckItem),
         profiles: profiles.data ?? [],
         feed: (feed.data ?? []).map(mapFeedPost),
         errorCodes: (errorCodes.data ?? []).map(mapErrorCode),

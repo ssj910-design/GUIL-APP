@@ -6,11 +6,12 @@
 import { useEffect, useState } from "react";
 import { Search, Map as MapIcon } from "lucide-react";
 import { supabase, fetchAll } from "@/lib/supabaseClient";
-import { mapSelfCheck, mapSelfCheckItem } from "@/lib/mappers";
+import { mapSelfCheck, mapSelfCheckItem, mapTodo } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
-import { shortDate } from "@/lib/utils";
+import { shortDate, addDays } from "@/lib/utils";
 import { locOf, personOf, StatusBadge, AdminTable, Modal, PhotoGrid, inputCls } from "@/app/components/admin/adminShared";
 import { SiteMapModal } from "@/app/components/admin/SiteMapModal";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 import SELF_CHECK_ITEM_CODES from "@/lib/data/selfCheckItemCodes.json";
 
 const RESULT_LABEL = { A: "양호", B: "주의관찰", C: "긴급수리", E: "없음" };
@@ -134,8 +135,108 @@ function EngineerDetailModal({ name, rows, onClose }) {
   );
 }
 
+// 자체점검 지적사항(B/C) — 결과가 B(주의관찰)·C(긴급수리)로 저장된 항목만 모아 보여준다.
+// 저장되는 순간 자동으로 본인 할일이 되게 하면 "내 할일이 느니까 애매하면 A로 넘기자"는
+// 유인이 생겨서, 관리자가 여기서 확인하고 "할일로 발행"해야 담당기사에게 할일이 간다.
+function FlaggedItemsView({ data, setData }) {
+  const [publishing, setPublishing] = useState(null);
+  const [onlyOpen, setOnlyOpen] = useState(true);
+
+  const rows = data.selfCheckItems
+    .map((it) => {
+      const check = data.selfChecks.find((c) => c.id === it.selfCheckId);
+      if (!check) return null;
+      const unit = data.units.find((u) => u.id === check.unitId);
+      const site = unit ? data.sites.find((s) => s.id === unit.siteId) : null;
+      const meta = SELF_CHECK_ITEM_CODES.find((x) => x.code === it.itemCd);
+      const todo = data.todos.find((t) => t.selfCheckItemId === it.id);
+      return {
+        ...it,
+        ym: check.ym,
+        unitId: check.unitId,
+        siteId: site?.id ?? null,
+        assignedEngineer: site?.assignedEngineer ?? null,
+        itemName: meta ? `${meta.no} ${meta.name}${meta.detail ? ` - ${meta.detail}` : ""}` : it.itemCd,
+        todo,
+      };
+    })
+    .filter(Boolean)
+    .filter((r) => !onlyOpen || !r.todo)
+    .sort((a, b) => (a.result === b.result ? (b.ym ?? "").localeCompare(a.ym ?? "") : a.result === "C" ? -1 : 1));
+
+  async function publish(row) {
+    if (!(await confirmAsync(`${locOf(data, row.unitId)} · ${row.itemName} — 할일로 발행할까요?\n담당기사: ${row.assignedEngineer ?? "미배정"}`))) return;
+    setPublishing(row.id);
+    const engineer = row.assignedEngineer ? data.profiles.find((p) => p.name === row.assignedEngineer) : null;
+    const gradeLabel = RESULT_LABEL[row.result] ?? row.result;
+    const patch = {
+      id: `todo-selfcheck-${row.id}`,
+      source: "selfcheck",
+      self_check_item_id: row.id,
+      title: `${locOf(data, row.unitId)} 자체점검 지적사항 — ${row.itemName} (${gradeLabel})`,
+      site_name: data.sites.find((s) => s.id === row.siteId)?.name ?? null,
+      elevator_no: data.units.find((u) => u.id === row.unitId)?.unitNo ?? null,
+      unit_id: row.unitId,
+      part: "자체점검 지적사항",
+      assignee: row.assignedEngineer,
+      assignee_id: engineer?.id ?? null,
+      assigned_date: TODAY_STR,
+      due_date: addDays(TODAY_STR, row.result === "C" ? 7 : 14),
+      done: false,
+      description: row.remark || "특이사항 입력 없음",
+    };
+    const { data: inserted, error } = await supabase.from("todos").insert(patch).select().single();
+    setPublishing(null);
+    if (error) { alert("발행 실패: " + error.message); return; }
+    setData((prev) => ({ ...prev, todos: [mapTodo(inserted), ...prev.todos] }));
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm text-slate-500">B(주의관찰)·C(긴급수리)로 표시된 항목 — 확인 후 할일로 발행하면 담당기사에게 갑니다.</p>
+        <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 shrink-0">
+          <input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} />
+          미발행만 보기
+        </label>
+      </div>
+      {rows.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 py-20 text-center text-sm text-slate-400">
+          {onlyOpen ? "미발행 지적사항이 없습니다" : "지적사항이 없습니다"}
+        </div>
+      ) : (
+        <AdminTable head={["현장 · 호기", "점검월", "항목", "등급", "특이사항", ""]}>
+          {rows.map((r) => (
+            <tr key={r.id} className="border-b border-slate-50">
+              <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{locOf(data, r.unitId)}</td>
+              <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{r.ym}</td>
+              <td className="px-3 py-2.5 max-w-xs">{r.itemName}</td>
+              <td className="px-3 py-2.5"><StatusBadge tone={RESULT_TONE[r.result] ?? "slate"}>{RESULT_LABEL[r.result] ?? r.result}</StatusBadge></td>
+              <td className="px-3 py-2.5 text-slate-600 max-w-xs">{r.remark || "-"}</td>
+              <td className="px-3 py-2.5 text-right pr-4 whitespace-nowrap">
+                {r.todo ? (
+                  <StatusBadge tone="green">발행됨</StatusBadge>
+                ) : (
+                  <button
+                    disabled={publishing === r.id}
+                    onClick={() => publish(r)}
+                    className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-lg px-3 py-1.5"
+                  >
+                    {publishing === r.id ? "발행 중..." : "할일로 발행"}
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </AdminTable>
+      )}
+    </div>
+  );
+}
+
 export default function SelfChecksAdmin({ data, setData }) {
   const { selfChecks } = data;
+  const [view, setView] = useState("progress"); // "progress" | "flags"
   const [ym, setYm] = useState(TODAY_STR.slice(0, 7));
   const [busy, setBusy] = useState(false);
   const [engineerKey, setEngineerKey] = useState(null);
@@ -183,26 +284,47 @@ export default function SelfChecksAdmin({ data, setData }) {
   }
 
   const detail = summaryRows.find((g) => g.key === engineerKey);
+  const openFlagCount = data.selfCheckItems.filter((it) => !data.todos.some((t) => t.selfCheckItemId === it.id)).length;
 
   return (
     <div className="max-w-[100rem] mx-auto">
       <div className="flex items-end justify-between mb-4">
         <div>
           <h1 className="text-xl font-extrabold">자체점검 현황</h1>
+          <div className="flex items-center gap-1 mt-2">
+            {[{ k: "progress", label: "월별현황" }, { k: "flags", label: "지적사항(B/C)" }].map((t) => (
+              <button
+                key={t.k}
+                onClick={() => setView(t.k)}
+                className={`text-xs font-bold px-3 py-1.5 rounded-full border ${view === t.k ? "bg-blue-700 text-white border-blue-700" : "bg-white text-slate-500 border-slate-200"}`}
+              >
+                {t.label}
+                {t.k === "flags" && openFlagCount > 0 && (
+                  <span className={`ml-1.5 ${view === t.k ? "text-blue-100" : "text-red-500"}`}>{openFlagCount}</span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setMapOpen(true)} className="flex items-center gap-1.5 text-sm font-bold text-blue-700 bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-2">
-            <MapIcon size={15} /> 지도보기
-          </button>
-          <input type="month" className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white" value={ym} onChange={(e) => setYm(e.target.value)} />
-          {rows.length === 0 && (
-            <button onClick={generate} disabled={busy} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2">
-              {busy ? "생성 중..." : `${ym} 출석부 생성`}
+        {view === "progress" && (
+          <div className="flex items-center gap-2">
+            <button onClick={() => setMapOpen(true)} className="flex items-center gap-1.5 text-sm font-bold text-blue-700 bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-2">
+              <MapIcon size={15} /> 지도보기
             </button>
-          )}
-        </div>
+            <input type="month" className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white" value={ym} onChange={(e) => setYm(e.target.value)} />
+            {rows.length === 0 && (
+              <button onClick={generate} disabled={busy} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2">
+                {busy ? "생성 중..." : `${ym} 출석부 생성`}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
+      {view === "flags" ? (
+        <FlaggedItemsView data={data} setData={setData} />
+      ) : (
+        <>
       {rows.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-200 px-5 py-4 mb-4">
           <div className="flex items-center justify-between text-sm mb-2">
@@ -236,6 +358,8 @@ export default function SelfChecksAdmin({ data, setData }) {
       <p className="text-[10px] text-slate-400 mt-2">
         * 기사용 모바일 점검 화면(사진·특이사항 입력)은 다음 단계. 매월 1일 자동 생성은 pg_cron 설정으로 가능 (supabase/migrations/004 참고).
       </p>
+        </>
+      )}
 
       {detail && <EngineerDetailModal name={detail.name} rows={detail.rows} onClose={() => setEngineerKey(null)} />}
       {mapOpen && <SiteMapModal sites={data.sites} units={data.units} onClose={() => setMapOpen(false)} />}
