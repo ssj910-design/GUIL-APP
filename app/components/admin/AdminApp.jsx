@@ -28,6 +28,7 @@ import { LoginScreen } from "@/app/components/LoginScreen";
 import { PasswordChangeForm } from "@/app/components/PasswordChangeForm";
 import { AdminAuthContext } from "@/app/components/admin/adminShared";
 import { BrandSplash } from "@/app/components/ui";
+import { pushSupported, pushPermission, enablePush, disablePush, isSubscribed } from "@/lib/push";
 
 // 로그인 강제 스위치 — 모바일 앱과 동일. 기본 꺼짐(배포본은 지금처럼 열림), 로컬 .env.local에서 켠다.
 const SKIP_LOGIN = process.env.NEXT_PUBLIC_SKIP_LOGIN !== "false";
@@ -65,6 +66,8 @@ export default function AdminApp() {
   const [authError, setAuthError] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
 
   // layout.js가 JS 뜨기 전 흰 화면 방지용으로 그려둔 정적 로고 스플래시를, 이 앱이 마운트되는
   // 즉시 치운다 — 아래 BrandSplash 로딩화면이 같은 로고를 이어서 보여주므로 깜빡임이 없다.
@@ -109,6 +112,22 @@ export default function AdminApp() {
   }
 
   function adminLogout() { localStorage.removeItem("guilAuthV1"); setMe(null); }
+
+  // 이 브라우저(PC)의 웹푸시 구독 여부 — 모바일 마이페이지와 동일한 방식. 이게 꺼져있으면
+  // (구독 자체가 없으면) 이 계정으로 온 알림·테스트 발송을 이 기기에서 받을 수 없다.
+  useEffect(() => { if (me?.id) isSubscribed(me.id).then(setPushSubscribed); }, [me?.id]);
+  async function toggleAdminPush() {
+    setPushBusy(true);
+    if (pushSubscribed) {
+      await disablePush();
+      setPushSubscribed(false);
+    } else {
+      const r = await enablePush(me.id);
+      if (!r.ok) alert(r.reason);
+      setPushSubscribed(r.ok);
+    }
+    setPushBusy(false);
+  }
 
   const tier = SKIP_LOGIN ? "super" : me?.adminTier; // 로그인 꺼진 상태선 전 기능 노출(기존 동작)
 
@@ -217,6 +236,21 @@ export default function AdminApp() {
           <div className="px-5 py-3 border-t border-blue-900">
             <p className="text-[11px] font-bold text-blue-100">{me.name}</p>
             <p className="text-[10px] text-blue-400 mb-2">{tier === "super" ? "최고관리자" : "중간관리자"}</p>
+            <button
+              onClick={toggleAdminPush}
+              disabled={pushBusy || !pushSupported()}
+              className={`w-full flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 mb-1.5 border text-[11px] font-bold ${
+                pushSubscribed ? "bg-blue-800 border-blue-700 text-blue-100" : "bg-blue-900 border-blue-800 text-blue-300"
+              }`}
+            >
+              이 기기에서 알림 받기
+              <span>
+                {pushBusy ? "처리 중…"
+                  : !pushSupported() ? "미지원"
+                  : pushPermission() === "denied" ? "차단됨"
+                  : pushSubscribed ? "켜짐" : "꺼짐"}
+              </span>
+            </button>
             <div className="flex gap-1.5">
               <button onClick={() => setPwOpen(true)} className="flex-1 text-[11px] font-bold text-blue-100 bg-blue-900 rounded-lg py-1.5">비밀번호 변경</button>
               <button onClick={adminLogout} className="flex-1 text-[11px] font-bold text-blue-100 bg-blue-900 rounded-lg py-1.5">로그아웃</button>
