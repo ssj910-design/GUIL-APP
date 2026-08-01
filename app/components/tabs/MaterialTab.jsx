@@ -666,9 +666,10 @@ export function MaterialTab({ requests, onAddMaterialRequest, todos, onReject, q
 
   function addRequest() {
     if (!form.siteId || !formPartText || form.photos.length === 0) return;
-    // 같은 현장에 승인대기 중인 자재신청이 있으면 접수 전에 보여주고 기사가 직접 중복 여부를 판단하게 한다
-    // (부품명이 자유텍스트라 정확매칭은 표기차이로 놓칠 수 있어, 현장 단위로 넓게 걸고 사람이 보게 함).
-    const pending = requests.filter((r) => r.siteId === form.siteId && r.status === "승인대기");
+    // 같은 현장에 비용청구 전 단계(승인대기·지급완료 — 반려는 끝난 건이라 제외)인 자재신청이
+    // 있으면 접수 전에 보여주고 기사가 직접 중복 여부를 판단하게 한다 (부품명이 자유텍스트라
+    // 정확매칭은 표기차이로 놓칠 수 있어, 현장 단위로 넓게 걸고 사람이 보게 함).
+    const pending = requests.filter((r) => r.siteId === form.siteId && r.status !== "반려" && !isBilled(r.id));
     if (pending.length > 0) { setDupWarning({ items: pending, onConfirm: submitMaterialRequest }); return; }
     submitMaterialRequest();
   }
@@ -769,9 +770,9 @@ export function MaterialTab({ requests, onAddMaterialRequest, todos, onReject, q
 
   function submitQuote() {
     if (!quoteValid) return;
-    // 같은 현장에 아직 지급완료 전(요청접수/견적발행/승인 어느 단계든)인 견적요청이 있으면 경고 —
-    // 견적은 완료 전까지 여러 단계를 거치므로 승인대기 하나만 보는 자재신청보다 범위를 넓게 잡는다.
-    const pending = quoteRequests.filter((q) => q.siteId === quoteForm.siteId && q.status !== "자재지급완료");
+    // 같은 현장에 비용청구 전 단계(요청접수~자재지급완료 어디든, 아직 비용청구 안 된 건)인
+    // 견적요청이 있으면 경고 — 자재신청과 같은 기준(비용청구 완료 전이면 전부 대상).
+    const pending = quoteRequests.filter((q) => q.siteId === quoteForm.siteId && !isQuoteBilled(q.id));
     if (pending.length > 0) { setDupWarning({ items: pending, onConfirm: submitQuoteRequest }); return; }
     submitQuoteRequest();
   }
