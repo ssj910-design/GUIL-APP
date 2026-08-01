@@ -232,14 +232,26 @@ export default function App() {
   }
 
   // 웹(PWA) — 주소창 쿼리로 들어온 경우(sw.js의 notificationclick이 이 URL로 이동시킴).
+  // 앱이 이미 떠 있는 상태에서 알림을 누르면 sw.js가 기존 창을 그대로 재사용(navigate)하므로,
+  // 마운트 시점 한 번만 검사해선 못 잡는다 — 창이 다시 포커스/보임 상태가 될 때마다 다시 확인한다.
   useEffect(() => {
-    if (!profile || profile.role !== "admin") return;
-    const url = new URL(window.location.href);
-    if (applyOpenParams(url.searchParams)) {
-      url.searchParams.delete("openMaterial");
-      url.searchParams.delete("openQuote");
-      window.history.replaceState({}, "", url);
+    if (!profile) return;
+    function checkOpenParams() {
+      const url = new URL(window.location.href);
+      if (applyOpenParams(url.searchParams)) {
+        url.searchParams.delete("openMaterial");
+        url.searchParams.delete("openQuote");
+        url.searchParams.delete("openPost");
+        window.history.replaceState({}, "", url);
+      }
     }
+    checkOpenParams();
+    window.addEventListener("focus", checkOpenParams);
+    document.addEventListener("visibilitychange", checkOpenParams);
+    return () => {
+      window.removeEventListener("focus", checkOpenParams);
+      document.removeEventListener("visibilitychange", checkOpenParams);
+    };
   }, [profile]);
 
   // 네이티브 앱 — 백그라운드/종료 상태에서 푸시를 탭해 앱이 열린 경우. 주소 이동이 없어 별도로 받는다.

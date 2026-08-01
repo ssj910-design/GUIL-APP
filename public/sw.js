@@ -26,8 +26,10 @@ self.addEventListener("notificationclick", (event) => {
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       // 이미 열려 있는 창이 있으면 그 창을 쓴다 (앱을 두 번 띄우지 않게)
+      // navigate()가 끝나기 전에 focus()부터 반환하면, 앱 쪽 focus 리스너가 아직 안 바뀐 URL을
+      // 읽어버려 딥링크가 안 먹는다 — navigate 완료를 기다린 뒤 focus한다.
       for (const c of list) {
-        if ("focus" in c) { c.navigate(url); return c.focus(); }
+        if ("navigate" in c) return c.navigate(url).then((client) => (client ?? c).focus());
       }
       return clients.openWindow(url);
     })
