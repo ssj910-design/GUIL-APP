@@ -2,7 +2,7 @@
 
 // 관리자 대시보드 — 오늘 처리해야 할 일이 한눈에 보이는 화면.
 // 호기·담당자 표기는 v2 FK(unitId/assigneeId)를 우선 쓰고, 옛 라벨은 fallback.
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import WeekStrip from "@/app/components/admin/WeekStrip";
 import { AlertOctagon, Plus, MapPin } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
@@ -89,8 +89,8 @@ export function FailureDetailContent({ f, units, sites, profiles = [] }) {
   );
 }
 
-export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
-  const { sites, units, failures, inspections, materialRequests, quoteRequests, todos, billings, selfChecks, profiles } = data;
+export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLeaves, onOpenTodos, onOpenMaterials, onOpenBillings, onOpenFailures, onOpenSelfChecks }) {
+  const { sites, units, failures, inspections, materialRequests, quoteRequests, todos, billings, selfChecks, selfCheckItems, profiles } = data;
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const engineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
   const engineerJobs = useMemo(() => engineerJobsByName(failures), [failures]);
@@ -173,6 +173,31 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
   // 지급됐지만 미청구: 자재·견적 지급완료로 자동 생성된 할일(마감=지급일+30일 기본)이 아직도
   // 안 끝났으면(청구 처리 전) — 개별 할일 목록을 일일이 정렬해보지 않아도 밀린 정산이 한눈에 보이게.
   const overdueUnbilled = todos.filter((t) => (t.source === "material" || t.source === "quote") && !t.done && t.dueDate && t.dueDate < TODAY_STR);
+
+  // 오늘 처리할 것 — 관리자 승인대기 큐 7종을 한 곳에 모은다. 새 데이터가 아니라
+  // 각 화면(LeavesAdmin/TodosAdmin/MaterialsAdmin/FailuresAdmin/SelfChecksAdmin)이
+  // 이미 쓰는 것과 같은 조건으로만 센다.
+  const [pendingLeaves, setPendingLeaves] = useState([]);
+  useEffect(() => {
+    supabase.from("leaves").select("id").eq("status", "신청").then(({ data: rows }) => setPendingLeaves(rows ?? []));
+  }, []);
+  const reassignTodos = todos.filter((t) => t.reassignRequested && !t.done);
+  const quotesForApproval = quoteRequests.filter((q) => q.status === "견적발행");
+  // billings엔 승인 상태 필드가 없어, 관리자 메모(notes)가 아직 없는 건을 "확인 전"으로 본다.
+  const unconfirmedBillings = billings.filter((b) => !b.notes);
+  const unassignedFailures = failures.filter((f) => f.status === "미처리" && !f.assignee);
+  const flaggedSelfCheckItems = selfCheckItems.filter((it) => !todos.some((t) => t.selfCheckItemId === it.id));
+
+  const todayQueue = [
+    { key: "leaves", label: "연차승인", count: pendingLeaves.length, onClick: onOpenLeaves },
+    { key: "reassign", label: "재배정요청", count: reassignTodos.length, onClick: () => onOpenTodos?.("reassign") },
+    { key: "materials", label: "자재승인·지급", count: pendingMaterials.length, onClick: () => onOpenMaterials?.("material") },
+    { key: "quotes", label: "견적승인", count: quotesForApproval.length, onClick: () => onOpenMaterials?.("quote") },
+    { key: "billings", label: "청구확인", count: unconfirmedBillings.length, onClick: onOpenBillings },
+    { key: "unassigned", label: "미배정 고장", count: unassignedFailures.length, onClick: () => onOpenFailures?.("미처리") },
+    { key: "selfcheck", label: "자체점검 B·C 할일배정", count: flaggedSelfCheckItems.length, onClick: () => onOpenSelfChecks?.("flags") },
+  ];
+
   const ym = TODAY_STR.slice(0, 7);
   const monthChecks = selfChecks.filter((c) => c.ym === ym);
   const doneChecks = monthChecks.filter((c) => c.status === "완료");
@@ -253,6 +278,24 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
           </div>
         ) : null;
       })()}
+
+      {/* 오늘 처리할 것 — 여러 화면에 흩어진 승인대기 큐를 한 곳에서 확인하고 클릭 시 해당 화면으로 바로 이동 */}
+      <section className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-6">
+        <h2 className="px-5 py-3 text-sm font-bold border-b border-slate-100">오늘 처리할 것</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 divide-x divide-y md:divide-y-0 divide-slate-100">
+          {todayQueue.map((q) => (
+            <button
+              key={q.key}
+              onClick={q.onClick}
+              disabled={!q.onClick}
+              className="flex flex-col items-start gap-0.5 px-4 py-3 text-left hover:bg-slate-50 disabled:hover:bg-transparent"
+            >
+              <span className="text-xs text-slate-500">{q.label}</span>
+              <span className={`text-lg font-extrabold ${q.count ? "text-red-600" : "text-slate-900"}`}>{q.count}</span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-8">
         <Kpi label="미처리 고장" value={openFailures.length} tone={openFailures.length ? "text-red-600" : "text-slate-900"} />

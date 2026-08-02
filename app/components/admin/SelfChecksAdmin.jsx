@@ -234,9 +234,9 @@ function FlaggedItemsView({ data, setData }) {
   );
 }
 
-export default function SelfChecksAdmin({ data, setData }) {
+export default function SelfChecksAdmin({ data, setData, initialView }) {
   const { selfChecks } = data;
-  const [view, setView] = useState("progress"); // "progress" | "flags"
+  const [view, setView] = useState(initialView ?? "progress"); // "progress" | "flags"
   const [ym, setYm] = useState(TODAY_STR.slice(0, 7));
   const [busy, setBusy] = useState(false);
   const [engineerKey, setEngineerKey] = useState(null);

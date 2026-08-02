@@ -51,8 +51,13 @@ const MENU = [
 
 export default function AdminApp() {
   const [menu, setMenu] = useState("dashboard");
-  const [hrSub, setHrSub] = useState("직원"); // 인사관리 하위 탭 (대시보드에서 워크 캘린더로 바로 진입)
+  const [hrSub, setHrSub] = useState("직원"); // 인사관리 하위 탭 (대시보드에서 워크 캘린더·연차관리로 바로 진입)
   const [navOpen, setNavOpen] = useState(false); // 모바일 드로어
+  // 대시보드 "오늘 처리할 것" 클릭 시 해당 화면의 하위 탭/필터를 미리 지정해 바로 그 목록이 보이게 한다.
+  const [todosInitialView, setTodosInitialView] = useState("open");
+  const [materialsInitialTab, setMaterialsInitialTab] = useState("all");
+  const [failuresInitialStatus, setFailuresInitialStatus] = useState("all");
+  const [selfChecksInitialView, setSelfChecksInitialView] = useState("progress");
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
     sites: [], units: [], siteManagers: [], failures: [], inspections: [],
@@ -267,21 +272,31 @@ export default function AdminApp() {
         {loading ? (
           <p className="text-sm text-slate-400 pt-20 text-center">데이터를 불러오는 중...</p>
         ) : menu === "dashboard" ? (
-          <Dashboard data={data} setData={setData} onOpenWorkCalendar={() => { setHrSub("워크 캘린더"); setMenu("engineers"); }} />
+          <Dashboard
+            data={data}
+            setData={setData}
+            onOpenWorkCalendar={() => { setHrSub("워크 캘린더"); setMenu("engineers"); }}
+            onOpenLeaves={() => { setHrSub("연차관리"); setMenu("engineers"); }}
+            onOpenTodos={(view) => { setTodosInitialView(view); setMenu("todos"); }}
+            onOpenMaterials={(tab) => { setMaterialsInitialTab(tab); setMenu("materials"); }}
+            onOpenBillings={() => setMenu("billings")}
+            onOpenFailures={(status) => { setFailuresInitialStatus(status); setMenu("failures"); }}
+            onOpenSelfChecks={(view) => { setSelfChecksInitialView(view); setMenu("selfChecks"); }}
+          />
         ) : menu === "sites" ? (
           <SitesAdmin data={data} setData={setData} />
         ) : menu === "failures" ? (
-          <FailuresAdmin data={data} setData={setData} />
+          <FailuresAdmin data={data} setData={setData} initialStatus={failuresInitialStatus} />
         ) : menu === "inspections" ? (
           <InspectionsAdmin data={data} setData={setData} />
         ) : menu === "materials" ? (
-          <MaterialsAdmin data={data} setData={setData} />
+          <MaterialsAdmin data={data} setData={setData} initialTab={materialsInitialTab} />
         ) : menu === "billings" ? (
           <BillingsAdmin data={data} setData={setData} />
         ) : menu === "todos" ? (
-          <TodosAdmin data={data} setData={setData} />
+          <TodosAdmin data={data} setData={setData} initialView={todosInitialView} />
         ) : menu === "selfChecks" ? (
-          <SelfChecksAdmin data={data} setData={setData} />
+          <SelfChecksAdmin data={data} setData={setData} initialView={selfChecksInitialView} />
         ) : menu === "room" ? (
           <RoomAdmin data={data} setData={setData} />
         ) : menu === "engineers" ? (

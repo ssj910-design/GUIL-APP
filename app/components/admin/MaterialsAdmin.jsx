@@ -72,9 +72,9 @@ function assigneeNames(data, key, requestId) {
   return linked.map((t) => personOf(data, t.assigneeId, t.assignee)).join(", ");
 }
 
-export default function MaterialsAdmin({ data, setData }) {
+export default function MaterialsAdmin({ data, setData, initialTab }) {
   const { materialRequests: allMaterialRequests, quoteRequests: allQuoteRequests } = data;
-  const [tab, setTab] = useState("all");
+  const [tab, setTab] = useState(initialTab ?? "all");
   const [search, setSearch] = useState("");
   const [quoteStageFilter, setQuoteStageFilter] = useState("all");
   const [payTarget, setPayTarget] = useState(null); // 지급완료 처리 중인 자재신청
