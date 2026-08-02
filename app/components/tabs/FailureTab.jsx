@@ -350,9 +350,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                     <option key={m} value={m}>{m}분 후</option>
                   ))}
                 </select>
-                <p className="text-[11px] text-orange-600 font-semibold mt-1.5 leading-relaxed">
-                  고객에게 도착 시간이 문자로 자동 발송됩니다
-                </p>
+                {/* 문자 자동발송 안내 — 실제 발송 기능이 아직 없어 숨김. 기능 붙이면 다시 노출. */}
               </div>
             )}
             {/* "고객안심 출동문자 발송" 토글 — 실제 발송 기능이 아직 없어 숨김. 기능 붙이면 다시 노출. */}
@@ -789,9 +787,7 @@ export function DispatchEtaModal({ failure, onConfirm, onClose }) {
           ))}
         </select>
       </Field>
-      <p className="text-xs font-bold text-orange-600 bg-orange-50 rounded-lg px-3 py-2.5 mb-4 leading-relaxed">
-        ⚠️ 확인을 누르면 고객에게 도착 시간이 문자로 자동 발송됩니다
-      </p>
+      {/* 문자 자동발송 안내 — 실제 발송 기능이 아직 없어 숨김. 기능 붙이면 다시 노출. */}
       <PrimaryButton onClick={() => valid && onConfirm(parseInt(eta, 10))} disabled={!valid}>출동 확정</PrimaryButton>
     </Sheet>
   );
