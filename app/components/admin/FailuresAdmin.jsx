@@ -347,9 +347,9 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
   );
 }
 
-export default function FailuresAdmin({ data, setData }) {
+export default function FailuresAdmin({ data, setData, initialStatus }) {
   const { failures, profiles, units, sites } = data;
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState(initialStatus ?? "all");
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState(null);
   const [registering, setRegistering] = useState(false);

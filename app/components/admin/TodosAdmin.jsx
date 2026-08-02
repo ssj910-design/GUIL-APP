@@ -264,9 +264,9 @@ function AssignTodoModal({ data, onClose, onCreate }) {
   );
 }
 
-export default function TodosAdmin({ data, setData }) {
+export default function TodosAdmin({ data, setData, initialView }) {
   const { todos, sites, units, profiles } = data;
-  const [view, setView] = useState("open");
+  const [view, setView] = useState(initialView ?? "open");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState(null);
