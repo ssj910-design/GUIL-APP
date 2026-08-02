@@ -46,7 +46,7 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
             <p className="px-5 pt-4 pb-2 text-xs font-bold text-slate-400">기본정보</p>
             <div className="bg-white">
               <TimelineRow icon={Flag} label="건물명" value={site.name} />
-              <TimelineRow icon={Flag} label="호기" value={`${unit}${site.emergencyPhone ? ` (비상통화장치 ${site.emergencyPhone})` : ""}`} />
+              <TimelineRow icon={Flag} label="호기" value={unit} />
               <TimelineRow icon={Flag} label="승강기번호" value={liveInfo?.govElevatorNo || "미등록"} valueColor={liveInfo ? "text-blue-600" : "text-slate-700"} />
               <TimelineRow icon={Flag} label="승강기종류" value={realUnit?.kind || "-"} />
               <TimelineRow icon={Flag} label="승강기형식" value={realUnit?.form || "-"} />
@@ -56,6 +56,7 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
               <TimelineRow icon={Flag} label="운행구간" value={realUnit?.runSection || "-"} />
               <TimelineRow icon={Flag} label="적재하중" value={realUnit?.loadKg ? `${realUnit.loadKg}kg` : "-"} />
               <TimelineRow icon={Flag} label="정원" value={realUnit?.capacityPersons ? `${realUnit.capacityPersons}인승` : "-"} />
+              <TimelineRow icon={Flag} label="비상통화장치" value={site.emergencyPhone || "-"} valueColor={site.emergencyPhone ? "text-blue-600" : "text-slate-700"} />
               <TimelineRow icon={Flag} label="보험" value={realUnit?.insurer ? `${realUnit.insurer} (~${realUnit.insuranceEnd ?? "?"})` : "-"} valueColor="text-blue-600" last />
             </div>
             {liveInfo && <p className="px-5 pt-2 text-[10px] text-slate-400">* 국가승강기정보센터 실시간 데이터</p>}
@@ -534,7 +535,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
               <div className="flex-1 pb-3">
                 <p className="text-sm font-bold text-slate-800 py-2.5">
                   {u.unitNo}{realInstallPlace(u) ? ` · ${realInstallPlace(u)}` : ""} ({u.govNo || site.govElevatorNos?.[idx] || "승강기고유번호 미등록"})
-                  {site.emergencyPhone && ` (${site.emergencyPhone})`}
+                  {site.emergencyPhone && ` (비통 ${site.emergencyPhone})`}
                 </p>
                 <button
                   onClick={() => onOpenUnit(u.unitNo)}
