@@ -469,12 +469,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
             icon={MapPin}
             label="주소"
             valueColor="text-blue-600"
-            value={
-              <span className="flex items-center justify-end gap-1.5">
-                <MapLinkButtons site={site} />
-                {site.address}
-              </span>
-            }
+            value={site.address}
           />
           <TimelineRow icon={Flame} label="계약구분" value={site.contractType || "-"} valueColor={site.contractType === "FM(종합계약)" ? "text-red-600 font-bold" : "text-slate-700"} />
           {siteManagers.map((m, idx) => {
