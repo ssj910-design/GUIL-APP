@@ -170,6 +170,9 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
   const pendingMaterials = materialRequests.filter((m) => m.status === "승인대기");
   const activeQuotes = quoteRequests.filter((q) => q.status !== "자재지급완료");
   const openTodos = todos.filter((t) => !t.done);
+  // 지급됐지만 미청구: 자재·견적 지급완료로 자동 생성된 할일(마감=지급일+30일 기본)이 아직도
+  // 안 끝났으면(청구 처리 전) — 개별 할일 목록을 일일이 정렬해보지 않아도 밀린 정산이 한눈에 보이게.
+  const overdueUnbilled = todos.filter((t) => (t.source === "material" || t.source === "quote") && !t.done && t.dueDate && t.dueDate < TODAY_STR);
   const ym = TODAY_STR.slice(0, 7);
   const monthChecks = selfChecks.filter((c) => c.ym === ym);
   const doneChecks = monthChecks.filter((c) => c.status === "완료");
@@ -262,6 +265,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar }) {
           value={monthChecks.length ? `${doneChecks.length}/${monthChecks.length}` : "미생성"}
           tone={monthChecks.length && doneChecks.length < monthChecks.length ? "text-amber-600" : "text-slate-900"}
         />
+        <Kpi label="30일 초과 미청구" value={overdueUnbilled.length} tone={overdueUnbilled.length ? "text-red-600" : "text-slate-900"} />
       </div>
 
       <WeekStrip data={data} onOpenCalendar={onOpenWorkCalendar} />
