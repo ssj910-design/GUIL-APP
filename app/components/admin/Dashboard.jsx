@@ -174,7 +174,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
   // 안 끝났으면(청구 처리 전) — 개별 할일 목록을 일일이 정렬해보지 않아도 밀린 정산이 한눈에 보이게.
   const overdueUnbilled = todos.filter((t) => (t.source === "material" || t.source === "quote") && !t.done && t.dueDate && t.dueDate < TODAY_STR);
 
-  // 오늘 처리할 것 — 관리자 승인대기 큐 7종을 한 곳에 모은다. 새 데이터가 아니라
+  // 오늘 처리할 것 — 관리자 승인대기 큐 8종을 한 곳에 모은다. 새 데이터가 아니라
   // 각 화면(LeavesAdmin/TodosAdmin/MaterialsAdmin/FailuresAdmin/SelfChecksAdmin)이
   // 이미 쓰는 것과 같은 조건으로만 센다.
   const [pendingLeaves, setPendingLeaves] = useState([]);
@@ -196,6 +196,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
     { key: "billings", label: "청구확인", count: unconfirmedBillings.length, onClick: onOpenBillings },
     { key: "unassigned", label: "미배정 고장", count: unassignedFailures.length, onClick: () => onOpenFailures?.("미처리") },
     { key: "selfcheck", label: "자체점검 B·C 할일배정", count: flaggedSelfCheckItems.length, onClick: () => onOpenSelfChecks?.("flags") },
+    { key: "overdueUnbilled", label: "지급 후 30일 초과 미청구", count: overdueUnbilled.length, onClick: () => onOpenTodos?.("open") },
   ];
 
   const ym = TODAY_STR.slice(0, 7);
@@ -282,7 +283,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
       {/* 오늘 처리할 것 — 여러 화면에 흩어진 승인대기 큐를 한 곳에서 확인하고 클릭 시 해당 화면으로 바로 이동 */}
       <section className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-6">
         <h2 className="px-5 py-3 text-sm font-bold border-b border-slate-100">오늘 처리할 것</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 divide-x divide-y md:divide-y-0 divide-slate-100">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 divide-x divide-y md:divide-y-0 divide-slate-100">
           {todayQueue.map((q) => (
             <button
               key={q.key}
