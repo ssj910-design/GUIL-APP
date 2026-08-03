@@ -478,10 +478,10 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
           <TimelineRow icon={Flame} label="계약구분" value={site.contractType || "-"} valueColor={site.contractType === "FM(종합계약)" ? "text-red-600 font-bold" : "text-slate-700"} />
           {primaryManager && (
             <>
-              <TimelineRow icon={User} label="담당자1" value={primaryManager.name || "-"} />
-              <TimelineRow icon={PhoneCall} label="담당자1 전화번호" value={primaryManager.phone || "-"} valueColor="text-blue-600" />
-              <TimelineRow icon={Mail} label="담당자1 메일주소" value={primaryManager.email || "-"} />
-              <TimelineRow icon={Paperclip} label="담당자1 FAX" value={primaryManager.fax || "-"} />
+              <TimelineRow icon={User} label={primaryManager.role || "담당자"} value={primaryManager.name || "-"} />
+              <TimelineRow icon={PhoneCall} label={`${primaryManager.role || "담당자"} 전화번호`} value={primaryManager.phone || "-"} valueColor="text-blue-600" />
+              <TimelineRow icon={Mail} label={`${primaryManager.role || "담당자"} 메일주소`} value={primaryManager.email || "-"} />
+              <TimelineRow icon={Paperclip} label={`${primaryManager.role || "담당자"} FAX`} value={primaryManager.fax || "-"} />
             </>
           )}
           {otherManagers.length > 0 && (
@@ -498,14 +498,14 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
               onClick={() => setManagersExpanded((v) => !v)}
             />
           )}
-          {managersExpanded && otherManagers.map((m, idx) => {
-            const n = idx + 2;
+          {managersExpanded && otherManagers.map((m) => {
+            const roleLabel = m.role || "담당자";
             return (
               <React.Fragment key={m.id}>
-                <TimelineRow icon={User} label={`담당자${n}`} value={m.name || "-"} />
-                <TimelineRow icon={PhoneCall} label={`담당자${n} 전화번호`} value={m.phone || "-"} valueColor="text-blue-600" />
-                <TimelineRow icon={Mail} label={`담당자${n} 메일주소`} value={m.email || "-"} />
-                <TimelineRow icon={Paperclip} label={`담당자${n} FAX`} value={m.fax || "-"} />
+                <TimelineRow icon={User} label={roleLabel} value={m.name || "-"} />
+                <TimelineRow icon={PhoneCall} label={`${roleLabel} 전화번호`} value={m.phone || "-"} valueColor="text-blue-600" />
+                <TimelineRow icon={Mail} label={`${roleLabel} 메일주소`} value={m.email || "-"} />
+                <TimelineRow icon={Paperclip} label={`${roleLabel} FAX`} value={m.fax || "-"} />
               </React.Fragment>
             );
           })}
