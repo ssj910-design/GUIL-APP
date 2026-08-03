@@ -1,5 +1,5 @@
 import React, { useState, useContext, useRef } from "react";
-import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Flame, Download, KeyRound } from "lucide-react";
+import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Flame, Download, KeyRound, ChevronDown } from "lucide-react";
 import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, formatShortDate, recentFailuresBySite, siteMatchesQuery } from "@/lib/utils";
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
@@ -456,6 +456,10 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
   const [editingAccessInfo, setEditingAccessInfo] = useState(false);
   const [accessInfoDraft, setAccessInfoDraft] = useState(site.accessInfo ?? "");
   const assignedEngineerProfile = engineers.find((e) => e.name === site.assignedEngineer) ?? null;
+  // 관리자웹에서 ★로 지정한 대표 담당자만 기본 노출 — 없으면 첫 번째 담당자를 대표로 본다(관리자웹과 동일한 폴백).
+  const primaryManager = siteManagers.find((m) => m.isPrimary) ?? siteManagers[0] ?? null;
+  const otherManagers = siteManagers.filter((m) => m.id !== primaryManager?.id);
+  const [managersExpanded, setManagersExpanded] = useState(false);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
@@ -472,8 +476,30 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
             value={site.address}
           />
           <TimelineRow icon={Flame} label="계약구분" value={site.contractType || "-"} valueColor={site.contractType === "FM(종합계약)" ? "text-red-600 font-bold" : "text-slate-700"} />
-          {siteManagers.map((m, idx) => {
-            const n = siteManagers.length > 1 ? `${idx + 1}` : "";
+          {primaryManager && (
+            <>
+              <TimelineRow icon={User} label="담당자1" value={primaryManager.name || "-"} />
+              <TimelineRow icon={PhoneCall} label="담당자1 전화번호" value={primaryManager.phone || "-"} valueColor="text-blue-600" />
+              <TimelineRow icon={Mail} label="담당자1 메일주소" value={primaryManager.email || "-"} />
+              <TimelineRow icon={Paperclip} label="담당자1 FAX" value={primaryManager.fax || "-"} />
+            </>
+          )}
+          {otherManagers.length > 0 && (
+            <TimelineRow
+              icon={User}
+              label={managersExpanded ? "담당자 접기" : "담당자 더보기"}
+              valueColor="text-blue-600"
+              value={
+                <span className="inline-flex items-center gap-1">
+                  {otherManagers.length}명
+                  <ChevronDown size={14} className={`transition-transform ${managersExpanded ? "rotate-180" : ""}`} />
+                </span>
+              }
+              onClick={() => setManagersExpanded((v) => !v)}
+            />
+          )}
+          {managersExpanded && otherManagers.map((m, idx) => {
+            const n = idx + 2;
             return (
               <React.Fragment key={m.id}>
                 <TimelineRow icon={User} label={`담당자${n}`} value={m.name || "-"} />
