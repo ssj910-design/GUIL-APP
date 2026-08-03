@@ -721,7 +721,7 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
               className="w-full text-left bg-white rounded-xl border border-slate-200 p-3.5 active:bg-slate-50 cursor-pointer"
             >
               <div className="flex items-center justify-between gap-2 mb-1">
-                <p className="font-bold text-slate-800 text-sm">{s.name} · {siteUnitList(s, allUnits).length}대</p>
+                <p className={`font-bold text-sm ${s.isActive === false ? "text-slate-400 line-through" : "text-slate-800"}`}>{s.name} · {siteUnitList(s, allUnits).length}대</p>
                 <div className="flex items-center gap-1.5 flex-wrap shrink-0">
                   {(recentFailuresMap.get(s.id)?.length ?? 0) >= 3 && (
                     <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">집중관리</span>
@@ -730,12 +730,22 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
                     <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">미처리 고장 {openF}건</span>
                   )}
                   {insp?.result && <Badge result={insp.result} />}
+                  {s.isActive === false && (
+                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">계약종료</span>
+                  )}
                 </div>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <p className="text-[11px] text-slate-400 truncate">{s.address}</p>
                 <MapLinkButtons site={s} />
               </div>
+              {s.isActive === false && (s.terminatedDate || s.terminationBasis || s.terminationReason) && (
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {s.terminatedDate && `종료일자 ${formatShortDate(s.terminatedDate)}`}
+                  {s.terminationBasis && ` · 근거 ${s.terminationBasis}`}
+                  {s.terminationReason && ` · 사유 ${s.terminationReason}`}
+                </p>
+              )}
             </div>
           );
         })}
