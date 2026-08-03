@@ -148,7 +148,7 @@ export default function App() {
   const [openFailureId, setOpenFailureId] = useState(null); // 알림에서 특정 고장 건을 눌러 상세를 바로 연다 (탭 이동 없이 현재 화면 위에 띄움)
   const [openTodoId, setOpenTodoId] = useState(null); // 알림에서 특정 할일을 눌러 할일 탭의 인라인 상세(카드 펼침)를 바로 연다
   const [openFeedPostId, setOpenFeedPostId] = useState(null); // 알림/푸시에서 특정 게시글을 눌러 게시판 탭에서 바로 그 글 화면으로 들어간다
-  const [pushBanner, setPushBanner] = useState(null); // 네이티브 앱 포그라운드 중 도착한 푸시 — 상단 배너로 직접 보여준다 { title, body, url }
+  const [pushBanner, setPushBanner] = useState(null); // 네이티브 앱 포그라운드 중 도착한 푸시 — 상단 배너로 직접 보여준다 { title, body, url, time }
   const [materialFocusId, setMaterialFocusId] = useState(null); // 알림/푸시에서 특정 자재신청을 눌러 관리자 모드 자재출하관리에서 바로 상세를 연다
   const [quoteFocusId, setQuoteFocusId] = useState(null); // 알림/푸시에서 특정 견적신청을 눌러 관리자 모드 견적요청관리에서 바로 상세를 연다
   const [notifDispatchTarget, setNotifDispatchTarget] = useState(null);
@@ -230,12 +230,14 @@ export default function App() {
     const openQuote = params.get("openQuote");
     const openPost = params.get("openPost");
     const openTodo = params.get("openTodo");
-    if (!openMaterial && !openQuote && !openPost && !openTodo) return false;
+    const openFailure = params.get("openFailure");
+    if (!openMaterial && !openQuote && !openPost && !openTodo && !openFailure) return false;
     if (openMaterial || openQuote) setTab("admin");
     if (openMaterial) setMaterialFocusId(openMaterial);
     if (openQuote) setQuoteFocusId(openQuote);
     if (openPost) { setTab("room"); setOpenFeedPostId(openPost); handleDismissNotif("post:" + openPost); }
     if (openTodo) { setTab("todo"); setOpenTodoId(openTodo); handleDismissNotif("todo:" + openTodo); }
+    if (openFailure) setOpenFailureId(openFailure);
     return true;
   }
 
@@ -251,6 +253,7 @@ export default function App() {
         url.searchParams.delete("openQuote");
         url.searchParams.delete("openPost");
         url.searchParams.delete("openTodo");
+        url.searchParams.delete("openFailure");
         window.history.replaceState({}, "", url);
       }
     }
@@ -277,7 +280,8 @@ export default function App() {
   // 상단 배너로 대신 알려준다. 탭하면 그 알림의 화면으로 바로 이동.
   useEffect(() => {
     return onPushNotificationReceived((n) => {
-      setPushBanner({ title: n.title, body: n.body, url: n.data?.url });
+      const time = new Date().toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
+      setPushBanner({ title: n.title, body: n.body, url: n.data?.url, time });
     });
   }, []);
 
@@ -779,6 +783,7 @@ export default function App() {
     sendPush("failure_assigned", [assignedId], {
       title: "고장이 배정되었습니다",
       body: `${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} — ${parseErrorCode(failure.errorCode).faultType}`,
+      url: `/?openFailure=${failure.id}`,
     });
     notifyFailure(`${engineerName}에게 배정 완료`);
   }
@@ -814,9 +819,9 @@ export default function App() {
       : x)));
     // 재배정도 배정만큼 급하다 — 새 기사에겐 배정 알림, 회수당한 이전 기사에겐 회수 알림을 보낸다.
     const where = `${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} — ${parseErrorCode(failure.errorCode).faultType}`;
-    if (newAssigneeId) sendPush("failure_assigned", [newAssigneeId], { title: "고장이 배정되었습니다", body: where });
+    if (newAssigneeId) sendPush("failure_assigned", [newAssigneeId], { title: "고장이 배정되었습니다", body: where, url: `/?openFailure=${failure.id}` });
     if (failure.assigneeId && failure.assigneeId !== newAssigneeId) {
-      sendPush("failure_reassigned", [failure.assigneeId], { title: "배정이 회수되었습니다", body: where });
+      sendPush("failure_reassigned", [failure.assigneeId], { title: "배정이 회수되었습니다", body: where, url: `/?openFailure=${failure.id}` });
     }
     notifyFailure(engineerName ? `${engineerName}(으)로 재배정 완료` : "미배정으로 되돌림");
   }
@@ -833,14 +838,16 @@ export default function App() {
     sendPush("failure_reported", adminIds(), {
       title: `고장 접수 — ${what}`,
       body: `${where}${more}`,
+      url: `/?openFailure=${first.id}`,
     });
     if (created.some((f) => f.escalation)) {
-      sendPush("failure_escalated", adminIds(), { title: "중대 고장 접수", body: `${where} — ${what}` });
+      sendPush("failure_escalated", adminIds(), { title: "중대 고장 접수", body: `${where} — ${what}`, url: `/?openFailure=${first.id}` });
     }
     if (!first.assignee) {
       sendPush("failure_unassigned", engineerIds(), {
         title: "미배정 고장 — 먼저 잡는 사람이 담당",
         body: `${where} — ${what}`,
+        url: `/?openFailure=${first.id}`,
       });
     }
   }
@@ -867,6 +874,7 @@ export default function App() {
       sendPush("failure_refused", adminIds(), {
         title: "출동 거부됨 — 재배정 필요",
         body: `${profile.name}님이 ${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` (${reason.trim()})` : ""}`,
+        url: `/?openFailure=${failure.id}`,
       });
       const admins = profilesAll.filter((p) => p.role === "admin").map((p) => "@" + p.name).join(" ");
       handleSendFeedPost(
@@ -1024,6 +1032,7 @@ export default function App() {
       sendPush("failure_unassigned", engineerIds(), {
         title: `${result} — 지원 필요 (미배정 복귀)`,
         body: `${failure.siteName}${unit ? ` ${unit}` : ""}`,
+        url: `/?openFailure=${failure.id}`,
       });
     }
   }
@@ -1934,11 +1943,18 @@ export default function App() {
           {pushBanner && (
             <button
               onClick={openPushBanner}
-              className="absolute left-2 right-2 z-50 bg-blue-950 text-white rounded-2xl shadow-2xl px-4 py-3 text-left active:scale-[0.98] transition-transform"
+              className="absolute left-2 right-2 z-50 bg-blue-950 text-white rounded-2xl shadow-2xl px-3 py-2.5 text-left active:scale-[0.98] transition-transform flex items-start gap-2.5"
               style={{ top: "max(0.5rem, env(safe-area-inset-top))" }}
             >
-              <p className="text-xs font-extrabold truncate">{pushBanner.title || "새 알림"}</p>
-              {pushBanner.body && <p className="text-[11px] text-blue-200 truncate mt-0.5">{pushBanner.body}</p>}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/icon-192.png" alt="" className="w-8 h-8 rounded-lg shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-extrabold truncate">{pushBanner.title || "새 알림"}</p>
+                  {pushBanner.time && <span className="text-[10px] text-blue-300 shrink-0">{pushBanner.time}</span>}
+                </div>
+                {pushBanner.body && <p className="text-[11px] text-blue-200 truncate mt-0.5">{pushBanner.body}</p>}
+              </div>
             </button>
           )}
           <ScreenHeader

@@ -53,7 +53,7 @@ async function handle(request) {
 
     let staleSent = 0;
     for (const f of stale ?? []) {
-      const ok = await send({ key: "failure_stale", profileIds: adminIds, title: "미배정 15분 경과", body: `${label(f)} — 아직 아무도 안 잡았습니다`, url: "/" });
+      const ok = await send({ key: "failure_stale", profileIds: adminIds, title: "미배정 15분 경과", body: `${label(f)} — 아직 아무도 안 잡았습니다`, url: `/?openFailure=${f.id}` });
       if (ok) { await db.from("failures").update({ stale_notified_at: new Date().toISOString() }).eq("id", f.id); staleSent++; }
     }
 
@@ -70,7 +70,7 @@ async function handle(request) {
     for (const f of pending ?? []) {
       const ids = [f.assignee_id, ...adminIds].filter(Boolean);
       // 고장별 고정 tag — 같은 고장 재촉은 알림 한 칸에서 갱신(긴급이라 다시 소리·진동), 다른 고장은 따로 쌓임.
-      const ok = await send({ key: "dispatch_no_response", profileIds: ids, tag: `dispatch_no_response-${f.id}`, title: "출동 응답 없음", body: `${label(f)} — ${f.assignee ?? "배정 기사"} 미응답 (배정 후 5분+)`, url: "/" });
+      const ok = await send({ key: "dispatch_no_response", profileIds: ids, tag: `dispatch_no_response-${f.id}`, title: "출동 응답 없음", body: `${label(f)} — ${f.assignee ?? "배정 기사"} 미응답 (배정 후 5분+)`, url: `/?openFailure=${f.id}` });
       if (ok) { await db.from("failures").update({ no_response_nag_at: new Date().toISOString() }).eq("id", f.id); nagSent++; }
     }
 
