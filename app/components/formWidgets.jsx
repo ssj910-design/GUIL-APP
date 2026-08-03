@@ -3,6 +3,7 @@ import { X, Camera, Search, Image as ImageIcon } from "lucide-react";
 import { uploadPhoto } from "@/lib/photos";
 import { inputCls } from "@/app/components/ui";
 import { SitesContext } from "@/app/components/context";
+import { activeSites } from "@/lib/utils";
 
 
 /* ------------------------------------------------------------------ */
@@ -14,7 +15,9 @@ export function SiteSearchSelect({ value, onChange, placeholder = "현장명을 
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const selected = sites.find((s) => s.id === value);
-  const filtered = sites.filter((s) => s.name.toLowerCase().includes(query.trim().toLowerCase()));
+  // 계약종료 현장은 새 고장접수·자재·견적 신청 대상이 아니므로 검색 목록에서 뺀다
+  // (단, 이미 선택된 값이 계약종료 현장이어도 selected 표시는 원본 sites 기준으로 그대로 유지).
+  const filtered = activeSites(sites).filter((s) => s.name.toLowerCase().includes(query.trim().toLowerCase()));
 
   return (
     <div className="relative">

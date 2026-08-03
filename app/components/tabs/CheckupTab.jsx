@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { useHolidays } from "@/app/hooks/useHolidays";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
-import { siteUnitList, distanceKm, formatMonthDay } from "@/lib/utils";
+import { siteUnitList, distanceKm, formatMonthDay, activeSites } from "@/lib/utils";
 import { mapSelfCheck, mapSelfCheckItem, mapSelfCheckItemState } from "@/lib/mappers";
 import { notify } from "@/lib/push";
 import { PrimaryButton, Sheet, Field, inputCls, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, Badge } from "@/app/components/ui";
@@ -114,7 +114,8 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   const selfProfile = profilesAll.find((p) => p.id === selfId);
 
   // 디폴트는 내 담당현장만, "모든 현장보기" 체크 시 전체 현장. 계획 탭은 현장명·주소로 추가 검색.
-  const scopedSites = sites.filter((s) => showAll || s.assignedEngineer === CURRENT_ENGINEER);
+  // 계약종료 현장은 자체점검 대상이 아니므로 뺀다.
+  const scopedSites = activeSites(sites).filter((s) => showAll || s.assignedEngineer === CURRENT_ENGINEER);
   const visibleUnitIds = new Set(units.filter((u) => scopedSites.some((s) => s.id === u.siteId)).map((u) => u.id));
   const q = query.trim().toLowerCase();
   const checksThisMonth = selfChecks.filter((c) => c.ym === ym && visibleUnitIds.has(c.unitId));

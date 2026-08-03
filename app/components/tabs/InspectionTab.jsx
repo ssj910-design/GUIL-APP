@@ -1,6 +1,6 @@
 import { useState, useContext } from "react";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, activeSites } from "@/lib/utils";
 import { Badge, DDay, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, inputCls } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -91,7 +91,8 @@ export function InspectionTab({ inspections }) {
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
-  const mySites = role === "admin" ? sites : sites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER);
+  // 계약종료 현장은 검사도래·조건부/불합격 어느 쪽도 대응 대상이 아니므로 뺀다.
+  const mySites = activeSites(role === "admin" ? sites : sites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER));
   const mySiteIds = new Set(mySites.map((s) => s.id));
   const [subTab, setSubTab] = useState("검사도래현장");
   const [inspectionFailTarget, setInspectionFailTarget] = useState(null);
