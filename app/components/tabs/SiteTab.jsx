@@ -524,7 +524,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
           />
           <TimelineRow
             icon={ClipboardCheck}
-            label="비고(전달사항)"
+            label="특이사항"
             value={site.notes ? site.notes : "터치해서 입력"}
             valueColor={site.notes ? "text-slate-700" : "text-slate-400"}
             multiline
@@ -593,8 +593,8 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
       )}
 
       {editingNotes && (
-        <Sheet title="비고(전달사항)" onClose={() => setEditingNotes(false)}>
-          <Field label="현장 전달사항">
+        <Sheet title="특이사항" onClose={() => setEditingNotes(false)}>
+          <Field label="특이사항">
             <textarea
               className={inputCls}
               rows={4}

@@ -103,7 +103,7 @@ function AddSiteModal({ engineers, onClose, onSave }) {
         </div>
         <div><p className="text-xs font-bold text-slate-500 mb-1">출입 정보(비번·열쇠)</p>
           <textarea className={inputCls + " resize-y"} rows={2} value={form.accessInfo} onChange={(e) => set("accessInfo")(e.target.value)} /></div>
-        <div><p className="text-xs font-bold text-slate-500 mb-1">비고(전달사항)</p>
+        <div><p className="text-xs font-bold text-slate-500 mb-1">비고(현장직 참고사항)</p>
           <input className={inputCls} value={form.notes} onChange={(e) => set("notes")(e.target.value)} /></div>
         <p className="text-[11px] text-slate-400">호기(승강기 정보)는 등록 후 상세화면에서 추가하면 됩니다.</p>
         <div className="flex justify-end gap-2 pt-1">
@@ -490,6 +490,7 @@ export default function SitesAdmin({ data, setData }) {
   // contract_date/maintenance_cost 컬럼은 각 마이그레이션 실행 전엔 존재하지 않는다 — undefined면 아직 미실행으로 간주.
   const contractDateReady = sites.some((s) => s.contractDate !== undefined);
   const maintenanceCostReady = sites.some((s) => s.maintenanceCost !== undefined);
+  const officeNotesReady = sites.some((s) => s.officeNotes !== undefined);
 
   const contacts = siteManagers.filter((m) => m.siteId === selectedId);
 
@@ -503,7 +504,7 @@ export default function SitesAdmin({ data, setData }) {
     setRenew(null);
     setSiteForm({
       name: s.name, address: s.address ?? "", contractType: s.contractType ?? CONTRACT_TYPES[0],
-      notes: s.notes ?? "", assignedEngineer: s.assignedEngineer ?? "",
+      notes: s.notes ?? "", officeNotes: s.officeNotes ?? "", assignedEngineer: s.assignedEngineer ?? "",
       phone: s.phone ?? "", fax: s.fax ?? "", email: s.email ?? "", accessInfo: s.accessInfo ?? "",
       contractDate: s.contractDate ?? "", contractEnd: s.contractEnd ?? "", maintenanceCost: s.maintenanceCost ?? "",
     });
@@ -633,6 +634,7 @@ export default function SitesAdmin({ data, setData }) {
       ...(contractDateReady ? { contract_date: siteForm.contractDate || null } : {}),
       contract_end: siteForm.contractEnd || null,
       ...(maintenanceCostReady ? { maintenance_cost: siteForm.maintenanceCost === "" ? null : Number(siteForm.maintenanceCost) } : {}),
+      ...(officeNotesReady ? { office_notes: siteForm.officeNotes || null } : {}),
     }).eq("id", selectedId);
     setData((prev) => ({
       ...prev,
@@ -964,7 +966,10 @@ export default function SitesAdmin({ data, setData }) {
                         <div><p className="text-xs font-bold text-slate-400 mb-1">팩스</p><p className="font-semibold text-slate-800">{site.fax || "-"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">이메일</p><p className="font-semibold text-slate-800">{site.email || "-"}</p></div>
                         <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">출입 정보(비번·열쇠)</p><p className="font-semibold text-slate-700 whitespace-pre-wrap">{site.accessInfo || "-"}</p></div>
-                        <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(전달사항)</p><p className="text-slate-700 whitespace-pre-wrap">{site.notes || "-"}</p></div>
+                        <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(현장직 참고사항)</p><p className="text-slate-700 whitespace-pre-wrap">{site.notes || "-"}</p></div>
+                        {officeNotesReady && (
+                          <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(사무직 참고사항)</p><p className="text-slate-700 whitespace-pre-wrap">{site.officeNotes || "-"}</p></div>
+                        )}
                       </div>
                     </div>
                     {/* 재계약 안내 — 계약종료 상태이거나 종료일이 임박/지난 현장에만 표시 */}
@@ -1060,8 +1065,12 @@ export default function SitesAdmin({ data, setData }) {
                       <textarea className={inputCls + " resize-y"} rows={2} value={siteForm.accessInfo} onChange={(e) => setSiteForm({ ...siteForm, accessInfo: e.target.value })} />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-slate-500 mb-1">비고(전달사항)</p>
+                      <p className="text-xs font-bold text-slate-500 mb-1">비고(현장직 참고사항)</p>
                       <textarea className={inputCls + " resize-y"} rows={4} value={siteForm.notes} onChange={(e) => setSiteForm({ ...siteForm, notes: e.target.value })} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-500 mb-1">비고(사무직 참고사항){!officeNotesReady && " (마이그레이션 대기)"}</p>
+                      <textarea className={inputCls + " resize-y"} rows={4} disabled={!officeNotesReady} value={siteForm.officeNotes} onChange={(e) => setSiteForm({ ...siteForm, officeNotes: e.target.value })} />
                     </div>
                     <div className="flex justify-end gap-3">
                       <button onClick={cancelEditInfo} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5 whitespace-nowrap">취소</button>
