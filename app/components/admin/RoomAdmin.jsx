@@ -4,17 +4,15 @@
 // 모바일 앱 RoomTab과 데이터(feed_posts)를 공유하지만 화면은 완전히 새로 짠다:
 // 하단시트/채팅형 UI 대신 가운데 정렬된 카드 목록 + 작성창 상단 고정 + 상세는
 // 중앙 모달(adminShared의 Modal)로 — PC 게시판에 맞는 레이아웃.
-// 관리자 콘솔은 아직 로그인이 없어 작성자는 "관리자"로 고정(=프로필 "관리자(신석주)").
-import { useState } from "react";
+// 작성자는 실제 로그인한 관리자 이름(AdminAuthContext)을 쓴다 — "관리자"로 뭉뚱그리지 않는다.
+import { useContext, useState } from "react";
 import { Image as ImageIcon, Pin, ThumbsUp, MessageCircle, Trash2, X, Send, Search, MoreVertical } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
 import { uploadPhoto } from "@/lib/photos";
-import { profileIdByName } from "@/lib/utils";
-import { Modal, inputCls } from "@/app/components/admin/adminShared";
+import { Modal, inputCls, AdminAuthContext } from "@/app/components/admin/adminShared";
 import { confirmAsync } from "@/app/components/ConfirmHost";
-
-const ADMIN_NAME = "관리자";
+import { profileIdByName } from "@/lib/utils";
 
 // 작성자 이름 첫 글자로 아바타 원을 만든다 — 네이버밴드처럼 글마다 시각적 기준점을 준다.
 function Avatar({ name, small }) {
@@ -158,6 +156,7 @@ function ComposeBox({ onSubmit, placeholder, compact, members = [] }) {
 }
 
 export default function RoomAdmin({ data, setData }) {
+  const { name: ADMIN_NAME, id: adminId } = useContext(AdminAuthContext);
   const [search, setSearch] = useState("");
   const [detailId, setDetailId] = useState(null);
   const [photoViewer, setPhotoViewer] = useState(null); // { urls, index }
@@ -198,18 +197,29 @@ export default function RoomAdmin({ data, setData }) {
       body: newPost.text,
       photo_urls: newPost.photoUrls.length ? newPost.photoUrls : null,
       reply_to_id: newPost.replyToId,
-      author_id: profileIdByName(data.profiles, ADMIN_NAME),
+      author_id: adminId,
       is_notice: newPost.isNotice,
     });
     setData((prev) => ({ ...prev, feed: [...(prev.feed ?? []), newPost] }));
     // 게시판 알림 — 앱과 동일하게 @멘션 대상·공지 전원에게 (콘솔에서 쓴 글도 기사 폰에 뜨게).
-    const myId = profileIdByName(data.profiles, ADMIN_NAME);
+    const myId = adminId;
     const tags = [...text.matchAll(/@([가-힣a-zA-Z0-9()]+)/g)].map((m) => m[1]);
     const mentionIds = tags.includes("모두")
       ? (data.profiles ?? []).filter((p) => p.is_active !== false && p.id !== myId).map((p) => p.id)
       : (data.profiles ?? []).filter((p) => tags.includes(p.name) && p.id !== myId).map((p) => p.id);
-    if (mentionIds.length) notify("room_mention", { profileIds: mentionIds, title: `${ADMIN_NAME}님이 회원님을 언급했어요`, body: text.slice(0, 60) });
-    if (newPost.isNotice) notify("room_notice", { title: "새 공지가 등록됐어요", body: text.slice(0, 60) });
+    if (mentionIds.length) notify("room_mention", { profileIds: mentionIds, title: `${ADMIN_NAME}님이 회원님을 언급했어요`, body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
+    if (newPost.isNotice) notify("room_notice", { title: "새 공지가 등록됐어요", body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
+    // 댓글이면 원글 작성자에게 알림 (본인 글에 본인이 단 댓글은 제외).
+    if (newPost.replyToId) {
+      const parentPost = feed.find((p) => p.id === newPost.replyToId);
+      const authorId = parentPost?.authorId ?? profileIdByName(data.profiles, parentPost?.author);
+      if (authorId && authorId !== myId) notify("room_comment", {
+        profileIds: [authorId],
+        title: `${ADMIN_NAME}님이 내 글에 댓글을 남겼어요`,
+        body: text.slice(0, 60),
+        url: `/?openPost=${newPost.replyToId}`,
+      });
+    }
   }
 
   async function toggleLike(postId) {
