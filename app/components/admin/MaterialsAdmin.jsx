@@ -169,9 +169,16 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
     if (error) { alert("수정 실패: " + error.message); return; }
 
     const todoId = "todo-" + request.id;
+    // 담당기사가 바뀌었는지는 여기서 고쳐 쓰기 전 할 일에 남아있던 담당자와 비교해서 판단한다 —
+    // material_requests엔 담당기사 컬럼이 없어 할 일이 유일한 기준이다.
+    const prevAssigneeId = (data.todos ?? []).find((t) => t.id === todoId)?.assigneeId;
+    const assigneeChanged = assigneeId && assigneeId !== prevAssigneeId;
     const todoPatch = { assignee: assigneeName, assignee_id: assigneeId || null, billing_part: billingPart, billing_amount: billingAmount };
     const { error: todoError } = await supabase.from("todos").update(todoPatch).eq("id", todoId);
     if (todoError) { alert("할 일 수정 실패: " + todoError.message); return; }
+    if (assigneeChanged) {
+      notify("supply_ready", { profileIds: [assigneeId], title: "자재 지급 담당자로 변경됨 — 수령 확인해주세요", body: `${request.siteName}${request.elevatorNo ? ` · ${request.elevatorNo}` : ""} · ${request.part}` });
+    }
 
     setData((prev) => ({
       ...prev,
@@ -319,6 +326,9 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         }))
       );
       if (todoError) { alert("할 일 생성 실패: " + todoError.message); return; }
+    }
+    if (toAddIds.length) {
+      notify("supply_ready", { profileIds: toAddIds, title: "견적 자재 지급 담당자로 지정됨 — 수령 확인해주세요", body: `${quote.siteName}${quote.elevatorNo ? ` · ${quote.elevatorNo}` : ""} · ${quote.constructionType}` });
     }
 
     setData((prev) => ({
