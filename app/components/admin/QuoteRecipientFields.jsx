@@ -174,12 +174,12 @@ export function QuoteRecipientExtras({ rf }) {
   return (
     <>
       <div className="mb-4">
-        <p className="text-xs font-bold text-slate-500 mb-1">안내메시지 (선택, 이메일 본문에만 반영)</p>
+        <p className="text-xs font-bold text-slate-500 mb-1">특이사항/안내메시지 (선택, 이메일 본문 + 카카오 알림톡 특이사항 줄에 반영)</p>
         <textarea
           className={`${inputCls} min-h-20`}
           value={rf.noticeMessage}
           onChange={(e) => rf.setNoticeMessage(e.target.value)}
-          placeholder="이메일 본문 서명 아래에 추가로 들어갈 안내 문구를 입력하세요."
+          placeholder="이메일 본문과 카카오 알림톡 특이사항 줄에 들어갈 안내 문구를 입력하세요."
         />
       </div>
 

@@ -1665,6 +1665,11 @@ export default function App() {
     ), "할 일 부여 실패");
     if (!assigned) return; // 부여했다고 보이는데 실제로는 없는 상황 방지 (P1-7)
     setTodos((prev) => [...newTodos, ...prev]);
+    const assigneeIds = assignees.map((name) => profileIdByName(profilesAll, name)).filter(Boolean);
+    if (assigneeIds.length) sendPush("todo_assigned", assigneeIds, {
+      title: "할 일이 배정되었습니다",
+      body: `${siteName ? `${siteName} · ` : ""}${title}`,
+    });
   }
 
   // ★ 관리자 권한: 어떤 할 일이든(자재/견적 연동건 포함) 임의로 완료·완료취소 처리할 수 있음
@@ -1681,6 +1686,12 @@ export default function App() {
     // 재배정하면 걸려 있던 재배정 요청도 함께 해제한다.
     if (!(await writeOk(supabase.from("todos").update({ assignee: newAssignee, reassign_requested: false, reassign_reason: null, reassign_to: null }).eq("id", todoId), "재배정 실패"))) return;
     setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, assignee: newAssignee, reassignRequested: false, reassignReason: null, reassignTo: null } : t)));
+    const t = todos.find((x) => x.id === todoId);
+    const newAssigneeId = profileIdByName(profilesAll, newAssignee);
+    if (newAssigneeId) sendPush("todo_assigned", [newAssigneeId], {
+      title: "할 일이 배정되었습니다",
+      body: `${t?.siteName ? `${t.siteName} · ` : ""}${t?.title ?? ""}`,
+    });
   }
 
   // ★ 기사가 자기 할일을 다른 사람에게 넘겨달라고 관리자에게 요청 (사유·희망담당자 선택).
@@ -1962,7 +1973,7 @@ export default function App() {
                               {notifTodos.map((t) => (
                                 <NotifRow
                                   key={t.id}
-                                  onClick={() => { setNotifOpen(false); setOpenTodoId(t.id); }}
+                                  onClick={() => { setNotifOpen(false); setTab("todo"); setOpenTodoId(t.id); }}
                                   onDismiss={() => handleDismissNotif("todo:" + t.id)}
                                   title={t.title}
                                   subtitle={
