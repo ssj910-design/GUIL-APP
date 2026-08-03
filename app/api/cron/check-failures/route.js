@@ -39,9 +39,12 @@ async function handle(request) {
     const nagBefore = new Date(now - FIVE_MIN).toISOString();
     const nagFloor = new Date(now - THIRTY_MIN).toISOString(); // 배정 후 30분까지만 재촉(약 5~6회), 그 뒤 멈춤
 
-    // 관리자 목록(활성) — 두 알림 모두 관리자에게 간다.
-    const { data: profs } = await db.from("profiles").select("id,role,is_active,deleted_at").eq("role", "admin");
-    const adminIds = (profs ?? []).filter((p) => p.is_active !== false && !p.deleted_at).map((p) => p.id);
+    // 관리자 목록(활성) — 두 알림 모두 관리자에게 간다. 자재담당관리자는 자재·견적만 다루고
+    // 고장 대응은 관여하지 않으므로 제외한다.
+    const { data: profs } = await db.from("profiles").select("id,role,admin_tier,is_active,deleted_at").eq("role", "admin");
+    const adminIds = (profs ?? [])
+      .filter((p) => p.is_active !== false && !p.deleted_at && p.admin_tier !== "material")
+      .map((p) => p.id);
 
     // 1) 미배정 15분 — 접수 후 15분째 assignee 없음, 아직 안 알린 건.
     const { data: stale } = await db
