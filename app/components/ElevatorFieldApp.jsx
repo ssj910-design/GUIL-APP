@@ -224,11 +224,13 @@ export default function App() {
     const openMaterial = params.get("openMaterial");
     const openQuote = params.get("openQuote");
     const openPost = params.get("openPost");
-    if (!openMaterial && !openQuote && !openPost) return false;
+    const openTodo = params.get("openTodo");
+    if (!openMaterial && !openQuote && !openPost && !openTodo) return false;
     if (openMaterial || openQuote) setTab("admin");
     if (openMaterial) setMaterialFocusId(openMaterial);
     if (openQuote) setQuoteFocusId(openQuote);
     if (openPost) { setTab("room"); setOpenFeedPostId(openPost); handleDismissNotif("post:" + openPost); }
+    if (openTodo) { setTab("todo"); setOpenTodoId(openTodo); handleDismissNotif("todo:" + openTodo); }
     return true;
   }
 
@@ -243,6 +245,7 @@ export default function App() {
         url.searchParams.delete("openMaterial");
         url.searchParams.delete("openQuote");
         url.searchParams.delete("openPost");
+        url.searchParams.delete("openTodo");
         window.history.replaceState({}, "", url);
       }
     }
@@ -1114,6 +1117,16 @@ export default function App() {
       : profilesAll.filter((p) => tags.includes(p.name) && p.id !== myId).map((p) => p.id);
     if (mentionIds.length) sendPush("room_mention", mentionIds, { title: `${profile.name}님이 회원님을 언급했어요`, body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
     if (newPost.isNotice) notify("room_notice", { title: "새 공지가 등록됐어요", body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
+    // 댓글이면(replyToId 있음) 원글 작성자에게 알림 — 멘션 대상엔 이미 위에서 갔으니 중복은 허용(드묾).
+    if (newPost.replyToId) {
+      const parentPost = feed.find((p) => p.id === newPost.replyToId);
+      const authorId = parentPost?.authorId ?? profileIdByName(profilesAll, parentPost?.author);
+      if (authorId && authorId !== myId) sendPush("room_comment", [authorId], {
+        title: `${profile.name}님이 내 글에 댓글을 남겼어요`,
+        body: text.slice(0, 60),
+        url: `/?openPost=${newPost.replyToId}`,
+      });
+    }
     return true;
   }
 
@@ -1665,11 +1678,16 @@ export default function App() {
     ), "할 일 부여 실패");
     if (!assigned) return; // 부여했다고 보이는데 실제로는 없는 상황 방지 (P1-7)
     setTodos((prev) => [...newTodos, ...prev]);
-    const assigneeIds = assignees.map((name) => profileIdByName(profilesAll, name)).filter(Boolean);
-    if (assigneeIds.length) sendPush("todo_assigned", assigneeIds, {
-      title: "할 일이 배정되었습니다",
-      body: `${siteName ? `${siteName} · ` : ""}${title}`,
-    });
+    // 각자 다른 할일 id를 받으므로(assignees 수만큼 별도 행), 딥링크 url이 정확하도록 한 명씩 보낸다.
+    for (const t of newTodos) {
+      const assigneeId = profileIdByName(profilesAll, t.assignee);
+      if (!assigneeId) continue;
+      sendPush("todo_assigned", [assigneeId], {
+        title: "할 일이 배정되었습니다",
+        body: `${siteName ? `${siteName} · ` : ""}${title}`,
+        url: `/?openTodo=${t.id}`,
+      });
+    }
   }
 
   // ★ 관리자 권한: 어떤 할 일이든(자재/견적 연동건 포함) 임의로 완료·완료취소 처리할 수 있음
@@ -1691,6 +1709,7 @@ export default function App() {
     if (newAssigneeId) sendPush("todo_assigned", [newAssigneeId], {
       title: "할 일이 배정되었습니다",
       body: `${t?.siteName ? `${t.siteName} · ` : ""}${t?.title ?? ""}`,
+      url: `/?openTodo=${todoId}`,
     });
   }
 
@@ -1702,6 +1721,7 @@ export default function App() {
     sendPush("todo_reassign_requested", adminIds(), {
       title: "할일 재배정 요청",
       body: `${profile.name}님이 "${todo?.title ?? "할일"}"을(를) 넘겨달라고 요청했습니다${to ? ` (희망 담당자: ${to})` : ""}`,
+      url: `/?openTodo=${todoId}`,
     });
   }
 
