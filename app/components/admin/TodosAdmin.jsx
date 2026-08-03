@@ -350,6 +350,20 @@ export default function TodosAdmin({ data, setData, initialView }) {
         photoCount: photoUrls.length, photoUrls, part: null, materialRequestId: null, quoteRequestId: null,
       }, ...prev.todos],
     }));
+    // 배정된 기사에게 푸시 — 실패해도 등록 자체는 이미 끝났으니 조용히 넘어간다.
+    if (form.assigneeId) {
+      fetch("/api/push/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key: "todo_assigned",
+          profileIds: [form.assigneeId],
+          title: "할 일이 배정되었습니다",
+          body: `${site?.name ? `${site.name} · ` : ""}${row.title}`,
+          url: `/?openTodo=${id}`,
+        }),
+      }).catch(() => {});
+    }
   }
 
   return (
