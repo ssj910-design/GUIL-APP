@@ -11,7 +11,7 @@ import { DutySwapNotice } from "@/app/components/DutyRoster";
 import { WorkCalendarSheet } from "@/app/components/WorkCalendarSheet";
 import { MyPage } from "@/app/components/MyPage";
 import { simulateSms } from "@/lib/sms";
-import { notify, enablePush, onPushNotificationOpened, onPushNotificationReceived } from "@/lib/push";
+import { notify, enablePush, ensureNativeChannels, onPushNotificationOpened, onPushNotificationReceived } from "@/lib/push";
 import { Capacitor } from "@capacitor/core";
 import { ScreenHeader, BrandSplash } from "@/app/components/ui";
 import { ConfirmHost, confirmAsync } from "@/app/components/ConfirmHost";
@@ -176,6 +176,11 @@ export default function App() {
       document.removeEventListener("touchstart", handleOutside);
     };
   }, [notifOpen]);
+
+  // 안드로이드 알림 채널을 앱 시작 시점마다 보장해둔다(권한과 무관하게 만들 수 있고, 이미 있으면 그대로 통과).
+  // enablePush()는 로그인 시점에만 불리는데 로그인 세션이 localStorage에 남아있으면 재로그인 없이 계속 쓰이므로,
+  // 이미 로그인된 기존 사용자 기기에도 새로 추가된 채널(예: urgent)이 앱 재실행만으로 만들어지게 하려는 것.
+  useEffect(() => { ensureNativeChannels(); }, []);
 
   // 로그인 세션 — Supabase Auth 대신 자체 로그인(민원24 아이디+비번, verify_login RPC) 결과를
   // localStorage에 담아둔다. 여기서 읽어와 로그인 여부를 판단한다. { id, name, role, mustChange }

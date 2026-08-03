@@ -68,7 +68,7 @@ export default function NotifySettings() {
   const counts = {
     total: NOTIFICATIONS.length,
     off: NOTIFICATIONS.filter((n) => !on(n)).length,
-    urgent: NOTIFICATIONS.filter((n) => on(n) && levelOf(n, settings) === "urgent").length,
+    urgent: NOTIFICATIONS.filter((n) => on(n) && ["urgent", "high"].includes(levelOf(n, settings))).length,
   };
 
   return (

@@ -106,8 +106,9 @@ async function handlePost(request) {
   const baseLevel = levelOf(item, org);
   const uniqueTag = tag || `${key}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   function payloadFor(profileId) {
-    const level = baseLevel === "urgent" && offDutyIds.has(profileId) ? "normal" : baseLevel;
-    return { level, urgency: level === "urgent" ? "high" : "normal" };
+    const isLoud = baseLevel === "urgent" || baseLevel === "high";
+    const level = isLoud && offDutyIds.has(profileId) ? "normal" : baseLevel;
+    return { level, urgency: level === "urgent" || level === "high" ? "high" : "normal" };
   }
 
   let sent = 0;
@@ -152,9 +153,10 @@ async function handlePost(request) {
             data: { url: url || "/", tag: uniqueTag },
             android: {
               priority: urgency === "high" ? "high" : "normal",
-              // 퇴근 중(무음 처리 대상)은 미리 만들어둔 "silent" 채널로 보낸다 — 안 만들었으면(예: 구버전 앱)
-              // channelId가 무시되고 기본 채널(소리 있음)로 가니 최소한 알림 자체는 항상 도착한다.
-              ...(level !== "urgent" ? { notification: { channelId: "silent" } } : {}),
+              // level에 맞는 채널로 보낸다(urgent=헤드업 배너 뜨는 HIGH 채널, high=소리·진동만, 그 외엔 무음 채널) —
+              // 앱이 미리 만들어둔 채널이 없으면(예: 구버전 앱) channelId가 무시되고 기본 채널로 가니
+              // 최소한 알림 자체는 항상 도착한다.
+              notification: { channelId: level === "urgent" ? "urgent" : level === "high" ? "high" : "silent" },
             },
           });
           sent++;
