@@ -135,9 +135,10 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
     }));
     // 콘솔 접수도 앱 접수와 동일하게 알림 — 관리자엔 접수, 배정했으면 그 기사, 미배정이면 기사 전원(선착순).
     const where = `${site.name}${rows.length > 1 ? ` 외 ${rows.length}건` : (rows[0]?.elevatorNo ? ` · ${rows[0].elevatorNo}` : "")}`;
-    notify("failure_reported", { title: "고장 접수", body: `${where} — ${form.faultType}` });
-    if (assigneeProfile?.id) notify("failure_assigned", { profileIds: [assigneeProfile.id], title: "고장이 배정되었습니다", body: `${where} — ${form.faultType}` });
-    else notify("failure_unassigned", { title: "미배정 고장 — 먼저 잡는 사람이 담당", body: `${where} — ${form.faultType}` });
+    const firstFailureUrl = `/?openFailure=${rows[0]?.id}`;
+    notify("failure_reported", { title: "고장 접수", body: `${where} — ${form.faultType}`, url: firstFailureUrl });
+    if (assigneeProfile?.id) notify("failure_assigned", { profileIds: [assigneeProfile.id], title: "고장이 배정되었습니다", body: `${where} — ${form.faultType}`, url: firstFailureUrl });
+    else notify("failure_unassigned", { title: "미배정 고장 — 먼저 잡는 사람이 담당", body: `${where} — ${form.faultType}`, url: firstFailureUrl });
   }
 
   async function assign(f, name) {
@@ -152,8 +153,8 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
     }));
     // 콘솔 배정도 앱과 동일하게 알림 — 지정 기사에겐 배정, 미배정 복귀면 기사 전원.
     const where = `${f.siteName ?? ""}${f.elevatorNo ? ` · ${f.elevatorNo}` : ""}`;
-    if (p?.id) notify("failure_assigned", { profileIds: [p.id], title: "고장이 배정되었습니다", body: where });
-    else notify("failure_unassigned", { title: "미배정 고장 — 먼저 잡는 사람이 담당", body: where });
+    if (p?.id) notify("failure_assigned", { profileIds: [p.id], title: "고장이 배정되었습니다", body: where, url: `/?openFailure=${f.id}` });
+    else notify("failure_unassigned", { title: "미배정 고장 — 먼저 잡는 사람이 담당", body: where, url: `/?openFailure=${f.id}` });
   }
 
   const openFailures = failures.filter((f) => f.status === "미처리");
