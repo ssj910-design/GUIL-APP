@@ -1,6 +1,6 @@
 import React, { useState, useContext, useRef } from "react";
 import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Flame, Download, KeyRound, ChevronDown } from "lucide-react";
-import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, formatShortDate, recentFailuresBySite, siteMatchesQuery } from "@/lib/utils";
+import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, formatShortDate, formatFullDate, recentFailuresBySite, siteMatchesQuery } from "@/lib/utils";
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
@@ -740,8 +740,8 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
                 <MapLinkButtons site={s} />
               </div>
               {s.isActive === false && (s.terminatedDate || s.terminationBasis || s.terminationReason) && (
-                <p className="text-[11px] text-slate-400 mt-1">
-                  {s.terminatedDate && `종료일자 ${formatShortDate(s.terminatedDate)}`}
+                <p className="text-[11px] text-red-600 mt-1">
+                  {s.terminatedDate && `종료일자 ${formatFullDate(s.terminatedDate)}`}
                   {s.terminationBasis && ` · 근거 ${s.terminationBasis}`}
                   {s.terminationReason && ` · 사유 ${s.terminationReason}`}
                 </p>
