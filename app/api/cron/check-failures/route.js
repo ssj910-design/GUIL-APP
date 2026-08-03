@@ -5,6 +5,9 @@
 // 재촉은 근무시간(월~금 08:00~17:30 KST)에만 — 야간·주말은 끔. 초기 긴급 알림은 즉시형이라 시간 무관하게 감.
 // 실제 발송은 기존 /api/push/send에 위임(회사·개인 알림설정·만료구독 정리를 거기서 처리).
 import { createClient } from "@supabase/supabase-js";
+import { NOTIFICATIONS, audienceTiersOf } from "@/lib/notifications";
+
+const CATALOG = Object.fromEntries(NOTIFICATIONS.map((n) => [n.key, n]));
 
 const FIFTEEN_MIN = 15 * 60 * 1000;
 const FIVE_MIN = 5 * 60 * 1000;
@@ -39,12 +42,20 @@ async function handle(request) {
     const nagBefore = new Date(now - FIVE_MIN).toISOString();
     const nagFloor = new Date(now - THIRTY_MIN).toISOString(); // 배정 후 30분까지만 재촉(약 5~6회), 그 뒤 멈춤
 
-    // 관리자 목록(활성) — 두 알림 모두 관리자에게 간다. 자재담당관리자는 자재·견적만 다루고
-    // 고장 대응은 관여하지 않으므로 제외한다.
-    const { data: profs } = await db.from("profiles").select("id,role,admin_tier,is_active,deleted_at").eq("role", "admin");
-    const adminIds = (profs ?? [])
-      .filter((p) => p.is_active !== false && !p.deleted_at && p.admin_tier !== "material")
-      .map((p) => p.id);
+    // 관리자 목록(활성) — 실제 받는 등급은 알림설정 화면(NotifySettings)에서 고른 audience_tiers를
+    // 그대로 따른다(lib/notifications.js의 audienceTiersOf, 화면과 발송이 같은 함수를 써서 라벨과
+    // 실제 수신자가 항상 일치). 설정을 아무것도 안 건드렸으면 카탈로그의 기본값(최고+중간, 자재담당 제외).
+    const [{ data: profs }, { data: settingRows }] = await Promise.all([
+      db.from("profiles").select("id,role,admin_tier,is_active,deleted_at").eq("role", "admin"),
+      db.from("notify_settings").select("key,audience_tiers").in("key", ["failure_stale", "dispatch_no_response"]),
+    ]);
+    const activeAdmins = (profs ?? []).filter((p) => p.is_active !== false && !p.deleted_at);
+    const orgTiers = Object.fromEntries((settingRows ?? []).map((r) => [r.key, { audienceTiers: r.audience_tiers ?? [] }]));
+    function adminIdsFor(key) {
+      const tiers = audienceTiersOf(CATALOG[key], orgTiers);
+      const pool = tiers.length ? activeAdmins.filter((p) => tiers.includes(p.admin_tier)) : activeAdmins;
+      return pool.map((p) => p.id);
+    }
 
     // 1) 미배정 15분 — 접수 후 15분째 assignee 없음, 아직 안 알린 건.
     const { data: stale } = await db
@@ -56,7 +67,7 @@ async function handle(request) {
 
     let staleSent = 0;
     for (const f of stale ?? []) {
-      const ok = await send({ key: "failure_stale", profileIds: adminIds, title: "미배정 15분 경과", body: `${label(f)} — 아직 아무도 안 잡았습니다`, url: `/?openFailure=${f.id}` });
+      const ok = await send({ key: "failure_stale", profileIds: adminIdsFor("failure_stale"), title: "미배정 15분 경과", body: `${label(f)} — 아직 아무도 안 잡았습니다`, url: `/?openFailure=${f.id}` });
       if (ok) { await db.from("failures").update({ stale_notified_at: new Date().toISOString() }).eq("id", f.id); staleSent++; }
     }
 
@@ -71,7 +82,7 @@ async function handle(request) {
 
     let nagSent = 0;
     for (const f of pending ?? []) {
-      const ids = [f.assignee_id, ...adminIds].filter(Boolean);
+      const ids = [f.assignee_id, ...adminIdsFor("dispatch_no_response")].filter(Boolean);
       // 고장별 고정 tag — 같은 고장 재촉은 알림 한 칸에서 갱신(긴급이라 다시 소리·진동), 다른 고장은 따로 쌓임.
       const ok = await send({ key: "dispatch_no_response", profileIds: ids, tag: `dispatch_no_response-${f.id}`, title: "출동 응답 없음", body: `${label(f)} — ${f.assignee ?? "배정 기사"} 미응답 (배정 후 5분+)`, url: `/?openFailure=${f.id}` });
       if (ok) { await db.from("failures").update({ no_response_nag_at: new Date().toISOString() }).eq("id", f.id); nagSent++; }
