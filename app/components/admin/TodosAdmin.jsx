@@ -3,7 +3,7 @@
 // 할 일 관리 — 전체 할일 관제 + 관리자 권한 완료/취소 토글 + 할 일 배정(생성).
 // 완료 규칙(DESIGN-v2 §7-2): 자재·견적 할일의 정상 완료 경로는 비용청구지만,
 // 관리자는 예외적으로 임의 토글 가능(모바일 관리자 모드와 동일 권한).
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { Plus, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto } from "@/lib/photos";
@@ -11,7 +11,7 @@ import { TODAY_STR } from "@/lib/constants";
 import { addDays, shortDate, formatUnitLabel } from "@/lib/utils";
 import {
   locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills,
-  Modal, SortableTh, sortRows, inputCls, DateTextInput,
+  Modal, SortableTh, sortRows, inputCls, DateTextInput, AdminAuthContext,
 } from "@/app/components/admin/adminShared";
 
 const SOURCE_LABEL = { material: "자재", quote: "견적", manual: "수동", inspection: "검사보완", selfcheck: "자체점검지적" };
@@ -265,6 +265,7 @@ function AssignTodoModal({ data, onClose, onCreate }) {
 }
 
 export default function TodosAdmin({ data, setData, initialView }) {
+  const { name: adminName, id: adminId } = useContext(AdminAuthContext);
   const { todos, sites, units, profiles } = data;
   const [view, setView] = useState(initialView ?? "open");
   const [sourceFilter, setSourceFilter] = useState("all");
@@ -337,6 +338,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
       assignee: engineer?.name ?? null, assignee_id: form.assigneeId || null,
       assigned_date: TODAY_STR, due_date: form.dueDate || null, done: false,
       photo_count: photoUrls.length, photo_urls: photoUrls.length ? photoUrls : null,
+      requested_by_id: adminId ?? null, requested_by_name: adminName,
     };
     const { error } = await supabase.from("todos").insert(row);
     if (error) { alert("배정 실패: " + error.message); return; }
@@ -348,6 +350,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
         assignee: row.assignee, assigneeId: row.assignee_id,
         assignedDate: row.assigned_date, dueDate: row.due_date, done: false,
         photoCount: photoUrls.length, photoUrls, part: null, materialRequestId: null, quoteRequestId: null,
+        requestedById: row.requested_by_id, requestedByName: row.requested_by_name,
       }, ...prev.todos],
     }));
     // 배정된 기사에게 푸시 — 실패해도 등록 자체는 이미 끝났으니 조용히 넘어간다.

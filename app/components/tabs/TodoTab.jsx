@@ -20,7 +20,8 @@ import { confirmAsync } from "@/app/components/ConfirmHost";
 export function getRequesterName(todo, materialRequests, quoteRequests) {
   if (todo.source === "material") return materialRequests?.find((r) => r.id === todo.materialRequestId)?.engineer ?? null;
   if (todo.source === "quote") return quoteRequests?.find((q) => q.id === todo.quoteRequestId)?.engineer ?? null;
-  return "관리자";
+  // 수동 등록 할일 — 097 마이그레이션 이전 행(requestedByName 없음)은 "관리자"로 표시.
+  return todo.requestedByName ?? "관리자";
 }
 
 // 같은 견적/자재 요청에 연결된 다른 담당자의 할 일(공동 담당)을 찾습니다.

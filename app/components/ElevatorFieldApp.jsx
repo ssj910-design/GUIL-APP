@@ -1673,11 +1673,13 @@ export default function App() {
         done: t.done,
         photo_count: t.photoCount,
         photo_urls: t.photoUrls?.length ? t.photoUrls : null,
+        requested_by_id: profile.id ?? null,
+        requested_by_name: profile.name,
         ...(v2Ready ? { assignee_id: profileIdByName(profilesAll, t.assignee) } : {}),
       }))
     ), "할 일 부여 실패");
     if (!assigned) return; // 부여했다고 보이는데 실제로는 없는 상황 방지 (P1-7)
-    setTodos((prev) => [...newTodos, ...prev]);
+    setTodos((prev) => [...newTodos.map((t) => ({ ...t, requestedById: profile.id ?? null, requestedByName: profile.name })), ...prev]);
     // 각자 다른 할일 id를 받으므로(assignees 수만큼 별도 행), 딥링크 url이 정확하도록 한 명씩 보낸다.
     for (const t of newTodos) {
       const assigneeId = profileIdByName(profilesAll, t.assignee);
