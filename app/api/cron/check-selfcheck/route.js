@@ -64,6 +64,7 @@ async function handle(request) {
       profileIds: [assigneeId],
       title: "이번 달 자체점검 미완료",
       body: list.map(label).join(", "),
+      url: "/?openCheckup=1",
     });
     if (ok) sent++;
   }

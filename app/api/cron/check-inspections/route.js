@@ -51,6 +51,7 @@ async function handle(request) {
       profileIds: [techId],
       title: "오늘 담당현장 정기검사",
       body: labels.join(", "),
+      url: "/?openInspectionTab=1",
     });
     if (ok) sent++;
   }

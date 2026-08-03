@@ -30,6 +30,7 @@ async function handle(request) {
       key: "contract_expiring",
       title: "계약 만료 임박 현장",
       body: sites.map((s) => `${s.name}(${s.contract_end})`).join(", "),
+      url: "/admin?openContract=1",
     }),
   }).then((r) => r.ok).catch(() => false);
 

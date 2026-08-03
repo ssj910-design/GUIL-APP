@@ -134,7 +134,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
     };
     const { error } = await supabase.from("material_requests").update(patch).eq("id", request.id);
     if (error) { alert("지급완료 처리 실패: " + error.message); return; }
-    if (assigneeId) notify("supply_ready", { profileIds: [assigneeId], title: "자재 지급 완료 — 수령 확인해주세요", body: `${request.siteName}${request.elevatorNo ? ` · ${request.elevatorNo}` : ""} · ${request.part}` });
+    if (assigneeId) notify("supply_ready", { profileIds: [assigneeId], title: "자재 지급 완료 — 수령 확인해주세요", body: `${request.siteName}${request.elevatorNo ? ` · ${request.elevatorNo}` : ""} · ${request.part}`, url: `/?openTodo=${todoId}` });
 
     setData((prev) => ({
       ...prev,
@@ -177,7 +177,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
     const { error: todoError } = await supabase.from("todos").update(todoPatch).eq("id", todoId);
     if (todoError) { alert("할 일 수정 실패: " + todoError.message); return; }
     if (assigneeChanged) {
-      notify("supply_ready", { profileIds: [assigneeId], title: "자재 지급 담당자로 변경됨 — 수령 확인해주세요", body: `${request.siteName}${request.elevatorNo ? ` · ${request.elevatorNo}` : ""} · ${request.part}` });
+      notify("supply_ready", { profileIds: [assigneeId], title: "자재 지급 담당자로 변경됨 — 수령 확인해주세요", body: `${request.siteName}${request.elevatorNo ? ` · ${request.elevatorNo}` : ""} · ${request.part}`, url: `/?openTodo=${todoId}` });
     }
 
     setData((prev) => ({
@@ -251,8 +251,11 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
     };
     const { error } = await supabase.from("quote_requests").update(patch).eq("id", quote.id);
     if (error) { alert("자재지급완료 처리 실패: " + error.message); return; }
-    const quoteTo = assigneeIds.filter(Boolean);
-    if (quoteTo.length) notify("supply_ready", { profileIds: quoteTo, title: "견적 자재 지급 완료 — 수령 확인해주세요", body: `${quote.siteName}${quote.elevatorNo ? ` · ${quote.elevatorNo}` : ""} · ${quote.constructionType}` });
+    // 각자 다른 할일 id를 받으므로(assignees 수만큼 별도 행), 딥링크 url이 정확하도록 한 명씩 보낸다.
+    for (const t of newTodos) {
+      if (!t.assigneeId) continue;
+      notify("supply_ready", { profileIds: [t.assigneeId], title: "견적 자재 지급 완료 — 수령 확인해주세요", body: `${quote.siteName}${quote.elevatorNo ? ` · ${quote.elevatorNo}` : ""} · ${quote.constructionType}`, url: `/?openTodo=${t.id}` });
+    }
 
     setData((prev) => ({
       ...prev,
@@ -327,8 +330,9 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
       );
       if (todoError) { alert("할 일 생성 실패: " + todoError.message); return; }
     }
-    if (toAddIds.length) {
-      notify("supply_ready", { profileIds: toAddIds, title: "견적 자재 지급 담당자로 지정됨 — 수령 확인해주세요", body: `${quote.siteName}${quote.elevatorNo ? ` · ${quote.elevatorNo}` : ""} · ${quote.constructionType}` });
+    // 각자 다른 할일 id를 받으므로(assignees 수만큼 별도 행), 딥링크 url이 정확하도록 한 명씩 보낸다.
+    for (const t of newTodos) {
+      notify("supply_ready", { profileIds: [t.assigneeId], title: "견적 자재 지급 담당자로 지정됨 — 수령 확인해주세요", body: `${quote.siteName}${quote.elevatorNo ? ` · ${quote.elevatorNo}` : ""} · ${quote.constructionType}`, url: `/?openTodo=${t.id}` });
     }
 
     setData((prev) => ({

@@ -182,7 +182,7 @@ function LeaveCalendarTab({ schedules = [] }) {
     }).select();
     setBusy(false);
     if (error) { alert("신청 실패: " + error.message); return; }
-    notify("leave_requested", { title: "연차 신청이 들어왔어요", body: `${me.name ?? ""} · ${form.kind} ${form.start}${form.end !== form.start ? `~${form.end}` : ""} (${reqDays}일)` });
+    notify("leave_requested", { title: "연차 신청이 들어왔어요", body: `${me.name ?? ""} · ${form.kind} ${form.start}${form.end !== form.start ? `~${form.end}` : ""} (${reqDays}일)`, url: "/admin?openLeave=1" });
     if (data[0] && data[0].start_date <= last && data[0].end_date >= `${ym}-01`) {
       setLeaves((prev) => [data[0], ...prev]);
     }
@@ -453,8 +453,8 @@ function LeaveCalendarTab({ schedules = [] }) {
 
 // 다른 탭(고장접수 등)과 동일한 구조 — 상단 제목은 앱 셸의 공용 ScreenHeader가 맡고,
 // 여기서는 서브탭 바 + 내용만 그린다. 하단 네비게이터도 그대로 보이는 일반 탭이다.
-export function WorkCalendarSheet({ schedules, swaps, onSetPerson, onRequestSwap, onRespondSwap, onSchedulesChange, onEngineersChange }) {
-  const [subTab, setSubTab] = useState("당직·숙직");
+export function WorkCalendarSheet({ schedules, swaps, onSetPerson, onRequestSwap, onRespondSwap, onSchedulesChange, onEngineersChange, initialSubTab }) {
+  const [subTab, setSubTab] = useState(initialSubTab || "당직·숙직");
   const subTabs = ["당직·숙직", "연차"];
   const swipe = useSwipeSubtab(subTabs, subTab, setSubTab);
 

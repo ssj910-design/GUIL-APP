@@ -51,12 +51,14 @@ async function handle(request) {
       profileIds: notCheckedIn.map((e) => e.id),
       title: "출근체크를 아직 안 하셨어요",
       body: "정상 출근하셨다면 앱에서 출근체크를 눌러주세요",
+      url: "/?openAttendance=1",
     });
     if (kstMins === 550) { // 09:10 — 관리자 요약은 이 시각에 한 번만
       reported = await send({
         key: "attendance_report",
         title: "출근 미체크 인원",
         body: notCheckedIn.map((e) => e.name).join(", "),
+        url: "/admin?openAttendanceReport=1",
       });
     }
   }

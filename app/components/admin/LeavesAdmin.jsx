@@ -84,6 +84,7 @@ export default function LeavesAdmin({ data, setData }) {
       profileIds: [l.profile_id],
       title: `연차 신청이 ${decision}되었어요`,
       body: `${shortDate(l.start_date)} ${l.kind}${decision === "반려" && reason ? ` — ${reason}` : ""}`,
+      url: "/?openLeave=1",
     });
   }
 
@@ -97,7 +98,7 @@ export default function LeavesAdmin({ data, setData }) {
     if (error) { alert("처리 실패: " + error.message); return; }
     if (!ok?.length) { alert("이미 처리된 요청이에요. 새로고침 후 다시 확인해주세요."); return; }
     setLeaves((prev) => prev.map((x) => (x.id === l.id ? { ...x, ...patch } : x)));
-    notify("leave_decided", { profileIds: [l.profile_id], title: `연차 취소 요청이 ${decision}되었어요`, body: `${shortDate(l.start_date)} ${l.kind}` });
+    notify("leave_decided", { profileIds: [l.profile_id], title: `연차 취소 요청이 ${decision}되었어요`, body: `${shortDate(l.start_date)} ${l.kind}`, url: "/?openLeave=1" });
   }
   const nameOf = (id) => staff.find((p) => p.id === id)?.name ?? "(퇴사)";
   const autoDays = form.kind === "반차" ? 0.5 : Math.max(1, daysBetween(form.start, form.end));
@@ -134,7 +135,7 @@ export default function LeavesAdmin({ data, setData }) {
     setBusy(false);
     if (error) { alert("등록 실패: " + error.message); return; }
     setLeaves((prev) => [rows[0], ...prev]);
-    notify("leave_decided", { profileIds: [form.profileId], title: "연차가 등록됐어요", body: `${shortDate(form.start)} ${form.kind}` });
+    notify("leave_decided", { profileIds: [form.profileId], title: "연차가 등록됐어요", body: `${shortDate(form.start)} ${form.kind}`, url: "/?openLeave=1" });
     setForm({ ...form, note: "" });
   }
 

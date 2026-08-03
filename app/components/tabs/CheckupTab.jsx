@@ -386,6 +386,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
           profileIds: [selfId],
           title: "자체점검 공단 제출 실패",
           body: `${checkupTarget.name} — ${data.resultMsg ?? data.error ?? "제출 실패"}`,
+          url: "/?openCheckup=1",
         });
       }
     } catch (err) {

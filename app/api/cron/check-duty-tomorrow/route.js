@@ -36,6 +36,7 @@ async function handle(request) {
       profileIds: [r.profile_id],
       title: `내일 ${r.kind}입니다`,
       body: tomorrowStr,
+      url: "/?openDuty=1",
     });
     if (ok) sent++;
   }

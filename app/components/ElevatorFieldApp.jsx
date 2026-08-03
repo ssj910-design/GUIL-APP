@@ -152,6 +152,7 @@ export default function App() {
   const [materialFocusId, setMaterialFocusId] = useState(null); // 알림/푸시에서 특정 자재신청을 눌러 관리자 모드 자재출하관리에서 바로 상세를 연다
   const [quoteFocusId, setQuoteFocusId] = useState(null); // 알림/푸시에서 특정 견적신청을 눌러 관리자 모드 견적요청관리에서 바로 상세를 연다
   const [focusRestockHistory, setFocusRestockHistory] = useState(false); // 상비부품 지급완료 알림 — 특정 건이 아니라 "나의 상비부품 현황" 화면으로 이동
+  const [workCalendarSubTab, setWorkCalendarSubTab] = useState(null); // 근무 교환/연차 알림 — 워크캘린더의 어느 하위 탭으로 열지
   const [notifDispatchTarget, setNotifDispatchTarget] = useState(null);
   const [notifResultTarget, setNotifResultTarget] = useState(null);
 
@@ -233,7 +234,15 @@ export default function App() {
     const openTodo = params.get("openTodo");
     const openFailure = params.get("openFailure");
     const openRestock = params.get("openRestock");
-    if (!openMaterial && !openQuote && !openPost && !openTodo && !openFailure && !openRestock) return false;
+    const openDuty = params.get("openDuty");
+    const openLeave = params.get("openLeave");
+    const openContract = params.get("openContract");
+    const openCheckup = params.get("openCheckup");
+    const openInspectionTab = params.get("openInspectionTab");
+    const openAttendance = params.get("openAttendance");
+    const openAttendanceReport = params.get("openAttendanceReport");
+    if (!openMaterial && !openQuote && !openPost && !openTodo && !openFailure && !openRestock
+      && !openDuty && !openLeave && !openContract && !openCheckup && !openInspectionTab && !openAttendance && !openAttendanceReport) return false;
     if (openMaterial || openQuote) setTab("admin");
     if (openMaterial) setMaterialFocusId(openMaterial);
     if (openQuote) setQuoteFocusId(openQuote);
@@ -241,6 +250,13 @@ export default function App() {
     if (openTodo) { setTab("todo"); setOpenTodoId(openTodo); handleDismissNotif("todo:" + openTodo); }
     if (openFailure) setOpenFailureId(openFailure);
     if (openRestock) { setTab("material"); setFocusRestockHistory(true); }
+    if (openDuty) { setTab("workcalendar"); setWorkCalendarSubTab("당직·숙직"); }
+    if (openLeave) { setTab("workcalendar"); setWorkCalendarSubTab("연차"); }
+    if (openContract) setTab("sites");
+    if (openCheckup) setTab("checkup");
+    if (openInspectionTab) setTab("inspection");
+    if (openAttendance) setTab("home");
+    if (openAttendanceReport) setTab("admin");
     return true;
   }
 
@@ -258,6 +274,13 @@ export default function App() {
         url.searchParams.delete("openTodo");
         url.searchParams.delete("openFailure");
         url.searchParams.delete("openRestock");
+        url.searchParams.delete("openDuty");
+        url.searchParams.delete("openLeave");
+        url.searchParams.delete("openContract");
+        url.searchParams.delete("openCheckup");
+        url.searchParams.delete("openInspectionTab");
+        url.searchParams.delete("openAttendance");
+        url.searchParams.delete("openAttendanceReport");
         window.history.replaceState({}, "", url);
       }
     }
@@ -545,7 +568,7 @@ export default function App() {
     }
     const { data } = await supabase.from("duty_swaps").insert(row).select();
     if (data?.[0]) setDutySwaps((prev) => [...prev, mapDutySwap(data[0])]);
-    sendPush("duty_swap_request", [targetId], { title: "근무 요청", body: msg });
+    sendPush("duty_swap_request", [targetId], { title: "근무 요청", body: msg, url: "/?openDuty=1" });
   }
 
   // 수락 = 두 칸의 담당자를 맞바꾼다. 같은 달이든 다음 달이든 동일 로직(이월도 이걸로 처리).
@@ -563,6 +586,7 @@ export default function App() {
       sendPush("duty_swap_result", [swap.requesterId], {
         title: "교환이 거절됐습니다",
         body: `${profile.name}님이 근무 교환 요청을 거절했습니다`,
+        url: "/?openDuty=1",
       });
       return;
     }
@@ -622,6 +646,7 @@ export default function App() {
     sendPush("duty_swap_result", [swap.requesterId], {
       title: swap.kind === "교환" ? "교환이 성사됐습니다" : "근무 요청이 수락됐습니다",
       body: `${profile.name}님이 수락했습니다`,
+      url: "/?openDuty=1",
     });
   }
 
@@ -2229,6 +2254,7 @@ export default function App() {
               onRespondSwap={handleRespondDutySwap}
               onSchedulesChange={setDutySchedules}
               onEngineersChange={setEngineers}
+              initialSubTab={workCalendarSubTab}
             />
           )}
           {tab === "admin" && profile.role === "admin" && <AdminTab materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onClearReassignRequest={handleClearReassignRequest} onAssignTodo={handleAssignTodo} onResetEngineerPassword={handleResetEngineerPassword} materialFocusId={materialFocusId} onMaterialFocusHandled={() => setMaterialFocusId(null)} quoteFocusId={quoteFocusId} onQuoteFocusHandled={() => setQuoteFocusId(null)} />}

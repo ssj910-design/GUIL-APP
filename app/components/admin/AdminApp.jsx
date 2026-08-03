@@ -118,6 +118,33 @@ export default function AdminApp() {
 
   function adminLogout() { localStorage.removeItem("guilAuthV1"); setMe(null); }
 
+  // 관리자 알림(연차 신청·계약 만료·출근 미체크 요약) 푸시 딥링크 — 모바일 App 셸의
+  // checkOpenParams와 같은 패턴. 알림이 이미 떠 있는 창을 재사용(navigate)할 수도 있어
+  // 마운트 시점 한 번만으론 못 잡고, 창이 다시 포커스/보임 상태가 될 때마다 다시 확인한다.
+  useEffect(() => {
+    function checkOpenParams() {
+      const url = new URL(window.location.href);
+      const openLeave = url.searchParams.get("openLeave");
+      const openContract = url.searchParams.get("openContract");
+      const openAttendanceReport = url.searchParams.get("openAttendanceReport");
+      if (!openLeave && !openContract && !openAttendanceReport) return;
+      if (openLeave) { setHrSub("연차관리"); setMenu("engineers"); }
+      if (openContract) setMenu("sites");
+      if (openAttendanceReport) setMenu("dashboard");
+      url.searchParams.delete("openLeave");
+      url.searchParams.delete("openContract");
+      url.searchParams.delete("openAttendanceReport");
+      window.history.replaceState({}, "", url);
+    }
+    checkOpenParams();
+    window.addEventListener("focus", checkOpenParams);
+    document.addEventListener("visibilitychange", checkOpenParams);
+    return () => {
+      window.removeEventListener("focus", checkOpenParams);
+      document.removeEventListener("visibilitychange", checkOpenParams);
+    };
+  }, []);
+
   // 이 브라우저(PC)의 웹푸시 구독 여부 — 모바일 마이페이지와 동일한 방식. 이게 꺼져있으면
   // (구독 자체가 없으면) 이 계정으로 온 알림·테스트 발송을 이 기기에서 받을 수 없다.
   useEffect(() => { if (me?.id) isSubscribed(me.id).then(setPushSubscribed); }, [me?.id]);
