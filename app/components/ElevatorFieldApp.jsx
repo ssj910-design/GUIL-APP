@@ -1943,17 +1943,17 @@ export default function App() {
           {pushBanner && (
             <button
               onClick={openPushBanner}
-              className="absolute left-2 right-2 z-50 bg-blue-950 text-white rounded-2xl shadow-2xl px-3 py-2.5 text-left active:scale-[0.98] transition-transform flex items-start gap-2.5"
+              className="absolute left-2 right-2 z-50 bg-blue-950/80 backdrop-blur-md text-white rounded-[28px] shadow-2xl px-5 py-4 text-left active:scale-[0.98] transition-transform flex items-start gap-3.5"
               style={{ top: "max(0.5rem, env(safe-area-inset-top))" }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/icon-192.png" alt="" className="w-8 h-8 rounded-lg shrink-0 mt-0.5" />
+              <img src="/icon-192.png" alt="" className="w-12 h-12 rounded-2xl shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-extrabold truncate">{pushBanner.title || "새 알림"}</p>
-                  {pushBanner.time && <span className="text-[10px] text-blue-300 shrink-0">{pushBanner.time}</span>}
+                  <p className="text-base font-extrabold truncate">{pushBanner.title || "새 알림"}</p>
+                  {pushBanner.time && <span className="text-xs text-blue-300 shrink-0">{pushBanner.time}</span>}
                 </div>
-                {pushBanner.body && <p className="text-[11px] text-blue-200 truncate mt-0.5">{pushBanner.body}</p>}
+                {pushBanner.body && <p className="text-sm text-blue-200 truncate mt-1">{pushBanner.body}</p>}
               </div>
             </button>
           )}
