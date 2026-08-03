@@ -245,7 +245,7 @@ export default function RoomAdmin({ data, setData }) {
     await supabase.from("feed_posts").update({ is_notice: isNotice }).eq("id", postId);
     if (isNotice) {
       const post = feed.find((p) => p.id === postId);
-      notify("room_notice", { title: "새 공지가 등록됐어요", body: (post?.text ?? "").slice(0, 60) });
+      notify("room_notice", { title: "새 공지가 등록됐어요", body: (post?.text ?? "").slice(0, 60), url: `/?openPost=${postId}` });
     }
   }
 

@@ -151,6 +151,7 @@ export default function App() {
   const [pushBanner, setPushBanner] = useState(null); // 네이티브 앱 포그라운드 중 도착한 푸시 — 상단 배너로 직접 보여준다 { title, body, url, time }
   const [materialFocusId, setMaterialFocusId] = useState(null); // 알림/푸시에서 특정 자재신청을 눌러 관리자 모드 자재출하관리에서 바로 상세를 연다
   const [quoteFocusId, setQuoteFocusId] = useState(null); // 알림/푸시에서 특정 견적신청을 눌러 관리자 모드 견적요청관리에서 바로 상세를 연다
+  const [focusRestockHistory, setFocusRestockHistory] = useState(false); // 상비부품 지급완료 알림 — 특정 건이 아니라 "나의 상비부품 현황" 화면으로 이동
   const [notifDispatchTarget, setNotifDispatchTarget] = useState(null);
   const [notifResultTarget, setNotifResultTarget] = useState(null);
 
@@ -231,13 +232,15 @@ export default function App() {
     const openPost = params.get("openPost");
     const openTodo = params.get("openTodo");
     const openFailure = params.get("openFailure");
-    if (!openMaterial && !openQuote && !openPost && !openTodo && !openFailure) return false;
+    const openRestock = params.get("openRestock");
+    if (!openMaterial && !openQuote && !openPost && !openTodo && !openFailure && !openRestock) return false;
     if (openMaterial || openQuote) setTab("admin");
     if (openMaterial) setMaterialFocusId(openMaterial);
     if (openQuote) setQuoteFocusId(openQuote);
     if (openPost) { setTab("room"); setOpenFeedPostId(openPost); handleDismissNotif("post:" + openPost); }
     if (openTodo) { setTab("todo"); setOpenTodoId(openTodo); handleDismissNotif("todo:" + openTodo); }
     if (openFailure) setOpenFailureId(openFailure);
+    if (openRestock) { setTab("material"); setFocusRestockHistory(true); }
     return true;
   }
 
@@ -254,6 +257,7 @@ export default function App() {
         url.searchParams.delete("openPost");
         url.searchParams.delete("openTodo");
         url.searchParams.delete("openFailure");
+        url.searchParams.delete("openRestock");
         window.history.replaceState({}, "", url);
       }
     }
@@ -1181,7 +1185,7 @@ export default function App() {
     await supabase.from("feed_posts").update({ is_notice: isNotice }).eq("id", postId);
     if (isNotice) {
       const post = feed.find((p) => p.id === postId);
-      notify("room_notice", { title: "새 공지가 등록됐어요", body: (post?.text ?? "").slice(0, 60) });
+      notify("room_notice", { title: "새 공지가 등록됐어요", body: (post?.text ?? "").slice(0, 60), url: `/?openPost=${postId}` });
     }
   }
 
@@ -1216,6 +1220,7 @@ export default function App() {
     notify("material_request_cancelled", {
       title: "자재 신청이 취소됐어요",
       body: `${profile.name}님이 ${target?.siteName ?? ""} · ${target?.part ?? ""} 신청을 취소했습니다`,
+      url: `/?openMaterial=${requestId}`,
     });
     return true;
   }
@@ -1233,6 +1238,7 @@ export default function App() {
     notify("quote_request_cancelled", {
       title: "견적 신청이 취소됐어요",
       body: `${profile.name}님이 ${target?.siteName ?? ""} · ${target?.constructionType ?? ""} 신청을 취소했습니다`,
+      url: `/?openQuote=${requestId}`,
     });
     return true;
   }
@@ -1327,6 +1333,7 @@ export default function App() {
     if (suppliedTo) sendPush("supply_ready", [suppliedTo], {
       title: "자재 지급 완료 — 수령 확인해주세요",
       body: `${req.siteName}${formatUnitLabel(req.elevatorNo) ? ` ${formatUnitLabel(req.elevatorNo)}` : ""} · ${req.part}`,
+      url: `/?openTodo=${newTodo.id}`,
     });
   }
 
@@ -1472,9 +1479,10 @@ export default function App() {
       prev.map((x) => (x.id === restockId ? { ...x, status: "완료", suppliedDate: TODAY_STR } : x))
     );
     const restockTo = r.engineerId ?? profileIdByName(profilesAll, r.engineer);
-    if (restockTo) sendPush("supply_ready", [restockTo], {
+    if (restockTo) sendPush("restock_ready", [restockTo], {
       title: "상비부품 지급 완료 — 수령 확인해주세요",
       body: `${r.part}${r.siteName ? ` · ${r.siteName}` : ""}`,
+      url: "/?openRestock=1",
     });
   }
 
@@ -1588,11 +1596,16 @@ export default function App() {
       prev.map((x) => (x.id === quoteId ? { ...x, status: "자재지급완료", suppliedDate: TODAY_STR } : x))
     );
     setTodos((prev) => [...newTodos, ...prev]);
-    const quoteTo = finalAssignees.map((n) => profileIdByName(profilesAll, n)).filter(Boolean);
-    if (quoteTo.length) sendPush("supply_ready", quoteTo, {
-      title: "견적 자재 지급 완료 — 수령 확인해주세요",
-      body: `${q.siteName}${formatUnitLabel(q.elevatorNo) ? ` ${formatUnitLabel(q.elevatorNo)}` : ""} · ${q.constructionType}`,
-    });
+    // 각자 다른 할일 id를 받으므로(assignees 수만큼 별도 행), 딥링크 url이 정확하도록 한 명씩 보낸다.
+    for (const t of newTodos) {
+      const assigneeId = profileIdByName(profilesAll, t.assignee);
+      if (!assigneeId) continue;
+      sendPush("supply_ready", [assigneeId], {
+        title: "견적 자재 지급 완료 — 수령 확인해주세요",
+        body: `${q.siteName}${formatUnitLabel(q.elevatorNo) ? ` ${formatUnitLabel(q.elevatorNo)}` : ""} · ${q.constructionType}`,
+        url: `/?openTodo=${t.id}`,
+      });
+    }
   }
 
   // ★ 이미 자재지급완료된 견적요청 수정 — 상태/지급일/사진(별도 onAttachQuotePhoto)은 그대로 두고
@@ -2176,7 +2189,7 @@ export default function App() {
           )}
           {tab === "checkup" && <CheckupTab selfChecks={selfChecks} setSelfChecks={setSelfChecks} siteManagers={siteManagers} profilesAll={profilesAll} inspections={inspections} />}
           {tab === "inspection" && <InspectionTab inspections={inspections} />}
-          {tab === "material" && <MaterialTab requests={materialRequests} onAddMaterialRequest={handleAddMaterialRequest} onCancelMaterialRequest={handleCancelMaterialRequest} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} onAddQuoteRequest={handleAddQuoteRequest} onCancelQuoteRequest={handleCancelQuoteRequest} restockRequests={restockRequests} kitStock={kitStock} onReceiveRestock={handleReceiveRestock} />}
+          {tab === "material" && <MaterialTab requests={materialRequests} onAddMaterialRequest={handleAddMaterialRequest} onCancelMaterialRequest={handleCancelMaterialRequest} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} onAddQuoteRequest={handleAddQuoteRequest} onCancelQuoteRequest={handleCancelQuoteRequest} restockRequests={restockRequests} kitStock={kitStock} onReceiveRestock={handleReceiveRestock} focusRestockHistory={focusRestockHistory} onRestockHistoryHandled={() => setFocusRestockHistory(false)} />}
           {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} />}
           {tab === "todo" && (
             <TodoTab

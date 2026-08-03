@@ -1,4 +1,4 @@
-import { Fragment, useState, useContext } from "react";
+import { Fragment, useState, useContext, useEffect } from "react";
 import { ChevronRight, X, Plus, Search, PackageCheck, PackageX, AlertTriangle, Check } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, realInstallPlace, unitIdFor, profileIdByName, formatPhone } from "@/lib/utils";
@@ -662,7 +662,7 @@ function DuplicateWarningSheet({ items, onCancel, onConfirm }) {
 const MAT_STEP_TITLES = ["현장·호기·긴급도", "부품·사진·의견"];
 const QUOTE_STEP_TITLES = ["현장·호기·담당자", "견적·사진·의견"];
 
-export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRequest, todos, onReject, quoteRequests, onAddQuoteRequest, onCancelQuoteRequest, restockRequests, kitStock = [], onReceiveRestock }) {
+export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRequest, todos, onReject, quoteRequests, onAddQuoteRequest, onCancelQuoteRequest, restockRequests, kitStock = [], onReceiveRestock, focusRestockHistory, onRestockHistoryHandled }) {
   const sites = useContext(SitesContext);
   const { name: CURRENT_ENGINEER, selfId } = useContext(AuthContext);
   const units = useContext(UnitsContext);
@@ -685,6 +685,13 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
   const [showQuoteHistory, setShowQuoteHistory] = useState(false);
   const [showRestockHistory, setShowRestockHistory] = useState(false);
   const [dupWarning, setDupWarning] = useState(null); // { items } — 중복 신청 경고 (자재·견적 공용)
+
+  // 상비부품 지급완료 알림에서 온 딥링크 — 특정 건이 아니라 이 화면 자체를 바로 연다.
+  useEffect(() => {
+    if (!focusRestockHistory) return;
+    setShowRestockHistory(true);
+    onRestockHistoryHandled?.();
+  }, [focusRestockHistory]);
 
   const formPartText = formatPartRows(form.parts);
 
