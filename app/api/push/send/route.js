@@ -43,7 +43,7 @@ export async function POST(request) {
 }
 
 async function handlePost(request) {
-  const { key, profileIds, title, body, url, tag } = await request.json().catch(() => ({}));
+  const { key, profileIds, title, body, url, tag, test } = await request.json().catch(() => ({}));
   const item = CATALOG[key];
   if (!item) return Response.json({ ok: false, reason: `알 수 없는 알림 종류: ${key}` }, { status: 400 });
 
@@ -83,7 +83,10 @@ async function handlePost(request) {
   // 회사 설정에서 꺼둔 알림이면 여기서 끝
   if (org[key]?.enabled === false) return Response.json({ ok: true, sent: 0, skipped: "회사 설정에서 꺼짐" });
 
-  const targets = (profiles ?? []).filter((p) => isEnabled(item, org, p.notify_prefs ?? {}));
+  // 테스트 발송(알림 설정 화면)은 개인별 수신 설정을 건너뛴다 — '낮음' 등급은 개인 설정이 없으면
+  // 기본 꺼짐이라, 안 그러면 테스트를 눌러도 조용히 스킵돼 "버튼이 안 먹는다"로 보인다.
+  // 회사 설정의 "사용 꺼짐"은 위에서 이미 막았으므로 그대로 존중된다.
+  const targets = test ? (profiles ?? []) : (profiles ?? []).filter((p) => isEnabled(item, org, p.notify_prefs ?? {}));
   if (!targets.length) return Response.json({ ok: true, sent: 0, skipped: "받을 사람 없음" });
 
   // 웹 구독자(subs)와 네이티브 앱 사용자(native_push_tokens)는 서로 다른 채널이라, 한쪽이

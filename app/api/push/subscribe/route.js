@@ -19,6 +19,15 @@ export async function POST(request) {
   return Response.json({ ok: true });
 }
 
+// 이 기기 구독의 주인 찾기 — 로그인이 꺼진 화면에서 "나에게만 보내기"의 대상을 정할 때 쓴다.
+// endpoint는 브라우저가 가진 자기 구독 주소라, 이걸 아는 것 자체가 그 기기라는 증거다.
+export async function GET(request) {
+  const endpoint = new URL(request.url).searchParams.get("endpoint");
+  if (!endpoint) return Response.json({ ok: false, reason: "endpoint 필요" }, { status: 400 });
+  const { data } = await db().from("push_subscriptions").select("profile_id").eq("endpoint", endpoint).maybeSingle();
+  return Response.json({ ok: true, profileId: data?.profile_id ?? null });
+}
+
 export async function DELETE(request) {
   const { endpoint } = await request.json().catch(() => ({}));
   if (!endpoint) return Response.json({ ok: false }, { status: 400 });

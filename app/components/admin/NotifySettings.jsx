@@ -6,6 +6,7 @@ import { useState, useEffect, useContext } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { NOTIFICATIONS, GROUPS, LEVELS, levelOf, audienceTiersOf } from "@/lib/notifications";
 import { AdminAuthContext } from "@/app/components/admin/adminShared";
+import { subscribedProfileId } from "@/lib/push";
 
 const AUDIENCE = { engineer: "기사", admin: "관리자", all: "전원" };
 const ADMIN_TIER_CHIPS = { super: "최고", manager: "중간", material: "자재담당" };
@@ -20,13 +21,22 @@ export default function NotifySettings() {
   // 실제 발송 시점(크론·스케줄)을 안 기다리고 본인 기기로 바로 받아서 확인해볼 수 있는 테스트 발송.
   // profileIds를 본인 하나로 못박아서 받는사람 설정과 무관하게 나에게만 간다 — 단, "사용" 꺼짐은 그대로 존중한다.
   async function testSend(n) {
-    if (!myId) { alert("로그인 계정 정보가 없어 테스트 발송을 보낼 수 없습니다."); return; }
+    // 로그인이 꺼져 있으면(SKIP_LOGIN) 화면이 "누가 보고 있는지"를 모른다 — 그땐 이 기기가
+    // 알림을 켤 때 저장해둔 구독(endpoint→profile_id)으로 본인을 찾는다. 안 그러면 테스트 버튼이
+    // 전부 "로그인 정보 없음"만 띄우고 아무것도 못 하는 껍데기가 된다.
+    const target = myId ?? (await subscribedProfileId());
+    if (!target) {
+      alert("이 기기로 보낼 대상을 찾지 못했습니다.\n먼저 좌측 하단 또는 마이페이지에서 “이 기기에서 알림 받기”를 켜주세요.");
+      return;
+    }
     setTesting(n.key);
     try {
       const res = await fetch("/api/push/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: n.key, profileIds: [myId], title: `[테스트] ${n.label}`, body: "알림 설정 화면에서 보낸 테스트 알림입니다." }),
+        // test: 개인별 수신 설정(특히 '낮음' 등급 기본 꺼짐) 때문에 테스트가 조용히 스킵되지 않게 한다.
+        // 회사 설정의 "사용 꺼짐"은 그대로 존중된다(서버에서 먼저 차단).
+        body: JSON.stringify({ key: n.key, profileIds: [target], test: true, title: `[테스트] ${n.label}`, body: "알림 설정 화면에서 보낸 테스트 알림입니다." }),
       });
       const data = await res.json();
       if (data.ok && data.sent > 0) alert("테스트 알림을 보냈습니다 — 이 기기에서 확인해보세요.");
