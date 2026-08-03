@@ -119,8 +119,13 @@ export default function NotifySettings() {
                         {n.desc && <p className="text-[11px] text-slate-400 mt-0.5">{n.desc}</p>}
                       </td>
                       <td className="px-3 py-2.5 text-slate-500 text-[11px] whitespace-nowrap">
-                        {n.audience === "admin" ? (
+                        {n.audience === "admin" || n.audience === "engineer_admin" ? (
                           <div className="flex gap-1 items-center flex-wrap">
+                            {n.audience === "engineer_admin" && (
+                              <span className="text-[10px] font-bold rounded-full px-2 py-1 border bg-slate-100 text-slate-500 border-slate-200">
+                                기사
+                              </span>
+                            )}
                             {Object.entries(ADMIN_TIER_CHIPS).map(([v, label]) => {
                               const active = tiers.includes(v);
                               return (
