@@ -1,10 +1,10 @@
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect } from "react";
 import { ListTodo, Check, CheckCircle2, Search, Lock, Image as ImageIcon, Download, Plus, Repeat, ChevronDown } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { addDays, formatShortDate, formatYyMmDd } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { downloadPhoto, sanitizeFilename, extOf } from "@/lib/photos";
-import { DDay, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
+import { PrimaryButton, Sheet, Field, inputCls } from "@/app/components/ui";
 import { SitesContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 import { confirmAsync } from "@/app/components/ConfirmHost";
@@ -80,13 +80,24 @@ function TodoCheckbox({ done, locked, onClick }) {
   return <button type="button" onClick={onClick} className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />;
 }
 
-export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescription, onUpdateTodoDueDate, onExtendTodoDueDate, onRequestReassignTodo, onClearReassignRequest, onAssignTodo, onAdminToggle, materialRequests, quoteRequests }) {
+export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescription, onUpdateTodoDueDate, onExtendTodoDueDate, onRequestReassignTodo, onClearReassignRequest, onAssignTodo, onAdminToggle, materialRequests, quoteRequests, focusTodoId, onFocusHandled }) {
   const { name: CURRENT_ENGINEER, engineerNames, role } = useContext(AuthContext);
   const sites = useContext(SitesContext);
   const [showDone, setShowDone] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [search, setSearch] = useState("");
   const [assignOpen, setAssignOpen] = useState(false);
+  // 알림/푸시로 특정 할일을 지목해 열 때 쓴다 — 사용자가 아코디언을 직접 조작하면(펼치기/접기)
+  // 그 시점부터는 로컬 expandedId가 우선하고 focusTodoId는 해제한다(RoomTab의 focusPostId와 동일 패턴).
+  const shownExpandedId = expandedId ?? focusTodoId;
+  function setExpanded(id) {
+    setExpandedId(id);
+    if (focusTodoId) onFocusHandled?.();
+  }
+  useEffect(() => {
+    if (!focusTodoId) return;
+    document.getElementById(`todo-row-${focusTodoId}`)?.scrollIntoView({ block: "center" });
+  }, [focusTodoId]);
   // 관리자는 본인 담당 할일이 아니라 전체 기사의 할일을 본다.
   const mine = role === "admin" ? todos : todos.filter((t) => t.assignee === CURRENT_ENGINEER);
 
@@ -110,7 +121,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
 
   const q = search.trim().toLowerCase();
   const visible = mine
-    .filter((t) => showDone || !t.done)
+    .filter((t) => showDone || !t.done || t.id === focusTodoId)
     .filter((t) => !q || t.title.toLowerCase().includes(q) || (t.siteName ?? "").toLowerCase().includes(q))
     .slice()
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
@@ -152,10 +163,10 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
           const isManual = t.source === "manual" || t.source === "inspection" || t.source === "selfcheck";
           const overdue = !t.done && new Date(t.dueDate) < new Date(TODAY_STR);
           const requester = getRequesterName(t, materialRequests, quoteRequests);
-          const expanded = expandedId === t.id;
+          const expanded = shownExpandedId === t.id;
           // 지브라 스트라이프 — 짝수줄만 살짝 톤(bg-slate-50), 펼친 행은 제목·내용을 한 박스로 묶어 흰 배경
           return (
-            <div key={t.id} className={`rounded-xl px-2 ${expanded ? "bg-white" : i % 2 === 1 ? "bg-slate-50" : ""}`}>
+            <div key={t.id} id={`todo-row-${t.id}`} className={`rounded-xl px-2 ${expanded ? "bg-white" : i % 2 === 1 ? "bg-slate-50" : ""}`}>
               <div className="flex items-start gap-2.5 py-2">
                 <div className="pt-0.5">
                   <TodoCheckbox
@@ -171,7 +182,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
                   />
                 </div>
                 {/* 행 클릭 = 아코디언 펼침/접힘 (바텀시트 대신 인라인) */}
-                <button type="button" onClick={() => setExpandedId(expanded ? null : t.id)} className="flex-1 min-w-0 text-left">
+                <button type="button" onClick={() => setExpanded(expanded ? null : t.id)} className="flex-1 min-w-0 text-left">
                   <div className="flex items-center gap-1.5">
                     {overdue && <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />}
                     <p className={`text-sm font-bold min-w-0 truncate ${t.done ? "line-through text-slate-400" : "text-slate-800"}`}>{t.title}</p>
@@ -203,7 +214,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
                     onRequestReassign={role !== "admin" ? onRequestReassignTodo : null}
                     onClearReassignRequest={onClearReassignRequest}
                     role={role}
-                    onClose={() => setExpandedId(null)}
+                    onClose={() => setExpanded(null)}
                     hideTitleBlock
                   />
                 </div>
@@ -220,38 +231,6 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
   );
 }
 
-
-function TodoRow({ t, onToggle, onOpenDetail }) {
-  return (
-    <div className={`border rounded-xl p-3 ${t.done ? "border-slate-100 opacity-60" : "border-slate-200"}`}>
-      <button type="button" onClick={() => onOpenDetail(t)} className="w-full flex items-start justify-between gap-2 text-left">
-        <div className="flex-1">
-          <p className={`text-sm font-bold text-slate-800 ${t.done ? "line-through" : ""}`}>{t.title}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">
-            {t.assignee} 담당 · {t.siteName} · {t.source === "manual" ? "관리자 부여" : t.source === "quote" ? "견적 연동" : t.source === "inspection" ? "검사 보완" : t.source === "selfcheck" ? "자체점검 지적" : "자재 연동"}
-          </p>
-        </div>
-        {!t.done && <DDay dueDate={t.dueDate} />}
-      </button>
-      <button
-        onClick={() => onToggle(t.id)}
-        className={`w-full mt-2.5 text-xs font-bold py-2 rounded-lg ${t.done ? "bg-slate-100 text-slate-500 active:bg-slate-200" : "bg-blue-700 text-white active:bg-blue-800"}`}
-      >
-        {t.done ? "완료 취소" : "완료 처리"}
-      </button>
-    </div>
-  );
-}
-
-
-// 바텀시트 래퍼 — 다른 화면(관리자 콘솔 등)에서 시트로 열 때 사용. TodoTab은 본문을 인라인 아코디언으로 쓴다.
-export function TodoDetailSheet(props) {
-  return (
-    <Sheet title="할 일 상세" onClose={props.onClose} bg="bg-white">
-      <TodoDetailBody {...props} />
-    </Sheet>
-  );
-}
 
 // 할 일 상세 본문 (시트/아코디언 공용). role: 'admin'이면 편집·재배정, 기사면 기한연장·재배정 요청.
 export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoUrls = [], siteAddress, onToggle, onReassign, engineerNames, onUpdateDescription, onUpdateDueDate, onExtendDueDate, onRequestReassign, onClearReassignRequest, role, onClose, hideTitleBlock = false }) {
@@ -306,7 +285,7 @@ export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoU
           </div>
         ) : reassignOpen ? (
           <div className="border border-slate-200 rounded-xl p-3 mb-3">
-            <p className="text-xs font-bold text-slate-600 mb-2">다른 사람에게 넘기기 요청</p>
+            <p className="text-xs font-bold text-slate-600 mb-2">담당자 재배정 요청</p>
             <select className={`${inputCls} mb-2`} value={reassignTo} onChange={(e) => setReassignTo(e.target.value)}>
               <option value="">희망 담당자 (선택 안 함 가능)</option>
               {engineerNames?.filter((n) => n !== todo.assignee).map((n) => <option key={n} value={n}>{n}</option>)}
@@ -319,7 +298,7 @@ export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoU
           </div>
         ) : (
           <button type="button" onClick={() => { setReassignReason(""); setReassignTo(""); setReassignOpen(true); }} className="w-full mb-3 text-xs font-bold text-blue-700 border border-blue-200 rounded-xl py-2.5 active:bg-blue-50 flex items-center justify-center gap-1.5">
-            <Repeat size={13} strokeWidth={2.5} /> 다른 사람에게 넘기기 요청
+            <Repeat size={13} strokeWidth={2.5} /> 담당자 재배정 요청
           </button>
         )
       )}
@@ -635,105 +614,3 @@ export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
 }
 
 
-export function TodoManageScreen({ todos, onToggle, onAssignTodo, onReassignTodo, onUpdateTodoDescription, onUpdateTodoDueDate, materialRequests, quoteRequests, engineerNames, onBack }) {
-  const sites = useContext(SitesContext);
-  const [query, setQuery] = useState("");
-  const [source, setSource] = useState("전체");
-  const [assignOpen, setAssignOpen] = useState(false);
-  const [detailTarget, setDetailTarget] = useState(null);
-  const sourceMatch = { 전체: null, 자재연동: "material", 견적연동: "quote", 관리자부여: "manual", 검사보완: "inspection", 자체점검지적: "selfcheck" };
-
-  const filtered = todos.filter((t) => {
-    const matchesSource = source === "전체" || t.source === sourceMatch[source];
-    const matchesQuery = t.siteName.toLowerCase().includes(query.trim().toLowerCase()) || t.assignee.toLowerCase().includes(query.trim().toLowerCase());
-    return matchesSource && matchesQuery;
-  });
-
-  const groups = {};
-  filtered.forEach((t) => {
-    (groups[t.assignee] ??= []).push(t);
-  });
-  const assignees = Object.keys(groups).sort((a, b) => groups[b].filter((t) => !t.done).length - groups[a].filter((t) => !t.done).length);
-  const undoneCount = filtered.filter((t) => !t.done).length;
-
-  return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-white">
-      <DrillHeader title="할 일 관리" onBack={onBack} onHome={onBack} />
-
-      <div className="px-5 py-3 bg-blue-950 shrink-0 flex items-center justify-between">
-        <span className="text-xs text-blue-200">조건에 맞는 할 일 {filtered.length}건</span>
-        <span className="text-sm font-extrabold text-white">미완료 {undoneCount}건</span>
-      </div>
-
-      <div className="px-5 pt-3 pb-2 shrink-0">
-        <PrimaryButton onClick={() => setAssignOpen(true)} className="mb-3">
-          + 새 할 일 부여
-        </PrimaryButton>
-        <div className="relative mb-2.5">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            className={`${inputCls} pl-8`}
-            placeholder="현장명 또는 담당자로 검색"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-        <div className="flex gap-2 overflow-x-auto">
-          {["전체", "자재연동", "견적연동", "관리자부여", "검사보완", "자체점검지적"].map((s) => (
-            <button
-              key={s}
-              onClick={() => setSource(s)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold shrink-0 ${source === s ? "bg-blue-700 text-white" : "bg-white text-slate-500 border border-slate-200"}`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-5 pb-4">
-        {assignees.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-10">해당 조건의 할 일이 없습니다</p>
-        ) : (
-          assignees.map((a) => (
-            <div key={a} className="mb-4">
-              <p className="text-xs font-bold text-slate-400 mb-2 sticky top-0 bg-white py-1">
-                {a} · {groups[a].filter((t) => !t.done).length}건 미완료 / 총 {groups[a].length}건
-              </p>
-              <div className="space-y-2">
-                {groups[a].map((t) => <TodoRow key={t.id} t={t} onToggle={onToggle} onOpenDetail={setDetailTarget} />)}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {assignOpen && (
-        <TodoAssignSheet
-          engineerNames={engineerNames}
-          onSubmit={onAssignTodo}
-          onClose={() => setAssignOpen(false)}
-        />
-      )}
-
-      {detailTarget && (() => {
-        const t = todos.find((x) => x.id === detailTarget.id) ?? detailTarget;
-        return (
-          <TodoDetailSheet
-            todo={t}
-            requester={getRequesterName(t, materialRequests, quoteRequests)}
-            coAssignees={getCoAssignees(t, todos)}
-            supplyPhotoUrls={getSupplyPhotos(t, materialRequests, quoteRequests)}
-            siteAddress={getTodoSiteAddress(t, materialRequests, quoteRequests, sites)}
-            onToggle={onToggle}
-            onReassign={onReassignTodo}
-            engineerNames={engineerNames}
-            onUpdateDescription={onUpdateTodoDescription}
-            onUpdateDueDate={onUpdateTodoDueDate}
-            onClose={() => setDetailTarget(null)}
-          />
-        );
-      })()}
-    </div>
-  );
-}

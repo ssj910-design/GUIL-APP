@@ -7,8 +7,8 @@
 - **ui.jsx** = 순수 표시용 공용 부품 (Sheet, PrimaryButton, HistoryCard, FilterBar, TimelineRow/Input,
   Badge, DDay, ScreenHeader, DrillHeader, Field, SmsToast, 스타일 상수 inputCls/tlInputCls).
 - **formWidgets.jsx** = 데이터 연동 폼 위젯 (SiteSearchSelect, MultiPhotoUpload, SinglePhotoUpload, SupplyPhotoButton).
-- **교차 참조 3곳** (더 늘리지 말 것): HomeTab→FailureTab(고장 카드·모달 공유),
-  AdminTab→TodoTab(TodoManageScreen), AdminTab→BillingTab(BillingHistoryScreen).
+- **교차 참조 2곳** (더 늘리지 말 것): HomeTab→FailureTab(고장 카드·모달 공유),
+  AdminTab→BillingTab(BillingHistoryScreen).
 
 역할 분기: AuthContext의 role이 'admin'이면 전체 데이터, 'engineer'면 본인 배정 현장만.
 이 필터링은 클라이언트에서만 이뤄진다 (RLS 없음 — 보안 아님, 화면 분리일 뿐).

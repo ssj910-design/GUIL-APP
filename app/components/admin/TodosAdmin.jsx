@@ -4,7 +4,7 @@
 // 완료 규칙(DESIGN-v2 §7-2): 자재·견적 할일의 정상 완료 경로는 비용청구지만,
 // 관리자는 예외적으로 임의 토글 가능(모바일 관리자 모드와 동일 권한).
 import { useContext, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Repeat } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto } from "@/lib/photos";
 import { TODAY_STR } from "@/lib/constants";
@@ -74,6 +74,14 @@ function TodoDetailModal({ t, data, onClose, onSave }) {
 
   return (
     <Modal title="할 일 상세내역" onClose={onClose}>
+      {t.reassignRequested && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+          <p className="text-xs font-bold text-amber-700 mb-1 flex items-center gap-1"><Repeat size={13} strokeWidth={2.5} /> 담당자 재배정 요청됨</p>
+          {t.reassignReason && <p className="text-[13px] text-slate-700">사유: {t.reassignReason}</p>}
+          {t.reassignTo && <p className="text-[13px] text-slate-700">희망 담당자: <b>{t.reassignTo}</b></p>}
+          <p className="text-[11px] text-slate-400 mt-1">아래 담당자를 변경하면 요청이 자동 해제됩니다.</p>
+        </div>
+      )}
       <div className="space-y-3 mb-4">
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">구분</p>
@@ -299,12 +307,15 @@ export default function TodosAdmin({ data, setData, initialView }) {
     const site = sites.find((s) => s.id === form.siteId);
     const engineer = profiles.find((p) => p.id === form.assigneeId);
     const photoUrls = form.photoUrls ?? [];
+    // 재배정 요청 중인 할일의 담당자를 여기서 바꾸면 요청은 처리된 것이므로 자동 해제한다 (모바일 담당자 변경과 동일 규칙).
+    const reassigned = form.assigneeId !== (t.assigneeId ?? "");
     const patch = {
       title: form.title.trim(), description: form.description || null,
       site_name: site?.name ?? null, elevator_no: unit?.unitNo ?? null, unit_id: form.unitId || null,
       assignee: engineer?.name ?? null, assignee_id: form.assigneeId || null,
       assigned_date: form.assignedDate || null, due_date: form.dueDate || null, done: form.done,
       photo_count: photoUrls.length, photo_urls: photoUrls.length ? photoUrls : null,
+      ...(reassigned ? { reassign_requested: false, reassign_reason: null, reassign_to: null } : {}),
     };
     const { error } = await supabase.from("todos").update(patch).eq("id", t.id);
     if (error) { alert("저장 실패: " + error.message); return; }
@@ -317,6 +328,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
         assignee: patch.assignee, assigneeId: patch.assignee_id,
         assignedDate: patch.assigned_date, dueDate: patch.due_date, done: patch.done,
         photoCount: patch.photo_count, photoUrls,
+        ...(reassigned ? { reassignRequested: false, reassignReason: null, reassignTo: null } : {}),
       } : x)),
     }));
   }

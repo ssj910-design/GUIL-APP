@@ -25,7 +25,7 @@ import { CheckupTab } from "@/app/components/tabs/CheckupTab";
 import { InspectionTab } from "@/app/components/tabs/InspectionTab";
 import { MaterialTab } from "@/app/components/tabs/MaterialTab";
 import { BillingTab } from "@/app/components/tabs/BillingTab";
-import { TodoTab, TodoDetailSheet, getRequesterName, getCoAssignees, getSupplyPhotos, getTodoSiteAddress } from "@/app/components/tabs/TodoTab";
+import { TodoTab } from "@/app/components/tabs/TodoTab";
 import { AdminTab } from "@/app/components/tabs/AdminTab";
 import { RoomTab } from "@/app/components/tabs/RoomTab";
 
@@ -146,7 +146,7 @@ export default function App() {
   const [notifOpen, setNotifOpen] = useState(false); // 우측상단 알림(종) 드롭다운
   const notifRef = useRef(null);
   const [openFailureId, setOpenFailureId] = useState(null); // 알림에서 특정 고장 건을 눌러 상세를 바로 연다 (탭 이동 없이 현재 화면 위에 띄움)
-  const [openTodoId, setOpenTodoId] = useState(null); // 알림에서 특정 할일을 눌러 상세를 바로 연다
+  const [openTodoId, setOpenTodoId] = useState(null); // 알림에서 특정 할일을 눌러 할일 탭의 인라인 상세(카드 펼침)를 바로 연다
   const [openFeedPostId, setOpenFeedPostId] = useState(null); // 알림/푸시에서 특정 게시글을 눌러 게시판 탭에서 바로 그 글 화면으로 들어간다
   const [pushBanner, setPushBanner] = useState(null); // 네이티브 앱 포그라운드 중 도착한 푸시 — 상단 배너로 직접 보여준다 { title, body, url }
   const [materialFocusId, setMaterialFocusId] = useState(null); // 알림/푸시에서 특정 자재신청을 눌러 관리자 모드 자재출하관리에서 바로 상세를 연다
@@ -2171,6 +2171,8 @@ export default function App() {
               onAdminToggle={handleAdminToggleTodo}
               materialRequests={materialRequests}
               quoteRequests={quoteRequests}
+              focusTodoId={openTodoId}
+              onFocusHandled={() => setOpenTodoId(null)}
             />
           )}
           {tab === "room" && <RoomTab
@@ -2260,26 +2262,6 @@ export default function App() {
               onConfirm={(result) => { handleFailureResult(notifResultTarget, result); setNotifResultTarget(null); }}
             />
           )}
-          {openTodoId && (() => {
-            const t = todos.find((x) => x.id === openTodoId);
-            if (!t) return null;
-            return (
-              <TodoDetailSheet
-                todo={t}
-                requester={getRequesterName(t, materialRequests, quoteRequests)}
-                coAssignees={getCoAssignees(t, todos)}
-                supplyPhotoUrls={getSupplyPhotos(t, materialRequests, quoteRequests)}
-                siteAddress={getTodoSiteAddress(t, materialRequests, quoteRequests, sites)}
-                onToggle={profile.role === "admin" ? handleAdminToggleTodo : (t.source === "manual" && !t.done ? handleAdminToggleTodo : null)}
-                onReassign={handleReassignTodo}
-                engineerNames={engineerNames}
-                onUpdateDescription={profile.role === "admin" ? handleUpdateTodoDescription : null}
-                onUpdateDueDate={profile.role === "admin" ? handleUpdateTodoDueDate : null}
-                onExtendDueDate={profile.role !== "admin" ? handleExtendTodoDueDate : null}
-                onClose={() => setOpenTodoId(null)}
-              />
-            );
-          })()}
           {/* bottom nav — 기존 형태(전체 탭 가로 스크롤), 팀 합의로 원복 (2026-07-17) */}
           <div
             className="shrink-0 bg-slate-50 border-t-2 border-slate-300 flex overflow-x-auto"
