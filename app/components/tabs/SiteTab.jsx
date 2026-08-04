@@ -637,7 +637,9 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [elevatorSubTab, setElevatorSubTab] = useState("정보");
 
+  // 계약종료 현장은 기본 목록에는 안 보이고, 검색어로 직접 찾을 때만 나온다.
   const list = sites
+    .filter((s) => query.trim() || s.isActive !== false)
     .filter((s) => siteMatchesQuery(s, query, { units: allUnits, siteManagers }))
     .filter((s) => !onlyMine || s.assignedEngineer === CURRENT_ENGINEER);
 

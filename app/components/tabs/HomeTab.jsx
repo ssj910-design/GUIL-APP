@@ -610,7 +610,8 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
   // 갇힘사고는 재발 횟수와 무관하게 최근 30일 내 1건만 있어도 집중관리 대상 — 30일 지나면 자동으로 빠진다.
   const entrapmentSiteIds = entrapmentSitesRecent(failures);
   // 집중관리현장: 3회 이상 고장 또는 갇힘사고 걸린 현장 (담당 무관 — 기사도 회사 전체 위험 현장을 봄).
-  const criticalSites = sites.filter((s) =>
+  // 계약종료 현장은 대응 대상이 아니므로 뺀다.
+  const criticalSites = activeSites(sites).filter((s) =>
     (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || entrapmentSiteIds.has(s.id)
   );
   const [detailTarget, setDetailTarget] = useState(null);
@@ -754,7 +755,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
               {criticalSites.map((s) => {
                 const stopped = stoppedSiteIds.has(s.id);
                 const support = supportSiteIds.has(s.id);
-                const trapped = entrapmentSiteIds.has(s.id);
+                const trappedCount = entrapmentSiteIds.get(s.id)?.length ?? 0;
                 const recent = recentFailuresBySiteId.get(s.id) ?? [];
                 const count30d = recent.length;
                 const units = [...new Set(recent.map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean))];
@@ -770,10 +771,10 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
                       <p className="text-[11px] text-slate-400">{s.address}</p>
                     </div>
                     <span className="flex flex-col items-end gap-1 shrink-0 ml-2">
-                      {trapped && <span className="text-xs font-extrabold text-white bg-red-600 px-2 py-1 rounded-full">갇힘</span>}
+                      {trappedCount > 0 && <span className="text-xs font-extrabold text-white bg-red-600 px-2 py-1 rounded-full">갇힘 {trappedCount}회</span>}
                       {support && <span className="text-xs font-extrabold text-amber-600 bg-amber-100 px-2 py-1 rounded-full">지원요청</span>}
                       {stopped && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">운행정지</span>}
-                      {count30d > 0 && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">{count30d}회 고장</span>}
+                      {count30d > 0 && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">고장 {count30d}회</span>}
                     </span>
                   </button>
                 );
