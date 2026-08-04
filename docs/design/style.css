@@ -102,3 +102,12 @@ mark.changed { background: var(--warn-soft); color: var(--warn-ink); padding: 0 
 .connect .node.this { color: var(--accent); font-weight: 700; }
 .connect .node .ph { width: 104px; height: 188px; border: 1px dashed var(--line); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--faint); font-size: 11px; margin: 0 auto 4px; padding: 6px; text-align: center; }
 .connect .arrow { color: var(--faint); font-size: 18px; padding-bottom: 18px; }
+
+/* 문서 공통 내비게이션 — 모든 설계 문서 맨 위. 현재 문서는 .here로 강조 */
+.docnav { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; margin: -24px -24px 28px; padding: 10px 24px; background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 10; }
+.docnav a { font-size: 13px; font-weight: 600; color: var(--sub); padding: 5px 10px; border-radius: 7px; text-decoration: none; white-space: nowrap; }
+.docnav a:hover { background: var(--accent-soft); color: var(--accent); text-decoration: none; }
+.docnav a.here { background: var(--accent); color: #fff; }
+.docnav .sep { color: var(--line); padding: 0 4px; user-select: none; }
+.docnav .home { font-weight: 800; color: var(--ink); }
+@media (max-width: 640px) { .docnav { margin: -24px -16px 20px; padding: 8px 16px; } .docnav a { font-size: 12px; padding: 4px 7px; } }
