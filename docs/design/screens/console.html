@@ -1,0 +1,79 @@
+<!doctype html>
+<!--
+  ═══ 편집 규칙 — AI 포함, 이 문서를 고치는 누구든 따를 것 ═══
+  1. 의미가 바뀌는 수정은 버전(v0.x)을 올리고 "변경 이력" 표에 한 줄 추가한다.
+  2. 섹션의 기존 내용이 "변경·삭제"되면(단순 추가 말고) 그 섹션 끝에
+     <details class="history"><summary>이전 버전 (vX.X)</summary>예전 내용/요약</details>
+     으로 직전 버전을 남긴다. 직전 1개 버전만 인라인 보존 — 더 오래된 건 git 이력으로.
+  3. 이번 버전에서 바뀐 문구는 <mark class="changed">…</mark>로 표시하고,
+     다음 버전을 만들 때 이전 버전의 mark는 벗긴다.
+  4. 오타·문구 다듬기는 버전·이력 없이 바로 수정.
+  ※ 콘솔 12메뉴를 한 문서에 총람으로 — 대부분 모바일 화면의 관리자 대응판이라 해당 설계서 참조가 본문.
+    깊은 개별 설계가 필요해지는 메뉴(예: 인사관리)는 그때 별도 문서로 승격.
+  ※ 스크린샷은 실물이 진실 — localhost:3000/admin (1400px), img/console-*.png
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>화면설계 — PC 콘솔 총람</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<main>
+  <nav class="docnav"><a href="../index.html" class="home">설계 허브</a><span class="sep">·</span><a href="../01-prd.html">01 PRD</a><span class="sep">·</span><a href="../02-userflow.html">02 유저플로우</a><span class="sep">·</span><a href="../03-sitemap.html">03 화면지도</a><span class="sep">·</span><a href="../04-snapshot.html">04 스냅샷</a><span class="sep">|</span><span class="sep" style="font-size:11px">화면설계</span><a href="login.html">로그인</a><a href="home-eng.html">홈(기사)</a><a href="home-adm.html">홈(관리자)</a><a href="failure.html">고장접수</a><a href="checkup.html">자체점검</a><a href="inspection.html">검사관리</a><a href="material.html">자재·견적</a><a href="billing-todo.html">비용청구·할일</a><a href="workcal.html">워크캘린더</a><a href="site.html">현장정보</a><a href="room-mypage.html">게시판·마이페이지</a><a href="console-dashboard.html">콘솔 대시보드</a><a href="console.html" class="here">콘솔 총람</a></nav>
+  <h1>PC 콘솔 총람 — 12메뉴 <span class="badge doing">v0.1</span></h1>
+  <p class="doc-meta">화면설계서 · 코드 <code>admin/*.jsx</code> (셸 AdminApp — 사이드바 + 전 테이블 일괄 로딩 + 화면별 파일) · <a href="console-dashboard.html">대시보드는 별도 문서</a> · <a href="../index.html">← 설계 허브</a></p>
+
+  <h2>1. 콘솔 공통 규칙</h2>
+  <ul>
+    <li><b>v2 네이티브</b>: FK(unit_id 등) 기반, 옛 컬럼 참조 금지 (편집이 겹치면 syncLegacy로 옛 컬럼 병행 갱신)</li>
+    <li>셸이 전 테이블을 한 번에 로드해 props로 배분 — 새 화면은 admin/에 파일 추가 + MENU 연결</li>
+    <li>권한: 최고관리자만 설정 메뉴. 자재담당관리자는 콘솔 접근 불가(모바일 관리자 모드만)</li>
+    <li>콘솔에서의 쓰기 동작도 기사 폰에 알림 — notify 연결 (7/29 구멍 메움)</li>
+  </ul>
+
+  <h2>2. 12메뉴 총람</h2>
+  <table>
+    <tr><th>메뉴</th><th>코드</th><th>역할 · 핵심 규칙</th><th>모바일 대응 설계서</th></tr>
+    <tr><td>현장정보</td><td>SitesAdmin</td><td>현장·호기 CRUD의 본진. 새 현장, <b>엑셀 검증 업로드</b>(VerifyImport — 779행 실전 검증), 비상통화 업로드, 계약구분(099), 계약종료 처리</td><td><a href="site.html">현장정보</a></td></tr>
+    <tr><td>고장관리</td><td>FailuresAdmin</td><td>전체 고장 상태별 필터·배정·이력. 콘솔 접수도 가능</td><td><a href="failure.html">고장접수</a></td></tr>
+    <tr><td>에러코드집</td><td>ErrorCodesAdmin</td><td>기종별 코드 CRUD + <b>엑셀 대량입력</b>. 1,137개·5기종. 공유 자산 확정(2026-08-04)</td><td><a href="failure.html">고장접수 5탭</a></td></tr>
+    <tr><td>검사관리</td><td>InspectionsAdmin</td><td><b>검사예정일 수기입력 = 기준값</b> (API는 참고). 결과·부적합내역 기록</td><td><a href="inspection.html">검사관리</a></td></tr>
+    <tr><td>자재·견적 신청내역</td><td>MaterialsAdmin</td><td>승인·지급 처리(지급사진), 견적서 작성·<b>고객 메일 발송</b>(QuoteSendModal — SMTP 화이트라벨 대상)</td><td><a href="material.html">자재·견적</a></td></tr>
+    <tr><td>부품교체·공사 내역</td><td>PartsAdmin</td><td>완료된 교체·공사의 대장(금액·근거·청구방식) — 회계 시야</td><td><a href="billing-todo.html">비용청구</a></td></tr>
+    <tr><td>할 일 관리</td><td>TodosAdmin</td><td>할일 배정·재배정 승인. 완료 권한 규칙의 관리자 측</td><td><a href="billing-todo.html">할일관리</a></td></tr>
+    <tr><td>자체점검 현황</td><td>SelfChecksAdmin</td><td>월별 출석부 생성(<b>수동 — 월초 자동화 후보</b>)·지적(B/C) 할일배정·지도보기</td><td><a href="checkup.html">자체점검</a></td></tr>
+    <tr><td>게시판</td><td>RoomAdmin</td><td>모바일 게시판과 같은 데이터 — 글·댓글·멘션·공지, 알림 동등(8/3 배포로 완성)</td><td><a href="room-mypage.html">게시판</a></td></tr>
+    <tr><td>인사관리</td><td>HrAdmin 계열</td><td>직원(계정·<b>민원24 ID</b>·입사일)·당직 근무표·출근부·연차관리·워크캘린더. 로그인 계정 발급의 본진 — <b>콘솔 중 유일하게 모바일 대응 없는 관리 전용 축</b></td><td><a href="workcal.html">워크캘린더</a>(일부)</td></tr>
+    <tr><td>통계</td><td>StatsAdmin</td><td>현황·자산 분석(노후 20년+·검사만료 60일·보험만료)·계약 만료. Eleva 운영자 콘솔 통계의 원형</td><td>—</td></tr>
+    <tr><td>알림 설정</td><td>NotifySettings</td><td>회사 기본값(35종 on/off·등급·수신 관리자 등급) + 테스트 발송 + <b>기기 등록 현황</b>(8/4 추가 — 4/20명 가시화)</td><td><a href="room-mypage.html">마이페이지 알림</a></td></tr>
+  </table>
+  <p style="font-size:12px;color:var(--sub)">캡처: img/console-*.png (13장, 2026-08-04). 개별 메뉴가 깊은 설계 필요해지면 이 총람에서 승격.</p>
+
+  <h2>4. QA 체크포인트 — 2026-08-04 스윕 (QA-RULES 8장)</h2>
+  <ol>
+    <li>✅ 13메뉴 렌더링·콘솔에러 0</li>
+    <li>✅ 콘솔 쓰기 → 기사 알림 경로 (7/29~8/3에 걸쳐 완성)</li>
+    <li>개별 메뉴의 CRUD 엣지(중복·동시수정)는 미점검 — 필요 시 메뉴별 승격하며</li>
+  </ol>
+
+  <h2>6. 화이트라벨 — 구일전용 → 타사 일반화</h2>
+  <table>
+    <tr><th>#</th><th>지금</th><th>어떻게</th></tr>
+    <tr><td>1</td><td>사이드바·title 회사명</td><td><code>tenants.name</code></td></tr>
+    <tr><td>2</td><td>견적 메일 SMTP (MaterialsAdmin)</td><td>중앙 발송 기본 + 자기 메일 업그레이드 (material.md 확정)</td></tr>
+    <tr><td>3</td><td>통계 기준값 (노후 20년, 만료 60일)</td><td><code>tenants.settings</code> 후보 — 1차 공통</td></tr>
+    <tr><td>4</td><td>인사관리의 민원24 ID 필드</td><td>민원24 플래그 딸림 — 끈 테넌트는 숨김</td></tr>
+    <tr><td>5</td><td>알림 설정 + <b>키 등록(신설 예정)</b></td><td>Eleva에서 "설정" 축 확장: 민원24 키·문자 설정·기능 플래그 — super-admin.md와 짝</td></tr>
+  </table>
+
+  <h2>변경 이력</h2>
+  <table>
+    <tr><th>버전</th><th>날짜</th><th>변경</th></tr>
+    <tr><td>v0.1</td><td>2026-08-04</td><td>최초 작성 — 12메뉴 총람 형식(모바일 설계서 참조 중심), 공통 규칙·화이트라벨 5종</td></tr>
+  </table>
+</main>
+<footer>GUIL-APP 설계 문서 · docs/design/screens/console.html</footer>
+</body>
+</html>
