@@ -556,7 +556,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
               <div className="flex-1 pb-3">
                 <p className="text-sm font-bold text-slate-800 py-2.5">
                   {u.unitNo}{realInstallPlace(u) ? ` · ${realInstallPlace(u)}` : ""} ({u.govNo || site.govElevatorNos?.[idx] || "승강기고유번호 미등록"})
-                  {site.emergencyPhone && ` (비통 ${site.emergencyPhone})`}
+                  {site.emergencyPhone && ` (비상통화장치 번호 ${site.emergencyPhone})`}
                 </p>
                 <button
                   onClick={() => onOpenUnit(u.unitNo)}
