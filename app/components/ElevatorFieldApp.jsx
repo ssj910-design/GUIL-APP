@@ -5,7 +5,7 @@ import { Home, AlertTriangle, CalendarCheck, CalendarClock, ShieldCheck, Package
 import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk, fetchAll, loginFailReason } from "@/lib/supabaseClient";
 import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode } from "@/lib/mappers";
-import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel } from "@/lib/utils";
+import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { DutySwapNotice } from "@/app/components/DutyRoster";
 import { WorkCalendarSheet } from "@/app/components/WorkCalendarSheet";
@@ -897,6 +897,27 @@ export default function App() {
       sendPush("failure_unassigned", engineerIds().filter((id) => id !== engId), {
         title: "미배정 고장 — 먼저 잡는 사람이 담당",
         body: `${where} — ${what}`,
+        url: `/?openFailure=${first.id}`,
+      });
+    }
+
+    // 집중관리현장 판정 — 이번 신규 건들을 빼고 계산한 상태(before)와 포함한 상태(after)를 비교해
+    // 방금 기준을 넘겼는지(새로 발생), 이미 대상이었는데 또 접수됐는지(추가고장)를 가른다.
+    // created는 항상 단일 현장이라(Global Constraints 참고) first.siteId 하나만 보면 된다.
+    const isCritical = (list) =>
+      recentFailuresBySite(list, 30, 3).has(first.siteId) || entrapmentSitesRecent(list, 30).has(first.siteId);
+    const wasCritical = isCritical(failures);
+    const isCriticalNow = isCritical([...failures, ...created]);
+    if (!wasCritical && isCriticalNow) {
+      sendPush("critical_site_new", [...adminIds(), ...engineerIds()], {
+        title: "집중관리현장 발생",
+        body: first.siteName,
+        url: `/?openFailure=${first.id}`,
+      });
+    } else if (wasCritical && isCriticalNow) {
+      sendPush("critical_site_repeat", seniorAdminIds(), {
+        title: "집중관리현장 추가고장",
+        body: first.siteName,
         url: `/?openFailure=${first.id}`,
       });
     }

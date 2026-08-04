@@ -83,6 +83,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
       errorCode: form.faultType + (detailOf(u) ? ` (${detailOf(u)})` : ""),
       status: "미처리",
       reportedAt: TODAY_STR.slice(5).replace("-", "/") + " " + new Date().toTimeString().slice(0, 5),
+      createdAt: new Date(stamp).toISOString(), // DB에도 없이 낙관적 반영만 하므로 로컬에서 채워야 재발 판정(f.createdAt 참조)이 새 건도 즉시 인식한다
       assignee: form.assignee || null,
       notFault: form.notFault,
       reporterPhone: form.reporterPhone.trim(),
