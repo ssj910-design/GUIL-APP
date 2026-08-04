@@ -610,7 +610,8 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
   // 갇힘사고는 재발 횟수와 무관하게 최근 30일 내 1건만 있어도 집중관리 대상 — 30일 지나면 자동으로 빠진다.
   const entrapmentSiteIds = entrapmentSitesRecent(failures);
   // 집중관리현장: 3회 이상 고장 또는 갇힘사고 걸린 현장 (담당 무관 — 기사도 회사 전체 위험 현장을 봄).
-  const criticalSites = sites.filter((s) =>
+  // 계약종료 현장은 대응 대상이 아니므로 뺀다.
+  const criticalSites = activeSites(sites).filter((s) =>
     (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || entrapmentSiteIds.has(s.id)
   );
   const [detailTarget, setDetailTarget] = useState(null);
