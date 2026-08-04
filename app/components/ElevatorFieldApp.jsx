@@ -217,6 +217,18 @@ export default function App() {
         setProfile(null);
         return;
       }
+      // 관리자가 PC 브라우저로 모바일 주소(/)에 오면 웹 콘솔로 보낸다 — 폰에서는 홈탭 그대로.
+      // ?stay=1은 예외(콘솔의 "모바일 앱" 링크가 다시 튕겨오는 루프 방지). 개발용 SKIP_LOGIN
+      // 진입은 위에서 이미 걸러짐(PC에서 모바일 화면을 봐야 하는 QA 경로). 강제 비번변경이
+      // 남은 계정은 그 화면부터 — 콘솔로 보내면 변경을 건너뛰게 되므로 제외.
+      if (
+        data.role === "admin" && !session.mustChange && !Capacitor.isNativePlatform() &&
+        !new URLSearchParams(window.location.search).has("stay") &&
+        window.matchMedia("(min-width: 1024px) and (pointer: fine)").matches
+      ) {
+        window.location.replace("/admin");
+        return;
+      }
       setProfile({ id: data.id, name: data.name, role: data.role, adminTier: data.admin_tier });
     })();
     return () => { alive = false; };

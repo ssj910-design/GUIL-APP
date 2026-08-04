@@ -290,7 +290,8 @@ export default function AdminApp() {
           </div>
         )}
         <p className="px-5 py-3 text-[10px] text-blue-400 border-t border-blue-900">
-          모바일 앱: /
+          {/* ?stay=1 — 관리자 PC는 /에서 콘솔로 자동 이동하므로, 여기서 갈 땐 이동을 끈다 */}
+          <a href="/?stay=1" className="hover:text-white">모바일 앱 화면 보기 →</a>
         </p>
       </aside>
 
