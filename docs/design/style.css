@@ -101,6 +101,14 @@ mark.changed { background: var(--warn-soft); color: var(--warn-ink); padding: 0 
 .connect .node.this img { border: 2px solid var(--accent); }
 .connect .node.this { color: var(--accent); font-weight: 700; }
 .connect .node .ph { width: 104px; height: 188px; border: 1px dashed var(--line); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--faint); font-size: 11px; margin: 0 auto 4px; padding: 6px; text-align: center; }
+
+/* 화이트라벨 와이어프레임 — 갈아끼울 자리를 번호로 표시하는 목업 */
+.wire { width: 250px; border: 2px solid var(--line); border-radius: 18px; padding: 40px 18px; background: #fff; margin: 0 auto; position: relative; }
+.wire .w-el { position: relative; border-radius: 8px; margin-bottom: 10px; }
+.wire .w-fixed { background: #f1f5f9; height: 34px; }              /* 회사 무관 = 회색 */
+.wire .w-swap { border: 2px dashed #d97706; background: #fffbeb; padding: 8px; text-align: center; font-size: 11px; color: #92400e; font-weight: 700; }  /* 갈아끼울 자리 = 주황 점선 */
+.wire .w-num { position: absolute; top: -9px; left: -9px; width: 20px; height: 20px; border-radius: 50%; background: #d97706; color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.wire .w-label { font-size: 10px; color: var(--faint); margin: -4px 0 8px; }
 .connect .arrow { color: var(--faint); font-size: 18px; padding-bottom: 18px; }
 
 /* 문서 공통 내비게이션 — 모든 설계 문서 맨 위. 현재 문서는 .here로 강조 */
