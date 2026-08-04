@@ -63,6 +63,8 @@ sendPush("failure_unassigned", engineerIds().filter((id) => id !== siteEngineerI
 
 기존 `lib/utils.js`의 `recentFailuresBySite(failures, days=30, threshold=3)`와 `entrapmentSitesRecent(failures, days=30)`를 그대로 재사용한다(로직 변경 없음, 판정 기준 그대로: 같은 호기 30일 내 3회+ 또는 갇힘사고 1건+).
 
+**"현장당 딱 1회"는 베스트 에포트다, 완전 보장이 아니다** — `failures`는 클라이언트 상태라 기기마다 로그인/새로고침 시점에만 갱신되고 실시간 동기화가 없다. 서로 다른 낡은 상태를 든 기사 두 명이 같은 현장에 거의 동시에 접수하면 둘 다 `wasCritical=false`로 계산해 `critical_site_new`가 두 번 갈 수 있다(최종 리뷰에서 발견, 2026-08-04). 최악의 결과는 중복 긴급 알림 1건이지 데이터 유실이 아니라서, 지금은 이 리스크를 그대로 받아들이기로 했다 — DB에 발송 여부를 기록하는 컬럼(예: `sites.critical_notified_at`)을 추가해 조건부 update로 1회를 강제하는 보강은 필요해지면 별도로 진행한다.
+
 `handleFailureReported`에서 새로 저장된 고장이 속한 siteId마다:
 
 ```js
