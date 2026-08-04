@@ -12,6 +12,63 @@ const AUDIENCE = { engineer: "기사", admin: "관리자", all: "전원" };
 const ADMIN_TIER_CHIPS = { super: "최고", manager: "중간", material: "자재담당" };
 const TRIGGER = { instant: "즉시", scheduled: "정해진 시각" };
 
+// 기기 등록 현황 — 알림을 다 켜둬도 각자 폰에서 "알림 허용"을 안 누르면 아무것도 안 간다.
+// 그게 화면에 안 보여서 "설정 다 했는데 왜 안 와요"로 오해받는다. 그래서 누가 안 눌렀는지 여기서 보여준다.
+function DeviceStatus() {
+  const [rows, setRows] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      // 웹(홈화면 추가)과 네이티브 앱은 별개 채널이라 둘 중 하나만 있어도 알림은 간다.
+      const [{ data: profs }, { data: webs }, { data: natives }] = await Promise.all([
+        supabase.from("profiles").select("id,name,role,is_active,deleted_at").order("name"),
+        supabase.from("push_subscriptions").select("profile_id"),
+        supabase.from("native_push_tokens").select("profile_id"),
+      ]);
+      const web = new Set((webs ?? []).map((r) => r.profile_id));
+      const nat = new Set((natives ?? []).map((r) => r.profile_id));
+      setRows(
+        (profs ?? [])
+          .filter((p) => p.is_active !== false && !p.deleted_at)
+          .map((p) => ({ ...p, ok: web.has(p.id) || nat.has(p.id) }))
+      );
+    })();
+  }, []);
+
+  if (!rows) return null;
+  const missing = rows.filter((p) => !p.ok);
+  const done = rows.length - missing.length;
+  const label = (p) => `${p.name}${p.role === "admin" ? "(관리자)" : ""}`;
+
+  return (
+    <div className={`rounded-xl border px-4 py-3 mb-4 ${missing.length ? "bg-amber-50 border-amber-200" : "bg-white border-slate-200"}`}>
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <p className="text-sm font-extrabold text-slate-800">알림 받을 수 있는 사람</p>
+        <p className={`text-lg font-extrabold ${missing.length ? "text-amber-700" : "text-slate-900"}`}>
+          {done} <span className="text-sm font-bold text-slate-400">/ {rows.length}명</span>
+        </p>
+      </div>
+      {missing.length === 0 ? (
+        <p className="text-[11px] text-slate-500 mt-1">전원이 기기를 등록했습니다.</p>
+      ) : (
+        <>
+          <p className="text-[11px] text-amber-800 mt-1 leading-relaxed">
+            아래 {missing.length}명은 <b>어떤 알림도 받지 못합니다</b>. 설정과 무관하게, 본인 폰에서 앱을 연 뒤
+            “이 기기에서 알림 받기”(마이페이지)를 켜야 등록됩니다. 아이폰은 <b>홈 화면에 추가</b>한 뒤에만 켤 수 있습니다.
+          </p>
+          <div className="flex gap-1 flex-wrap mt-2">
+            {missing.map((p) => (
+              <span key={p.id} className="text-[11px] font-bold bg-white text-amber-800 border border-amber-300 rounded-full px-2 py-1">
+                {label(p)}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function NotifySettings() {
   const { id: myId } = useContext(AdminAuthContext);
   const [settings, setSettings] = useState({});
@@ -78,6 +135,8 @@ export default function NotifySettings() {
         회사 기본값입니다. 여기서 끈 알림은 아무에게도 가지 않습니다.
         기사는 마이페이지에서 켜진 알림 중 원하지 않는 것을 끌 수 있습니다.
       </p>
+
+      <DeviceStatus />
 
       <div className="grid grid-cols-3 gap-3 mb-5 max-w-md">
         {[["전체", `${counts.total}종`, "text-slate-900"],
