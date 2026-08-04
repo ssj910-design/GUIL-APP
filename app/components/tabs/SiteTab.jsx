@@ -554,12 +554,14 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
                 {idx !== units.length - 1 && <div className="w-px flex-1 bg-slate-200 mt-1" />}
               </div>
               <div className="flex-1 pb-3">
-                <p className={`text-sm font-bold text-slate-800 pt-2.5 ${site.emergencyPhone ? "pb-0.5" : "pb-2.5"}`}>
-                  {u.unitNo}{realInstallPlace(u) ? ` · ${realInstallPlace(u)}` : ""} ({u.govNo || site.govElevatorNos?.[idx] || "승강기고유번호 미등록"})
-                </p>
-                {site.emergencyPhone && (
-                  <p className="text-xs font-semibold text-slate-500 text-right pb-2.5">비상통화장치 {site.emergencyPhone}</p>
-                )}
+                <div className="flex items-baseline justify-between gap-2 py-2.5">
+                  <p className="text-sm font-bold text-slate-800">
+                    {u.unitNo}{realInstallPlace(u) ? ` · ${realInstallPlace(u)}` : ""} ({u.govNo || site.govElevatorNos?.[idx] || "승강기고유번호 미등록"})
+                  </p>
+                  {site.emergencyPhone && (
+                    <p className="text-xs font-semibold text-slate-500 shrink-0">비상통화장치 {site.emergencyPhone}</p>
+                  )}
+                </div>
                 <button
                   onClick={() => onOpenUnit(u.unitNo)}
                   className="w-full bg-blue-500 text-white text-sm font-bold py-2.5 rounded-md active:bg-blue-600 mb-1"
