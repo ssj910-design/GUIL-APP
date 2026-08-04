@@ -6,7 +6,7 @@ import { PasswordChangeForm } from "@/app/components/PasswordChangeForm";
 import { TODAY_STR } from "@/lib/constants";
 import { yearsOfService } from "@/lib/leave";
 import { forRole, GROUPS, LEVELS, isEnabled, levelOf } from "@/lib/notifications";
-import { pushSupported, pushPermission, enablePush, disablePush, isSubscribed } from "@/lib/push";
+import { pushSupported, pushPermission, enablePush, disablePush, isSubscribed, notify } from "@/lib/push";
 
 const KIND_TONE = { 당직: "bg-emerald-50 text-emerald-700", 숙직: "bg-blue-50 text-blue-700", 정상근무: "bg-violet-50 text-violet-500" };
 
@@ -26,11 +26,25 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
   const [fbMsg, setFbMsg] = useState("");
   const [fbSending, setFbSending] = useState(false);
   const [fbResult, setFbResult] = useState(null); // { ok, reason }
+  const [fbThreads, setFbThreads] = useState([]); // feedbacks 전체 행 (원글+댓글), 표시할 것만 아래서 거른다
+  const [fbReplyTo, setFbReplyTo] = useState(null); // 댓글 입력창이 열린 건의 id
+  const [fbReplyMsg, setFbReplyMsg] = useState("");
+
+  // 건의함 — 테이블(100_feedbacks)이 아직 없으면 조용히 빈 목록 (메일 발송은 그대로 동작)
+  useEffect(() => {
+    supabase.from("feedbacks").select("*").order("created_at").then(({ data }) => setFbThreads(data ?? []));
+  }, []);
 
   async function sendFeedback() {
     if (!fbMsg.trim()) return;
     setFbSending(true);
     setFbResult(null);
+    // DB에 남기고(댓글용) 메일로도 보낸다 — 로그인 꺼짐 등으로 본인을 모르면 메일만.
+    let saved = false;
+    if (selfId) {
+      const { data } = await supabase.from("feedbacks").insert({ profile_id: selfId, message: fbMsg.trim() }).select().single();
+      if (data) { setFbThreads((t) => [...t, data]); saved = true; }
+    }
     try {
       const res = await fetch("/api/feedback", {
         method: "POST",
@@ -38,13 +52,32 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
         body: JSON.stringify({ name, role: role === "admin" ? "관리자" : "기사", message: fbMsg.trim() }),
       });
       const data = await res.json().catch(() => ({ ok: false }));
-      setFbResult(data);
-      if (data.ok) { setFbMsg(""); setFbOpen(false); }
+      // DB에 저장됐으면 메일 실패(로컬 SMTP 미설정 등)여도 접수는 된 것
+      setFbResult(saved ? { ok: true } : data);
+      if (saved || data.ok) { setFbMsg(""); setFbOpen(false); }
     } catch {
-      setFbResult({ ok: false, reason: "전송 중 오류가 발생했습니다" });
+      setFbResult(saved ? { ok: true } : { ok: false, reason: "전송 중 오류가 발생했습니다" });
+      if (saved) { setFbMsg(""); setFbOpen(false); }
     }
     setFbSending(false);
   }
+
+  async function sendFbReply(root) {
+    const msg = fbReplyMsg.trim();
+    if (!msg || !selfId) return;
+    const { data } = await supabase.from("feedbacks").insert({ profile_id: selfId, message: msg, reply_to_id: root.id }).select().single();
+    if (!data) return;
+    setFbThreads((t) => [...t, data]);
+    setFbReplyMsg("");
+    setFbReplyTo(null);
+    if (root.profile_id && root.profile_id !== selfId)
+      notify("feedback_reply", { profileIds: [root.profile_id], title: "건의에 답글이 달렸습니다", body: msg.slice(0, 80), url: "/" });
+  }
+
+  // 비공개: 기사는 본인 건의만, 관리자는 전체를 본다
+  const fbRoots = fbThreads.filter((f) => !f.reply_to_id && (role === "admin" || f.profile_id === selfId));
+  const fbCommentsOf = (id) => fbThreads.filter((f) => f.reply_to_id === id);
+  const fbNameOf = (id) => profiles.find((p) => p.id === id)?.name ?? "익명";
 
   // 회사에서 켜둔 알림만 개인이 조절할 수 있다
   useEffect(() => {
@@ -268,6 +301,47 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
             <p className="text-xs text-emerald-600 font-semibold">의견을 보냈습니다. 감사합니다!</p>
           ) : (
             <p className="text-xs text-slate-400">앱 개선 의견을 운영자에게 보낼 수 있습니다</p>
+          )}
+
+          {/* 내 건의 목록 (관리자는 전체) — 답글로 주고받는다. 본인+관리자만 보는 비공개. */}
+          {fbRoots.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-slate-100 space-y-3">
+              {[...fbRoots].reverse().map((root) => {
+                const comments = fbCommentsOf(root.id);
+                return (
+                  <div key={root.id} className="bg-slate-50 rounded-lg p-2.5">
+                    <p className="text-[10px] text-slate-400 mb-1">
+                      {role === "admin" && <span className="font-bold text-slate-500">{fbNameOf(root.profile_id)} · </span>}
+                      {root.created_at?.slice(0, 10)}
+                    </p>
+                    <p className="text-xs text-slate-700 whitespace-pre-wrap">{root.message}</p>
+                    {comments.map((c) => (
+                      <div key={c.id} className="mt-1.5 ml-2 pl-2 border-l-2 border-blue-200">
+                        <p className="text-[10px] text-slate-400">{fbNameOf(c.profile_id)} · {c.created_at?.slice(0, 10)}</p>
+                        <p className="text-xs text-slate-600 whitespace-pre-wrap">{c.message}</p>
+                      </div>
+                    ))}
+                    {fbReplyTo === root.id ? (
+                      <div className="flex gap-1.5 mt-2">
+                        <input
+                          className="flex-1 min-w-0 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="답글을 입력하세요"
+                          value={fbReplyMsg}
+                          onChange={(e) => setFbReplyMsg(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && sendFbReply(root)}
+                          autoFocus
+                        />
+                        <button onClick={() => sendFbReply(root)} disabled={!fbReplyMsg.trim()}
+                          className="shrink-0 bg-blue-700 disabled:bg-slate-300 text-white text-[11px] font-bold px-3 rounded-lg">등록</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => { setFbReplyTo(root.id); setFbReplyMsg(""); }}
+                        className="text-[10px] font-bold text-blue-700 mt-1.5">답글 달기</button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </Card>
 
