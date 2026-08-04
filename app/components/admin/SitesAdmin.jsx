@@ -497,6 +497,7 @@ export default function SitesAdmin({ data, setData }) {
   const contractDateReady = sites.some((s) => s.contractDate !== undefined);
   const maintenanceCostReady = sites.some((s) => s.maintenanceCost !== undefined);
   const officeNotesReady = sites.some((s) => s.officeNotes !== undefined);
+  const managementBodyReady = sites.some((s) => s.managementBody !== undefined);
   const unitContractTypeReady = units.some((u) => u.contractType !== undefined);
 
   const contacts = siteManagers.filter((m) => m.siteId === selectedId);
@@ -510,7 +511,7 @@ export default function SitesAdmin({ data, setData }) {
     setEditingUnits(false);
     setRenew(null);
     setSiteForm({
-      name: s.name, address: s.address ?? "",
+      name: s.name, address: s.address ?? "", managementBody: s.managementBody ?? "",
       notes: s.notes ?? "", officeNotes: s.officeNotes ?? "", assignedEngineer: s.assignedEngineer ?? "",
       phone: s.phone ?? "", fax: s.fax ?? "", email: s.email ?? "", accessInfo: s.accessInfo ?? "",
       contractDate: s.contractDate ?? "", contractEnd: s.contractEnd ?? "", maintenanceCost: s.maintenanceCost ?? "",
@@ -648,6 +649,7 @@ export default function SitesAdmin({ data, setData }) {
       contract_end: siteForm.contractEnd || null,
       ...(maintenanceCostReady ? { maintenance_cost: siteForm.maintenanceCost === "" ? null : Number(siteForm.maintenanceCost) } : {}),
       ...(officeNotesReady ? { office_notes: siteForm.officeNotes || null } : {}),
+      ...(managementBodyReady ? { management_body: siteForm.managementBody || null } : {}),
     }).eq("id", selectedId);
     setData((prev) => ({
       ...prev,
@@ -954,9 +956,10 @@ export default function SitesAdmin({ data, setData }) {
                       </button>
                     </div>
                     <div className="flex items-start justify-between">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 flex-1 text-sm">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 flex-1 text-sm">
                         <div><p className="text-xs font-bold text-slate-400 mb-1">현장명</p><p className="font-semibold text-slate-800">{site.name}</p></div>
                         <div className="col-span-2"><p className="text-xs font-bold text-slate-400 mb-1">주소</p><p className="font-semibold text-slate-800">{site.address || "-"}</p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">관리주체{!managementBodyReady && " (마이그레이션 대기)"}</p><p className="font-semibold text-slate-800">{site.managementBody || "-"}</p></div>
                       </div>
                     </div>
                     <div className="flex items-start justify-between mt-3">
@@ -1040,9 +1043,13 @@ export default function SitesAdmin({ data, setData }) {
                   </>
                 ) : (
                   <>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                       <div><p className="text-xs font-bold text-slate-500 mb-1">현장명</p><input className={inputCls} value={siteForm.name} onChange={(e) => setSiteForm({ ...siteForm, name: e.target.value })} /></div>
                       <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">주소</p><input className={inputCls} value={siteForm.address} onChange={(e) => setSiteForm({ ...siteForm, address: e.target.value })} /></div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-500 mb-1">관리주체{!managementBodyReady && " (마이그레이션 대기)"}</p>
+                        <input className={inputCls} disabled={!managementBodyReady} value={siteForm.managementBody} onChange={(e) => setSiteForm({ ...siteForm, managementBody: e.target.value })} />
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <div>
