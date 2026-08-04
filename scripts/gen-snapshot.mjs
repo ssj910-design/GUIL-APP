@@ -53,6 +53,15 @@ const brandHits = [];
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations"))
   .filter((f) => f.endsWith(".sql")).sort();
 
+// ── 화면설계서 목록 (내비게이션용 자동 발견) ──────────────────
+const screenLinks = fs.readdirSync(path.join(ROOT, "docs/design/screens"))
+  .filter((f) => f.endsWith(".html"))
+  .map((f) => {
+    const t = /<title>화면설계 — (.+?)<\/title>/.exec(read(`docs/design/screens/${f}`))?.[1] ?? f;
+    return `<a href="screens/${f}">${t.replace(/\s/g, "")}</a>`;
+  })
+  .join("");
+
 // ── HTML 출력 ────────────────────────────────────────────────
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
@@ -72,7 +81,7 @@ const html = `<!doctype html>
 </head>
 <body>
 <main>
-  <nav class="docnav"><a href="index.html" class="home">설계 허브</a><span class="sep">·</span><a href="01-prd.html">01 PRD</a><span class="sep">·</span><a href="02-userflow.html">02 유저플로우</a><span class="sep">·</span><a href="03-sitemap.html">03 화면지도</a><span class="sep">·</span><a href="04-snapshot.html" class="here">04 스냅샷</a><span class="sep">|</span><span class="sep" style="font-size:11px">화면설계</span><a href="screens/login.html">로그인</a></nav>
+  <nav class="docnav"><a href="index.html" class="home">설계 허브</a><span class="sep">·</span><a href="01-prd.html">01 PRD</a><span class="sep">·</span><a href="02-userflow.html">02 유저플로우</a><span class="sep">·</span><a href="03-sitemap.html">03 화면지도</a><span class="sep">·</span><a href="04-snapshot.html" class="here">04 스냅샷</a><span class="sep">|</span><span class="sep" style="font-size:11px">화면설계</span>${screenLinks}</nav>
   <h1>코드 스냅샷 <span class="badge done">자동 생성</span></h1>
   <p class="doc-meta">${today} 기준 · <code>node scripts/gen-snapshot.mjs</code>로 갱신 · 손으로 고치지 마세요(코드가 원본)</p>
 

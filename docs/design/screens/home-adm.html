@@ -1,0 +1,71 @@
+<!doctype html>
+<!--
+  ═══ 편집 규칙 — AI 포함, 이 문서를 고치는 누구든 따를 것 ═══
+  1. 의미가 바뀌는 수정은 버전(v0.x)을 올리고 "변경 이력" 표에 한 줄 추가한다.
+  2. 섹션의 기존 내용이 "변경·삭제"되면(단순 추가 말고) 그 섹션 끝에
+     <details class="history"><summary>이전 버전 (vX.X)</summary>예전 내용/요약</details>
+     으로 직전 버전을 남긴다. 직전 1개 버전만 인라인 보존 — 더 오래된 건 git 이력으로.
+  3. 이번 버전에서 바뀐 문구는 <mark class="changed">…</mark>로 표시하고,
+     다음 버전을 만들 때 이전 버전의 mark는 벗긴다.
+  4. 오타·문구 다듬기는 버전·이력 없이 바로 수정.
+  ※ 스크린샷은 실물이 진실 — 화면이 바뀌면 img/를 재캡처한다. (관리자 홈은 localhost:3000/?as=admin)
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>화면설계 — 홈 (관리자 모바일)</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<main>
+  <nav class="docnav"><a href="../index.html" class="home">설계 허브</a><span class="sep">·</span><a href="../01-prd.html">01 PRD</a><span class="sep">·</span><a href="../02-userflow.html">02 유저플로우</a><span class="sep">·</span><a href="../03-sitemap.html">03 화면지도</a><span class="sep">·</span><a href="../04-snapshot.html">04 스냅샷</a><span class="sep">|</span><span class="sep" style="font-size:11px">화면설계</span><a href="login.html">로그인</a><a href="home-eng.html">홈(기사)</a><a href="home-adm.html" class="here">홈(관리자)</a><a href="failure.html">고장접수</a></nav>
+  <h1>홈 (관리자 모바일) <span class="badge doing">v0.1</span></h1>
+  <p class="doc-meta">화면설계서 · 코드는 <a href="home-eng.html">홈(기사)</a>와 <b>같은 파일</b>(<code>tabs/HomeTab.jsx</code>) — role=admin 분기만 다름 · <a href="../index.html">← 설계 허브</a></p>
+
+  <h2>1. 이 화면의 정체 — 기사 홈의 관리자 분기</h2>
+  <ul>
+    <li>별도 화면이 아니라 <b>홈(기사)와 같은 코드에서 role=admin일 때 위젯 구성이 바뀌는 것</b>. 공통 위젯(워크캘린더·집중관리·검사관제·게시판)은 기사 홈 문서를 따른다 — 여기엔 <b>다른 것만</b> 적는다</li>
+    <li>PC 관리자는 로그인 시 웹 콘솔로 자동 이동(2026-08-04 구현) — 이 화면은 <b>폰 든 관리자</b>용. 현장에서 즉시 배정·재배정하는 게 존재 이유</li>
+    <li>같은 관리자여도: 폰 = 즉시 대응(배정·재배정), PC 콘솔 = 관리 업무(설정·통계·인사)</li>
+  </ul>
+
+  <h2>2. 기사 홈과 다른 요소</h2>
+  <div class="shot-row">
+    <div class="col"><img class="shot" src="img/home-adm.png" alt="관리자 홈 스크린샷"></div>
+    <div class="col">
+      <table>
+        <tr><th>요소</th><th>기사 홈과의 차이</th></tr>
+        <tr><td>오늘 출근 (관리자 전용)</td><td>출근 체크 버튼 대신 <b>전 직원 출근 요약</b>: 정상근무 n/16, 2시간+ 미확인, 위치 미설정. 탭하면 출근부</td></tr>
+        <tr><td>고장 처리 현황</td><td>기사=본인 것만·거리순 / 관리자=<b>전체 미처리</b>·미배정 우선 정렬 + 미배정·지원미배정·응답대기 카운트</td></tr>
+        <tr><td>고장 카드 버튼</td><td>기사="내가 출동" / 관리자=<b>기사 배정·재배정</b> (배정 시트: 기사별 상태(출동중·처리중·휴가) 표시, 진행중 기사에게 배정하면 경고)</td></tr>
+        <tr><td>알림 배지</td><td>같은 종이지만 관리자 대상 알림(접수·거부·중대·15분 미배정 등)이 와서 체감 다름</td></tr>
+      </table>
+      <p style="font-size:12px;color:var(--sub)">공통 위젯·QA는 <a href="home-eng.html">홈(기사) 문서</a> 기준. 배정·재배정 동작의 QA는 <a href="failure.html">고장접수 문서</a> 4장(선착순·덮어쓰기 방지)과 동일 로직.</p>
+    </div>
+  </div>
+
+  <h2>3. QA 체크포인트</h2>
+  <ol>
+    <li>✅ 재배정 시 원기사 회수 알림 + 조건부 update (고장접수 4장에서 검증)</li>
+    <li>✅ 진행중(출동·처리중) 기사에게 배정 시 경고 표시 (busyStatusOf)</li>
+    <li>출근 요약의 "2시간+ 미확인"·"위치 미설정" 기준값 — 운영하며 조정 여지</li>
+    <li>관리자도 기사 겸직 가능(작은 회사) — 그 경우 본인 출동 버튼이 없는 게 불편할 수 있음 <span class="tbd">관찰 중</span></li>
+  </ol>
+
+  <h2>6. 화이트라벨 — 구일전용 → 타사 일반화</h2>
+  <p>기사 홈과 동일 (①헤더 회사명 ②집중관리 기준 ③검사관제 플래그) + 추가 1건:</p>
+  <table>
+    <tr><th>#</th><th>지금</th><th>어떻게</th></tr>
+    <tr><td>4</td><td>출근 요약 기준(2시간 미확인 등)·직원 수 전제가 구일 규모(16명) 기준</td><td>기준값은 <code>tenants.settings</code>로, 표시는 인원 수와 무관하게 이미 동작 — 확인만</td></tr>
+  </table>
+
+  <h2>변경 이력</h2>
+  <table>
+    <tr><th>버전</th><th>날짜</th><th>변경</th></tr>
+    <tr><td>v0.1</td><td>2026-08-04</td><td>최초 작성 — 기사 홈과의 차이만 기록하는 형식(같은 코드의 role 분기라서). 실물 캡처 포함</td></tr>
+  </table>
+</main>
+<footer>GUIL-APP 설계 문서 · docs/design/screens/home-adm.html</footer>
+</body>
+</html>
