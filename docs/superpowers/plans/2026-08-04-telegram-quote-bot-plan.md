@@ -17,7 +17,11 @@ Next.js API Route, Supabase.
 
 ## Global Constraints
 
-- v1은 **단일 품목 견적만** 지원한다. 다품목·운반비 등 세부비용은 관리자웹으로 넘긴다(설계 문서 "범위 밖").
+- v1은 **단일 품목 견적만** 지원한다(라인아이템 1건). 그 한 품목 안에서는 관리자웹
+  `QuoteItemsModal.jsx`가 쓰는 필드(담당자지정·견적명·품명·규격·수량·단위·가격)를 전부 받는다 —
+  다품목(라인아이템 2건 이상)·운반비/안전관리비/이윤은 여전히 관리자웹으로 넘긴다(설계 문서 "범위 밖").
+- 담당자지정이 텍스트로 안 맞으면(오타·동명이인) 되묻지 않고 주담당자로 대체 후 미리보기 캡션에
+  표시한다 — [발송]/[취소] 확인 단계가 이미 있어서 왕복을 늘리지 않는다(설계 문서 §4.5).
 - 봇은 항상 **새 견적 초안**을 만든다 — 기사가 이미 올린 자재/견적 요청과 병합하지 않는다.
 - 대화 상태 저장용 새 테이블을 만들지 않는다 — 콜백 식별자는 `callback_data`에 `quote_requests.id`를
   실어서 전달한다.
@@ -163,13 +167,14 @@ git commit -m "feat: 텔레그램 Bot API 유틸(sendMessage/sendDocument/answer
 - Create: `lib/telegramQuoteParse.js`
 
 **Interfaces:**
-- Produces: `async function parseQuoteMessage(text): Promise<{siteQuery, itemName, unitPrice} | null>` — 파싱 실패(스키마와 안 맞음, 필수값 비었음)면 `null`. Task 5가 `null`이면 재질문 메시지를 보낸다.
+- Produces: `async function parseQuoteMessage(text): Promise<{siteQuery, managerName, quoteTitle, itemName, spec, qty, unit, unitPrice} | null>` — `siteQuery`/`itemName`/`unitPrice`(0 초과) 중 하나라도 비면 `null`. 나머지 5개(담당자·견적명·규격·수량·단위)는 없으면 스키마 자체에서 빈 문자열/기본값으로 채워지므로 항상 8개 키가 다 있는 객체가 온다. Task 5가 `null`이면 재질문 메시지를 보낸다.
 
 - [ ] **Step 1: 구현**
 
 ```js
 // lib/telegramQuoteParse.js
-// "OO현장 도어레일 12만원 견적 보내줘" 같은 한 문장에서 현장명/품목/단가를 뽑는다.
+// "태영하이빌 김담당자 도어레일 SUS304 2개 EA 12만원 견적" 같은 문장에서 관리자웹
+// QuoteItemsModal.jsx의 품목 필드(name/spec/unit/qty/unitPrice)와 1:1로 맞춘 8개 필드를 뽑는다.
 // 구조화 추출 1회 호출이라 저비용 모델(Haiku)로 충분 — docs/RAG.md 컨벤션과 동일.
 import Anthropic from "@anthropic-ai/sdk";
 
@@ -178,22 +183,28 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const SCHEMA = {
   type: "object",
   properties: {
-    siteQuery: { type: "string", description: "문장에 언급된 현장명(부분 명칭이어도 됨)" },
-    itemName: { type: "string", description: "견적을 낼 부품/작업명" },
-    unitPrice: { type: "integer", description: "원 단위 가격. 명시 안 됐으면 0" },
+    siteQuery: { type: "string", description: "문장에 언급된 현장명(부분 명칭이어도 됨). 필수." },
+    managerName: { type: "string", description: "받는사람으로 지정한 담당자 이름. 없으면 빈 문자열." },
+    quoteTitle: { type: "string", description: "견적명(품명과 별개로 명시했을 때만). 없으면 빈 문자열." },
+    itemName: { type: "string", description: "품명. 필수." },
+    spec: { type: "string", description: "규격. 없으면 빈 문자열." },
+    qty: { type: "integer", description: "수량. 없으면 1." },
+    unit: { type: "string", enum: ["EA", "SET", "식", ""], description: "단위. 없으면 빈 문자열." },
+    unitPrice: { type: "integer", description: "단가(원). 필수, 0 초과." },
   },
-  required: ["siteQuery", "itemName", "unitPrice"],
+  required: ["siteQuery", "managerName", "quoteTitle", "itemName", "spec", "qty", "unit", "unitPrice"],
   additionalProperties: false,
 };
 
 export async function parseQuoteMessage(text) {
   const response = await client.messages.create({
     model: "claude-haiku-4-5",
-    max_tokens: 256,
+    max_tokens: 512,
     output_config: { format: { type: "json_schema", schema: SCHEMA } },
     messages: [{
       role: "user",
-      content: `승강기 부품 견적 요청 문장에서 현장명·품목명·단가(원)를 추출해줘.\n\n"${text}"`,
+      content: `승강기 부품 견적 요청 문장에서 현장명·담당자·견적명·품명·규격·수량·단위·단가를 추출해줘. ` +
+        `문장에 없는 항목은 빈 문자열(수량은 1, 단가는 0)로 채워줘.\n\n"${text}"`,
     }],
   });
 
@@ -219,11 +230,11 @@ export async function parseQuoteMessage(text) {
 node --input-type=module -e "
 import { parseQuoteMessage } from './lib/telegramQuoteParse.js';
 console.log(await parseQuoteMessage('태영하이빌 도어레일 12만원 견적 보내줘'));
+console.log(await parseQuoteMessage('태영하이빌 김담당자 앞으로 도어레일 교체건 견적 보내줘 — 품명 도어레일, 규격 SUS304, 2개, EA, 개당 6만원'));
 "
 ```
 
-Expected: `{ siteQuery: '태영하이빌', itemName: '도어레일', unitPrice: 120000 }` 형태 출력.
-환경변수가 없으면 이 스텝은 스킵하고 보고한다.
+Expected: 첫 줄은 `{ siteQuery: '태영하이빌', managerName: '', quoteTitle: '', itemName: '도어레일', spec: '', qty: 1, unit: '', unitPrice: 120000 }`, 둘째 줄은 8개 필드가 전부 채워진 결과. 환경변수가 없으면 이 스텝은 스킵하고 보고한다.
 
 - [ ] **Step 3: 커밋**
 
@@ -298,8 +309,24 @@ async function handleMessage(message) {
 
   const { data: managers } = await supabase.from("site_managers").select("*").eq("site_id", site.id);
   const primary = (managers ?? []).find((m) => m.is_primary) ?? (managers ?? [])[0];
+  // 담당자지정 — 지정한 이름으로 못 찾으면 되묻지 않고 주담당자로 대체(§4.5) 후 미리보기에 표시.
+  const nameMatch = parsed.managerName?.trim()
+    ? (managers ?? []).find((m) => m.name?.includes(parsed.managerName.trim()))
+    : null;
+  const manager = nameMatch ?? primary;
+  const managerNote = parsed.managerName?.trim() && !nameMatch
+    ? `\n(지정하신 담당자 "${parsed.managerName}"를 못 찾아 주담당자로 대체)`
+    : "";
 
-  const items = [{ category: "부품", name: parsed.itemName, qty: 1, unitPrice: parsed.unitPrice }];
+  const quoteTitle = parsed.quoteTitle?.trim() || parsed.itemName;
+  const items = [{
+    category: "자재비",
+    name: parsed.itemName,
+    spec: parsed.spec || "",
+    unit: parsed.unit || "EA",
+    qty: parsed.qty || 1,
+    unitPrice: parsed.unitPrice,
+  }];
   const { data: draft, error: draftError } = await supabase
     .from("quote_requests")
     .insert({
@@ -310,9 +337,9 @@ async function handleMessage(message) {
       transport_cost: 0,
       safety_cost: 0,
       profit: 0,
-      quote_title: parsed.itemName,
+      quote_title: quoteTitle,
       quote_issued_date: TODAY_STR,
-      recipient_name: primary?.name ?? null,
+      recipient_name: manager?.name ?? null,
       created_by: admin.id,
     })
     .select()
@@ -325,8 +352,8 @@ async function handleMessage(message) {
   let pdfBytes;
   try {
     pdfBytes = await buildQuotePdfBytes({
-      siteName: site.name, quoteTitle: parsed.itemName, quoteDate: TODAY_STR,
-      recipientName: primary?.name, items, transportCost: 0, safetyCost: 0, profit: 0,
+      siteName: site.name, quoteTitle, quoteDate: TODAY_STR,
+      recipientName: manager?.name, items, transportCost: 0, safetyCost: 0, profit: 0,
     });
   } catch (err) {
     await sendTelegramMessage({ chatId, text: "PDF 생성에 실패했어요: " + err.message });
@@ -344,15 +371,18 @@ async function handleMessage(message) {
   const { data: pub } = supabase.storage.from("photos").getPublicUrl(path);
   await supabase.from("quote_requests").update({ quote_pdf_url: pub.publicUrl, status: "견적발행" }).eq("id", draft.id);
 
-  const recipientLine = primary
-    ? `수신: ${primary.name ?? "-"} (${primary.email ?? "이메일 없음"} / ${primary.phone ?? "전화 없음"})`
+  const recipientLine = manager
+    ? `수신: ${manager.name ?? "-"} (${manager.email ?? "이메일 없음"} / ${manager.phone ?? "전화 없음"})`
     : "수신: 담당자 정보 없음 — 발송 전 관리자웹에서 채워주세요";
+  const amount = (parsed.qty || 1) * parsed.unitPrice;
 
   await sendTelegramDocument({
     chatId,
     buffer: Buffer.from(pdfBytes),
     filename: `${site.name}_견적서.pdf`,
-    caption: `${site.name} · ${parsed.itemName} ${parsed.unitPrice.toLocaleString()}원\n${recipientLine}\n\n이대로 발송할까요?`,
+    caption: `${site.name}\n견적명: ${quoteTitle}\n품명: ${parsed.itemName}${parsed.spec ? ` (${parsed.spec})` : ""}\n` +
+      `수량: ${parsed.qty || 1}${parsed.unit || "EA"} × ${parsed.unitPrice.toLocaleString()}원 = ${amount.toLocaleString()}원\n` +
+      `${recipientLine}${managerNote}\n\n이대로 발송할까요?`,
     replyMarkup: { inline_keyboard: [[
       { text: "✅ 발송", callback_data: `send:${draft.id}` },
       { text: "❌ 취소", callback_data: `cancel:${draft.id}` },
@@ -431,25 +461,28 @@ async function handleCallback(callbackQuery) {
 
   if (action === "send") {
     const { data: managers } = await supabase.from("site_managers").select("*").eq("site_id", draft.site_id);
-    const primary = (managers ?? []).find((m) => m.is_primary) ?? (managers ?? [])[0];
+    // 초안 생성 시점(§4.5)에 정한 수신자를 그대로 재사용 — 발송 시점에 다시 "주담당자"로
+    // 재계산하면 미리보기 캡션에 보여준 수신자와 실제 발송 대상이 어긋날 수 있다.
+    const recipient = (managers ?? []).find((m) => m.name === draft.recipient_name)
+      ?? (managers ?? []).find((m) => m.is_primary) ?? (managers ?? [])[0];
     const { data: site } = await supabase.from("sites").select("name").eq("id", draft.site_id).single();
 
     const quote = { siteName: site?.name, quoteTitle: draft.quote_title, quoteDate: draft.quote_issued_date };
     const results = {};
     const patch = {};
 
-    if (primary?.email) {
+    if (recipient?.email) {
       try {
-        await sendQuoteEmail({ to: primary.email, cc: [], quote, pdfUrl: draft.quote_pdf_url });
+        await sendQuoteEmail({ to: recipient.email, cc: [], quote, pdfUrl: draft.quote_pdf_url });
         results.email = { ok: true };
         patch.email_sent_at = new Date().toISOString();
       } catch (err) {
         results.email = { ok: false, reason: err.message };
       }
     }
-    if (primary?.phone) {
+    if (recipient?.phone) {
       try {
-        await sendQuoteAlimtalk({ to: primary.phone, quote, pdfUrl: draft.quote_pdf_url });
+        await sendQuoteAlimtalk({ to: recipient.phone, quote, pdfUrl: draft.quote_pdf_url });
         results.kakao = { ok: true };
         patch.kakao_sent_at = new Date().toISOString();
       } catch (err) {
@@ -458,12 +491,12 @@ async function handleCallback(callbackQuery) {
     }
 
     if (Object.keys(patch).length) {
-      await supabase.from("quote_requests").update({ ...patch, recipient_email: primary?.email ?? null, recipient_phone: primary?.phone ?? null }).eq("id", quoteRequestId);
+      await supabase.from("quote_requests").update({ ...patch, recipient_email: recipient?.email ?? null, recipient_phone: recipient?.phone ?? null }).eq("id", quoteRequestId);
     }
 
     const lines = [
-      !primary?.email ? "📧 이메일 — 수신처 없음" : results.email?.ok ? "📧 이메일 — 성공" : `📧 이메일 — 실패 (${results.email?.reason})`,
-      !primary?.phone ? "💬 카카오 알림톡 — 수신처 없음" : results.kakao?.ok ? "💬 카카오 알림톡 — 성공" : `💬 카카오 알림톡 — 실패 (${results.kakao?.reason})`,
+      !recipient?.email ? "📧 이메일 — 수신처 없음" : results.email?.ok ? "📧 이메일 — 성공" : `📧 이메일 — 실패 (${results.email?.reason})`,
+      !recipient?.phone ? "💬 카카오 알림톡 — 수신처 없음" : results.kakao?.ok ? "💬 카카오 알림톡 — 성공" : `💬 카카오 알림톡 — 실패 (${results.kakao?.reason})`,
     ];
     await answerTelegramCallback({ callbackQueryId: callbackQuery.id, text: "발송 처리 완료" });
     await sendTelegramMessage({ chatId, text: lines.join("\n") });

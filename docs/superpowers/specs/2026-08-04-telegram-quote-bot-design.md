@@ -8,33 +8,41 @@
 `2026-07-27-quote-send-email-kakao-design.md`에서 설계한 `quote_requests` 발송 컬럼들)을 텔레그램이라는
 새 입력 채널로 여는 것이다. 발송 로직 자체는 손대지 않는다.
 
-**v1 범위는 단일 품목 견적으로 한정**한다 — 운반비·안전관리비·이윤 같은 세부 비용이나 품목 여러 개는
-관리자웹으로 넘긴다(아래 "범위 밖" 참고). 실무에서 가장 잦은 케이스(현장 하나 + 품목 하나 + 가격 하나)를
-먼저 완전히 자동화하고, 복잡한 케이스는 억지로 챗봇 안에서 다 해결하려 하지 않는다.
+**v1 범위는 단일 품목 견적으로 한정**한다 — 운반비·안전관리비·이윤이나 품목 여러 개(라인아이템 2건
+이상)는 관리자웹으로 넘긴다(아래 "범위 밖" 참고). 대신 그 한 품목 안에서는 관리자웹 품목 편집화면
+(`QuoteItemsModal.jsx`)이 이미 쓰는 필드를 그대로 받는다 — **현장명, 담당자지정, 견적명, 품명, 규격,
+수량, 단위, 가격** 8개. 새 데이터 모델을 만드는 게 아니라 기존 `quote_items` 한 줄(`{category, name,
+spec, unit, qty, unitPrice}`) 구조에 맞춰 텔레그램 문장에서 그대로 채워 넣는 것이다.
 
 ## 전체 흐름
 
 ```
 관리자(텔레그램)                         서버(Vercel API 라우트)
   │                                          │
-  │  "태영하이빌 도어레일 12만원 견적 보내줘"  →  1. 발신자 인가 확인 (profiles.telegram_user_id)
-  │                                          │  2. Claude API로 현장명/품목/가격 파싱
-  │                                          │  3. 현장명 매칭 (sites.name 기준)
+  │  "태영하이빌 김담당자 도어레일     →  1. 발신자 인가 확인 (profiles.telegram_user_id)
+  │   교체건 도어레일 SUS304 2개      │  2. Claude API로 8개 필드 파싱(있는 만큼만, 나머지는 기본값)
+  │   EA 12만원 견적 보내줘"          │  3. 현장명 매칭 (sites.name 기준)
   │                                          │     - 모호하거나 못 찾으면 → 재질문하고 종료(상태 없음)
-  │                                          │  4. quote_requests 새 초안 생성(현장만 연결, "새 견적서"와 동일)
-  │                                          │     + quote_items에 파싱된 품목 1건 저장
-  │                                          │  5. lib/quotePdf.js로 PDF 생성 → Storage 업로드
+  │                                          │  4. 담당자 매칭 (지정했으면 site_managers.name 기준,
+  │                                          │     못 찾으면 주담당자로 대체하고 미리보기에 표시)
+  │                                          │  5. quote_requests 새 초안 생성(현장만 연결, "새 견적서"와 동일)
+  │                                          │     + quote_items에 파싱된 품목 1건 저장(규격·단위 포함)
+  │                                          │  6. lib/quotePdf.js로 PDF 생성 → Storage 업로드
   │  ← PDF 문서 + 요약 텍스트 + [발송]/[취소] 버튼
   │
-  │  [발송] 클릭                       →     6. lib/email.js + lib/alimtalk.js 직접 호출
-  │                                          │     (site_managers 주담당자 정보로 수신처 자동 채움)
-  │                                          │  7. quote_requests에 발송 결과 반영(email_sent_at 등)
+  │  [발송] 클릭                       →     7. lib/email.js + lib/alimtalk.js 직접 호출
+  │                                          │     (4단계에서 정한 수신처로)
+  │                                          │  8. quote_requests에 발송 결과 반영(email_sent_at 등)
   │  ← "발송 완료 — 이메일 ✅ 카카오 ✅"
   │
-  │  [취소] 클릭                       →     6'. 빈 초안 quote_requests 삭제(MaterialsAdmin.jsx의
+  │  [취소] 클릭                       →     7'. 빈 초안 quote_requests 삭제(MaterialsAdmin.jsx의
   │                                          │      onClose 정리 로직과 동일 조건)
   │  ← "취소했습니다"
 ```
+
+문장이 짧아도(현장명·품명·가격만) 그대로 동작한다 — 담당자·견적명·규격·단위·수량은 없으면 아래
+기본값으로 채워진다. 8개를 전부 말해야 하는 게 아니라, **말한 만큼만 채우고 나머지는 기본값**이라는
+원칙은 그대로 유지한다.
 
 핵심 설계 결정: **모호성 해소용 별도 세션/상태 저장소를 두지 않는다.** 텔레그램 인라인 버튼의
 `callback_data`에 필요한 식별자(`quote_requests.id`)를 그대로 실어 보내고, 버튼을 누르면 그 콜백 안에서
@@ -69,15 +77,37 @@ export async function POST(request) {
 ### 3. 자연어 파싱 — `lib/telegramQuoteParse.js` (신설)
 
 Claude API(Haiku, 저비용) 1회 호출로 구조화 추출. `output_config.format`(structured outputs)으로
-스키마를 강제해서 파싱 실패를 없앤다.
+아래 8개 필드 스키마를 강제한다 — `siteQuery`/`itemName`/`unitPrice`만 필수, 나머지는 없으면 빈
+값/기본값으로 채우게 프롬프트에서 지시한다(관리자웹 `QuoteItemsModal.jsx`의 품목 필드와 1:1로
+맞춘 이름).
 
 ```js
-// 입력: "태영하이빌 도어레일 12만원 견적 보내줘"
-// 출력: { siteQuery: "태영하이빌", itemName: "도어레일", unitPrice: 120000, transportCost: 0 }
+// 필수: siteQuery, itemName, unitPrice — 없으면 파싱 실패 처리
+// 나머지는 문장에 없으면 빈 문자열/기본값으로 채워서 반환하게 스키마 description에 명시
+{
+  siteQuery: string,        // 현장명
+  managerName: string,      // 담당자지정 — 없으면 ""
+  quoteTitle: string,       // 견적명 — 없으면 "" (아래 §5에서 itemName으로 대체)
+  itemName: string,         // 품명
+  spec: string,             // 규격 — 없으면 ""
+  qty: number,              // 수량 — 없으면 1
+  unit: "EA" | "SET" | "식" | "", // 단위 — 없으면 "" (아래 §5에서 "EA"로 대체)
+  unitPrice: number,        // 가격(단가)
+}
+
+// 입력 예1(최소): "태영하이빌 도어레일 12만원 견적 보내줘"
+// → { siteQuery: "태영하이빌", managerName: "", quoteTitle: "", itemName: "도어레일",
+//     spec: "", qty: 1, unit: "", unitPrice: 120000 }
+
+// 입력 예2(전체): "태영하이빌 김담당자 앞으로 도어레일 교체건 견적 보내줘 — 품명 도어레일,
+//                 규격 SUS304, 2개, EA, 개당 6만원"
+// → { siteQuery: "태영하이빌", managerName: "김담당자", quoteTitle: "도어레일 교체건",
+//     itemName: "도어레일", spec: "SUS304", qty: 2, unit: "EA", unitPrice: 60000 }
 ```
 
-파싱 결과에 `siteQuery`나 `itemName`, `unitPrice` 중 하나라도 비어 있으면 즉시
-"현장·품목·가격을 한 문장에 다 알려주세요 — 예: 'OO현장 도어레일 12만원 견적'" 응답하고 종료.
+파싱 결과에 `siteQuery`, `itemName`, `unitPrice`(0 초과) 중 하나라도 비어 있으면 즉시
+"현장·품목·가격은 꼭 알려주세요 — 예: 'OO현장 도어레일 12만원 견적'" 응답하고 종료. 나머지 5개
+(담당자·견적명·규격·수량·단위)는 빠져도 파싱 실패로 취급하지 않는다.
 
 ### 4. 현장 매칭
 
@@ -89,6 +119,20 @@ Claude API(Haiku, 저비용) 1회 호출로 구조화 추출. `output_config.for
 - 0건 → "그 이름으로 현장을 못 찾았어요. 정확한 현장명으로 다시 알려주세요."
 - 2건 이상 → 후보 이름을 나열하고 "정확한 이름으로 다시 말씀해주세요" (버튼 아님 — 상태 안 만듦)
 
+### 4.5. 담당자 매칭
+
+`managerName`이 있으면 그 현장의 `site_managers.name`과 부분일치(§4의 현장명 매칭과 같은 방식,
+포함검사)로 찾는다.
+
+- 정확히 1건 매칭 → 그 담당자를 수신자로 확정
+- `managerName`이 없거나, 있어도 못 찾았으면 → 주담당자(`is_primary = true`, 없으면 첫 번째)로
+  대체. 지정했는데 못 찾은 경우엔 "지정하신 담당자(OOO)를 못 찾아 주담당자로 대체했습니다"를
+  §7 미리보기 캡션에 그대로 보여준다 — **여기서 되묻지 않는다.** 어차피 [발송] 전에 미리보기를
+  보여주는 확인 단계가 있으니, 그 화면에서 수신자가 틀렸으면 관리자가 [취소]로 걸러내면 된다(왕복
+  줄이기 — §"핵심 설계 결정"과 같은 이유).
+- 담당자가 여러 명 매칭돼도(동명이인) 같은 이유로 되묻지 않고 첫 매칭을 쓰되, 캡션에 항상 수신자
+  이름·연락처를 명시해서 관리자가 확인하게 한다.
+
 ### 5. 견적 초안 생성
 
 기존 관리자웹 "새 견적서" 흐름(`MaterialsAdmin.jsx:947` `SitePicker` 이후 로직)과 동일하게, **기사
@@ -96,14 +140,28 @@ Claude API(Haiku, 저비용) 1회 호출로 구조화 추출. `output_config.for
 판단까지 자동화하면 오배정 위험이 크고, 어차피 관리자가 최종 PDF를 보고 확인하므로 새로 만드는 쪽이
 안전하고 단순하다.
 
+품목은 관리자웹 `QuoteItemsModal.jsx`가 쓰는 것과 정확히 같은 shape(`category, name, spec, unit,
+qty, unitPrice`)로 만든다 — 카테고리는 기본 "자재비"(관리자웹의 `emptyItem("자재비")`와 동일한
+기본값), 단위가 비어 있으면 "EA"(관리자웹 단위 드롭다운의 첫 옵션)로 채운다. 견적명(`quote_title`)은
+파싱된 `quoteTitle`이 있으면 그대로, 없으면 `itemName`으로 대체(기존 v1 동작 유지).
+
 ```js
+const quoteTitle = parsed.quoteTitle || parsed.itemName;
 const { data: draft } = await supabase.from("quote_requests").insert({
   id: `q-tg-${Date.now()}`,
   site_id: site.id,
   status: "요청접수",
-  quote_items: [{ category: "부품", name: itemName, qty: 1, unitPrice }],
+  quote_items: [{
+    category: "자재비",
+    name: parsed.itemName,
+    spec: parsed.spec || "",
+    unit: parsed.unit || "EA",
+    qty: parsed.qty || 1,
+    unitPrice: parsed.unitPrice,
+  }],
   transport_cost: 0, safety_cost: 0, profit: 0,
-  quote_title: itemName, quote_date: TODAY_STR,
+  recipient_name: manager?.name ?? null,
+  quote_title: quoteTitle, quote_issued_date: TODAY_STR,
 }).select().single();
 ```
 
@@ -119,9 +177,15 @@ Telegram Bot API `sendDocument`로 PDF 파일 자체를 전송(카톡처럼 링�
 같은 메시지에 요약 캡션 + 인라인 키보드:
 
 ```js
+const managerNote = parsed.managerName && manager?.name !== parsed.managerName
+  ? `\n(지정하신 담당자 "${parsed.managerName}"를 못 찾아 주담당자로 대체)`
+  : "";
+
 await tg("sendDocument", {
   chat_id, document: pdfBuffer,
-  caption: `${site.name} · ${itemName} ${unitPrice.toLocaleString()}원\n수신: ${manager.name} (${manager.email})\n이대로 발송할까요?`,
+  caption: `${site.name}\n견적명: ${quoteTitle}\n품명: ${parsed.itemName}${parsed.spec ? ` (${parsed.spec})` : ""}\n` +
+    `수량: ${parsed.qty || 1}${parsed.unit || "EA"} × ${parsed.unitPrice.toLocaleString()}원 = ${((parsed.qty || 1) * parsed.unitPrice).toLocaleString()}원\n` +
+    `수신: ${manager?.name ?? "담당자 정보 없음"} (${manager?.email ?? "-"})${managerNote}\n\n이대로 발송할까요?`,
   reply_markup: { inline_keyboard: [[
     { text: "✅ 발송", callback_data: `send:${draft.id}` },
     { text: "❌ 취소", callback_data: `cancel:${draft.id}` },
