@@ -1,5 +1,5 @@
 import React, { useState, useContext, useRef } from "react";
-import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Flame, Download, KeyRound, ChevronDown } from "lucide-react";
+import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Download, KeyRound, ChevronDown } from "lucide-react";
 import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, shortDate, recentFailuresBySite, siteMatchesQuery, unitContractBadges, unitBadgeLabel } from "@/lib/utils";
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
@@ -475,7 +475,6 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
             valueColor="text-blue-600"
             value={site.address}
           />
-          <TimelineRow icon={Flame} label="계약구분" value={site.contractType || "-"} valueColor={site.contractType === "FM(종합계약)" ? "text-red-600 font-bold" : "text-slate-700"} />
           {primaryManager && (
             <>
               <TimelineRow icon={User} label={primaryManager.role || "담당자"} value={primaryManager.name || "-"} />

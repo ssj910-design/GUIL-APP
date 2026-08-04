@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect, useRef } from "react";
 import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle, Wrench, ChevronRight, Search, X, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf } from "@/lib/utils";
+import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf, unitBadgeLabel } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
 import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -1026,13 +1026,16 @@ function FailureResponseCard({ f, dist, history = [], site, onOpenDetail, onDisp
   const stage = failureStage(f);
   const { faultType, faultDetail } = parseErrorCode(f.errorCode);
   const { role } = useContext(AuthContext);
+  const units = useContext(UnitsContext);
   const unitLabel = formatUnitLabel(f.elevatorNo);
+  const contractBadge = unitBadgeLabel(units.find((u) => u.id === f.unitId));
   const fmtDist = (km) => (km == null ? null : km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`);
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
       <div className="p-3.5 pb-2.5">
         <div className="flex items-center justify-between gap-2 mb-1">
-          <p className="font-bold text-slate-800 text-[15px] truncate">{f.siteName} · {unitLabel}</p>
+          <p className="font-bold text-slate-800 text-[15px] truncate flex-1 min-w-0">{f.siteName} · {unitLabel}</p>
+          {contractBadge && <span className="shrink-0 text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">{contractBadge}</span>}
           {f.escalation && <span className="shrink-0 text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{f.escalation}</span>}
         </div>
         <p className="text-[13px] text-slate-500 mb-2 flex items-center gap-1">
@@ -1080,9 +1083,11 @@ function FailureResponseCard({ f, dist, history = [], site, onOpenDetail, onDisp
 function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult, onRefuse, onAssignOpen }) {
   const siteOf = useSiteOf();
   const { name: me, role } = useContext(AuthContext);
+  const units = useContext(UnitsContext);
   const stage = failureStage(f);
   const { faultType, faultDetail } = parseErrorCode(f.errorCode);
   const unitLabel = formatUnitLabel(f.elevatorNo);
+  const contractBadge = unitBadgeLabel(units.find((u) => u.id === f.unitId));
   const bar = stage === "arrived" ? "border-l-amber-500" : stage === "dispatched" ? "border-l-blue-500" : f.escalation === "운행정지" ? "border-l-red-600" : "border-l-red-400";
   return (
     <div className={`rounded-xl border border-slate-200 border-l-4 ${bar} bg-white overflow-hidden`}>
@@ -1090,6 +1095,9 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
         <button type="button" onClick={() => onOpenDetail(f)} className="flex-1 min-w-0 text-left">
           <div className="flex items-center gap-1.5 mb-1">
             <p className="font-bold text-slate-800 text-[15px] truncate">{f.siteName} · {unitLabel}</p>
+            {contractBadge && (
+              <span className="shrink-0 text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">{contractBadge}</span>
+            )}
             {f.escalation && (
               <span className="shrink-0 text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{f.escalation}</span>
             )}
@@ -1178,8 +1186,10 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
   const units = useContext(UnitsContext);
   const stage = failureStage(f);
   const { name: me, role } = useContext(AuthContext);
-  const place = realInstallPlace(units.find((u) => u.id === f.unitId));
+  const unit = units.find((u) => u.id === f.unitId);
+  const place = realInstallPlace(unit);
   const unitLabel = formatUnitLabel(f.elevatorNo) + (place ? `(${place})` : "");
+  const contractBadge = unitBadgeLabel(unit);
   // 상태별 컬러 — 작업중(초록)/출동중(파랑)/응답대기(노랑) 우선, 그다음 미배정을 세분:
   // 운행정지(빨강 심각) / 지원미배정=지원요청에서 넘어옴(주황) / 일반 미배정(빨강)
   const state = stage === "arrived" ? { label: "작업중", bar: "border-l-amber-500", chip: "bg-amber-50 text-amber-600" }
@@ -1194,6 +1204,7 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
       <button type="button" onClick={() => onOpenDetail(f)} className="w-full text-left px-3.5 pt-3 pb-2">
         <div className="flex items-center gap-1.5">
           <p className="font-bold text-slate-800 text-sm truncate flex-1 min-w-0">{f.siteName}{formatUnitLabel(f.elevatorNo) ? ` · ${unitLabel}` : ""}</p>
+          {contractBadge && <span className="shrink-0 text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-1.5 py-0.5">{contractBadge}</span>}
           <span className={`shrink-0 text-[10px] font-bold rounded-full px-1.5 py-0.5 ${state.chip}`}>{state.label}</span>
           {warnCount >= 3 && <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold rounded-full px-1.5 py-0.5 bg-red-100 text-red-600" title={`최근 30일 ${warnCount}회 고장`}><Repeat size={10} strokeWidth={2.8} />{warnCount}</span>}
         </div>
@@ -1405,6 +1416,8 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
 // 완료(초록): 증상·원인·조치·처리자·도착~완료 시각 / 진행중(파랑·초록): 현재 단계·배정자 / 미처리(빨강): 미배정·접수
 function FailureStatusCard({ f, onOpenDetail, onReassign, canReassign }) {
   const { faultType, faultDetail } = parseErrorCode(f.errorCode);
+  const units = useContext(UnitsContext);
+  const contractBadge = unitBadgeLabel(units.find((u) => u.id === f.unitId));
   const stage = failureStage(f);
   // 미처리는 그냥 '미처리'로 뭉치지 않고 운행정지·지원미배정·응답대기·미배정으로 구분해 보여준다.
   const state = f.status === "완료"
@@ -1431,7 +1444,8 @@ function FailureStatusCard({ f, onOpenDetail, onReassign, canReassign }) {
     <div className={`rounded-xl border border-slate-200 border-l-4 ${state.bar} bg-white overflow-hidden`}>
       <button type="button" onClick={() => onOpenDetail(f)} className="w-full text-left p-3.5">
         <div className="flex items-center justify-between gap-2 mb-1.5">
-          <p className="font-bold text-slate-800 text-sm truncate">{f.siteName} · {formatUnitLabel(f.elevatorNo)}</p>
+          <p className="font-bold text-slate-800 text-sm truncate flex-1 min-w-0">{f.siteName} · {formatUnitLabel(f.elevatorNo)}</p>
+          {contractBadge && <span className="shrink-0 text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">{contractBadge}</span>}
           <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${state.chip}`}>{state.label}</span>
         </div>
         <div className="flex items-start gap-1.5 mb-1">
