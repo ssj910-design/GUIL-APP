@@ -370,17 +370,23 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
   );
 }
 
-function UnitRow({ unit, emergencyPhone, onSave, onSaveEmergencyPhone, onToggleActive, onDelete, onOpenDetail }) {
-  const [form, setForm] = useState({ unitType: unit.unitType, model: unit.model ?? "", installDate: unit.installDate ?? "", govNo: unit.govNo ?? "", installPlace: unit.installPlace ?? "" });
+function UnitRow({ unit, emergencyPhone, onSave, onSaveEmergencyPhone, onToggleActive, onDelete, onOpenDetail, contractTypeReady }) {
+  const [form, setForm] = useState({ unitType: unit.unitType, model: unit.model ?? "", installDate: unit.installDate ?? "", govNo: unit.govNo ?? "", installPlace: unit.installPlace ?? "", contractType: unit.contractType ?? CONTRACT_TYPES[0] });
   const [emergencyDraft, setEmergencyDraft] = useState(emergencyPhone ?? "");
   const [saving, setSaving] = useState(false);
-  const dirty = form.unitType !== unit.unitType || form.model !== (unit.model ?? "") || form.installDate !== (unit.installDate ?? "") || form.govNo !== (unit.govNo ?? "") || form.installPlace !== (unit.installPlace ?? "");
+  const dirty = form.unitType !== unit.unitType || form.model !== (unit.model ?? "") || form.installDate !== (unit.installDate ?? "") || form.govNo !== (unit.govNo ?? "") || form.installPlace !== (unit.installPlace ?? "") || form.contractType !== (unit.contractType ?? CONTRACT_TYPES[0]);
   const emergencyDirty = emergencyDraft !== (emergencyPhone ?? "");
 
   return (
     <tr className={`border-b border-slate-50 ${unit.isActive === false ? "opacity-40" : ""}`}>
       <td className="px-4 py-2 font-bold whitespace-nowrap">
         <button onClick={() => onOpenDetail(unit)} className="text-blue-700 hover:underline">{unit.unitNo}</button>
+      </td>
+      <td className="px-2 py-2">
+        {/* 호기별 계약구분 — 한 현장 안에서 FM/POG가 섞인 예외 케이스 대응. 기본값 POG(일반계약). */}
+        <select className={inputCls} disabled={!contractTypeReady} value={form.contractType} onChange={(e) => setForm({ ...form, contractType: e.target.value })}>
+          {CONTRACT_TYPES.map((t) => <option key={t}>{t}</option>)}
+        </select>
       </td>
       <td className="px-2 py-2">
         {/* 설치장소 — 호기 번호와 별개인 실제 위치(예: 합참본부-1, 별관-3, 교회) */}
@@ -491,6 +497,7 @@ export default function SitesAdmin({ data, setData }) {
   const contractDateReady = sites.some((s) => s.contractDate !== undefined);
   const maintenanceCostReady = sites.some((s) => s.maintenanceCost !== undefined);
   const officeNotesReady = sites.some((s) => s.officeNotes !== undefined);
+  const unitContractTypeReady = units.some((u) => u.contractType !== undefined);
 
   const contacts = siteManagers.filter((m) => m.siteId === selectedId);
 
@@ -586,10 +593,16 @@ export default function SitesAdmin({ data, setData }) {
   }
 
   async function saveUnit(unit, form) {
-    const patch = { unit_type: form.unitType, model: form.model || null, install_date: form.installDate || null, gov_no: form.govNo || null, install_place: form.installPlace?.trim() || null };
+    const patch = {
+      unit_type: form.unitType, model: form.model || null, install_date: form.installDate || null, gov_no: form.govNo || null, install_place: form.installPlace?.trim() || null,
+      ...(unitContractTypeReady ? { contract_type: form.contractType || null } : {}),
+    };
     const { error } = await supabase.from("units").update(patch).eq("id", unit.id);
     if (error) { alert("저장 실패: " + error.message); return; }
-    const nextUnits = units.map((u) => (u.id === unit.id ? { ...u, unitType: form.unitType, model: form.model || null, installDate: form.installDate || null, govNo: form.govNo || null, installPlace: form.installPlace?.trim() || null } : u));
+    const nextUnits = units.map((u) => (u.id === unit.id ? {
+      ...u, unitType: form.unitType, model: form.model || null, installDate: form.installDate || null, govNo: form.govNo || null, installPlace: form.installPlace?.trim() || null,
+      ...(unitContractTypeReady ? { contractType: form.contractType || null } : {}),
+    } : u));
     setData((prev) => ({ ...prev, units: nextUnits }));
     await syncLegacy(unit.siteId, nextUnits);
   }
@@ -1167,6 +1180,7 @@ export default function SitesAdmin({ data, setData }) {
                     <thead>
                       <tr className="text-xs text-slate-400 border-b border-slate-100">
                         <th className="text-left px-4 py-2 font-semibold w-14">호기</th>
+                        <th className="text-left px-2 py-2 font-semibold w-32">계약구분{!unitContractTypeReady && " (마이그레이션 대기)"}</th>
                         <th className="text-left px-2 py-2 font-semibold w-32">설치장소</th>
                         <th className="text-left px-2 py-2 font-semibold w-28">종류</th>
                         <th className="text-left px-2 py-2 font-semibold">모델</th>
@@ -1187,6 +1201,7 @@ export default function SitesAdmin({ data, setData }) {
                           onToggleActive={toggleUnitActive}
                           onDelete={deleteUnit}
                           onOpenDetail={setUnitDetail}
+                          contractTypeReady={unitContractTypeReady}
                         />
                       ))}
                     </tbody>
@@ -1196,6 +1211,7 @@ export default function SitesAdmin({ data, setData }) {
                     <thead>
                       <tr className="text-xs text-slate-400 border-b border-slate-100">
                         <th className="text-left px-4 py-2 font-semibold w-40">호기</th>
+                        {unitContractTypeReady && <th className="text-left px-2 py-2 font-semibold w-28">계약구분</th>}
                         <th className="text-left px-2 py-2 font-semibold w-32">승강기고유번호</th>
                         <th className="text-left px-2 py-2 font-semibold w-28">종류</th>
                         <th className="text-left px-2 py-2 font-semibold">모델</th>
@@ -1213,6 +1229,7 @@ export default function SitesAdmin({ data, setData }) {
                             className={`border-b border-slate-50 cursor-pointer hover:bg-slate-50 ${u.isActive === false ? "opacity-40" : ""}`}
                           >
                             <td className="px-4 py-2 font-bold truncate text-blue-700" title={unitPlaceLabel}>{unitPlaceLabel}</td>
+                            {unitContractTypeReady && <td className="px-2 py-2 truncate">{u.contractType || CONTRACT_TYPES[0]}</td>}
                             <td className="px-2 py-2 whitespace-nowrap">{u.govNo || "미등록"}</td>
                             <td className="px-2 py-2 truncate" title={u.kind || u.unitType}>{u.kind || u.unitType}</td>
                             <td className="px-2 py-2 truncate" title={u.model ?? ""}>{u.model || "-"}</td>
