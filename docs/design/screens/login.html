@@ -20,7 +20,7 @@
 <body>
 <main>
   <nav class="docnav"><a href="../index.html" class="home">설계 허브</a><span class="sep">·</span><a href="../01-prd.html">01 PRD</a><span class="sep">·</span><a href="../02-userflow.html">02 유저플로우</a><span class="sep">·</span><a href="../03-sitemap.html">03 화면지도</a><span class="sep">·</span><a href="../04-snapshot.html">04 스냅샷</a><span class="sep">|</span><span class="sep" style="font-size:11px">화면설계</span><a href="../screens/login.html" class="here">로그인</a></nav>
-  <h1>로그인 <span class="badge doing">v0.3</span></h1>
+  <h1>로그인 <span class="badge doing">v0.4</span></h1>
   <p class="doc-meta">화면설계서 · 코드 <code>LoginScreen.jsx</code> + <code>ElevatorFieldApp.jsx(handleLogin)</code> + RPC <code>verify_login</code>(마이그 067) · <a href="../index.html">← 설계 허브</a> · <a href="../03-sitemap.html">화면 지도</a></p>
 
   <h2>1. 연결 — 어디서 와서, 어디로 가나</h2>
@@ -112,7 +112,7 @@
         <tr><th>#</th><th>지금 어디에 박혀 있나</th><th>어떻게 갈아끼우나</th></tr>
         <tr><td>1</td><td><code>LoginScreen.jsx:35</code> — 회사명 하드코딩. 로고는 아예 없음</td><td>테넌트 설정 테이블 <code>tenants(id, name, logo_url, theme_color)</code>을 만들고 앱 시작 시 1회 로드 → <code>tenant.name</code>·<code>tenant.logo_url</code>로 치환. 로고 없으면 회사명 텍스트만(지금 모양 그대로)</td></tr>
         <tr><td>2</td><td><code>LoginScreen.jsx:36</code> — "현장관리 시스템 로그인"</td><td>서비스명(예: Eleva)으로 통일할지, 테넌트별 문구로 할지 <span class="tbd">미정</span> — 서비스명 통일이 관리 쉬움(권장)</td></tr>
-        <tr><td>3</td><td><code>verify_login</code> RPC(마이그 067) — login_id가 <b>전역 유일</b></td><td>DB: <code>unique(tenant_id, login_id)</code>로 바꾸고 RPC에 tenant 스코프 추가. 화면은 그대로 — 어느 회사인지는 아이디로 식별(전역 유일 유지)하거나 회사코드 입력 <span class="tbd">미정</span></td></tr>
+        <tr><td>3</td><td><code>verify_login</code> RPC(마이그 067) — login_id가 <b>전역 유일</b></td><td><mark class="changed"><b>확정(2026-08-04): 아이디 전역 유일 유지, 화면 변경 없음.</b> 온보딩이 컨시어지형(우리가 테넌트 세팅+계정 발급 후 URL 전달)이라 아이디를 우리가 만들어 줌 → 겹칠 일이 없고 회사코드 입력·서브도메인이 불필요. 셀프 가입 없음 — 직원은 관리자가 인사관리에서 등록. DB만 <code>tenant_id</code> 컬럼 추가(아이디에서 회사 역추적)</mark></td></tr>
         <tr><td>4</td><td>버튼·포커스링 등 파란색 계열이 Tailwind 클래스로 산재 (<code>bg-blue-700</code> 등)</td><td>1차: 안 바꿈(공통 파랑 = 서비스 브랜드색). 2차(원하는 회사만): CSS 변수 <code>--brand</code>로 뽑아 <code>tenant.theme_color</code> 주입 — 산재한 클래스를 변수 참조로 바꾸는 일괄 작업이라 별도 단계로</td></tr>
       </table>
       <p style="font-size:12px;color:var(--sub)">갈아끼우는 순서: <b>테넌트 테이블부터</b> (①이 첫 소비자) → 나머지 화면들도 같은 <code>tenant.*</code>를 읽게 확장. 하드코딩 잔여분은 <a href="../04-snapshot.html">04 스냅샷</a> 스캐너가 자동 추적(현재 47곳).</p>
@@ -133,6 +133,7 @@
   <h2>변경 이력</h2>
   <table>
     <tr><th>버전</th><th>날짜</th><th>변경</th></tr>
+    <tr><td>v0.4</td><td>2026-08-04</td><td>테넌트 식별 방식 확정 — 컨시어지 온보딩(우리가 세팅 후 URL·계정 전달)이므로 아이디 전역 유일 유지, 회사코드·서브도메인·셀프 가입 없음. 6장 ③ 미정 해소</td></tr>
     <tr><td>v0.3</td><td>2026-08-04</td><td>6장 화이트라벨을 와이어프레임+치환 가이드로 개편 — 갈아끼울 자리 4곳(로고·문구·아이디 유일성·테마색)을 번호로 표시하고, 각각 "지금 어디에 있나(파일:줄)·어떻게 바꾸나·순서"를 명시</td></tr>
     <tr><td>v0.2</td><td>2026-08-04</td><td>상태별 캡처 3장 추가(로그인·실패·강제 비번변경 — localhost ?auth=1에서 실물 캡처), 연결 다이어그램의 강제변경 자리를 실제 캡처로 교체, 홈 썸네일 최신화</td></tr>
     <tr><td>v0.1</td><td>2026-07-30</td><td>최초 작성 — docs/QA-RULES.md의 "1. 기사 로그인" 항목을 흡수(연결·요소·QA·화이트라벨)</td></tr>
