@@ -359,6 +359,14 @@ export default function App() {
   const adminIds = () => profilesAll.filter((p) => p.role === "admin" && p.is_active !== false).map((p) => p.id);
   const engineerIds = () => profilesAll.filter((p) => p.role === "engineer" && p.is_active !== false).map((p) => p.id);
 
+  // 최고+중간관리자만(자재담당 제외) — 고장 흐름 관련 알림 중 관리자 등급을 좁혀 보내는 곳에서 쓴다.
+  const seniorAdminIds = () => profilesAll.filter((p) => p.role === "admin" && p.is_active !== false && p.admin_tier !== "material").map((p) => p.id);
+  // 그 현장의 상시 담당기사 profile id — 미배정 상태에서도 늘 알아야 하는 사람이라 failure.assignee와 별개로 구한다.
+  const siteEngineerId = (siteId) => {
+    const site = sites.find((s) => s.id === siteId);
+    return site?.assignedEngineer ? profileIdByName(profilesAll, site.assignedEngineer) : null;
+  };
+
   // 알림 발송 — 실패해도 앱 동작을 막지 않는다(알림은 부가 기능이라 조용히 넘어간다).
   function sendPush(key, profileIds, { title, body, url } = {}) {
     if (!profileIds?.length) return;
@@ -874,8 +882,9 @@ export default function App() {
     const where = `${first.siteName} · ${created.map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean).join(", ") || "호기 미상"}`;
     const what = parseErrorCode(first.errorCode).faultType;
     const more = created.length > 1 ? ` 외 ${created.length - 1}건` : "";
+    const engId = siteEngineerId(first.siteId);
 
-    sendPush("failure_reported", adminIds(), {
+    sendPush("failure_reported", [...new Set([...seniorAdminIds(), engId].filter(Boolean))], {
       title: `고장 접수 — ${what}`,
       body: `${where}${more}`,
       url: `/?openFailure=${first.id}`,
@@ -884,7 +893,8 @@ export default function App() {
       sendPush("failure_escalated", adminIds(), { title: "중대 고장 접수", body: `${where} — ${what}`, url: `/?openFailure=${first.id}` });
     }
     if (!first.assignee) {
-      sendPush("failure_unassigned", engineerIds(), {
+      // 해당현장 담당기사는 위 failure_reported로 이미 알림을 받았으니 여기서 또 안 보낸다.
+      sendPush("failure_unassigned", engineerIds().filter((id) => id !== engId), {
         title: "미배정 고장 — 먼저 잡는 사람이 담당",
         body: `${where} — ${what}`,
         url: `/?openFailure=${first.id}`,
