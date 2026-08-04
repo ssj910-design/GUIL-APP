@@ -142,10 +142,12 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   // 월 1회 점검이라 이번 달에 이미 등록 완료한 현장은 계획 목록에서 기본적으로 숨긴다
   // (다음 달이 되면 ym이 바뀌어 자동으로 다시 나타남). 월 2회 이상 도는 현장도 있어서
   // "점검완료현장 보기" 체크로 다시 볼 수 있게 해둔다.
+  // 로컬 등록(status: 완료)만 보고 숨기면 안 된다 — 공단 제출에 실패한 건(gov_result_code가
+  // "000"이 아니거나 아예 없음)은 재제출이 필요하므로 계획 목록에 계속 남아 있어야 한다.
   function isSiteDoneThisMonth(s) {
     const siteUnits = siteUnitList(s, units).filter((u) => u.id);
     if (siteUnits.length === 0) return false;
-    return siteUnits.every((u) => checksThisMonth.some((c) => c.unitId === u.id && c.status === "완료"));
+    return siteUnits.every((u) => checksThisMonth.some((c) => c.unitId === u.id && c.status === "완료" && c.govResultCode === "000"));
   }
   const planSites = scopedSites
     .filter((s) => !q || s.name.toLowerCase().includes(q) || (s.address ?? "").toLowerCase().includes(q))
