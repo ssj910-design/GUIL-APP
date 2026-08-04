@@ -1,0 +1,81 @@
+<!doctype html>
+<!--
+  ═══ 편집 규칙 — AI 포함, 이 문서를 고치는 누구든 따를 것 ═══
+  1. 의미가 바뀌는 수정은 버전(v0.x)을 올리고 "변경 이력" 표에 한 줄 추가한다.
+  2. 섹션의 기존 내용이 "변경·삭제"되면(단순 추가 말고) 그 섹션 끝에
+     <details class="history"><summary>이전 버전 (vX.X)</summary>예전 내용/요약</details>
+     으로 직전 버전을 남긴다. 직전 1개 버전만 인라인 보존 — 더 오래된 건 git 이력으로.
+  3. 이번 버전에서 바뀐 문구는 <mark class="changed">…</mark>로 표시하고,
+     다음 버전을 만들 때 이전 버전의 mark는 벗긴다.
+  4. 오타·문구 다듬기는 버전·이력 없이 바로 수정.
+  ※ 스크린샷은 실물이 진실 — 화면이 바뀌면 img/를 재캡처한다. (자재·견적은 localhost:3000/?as=engineer&name=김기사)
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>화면설계 — 자재·견적</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<main>
+  <nav class="docnav"><a href="../index.html" class="home">설계 허브</a><span class="sep">·</span><a href="../01-prd.html">01 PRD</a><span class="sep">·</span><a href="../02-userflow.html">02 유저플로우</a><span class="sep">·</span><a href="../03-sitemap.html">03 화면지도</a><span class="sep">·</span><a href="../04-snapshot.html">04 스냅샷</a><span class="sep">|</span><span class="sep" style="font-size:11px">화면설계</span><a href="login.html">로그인</a><a href="home-eng.html">홈(기사)</a><a href="home-adm.html">홈(관리자)</a><a href="failure.html">고장접수</a><a href="checkup.html">자체점검</a><a href="inspection.html">검사관리</a><a href="material.html" class="here">자재·견적</a></nav>
+  <h1>자재·견적 <span class="badge doing">v0.1</span></h1>
+  <p class="doc-meta">화면설계서 · 코드 <code>tabs/MaterialTab.jsx</code> · 돈 흐름의 시작점 (신청 → 지급 → 할일 → 비용청구) · <a href="../index.html">← 설계 허브</a></p>
+
+  <h2>1. 이 화면의 정체 — 돈 흐름의 입구</h2>
+  <ul>
+    <li>부품이 필요한 두 갈래: <b>자재 신청</b>(우리 재고에서 지급) / <b>견적 요청</b>(고객에게 견적서 보내 승인받는 유상 공사)</li>
+    <li>이후 체인: 자재담당관리자 지급 완료 → <b>할일 자동 생성</b>(교체 작업) → 작업 후 <b>비용청구</b> → 30일 초과 미청구는 관리자 대시보드에 경고. 할일·청구와 한 줄기의 데이터 흐름 — 이 체인이 이 서비스의 "서류 없는 회사" 실체</li>
+    <li>상비부품(기사 차량 재고) 보충 요청도 이 탭 — 지급 완료 시 수령 확인 알림</li>
+  </ul>
+
+  <h2>2. 하위 2탭</h2>
+  <div class="shot-row">
+    <div class="col">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <figure style="margin:0;flex:1;min-width:110px"><img class="shot" src="img/material-request.png" alt="자재 신청"><figcaption style="font-size:11px;color:var(--sub);text-align:center;margin-top:4px">자재 신청 (스텝폼 + 나의 현황)</figcaption></figure>
+        <figure style="margin:0;flex:1;min-width:110px"><img class="shot" src="img/material-quote.png" alt="견적 요청"><figcaption style="font-size:11px;color:var(--sub);text-align:center;margin-top:4px">견적 요청 (현장 담당자 연락처 포함)</figcaption></figure>
+      </div>
+    </div>
+    <div class="col">
+      <table>
+        <tr><th>탭</th><th>역할·핵심 규칙</th></tr>
+        <tr><td>자재 신청</td><td>스텝폼: 현장·호기·긴급도(일반/긴급) → 부품 → 제출. "지급 완료 처리 시 할 일 자동 생성" 안내가 폼에 명시. 아래에 나의 신청 현황·상비부품 현황</td></tr>
+        <tr><td>견적 요청</td><td>스텝폼: 현장·호기·<b>견적 담당자 전화번호</b> → 내용. 관리자가 견적서 작성 → 고객 메일 발송(콘솔 QuoteSendModal)</td></tr>
+      </table>
+      <p style="font-size:12px;color:var(--sub)">취소는 나의 현황에서 — 취소 시 관리자에게 알림(자재/견적 취소 알림 2종). 지급 전에만 가능.</p>
+    </div>
+  </div>
+
+  <h2>3. 필요 요소 (동작 전제)</h2>
+  <ul>
+    <li><code>supply_requests</code>·<code>quote_requests</code> — 신청·상태. v2 FK 병행</li>
+    <li>자재담당관리자(admin_tier=material) — 지급 처리 주체. 콘솔 아닌 모바일 관리자 모드 사용</li>
+    <li>견적 이메일: 네이버 SMTP (구일 계정 — 화이트라벨 분리 대상)</li>
+  </ul>
+
+  <h2>4. QA 체크포인트 — 2026-08-04 검증 (QA-RULES 7장)</h2>
+  <ol>
+    <li>✅ 지급완료 → 할일 자동 생성, "할일"과 "자재지급" 알림 중복 방지</li>
+    <li>✅ 신청→승인→지급→수령확인 각 단계 알림 (자재신청 들어옴·지급완료 등)</li>
+    <li>✅ 취소 시 관리자 알림 (지급 전만 취소 가능)</li>
+  </ol>
+
+  <h2>6. 화이트라벨 — 구일전용 → 타사 일반화</h2>
+  <table>
+    <tr><th>#</th><th>지금</th><th>어떻게</th></tr>
+    <tr><td>1</td><td>견적서 발송 메일 = 구일 네이버 SMTP (서버 환경변수)</td><td>테넌트별: 회사 메일 계정 등록(온보딩) or 중앙 발송 서비스(Resend 급). MULTITENANT-PLAN 5-3에서 <b>견적(고객 발송)만 회사별</b>로 가는 방향</td></tr>
+    <tr><td>2</td><td>견적서 양식의 회사 정보(상호·연락처 등)</td><td><code>tenants.*</code>에서 — 사업자등록증 수집(온보딩 1장)이 이 용도</td></tr>
+    <tr><td>3</td><td>부품 목록(lib/constants) — 구일 취급 부품 기준</td><td>테넌트별 부품 사전으로 (기본 목록 제공 + 회사가 추가)</td></tr>
+  </table>
+
+  <h2>변경 이력</h2>
+  <table>
+    <tr><th>버전</th><th>날짜</th><th>변경</th></tr>
+    <tr><td>v0.1</td><td>2026-08-04</td><td>최초 작성 — 돈 흐름 체인(신청→지급→할일→청구) 명시, QA-RULES 7장 반영, 부품 사전 테넌트화 포함</td></tr>
+  </table>
+</main>
+<footer>GUIL-APP 설계 문서 · docs/design/screens/material.html</footer>
+</body>
+</html>
