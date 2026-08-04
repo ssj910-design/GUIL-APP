@@ -9,7 +9,7 @@ import { Plus, Trash2, Paperclip, FileText, ShieldCheck, BadgeCheck, PhoneCall }
 import { supabase } from "@/lib/supabaseClient";
 import { mapUnit, mapSite } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, govDateToDashed, siteMatchesQuery, formatPhone, shortDate, realInstallPlace } from "@/lib/utils";
+import { addDays, govDateToDashed, siteMatchesQuery, formatPhone, shortDate, realInstallPlace, unitContractBadges } from "@/lib/utils";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -510,7 +510,7 @@ export default function SitesAdmin({ data, setData }) {
     setEditingUnits(false);
     setRenew(null);
     setSiteForm({
-      name: s.name, address: s.address ?? "", contractType: s.contractType ?? CONTRACT_TYPES[0],
+      name: s.name, address: s.address ?? "",
       notes: s.notes ?? "", officeNotes: s.officeNotes ?? "", assignedEngineer: s.assignedEngineer ?? "",
       phone: s.phone ?? "", fax: s.fax ?? "", email: s.email ?? "", accessInfo: s.accessInfo ?? "",
       contractDate: s.contractDate ?? "", contractEnd: s.contractEnd ?? "", maintenanceCost: s.maintenanceCost ?? "",
@@ -641,7 +641,7 @@ export default function SitesAdmin({ data, setData }) {
       await changeLead(siteForm.assignedEngineer);
     }
     await supabase.from("sites").update({
-      name: siteForm.name, address: siteForm.address, contract_type: siteForm.contractType, notes: siteForm.notes || null,
+      name: siteForm.name, address: siteForm.address, notes: siteForm.notes || null,
       phone: siteForm.phone || null, fax: siteForm.fax || null, email: siteForm.email || null,
       access_info: siteForm.accessInfo || null,
       ...(contractDateReady ? { contract_date: siteForm.contractDate || null } : {}),
@@ -853,7 +853,9 @@ export default function SitesAdmin({ data, setData }) {
           </div>
           <ul className="flex-1 overflow-y-auto">
             {filtered.map((s) => {
-              const cnt = units.filter((u) => u.siteId === s.id && u.isActive !== false).length;
+              const activeUnits = units.filter((u) => u.siteId === s.id && u.isActive !== false);
+              const cnt = activeUnits.length;
+              const contractBadges = unitContractBadges(activeUnits);
               const open = failures.filter((f) => f.siteId === s.id && f.status !== "완료").length;
               // 엑셀 검증 상태 띠 — red/yellow/green (083 미실행이거나 미검증이면 투명)
               const bandCls = s.verifyLevel === "red" ? "bg-red-400" : s.verifyLevel === "yellow" ? "bg-amber-400" : s.verifyLevel === "green" ? "bg-emerald-400" : "bg-transparent";
@@ -875,6 +877,9 @@ export default function SitesAdmin({ data, setData }) {
                       <p className={`font-bold text-sm flex items-center gap-1 ${s.isActive === false ? "text-slate-300 line-through" : ""}`}>
                         {s.name}
                         {s.verifiedAt && <BadgeCheck size={14} className="shrink-0 text-emerald-500" title="검증 인증완료" />}
+                        {contractBadges.map((b) => (
+                          <span key={b} className="text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-1.5 py-0.5">{b}</span>
+                        ))}
                         <span className="text-slate-400 font-semibold">· {cnt}대</span>
                       </p>
                       <span className="flex gap-1">
@@ -955,8 +960,7 @@ export default function SitesAdmin({ data, setData }) {
                       </div>
                     </div>
                     <div className="flex items-start justify-between mt-3">
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 flex-1 text-sm">
-                        <div><p className="text-xs font-bold text-slate-400 mb-1">계약구분</p><p className="font-semibold text-slate-800">{site.contractType || "-"}</p></div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1 text-sm">
                         <div><p className="text-xs font-bold text-slate-400 mb-1">보수료(VAT별도)</p><p className="font-semibold text-slate-800">{maintenanceCostReady ? (site.maintenanceCost != null ? Number(site.maintenanceCost).toLocaleString() + "원" : "-") : "마이그레이션 대기"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">계약일자</p><p className="font-semibold text-slate-800">{contractDateReady ? shortDate(site.contractDate) : "마이그레이션 대기"}</p></div>
                         <div><p className="text-xs font-bold text-slate-400 mb-1">계약종료일</p>
@@ -1040,12 +1044,7 @@ export default function SitesAdmin({ data, setData }) {
                       <div><p className="text-xs font-bold text-slate-500 mb-1">현장명</p><input className={inputCls} value={siteForm.name} onChange={(e) => setSiteForm({ ...siteForm, name: e.target.value })} /></div>
                       <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">주소</p><input className={inputCls} value={siteForm.address} onChange={(e) => setSiteForm({ ...siteForm, address: e.target.value })} /></div>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                      <div><p className="text-xs font-bold text-slate-500 mb-1">계약구분</p>
-                        <select className={inputCls} value={siteForm.contractType} onChange={(e) => setSiteForm({ ...siteForm, contractType: e.target.value })}>
-                          {CONTRACT_TYPES.map((t) => <option key={t}>{t}</option>)}
-                          {!CONTRACT_TYPES.includes(siteForm.contractType) && <option>{siteForm.contractType}</option>}
-                        </select></div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <div>
                         <p className="text-xs font-bold text-slate-500 mb-1">보수료(VAT별도){!maintenanceCostReady && " (마이그레이션 대기)"}</p>
                         <input className={inputCls} type="number" placeholder="원" disabled={!maintenanceCostReady} value={siteForm.maintenanceCost} onChange={(e) => setSiteForm({ ...siteForm, maintenanceCost: e.target.value })} />

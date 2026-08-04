@@ -1,6 +1,6 @@
 import React, { useState, useContext, useRef } from "react";
 import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Flame, Download, KeyRound, ChevronDown } from "lucide-react";
-import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, shortDate, recentFailuresBySite, siteMatchesQuery } from "@/lib/utils";
+import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, shortDate, recentFailuresBySite, siteMatchesQuery, unitContractBadges, unitBadgeLabel } from "@/lib/utils";
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
@@ -557,6 +557,9 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
                 <div className="flex items-baseline justify-between gap-2 py-2.5">
                   <p className="text-sm font-bold text-slate-800">
                     {u.unitNo}{realInstallPlace(u) ? ` · ${realInstallPlace(u)}` : ""} ({u.govNo || site.govElevatorNos?.[idx] || "승강기고유번호 미등록"})
+                    {unitBadgeLabel(u) && (
+                      <span className="ml-1.5 text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-1.5 py-0.5 align-middle">{unitBadgeLabel(u)}</span>
+                    )}
                   </p>
                   {site.emergencyPhone && (
                     <p className="text-xs font-semibold text-slate-500 shrink-0">비상통화장치 {site.emergencyPhone}</p>
@@ -720,6 +723,7 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
         {list.map((s) => {
           const insp = latestInspection(s.id);
           const openF = openFailures(s.id);
+          const contractBadges = unitContractBadges(siteUnitList(s, allUnits));
           return (
             <div
               key={s.id}
@@ -729,6 +733,9 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
               <div className="flex items-center justify-between gap-2 mb-1">
                 <p className={`font-bold text-sm ${s.isActive === false ? "text-slate-400 line-through" : "text-slate-800"}`}>{s.name} · {siteUnitList(s, allUnits).length}대</p>
                 <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                  {contractBadges.map((b) => (
+                    <span key={b} className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">{b}</span>
+                  ))}
                   {(recentFailuresMap.get(s.id)?.length ?? 0) >= 3 && (
                     <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">집중관리</span>
                   )}
