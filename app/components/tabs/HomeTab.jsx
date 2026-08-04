@@ -774,7 +774,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
                       {trappedCount > 0 && <span className="text-xs font-extrabold text-white bg-red-600 px-2 py-1 rounded-full">갇힘 {trappedCount}회</span>}
                       {support && <span className="text-xs font-extrabold text-amber-600 bg-amber-100 px-2 py-1 rounded-full">지원요청</span>}
                       {stopped && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">운행정지</span>}
-                      {count30d > 0 && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">{count30d}회 고장</span>}
+                      {count30d > 0 && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">고장 {count30d}회</span>}
                     </span>
                   </button>
                 );
