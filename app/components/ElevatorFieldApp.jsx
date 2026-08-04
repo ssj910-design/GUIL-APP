@@ -10,7 +10,6 @@ import { TODAY_STR } from "@/lib/constants";
 import { DutySwapNotice } from "@/app/components/DutyRoster";
 import { WorkCalendarSheet } from "@/app/components/WorkCalendarSheet";
 import { MyPage } from "@/app/components/MyPage";
-import { simulateSms } from "@/lib/sms";
 import { notify, enablePush, ensureNativeChannels, onPushNotificationOpened, onPushNotificationReceived } from "@/lib/push";
 import { Capacitor } from "@capacitor/core";
 import { ScreenHeader, BrandSplash } from "@/app/components/ui";
@@ -952,8 +951,8 @@ export default function App() {
     if (selfPid) {
       getPositionOnce().then((here) => { if (here) updateLastLocation(selfPid, here.lat, here.lng, "출동 출발"); });
     }
-    simulateSms(failure.reporterPhone, `구일엘리베이터입니다. 담당 기사가 약 ${etaMinutes}분 후 도착 예정입니다.`);
-    notifyFailure(`문자 발송 완료 · ${failure.reporterPhone || "신고자"}에게 도착예정시간 안내`);
+    // 신고자 안내문자는 아직 미구현(접수 폼의 발송 토글도 같은 이유로 숨김) — 되는 것처럼 안내하지 않는다.
+    notifyFailure(`출동 응답 완료 · 약 ${etaMinutes}분 후 도착 예정`);
   }
 
   // 도착 = 원터치. 버튼을 누른 그 순간을 도착 시각으로 기록한다.
