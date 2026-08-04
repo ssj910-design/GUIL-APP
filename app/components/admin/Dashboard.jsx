@@ -325,7 +325,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
             {criticalSites.map((s) => {
               const stopped = stoppedSiteIds.has(s.id);
               const support = supportSiteIds.has(s.id);
-              const trapped = entrapmentSiteIds.has(s.id);
+              const trappedCount = entrapmentSiteIds.get(s.id)?.length ?? 0;
               const recent = recentFailuresBySiteId.get(s.id) ?? [];
               const count30d = recent.length;
               const units = [...new Set(recent.map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean))];
@@ -341,7 +341,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
                     <p className="text-[11px] text-slate-400 truncate">{s.address}</p>
                   </div>
                   <span className="flex gap-1 shrink-0 ml-2">
-                    {trapped && <span className="text-xs font-extrabold text-white bg-red-600 px-2 py-1 rounded-full">갇힘</span>}
+                    {trappedCount > 0 && <span className="text-xs font-extrabold text-white bg-red-600 px-2 py-1 rounded-full">갇힘 {trappedCount}회</span>}
                     {support && <span className="text-xs font-extrabold text-amber-600 bg-amber-100 px-2 py-1 rounded-full">지원요청</span>}
                     {stopped && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">운행정지</span>}
                     {count30d > 0 && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">{count30d}회 고장</span>}
