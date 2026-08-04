@@ -1,0 +1,96 @@
+<!doctype html>
+<!--
+  ═══ 편집 규칙 — AI 포함, 이 문서를 고치는 누구든 따를 것 ═══
+  1. 의미가 바뀌는 수정은 버전(v0.x)을 올리고 "변경 이력" 표에 한 줄 추가한다.
+  2. 섹션의 기존 내용이 "변경·삭제"되면(단순 추가 말고) 그 섹션 끝에
+     <details class="history"><summary>이전 버전 (vX.X)</summary>예전 내용/요약</details>
+     으로 직전 버전을 남긴다. 직전 1개 버전만 인라인 보존 — 더 오래된 건 git 이력으로.
+  3. 이번 버전에서 바뀐 문구는 <mark class="changed">…</mark>로 표시하고,
+     다음 버전을 만들 때 이전 버전의 mark는 벗긴다.
+  4. 오타·문구 다듬기는 버전·이력 없이 바로 수정.
+  ※ 스크린샷은 실물이 진실 — 화면이 바뀌면 img/를 재캡처한다. (자체점검은 localhost:3000/?as=engineer&name=김기사)
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>화면설계 — 자체점검</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<main>
+  <nav class="docnav"><a href="../index.html" class="home">설계 허브</a><span class="sep">·</span><a href="../01-prd.html">01 PRD</a><span class="sep">·</span><a href="../02-userflow.html">02 유저플로우</a><span class="sep">·</span><a href="../03-sitemap.html">03 화면지도</a><span class="sep">·</span><a href="../04-snapshot.html">04 스냅샷</a><span class="sep">|</span><span class="sep" style="font-size:11px">화면설계</span><a href="login.html">로그인</a><a href="home-eng.html">홈(기사)</a><a href="home-adm.html">홈(관리자)</a><a href="failure.html">고장접수</a><a href="checkup.html" class="here">자체점검</a></nav>
+  <h1>자체점검 <span class="badge doing">v0.1</span></h1>
+  <p class="doc-meta">화면설계서 · 코드 <code>tabs/CheckupTab.jsx</code>(799줄) · 법정 월례 업무 + 승강기민원24 자동 제출 · <a href="../index.html">← 설계 허브</a></p>
+
+  <h2>1. 이 화면의 정체 — 법정 업무의 자동화</h2>
+  <ul>
+    <li>승강기는 <b>월 1회 자체점검 + 결과를 공단(승강기민원24)에 등록</b>이 법정 의무. 원래는 공단 웹에 일일이 수기 입력 — 이 화면이 그걸 <b>사내 기록과 공단 제출을 한 번에</b> 끝낸다 (서류 없는 회사 = PRD의 성공 기준과 직결)</li>
+    <li>월별 "출석부"(self_checks — 친구 재설계 2026-08 적용): 매월 활성 호기 전체에 1줄씩 생성, 완료·제출 여부를 채워감. 관리자 콘솔 "자체점검 현황"이 같은 데이터의 감독 화면</li>
+    <li>계약종료 현장 제외 (2026-08-04 확인 — ssj910 처리)</li>
+  </ul>
+
+  <h2>2. 하위 3탭</h2>
+  <div class="shot-row">
+    <div class="col">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <figure style="margin:0;flex:1;min-width:110px"><img class="shot" src="img/checkup-plan.png" alt="계획"><figcaption style="font-size:11px;color:var(--sub);text-align:center;margin-top:4px">계획 (내 진행률·대상 현장)</figcaption></figure>
+        <figure style="margin:0;flex:1;min-width:110px"><img class="shot" src="img/checkup-done.png" alt="처리"><figcaption style="font-size:11px;color:var(--sub);text-align:center;margin-top:4px">처리 (공단 제출 결과)</figcaption></figure>
+        <figure style="margin:0;flex:1;min-width:110px"><img class="shot" src="img/checkup-calendar.png" alt="달력"><figcaption style="font-size:11px;color:var(--sub);text-align:center;margin-top:4px">달력 (예정·공휴일)</figcaption></figure>
+      </div>
+    </div>
+    <div class="col">
+      <table>
+        <tr><th>탭</th><th>역할·핵심 규칙</th></tr>
+        <tr><td>계획</td><td>이번 달 내 담당현장 진행률(완료 n/n · 공단 제출 n). 현장 골라 점검 등록 진입</td></tr>
+        <tr><td>처리</td><td>등록 결과 조회 — 공단 제출 성공/실패·전송일시. 실패 건 재시도 진입점</td></tr>
+        <tr><td>달력</td><td>월 달력에 점검 예정 현장·공휴일 표시 — 일정 배분용</td></tr>
+      </table>
+      <p style="font-size:12px"><b>점검 등록 3스텝</b>: 점검 정보(일시·부점검자) → 점검 항목(184개 중 예외만 입력 — 나머지는 대상월 기준 자동 A/D/E) → 특이사항·사진·제출. 등록=제출 단일 액션 (실제 공단 화면과 동일 구성)</p>
+    </div>
+  </div>
+
+  <h2>3. 필요 요소 (동작 전제) — 이 화면이 제일 까다롭다</h2>
+  <ul>
+    <li>호기 <b>승강기고유번호</b>(govNo) — 센터 엑셀에서 옴. 없으면 제출 불가</li>
+    <li>본인 <b>민원24 점검자 ID</b>(profiles.minwon_id) + 연락처 — 인사관리에서 등록</li>
+    <li><b>부점검자</b> — 공단 규정상 점검자 2명 이상 (본인과 같은 ID 불가)</li>
+    <li>관리주체명·전화 — 현장 담당자 정보에서</li>
+    <li>회사 <b>민원24 공유플랫폼 인증키+암호화키</b> — 서버 환경변수 (테넌트별 필수 키, 온보딩 체크리스트 2장)</li>
+    <li>※ 이 전제들이 빠지면 <b>제출 직전에 알럿으로 "어디 가서 등록하라"까지 안내</b> — QA 검증 완료</li>
+  </ul>
+
+  <h2>4. QA 체크포인트 — 2026-08-04 검증 (QA-RULES 5장)</h2>
+  <ol>
+    <li>✅ 제출 전 필수값 가드 5종 (고유번호·민원24ID·연락처·부점검자·관리주체) — 안내 문구까지</li>
+    <li>✅ 사내 저장 → 공단 제출 순서. 제출 실패해도 사내 기록 보존, 처리 탭에서 결과코드 확인 + 본인에게 실패 푸시</li>
+    <li>✅ 184개 항목 자동 채움 (예외만 사람 입력)</li>
+    <li>✅ 계약종료 현장 제외</li>
+    <li>매월 출석부 생성이 <b>수동 버튼</b> (콘솔) — 잊으면 그 달 대상이 안 뜸. 월초 자동 생성 후보 (운영 메모, QA-RULES 8장)</li>
+  </ol>
+
+  <h2>5. 알려진 한계 (보류 중)</h2>
+  <ul>
+    <li>출석부 월초 자동 생성 미구현 — 수동 버튼 의존</li>
+    <li>공단 API 장애 시 재시도가 수동 (실패 알림은 감)</li>
+  </ul>
+
+  <h2>6. 화이트라벨 — 구일전용 → 타사 일반화</h2>
+  <p style="font-size:13px">이 화면이 <b>테넌트별 필수 키가 걸린 유일한 화면</b> — 화이트라벨의 최심부.</p>
+  <table>
+    <tr><th>#</th><th>지금 어디에 박혀 있나</th><th>어떻게 갈아끼우나</th></tr>
+    <tr><td>1</td><td><code>MINWON24_CERT_KEY/CRYPT_KEY</code> — 서버 환경변수에 구일 키</td><td><b>테넌트별 DB 암호화 저장</b>(업체 어드민에서 셀프 등록 — super-admin 설계 확정). 서버가 제출 시 tenant로 키 조회. 키는 유지관리업체 명의로만 발급되므로 고객사가 공단에 신청 (우리는 안내만)</td></tr>
+    <tr><td>2</td><td><code>COMPANY_UNIQUE_NO</code>에 <code>GUIL_</code> 접두어 하드코딩</td><td>테넌트 코드 접두어 (<code>tenants.code</code>)</td></tr>
+    <tr><td>3</td><td>184개 점검항목 코드표 — 전사 공통 상수</td><td><b>공유 자산 유지</b> — 공단 표준이라 회사 무관. 에러코드집과 같은 취급</td></tr>
+    <tr><td>4</td><td>민원24 연동 자체</td><td>한국 전용 — 기능 플래그. 끄면 사내 기록만 (해외/미신청 업체)</td></tr>
+  </table>
+
+  <h2>변경 이력</h2>
+  <table>
+    <tr><th>버전</th><th>날짜</th><th>변경</th></tr>
+    <tr><td>v0.1</td><td>2026-08-04</td><td>최초 작성 — 3탭 캡처, QA-RULES 5장 반영, 민원24 키 테넌트화(셀프 등록) 방향 명시</td></tr>
+  </table>
+</main>
+<footer>GUIL-APP 설계 문서 · docs/design/screens/checkup.html</footer>
+</body>
+</html>
