@@ -621,11 +621,11 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
 export function SiteTab({ inspections, failures, billings, quoteRequests, todos, siteManagers, onUpdateSiteNotes, onUpdateSiteAccessInfo }) {
   const allSites = useContext(SitesContext);
   const allUnits = useContext(UnitsContext);
-  const { name: CURRENT_ENGINEER } = useContext(AuthContext);
-  // 현장관리는 기사·관리자 모두 전체 현장을 볼 수 있다 — "내 현장만 보기"로 좁혀볼 수 있다.
+  const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
+  // 기사는 "내 현장만"이 기본(전체는 체크 해제로) — 관리자는 담당현장 개념이 없어 토글 없이 전체.
   const sites = allSites;
   const [query, setQuery] = useState("");
-  const [onlyMine, setOnlyMine] = useState(false);
+  const [onlyMine, setOnlyMine] = useState(role === "engineer");
   const [view, setView] = useState("list"); // list | site | elevator
   const [selectedSite, setSelectedSite] = useState(null);
   const [selectedUnit, setSelectedUnit] = useState(null);
@@ -702,10 +702,12 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
           />
         </div>
         <div className="flex items-center justify-between mt-2">
-          <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
-            <input type="checkbox" checked={onlyMine} onChange={(e) => setOnlyMine(e.target.checked)} />
-            내 현장만 보기
-          </label>
+          {role === "engineer" ? (
+            <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+              <input type="checkbox" checked={onlyMine} onChange={(e) => setOnlyMine(e.target.checked)} />
+              내 현장만 보기
+            </label>
+          ) : <span />}
           <p className="text-[11px] text-slate-400">총 {allSites.length}개 현장 중 {list.length}건 표시</p>
         </div>
       </div>
