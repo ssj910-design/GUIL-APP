@@ -103,6 +103,14 @@ Claude API(Haiku, 저비용) 1회 호출로 구조화 추출. `output_config.for
 //                 규격 SUS304, 2개, EA, 개당 6만원"
 // → { siteQuery: "태영하이빌", managerName: "김담당자", quoteTitle: "도어레일 교체건",
 //     itemName: "도어레일", spec: "SUS304", qty: 2, unit: "EA", unitPrice: 60000 }
+
+// 입력 예3(쉼표로 나열한 실사용 문장) —
+// "태영하이빌 김담당자 앞으로 도어레일 교체건 견적 보내줘,품명 도어레일,규격 op800,2ea,개당 5만원"
+// → { siteQuery: "태영하이빌", managerName: "김담당자", quoteTitle: "도어레일 교체건",
+//     itemName: "도어레일", spec: "op800", qty: 2, unit: "EA", unitPrice: 50000 }
+// "2ea"처럼 수량·단위가 붙어 있어도, 문장이 쉼표로 나열돼 있어도 문제 없다 — 정규식이 아니라
+// Claude가 의미로 뽑아내기 때문에 형식이 고정될 필요가 없다. 라벨(품명/규격 등)이 없어도,
+// 순서가 달라도 동작한다.
 ```
 
 파싱 결과에 `siteQuery`, `itemName`, `unitPrice`(0 초과) 중 하나라도 비어 있으면 즉시
@@ -174,7 +182,7 @@ import해서 호출**한다(불필요한 self-HTTP 호출 없음). 생성된 PDF
 ### 7. 텔레그램에 미리보기 전송
 
 Telegram Bot API `sendDocument`로 PDF 파일 자체를 전송(카톡처럼 링크가 아니라 파일로 바로 보임) +
-같은 메시지에 요약 캡션 + 인라인 키보드:
+같은 메시지에 요약 캡션 + 인라인 키보드(3버튼 — 발송/취소 외에 수신처를 수기로 고칠 수 있는 버튼 추가):
 
 ```js
 const managerNote = parsed.managerName && manager?.name !== parsed.managerName
@@ -185,24 +193,66 @@ await tg("sendDocument", {
   chat_id, document: pdfBuffer,
   caption: `${site.name}\n견적명: ${quoteTitle}\n품명: ${parsed.itemName}${parsed.spec ? ` (${parsed.spec})` : ""}\n` +
     `수량: ${parsed.qty || 1}${parsed.unit || "EA"} × ${parsed.unitPrice.toLocaleString()}원 = ${((parsed.qty || 1) * parsed.unitPrice).toLocaleString()}원\n` +
-    `수신: ${manager?.name ?? "담당자 정보 없음"} (${manager?.email ?? "-"})${managerNote}\n\n이대로 발송할까요?`,
-  reply_markup: { inline_keyboard: [[
-    { text: "✅ 발송", callback_data: `send:${draft.id}` },
-    { text: "❌ 취소", callback_data: `cancel:${draft.id}` },
-  ]] },
+    `수신: ${manager?.name ?? "담당자 정보 없음"} (${manager?.email ?? "이메일 없음"} / ${manager?.phone ?? "전화 없음"})${managerNote}\n\n이대로 발송할까요?`,
+  reply_markup: { inline_keyboard: [
+    [{ text: "✅ 발송", callback_data: `send:${draft.id}` }],
+    [{ text: "✏️ 수신처 수정", callback_data: `edit:${draft.id}` }, { text: "❌ 취소", callback_data: `cancel:${draft.id}` }],
+  ] },
 });
 ```
 
-### 8. 발송/취소 콜백 처리
+### 7.5. 수신처(이메일·전화번호) 수기 수정
+
+`site_managers`에 담당자 정보가 없거나 틀렸을 때, 자동 매칭 대신 관리자가 직접 이메일·전화번호를
+입력할 수 있게 한다. 별도 세션 테이블 없이, **텔레그램의 "답장(reply)" 기능**으로 어떤 초안에 대한
+답인지 구분한다 — Vercel 서버리스 함수는 요청 사이에 메모리를 유지하지 않으므로, 상태는 항상
+DB(또는 텔레그램 자체 메커니즘)에 있어야 한다.
+
+흐름:
+1. [✏️ 수신처 수정] 클릭 → `callback_data`(`edit:${draft.id}`)로 어떤 초안인지 이미 알고 있음.
+2. 봇이 `sendMessage`를 **`reply_markup: { force_reply: true }`** 로 보낸다 — 이러면 텔레그램 클라이언트가
+   자동으로 "이 메시지에 답장" 모드로 들어간다(사용자가 직접 스와이프해서 답장 지정할 필요 없음).
+   ```js
+   const prompt = await tg("sendMessage", {
+     chat_id, text: "이메일과 전화번호를 답장으로 보내주세요 (예: kim@site.com 010-1234-5678)",
+     reply_markup: { force_reply: true },
+   });
+   await supabase.from("quote_requests").update({ telegram_prompt_message_id: prompt.message_id }).eq("id", draft.id);
+   ```
+3. 관리자가 답장을 보내면, 그 메시지에는 텔레그램이 자동으로 `message.reply_to_message.message_id`를
+   붙여준다 — 이 값으로 어떤 초안에 대한 답인지 역추적한다(새 세션 없이, 이미 있는
+   `quote_requests` 행 하나에 컬럼 하나 추가한 것만으로 해결).
+   ```js
+   if (message.reply_to_message) {
+     const { data: draft } = await supabase.from("quote_requests")
+       .select("*").eq("telegram_prompt_message_id", message.reply_to_message.message_id).maybeSingle();
+     if (draft) return handleRecipientReply(draft, message.text, chatId);
+   }
+   ```
+4. 답장 텍스트에서 이메일·전화번호를 정규식으로 뽑는다(Claude API 호출 안 함 — 형식이 고정적이라
+   정규식이 더 빠르고 확실함): `/[\w.+-]+@[\w-]+\.[\w.-]+/`, `/01[0-9][-\s]?\d{3,4}[-\s]?\d{4}/`.
+   찾은 값만 `quote_requests.recipient_email`/`recipient_phone`에 반영(하나만 보내면 그것만 갱신,
+   기존 값은 유지).
+5. 갱신 후 §7과 같은 형식으로 요약을 다시 보여주고(PDF 재전송은 안 함 — 수신처는 PDF 내용이 아니라
+   발송 채널 정보라 PDF를 다시 만들 필요가 없다) [✅ 발송]/[✏️ 수신처 수정]/[❌ 취소] 버튼을 다시 단다.
+6. 이메일·전화번호를 둘 다 못 찾았으면 "이메일이나 전화번호를 알아볼 수 없었어요. 다시 답장해주세요"
+   하고 같은 `force_reply` 프롬프트를 다시 보낸다.
+
+### 8. 발송/취소/수정 콜백 처리
 
 `callback_query.data`를 `:`로 분리해 `action`, `quoteRequestId`를 얻는다. `quote_requests`를 다시
-조회해서 해당 건이 여전히 "요청접수" 상태인지 확인 후 처리(이중 클릭 방지).
+조회해서 해당 건이 여전히 유효한 상태인지 확인 후 처리(이중 클릭 방지).
 
 - `send:` → `lib/email.js`의 `sendQuoteEmail`, `lib/alimtalk.js`의 `sendQuoteAlimtalk`를 **직접 호출**
-  (site_managers 주담당자 정보로 수신처 자동 채움, `app/api/send-quote/route.js`의 채널별 독립 try/catch
-  패턴을 그대로 따름) → 성공한 채널만 `email_sent_at`/`kakao_sent_at` 기록 → 텔레그램에 결과 회신
-- `cancel:` → `MaterialsAdmin.jsx:596-619`와 동일 조건(상태="요청접수" AND requester_id/engineer 없음)일
-  때만 삭제 → "취소했습니다" 회신. 조건 안 맞으면(이미 다른 경로로 진행된 건) 삭제하지 않고 안내만.
+  (§4.5에서 정하고 §7.5에서 수정했을 수도 있는 수신처로, `app/api/send-quote/route.js`의 채널별 독립
+  try/catch 패턴을 그대로 따름) → 성공한 채널만 `email_sent_at`/`kakao_sent_at` 기록 → 텔레그램에 결과 회신
+- `edit:` → §7.5 흐름 시작(force_reply 프롬프트 전송)
+- `cancel:` → **주의**: 이 시점엔 §6에서 이미 PDF 생성이 끝나 `status`가 "견적발행"으로 바뀌어 있다
+  (`MaterialsAdmin.jsx`의 "요청접수 + 담당자 없음"과 같은 조건을 그대로 재사용하면 안 됨 — 그 조건은
+  절대 참이 될 수 없어서 취소 버튼이 아무것도 안 지우는 조용한 버그가 된다). 대신 **"아직 발송 안
+  됐음"**을 조건으로 쓴다: `email_sent_at IS NULL AND kakao_sent_at IS NULL`이고, 이 웹훅이 만든
+  초안이 맞는지 `id`가 `q-tg-`로 시작하는지까지 확인한 뒤에만 삭제 → "취소했습니다" 회신. 조건 안
+  맞으면(이미 발송된 건) 삭제하지 않고 안내만.
 
 ## 데이터 모델
 
@@ -211,10 +261,14 @@ await tg("sendDocument", {
 ```sql
 -- 101_telegram_admin_link_DRAFT.sql
 alter table public.profiles add column if not exists telegram_user_id bigint unique;
+alter table public.quote_requests add column if not exists telegram_prompt_message_id bigint;
 ```
 
-새 테이블은 만들지 않는다 — "전체 흐름"에서 설명했듯 봇 대화 상태를 별도로 저장하지 않고
-`quote_requests.id`를 콜백 식별자로 그대로 쓰기 때문.
+새 테이블은 만들지 않는다. 대화 상태는 두 가지 방식으로만 다룬다 — (1) 버튼 클릭은
+`callback_data`에 `quote_requests.id`를 실어 보내는 방식(§"핵심 설계 결정"), (2) §7.5의 수기 입력만
+예외적으로 텔레그램의 답장(reply) 스레딩 기능 + `quote_requests.telegram_prompt_message_id` 컬럼
+하나로 "어떤 초안에 대한 답장인지"를 추적한다. 둘 다 세션 테이블 없이 기존 행에 값을 싣거나
+텔레그램이 이미 제공하는 메커니즘을 쓰는 방식이라는 점은 동일하다.
 
 ## 보안
 
