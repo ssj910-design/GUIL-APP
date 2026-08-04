@@ -1096,11 +1096,20 @@ export default function App() {
           : x
       )
     );
-    // 지원요청·운행정지로 미배정 풀에 되돌린 건은 접수 때와 마찬가지로 기사 전원에게 알린다.
-    // 이게 없으면 지원이 필요한 건이 미배정으로 돌아가도 아무도 모른다. (P2-7)
+    const unit = formatUnitLabel(failure.elevatorNo);
+    if (isClosed) {
+      // 처리완료·오신고 — 최고+중간관리자와 그 현장 담당기사에게. 담당기사가 직접 처리한
+      // 본인 건이어도 "확인용"으로 그대로 보낸다(누가 처리했든 알아야 하는 관리 성격의 알림).
+      sendPush("failure_completed", [...new Set([...seniorAdminIds(), siteEngineerId(failure.siteId)].filter(Boolean))], {
+        title: `고장 처리완료 — ${result}`,
+        body: `${failure.siteName}${unit ? ` ${unit}` : ""}`,
+        url: `/?openFailure=${failure.id}`,
+      });
+    }
     if (isEscalation) {
-      const unit = formatUnitLabel(failure.elevatorNo);
-      sendPush("failure_unassigned", engineerIds(), {
+      // 처리 중 지원요청·운행정지로 바뀌면 관리자+기사 전원에게 — 미배정 풀로 되돌아간 급한
+      // 건이라 선착순으로 잡을 기사뿐 아니라 관리자도 즉시 알아야 한다. (기존엔 기사에게만 갔다.)
+      sendPush("failure_result_escalated", [...adminIds(), ...engineerIds()], {
         title: `${result} — 지원 필요 (미배정 복귀)`,
         body: `${failure.siteName}${unit ? ` ${unit}` : ""}`,
         url: `/?openFailure=${failure.id}`,
