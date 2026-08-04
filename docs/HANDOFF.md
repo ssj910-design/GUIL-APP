@@ -6,6 +6,19 @@
 
 ---
 
+## 🔴 대기 중 — DB 자동 백업 켜기 (차호근 → 친구, 2026-08-04, 5분 작업)
+
+> **실운영 DB에 지금 자동 백업이 없다.** 스크립트·스케줄러는 차호근 쪽 맥에 전부 세팅돼 있고
+> (매일 21:00 pg_dump → 로컬 14일 + iCloud 30일 이중 보관), **Supabase 접속 문자열 한 줄만 필요해.**
+
+1. Supabase 대시보드 → 구일 프로젝트 → **Connect** → **Session pooler** URI 복사
+   (`postgresql://postgres.xxxx:[비밀번호]@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres`)
+2. `[YOUR-PASSWORD]`를 실제 DB 비밀번호로 바꿔서 (모르면 같은 화면 Reset database password —
+   anon key와 무관해서 앱엔 영향 없음. 단 어딘가 DB 비번을 직접 쓰는 게 있으면 그것만 갱신)
+3. 차호근에게 전달 (직접 만나서/전화로 — 카톡 평문 지양) → 차호근이 `eleva/backups/.dbenv`에 넣고 시험 실행
+
+이게 되면: 사고 시 하루 전으로 복구 가능 + 나중에 구일→Eleva 이사 리허설 재료도 됨.
+
 ## 💬 UX 확인 요청 — 출근/근태 (차호근 → 친구, 2026-07-21)
 
 > 출근체크·근무종료·위치 기능을 만들면서 **차호근이 이해한 UX**가 맞는지 확인 부탁해.
