@@ -25,10 +25,19 @@ function LoadingDots() {
   return <span>{Array(n).fill("·").join(" ")}</span>;
 }
 
+// 자재담당관리자(adminTier "material")는 앱 전역에서 기사처럼 스코프된다(SiteTab 등에서
+// role이 "engineer"로 내려감 — ElevatorFieldApp.jsx의 scopedRole 참고). 다만 고장배정만은
+// 예외로 관리자와 동일하게 쓸 수 있어야 해서, 이 탭에서만 role을 다시 admin으로 올려본다.
+function useFailureRole() {
+  const { role, adminTier } = useContext(AuthContext);
+  return role === "admin" || adminTier === "material" ? "admin" : role;
+}
+
 function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported, onDispatch }) {
   const sites = useContext(SitesContext);
   const units = useContext(UnitsContext);
-  const { engineerNames, profiles: allProfiles, selfId, name: myName, role, engineers = [] } = useContext(AuthContext);
+  const { engineerNames, profiles: allProfiles, selfId, name: myName, engineers = [] } = useContext(AuthContext);
+  const role = useFailureRole();
   const v2Ready = units.length > 0;
   // 기사 본인이 접수하면 기본 배정 = 본인, 단 지금 처리 중(진행중 건 보유)이면 미배정으로
   const isBusy = (name) => failures.some((f) => f.assignee === name && f.status === "진행중");
@@ -413,7 +422,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
 
 
 export function FailureDetailSheet({ failure, failures = [], nested = false, onClose, onDispatch, onArrive, onOpenResult, onAssignOpen }) {
-  const { role } = useContext(AuthContext);
+  const role = useFailureRole();
   const sites = useContext(SitesContext);
   const units = useContext(UnitsContext);
   const site = sites.find((s) => s.id === failure.siteId);
@@ -1026,7 +1035,7 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
 function FailureResponseCard({ f, dist, history = [], site, onOpenDetail, onDispatch, onAssignOpen }) {
   const stage = failureStage(f);
   const { faultType, faultDetail } = parseErrorCode(f.errorCode);
-  const { role } = useContext(AuthContext);
+  const role = useFailureRole();
   const units = useContext(UnitsContext);
   const unitLabel = formatUnitLabel(f.elevatorNo);
   const contractBadge = unitBadgeLabel(units.find((u) => u.id === f.unitId));
@@ -1083,7 +1092,8 @@ function FailureResponseCard({ f, dist, history = [], site, onOpenDetail, onDisp
 
 function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult, onRefuse, onAssignOpen }) {
   const siteOf = useSiteOf();
-  const { name: me, role } = useContext(AuthContext);
+  const { name: me } = useContext(AuthContext);
+  const role = useFailureRole();
   const units = useContext(UnitsContext);
   const stage = failureStage(f);
   const { faultType, faultDetail } = parseErrorCode(f.errorCode);
@@ -1186,7 +1196,8 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
   const siteOf = useSiteOf();
   const units = useContext(UnitsContext);
   const stage = failureStage(f);
-  const { name: me, role } = useContext(AuthContext);
+  const { name: me } = useContext(AuthContext);
+  const role = useFailureRole();
   const unit = units.find((u) => u.id === f.unitId);
   const place = realInstallPlace(unit);
   const unitLabel = formatUnitLabel(f.elevatorNo) + (place ? `(${place})` : "");
@@ -1248,7 +1259,8 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [resultTarget, setResultTarget] = useState(null);
-  const { role, selfId, engineers = [] } = useContext(AuthContext);
+  const { selfId, engineers = [] } = useContext(AuthContext);
+  const role = useFailureRole();
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const selfLoc = engineers.find((e) => e.id === selfId);
@@ -1473,7 +1485,8 @@ function FailureStatusCard({ f, onOpenDetail, onReassign, canReassign }) {
 }
 
 function FailureStatusOverview({ failures, onReassign, attendances = [], todayLeaves = [] }) {
-  const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
+  const { name: CURRENT_ENGINEER } = useContext(AuthContext);
+  const role = useFailureRole();
   const [detailTarget, setDetailTarget] = useState(null);
   const [reassignTarget, setReassignTarget] = useState(null);
   const [filter, setFilter] = useState("all"); // all · 미처리(미배정) · 진행중 · 완료
