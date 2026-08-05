@@ -9,7 +9,7 @@ import { Plus, Trash2, Paperclip, FileText, ShieldCheck, BadgeCheck, PhoneCall }
 import { supabase } from "@/lib/supabaseClient";
 import { mapUnit, mapSite } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, govDateToDashed, siteMatchesQuery, formatPhone, shortDate, realInstallPlace, unitContractBadges } from "@/lib/utils";
+import { addDays, govDateToDashed, siteMatchesQuery, siteMatchReasons, formatPhone, shortDate, realInstallPlace, unitContractBadges } from "@/lib/utils";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -858,6 +858,10 @@ export default function SitesAdmin({ data, setData }) {
               const cnt = activeUnits.length;
               const contractBadges = unitContractBadges(activeUnits);
               const open = failures.filter((f) => f.siteId === s.id && f.status !== "완료").length;
+              // 검색어와 일치한 필드 — 현장명·주소 자체는 카드에 이미 보이니 표시에서 뺀다.
+              const matchReasons = search.trim()
+                ? siteMatchReasons(s, search, { units, siteManagers }).filter((r) => r !== "현장명" && r !== "주소")
+                : [];
               // 엑셀 검증 상태 띠 — red/yellow/green (083 미실행이거나 미검증이면 투명)
               const bandCls = s.verifyLevel === "red" ? "bg-red-400" : s.verifyLevel === "yellow" ? "bg-amber-400" : s.verifyLevel === "green" ? "bg-emerald-400" : "bg-transparent";
               return (
@@ -892,6 +896,9 @@ export default function SitesAdmin({ data, setData }) {
                       </span>
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5">{s.address}</p>
+                    {matchReasons.length > 0 && (
+                      <p className="text-[10px] text-blue-600 font-semibold mt-0.5">일치: {matchReasons.join(", ")}</p>
+                    )}
                   </button>
                 </li>
               );
