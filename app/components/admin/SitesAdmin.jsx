@@ -666,22 +666,35 @@ export default function SitesAdmin({ data, setData }) {
 
   // 호기 상세정보 모달의 "정보" 탭 저장 — 표(UnitRow)와는 별개 필드 집합(승강기번호·종류·형식·
   // 제조업체·설치일자·운행구간·적재하중·정원·정격속도·보험)이라 saveUnit과 분리해서 관리한다.
+  // 바뀐 필드만 patch에 넣는다 — 특히 gov_no는 유니크 제약이라, 안 건드린 항목까지
+  // 매번 통째로 재저장하면(예전 방식) 다른 호기와 겹치는 기존 값 때문에 무관한 필드
+  // 하나만 고쳐도 "duplicate key" 에러로 저장 자체가 막히는 문제가 있었다.
   async function saveUnitDetail(unit, form) {
     const numOrNull = (v) => (v === "" || v == null ? null : Number(v));
-    const patch = {
-      install_place: form.installPlace?.trim() || null, gov_no: form.govNo || null, kind: form.kind || null, form: form.form || null,
-      model: form.model || null, manufacturer: form.manufacturer || null, install_date: form.installDate || null,
-      run_section: form.runSection || null, load_kg: numOrNull(form.loadKg), capacity_persons: numOrNull(form.capacityPersons),
-      rated_speed: numOrNull(form.ratedSpeed), insurer: form.insurer || null, insurance_end: form.insuranceEnd || null,
+    const fieldMap = {
+      installPlace: ["install_place", form.installPlace?.trim() || null, unit.installPlace ?? null],
+      govNo: ["gov_no", form.govNo || null, unit.govNo ?? null],
+      kind: ["kind", form.kind || null, unit.kind ?? null],
+      form: ["form", form.form || null, unit.form ?? null],
+      model: ["model", form.model || null, unit.model ?? null],
+      manufacturer: ["manufacturer", form.manufacturer || null, unit.manufacturer ?? null],
+      installDate: ["install_date", form.installDate || null, unit.installDate ?? null],
+      runSection: ["run_section", form.runSection || null, unit.runSection ?? null],
+      loadKg: ["load_kg", numOrNull(form.loadKg), unit.loadKg ?? null],
+      capacityPersons: ["capacity_persons", numOrNull(form.capacityPersons), unit.capacityPersons ?? null],
+      ratedSpeed: ["rated_speed", numOrNull(form.ratedSpeed), unit.ratedSpeed ?? null],
+      insurer: ["insurer", form.insurer || null, unit.insurer ?? null],
+      insuranceEnd: ["insurance_end", form.insuranceEnd || null, unit.insuranceEnd ?? null],
     };
+    const patch = {};
+    const localPatch = {};
+    for (const [key, [dbCol, next, current]] of Object.entries(fieldMap)) {
+      if (String(next ?? "") !== String(current ?? "")) { patch[dbCol] = next; localPatch[key] = next; }
+    }
+    if (!Object.keys(patch).length) return;
     const { error } = await supabase.from("units").update(patch).eq("id", unit.id);
     if (error) { alert("저장 실패: " + error.message); return; }
-    const nextUnits = units.map((u) => (u.id === unit.id ? {
-      ...u, installPlace: form.installPlace?.trim() || null, govNo: form.govNo || null, kind: form.kind || null, form: form.form || null,
-      model: form.model || null, manufacturer: form.manufacturer || null, installDate: form.installDate || null,
-      runSection: form.runSection || null, loadKg: numOrNull(form.loadKg), capacityPersons: numOrNull(form.capacityPersons),
-      ratedSpeed: numOrNull(form.ratedSpeed), insurer: form.insurer || null, insuranceEnd: form.insuranceEnd || null,
-    } : u));
+    const nextUnits = units.map((u) => (u.id === unit.id ? { ...u, ...localPatch } : u));
     setData((prev) => ({ ...prev, units: nextUnits }));
     await syncLegacy(unit.siteId, nextUnits); // model·govNo가 legacy site 컬럼(elevator_model·gov_elevator_nos)에도 반영돼야 함
   }

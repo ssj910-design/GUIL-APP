@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { Modal } from "@/app/components/admin/adminShared";
 import { useQuoteRecipientFields, QuoteRecipientInfo, QuoteRecipientExtras } from "@/app/components/admin/QuoteRecipientFields";
+import { quoteGrandTotal } from "@/lib/utils";
 
 export default function QuoteSendModal({ quote, site, siteManagers, profiles, onClose, onSaved }) {
   const rf = useQuoteRecipientFields(quote, siteManagers, profiles);
@@ -41,6 +42,7 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
           quoteTitle: quote.quoteTitle,
           quoteDate: quote.quoteIssuedDate,
           pdfUrl: quote.quotePdfUrl,
+          totalAmount: quoteGrandTotal(quote.quoteItems, quote.transportCost, quote.safetyCost, quote.profit),
         },
       }),
     })

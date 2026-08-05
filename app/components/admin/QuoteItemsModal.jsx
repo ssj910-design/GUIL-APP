@@ -21,6 +21,7 @@ import { useState, useEffect } from "react";
 import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
+import { quoteGrandTotal } from "@/lib/utils";
 import { Modal, inputCls, PhotoGrid } from "@/app/components/admin/adminShared";
 import { COMPANY } from "@/lib/company";
 import { useQuoteRecipientFields, QuoteRecipientInfo, QuoteRecipientExtras } from "@/app/components/admin/QuoteRecipientFields";
@@ -102,7 +103,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
 
   const itemsSubtotal = items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.unitPrice || 0), 0);
   const subtotal = itemsSubtotal + Number(transportCost || 0) + Number(safetyCost || 0) + Number(profit || 0);
-  const grandTotal = Math.floor(subtotal / 1000) * 1000;
+  const grandTotal = quoteGrandTotal(items, transportCost, safetyCost, profit);
   const finalAmount = subtotal - discountAmount;
 
   // 오른쪽 미리보기 카드용 — 자재비/인건비 구분 없이 하나로 합치고, 운반비/안전관리비/이윤은
@@ -209,6 +210,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
             quoteTitle,
             quoteDate,
             pdfUrl: pdfRes.url,
+            totalAmount: grandTotal,
           },
         }),
       })
