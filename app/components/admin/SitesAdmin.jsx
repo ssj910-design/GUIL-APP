@@ -13,7 +13,7 @@ import { addDays, govDateToDashed, siteMatchesQuery, siteMatchReasons, formatPho
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
-import { Modal, StatusBadge, DateTextInput, EditableDate, FileCarousel, sentHistory } from "@/app/components/admin/adminShared";
+import { Modal, StatusBadge, DateTextInput, EditableDate, FileCarousel, sentHistory, Highlight } from "@/app/components/admin/adminShared";
 import ImportSites from "@/app/components/admin/ImportSites";
 import VerifyImport from "@/app/components/admin/VerifyImport";
 import ImportEmergencyPhones from "@/app/components/admin/ImportEmergencyPhones";
@@ -963,8 +963,8 @@ export default function SitesAdmin({ data, setData }) {
                     </div>
                     <div className="flex items-start justify-between">
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 flex-1 text-sm">
-                        <div><p className="text-xs font-bold text-slate-400 mb-1">현장명</p><p className="font-semibold text-slate-800">{site.name}</p></div>
-                        <div className="col-span-2"><p className="text-xs font-bold text-slate-400 mb-1">주소</p><p className="font-semibold text-slate-800">{site.address || "-"}</p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">현장명</p><p className="font-semibold text-slate-800"><Highlight text={site.name} query={search} /></p></div>
+                        <div className="col-span-2"><p className="text-xs font-bold text-slate-400 mb-1">주소</p><p className="font-semibold text-slate-800"><Highlight text={site.address} query={search} /></p></div>
                       </div>
                     </div>
                     <div className="flex items-start justify-between mt-3">
@@ -987,13 +987,13 @@ export default function SitesAdmin({ data, setData }) {
                     </div>
                     <div className="flex items-start justify-between mt-3">
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 flex-1 text-sm">
-                        <div><p className="text-xs font-bold text-slate-400 mb-1">전화번호</p><p className="font-semibold text-slate-800">{site.phone || "-"}</p></div>
-                        <div><p className="text-xs font-bold text-slate-400 mb-1">팩스</p><p className="font-semibold text-slate-800">{site.fax || "-"}</p></div>
-                        <div><p className="text-xs font-bold text-slate-400 mb-1">이메일</p><p className="font-semibold text-slate-800">{site.email || "-"}</p></div>
-                        <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">출입 정보(비번·열쇠)</p><p className="font-semibold text-slate-700 whitespace-pre-wrap">{site.accessInfo || "-"}</p></div>
-                        <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(현장직 참고사항)</p><p className="text-slate-700 whitespace-pre-wrap">{site.notes || "-"}</p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">전화번호</p><p className="font-semibold text-slate-800"><Highlight text={site.phone} query={search} /></p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">팩스</p><p className="font-semibold text-slate-800"><Highlight text={site.fax} query={search} /></p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">이메일</p><p className="font-semibold text-slate-800"><Highlight text={site.email} query={search} /></p></div>
+                        <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">출입 정보(비번·열쇠)</p><p className="font-semibold text-slate-700 whitespace-pre-wrap"><Highlight text={site.accessInfo} query={search} /></p></div>
+                        <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(현장직 참고사항)</p><p className="text-slate-700 whitespace-pre-wrap"><Highlight text={site.notes} query={search} /></p></div>
                         {officeNotesReady && (
-                          <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(사무직 참고사항)</p><p className="text-slate-700 whitespace-pre-wrap">{site.officeNotes || "-"}</p></div>
+                          <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(사무직 참고사항)</p><p className="text-slate-700 whitespace-pre-wrap"><Highlight text={site.officeNotes} query={search} /></p></div>
                         )}
                       </div>
                     </div>
@@ -1157,10 +1157,10 @@ export default function SitesAdmin({ data, setData }) {
                           {/* 대표로 지정된 담당자가 없으면 맨 위(첫 번째) 담당자를 기본값으로 표시 */}
                           <td className="pl-4 py-2 w-8 text-center">{(c.isPrimary || (!contacts.some((x) => x.isPrimary) && c.id === contacts[0]?.id)) && <span className="text-amber-500">★</span>}</td>
                           <td className="px-2 py-2">{c.role}</td>
-                          <td className="px-2 py-2">{c.name || "-"}</td>
-                          <td className="px-2 py-2">{c.phone || "-"}</td>
-                          <td className="px-2 py-2">{c.email || "-"}</td>
-                          <td className="px-2 py-2">{c.fax || "-"}</td>
+                          <td className="px-2 py-2"><Highlight text={c.name} query={search} /></td>
+                          <td className="px-2 py-2"><Highlight text={c.phone} query={search} /></td>
+                          <td className="px-2 py-2"><Highlight text={c.email} query={search} /></td>
+                          <td className="px-2 py-2"><Highlight text={c.fax} query={search} /></td>
                         </tr>
                       ))}
                     </tbody>

@@ -23,6 +23,24 @@ export function locOf(data, unitId, fallbackSiteName, fallbackLabel) {
   return `${s?.name ?? fallbackSiteName ?? "-"} · ${u.unitNo}`;
 }
 
+// 검색어와 일치하는 부분을 강조 표시 — 현장정보 검색 결과에서 실제로 어디가 일치했는지
+// 텍스트 안에 바로 보여주는 용도(siteMatchReasons가 "어떤 필드가" 맞았는지 알려준다면, 이건
+// "그 필드의 어느 글자가" 맞았는지 보여준다). query가 비어 있으면 원문(또는 "-") 그대로.
+export function Highlight({ text, query }) {
+  const t = text == null ? "" : String(text);
+  const q = (query ?? "").trim();
+  if (!t) return "-";
+  if (!q) return t;
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = t.split(new RegExp(`(${escaped})`, "gi"));
+  if (parts.length === 1) return t;
+  return parts.map((part, i) =>
+    part.toLowerCase() === q.toLowerCase()
+      ? <mark key={i} className="bg-blue-200 text-blue-900 rounded px-0.5">{part}</mark>
+      : part
+  );
+}
+
 // 현장명만: unitId → 현장명, 없으면 옛 텍스트
 export function siteOf(data, unitId, fallbackSiteName) {
   const u = data.units.find((x) => x.id === unitId);
