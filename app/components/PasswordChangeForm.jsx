@@ -2,7 +2,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 // 비밀번호 변경 폼 — 마이페이지(설정)와 첫 로그인 강제변경 화면이 공용으로 쓴다.
-// 규칙(DB change_password 함수와 동일): 6자 이상, 숫자만, 같은 숫자·뻔한 것 금지.
+// 규칙(DB change_password 함수와 동일): 6자 이상, 문자+숫자 조합 필수, 같은 글자·뻔한 것 금지.
 export function PasswordChangeForm({ profileId, onDone, submitLabel = "비밀번호 변경" }) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -27,9 +27,9 @@ export function PasswordChangeForm({ profileId, onDone, submitLabel = "비밀번
 
   return (
     <div className="space-y-2.5">
-      <input type="password" inputMode="numeric" className={inputCls} placeholder="현재 비밀번호" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" />
-      <input type="password" inputMode="numeric" className={inputCls} placeholder="새 비밀번호 (숫자 6자 이상)" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
-      <input type="password" inputMode="numeric" className={inputCls} placeholder="새 비밀번호 확인" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password"
+      <input type="password" className={inputCls} placeholder="현재 비밀번호" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" />
+      <input type="password" className={inputCls} placeholder="새 비밀번호 (문자+숫자 조합, 6자 이상)" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
+      <input type="password" className={inputCls} placeholder="새 비밀번호 확인" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password"
         onKeyDown={(e) => e.key === "Enter" && submit()} />
       {err && <p className="text-xs text-red-500">{err}</p>}
       <button

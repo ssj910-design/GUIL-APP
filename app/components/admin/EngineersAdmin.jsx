@@ -367,6 +367,11 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
     const loginId = adminForm.loginId.trim();
     const existingId = adminForm.existingId || null;
     if (!name || !loginId) { alert("이름과 로그인 아이디를 입력해주세요."); return; }
+    // 문자+숫자 조합 필수 — 비밀번호 규칙과 동일한 방침(숫자만은 더 이상 허용 안 함).
+    if (!/^[a-zA-Z0-9]+$/.test(loginId) || !/[a-zA-Z]/.test(loginId) || !/[0-9]/.test(loginId)) {
+      alert("로그인 아이디는 문자와 숫자를 조합해 입력해주세요.");
+      return;
+    }
     if (!existingId && profiles.some((p) => p.name === name)) { alert("같은 이름의 직원/관리자가 이미 있습니다."); return; }
     if (profiles.some((p) => p.login_id === loginId && p.id !== existingId)) { alert("이미 쓰는 로그인 아이디입니다."); return; }
     setAddingAdmin(true);
@@ -563,7 +568,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
                 onChange={(e) => setAdminForm({ ...adminForm, name: e.target.value })} />
             </div>
             <div>
-              <p className="text-[11px] font-bold text-slate-500 mb-1">로그인 아이디</p>
+              <p className="text-[11px] font-bold text-slate-500 mb-1">로그인 아이디 (문자+숫자 조합)</p>
               <input className={inputCls} placeholder="예: manager2" value={adminForm.loginId} onChange={(e) => setAdminForm({ ...adminForm, loginId: e.target.value })} autoCapitalize="none" />
             </div>
             <div>
