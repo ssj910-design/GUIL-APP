@@ -61,7 +61,7 @@ scp -i /path/to/your-key.key relay-server/server.js ubuntu@<인스턴스_PUBLIC_
 
 ```bash
 cd ~/alimtalk-relay
-export RELAY_SECRET="3968146a339b178c97c1243f458b1b3f5fefc0aa9610c230ee20510e57faec5c"
+export RELAY_SECRET="<시크릿 — openssl rand -hex 32 로 새로 생성해서 양쪽에 동일하게 (저장소에 적지 말 것)>"
 pm2 start server.js --name alimtalk-relay
 pm2 save
 pm2 startup   # 화면에 나오는 명령어를 그대로 한 번 더 복붙 실행 (재부팅 시 자동시작 등록)
@@ -71,7 +71,7 @@ pm2 startup   # 화면에 나오는 명령어를 그대로 한 번 더 복붙 �
 매번 접속할 때마다 `export`하기 번거로우면 pm2에 환경변수로 등록해도 된다:
 
 ```bash
-pm2 start server.js --name alimtalk-relay --env RELAY_SECRET=3968146a339b178c97c1243f458b1b3f5fefc0aa9610c230ee20510e57faec5c
+pm2 start server.js --name alimtalk-relay --env RELAY_SECRET=<시크릿 — openssl rand -hex 32 로 새로 생성해서 양쪽에 동일하게 (저장소에 적지 말 것)>
 ```
 
 ## 5. 방화벽(우분투 자체) 확인
@@ -89,7 +89,7 @@ sudo ufw status
 
 ```bash
 curl -X POST http://<인스턴스_PUBLIC_IP>:3001/send \
-  -H "X-Relay-Secret: 3968146a339b178c97c1243f458b1b3f5fefc0aa9610c230ee20510e57faec5c" \
+  -H "X-Relay-Secret: <시크릿 — openssl rand -hex 32 로 새로 생성해서 양쪽에 동일하게 (저장소에 적지 말 것)>" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "test=1"
 ```
@@ -104,7 +104,7 @@ curl -X POST http://<인스턴스_PUBLIC_IP>:3001/send \
 ## 8. Vercel 환경변수 추가
 
 - `ALIMTALK_RELAY_URL` = `http://<인스턴스_PUBLIC_IP>:3001`
-- `ALIMTALK_RELAY_SECRET` = `3968146a339b178c97c1243f458b1b3f5fefc0aa9610c230ee20510e57faec5c`
+- `ALIMTALK_RELAY_SECRET` = `<시크릿 — openssl rand -hex 32 로 새로 생성해서 양쪽에 동일하게 (저장소에 적지 말 것)>`
 
 두 값 다 Production 환경에 추가하고 재배포.
 
