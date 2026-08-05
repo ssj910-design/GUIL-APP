@@ -591,6 +591,17 @@ export default function SitesAdmin({ data, setData }) {
     setAddingSite(false);
     setSearch("");
     select(mapped);
+    // 새 현장은 좌표가 없어 티맵·카카오맵 연동 아이콘이 안 뜬다 — 지오코딩 배치를 바로 한 번
+    // 돌려서 이 현장(+밀린 다른 현장 몇 개)의 좌표를 채운다. 실패해도 조용히 넘어가고
+    // (나중에 배치가 다시 돌면 채워짐), UI 흐름을 막지 않는다.
+    fetch("/api/geocode-sites?limit=5")
+      .then(() => supabase.from("sites").select("lat, lng").eq("id", id).maybeSingle())
+      .then(({ data: geo }) => {
+        if (geo?.lat != null) {
+          setData((prev) => ({ ...prev, sites: prev.sites.map((s) => (s.id === id ? { ...s, lat: geo.lat, lng: geo.lng } : s)) }));
+        }
+      })
+      .catch(() => {});
   }
 
   // 재계약 확정 — 새 기간 저장 + 계약종료 상태였다면 복구
