@@ -13,7 +13,7 @@ import { addDays, govDateToDashed, siteMatchesQuery, siteMatchReasons, formatPho
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
-import { Modal, StatusBadge, DateTextInput, EditableDate, FileCarousel, sentHistory, Highlight } from "@/app/components/admin/adminShared";
+import { Modal, StatusBadge, DateTextInput, FileCarousel, sentHistory, Highlight } from "@/app/components/admin/adminShared";
 import ImportSites from "@/app/components/admin/ImportSites";
 import VerifyImport from "@/app/components/admin/VerifyImport";
 import ImportEmergencyPhones from "@/app/components/admin/ImportEmergencyPhones";
@@ -167,9 +167,21 @@ function legacySiteFields(siteUnits) {
 }
 
 // 호기 상세정보 — 승강기정보(국가승강기정보센터 연동)/고장내역/검사내역/부품교체내역/견적내역
-function UnitDetailModal({ unit, site, failures, inspections, billings, quoteRequests, onClose }) {
+function UnitDetailModal({ unit, site, failures, inspections, billings, quoteRequests, onClose, onSave }) {
   const [tab, setTab] = useState("정보");
   const [failTarget, setFailTarget] = useState(null);
+  // 정보 탭 — 건물명·호기 빼고는 여기서 직접 수정한다(승강기고유번호·설치일자는 표에서
+  // 뺐으므로 여기가 유일한 수정 경로). 국가승강기정보센터 실시간 데이터가 있는 항목도
+  // 자체 데이터가 우선 — 엑셀 일괄등록으로 들어온 값을 사람이 여기서 손볼 수 있어야 한다.
+  const [editForm, setEditForm] = useState({
+    govNo: unit.govNo ?? "", kind: unit.kind ?? "", form: unit.form ?? "", model: unit.model ?? "",
+    manufacturer: unit.manufacturer ?? "", installDate: unit.installDate ?? "", runSection: unit.runSection ?? "",
+    loadKg: unit.loadKg ?? "", capacityPersons: unit.capacityPersons ?? "", ratedSpeed: unit.ratedSpeed ?? "",
+    insurer: unit.insurer ?? "", insuranceEnd: unit.insuranceEnd ?? "",
+  });
+  const [savingDetail, setSavingDetail] = useState(false);
+  const detailKeys = ["govNo", "kind", "form", "model", "manufacturer", "installDate", "runSection", "loadKg", "capacityPersons", "ratedSpeed", "insurer", "insuranceEnd"];
+  const detailDirty = detailKeys.some((k) => String(editForm[k] ?? "") !== String(unit[k] ?? ""));
   // units.gov_no가 아직 안 채워진 호기가 있다(마이그레이션 진행 중) — 그런 경우
   // 모바일 앱과 동일하게 sites의 옛 컬럼(gov_elevator_nos)에서 찾아 폴백한다.
   // 편집·저장은 아니라 조회 전용이라 v2 네이티브 원칙과 충돌하지 않는다.
@@ -193,23 +205,6 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
     .filter((q) => (q.unitId ? q.unitId === unit.id : q.siteId === site.id))
     .sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate));
 
-  // 모바일 앱 "승강기정보 - 정보" 탭과 동일한 항목·순서.
-  const infoRows = [
-    ["건물명", site.name],
-    ["호기", unit.unitNo],
-    ["승강기번호", liveInfo?.govElevatorNo || unitGovNo || "미등록"],
-    ["승강기종류", unit.kind || "-"],
-    ["승강기형식", unit.form || "-"],
-    ["승강기모델", unit.model || "-"],
-    ["제조업체", unit.manufacturer || "-"],
-    ["설치일자", unit.installDate || "-"],
-    ["운행구간", unit.runSection || "-"],
-    ["적재하중", unit.loadKg ? `${unit.loadKg}kg` : "-"],
-    ["정원", unit.capacityPersons ? `${unit.capacityPersons}인승` : "-"],
-    ["정격속도", unit.ratedSpeed ? `${unit.ratedSpeed}m/s` : "-"],
-    ["보험", unit.insurer ? `${unit.insurer} (~${unit.insuranceEnd ?? "?"})` : "-"],
-  ];
-
   return (
     <Modal title={`${site.name} · ${unit.unitNo} 상세정보`} onClose={onClose} wide>
       <div className="flex gap-1 mb-4 border-b border-slate-100 shrink-0">
@@ -224,13 +219,57 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
       <div className="h-[26rem] overflow-y-auto">
         {tab === "정보" && (
           <div className="space-y-2 text-sm">
-            {infoRows.map(([label, value]) => (
-              <div key={label} className="flex justify-between border-b border-slate-50 pb-2">
-                <span className="text-slate-400">{label}</span>
-                <span className="font-semibold text-slate-800">{value}</span>
+            <div className="flex justify-between border-b border-slate-50 pb-2">
+              <span className="text-slate-400">건물명</span>
+              <span className="font-semibold text-slate-800">{site.name}</span>
+            </div>
+            <div className="flex justify-between border-b border-slate-50 pb-2">
+              <span className="text-slate-400">호기</span>
+              <span className="font-semibold text-slate-800">{unit.unitNo}</span>
+            </div>
+            {[
+              ["승강기번호", "govNo"], ["승강기종류", "kind"], ["승강기형식", "form"],
+              ["승강기모델", "model"], ["제조업체", "manufacturer"], ["운행구간", "runSection"],
+            ].map(([label, key]) => (
+              <div key={key} className="flex items-center justify-between border-b border-slate-50 pb-2 gap-3">
+                <span className="text-slate-400 shrink-0">{label}</span>
+                <input className={inputCls + " text-right"} value={editForm[key]} onChange={(e) => setEditForm({ ...editForm, [key]: e.target.value })} />
               </div>
             ))}
-            {liveInfo && <p className="text-[10px] text-slate-400 pt-2">* 국가승강기정보센터 실시간 데이터</p>}
+            <div className="flex items-center justify-between border-b border-slate-50 pb-2 gap-3">
+              <span className="text-slate-400 shrink-0">설치일자</span>
+              <DateTextInput key={editForm.installDate} value={editForm.installDate} onChange={(v) => setEditForm({ ...editForm, installDate: v })} />
+            </div>
+            <div className="flex items-center justify-between border-b border-slate-50 pb-2 gap-3">
+              <span className="text-slate-400 shrink-0">적재하중(kg)</span>
+              <input className={inputCls + " text-right"} type="number" value={editForm.loadKg} onChange={(e) => setEditForm({ ...editForm, loadKg: e.target.value })} />
+            </div>
+            <div className="flex items-center justify-between border-b border-slate-50 pb-2 gap-3">
+              <span className="text-slate-400 shrink-0">정원(인승)</span>
+              <input className={inputCls + " text-right"} type="number" value={editForm.capacityPersons} onChange={(e) => setEditForm({ ...editForm, capacityPersons: e.target.value })} />
+            </div>
+            <div className="flex items-center justify-between border-b border-slate-50 pb-2 gap-3">
+              <span className="text-slate-400 shrink-0">정격속도(m/s)</span>
+              <input className={inputCls + " text-right"} type="number" step="0.01" value={editForm.ratedSpeed} onChange={(e) => setEditForm({ ...editForm, ratedSpeed: e.target.value })} />
+            </div>
+            <div className="flex items-center justify-between border-b border-slate-50 pb-2 gap-3">
+              <span className="text-slate-400 shrink-0">보험사</span>
+              <input className={inputCls + " text-right"} value={editForm.insurer} onChange={(e) => setEditForm({ ...editForm, insurer: e.target.value })} />
+            </div>
+            <div className="flex items-center justify-between border-b border-slate-50 pb-2 gap-3">
+              <span className="text-slate-400 shrink-0">보험 만기일</span>
+              <DateTextInput key={editForm.insuranceEnd} value={editForm.insuranceEnd} onChange={(v) => setEditForm({ ...editForm, insuranceEnd: v })} />
+            </div>
+            <div className="flex justify-end pt-1">
+              <button
+                disabled={!detailDirty || savingDetail}
+                onClick={async () => { setSavingDetail(true); await onSave(unit, editForm); setSavingDetail(false); }}
+                className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-lg px-4 py-2"
+              >
+                저장
+              </button>
+            </div>
+            {liveInfo && <p className="text-[10px] text-slate-400 pt-2">* 국가승강기정보센터 실시간 데이터(승강기번호 {liveInfo.govElevatorNo})는 참고용 — 실제 값은 위 항목에 직접 입력합니다.</p>}
           </div>
         )}
 
@@ -370,11 +409,13 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
   );
 }
 
-function UnitRow({ unit, emergencyPhone, onSave, onSaveEmergencyPhone, onToggleActive, onDelete, onOpenDetail, contractTypeReady }) {
-  const [form, setForm] = useState({ unitType: unit.unitType, model: unit.model ?? "", installDate: unit.installDate ?? "", govNo: unit.govNo ?? "", installPlace: unit.installPlace ?? "", contractType: unit.contractType ?? CONTRACT_TYPES[0] });
+function UnitRow({ unit, emergencyPhone, unitMaintenanceCostLabel, onSave, onSaveEmergencyPhone, onToggleActive, onDelete, onOpenDetail, contractTypeReady }) {
+  // 승강기고유번호·설치일자는 여기서 안 다룬다 — 호기 상세정보(onOpenDetail)의 "정보" 탭에서
+  // 수정한다. 표는 목록으로 훑어볼 항목만, 상세는 상세정보에서.
+  const [form, setForm] = useState({ unitType: unit.unitType, model: unit.model ?? "", installPlace: unit.installPlace ?? "", contractType: unit.contractType ?? CONTRACT_TYPES[0] });
   const [emergencyDraft, setEmergencyDraft] = useState(emergencyPhone ?? "");
   const [saving, setSaving] = useState(false);
-  const dirty = form.unitType !== unit.unitType || form.model !== (unit.model ?? "") || form.installDate !== (unit.installDate ?? "") || form.govNo !== (unit.govNo ?? "") || form.installPlace !== (unit.installPlace ?? "") || form.contractType !== (unit.contractType ?? CONTRACT_TYPES[0]);
+  const dirty = form.unitType !== unit.unitType || form.model !== (unit.model ?? "") || form.installPlace !== (unit.installPlace ?? "") || form.contractType !== (unit.contractType ?? CONTRACT_TYPES[0]);
   const emergencyDirty = emergencyDraft !== (emergencyPhone ?? "");
 
   return (
@@ -383,24 +424,24 @@ function UnitRow({ unit, emergencyPhone, onSave, onSaveEmergencyPhone, onToggleA
         <button onClick={() => onOpenDetail(unit)} className="text-blue-700 hover:underline">{unit.unitNo}</button>
       </td>
       <td className="px-2 py-2">
-        {/* 호기별 계약구분 — 한 현장 안에서 FM/POG가 섞인 예외 케이스 대응. 기본값 POG(일반계약). */}
-        <select className={inputCls} disabled={!contractTypeReady} value={form.contractType} onChange={(e) => setForm({ ...form, contractType: e.target.value })}>
-          {CONTRACT_TYPES.map((t) => <option key={t}>{t}</option>)}
-        </select>
-      </td>
-      <td className="px-2 py-2">
-        {/* 설치장소 — 호기 번호와 별개인 실제 위치(예: 합참본부-1, 별관-3, 교회) */}
-        <input className={inputCls} value={form.installPlace} placeholder="예: 합참본부-1" onChange={(e) => setForm({ ...form, installPlace: e.target.value })} />
-      </td>
-      <td className="px-2 py-2">
         <select className={inputCls} value={form.unitType} onChange={(e) => setForm({ ...form, unitType: e.target.value })}>
           {UNIT_TYPES.map((t) => <option key={t}>{t}</option>)}
         </select>
       </td>
       <td className="px-2 py-2"><input className={inputCls} value={form.model} placeholder="모델명" onChange={(e) => setForm({ ...form, model: e.target.value })} /></td>
-      <td className="px-2 py-2"><EditableDate value={form.installDate} onCommit={(v) => setForm({ ...form, installDate: v })} /></td>
-      <td className="px-2 py-2"><input className={inputCls} value={form.govNo} placeholder="승강기고유번호" onChange={(e) => setForm({ ...form, govNo: e.target.value })} /></td>
-      <td className="px-2 py-2"><input className={inputCls} value={emergencyDraft} placeholder="EMCALL,통신사,국선/무선" onChange={(e) => setEmergencyDraft(e.target.value)} /></td>
+      <td className="px-2 py-2">
+        {/* 호기별 계약구분 — 한 현장 안에서 FM/POG가 섞인 예외 케이스 대응. 기본값 POG(일반계약). */}
+        <select className={inputCls} disabled={!contractTypeReady} value={form.contractType} onChange={(e) => setForm({ ...form, contractType: e.target.value })}>
+          {CONTRACT_TYPES.map((t) => <option key={t}>{t}</option>)}
+        </select>
+      </td>
+      {/* 보수료 — 현장정보의 보수료를 호기 수만큼 균등 분배해 보여주는 값(계산 표시 전용, 여기서 수정 불가 — 현장정보에서 고친다) */}
+      <td className="px-2 py-2 text-slate-600">{unitMaintenanceCostLabel}</td>
+      <td className="px-2 py-2"><input className={inputCls} value={emergencyDraft} placeholder="비상통화장치" onChange={(e) => setEmergencyDraft(e.target.value)} /></td>
+      <td className="px-2 py-2">
+        {/* 설치장소 — 호기 번호와 별개인 실제 위치(예: 합참본부-1, 별관-3, 교회) */}
+        <input className={inputCls} value={form.installPlace} placeholder="예: 합참본부-1" onChange={(e) => setForm({ ...form, installPlace: e.target.value })} />
+      </td>
       <td className="px-2 py-2 whitespace-nowrap text-right">
         <button
           disabled={(!dirty && !emergencyDirty) || saving}
@@ -499,6 +540,12 @@ export default function SitesAdmin({ data, setData }) {
   const maintenanceCostReady = sites.some((s) => s.maintenanceCost !== undefined);
   const officeNotesReady = sites.some((s) => s.officeNotes !== undefined);
   const unitContractTypeReady = units.some((u) => u.contractType !== undefined);
+  // 승강기 정보 표의 "보수료" 열 — 별도 호기별 컬럼이 아니라 현장정보의 보수료를 호기 수만큼
+  // 균등 분배해서 보여주는 계산값이다(수정은 현장정보 쪽 보수료에서). 호기 1대면 그대로,
+  // 여러 대면 N분의 1.
+  const unitMaintenanceCostLabel = (!maintenanceCostReady || site?.maintenanceCost == null || !siteUnits.length)
+    ? "-"
+    : Math.round(Number(site.maintenanceCost) / siteUnits.length).toLocaleString() + "원";
 
   const contacts = siteManagers.filter((m) => m.siteId === selectedId);
 
@@ -593,19 +640,43 @@ export default function SitesAdmin({ data, setData }) {
     }));
   }
 
+  // 승강기고유번호·설치일자는 표에서 안 다룬다(호기 상세정보 모달의 saveUnitDetail 전용) —
+  // 여기서 같이 patch에 넣으면 표에서 저장할 때마다 상세정보에서 입력한 값을 지워버린다.
   async function saveUnit(unit, form) {
     const patch = {
-      unit_type: form.unitType, model: form.model || null, install_date: form.installDate || null, gov_no: form.govNo || null, install_place: form.installPlace?.trim() || null,
+      unit_type: form.unitType, model: form.model || null, install_place: form.installPlace?.trim() || null,
       ...(unitContractTypeReady ? { contract_type: form.contractType || null } : {}),
     };
     const { error } = await supabase.from("units").update(patch).eq("id", unit.id);
     if (error) { alert("저장 실패: " + error.message); return; }
     const nextUnits = units.map((u) => (u.id === unit.id ? {
-      ...u, unitType: form.unitType, model: form.model || null, installDate: form.installDate || null, govNo: form.govNo || null, installPlace: form.installPlace?.trim() || null,
+      ...u, unitType: form.unitType, model: form.model || null, installPlace: form.installPlace?.trim() || null,
       ...(unitContractTypeReady ? { contractType: form.contractType || null } : {}),
     } : u));
     setData((prev) => ({ ...prev, units: nextUnits }));
     await syncLegacy(unit.siteId, nextUnits);
+  }
+
+  // 호기 상세정보 모달의 "정보" 탭 저장 — 표(UnitRow)와는 별개 필드 집합(승강기번호·종류·형식·
+  // 제조업체·설치일자·운행구간·적재하중·정원·정격속도·보험)이라 saveUnit과 분리해서 관리한다.
+  async function saveUnitDetail(unit, form) {
+    const numOrNull = (v) => (v === "" || v == null ? null : Number(v));
+    const patch = {
+      gov_no: form.govNo || null, kind: form.kind || null, form: form.form || null,
+      model: form.model || null, manufacturer: form.manufacturer || null, install_date: form.installDate || null,
+      run_section: form.runSection || null, load_kg: numOrNull(form.loadKg), capacity_persons: numOrNull(form.capacityPersons),
+      rated_speed: numOrNull(form.ratedSpeed), insurer: form.insurer || null, insurance_end: form.insuranceEnd || null,
+    };
+    const { error } = await supabase.from("units").update(patch).eq("id", unit.id);
+    if (error) { alert("저장 실패: " + error.message); return; }
+    const nextUnits = units.map((u) => (u.id === unit.id ? {
+      ...u, govNo: form.govNo || null, kind: form.kind || null, form: form.form || null,
+      model: form.model || null, manufacturer: form.manufacturer || null, installDate: form.installDate || null,
+      runSection: form.runSection || null, loadKg: numOrNull(form.loadKg), capacityPersons: numOrNull(form.capacityPersons),
+      ratedSpeed: numOrNull(form.ratedSpeed), insurer: form.insurer || null, insuranceEnd: form.insuranceEnd || null,
+    } : u));
+    setData((prev) => ({ ...prev, units: nextUnits }));
+    await syncLegacy(unit.siteId, nextUnits); // model·govNo가 legacy site 컬럼(elevator_model·gov_elevator_nos)에도 반영돼야 함
   }
 
   async function toggleUnitActive(unit) {
@@ -1187,13 +1258,12 @@ export default function SitesAdmin({ data, setData }) {
                     <thead>
                       <tr className="text-xs text-slate-400 border-b border-slate-100">
                         <th className="text-left px-4 py-2 font-semibold w-14">호기</th>
-                        <th className="text-left px-2 py-2 font-semibold w-32">계약구분{!unitContractTypeReady && " (마이그레이션 대기)"}</th>
-                        <th className="text-left px-2 py-2 font-semibold w-32">설치장소</th>
                         <th className="text-left px-2 py-2 font-semibold w-28">종류</th>
                         <th className="text-left px-2 py-2 font-semibold">모델</th>
-                        <th className="text-left px-2 py-2 font-semibold w-32">설치일</th>
-                        <th className="text-left px-2 py-2 font-semibold w-32">승강기고유번호</th>
-                        <th className="text-left px-2 py-2 font-semibold w-40">EMCALL,통신사,국선/무선</th>
+                        <th className="text-left px-2 py-2 font-semibold w-32">계약구분{!unitContractTypeReady && " (마이그레이션 대기)"}</th>
+                        <th className="text-left px-2 py-2 font-semibold w-24">보수료(VAT별도)</th>
+                        <th className="text-left px-2 py-2 font-semibold w-40">비상통화장치</th>
+                        <th className="text-left px-2 py-2 font-semibold w-32">설치장소</th>
                         <th className="w-40" />
                       </tr>
                     </thead>
@@ -1203,6 +1273,7 @@ export default function SitesAdmin({ data, setData }) {
                           key={u.id}
                           unit={u}
                           emergencyPhone={site.emergencyPhone}
+                          unitMaintenanceCostLabel={unitMaintenanceCostLabel}
                           onSave={saveUnit}
                           onSaveEmergencyPhone={saveEmergencyPhone}
                           onToggleActive={toggleUnitActive}
@@ -1218,12 +1289,11 @@ export default function SitesAdmin({ data, setData }) {
                     <thead>
                       <tr className="text-xs text-slate-400 border-b border-slate-100">
                         <th className="text-left px-4 py-2 font-semibold w-40">호기</th>
-                        {unitContractTypeReady && <th className="text-left px-2 py-2 font-semibold w-28">계약구분</th>}
-                        <th className="text-left px-2 py-2 font-semibold w-32">승강기고유번호</th>
                         <th className="text-left px-2 py-2 font-semibold w-28">종류</th>
                         <th className="text-left px-2 py-2 font-semibold">모델</th>
-                        <th className="text-left px-2 py-2 font-semibold w-32">설치일자</th>
-                        <th className="text-left px-2 py-2 font-semibold w-40">EMCALL,통신사,국선/무선</th>
+                        {unitContractTypeReady && <th className="text-left px-2 py-2 font-semibold w-28">계약구분</th>}
+                        <th className="text-left px-2 py-2 font-semibold w-24">보수료(VAT별도)</th>
+                        <th className="text-left px-2 py-2 font-semibold w-40">비상통화장치</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1236,11 +1306,10 @@ export default function SitesAdmin({ data, setData }) {
                             className={`border-b border-slate-50 cursor-pointer hover:bg-slate-50 ${u.isActive === false ? "opacity-40" : ""}`}
                           >
                             <td className="px-4 py-2 font-bold truncate text-blue-700" title={unitPlaceLabel}>{unitPlaceLabel}</td>
-                            {unitContractTypeReady && <td className="px-2 py-2 truncate">{u.contractType || CONTRACT_TYPES[0]}</td>}
-                            <td className="px-2 py-2 whitespace-nowrap">{u.govNo || "미등록"}</td>
                             <td className="px-2 py-2 truncate" title={u.kind || u.unitType}>{u.kind || u.unitType}</td>
                             <td className="px-2 py-2 truncate" title={u.model ?? ""}>{u.model || "-"}</td>
-                            <td className="px-2 py-2 whitespace-nowrap">{u.installDate || "-"}</td>
+                            {unitContractTypeReady && <td className="px-2 py-2 truncate">{u.contractType || CONTRACT_TYPES[0]}</td>}
+                            <td className="px-2 py-2 truncate">{unitMaintenanceCostLabel}</td>
                             <td className="px-2 py-2 truncate" title={site.emergencyPhone ?? ""}>{site.emergencyPhone || "-"}</td>
                           </tr>
                         );
@@ -1266,6 +1335,7 @@ export default function SitesAdmin({ data, setData }) {
           billings={billings}
           quoteRequests={quoteRequests ?? []}
           onClose={() => setUnitDetail(null)}
+          onSave={saveUnitDetail}
         />
       )}
 
