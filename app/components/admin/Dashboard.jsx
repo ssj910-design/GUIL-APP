@@ -92,7 +92,8 @@ export function FailureDetailContent({ f, units, sites, profiles = [] }) {
 export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLeaves, onOpenTodos, onOpenMaterials, onOpenBillings, onOpenFailures, onOpenSelfChecks }) {
   const { sites, units, failures, inspections, materialRequests, quoteRequests, todos, billings, selfChecks, selfCheckItems, profiles } = data;
   const siteById = new Map(sites.map((s) => [s.id, s]));
-  const engineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
+  // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 관리자가 자재담당자에게도 배정할 수 있어야 한다.
+  const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
   const engineerJobs = useMemo(() => engineerJobsByName(failures), [failures]);
   const [reassignTarget, setReassignTarget] = useState(null);
   const [historySite, setHistorySite] = useState(null);
