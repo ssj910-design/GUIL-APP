@@ -42,7 +42,11 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
           quoteTitle: quote.quoteTitle,
           quoteDate: quote.quoteIssuedDate,
           pdfUrl: quote.quotePdfUrl,
+<<<<<<< Updated upstream
           totalAmount: quoteGrandTotal(quote.quoteItems, quote.transportCost, quote.safetyCost, quote.profit),
+=======
+          totalAmount: quoteGrandTotal(quote), // 알림톡 #{총금액}
+>>>>>>> Stashed changes
         },
       }),
     })

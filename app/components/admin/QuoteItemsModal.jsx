@@ -210,7 +210,11 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
             quoteTitle,
             quoteDate,
             pdfUrl: pdfRes.url,
+<<<<<<< Updated upstream
             totalAmount: grandTotal,
+=======
+            totalAmount: grandTotal, // 알림톡 #{총금액}
+>>>>>>> Stashed changes
           },
         }),
       })
