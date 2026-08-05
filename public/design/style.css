@@ -1,0 +1,121 @@
+/* 설계 문서 공통 스타일 — docs/design/*.html 이 공유한다. 브라우저로 바로 열어 보는 내부 문서용. */
+:root {
+  --ink: #1e293b;
+  --sub: #64748b;
+  --faint: #94a3b8;
+  --line: #e2e8f0;
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --accent: #1d4ed8;
+  --accent-soft: #eff6ff;
+  --warn-soft: #fffbeb;
+  --warn-ink: #b45309;
+  --ok-soft: #ecfdf5;
+  --ok-ink: #047857;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e2e8f0; --sub: #94a3b8; --faint: #64748b; --line: #334155;
+    --bg: #0f172a; --card: #1e293b; --accent: #60a5fa; --accent-soft: #1e3a8a33;
+    --warn-soft: #78350f33; --warn-ink: #fbbf24; --ok-soft: #064e3b33; --ok-ink: #34d399;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  background: var(--bg); color: var(--ink);
+  line-height: 1.7; font-size: 15px;
+  padding: 48px 24px 96px;
+}
+main { max-width: 760px; margin: 0 auto; }
+h1 { font-size: 26px; letter-spacing: -0.5px; margin-bottom: 4px; }
+h2 { font-size: 18px; margin: 40px 0 12px; padding-top: 24px; border-top: 1px solid var(--line); }
+h3 { font-size: 15px; margin: 20px 0 8px; }
+p { margin-bottom: 10px; }
+ul, ol { margin: 0 0 12px 22px; }
+li { margin-bottom: 4px; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.doc-meta { color: var(--faint); font-size: 12px; margin-bottom: 32px; }
+.doc-meta a { color: var(--faint); }
+table { width: 100%; border-collapse: collapse; margin: 12px 0 16px; font-size: 14px; }
+th, td { text-align: left; padding: 8px 10px; border: 1px solid var(--line); vertical-align: top; }
+th { background: var(--card); font-size: 12px; color: var(--sub); }
+.badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 99px; vertical-align: middle; }
+.badge.todo { background: var(--warn-soft); color: var(--warn-ink); }
+.badge.doing { background: var(--accent-soft); color: var(--accent); }
+.badge.done { background: var(--ok-soft); color: var(--ok-ink); }
+.callout { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; padding: 12px 16px; margin: 12px 0 16px; font-size: 14px; }
+.callout.warn { border-left-color: var(--warn-ink); }
+.tbd { background: var(--warn-soft); color: var(--warn-ink); font-weight: 700; padding: 0 6px; border-radius: 4px; font-size: 13px; }
+.card-list { display: grid; gap: 12px; margin: 16px 0; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; }
+.card h3 { margin: 0 0 4px; }
+.card p { margin: 0; color: var(--sub); font-size: 13px; }
+.term { border-bottom: 1px dotted var(--faint); cursor: help; }
+footer { max-width: 760px; margin: 64px auto 0; color: var(--faint); font-size: 12px; border-top: 1px solid var(--line); padding-top: 16px; }
+
+/* 섹션 변경 이력 — 바뀐 섹션 바로 아래 직전 버전을 접이식으로 보존 (편집 규칙은 각 문서 상단 주석) */
+details.history { margin: 8px 0 16px; font-size: 13px; color: var(--sub); background: var(--card); border: 1px dashed var(--line); border-radius: 8px; padding: 8px 14px; }
+details.history summary { cursor: pointer; font-weight: 700; color: var(--faint); font-size: 12px; }
+details.history[open] summary { margin-bottom: 6px; }
+mark.changed { background: var(--warn-soft); color: var(--warn-ink); padding: 0 4px; border-radius: 4px; }
+
+/* 유저플로우 — 세로 단계 흐름 (02-userflow.html) */
+:root { --purple-soft: #f5f3ff; --purple-ink: #6d28d9; }
+@media (prefers-color-scheme: dark) { :root { --purple-soft: #4c1d9533; --purple-ink: #a78bfa; } }
+.flow { margin: 16px 0 8px; }
+.step { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+.step + .step, .branch + .step, .step + .branch { margin-top: 24px; }
+.step + .step::before, .branch + .step::before { content: "↓"; position: absolute; top: -22px; left: 24px; color: var(--faint); font-size: 14px; }
+.actor { display: inline-block; font-size: 11px; font-weight: 700; padding: 0 8px; border-radius: 99px; margin-right: 6px; }
+.actor.eng { background: var(--accent-soft); color: var(--accent); }
+.actor.adm { background: var(--purple-soft); color: var(--purple-ink); }
+.actor.sys { background: var(--ok-soft); color: var(--ok-ink); }
+.actor.cust { background: var(--warn-soft); color: var(--warn-ink); }
+.step .note { display: block; color: var(--sub); font-size: 13px; margin-top: 3px; }
+.step .push { display: block; font-size: 12.5px; color: var(--warn-ink); margin-top: 5px; }
+.branch { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; position: relative; }
+.branch::before { content: "↓ 둘 중 하나"; position: absolute; top: -20px; left: 24px; color: var(--faint); font-size: 12px; }
+.branch .step { margin: 0; }
+@media (max-width: 640px) { .branch { grid-template-columns: 1fr; } }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--sub); margin: 8px 0 4px; }
+.branch.three { grid-template-columns: 1fr 1fr 1fr; }
+.branch.three::before { content: "↓ 셋 중 하나"; }
+@media (max-width: 640px) { .branch.three { grid-template-columns: 1fr; } }
+
+/* 화면 지도 트리 (03-sitemap.html) */
+.tree { list-style: none; margin: 12px 0 20px; }
+.tree ul { list-style: none; margin: 4px 0 8px 10px; padding-left: 14px; border-left: 2px solid var(--line); }
+.tree li { margin: 5px 0; font-size: 14px; }
+.tree .d { color: var(--sub); font-size: 12.5px; }
+.badge.gate { background: var(--purple-soft); color: var(--purple-ink); }
+
+/* 화면설계서 (screens/*.html) — 실물 스크린샷 + 연결 스트립 */
+.shot { border: 1px solid var(--line); border-radius: 16px; max-width: 300px; width: 100%; display: block; }
+.shot-row { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; margin: 12px 0; }
+.shot-row .col { flex: 1; min-width: 280px; }
+.connect { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0 4px; }
+.connect .node { text-align: center; font-size: 12px; color: var(--sub); }
+.connect .node img { width: 104px; border: 1px solid var(--line); border-radius: 10px; display: block; margin: 0 auto 4px; }
+.connect .node.this img { border: 2px solid var(--accent); }
+.connect .node.this { color: var(--accent); font-weight: 700; }
+.connect .node .ph { width: 104px; height: 188px; border: 1px dashed var(--line); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--faint); font-size: 11px; margin: 0 auto 4px; padding: 6px; text-align: center; }
+
+/* 화이트라벨 와이어프레임 — 갈아끼울 자리를 번호로 표시하는 목업 */
+.wire { width: 250px; border: 2px solid var(--line); border-radius: 18px; padding: 40px 18px; background: #fff; margin: 0 auto; position: relative; }
+.wire .w-el { position: relative; border-radius: 8px; margin-bottom: 10px; }
+.wire .w-fixed { background: #f1f5f9; height: 34px; }              /* 회사 무관 = 회색 */
+.wire .w-swap { border: 2px dashed #d97706; background: #fffbeb; padding: 8px; text-align: center; font-size: 11px; color: #92400e; font-weight: 700; }  /* 갈아끼울 자리 = 주황 점선 */
+.wire .w-num { position: absolute; top: -9px; left: -9px; width: 20px; height: 20px; border-radius: 50%; background: #d97706; color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.wire .w-label { font-size: 10px; color: var(--faint); margin: -4px 0 8px; }
+.connect .arrow { color: var(--faint); font-size: 18px; padding-bottom: 18px; }
+
+/* 문서 공통 내비게이션 — 모든 설계 문서 맨 위. 현재 문서는 .here로 강조 */
+.docnav { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; margin: -24px -24px 28px; padding: 10px 24px; background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 10; }
+.docnav a { font-size: 13px; font-weight: 600; color: var(--sub); padding: 5px 10px; border-radius: 7px; text-decoration: none; white-space: nowrap; }
+.docnav a:hover { background: var(--accent-soft); color: var(--accent); text-decoration: none; }
+.docnav a.here { background: var(--accent); color: #fff; }
+.docnav .sep { color: var(--line); padding: 0 4px; user-select: none; }
+.docnav .home { font-weight: 800; color: var(--ink); }
+@media (max-width: 640px) { .docnav { margin: -24px -16px 20px; padding: 8px 16px; } .docnav a { font-size: 12px; padding: 4px 7px; } }

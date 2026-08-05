@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "docs": "node scripts/gen-snapshot.mjs",
+    "docs": "node scripts/gen-snapshot.mjs && rm -rf public/design && cp -R docs/design public/design",
     "deploy": "git push && git commit --allow-empty -m '[deploy] 운영 반영' && git push"
   },
   "dependencies": {

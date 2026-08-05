@@ -1,0 +1,94 @@
+<!doctype html>
+<!-- ⚠️ 이 파일은 자동 생성됩니다 — 직접 고치지 마세요. 고쳐도 다음 실행 때 지워집니다.
+     갱신:  node scripts/gen-snapshot.mjs
+     사람이 쓰는 문서는 01-prd.html(제품 정의)뿐입니다. 화면·알림·브랜딩 목록은 코드가 원본입니다. -->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>04. 코드 스냅샷 (자동)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <nav class="docnav"><a href="index.html" class="home">설계 허브</a><span class="sep">·</span><a href="01-prd.html">01 PRD</a><span class="sep">·</span><a href="02-userflow.html">02 유저플로우</a><span class="sep">·</span><a href="03-sitemap.html">03 화면지도</a><span class="sep">·</span><a href="04-snapshot.html" class="here">04 스냅샷</a><span class="sep">|</span><span class="sep" style="font-size:11px">화면설계</span><a href="screens/billing-todo.html">비용청구·할일관리</a><a href="screens/checkup.html">자체점검</a><a href="screens/console-dashboard.html">관리자대시보드(PC콘솔)</a><a href="screens/console.html">PC콘솔총람</a><a href="screens/failure.html">고장접수</a><a href="screens/home-adm.html">홈(관리자모바일)</a><a href="screens/home-eng.html">홈(기사)</a><a href="screens/inspection.html">검사관리</a><a href="screens/login.html">로그인</a><a href="screens/material.html">자재·견적</a><a href="screens/room-mypage.html">게시판·마이페이지</a><a href="screens/site.html">현장정보</a><a href="screens/workcal.html">워크캘린더</a></nav>
+  <h1>코드 스냅샷 <span class="badge done">자동 생성</span></h1>
+  <p class="doc-meta">2026-08-04 기준 · <code>node scripts/gen-snapshot.mjs</code>로 갱신 · 손으로 고치지 마세요(코드가 원본)</p>
+
+  <div class="callout">
+    앱이 매일 바뀌어 손으로 쓴 목록은 금방 낡습니다. 이 문서는 <b>코드에서 직접 뽑아</b> 만들기 때문에
+    스크립트만 다시 돌리면 항상 최신입니다. 사람이 관리하는 건 <a href="01-prd.html">PRD</a>(제품 정의)뿐입니다.
+  </div>
+
+  <h2>1. 화면 <span style="font-size:13px;font-weight:400;color:var(--sub)">모바일 탭 9 · 콘솔 메뉴 13</span></h2>
+  <p><b>모바일 하단 탭</b><br><code>홈</code> · <code>현장정보</code> · <code>고장접수</code> · <code>자체점검</code> · <code>검사관리</code> · <code>자재·견적</code> · <code>비용청구</code> · <code>할일관리</code> · <code>워크캘린더</code></p>
+  <p><b>PC 관리자 콘솔 메뉴</b><br><code>대시보드</code> · <code>현장정보</code> · <code>고장관리</code> · <code>에러코드집</code> · <code>검사관리</code> · <code>자재·견적 신청내역</code> · <code>부품교체·공사 내역</code> · <code>할 일 관리</code> · <code>자체점검 현황</code> · <code>게시판</code> · <code>인사관리</code> · <code>통계</code> · <code>알림 설정</code><span class="badge gate">최고관리자</span></p>
+
+  <h2>2. 알림 <span style="font-size:13px;font-weight:400;color:var(--sub)">35종 · 크론 구현 9종</span></h2>
+  <table>
+    <tr><th>상황</th><th>받는 사람</th><th>시점</th><th>등급</th></tr>
+    <tr><td>나에게 고장이 배정됨</td><td>기사</td><td>즉시</td><td>긴급</td></tr>
+    <tr><td>미배정 고장 발생 (전원)</td><td>기사</td><td>즉시</td><td>긴급</td></tr>
+    <tr><td>고장 접수됨</td><td>기사+관리자</td><td>즉시</td><td>긴급</td></tr>
+    <tr><td>출동 거부됨</td><td>관리자</td><td>즉시</td><td>긴급</td></tr>
+    <tr><td>갇힘·운행정지 등 중대 건</td><td>관리자</td><td>즉시</td><td>긴급</td></tr>
+    <tr><td>15분째 아무도 안 잡은 미배정 고장</td><td>관리자</td><td>정해진 시각</td><td>긴급</td></tr>
+    <tr><td>배정된 기사가 출동응답 안 함</td><td>기사+관리자</td><td>정해진 시각</td><td>긴급</td></tr>
+    <tr><td>내 건이 재배정돼 회수됨</td><td>기사</td><td>즉시</td><td>보통</td></tr>
+    <tr><td>고장 처리완료</td><td>기사+관리자</td><td>즉시</td><td>긴급</td></tr>
+    <tr><td>처리 중 지원요청·운행정지 발생</td><td>전원</td><td>즉시</td><td>긴급</td></tr>
+    <tr><td>집중관리현장 새로 발생</td><td>전원</td><td>즉시</td><td>긴급</td></tr>
+    <tr><td>집중관리현장 추가 고장</td><td>관리자</td><td>즉시</td><td>긴급</td></tr>
+    <tr><td>근무 교환 요청 받음</td><td>기사</td><td>즉시</td><td>보통</td></tr>
+    <tr><td>내 교환 요청 수락·거절됨</td><td>기사</td><td>즉시</td><td>보통</td></tr>
+    <tr><td>내일 내 당직·숙직</td><td>기사</td><td>정해진 시각</td><td>낮음</td></tr>
+    <tr><td>출근 체크 안 함</td><td>기사</td><td>정해진 시각</td><td>낮음</td></tr>
+    <tr><td>출근 미체크 인원 요약</td><td>관리자</td><td>정해진 시각</td><td>낮음</td></tr>
+    <tr><td>연차 신청 들어옴</td><td>관리자</td><td>즉시</td><td>보통</td></tr>
+    <tr><td>내 연차 승인·반려됨</td><td>기사</td><td>즉시</td><td>보통</td></tr>
+    <tr><td>이번 달 자체점검 미완료</td><td>기사</td><td>정해진 시각</td><td>보통</td></tr>
+    <tr><td>오늘 담당현장 정기검사</td><td>기사</td><td>정해진 시각</td><td>보통</td></tr>
+    <tr><td>자체점검 공단 제출 실패</td><td>기사</td><td>즉시</td><td>보통</td></tr>
+    <tr><td>자재·견적 지급 완료 (수령 확인)</td><td>기사</td><td>즉시</td><td>보통</td></tr>
+    <tr><td>상비부품 지급 완료 (수령 확인)</td><td>기사</td><td>즉시</td><td>보통</td></tr>
+    <tr><td>자재 신청 들어옴</td><td>관리자</td><td>즉시</td><td>보통</td></tr>
+    <tr><td>견적 신청 들어옴</td><td>관리자</td><td>즉시</td><td>보통</td></tr>
+    <tr><td>자재 신청 취소됨</td><td>관리자</td><td>즉시</td><td>보통</td></tr>
+    <tr><td>견적 신청 취소됨</td><td>관리자</td><td>즉시</td><td>보통</td></tr>
+    <tr><td>계약 만료 D-30</td><td>관리자</td><td>정해진 시각</td><td>보통</td></tr>
+    <tr><td>나에게 할 일이 배정됨 (관리자 등록)</td><td>기사</td><td>즉시</td><td>보통</td></tr>
+    <tr><td>할일 재배정 요청 들어옴</td><td>관리자</td><td>즉시</td><td>보통</td></tr>
+    <tr><td>게시판에서 나를 @멘션</td><td>전원</td><td>즉시</td><td>보통</td></tr>
+    <tr><td>공지 등록됨</td><td>전원</td><td>즉시</td><td>보통</td></tr>
+    <tr><td>내 글에 댓글 달림</td><td>전원</td><td>즉시</td><td>보통</td></tr>
+    <tr><td>내 건의에 답글 달림</td><td>전원</td><td>즉시</td><td>보통</td></tr>
+  </table>
+
+  <h2>3. 화이트라벨 대상 <span style="font-size:13px;font-weight:400;color:var(--sub)">46곳 · 19개 파일</span></h2>
+  <p>타사가 쓰려면 아래가 전부 <b>회사 설정에서 읽어오도록</b> 바뀌어야 합니다. 코드에 회사명이 새로 들어오면 다음 실행 때 자동으로 잡힙니다.</p>
+  <details class="history"><summary>app/admin/page.js — 1곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">3:</span> export const metadata = { title: "구일엘리베이터(주) 관리자" };</div></details>
+  <details class="history"><summary>app/components/ElevatorFieldApp.jsx — 6곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">191:</span> const raw = localStorage.getItem("guilAuthV1");</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">215:</span> localStorage.removeItem("guilAuthV1");</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">351:</span> localStorage.setItem("guilAuthV1", JSON.stringify(sess));</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">684:</span> localStorage.removeItem("guilAuthV1");</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">2009:</span> localStorage.setItem("guilAuthV1", JSON.stringify(next));</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">2050:</span> title={tab === "home" ? "구일엘리베이터(주)" : tabTitle}</div></details>
+  <details class="history"><summary>app/components/LoginScreen.jsx — 2곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">4:</span> const SAVED_ID_KEY = "guilSavedLoginId"; // 아이디 저장(비번은 저장 안 함)</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">35:</span> &lt;h1 className="text-xl font-extrabold text-blue-950 mb-1 text-center"&gt;구일엘리베이터(주)&lt;/h1&gt;</div></details>
+  <details class="history"><summary>app/components/SignupPreview.jsx — 1곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">73:</span> &lt;input className={inputCls} placeholder="예: 구일엘리베이터(주)" value={form.company} onChange={(e) =&gt; set({ company: e</div></details>
+  <details class="history"><summary>app/components/admin/AdminApp.jsx — 7곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">86:</span> const raw = localStorage.getItem("guilAuthV1");</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">114:</span> localStorage.setItem("guilAuthV1", JSON.stringify({ id: row.id, name: row.name, role: row.role, mustChange: ro</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">119:</span> function adminLogout() { localStorage.removeItem("guilAuthV1"); setMe(null); }</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">224:</span> const raw = localStorage.getItem("guilAuthV1");</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">226:</span> localStorage.setItem("guilAuthV1", JSON.stringify({ ...s, mustChange: false }));</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">243:</span> &lt;p className="ml-auto text-[10px] text-blue-300"&gt;구일엘리베이터(주)&lt;/p&gt;</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">250:</span> &lt;p className="font-bold tracking-tight"&gt;구일엘리베이터(주)&lt;/p&gt;</div></details>
+  <details class="history"><summary>app/components/admin/BillingsAdmin.jsx — 1곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">224:</span> &lt;AdminTable head={["현장 · 호기", "담당자", "작업자", "교체내역", "금액", "교체일", "근거", "청구일", "청구방식"]}&gt;</div></details>
+  <details class="history"><summary>app/components/admin/ImportSites.jsx — 2곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">19:</span> "구일빌딩", "서울특별시 강남구 테헤란로 123", "1층",</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">21:</span> "김기사", "02-1234-5678", "02-1234-5679", "office@guil.co.kr", "정문 경비실에 문의", "SKT/국선",</div></details>
+  <details class="history"><summary>app/components/admin/SitesAdmin.jsx — 1곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">75:</span> &lt;input className={inputCls} placeholder="예: 구일빌딩" value={form.name} onChange={(e) =&gt; set("name")(e.target.valu</div></details>
+  <details class="history"><summary>app/components/admin/StatsAdmin.jsx — 1곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">139:</span> 구일은 관리대수 &lt;b className="text-slate-700"&gt;전국 {national.guil.rank}위&lt;/b&gt; ({national.guil.units.toLocaleString()}대 —</div></details>
+  <details class="history"><summary>app/components/tabs/CheckupTab.jsx — 1곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">341:</span> const companyUniqueNo = mapped.govCompanyUniqueNo || `GUIL_${mapped.id.slice(0, 8)}`;</div></details>
+  <details class="history"><summary>app/components/ui.jsx — 1곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">52:</span> &lt;img src="/icon-512.png" alt="구일엘리베이터" className="w-20 h-20 rounded-2xl shadow-lg" /&gt;</div></details>
+  <details class="history"><summary>app/layout.js — 3곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">15:</span> title: "구일엘리베이터(주) 현장관리",</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">18:</span> title: "구일엘리베이터",</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">42:</span> &lt;img src="/icon-512.png" alt="구일엘리베이터" width={96} height={96} className="rounded-2xl shadow-lg" /&gt;</div></details>
+  <details class="history"><summary>app/manifest.js — 2곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">3:</span> name: "구일엘리베이터(주) 현장관리",</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">4:</span> short_name: "구일엘리베이터",</div></details>
+  <details class="history"><summary>capacitor.config.json — 3곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">2:</span> "appId": "com.guilelevator.app",</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">3:</span> "appName": "구일엘리베이터",</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">6:</span> "url": "https://guil-app-pi.vercel.app",</div></details>
+  <details class="history"><summary>lib/company.js — 2곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">6:</span> name: "구일엘리베이터㈜",</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">11:</span> email: "E. guil2020@naver.com   E. guil2383@naver.com",</div></details>
+  <details class="history"><summary>lib/email.js — 6곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">55:</span> ? `&lt;br&gt;&lt;br&gt;&lt;img src="cid:guilcard" alt="구일엘리베이터 명함" style="max-width:420px;width:100%;height:auto;display:bloc</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">77:</span> const cardPath = path.join(process.cwd(), "public/guil-card.jpg");</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">83:</span> filename: "guil-card.jpg",</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">85:</span> cid: "guilcard",</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">97:</span> from: `"구일엘리베이터(주)" &lt;${process.env.NAVER_SMTP_USER}&gt;`,</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">100:</span> subject: `[구일엘리베이터] 견적서 안내 - ${quote.siteName ?? ""}`,</div></details>
+  <details class="history"><summary>lib/national-stats.json — 1곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">7:</span> "guil": { "units": 838, "rank": 196, "seoul": 770, "gyeonggi": 68 },</div></details>
+  <details class="history"><summary>lib/quotePdf.js — 4곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">28:</span> text: "폐기물처리관리법에 의거해 교체된 불량 PCB류, 로프, 벨트, 풀리, 쉬브, 모터ASSY 등은 환경보호 및 임의 수리 재사용시 품질 신뢰성 등 안전상의 목적으로 전량 회수를 원칙으로 하</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">99:</span> const logoPath = path.join(process.cwd(), "public/guil-logo.pdf");</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">111:</span> const sealPath = path.join(process.cwd(), "public/guil-seal.png");</div><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">162:</span> page.drawText("GUIL ELEVATOR", { x: MARGIN_X, y: logoCenterY - titleAscent20 / 2, size: 20, font: fontBold, co</div></details>
+  <details class="history"><summary>supabase/migrations/067_login_id.sql — 1곳</summary><div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">13:</span> update profiles set login_id = 'guiladmin' where name = '관리자(신석주)' and role = 'admin';</div></details>
+
+  <h2>4. DB 마이그레이션 <span style="font-size:13px;font-weight:400;color:var(--sub)">102개</span></h2>
+  <p style="font-family:ui-monospace,monospace;font-size:12px;color:var(--sub);line-height:1.9">001_profiles_decouple · 002_units · 003_site_assignments · 004_self_checks · 005_parallel_columns · 006_backfill · 007_cleanup_LATER · 008_kit_stock_RECORD · 009_site_common_contact · 010_todos_description_RECORD · 011_contract_date_and_billing_notes_RECORD · 012_maintenance_cost_RECORD · 012_units_inspection_cache_RECORD · 013_profiles_minwon_id_RECORD · 014_units_specs_RECORD · 015_profiles_feed_read_at_RECORD · 016_feed_posts_rich_RECORD · 017_rag_foundation_RECORD · 018_sites_contract_end_RECORD · 019_inspections_due_time_RECORD · 020_self_check_gov_submit_RECORD · 021_self_check_item_cycle_state_RECORD · 022_feed_posts_notice_RECORD · 023_profiles_dismissed_notifs_RECORD · 024_todos_billing_amount_RECORD · 025_attendances · 026_duty_roster · 027_profiles_member_fields · 028_profiles_duty_enabled · 029_duty_kind_normal · 030_duty_modes · 031_leaves_and_swap_notify · 032_profiles_hire_date · 033_profiles_archive · 034_holidays · 035_attendance_location · 036_leave_requests · 037_notification_settings · 038_push_subscriptions · 039_duty_swap_giveaway · 040_inspection_fail_cache_RECORD · 040_profiles_share_location · 041_profiles_geo_perm · 042_profiles_last_location · 043_profiles_last_seen · 043_sites_emergency_phone · 044_attendance_out_location · 045_units_fail_cache · 046_billings_manual_fields_RECORD · 047_billings_is_free_RECORD · 048_profiles_staff_fields_DRAFT · 049_profiles_ledger_url_DRAFT · 050_profiles_manual_ledger_items_DRAFT · 051_error_codes_DRAFT · 052_todos_reassign_request · 053_leaves_cancel_request · 054_failures_report_note_DRAFT · 055_sites_contract_termination_DRAFT · 056_sites_contract_urls_DRAFT · 057_leave_deduction_DRAFT · 058_clear_legacy_install_place · 059_profiles_attachment_urls_DRAFT · 060_error_code_requests_DRAFT · 062_failures_escalated_by_DRAFT · 063_failures_escalated_arrival_time_DRAFT · 064_quote_items_DRAFT · 065_auth_login · 066_auth_password_rules · 067_login_id · 068_admin_tier · 069_secure_admin_reset · 070_quote_send_DRAFT · 071_quote_send_cc_reference_DRAFT · 072_quote_send_log_DRAFT · 073_quote_send_notice_attachments_DRAFT · 074_dispatch_cron_columns · 075_pg_cron_failure_alerts · 076_login_lockout_password_expiry · 077_prune_cron_logs · 078_native_push_tokens · 079_sites_business_reg_urls · 080_departed_login_tracking · 081_error_codes_fault_name · 082_god_admin · 083_site_verify_status · 084_site_verify_issues · 085_site_access_info · 086_unit_emergency_phone · 087_login_lock_status_check · 088_units_prior_flagged_cache · 089_todos_self_check_item_link · 090_self_checks_auto_cron · 091_material_quote_cancel · 092_material_quote_cancel_status_check · 093_notify_audience_tier · 094_notify_audience_tiers_array · 095_pg_cron_new_notifications · 096_backfill_dismissed_posts · 097_todos_requested_by · 098_sites_office_notes · 099_units_contract_type · 100_feedbacks</p>
+</main>
+<footer>GUIL-APP 설계 문서 · docs/design/04-snapshot.html · 자동 생성 (node scripts/gen-snapshot.mjs)</footer>
+</body>
+</html>

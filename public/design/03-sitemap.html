@@ -1,0 +1,110 @@
+<!doctype html>
+<!--
+  ═══ 편집 규칙 — AI 포함, 이 문서를 고치는 누구든 따를 것 ═══
+  1. 의미가 바뀌는 수정은 버전(v0.x)을 올리고 "변경 이력" 표에 한 줄 추가한다.
+  2. 섹션의 기존 내용이 "변경·삭제"되면(단순 추가 말고) 그 섹션 끝에
+     <details class="history"><summary>이전 버전 (vX.X)</summary>예전 내용/요약</details>
+     으로 직전 버전을 남긴다. 직전 1개 버전만 인라인 보존 — 더 오래된 건 git 이력으로.
+  3. 이번 버전에서 바뀐 문구는 <mark class="changed">…</mark>로 표시하고,
+     다음 버전을 만들 때 이전 버전의 mark는 벗긴다.
+  4. 오타·문구 다듬기는 버전·이력 없이 바로 수정.
+  ※ 이 문서는 "실제 앱 화면"이 진실 — 탭·메뉴가 바뀌면 이 지도도 같이 고친다.
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>03. 화면 지도</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <nav class="docnav"><a href="index.html" class="home">설계 허브</a><span class="sep">·</span><a href="01-prd.html">01 PRD</a><span class="sep">·</span><a href="02-userflow.html">02 유저플로우</a><span class="sep">·</span><a href="03-sitemap.html" class="here">03 화면지도</a><span class="sep">·</span><a href="04-snapshot.html">04 스냅샷</a><span class="sep">|</span><span class="sep" style="font-size:11px">화면설계</span><a href="screens/login.html">로그인</a><a href="screens/home-eng.html">홈(기사)</a><a href="screens/home-adm.html">홈(관리자)</a><a href="screens/failure.html">고장접수</a><a href="screens/checkup.html">자체점검</a><a href="screens/inspection.html">검사관리</a><a href="screens/material.html">자재·견적</a><a href="screens/billing-todo.html">비용청구·할일</a><a href="screens/workcal.html">워크캘린더</a><a href="screens/site.html">현장정보</a><a href="screens/room-mypage.html">게시판·마이페이지</a><a href="screens/console-dashboard.html">콘솔 대시보드</a><a href="screens/console.html">콘솔 총람</a></nav>
+  <h1>화면 지도 (사이트맵) <span class="badge doing">v0.2</span></h1>
+  <p class="doc-meta">2026-07-30 · 실제 앱 코드 기준 전체 화면 목록과 이동 구조 · <a href="index.html">← 설계 허브로</a></p>
+
+  <h2>0. 진입점 3개</h2>
+  <div class="card-list">
+    <div class="card"><h3>모바일 앱 (PWA) — <code>/</code></h3><p>기사·관리자 공용. 폰 홈 화면에 설치. 하단 탭 + 플로팅 버튼으로 이동</p></div>
+    <div class="card"><h3>PC 관리자 콘솔 — <code>/admin</code></h3><p>관리자 전용(로그인 시 role=admin만). 좌측 사이드바 메뉴</p></div>
+    <div class="card"><h3>가입 미리보기 — <code>/signup</code></h3><p>미래 온보딩 화면의 자리표시(placeholder) — 아직 실기능 없음</p></div>
+  </div>
+
+  <h2>1. 모바일 앱 화면 트리</h2>
+  <ul class="tree">
+    <li><b>로그인</b> <span class="d">— SKIP_LOGIN=false일 때만. 첫 로그인이면 강제 비밀번호 변경 화면</span></li>
+    <li><b>하단 탭 (9개)</b>
+      <ul>
+        <li><b>홈</b> <span class="d">— 출근 체크, 처리현황 요약, 집중관리 현장, 실시간 검사, 내 할일·당직. 고장 카드는 고장접수 탭과 공유</span></li>
+        <li><b>현장정보</b> <span class="d">— 현장 목록·검색 → 현장 상세(호기·담당자·계약·사진) → 승강기(호기) 상세</span></li>
+        <li><b>고장접수</b> <span class="d">— 접수 폼(4단계 스텝), 미배정/진행중/완료 카드, 출동 응답·도착·처리결과</span></li>
+        <li><b>자체점검</b> <span class="d">— 월별 점검 계획·수행·기록 (공단 제출 체계), 점검항목 체크</span></li>
+        <li><b>검사관리</b> <span class="d">— 국가승강기정보센터 연동: 검사 도래 현장, 조건부/불합격 상세</span></li>
+        <li><b>자재·견적</b> <span class="d">— 자재신청 / 견적요청 / 상비부품(재고·보충) 3개 서브탭, 신청 상세 시트</span></li>
+        <li><b>비용청구</b> <span class="d">— 부품교체·공사 청구 작성(사진 전/후), 청구 내역</span></li>
+        <li><b>할일관리</b> <span class="d">— 자재 교체·시공 확인 할일 (지급완료 시 자동 생성), 재배정 요청</span></li>
+        <li><b>워크캘린더</b> <span class="d">— 당직·숙직 근무표, 근무 교환, 연차 캘린더·신청</span></li>
+      </ul>
+    </li>
+    <li><b>플로팅 버튼 (모든 탭 위)</b>
+      <ul>
+        <li><b>게시판</b> <span class="d">— 글·댓글·사진·좋아요, @멘션, 공지 등록. 연필 FAB로 글쓰기. 알림을 누르면 그 글로 바로 이동</span></li>
+        <li><b>관리자 모드 퀵버튼</b> <span class="badge gate">관리자만</span> <span class="d">— 게시판 FAB 위에 표시</span>
+          <ul>
+            <li><b>관리자 모드 (모바일)</b> <span class="d">— 처리대기 요약 대시보드, 자재 출하·견적·상비·재배정 요청 처리(아코디언+스와이프), 할일·비용청구 화면 재사용</span></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+    <li><b>헤더 (우상단)</b>
+      <ul>
+        <li><b>알림</b> <span class="d">— 안읽음 배지, 알림 목록</span></li>
+        <li><b>마이페이지</b> <span class="d">— 프로필·다가오는 근무·알림 설정(기기 푸시 스위치+종류별)·비밀번호 변경·건의하기·위치 공유·로그아웃</span></li>
+      </ul>
+    </li>
+  </ul>
+
+  <h2>2. PC 관리자 콘솔 화면 트리 (/admin)</h2>
+  <ul class="tree">
+    <li><b>관리자 로그인</b> <span class="d">— role=admin만 통과. 첫 로그인이면 강제 비밀번호 변경</span></li>
+    <li><b>사이드바 메뉴 (13개)</b>
+      <ul>
+        <li><b>대시보드</b> <span class="d">— <mark class="changed">오늘 처리할 것(승인대기 큐)</mark>, 실시간 고장 현황, 고장 접수·배정, 기사 위치 지도(관제), 출근 현황, <mark class="changed">30일 초과 미청구 KPI</mark></span></li>
+        <li><b>현장정보</b> <span class="d">— 현장·호기·담당자·계약 관리, 설치장소, <mark class="changed">엑셀 일괄등록·검증 업로드·비상통화 번호 업로드</mark>, 계약 필터(운영/만료임박/종료), 지도 모달</span></li>
+        <li><b>고장관리</b> <span class="d">— 전체 고장 표, 접수(스텝 폼)·배정·재배정, 상세</span></li>
+        <li><b>에러코드집</b> <span class="d">— 고장구분·에러코드 사전</span></li>
+        <li><b>검사관리</b> <span class="d">— 검사 일정·결과, 공단 데이터 캐시</span></li>
+        <li><b>자재·견적 신청내역</b> <span class="d">— 자재/견적/상비 승인·지급완료(할일 자동 생성), <mark class="changed">신청 취소</mark>, 견적 발행·이메일/알림톡 발송(발송 이력)</span></li>
+        <li><b>부품교체·공사 내역</b> <span class="d">— 비용청구 검토. 무상 처리·가격 조정 <span class="badge gate">최고관리자만</span></span></li>
+        <li><b>할 일 관리</b> <span class="d">— 전체 할일, 배정·재배정 요청 처리</span></li>
+        <li><b>자체점검 현황</b> <span class="d">— 월별 진행률, 점검 기록 열람</span></li>
+        <li><b>게시판</b> <span class="d">— 모바일 게시판의 웹 버전 (글·공지·@멘션·댓글)</span></li>
+        <li><b>인사관리</b> <span class="d">— 하위 탭: 직원(등록·수정) / 연차(승인·차감) / 워크캘린더. 관리자 등록·비번 초기화·당직표 생성 <span class="badge gate">최고관리자만</span></span></li>
+        <li><b>통계</b> <span class="d">— 고장·처리 통계 (구일 전용 문구 있음 → 화이트라벨 대상)</span></li>
+        <li><b>알림 설정</b> <span class="badge gate">최고관리자만</span> <span class="d">— 회사 알림 정책 <mark class="changed">27종</mark>(켬/끔·등급·<mark class="changed">받는 관리자 등급 지정·테스트 발송</mark>) — 개인 설정보다 우선</span></li>
+      </ul>
+    </li>
+    <li><b>사이드바 하단</b> <span class="d">— 내 이름·등급, 비밀번호 변경, 로그아웃</span></li>
+  </ul>
+
+  <h2>3. 화면 간 이동 규칙</h2>
+  <ul>
+    <li><b>모바일</b>: 하단 탭 = 큰 이동 / 탭 안에서 목록 → 상세는 드릴다운(뒤로가기) / 게시판·관리자모드는 플로팅 버튼 / 알림 탭하면 관련 화면으로 이동</li>
+    <li><b>교차 참조 3곳 (코드 공유)</b>: 홈 ↔ 고장접수(고장 카드·모달 공유) / 관리자모드 → 할일관리 화면 / 관리자모드 → 비용청구 내역 화면. <span class="d">더 늘리지 않는 게 규칙 (컴포넌트 규칙 문서)</span></li>
+    <li><b>같은 데이터, 두 화면</b>: 게시판(모바일=콘솔), 고장(모바일 카드=콘솔 표), 자재(모바일 신청=콘솔 처리) — 한쪽에서 바꾸면 다른 쪽도 같은 DB를 봄</li>
+  </ul>
+
+  <h2>4. 다음 단계 — 화면설계서(screens/)와 연결</h2>
+  <p>위 트리의 화면 하나마다 <code>screens/</code>에 1페이지(스크린샷+요소 주석+QA+화이트라벨)를 만든다.
+  순서는 유저플로우 중요도: <b>로그인 → 홈 → 고장접수 → 관리자 대시보드</b>부터. (docs/QA-RULES.md의 로그인 항목을 첫 페이지로 흡수)</p>
+
+  <h2>변경 이력</h2>
+  <table>
+    <tr><th>버전</th><th>날짜</th><th>변경</th></tr>
+    <tr><td>v0.2</td><td>2026-08-03</td><td>앱 변경 반영 — 우리방→게시판 명칭 통일, 티맵·카카오 길안내 제거, 대시보드(오늘 처리할 것·미청구 KPI)·자재견적 취소·알림설정 27종·현장정보 업로드 도구 3종 추가</td></tr>
+    <tr><td>v0.1</td><td>2026-07-30</td><td>최초 작성 — 진입점 3개, 모바일 탭 9+플로팅+헤더, 콘솔 메뉴 13, 이동 규칙</td></tr>
+  </table>
+</main>
+<footer>GUIL-APP 설계 문서 · docs/design/03-sitemap.html · 실제 앱 화면이 진실 — 탭·메뉴가 바뀌면 같이 고친다</footer>
+</body>
+</html>

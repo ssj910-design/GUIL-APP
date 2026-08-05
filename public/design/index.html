@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>설계 허브 — GUIL-APP</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <nav class="docnav"><a href="index.html" class="home here">설계 허브</a><span class="sep">·</span><a href="01-prd.html">01 PRD</a><span class="sep">·</span><a href="02-userflow.html">02 유저플로우</a><span class="sep">·</span><a href="03-sitemap.html">03 화면지도</a><span class="sep">·</span><a href="04-snapshot.html">04 스냅샷</a><span class="sep">|</span><span class="sep" style="font-size:11px">화면설계</span><a href="screens/login.html">로그인</a><a href="screens/home-eng.html">홈(기사)</a><a href="screens/home-adm.html">홈(관리자)</a><a href="screens/failure.html">고장접수</a><a href="screens/checkup.html">자체점검</a><a href="screens/inspection.html">검사관리</a><a href="screens/material.html">자재·견적</a><a href="screens/billing-todo.html">비용청구·할일</a><a href="screens/workcal.html">워크캘린더</a><a href="screens/site.html">현장정보</a><a href="screens/room-mypage.html">게시판·마이페이지</a><a href="screens/console-dashboard.html">콘솔 대시보드</a><a href="screens/console.html">콘솔 총람</a></nav>
+  <h1>설계 허브</h1>
+  <p class="doc-meta">승강기 유지보수 현장관리 서비스 — 기획·화면설계·화이트라벨 설계도의 목차. 브라우저로 열어 보는 내부 문서(배포 안 됨).</p>
+
+  <div class="card-list">
+    <div class="card">
+      <h3><a href="01-prd.html">01. PRD — 제품 정의서</a> <span class="badge doing">v0.1 초안</span></h3>
+      <p>이 제품이 뭔지, 누구를 위한 건지, 어디로 가는지. 모든 문서의 기준.</p>
+    </div>
+    <div class="card">
+      <h3><a href="02-userflow.html">02. 유저플로우</a> <span class="badge doing">v0.1</span></h3>
+      <p>기사의 하루 / 고장 한 건의 일생 / 관리자의 하루 — 3개 흐름.</p>
+    </div>
+    <div class="card">
+      <h3><a href="03-sitemap.html">03. 화면 지도 (사이트맵)</a> <span class="badge doing">v0.1</span></h3>
+      <p>진입점 3개, 모바일 탭 9+플로팅+헤더, 콘솔 메뉴 13, 이동 규칙.</p>
+    </div>
+    <div class="card">
+      <h3><a href="04-snapshot.html">04. 코드 스냅샷</a> <span class="badge done">자동</span></h3>
+      <p>지금 코드에 실제로 있는 화면·알림·회사명 박힌 자리·마이그레이션. <code>node scripts/gen-snapshot.mjs</code>로 갱신 — 손으로 안 고친다.</p>
+    </div>
+    <div class="card">
+      <h3>screens/ — 화면설계서 <span class="badge doing">13문서 · 전 화면 커버</span></h3>
+      <p>화면당 1페이지: 연결(썸네일 스트립)+스크린샷+요소+QA+화이트라벨 와이어프레임(갈아끼울 자리 번호+파일:줄+치환법). 순서: 로그인 → 홈 → 고장접수 → 관리자 대시보드 → …</p>
+      <ul style="margin:8px 0 0 18px; font-size:13px">
+        <li><a href="screens/login.html">로그인</a> <span class="badge doing">v0.4</span></li>
+        <li><a href="screens/home-eng.html">홈(기사)</a> <span class="badge doing">v0.1</span></li>
+        <li><a href="screens/failure.html">고장접수</a> <span class="badge doing">v0.1</span></li>
+        <li><a href="screens/home-adm.html">홈(관리자 모바일)</a> <span class="badge doing">v0.1</span></li>
+        <li><a href="screens/checkup.html">자체점검</a> <span class="badge doing">v0.1</span></li>
+        <li><a href="screens/inspection.html">검사관리</a> <span class="badge doing">v0.1</span></li>
+        <li><a href="screens/material.html">자재·견적</a> <span class="badge doing">v0.1</span></li>
+        <li><a href="screens/billing-todo.html">비용청구·할일관리</a> <span class="badge doing">v0.1</span></li>
+        <li><a href="screens/workcal.html">워크캘린더</a> <span class="badge doing">v0.1</span></li>
+        <li><a href="screens/site.html">현장정보</a> <span class="badge doing">v0.1</span></li>
+        <li><a href="screens/room-mypage.html">게시판·마이페이지</a> <span class="badge doing">v0.1</span></li>
+        <li><a href="screens/console-dashboard.html">관리자 대시보드(PC)</a> <span class="badge doing">v0.1</span></li>
+        <li><a href="screens/console.html">PC 콘솔 총람(12메뉴)</a> <span class="badge doing">v0.1</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>관련 문서 (마크다운)</h2>
+  <ul>
+    <li><a href="../MULTITENANT-PLAN.md">MULTITENANT-PLAN.md</a> — 타사 입주(테넌트 분리) 기술 계획</li>
+    <li><a href="../QA-RULES.md">QA-RULES.md</a> — 화면별 QA 규칙 (→ screens/로 흡수 예정)</li>
+    <li><a href="../APK-PLAN.md">APK-PLAN.md</a> — 안드로이드 APK 배포 계획</li>
+    <li><a href="../HANDOFF.md">HANDOFF.md</a> — 두 사람 간 처리 요청</li>
+  </ul>
+
+  <h2>이 폴더의 규칙</h2>
+  <ul>
+    <li>여기는 <b>내부 기준서</b> — 독자는 차호근·ssj910. 쉬운 말로, 용어는 PRD 9장 용어집 기준.</li>
+    <li>확정 안 된 건 <span class="tbd">미정</span>으로 표시하고 넘어간다 — 거짓 확정 금지.</li>
+    <li>화면설계는 실물(스크린샷)이 진실 — 앱이 바뀌면 재캡처. 변경 예정(화이트라벨)만 와이어프레임.</li>
+    <li><b>섹션이 바뀌면 그 자리에 이력을 남긴다</b> — 바뀐 문구는 형광(mark), 직전 버전은 접이식(details)으로 섹션 아래 보존. 상세 규칙은 각 문서 상단 주석(AI로 수정할 때도 이 규칙이 적용된다).</li>
+    <li>수정은 git 커밋으로 — 문서도 코드처럼 이력을 남긴다.</li>
+  </ul>
+</main>
+<footer>GUIL-APP 설계 문서 · docs/design/index.html</footer>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!doctype html>
+<!--
+  ═══ 편집 규칙 — AI 포함, 이 문서를 고치는 누구든 따를 것 ═══
+  1. 의미가 바뀌는 수정은 버전(v0.x)을 올리고 "변경 이력" 표에 한 줄 추가한다.
+  2. 섹션의 기존 내용이 "변경·삭제"되면(단순 추가 말고) 그 섹션 끝에
+     <details class="history"><summary>이전 버전 (vX.X)</summary>예전 내용/요약</details>
+     으로 직전 버전을 남긴다. 직전 1개 버전만 인라인 보존 — 더 오래된 건 git 이력으로.
+  3. 이번 버전에서 바뀐 문구는 <mark class="changed">…</mark>로 표시하고,
+     다음 버전을 만들 때 이전 버전의 mark는 벗긴다.
+  4. 오타·문구 다듬기는 버전·이력 없이 바로 수정.
+  ※ 스크린샷은 실물이 진실 — 화면이 바뀌면 img/를 재캡처한다. (고장접수는 localhost:3000/?as=engineer&name=김기사)
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>화면설계 — 고장접수</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<main>
+  <nav class="docnav"><a href="../index.html" class="home">설계 허브</a><span class="sep">·</span><a href="../01-prd.html">01 PRD</a><span class="sep">·</span><a href="../02-userflow.html">02 유저플로우</a><span class="sep">·</span><a href="../03-sitemap.html">03 화면지도</a><span class="sep">·</span><a href="../04-snapshot.html">04 스냅샷</a><span class="sep">|</span><span class="sep" style="font-size:11px">화면설계</span><a href="login.html">로그인</a><a href="home-eng.html">홈(기사)</a><a href="home-adm.html">홈(관리자)</a><a href="failure.html" class="here">고장접수</a><a href="checkup.html">자체점검</a><a href="inspection.html">검사관리</a><a href="material.html">자재·견적</a><a href="billing-todo.html">비용청구·할일</a><a href="workcal.html">워크캘린더</a><a href="site.html">현장정보</a><a href="room-mypage.html">게시판·마이페이지</a><a href="console-dashboard.html">콘솔 대시보드</a><a href="console.html">콘솔 총람</a></nav>
+  <h1>고장접수 <span class="badge doing">v0.1</span></h1>
+  <p class="doc-meta">화면설계서 · 코드 <code>tabs/FailureTab.jsx</code>(1,661줄) + 핸들러 <code>ElevatorFieldApp.jsx</code> · 앱에서 가장 무거운 화면(하위 5탭) · <a href="../index.html">← 설계 허브</a></p>
+
+  <h2>1. 연결 — 고장 한 건의 일생이 이 화면을 관통한다</h2>
+  <div class="connect">
+    <div class="node"><a href="home-eng.html"><img src="img/home-eng.png" alt="홈"></a>홈 (고장 카드)</div>
+    <div class="arrow">→</div>
+    <div class="node this"><img src="img/failure-report.png" alt="접수등록">고장접수 (이 화면)</div>
+    <div class="arrow">→</div>
+    <div class="node"><img src="img/failure-unassigned.png" alt="미배정">미배정 → 선착순</div>
+    <div class="arrow">→</div>
+    <div class="node"><img src="img/failure-result.png" alt="처리등록">출동 → 처리등록</div>
+  </div>
+  <ul>
+    <li>흐름: <b>접수 → (미배정이면 선착순 잡기 / 배정이면 출동응답) → 도착 → 처리등록 → 완료</b>. 상세는 <a href="../02-userflow.html">유저플로우 "고장 한 건의 일생"</a></li>
+    <li>기사도 접수 가능 — 본인 배정+도착예정시간을 접수와 동시에 입력하면 출동응답 단계 생략</li>
+    <li>혼자 못 끝내는 건은 지원요청·운행정지로 미배정 환원 (판단자·도착시각 스냅샷 보존)</li>
+    <li>홈 탭의 고장 카드와 이 화면의 상세 시트는 공유 (교차 참조 허용 2곳 중 하나)</li>
+  </ul>
+
+  <h2>2. 하위 5탭</h2>
+  <div class="shot-row">
+    <div class="col">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <figure style="margin:0;flex:1;min-width:110px"><img class="shot" src="img/failure-report.png" alt="접수등록"><figcaption style="font-size:11px;color:var(--sub);text-align:center;margin-top:4px">접수등록 (4스텝)</figcaption></figure>
+        <figure style="margin:0;flex:1;min-width:110px"><img class="shot" src="img/failure-unassigned.png" alt="미배정"><figcaption style="font-size:11px;color:var(--sub);text-align:center;margin-top:4px">미배정 (선착순)</figcaption></figure>
+        <figure style="margin:0;flex:1;min-width:110px"><img class="shot" src="img/failure-result.png" alt="처리등록"><figcaption style="font-size:11px;color:var(--sub);text-align:center;margin-top:4px">처리등록</figcaption></figure>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+        <figure style="margin:0;flex:1;min-width:110px"><img class="shot" src="img/failure-status.png" alt="처리현황"><figcaption style="font-size:11px;color:var(--sub);text-align:center;margin-top:4px">처리현황</figcaption></figure>
+        <figure style="margin:0;flex:1;min-width:110px"><img class="shot" src="img/failure-errorcodes.png" alt="에러코드집"><figcaption style="font-size:11px;color:var(--sub);text-align:center;margin-top:4px">에러코드집 (1,137개·5기종)</figcaption></figure>
+      </div>
+    </div>
+    <div class="col">
+      <table>
+        <tr><th>탭</th><th>역할·핵심 규칙</th></tr>
+        <tr><td>접수등록</td><td>4스텝 폼(현장→호기→증상→배정·연락처). 호기 여러 개 선택 시 <b>호기당 1건씩</b> 생성. 기사 본인 접수면 기본 배정=본인(진행중 건 있으면 미배정). 본인 배정 시 T맵 예상 소요시간 표시</td></tr>
+        <tr><td>미배정</td><td>선착순 — "내가 출동" 누르면 조건부 update로 DB가 한 명만 승자 처리. 미배정 15분 지속 시 관리자 알림(pg_cron)</td></tr>
+        <tr><td>처리등록</td><td>결과: 처리완료 / 오신고 / 지원요청 / 운행정지. 뒤 2개는 미배정 환원(escalation 표시 유지). 사진 첨부</td></tr>
+        <tr><td>처리현황</td><td>진행·완료 목록 조회, 타임라인(접수→출동→도착→완료)</td></tr>
+        <tr><td>에러코드집</td><td>기종별 에러코드 사전 (MHC2 489·SICON4000 282·SIGMA 147·TAC50 137·WB 82). 검색은 현장검색 방식·대소문자 무시. 콘솔에서 엑셀 대량입력</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h2>3. 필요 요소 (동작 전제)</h2>
+  <ul>
+    <li><code>failures</code> — 상태(미처리/진행중/완료)·배정·타임스탬프. v2 FK(unit_id·assignee_id) 병행 기록</li>
+    <li><code>error_codes</code> — 에러코드집. 회사 데이터가 아니라 <b>기종의 데이터</b></li>
+    <li>기사 GPS(last_lat/lng) — T맵 소요시간·거리순 정렬. 없어도 동작</li>
+    <li>알림 체인 — 접수→관리자 / 미배정→기사 전원 / 중대(갇힘 등)→관리자 / 배정→해당 기사 / 재배정→회수 기사 / 15분 미배정·5분 무응답→pg_cron</li>
+  </ul>
+
+  <h2>4. QA 체크포인트 — 2026-08-04 전 항목 검증 완료 (QA-RULES 4장)</h2>
+  <ol>
+    <li>✅ 접수 저장 실패 시 폼 유지+알럿 — 신고 조용히 소실 안 됨</li>
+    <li>✅ 선착순 동시 출동 — DB 조건부 update로 한 명만. 통신오류와 선점을 구분 안내</li>
+    <li>✅ 도착 기록 — 재배정·거부로 상태 바뀐 건 덮어쓰기 차단</li>
+    <li>✅ 지원요청·운행정지 환원 시 판단자·도착시각 스냅샷 보존</li>
+    <li>✅ 알림 체인 전 경로 확인</li>
+    <li>✅ 본인 접수→출동응답 생략 (ETA 필수 입력 조건 포함)</li>
+    <li>🔧 허위 "문자 발송 완료" 안내 제거 (2026-08-04) — 신고자 문자는 미구현</li>
+  </ol>
+
+  <h2>5. 알려진 한계 (보류 중)</h2>
+  <ul>
+    <li><b>신고자 안내문자 미구현</b> — 붙이려면 SMS 업체 계약 + 발신번호 사전등록 (테넌트별 결정 사항)</li>
+    <li>에러코드집에 이미지 없음 — 텍스트 설명뿐 (스캔 자료 연결 못 함)</li>
+  </ul>
+
+  <h2>6. 화이트라벨 — 구일전용 → 타사 일반화</h2>
+  <p style="font-size:13px">주황 점선 = 회사마다 갈아끼우는 자리. 회색 = 공통 부품.</p>
+  <div class="shot-row">
+    <div class="col" style="max-width:300px">
+      <div class="wire">
+        <div class="w-el w-fixed" style="height:26px"></div>
+        <div class="w-label">접수 폼·선착순·처리 흐름 — 전부 공통 (핵심 로직은 회사 무관)</div>
+        <div class="w-el w-swap" style="padding:6px"><span class="w-num">1</span>T맵 소요시간</div>
+        <div class="w-label" style="text-align:center">한국 전용 — 기능 플래그</div>
+        <div class="w-el w-swap" style="padding:6px"><span class="w-num">2</span>신고자 문자 (미구현)</div>
+        <div class="w-label" style="text-align:center">구현 시 발신번호·문구가 테넌트별</div>
+        <div class="w-el w-swap" style="padding:6px"><span class="w-num">3</span>에러코드집</div>
+        <div class="w-label" style="text-align:center">테넌트 <b>공유 자산</b> — 회사별 분리 안 함 (확정 2026-08-04)</div>
+      </div>
+    </div>
+    <div class="col">
+      <table>
+        <tr><th>#</th><th>지금 어디에 박혀 있나</th><th>어떻게 갈아끼우나</th></tr>
+        <tr><td>1</td><td><code>FailureTab.jsx</code> 접수폼 + 출동응답 — <code>/api/tmap-route</code> 호출</td><td>기능 플래그 <code>tenants.features.tmap_eta</code> — 플랫폼 공용키라 한국 업체 기본 ON, 끄면 소요시간 표기만 사라짐</td></tr>
+        <tr><td>2</td><td>(구)문자 문구에 "구일엘리베이터입니다" — 지금은 기능째 미구현·숨김</td><td>구현할 때부터 테넌트 발신번호+문구 템플릿. 발신번호 사전등록은 온보딩 체크리스트 미확정 항목</td></tr>
+        <tr><td>3</td><td><code>error_codes</code> 테이블 — 현재 단일 회사 전제</td><td><b>tenant_id 안 붙임</b> — 전 테넌트 공유(기종 데이터라서). 한 회사가 보강하면 모두에게 이득. 이미지 컬럼 추가는 Eleva에서</td></tr>
+      </table>
+      <p style="font-size:12px;color:var(--sub)">고장 흐름 자체(선착순·에스컬레이션·알림 체인)는 회사 무관 공통 — 이 화면의 화이트라벨 부담은 부가 기능 3개뿐.</p>
+    </div>
+  </div>
+
+  <h2>변경 이력</h2>
+  <table>
+    <tr><th>버전</th><th>날짜</th><th>변경</th></tr>
+    <tr><td>v0.1</td><td>2026-08-04</td><td>최초 작성 — 하위 5탭 실물 캡처, QA-RULES 4장(같은 날 검증) 반영, 에러코드집 공유자산 결정 반영</td></tr>
+  </table>
+</main>
+<footer>GUIL-APP 설계 문서 · docs/design/screens/failure.html</footer>
+</body>
+</html>
