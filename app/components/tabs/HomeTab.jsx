@@ -350,14 +350,14 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-bold text-slate-500">
                 출근 <span className="text-slate-800">{hhmm(mine.checkedInAt)}</span>
+                {done && (
+                  <> · {mine.status} <span className="text-slate-800">{hhmm(mine.checkedOutAt)}</span></>
+                )}
                 {mine.lat != null
                   ? done
                     ? <span className="ml-1.5 text-[10px] font-bold text-gray-400">· 위치 공유 종료</span>
                     : <span className="ml-1.5 text-[10px] font-bold text-emerald-600">· 📍근무 중 위치 공유</span>
                   : <span className="ml-1.5 text-[10px] font-bold text-amber-600">· 위치 미기록</span>}
-                {done && (
-                  <span className="ml-2 text-slate-800">{mine.status} {hhmm(mine.checkedOutAt)}</span>
-                )}
               </p>
               {!done && (
                 <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 shrink-0 ${workTone}`}>{workLabel}</span>
