@@ -25,6 +25,9 @@ async function handle(request) {
     }).then((r) => r.ok).catch(() => false);
 
   const currentYm = `${nowKst.getFullYear()}-${String(nowKst.getMonth() + 1).padStart(2, "0")}`;
+  // 2026-08은 자체점검 등록을 다음 달부터 시작하기로 해서 이번 달만 알림을 건너뛴다 — 데이터(예정
+  // 상태)는 그대로 두고 발송만 스킵. 9월부터는 이 줄이 저절로 안 걸려 코드 수정 없이 다시 울린다.
+  if (currentYm === "2026-08") return Response.json({ ok: true, skipped: "2026-08 알림 보류" });
   const lastDayOfMonth = new Date(nowKst.getFullYear(), nowKst.getMonth() + 1, 0).getDate();
   const isLastDay = nowKst.getDate() === lastDayOfMonth;
 
