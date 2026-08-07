@@ -13,7 +13,8 @@ import { mapDutySchedule, mapDutySwap } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
 
 export default function DutyAdmin({ data, setData }) {
-  const engineers = data.profiles.filter((p) => p.role === "engineer" && p.is_active !== false);
+  // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 자재담당자도 기사와 동일하게 근무표에 들어간다.
+  const engineers = data.profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false);
   const [schedules, setSchedules] = useState([]);
   const [swaps, setSwaps] = useState([]);
 

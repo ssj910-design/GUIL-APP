@@ -357,7 +357,8 @@ export default function App() {
   }
 
   const adminIds = () => profilesAll.filter((p) => p.role === "admin" && p.is_active !== false).map((p) => p.id);
-  const engineerIds = () => profilesAll.filter((p) => p.role === "engineer" && p.is_active !== false).map((p) => p.id);
+  // 자재담당관리자도 기사와 동일하게 미배정 고장을 보고 잡을 수 있으므로 기사 대상 알림에도 같이 넣는다.
+  const engineerIds = () => profilesAll.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false).map((p) => p.id);
 
   // 최고+중간관리자만(자재담당 제외) — 고장 흐름 관련 알림 중 관리자 등급을 좁혀 보내는 곳에서 쓴다.
   const seniorAdminIds = () => profilesAll.filter((p) => p.role === "admin" && p.is_active !== false && p.admin_tier !== "material").map((p) => p.id);

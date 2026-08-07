@@ -80,8 +80,9 @@ export default function StatsAdmin({ data }) {
   const failByKind = countBy(failures, (f) => units.find((u) => u.id === f.unitId)?.kind);
   const failBySite = countBy(failures, (f) => locOf(data, f.unitId, f.siteName, null).split(" · ")[0]);
   const partTop = countBy(billings.filter((b) => b.part), (b) => b.part.split("\n")[0]);
+  // 자재담당관리자도 기사와 동일하게 고장·할일·청구를 배정받을 수 있으므로 통계에도 포함시킨다.
   const engineerRows = profiles
-    .filter((p) => p.role === "engineer")
+    .filter((p) => p.role === "engineer" || p.admin_tier === "material")
     .map((p) => {
       const done = failures.filter((f) => (f.assigneeId === p.id || f.assignee === p.name) && f.status === "완료").length;
       const doing = failures.filter((f) => (f.assigneeId === p.id || f.assignee === p.name) && f.status !== "완료").length;

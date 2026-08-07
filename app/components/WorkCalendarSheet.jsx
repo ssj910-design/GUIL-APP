@@ -455,6 +455,15 @@ function LeaveCalendarTab({ schedules = [] }) {
 // 여기서는 서브탭 바 + 내용만 그린다. 하단 네비게이터도 그대로 보이는 일반 탭이다.
 export function WorkCalendarSheet({ schedules, swaps, onSetPerson, onRequestSwap, onRespondSwap, onSchedulesChange, onEngineersChange, initialSubTab }) {
   const [subTab, setSubTab] = useState(initialSubTab || "당직·숙직");
+  // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 자재담당자도 기사와 동일하게 근무표에
+  // 들어간다. 공용 engineers/engineerNames(GPS·근태 등에도 쓰임)는 그대로 두고 여기서만 합쳐 내려준다.
+  const outerAuth = useContext(AuthContext);
+  const materialStaff = (outerAuth.profiles ?? []).filter((p) => p.role === "admin" && p.admin_tier === "material" && p.is_active !== false);
+  const authWithMaterial = {
+    ...outerAuth,
+    engineers: [...outerAuth.engineers, ...materialStaff],
+    engineerNames: [...outerAuth.engineerNames, ...materialStaff.map((p) => p.name)],
+  };
   const subTabs = ["당직·숙직", "연차"];
   const swipe = useSwipeSubtab(subTabs, subTab, setSubTab);
 
@@ -482,27 +491,29 @@ export function WorkCalendarSheet({ schedules, swaps, onSetPerson, onRequestSwap
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden relative">
-      <div className="flex border-b border-slate-100 shrink-0 overflow-x-auto relative">
-        {subTabs.map((t) => (
-          <button
-            key={t}
-            onClick={() => setSubTab(t)}
-            className={`flex-1 py-3 text-xs font-bold shrink-0 px-1.5 whitespace-nowrap flex items-center justify-center gap-1 ${subTab === t ? "text-blue-700" : "text-slate-400"}`}
-          >
-            {t}
-          </button>
-        ))}
-        <SwipeIndicatorBar swipe={swipe} />
-      </div>
+    <AuthContext.Provider value={authWithMaterial}>
+      <div className="flex-1 flex flex-col overflow-hidden relative">
+        <div className="flex border-b border-slate-100 shrink-0 overflow-x-auto relative">
+          {subTabs.map((t) => (
+            <button
+              key={t}
+              onClick={() => setSubTab(t)}
+              className={`flex-1 py-3 text-xs font-bold shrink-0 px-1.5 whitespace-nowrap flex items-center justify-center gap-1 ${subTab === t ? "text-blue-700" : "text-slate-400"}`}
+            >
+              {t}
+            </button>
+          ))}
+          <SwipeIndicatorBar swipe={swipe} />
+        </div>
 
-      <SwipeSubtabTrack
-        swipe={swipe}
-        tabs={subTabs}
-        trackClassName="flex-1"
-        paneClassName="overflow-y-auto"
-        renderTab={renderWorkCalendarPane}
-      />
-    </div>
+        <SwipeSubtabTrack
+          swipe={swipe}
+          tabs={subTabs}
+          trackClassName="flex-1"
+          paneClassName="overflow-y-auto"
+          renderTab={renderWorkCalendarPane}
+        />
+      </div>
+    </AuthContext.Provider>
   );
 }

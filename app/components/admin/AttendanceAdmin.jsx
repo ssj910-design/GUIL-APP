@@ -12,7 +12,9 @@ const hhmm = (iso) => (iso ? new Date(iso).toTimeString().slice(0, 5) : null);
 const isoDay = (y, m, d) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 
 export default function AttendanceAdmin({ data }) {
-  const engineers = data.profiles.filter((p) => p.role === "engineer" && p.is_active !== false);
+  // 자재담당관리자도 기사와 동일하게 출근 체크를 하므로(모바일 앱에서 role이 engineer로 스코프됨)
+  // 여기서 빠지면 출근 기록은 쌓이는데 표에 이름이 안 뜨는 상태가 된다 — 같이 포함시킨다.
+  const engineers = data.profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false);
   const [view, setView] = useState("일별"); // 일별 | 월별
   const today = new Date(`${TODAY_STR}T00:00:00`);
   const [day, setDay] = useState(TODAY_STR);
