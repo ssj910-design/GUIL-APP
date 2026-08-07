@@ -50,10 +50,20 @@ export function DutyGenerateWidget({ schedules, onSchedulesChange, onEngineersCh
     const { data: recent } = await supabase.from("duty_schedules").select("*")
       .lt("duty_date", `${ym}-01`).order("duty_date", { ascending: false }).limit(120);
     for (const g of groups) {
+      // 금요일(주4일 전용)은 이전 달 기록을 이어받지 않고 매달 순번1부터 다시 시작한다.
+      if (g === "금요일") { cursors[g] = -1; continue; }
       const match = (recent ?? []).find((r) => dayGroup(mode, new Date(`${r.duty_date}T00:00:00`).getDay()) === g);
       cursors[g] = match ? roster.findIndex((e) => e.id === match.profile_id) : -1;
     }
     return cursors;
+  }
+
+  // 그 달의 몇 번째 금요일인지로 정상근무 자동배정 여부를 정한다 — 1·3·5번째 금요일만 순번을
+  // 뽑아 자동배정하고, 2·4번째 금요일은 칸을 아예 안 만들어 관리자가 직접(수동) 채우게 한다.
+  function fridayAutoAssignsNormalWork(iso) {
+    const day = Number(iso.slice(8));
+    const fridayIndex = Math.ceil(day / 7); // 그 달 몇 번째 금요일인지(1부터)
+    return fridayIndex % 2 === 1;
   }
 
   async function generate(ym, mode = "주5일") {
@@ -78,7 +88,7 @@ export function DutyGenerateWidget({ schedules, onSchedulesChange, onEngineersCh
         const ov = manualOverrides[`${iso}|${kind}`];
         rows.push({ duty_date: iso, kind, profile_id: ov !== undefined ? ov : auto });
       }
-      if (g === "금요일" && !existing.has(`${iso}|정상근무`)) {
+      if (g === "금요일" && fridayAutoAssignsNormalWork(iso) && !existing.has(`${iso}|정상근무`)) {
         const auto = next(g);
         const ov = manualOverrides[`${iso}|정상근무`];
         rows.push({ duty_date: iso, kind: "정상근무", profile_id: ov !== undefined ? ov : auto });
@@ -177,7 +187,7 @@ export function DutyGenerateWidget({ schedules, onSchedulesChange, onEngineersCh
         const found = existing.get(key);
         if (found) {
           rows.push({ iso, kind: "정상근무", name: nameOfAny(found.profileId), isNew: false });
-        } else if (g === "금요일") {
+        } else if (g === "금요일" && fridayAutoAssignsNormalWork(iso)) {
           const auto = next(g);
           const ov = manualOverrides[key];
           const person = ov !== undefined ? (ov ? { name: nameOfAny(ov) } : { name: null }) : auto;
