@@ -151,11 +151,23 @@ export function FilterPills({ options, value, onChange }) {
   );
 }
 
+// 모달 바깥 배경을 "클릭"해야만 닫히게 한다 — mousedown과 mouseup의 대상이 다르면 브라우저는
+// click 이벤트를 둘의 공통 조상(=배경 div)에서 바로 쏘는데, 입력창 안 글자를 드래그 선택하다가
+// 배경 위에서 손을 떼는 것도 여기 해당돼서 안쪽 div의 stopPropagation을 건너뛰고 모달이 닫혔다.
+// mousedown이 배경 자신에서 시작했을 때만 닫히게 해서 이 경우를 걸러낸다.
+export function useBackdropClose(onClose) {
+  const downOnSelf = useRef(false);
+  return {
+    onMouseDown: (e) => { downOnSelf.current = e.target === e.currentTarget; },
+    onClick: (e) => { if (downOnSelf.current && e.target === e.currentTarget) onClose(); },
+  };
+}
+
 // PC용 중앙 모달 (관리자 콘솔 최초의 상세보기 팝업 패턴 — 모바일 Sheet와 별개).
 export function Modal({ title, onClose, children, wide }) {
   const widthCls = wide === "2xl" ? "max-w-[88rem]" : wide === "xl" ? "max-w-5xl" : wide ? "max-w-3xl" : "max-w-lg";
   return (
-    <div className="fixed inset-0 lg:left-56 z-40 flex items-center justify-center bg-black/40 p-6" onClick={onClose}>
+    <div className="fixed inset-0 lg:left-56 z-40 flex items-center justify-center bg-black/40 p-6" {...useBackdropClose(onClose)}>
       <div
         className={`bg-white rounded-2xl shadow-2xl max-h-[85vh] flex flex-col w-full ${widthCls}`}
         onClick={(e) => e.stopPropagation()}
@@ -479,7 +491,7 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
   // 사이드바(z-50)에 화살표가 가려지지 않도록 body에 바로 붙인다 — 이 div는 관리자 콘솔
   // 레이아웃(사이드바·본문) 트리 밖에서 렌더링되어 항상 전체 뷰포트 기준으로 뜬다.
   return createPortal(
-    <div className="fixed inset-0 z-[70] bg-black/85 flex flex-col" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] bg-black/85 flex flex-col" {...useBackdropClose(onClose)}>
       <div className="flex items-center justify-between px-4 py-3 text-white shrink-0" onClick={(e) => e.stopPropagation()}>
         <span className="text-sm font-semibold">{index + 1} / {urls.length}</span>
         <div className="flex items-center gap-2">

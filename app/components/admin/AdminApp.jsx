@@ -26,7 +26,7 @@ import ErrorCodesAdmin from "@/app/components/admin/ErrorCodesAdmin";
 import { ConfirmHost } from "@/app/components/ConfirmHost";
 import { LoginScreen } from "@/app/components/LoginScreen";
 import { PasswordChangeForm } from "@/app/components/PasswordChangeForm";
-import { AdminAuthContext } from "@/app/components/admin/adminShared";
+import { AdminAuthContext, useBackdropClose } from "@/app/components/admin/adminShared";
 import { BrandSplash } from "@/app/components/ui";
 import { pushSupported, pushPermission, enablePush, disablePush, isSubscribed } from "@/lib/push";
 
@@ -344,7 +344,7 @@ export default function AdminApp() {
       </main>
 
       {pwOpen && me && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setPwOpen(false)}>
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" {...useBackdropClose(() => setPwOpen(false))}>
           <div className="bg-white rounded-2xl p-5 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
             <p className="text-sm font-extrabold text-slate-800 mb-3">비밀번호 변경</p>
             <PasswordChangeForm profileId={me.id} onDone={() => setPwOpen(false)} />

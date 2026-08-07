@@ -10,7 +10,7 @@ import { Image as ImageIcon, Pin, ThumbsUp, MessageCircle, Trash2, X, Send, Sear
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
 import { uploadPhoto, downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
-import { Modal, inputCls, AdminAuthContext } from "@/app/components/admin/adminShared";
+import { Modal, inputCls, AdminAuthContext, useBackdropClose } from "@/app/components/admin/adminShared";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { profileIdByName } from "@/lib/utils";
 import { PhotoLightboxPane } from "@/app/components/ui";
@@ -85,7 +85,7 @@ function PhotoViewerOverlay({ urls, index, onIndexChange, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/80 flex flex-col" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] bg-black/80 flex flex-col" {...useBackdropClose(onClose)}>
       <div className="flex items-center justify-between px-4 py-3 text-white shrink-0" onClick={(e) => e.stopPropagation()}>
         <span className="text-sm font-semibold">{urls.length > 1 ? `${index + 1} / ${urls.length}` : ""}</span>
         <div className="flex items-center gap-2">
