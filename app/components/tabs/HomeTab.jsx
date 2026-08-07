@@ -351,7 +351,7 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
               <p className="text-xs font-bold text-slate-500">
                 출근 <span className="text-slate-800">{hhmm(mine.checkedInAt)}</span>
                 {mine.lat != null
-                  ? <span className="ml-1.5 text-[10px] font-bold text-emerald-600">· 위치 확인됨</span>
+                  ? <span className="ml-1.5 text-[10px] font-bold text-emerald-600">· 📍근무 중 위치 공유</span>
                   : <span className="ml-1.5 text-[10px] font-bold text-amber-600">· 위치 미기록</span>}
                 {done && (
                   <span className="ml-2 text-slate-800">{mine.status} {hhmm(mine.checkedOutAt)}</span>
