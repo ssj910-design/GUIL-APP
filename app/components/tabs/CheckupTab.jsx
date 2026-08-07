@@ -738,7 +738,11 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
               {checkupResult && (
                 <div className="mb-2">
                   <p className={`text-xs font-bold ${checkupResult.resultCode === "000" ? "text-emerald-600" : "text-red-600"}`}>
-                    {checkupResult.error ? checkupResult.error : `${checkupResult.resultCode} ${checkupResult.resultMsg}`}
+                    {checkupResult.error
+                      ? checkupResult.error
+                      : checkupResult.resultCode === "000"
+                        ? "자체점검결과 등록 완료"
+                        : `${checkupResult.resultCode} ${checkupResult.resultMsg}`}
                   </p>
                   {checkupResult.resultCode === "999" && (
                     <p className="text-[10px] text-slate-400 mt-1">
