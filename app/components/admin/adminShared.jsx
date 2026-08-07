@@ -1,7 +1,7 @@
 "use client";
 
 // 관리자 콘솔 공용 헬퍼 — 표기(호기·담당자)는 v2 FK 우선, 옛 라벨 fallback.
-import { useState, useRef, createContext } from "react";
+import { useState, useEffect, useRef, createContext } from "react";
 import { createPortal } from "react-dom";
 import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil, Paperclip } from "lucide-react";
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
@@ -449,12 +449,37 @@ export function PhotoGrid({ urls = [], cols = 4, emptyText = "등록된 사진�
   );
 }
 
-// 크게보기 — 좌우 화살표로 이동, 지금 보는 사진 한 장 또는 전체(zip) 다운로드.
+// 크게보기 — 좌우 화살표로 이동, 더블클릭/휠로 확대(확대 중엔 드래그로 이동), 지금 보는
+// 사진 한 장 또는 전체(zip) 다운로드.
 function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
   const url = urls[index];
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const dragRef = useRef(null);
+
+  // 사진을 넘기면 확대·이동 상태를 초기화 — 이전 사진 확대 상태가 다음 사진에 남아있으면 헷갈린다.
+  useEffect(() => { setZoom(1); setPan({ x: 0, y: 0 }); }, [index]);
 
   function prev() { onIndexChange((index - 1 + urls.length) % urls.length); }
   function next() { onIndexChange((index + 1) % urls.length); }
+
+  function toggleZoom() {
+    setZoom((z) => (z > 1 ? 1 : 2.5));
+    setPan({ x: 0, y: 0 });
+  }
+  function onWheel(e) {
+    e.preventDefault();
+    setZoom((z) => Math.min(4, Math.max(1, z - e.deltaY * 0.01)));
+  }
+  function onPointerDown(e) {
+    if (zoom <= 1) return;
+    dragRef.current = { startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y };
+  }
+  function onPointerMove(e) {
+    if (!dragRef.current) return;
+    setPan({ x: dragRef.current.panX + (e.clientX - dragRef.current.startX), y: dragRef.current.panY + (e.clientY - dragRef.current.startY) });
+  }
+  function onPointerUp() { dragRef.current = null; }
 
   async function downloadOne() {
     try {
@@ -497,7 +522,19 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
           </button>
         )}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={url} alt="" className="max-w-full max-h-full object-contain" />
+        <img
+          src={url}
+          alt=""
+          draggable={false}
+          className={`max-w-full max-h-full object-contain select-none ${zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"}`}
+          style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transition: dragRef.current ? "none" : "transform 0.15s ease-out" }}
+          onDoubleClick={toggleZoom}
+          onWheel={onWheel}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerLeave={onPointerUp}
+        />
         {urls.length > 1 && (
           <button onClick={next} className="absolute right-2 md:right-6 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
             <ChevronRight size={24} />

@@ -1,7 +1,7 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft } from "lucide-react";
+import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
 
 
@@ -116,6 +116,99 @@ export function PhotoThumb({ caption }) {
       <ImageIcon size={20} className="text-slate-400" />
       {caption && <span className="text-[10px] text-slate-400 font-semibold">{caption}</span>}
     </div>
+  );
+}
+
+
+/* 사진 여러 장을 터치하면 전체화면으로 볼 수 있는 그리드 — 2장 이상이면 좌우 넘김, 더블탭/휠로 확대 */
+export function PhotoGrid({ urls = [], cols = 3, className = "" }) {
+  const [viewerIndex, setViewerIndex] = useState(null);
+  if (!urls.length) return null;
+  return (
+    <>
+      <div className={`grid gap-2 ${className}`} style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+        {urls.map((url, i) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={i}
+            src={url}
+            alt=""
+            className="w-full aspect-square rounded-xl object-cover border border-slate-200 active:opacity-80"
+            onClick={() => setViewerIndex(i)}
+          />
+        ))}
+      </div>
+      {viewerIndex != null && (
+        <PhotoLightbox urls={urls} index={viewerIndex} onIndexChange={setViewerIndex} onClose={() => setViewerIndex(null)} />
+      )}
+    </>
+  );
+}
+
+function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
+  const url = urls[index];
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const dragRef = useRef(null);
+
+  // 사진을 넘기면 확대·이동 상태를 초기화 — 이전 사진 확대 상태가 다음 사진에 남아있으면 헷갈린다.
+  useEffect(() => { setZoom(1); setPan({ x: 0, y: 0 }); }, [index]);
+
+  function prev() { onIndexChange((index - 1 + urls.length) % urls.length); }
+  function next() { onIndexChange((index + 1) % urls.length); }
+
+  function toggleZoom() {
+    setZoom((z) => (z > 1 ? 1 : 2.5));
+    setPan({ x: 0, y: 0 });
+  }
+  function onWheel(e) {
+    e.preventDefault();
+    setZoom((z) => Math.min(4, Math.max(1, z - e.deltaY * 0.01)));
+  }
+  function onPointerDown(e) {
+    if (zoom <= 1) return;
+    dragRef.current = { startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y };
+  }
+  function onPointerMove(e) {
+    if (!dragRef.current) return;
+    setPan({ x: dragRef.current.panX + (e.clientX - dragRef.current.startX), y: dragRef.current.panY + (e.clientY - dragRef.current.startY) });
+  }
+  function onPointerUp() { dragRef.current = null; }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[70] bg-black/85 flex flex-col" onClick={onClose}>
+      <div className="flex items-center justify-between px-4 py-3 text-white shrink-0" onClick={(e) => e.stopPropagation()}>
+        <span className="text-sm font-semibold">{index + 1} / {urls.length}</span>
+        <button onClick={onClose} className="p-1.5 text-white/80 hover:text-white"><X size={22} /></button>
+      </div>
+      <div className="flex-1 flex items-center justify-center relative px-4 min-h-0" onClick={(e) => e.stopPropagation()}>
+        {urls.length > 1 && (
+          <button onClick={prev} className="absolute left-2 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
+            <ChevronLeft size={24} />
+          </button>
+        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={url}
+          alt=""
+          draggable={false}
+          className={`max-w-full max-h-full object-contain select-none ${zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"}`}
+          style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transition: dragRef.current ? "none" : "transform 0.15s ease-out" }}
+          onDoubleClick={toggleZoom}
+          onWheel={onWheel}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerLeave={onPointerUp}
+        />
+        {urls.length > 1 && (
+          <button onClick={next} className="absolute right-2 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
+            <ChevronRight size={24} />
+          </button>
+        )}
+      </div>
+    </div>,
+    document.body
   );
 }
 

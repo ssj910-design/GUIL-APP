@@ -1,6 +1,6 @@
 import { useState, useContext, useRef, useEffect } from "react";
 import { Package, Receipt, ChevronRight, ChevronLeft, ChevronDown, FileText, PackageCheck, RotateCcw, PackageX, Search, Repeat, KeyRound } from "lucide-react";
-import { Badge, PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
+import { Badge, PhotoThumb, PhotoGrid, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
 import { AuthContext } from "@/app/components/context";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
@@ -435,13 +435,13 @@ function MaterialsPanel({ pending, rejected, suppliedCount, engineerNames, onSup
             )}
             <div>
               <p className="text-xs font-bold text-slate-500 mb-2">기사가 첨부한 부품 규격 사진 ({shownDetail.photoCount ?? 1}장)</p>
-              <div className="grid grid-cols-3 gap-2">
-                {shownDetail.photoUrls?.length > 0
-                  ? shownDetail.photoUrls.map((url, i) => (
-                      <img key={i} src={url} alt="" className="w-full aspect-square rounded-xl object-cover border border-slate-200" />
-                    ))
-                  : Array.from({ length: shownDetail.photoCount ?? 1 }).map((_, i) => <PhotoThumb key={i} />)}
-              </div>
+              {shownDetail.photoUrls?.length > 0
+                ? <PhotoGrid urls={shownDetail.photoUrls} />
+                : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {Array.from({ length: shownDetail.photoCount ?? 1 }).map((_, i) => <PhotoThumb key={i} />)}
+                  </div>
+                )}
             </div>
           </div>
         </Sheet>
@@ -511,13 +511,13 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
             )}
             <div>
               <p className="text-xs font-bold text-slate-500 mb-2">기사가 첨부한 현장 상태 사진 ({shownDetail.photoCount ?? 1}장)</p>
-              <div className="grid grid-cols-3 gap-2">
-                {shownDetail.photoUrls?.length > 0
-                  ? shownDetail.photoUrls.map((url, i) => (
-                      <img key={i} src={url} alt="" className="w-full aspect-square rounded-xl object-cover border border-slate-200" />
-                    ))
-                  : Array.from({ length: shownDetail.photoCount ?? 1 }).map((_, i) => <PhotoThumb key={i} />)}
-              </div>
+              {shownDetail.photoUrls?.length > 0
+                ? <PhotoGrid urls={shownDetail.photoUrls} />
+                : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {Array.from({ length: shownDetail.photoCount ?? 1 }).map((_, i) => <PhotoThumb key={i} />)}
+                  </div>
+                )}
             </div>
           </div>
         </Sheet>
