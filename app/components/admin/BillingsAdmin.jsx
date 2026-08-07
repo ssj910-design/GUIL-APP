@@ -24,7 +24,8 @@ function siteManagerOf(data, unitId, fallbackSiteName) {
 function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPrice }) {
   const { profiles } = data;
   const isSuper = useContext(AdminAuthContext).tier === "super"; // 무상처리·가격조정은 최고관리자만
-  const engineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
+  // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 관리자가 자재담당자에게도 배정할 수 있어야 한다.
+  const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
   const notesReady = data.billings.some((x) => x.notes !== undefined);
   const [form, setForm] = useState({
     notes: b.notes ?? "",

@@ -541,7 +541,8 @@ export default function SitesAdmin({ data, setData }) {
       contractFilter === "expiring" ? s.isActive !== false && (in30(s.contractEnd) || isExpired(s.contractEnd)) :
       // "전체" 목록에선 계약종료 현장을 기본으로 숨긴다 — 검색어를 입력했을 때만 매칭되면 보이게(종료 계약 탭은 그대로 전용 진입점).
       search.trim() ? true : s.isActive !== false);
-  const engineers = profiles.filter((p) => p.role === "engineer" && p.is_active !== false); // 제외된 기사는 담당기사 배정 목록에서 뺀다
+  // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 관리자가 자재담당자에게도 담당기사 배정을 할 수 있어야 한다.
+  const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false); // 제외된 기사는 담당기사 배정 목록에서 뺀다
   // contract_date/maintenance_cost 컬럼은 각 마이그레이션 실행 전엔 존재하지 않는다 — undefined면 아직 미실행으로 간주.
   const contractDateReady = sites.some((s) => s.contractDate !== undefined);
   const maintenanceCostReady = sites.some((s) => s.maintenanceCost !== undefined);

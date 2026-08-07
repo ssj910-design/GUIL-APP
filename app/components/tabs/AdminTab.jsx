@@ -911,9 +911,13 @@ function DashStat({ label, n, tone }) {
 
 
 export function AdminTab({ materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onClearReassignRequest, onResetEngineerPassword, materialFocusId, onMaterialFocusHandled, quoteFocusId, onQuoteFocusHandled }) {
-  const { engineerNames, adminTier, profiles } = useContext(AuthContext);
+  const { engineerNames: ctxEngineerNames, adminTier, profiles } = useContext(AuthContext);
   // 자재담당관리자는 자재출하관리·상비부품보충만 본다 (견적·재배정·비용청구·계정관리는 다른 관리자 담당).
   const isMaterialTier = adminTier === "material";
+  // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 다른 관리자가 자재지급·할일을
+  // 자재담당자에게도 배정할 수 있어야 한다. engineerNames(공용 기사 명단, GPS·근태 등에도 쓰임)는
+  // 그대로 두고 이 화면들에서만 합친다.
+  const engineerNames = [...ctxEngineerNames, ...(profiles ?? []).filter((p) => p.role === "admin" && p.admin_tier === "material" && p.is_active !== false).map((p) => p.name)];
   // PC 관리자 콘솔(EngineersAdmin)과 동일한 대상 — 기사 전체 + 최고관리자를 뺀 관리자 계정.
   const resettableAccounts = (profiles ?? [])
     .filter((p) => (p.role === "engineer" || (p.role === "admin" && p.admin_tier !== "super")) && p.is_active !== false);

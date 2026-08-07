@@ -724,7 +724,7 @@ export default function VerifyImport({ data, setData, onClose }) {
   const engineersByName = useMemo(() => {
     const m = new Map();
     for (const p of data?.profiles ?? []) {
-      if (p.role === "engineer" && p.is_active !== false && p.name) m.set(nameKey(p.name), p);
+      if ((p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false && p.name) m.set(nameKey(p.name), p);
     }
     return m;
   }, [data]);
