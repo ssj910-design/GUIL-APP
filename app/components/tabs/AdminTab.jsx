@@ -186,11 +186,13 @@ function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto
             const { name, qty } = parsePartQty(part);
             return (
               <div key={i} className="flex items-center gap-2">
-                <span className="text-xs text-slate-700 truncate flex-1">{name || part}{qty ? ` ×${qty}` : ""}</span>
+                <span className="text-xs text-slate-700 truncate flex-1 min-w-0">{name || part}{qty ? ` ×${qty}` : ""}</span>
+                {/* inputCls에 이미 w-full이 들어있어 뒤에 w-28만 붙이면 스타일시트 순서상 w-full이 이길 수
+                    있다 — !w-28(important)로 확실히 눌러야 좁은 고정폭이 실제로 적용된다. */}
                 <input
                   type="number"
                   inputMode="numeric"
-                  className={`${inputCls} w-28`}
+                  className={`${inputCls} !w-28 shrink-0`}
                   placeholder="개당 단가"
                   value={amounts[i] ?? ""}
                   onChange={(e) => setAmounts((m) => ({ ...m, [i]: e.target.value }))}
@@ -663,11 +665,11 @@ function SupplyEditForm({ r, existingTodo, engineerNames, onSubmit, onAttachPhot
             const { name, qty } = parsePartQty(part);
             return (
               <div key={i} className="flex items-center gap-1.5">
-                <span className="text-xs text-slate-700 flex-1 truncate">{name || part}</span>
-                <span className="text-xs text-slate-500 w-8">{qty || "-"}</span>
+                <span className="text-xs text-slate-700 flex-1 truncate min-w-0">{name || part}</span>
+                <span className="text-xs text-slate-500 w-8 shrink-0">{qty || "-"}</span>
                 <input
                   type="number"
-                  className={`${inputCls} w-28`}
+                  className={`${inputCls} !w-28 shrink-0`}
                   placeholder="금액"
                   value={amounts[i] ?? ""}
                   onChange={(e) => setAmounts((m) => ({ ...m, [i]: e.target.value }))}
