@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
+import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
 
 
@@ -169,11 +170,36 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
   const prev = () => onIndexChange((index - 1 + urls.length) % urls.length);
   const next = () => onIndexChange((index + 1) % urls.length);
 
+  async function downloadOne() {
+    try {
+      await downloadPhoto(urls[index], `사진_${index + 1}.${extOf(urls[index])}`);
+    } catch (err) {
+      alert("다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
+    }
+  }
+  async function downloadAll() {
+    try {
+      await downloadPhotosAsZip(urls, "사진.zip", "사진");
+    } catch (err) {
+      alert("전체 다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
+    }
+  }
+
   return createPortal(
     <div className="fixed inset-0 z-[70] bg-black/85 flex flex-col" onClick={onClose}>
       <div className="flex items-center justify-between px-4 py-3 text-white shrink-0" onClick={(e) => e.stopPropagation()}>
         <span className="text-sm font-semibold">{index + 1} / {urls.length}</span>
-        <button onClick={onClose} className="p-1.5 text-white/80 hover:text-white"><X size={22} /></button>
+        <div className="flex items-center gap-2">
+          <button onClick={downloadOne} className="text-xs font-bold bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg">
+            이 사진 다운로드
+          </button>
+          {urls.length > 1 && (
+            <button onClick={downloadAll} className="text-xs font-bold bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg">
+              전체 다운로드
+            </button>
+          )}
+          <button onClick={onClose} className="p-1.5 text-white/80 hover:text-white"><X size={22} /></button>
+        </div>
       </div>
       <div
         ref={containerRef}

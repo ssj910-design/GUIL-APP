@@ -1,7 +1,7 @@
 import { useState, useContext, useRef } from "react";
 import { Send, Plus, X, Download, MessageCircle, ThumbsUp, MoreVertical, ChevronLeft, ChevronRight, Pin, Search, Pencil } from "lucide-react";
 import { AuthContext } from "@/app/components/context";
-import { uploadPhoto, downloadPhoto } from "@/lib/photos";
+import { uploadPhoto, downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { PhotoLightboxPane } from "@/app/components/ui";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
@@ -12,14 +12,35 @@ const isVideo = (url) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(url);
 function PhotoViewerOverlay({ urls, index, onIndexChange, onClose }) {
   const { containerRef, idx, showPrev, showNext, trackStyle, zoom, pan, isGesturing, handlers } =
     usePhotoLightboxGestures(urls.length, index, onIndexChange);
+
+  async function downloadOne() {
+    try {
+      await downloadPhoto(urls[index], `게시판-사진_${index + 1}.${extOf(urls[index])}`);
+    } catch (err) {
+      alert("다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
+    }
+  }
+  async function downloadAll() {
+    try {
+      await downloadPhotosAsZip(urls, "게시판-사진.zip", "게시판-사진");
+    } catch (err) {
+      alert("전체 다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-black/90 flex flex-col" onClick={onClose}>
       <div className="flex items-center justify-between px-4 py-3 shrink-0" onClick={(e) => e.stopPropagation()}>
         <span className="text-white text-xs font-semibold">{urls.length > 1 ? `${index + 1} / ${urls.length}` : ""}</span>
         <div className="flex items-center gap-2">
-          <button onClick={() => downloadPhoto(urls[index], "게시판-사진")} className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="사진 저장">
+          <button onClick={downloadOne} className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="사진 저장">
             <Download size={18} />
           </button>
+          {urls.length > 1 && (
+            <button onClick={downloadAll} className="text-xs font-bold bg-white/15 text-white px-3 h-10 rounded-full" aria-label="전체 다운로드">
+              전체
+            </button>
+          )}
           <button onClick={onClose} className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="닫기">
             <X size={18} />
           </button>

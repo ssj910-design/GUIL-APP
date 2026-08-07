@@ -9,7 +9,7 @@ import { useContext, useState } from "react";
 import { Image as ImageIcon, Pin, ThumbsUp, MessageCircle, Trash2, X, Send, Search, MoreVertical, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
-import { uploadPhoto } from "@/lib/photos";
+import { uploadPhoto, downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
 import { Modal, inputCls, AdminAuthContext } from "@/app/components/admin/adminShared";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { profileIdByName } from "@/lib/utils";
@@ -68,11 +68,37 @@ function PhotoGrid({ urls, onOpen, compact }) {
 function PhotoViewerOverlay({ urls, index, onIndexChange, onClose }) {
   const { containerRef, idx, showPrev, showNext, trackStyle, zoom, pan, isGesturing, handlers } =
     usePhotoLightboxGestures(urls.length, index, onIndexChange);
+
+  async function downloadOne() {
+    try {
+      await downloadPhoto(urls[index], `사진_${index + 1}.${extOf(urls[index])}`);
+    } catch (err) {
+      alert("다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
+    }
+  }
+  async function downloadAll() {
+    try {
+      await downloadPhotosAsZip(urls, "사진.zip", "사진");
+    } catch (err) {
+      alert("전체 다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-[60] bg-black/80 flex flex-col" onClick={onClose}>
       <div className="flex items-center justify-between px-4 py-3 text-white shrink-0" onClick={(e) => e.stopPropagation()}>
         <span className="text-sm font-semibold">{urls.length > 1 ? `${index + 1} / ${urls.length}` : ""}</span>
-        <button onClick={onClose} className="p-1.5 text-white/80 hover:text-white"><X size={22} /></button>
+        <div className="flex items-center gap-2">
+          <button onClick={downloadOne} className="text-xs font-bold bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg">
+            이 사진 다운로드
+          </button>
+          {urls.length > 1 && (
+            <button onClick={downloadAll} className="text-xs font-bold bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg">
+              전체 다운로드
+            </button>
+          )}
+          <button onClick={onClose} className="p-1.5 text-white/80 hover:text-white"><X size={22} /></button>
+        </div>
       </div>
       <div ref={containerRef} className="flex-1 relative min-h-0 touch-none overflow-hidden p-6" onClick={(e) => e.stopPropagation()} {...handlers}>
         {urls.length > 1 && (
