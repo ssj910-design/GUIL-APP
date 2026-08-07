@@ -22,7 +22,7 @@ export function useQuoteRecipientFields(quote, siteManagers, profiles) {
   const [referencePhone, setReferencePhone] = useState("");
   const [sendEmail, setSendEmail] = useState(true);
   const [sendKakao, setSendKakao] = useState(true);
-  const [noticeMessage, setNoticeMessage] = useState(quote.noticeMessage || "■ 특이사항: ");
+  const [noticeMessage, setNoticeMessage] = useState(quote.noticeMessage || "");
   const [attachments, setAttachments] = useState(quote.attachmentUrls ?? []); // { name, url }[]
   const [uploading, setUploading] = useState(false);
   const [attachError, setAttachError] = useState("");
