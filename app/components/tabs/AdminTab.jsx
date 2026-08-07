@@ -152,10 +152,13 @@ function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto
   const [dueDate, setDueDate] = useState(addDays(TODAY_STR, 30));
   const [description, setDescription] = useState("");
   const [advanced, setAdvanced] = useState(false);
-  const total = parts.reduce((sum, _, i) => sum + (Number(amounts[i]) || 0), 0);
+  // amounts[i]는 개당 단가 — 부품별 합계는 단가 × 신청 수량으로 계산한다.
+  const qtyOf = (part) => { const q = parsePartQty(part).qty; return q ? parseInt(q, 10) : 1; };
+  const lineTotal = (part, i) => (Number(amounts[i]) || 0) * qtyOf(part);
+  const total = parts.reduce((sum, part, i) => sum + lineTotal(part, i), 0);
   const allAmountsFilled = parts.every((_, i) => Number(amounts[i]) > 0);
   const billingPartText = parts
-    .map((part, i) => (amounts[i] ? `${part}(₩${Number(amounts[i]).toLocaleString()})` : part))
+    .map((part, i) => (amounts[i] ? `${part}(₩${lineTotal(part, i).toLocaleString()})` : part))
     .join(", ");
   return (
     <div className="bg-white rounded-xl border border-amber-200 p-3.5 mx-0.5">
@@ -177,7 +180,7 @@ function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto
       </div>
 
       <div className="mt-3">
-        <label className="text-[11px] font-extrabold text-slate-600 block mb-1.5">부품별 금액</label>
+        <label className="text-[11px] font-extrabold text-slate-600 block mb-1.5">부품별 개당 단가</label>
         <div className="space-y-1.5">
           {parts.map((part, i) => {
             const { name, qty } = parsePartQty(part);
@@ -188,15 +191,18 @@ function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto
                   type="number"
                   inputMode="numeric"
                   className={`${inputCls} w-28`}
-                  placeholder="금액"
+                  placeholder="개당 단가"
                   value={amounts[i] ?? ""}
                   onChange={(e) => setAmounts((m) => ({ ...m, [i]: e.target.value }))}
                 />
+                {qtyOf(part) > 1 && (
+                  <span className="text-[10px] text-slate-400 w-20 text-right shrink-0">= ₩{lineTotal(part, i).toLocaleString()}</span>
+                )}
               </div>
             );
           })}
         </div>
-        {parts.length > 1 && <p className="text-[11px] text-slate-500 text-right mt-1">합계 ₩{total.toLocaleString()}</p>}
+        <p className="text-[11px] text-slate-500 text-right mt-1">합계 ₩{total.toLocaleString()}</p>
       </div>
 
       <button type="button" onClick={() => setAdvanced((v) => !v)} className="mt-2.5 flex items-center gap-0.5 text-[11px] font-bold text-slate-400">
