@@ -6,13 +6,15 @@
 // 중앙 모달(adminShared의 Modal)로 — PC 게시판에 맞는 레이아웃.
 // 작성자는 실제 로그인한 관리자 이름(AdminAuthContext)을 쓴다 — "관리자"로 뭉뚱그리지 않는다.
 import { useContext, useState } from "react";
-import { Image as ImageIcon, Pin, ThumbsUp, MessageCircle, Trash2, X, Send, Search, MoreVertical } from "lucide-react";
+import { Image as ImageIcon, Pin, ThumbsUp, MessageCircle, Trash2, X, Send, Search, MoreVertical, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
 import { uploadPhoto } from "@/lib/photos";
 import { Modal, inputCls, AdminAuthContext } from "@/app/components/admin/adminShared";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { profileIdByName } from "@/lib/utils";
+import { PhotoLightboxPane } from "@/app/components/ui";
+import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
 
 // 작성자 이름 첫 글자로 아바타 원을 만든다 — 네이버밴드처럼 글마다 시각적 기준점을 준다.
 function Avatar({ name, small }) {
@@ -58,6 +60,37 @@ function PhotoGrid({ urls, onOpen, compact }) {
           className="w-full aspect-square object-cover rounded-lg border border-slate-200 cursor-pointer"
         />
       ))}
+    </div>
+  );
+}
+
+// 게시글 사진 확대보기 — 여러 장이면 좌우 스와이프/화살표로 넘기고, 더블탭·핀치·휠로 확대.
+function PhotoViewerOverlay({ urls, index, onIndexChange, onClose }) {
+  const { containerRef, idx, showPrev, showNext, trackStyle, zoom, pan, isGesturing, handlers } =
+    usePhotoLightboxGestures(urls.length, index, onIndexChange);
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/80 flex flex-col" onClick={onClose}>
+      <div className="flex items-center justify-between px-4 py-3 text-white shrink-0" onClick={(e) => e.stopPropagation()}>
+        <span className="text-sm font-semibold">{urls.length > 1 ? `${index + 1} / ${urls.length}` : ""}</span>
+        <button onClick={onClose} className="p-1.5 text-white/80 hover:text-white"><X size={22} /></button>
+      </div>
+      <div ref={containerRef} className="flex-1 relative min-h-0 touch-none overflow-hidden p-6" onClick={(e) => e.stopPropagation()} {...handlers}>
+        {urls.length > 1 && (
+          <button onClick={() => onIndexChange(Math.max(0, index - 1))} className="absolute left-2 z-20 top-1/2 -translate-y-1/2 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
+            <ChevronLeft size={24} />
+          </button>
+        )}
+        <div className="flex h-full" style={trackStyle}>
+          {showPrev && <PhotoLightboxPane key={idx - 1} url={urls[idx - 1]} />}
+          <PhotoLightboxPane key={idx} url={urls[idx]} active zoom={zoom} pan={pan} isGesturing={isGesturing} />
+          {showNext && <PhotoLightboxPane key={idx + 1} url={urls[idx + 1]} />}
+        </div>
+        {urls.length > 1 && (
+          <button onClick={() => onIndexChange(Math.min(urls.length - 1, index + 1))} className="absolute right-2 z-20 top-1/2 -translate-y-1/2 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
+            <ChevronRight size={24} />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -369,10 +402,12 @@ export default function RoomAdmin({ data, setData }) {
       )}
 
       {photoViewer && (
-        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-6" onClick={() => setPhotoViewer(null)}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={photoViewer.urls[photoViewer.index]} alt="" className="max-w-full max-h-full object-contain" />
-        </div>
+        <PhotoViewerOverlay
+          urls={photoViewer.urls}
+          index={photoViewer.index}
+          onIndexChange={(i) => setPhotoViewer((v) => ({ ...v, index: i }))}
+          onClose={() => setPhotoViewer(null)}
+        />
       )}
     </div>
   );

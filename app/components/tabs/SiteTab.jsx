@@ -1,14 +1,15 @@
-import React, { useState, useContext, useRef } from "react";
-import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Download, KeyRound, ChevronDown } from "lucide-react";
+import React, { useState, useContext } from "react";
+import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Download, KeyRound, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, shortDate, recentFailuresBySite, siteMatchesQuery, unitContractBadges, unitBadgeLabel } from "@/lib/utils";
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
-import { Badge, TimelineRow, HistoryCard, PrimaryButton, Sheet, Field, inputCls, DrillHeader, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
+import { Badge, TimelineRow, HistoryCard, PrimaryButton, Sheet, Field, inputCls, DrillHeader, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, PhotoLightboxPane } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { BillingCard } from "@/app/components/tabs/BillingTab";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
+import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
 
 
 /* ---- 승강기정보 화면 (정보 / 고장 / 검사) ---- */
@@ -308,17 +309,13 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
 }
 
 
-// 사진이 여러 장이면 좌우로 드래그해서 넘겨볼 수 있는 전체화면 뷰어입니다.
+// 사진이 여러 장이면 좌우로 드래그해서 넘겨볼 수 있는 전체화면 뷰어입니다. 확대는 더블탭·핀치·휠.
 export function PhotoViewerSheet({ urls, index, siteName, date, onClose }) {
   const [current, setCurrent] = useState(index);
-  const [dragX, setDragX] = useState(0);
-  const [transitioning, setTransitioning] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const startXRef = useRef(null);
-  const draggingRef = useRef(false);
-  const dragXRef = useRef(0);
-  const containerRef = useRef(null);
   const baseName = sanitizeFilename(`${siteName || "사진"}_${date || ""}`.replace(/_$/, ""));
+  const { containerRef, idx, showPrev, showNext, trackStyle, zoom, pan, isGesturing, handlers } =
+    usePhotoLightboxGestures(urls.length, current, setCurrent);
 
   async function handleDownloadOne() {
     if (downloading) return;
@@ -343,50 +340,6 @@ export function PhotoViewerSheet({ urls, index, siteName, date, onClose }) {
     setDownloading(false);
   }
 
-  function handleStart(clientX) {
-    startXRef.current = clientX;
-    draggingRef.current = true;
-  }
-  function handleMove(clientX) {
-    if (!draggingRef.current || startXRef.current === null) return;
-    const delta = clientX - startXRef.current;
-    dragXRef.current = delta;
-    setDragX(delta);
-  }
-  function handleEnd() {
-    if (!draggingRef.current) return;
-    draggingRef.current = false;
-    startXRef.current = null;
-    const threshold = 60;
-    const delta = dragXRef.current;
-    const width = containerRef.current?.offsetWidth || 375;
-    dragXRef.current = 0;
-
-    if (delta <= -threshold && current < urls.length - 1) {
-      // 다음 사진: 지금 사진을 왼쪽 밖으로 부드럽게 밀어낸 뒤, 다음 사진으로 바꾸고 제자리로.
-      setTransitioning(true);
-      setDragX(-width);
-      setTimeout(() => {
-        setTransitioning(false);
-        setCurrent((c) => c + 1);
-        setDragX(0);
-      }, 220);
-    } else if (delta >= threshold && current > 0) {
-      setTransitioning(true);
-      setDragX(width);
-      setTimeout(() => {
-        setTransitioning(false);
-        setCurrent((c) => c - 1);
-        setDragX(0);
-      }, 220);
-    } else {
-      // 기준에 못 미치면 부드럽게 제자리로 되돌립니다.
-      setTransitioning(true);
-      setDragX(0);
-      setTimeout(() => setTransitioning(false), 220);
-    }
-  }
-
   return (
     <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
@@ -395,24 +348,22 @@ export function PhotoViewerSheet({ urls, index, siteName, date, onClose }) {
           <X size={22} />
         </button>
       </div>
-      <div
-        ref={containerRef}
-        className="flex-1 flex items-center justify-center overflow-hidden select-none"
-        onTouchStart={(e) => handleStart(e.touches[0].clientX)}
-        onTouchMove={(e) => handleMove(e.touches[0].clientX)}
-        onTouchEnd={handleEnd}
-        onMouseDown={(e) => handleStart(e.clientX)}
-        onMouseMove={(e) => { if (draggingRef.current) handleMove(e.clientX); }}
-        onMouseUp={handleEnd}
-        onMouseLeave={() => { if (draggingRef.current) handleEnd(); }}
-      >
-        <img
-          src={urls[current]}
-          alt=""
-          draggable={false}
-          className="max-w-full max-h-full object-contain"
-          style={{ transform: `translateX(${dragX}px)`, transition: transitioning ? "transform 0.22s ease-out" : "none" }}
-        />
+      <div ref={containerRef} className="flex-1 relative min-h-0 touch-none overflow-hidden" {...handlers}>
+        {urls.length > 1 && (
+          <button type="button" onClick={() => setCurrent((c) => Math.max(0, c - 1))} className="absolute left-2 z-20 top-1/2 -translate-y-1/2 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
+            <ChevronLeft size={24} />
+          </button>
+        )}
+        <div className="flex h-full" style={trackStyle}>
+          {showPrev && <PhotoLightboxPane key={idx - 1} url={urls[idx - 1]} />}
+          <PhotoLightboxPane key={idx} url={urls[idx]} active zoom={zoom} pan={pan} isGesturing={isGesturing} />
+          {showNext && <PhotoLightboxPane key={idx + 1} url={urls[idx + 1]} />}
+        </div>
+        {urls.length > 1 && (
+          <button type="button" onClick={() => setCurrent((c) => Math.min(urls.length - 1, c + 1))} className="absolute right-2 z-20 top-1/2 -translate-y-1/2 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
+            <ChevronRight size={24} />
+          </button>
+        )}
       </div>
       {urls.length > 1 && (
         <div className="flex justify-center gap-1.5 pt-2 shrink-0">

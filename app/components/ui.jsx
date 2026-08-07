@@ -1,8 +1,9 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
+import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
 
 
 /* ------------------------------------------------------------------ */
@@ -145,90 +146,26 @@ export function PhotoGrid({ urls = [], cols = 3, className = "" }) {
   );
 }
 
-// 사진 확대/이동 제스처(더블탭·핀치·좌우 스와이프)를 PC·모바일 라이트박스가 공유한다 — 로직이
-// 두 곳(ui.jsx, adminShared.jsx)에 흩어져 있으면 한쪽만 고치고 다른 쪽 버그를 놓치기 쉽다.
-//
-// 포인터 이벤트는 손가락별로 독립적인 pointerId를 주므로, 활성 포인터 수로 제스처 종류를 정한다
-// (1개=스와이프/이동, 2개=핀치). "드래그로 확대"라는 요청은 실제로는 두 손가락 핀치를 의미했다 —
-// 더블클릭·휠(PC)만으로는 터치 기기에서 확대할 방법이 아예 없었다.
-export function usePhotoZoomSwipe(index, urlsLength, onIndexChange) {
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const pointersRef = useRef(new Map());
-  const gestureRef = useRef(null);
-  const lastTapRef = useRef(0);
-
-  // 사진을 넘기면 확대·이동 상태를 초기화 — 이전 사진 확대 상태가 다음 사진에 남아있으면 헷갈린다.
-  useEffect(() => { setZoom(1); setPan({ x: 0, y: 0 }); }, [index]);
-
-  function prev() { onIndexChange((index - 1 + urlsLength) % urlsLength); }
-  function next() { onIndexChange((index + 1) % urlsLength); }
-  function toggleZoom() {
-    setZoom((z) => (z > 1 ? 1 : 2.5));
-    setPan({ x: 0, y: 0 });
-  }
-  function onWheel(e) {
-    e.preventDefault();
-    setZoom((z) => Math.min(4, Math.max(1, z - e.deltaY * 0.01)));
-  }
-
-  function onPointerDown(e) {
-    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    const pts = [...pointersRef.current.values()];
-    if (pts.length === 2) {
-      const [a, b] = pts;
-      gestureRef.current = { type: "pinch", startDist: Math.hypot(a.x - b.x, a.y - b.y), startZoom: zoom };
-    } else if (pts.length === 1) {
-      gestureRef.current = zoom > 1
-        ? { type: "pan", startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y }
-        : { type: "swipe", startX: e.clientX, startY: e.clientY, startTime: Date.now() };
-    }
-  }
-  function onPointerMove(e) {
-    if (!pointersRef.current.has(e.pointerId)) return;
-    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    const g = gestureRef.current;
-    if (!g) return;
-    if (g.type === "pinch") {
-      const pts = [...pointersRef.current.values()];
-      if (pts.length < 2 || g.startDist <= 0) return;
-      const [a, b] = pts;
-      setZoom(Math.min(4, Math.max(1, g.startZoom * (Math.hypot(a.x - b.x, a.y - b.y) / g.startDist))));
-    } else if (g.type === "pan") {
-      setPan({ x: g.panX + (e.clientX - g.startX), y: g.panY + (e.clientY - g.startY) });
-    }
-  }
-  function endGesture(e) {
-    pointersRef.current.delete(e.pointerId);
-    const g = gestureRef.current;
-    if (g?.type === "swipe") {
-      const dx = e.clientX - g.startX;
-      const dy = e.clientY - g.startY;
-      if (urlsLength > 1 && Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
-        dx > 0 ? prev() : next();
-      } else if (Math.abs(dx) < 10 && Math.abs(dy) < 10 && Date.now() - g.startTime < 300) {
-        const now = Date.now();
-        if (now - lastTapRef.current < 300) { toggleZoom(); lastTapRef.current = 0; }
-        else lastTapRef.current = now;
-      }
-    }
-    if (pointersRef.current.size === 0) {
-      gestureRef.current = null;
-    } else if (pointersRef.current.size === 1 && zoom > 1) {
-      const [[, p]] = pointersRef.current;
-      gestureRef.current = { type: "pan", startX: p.x, startY: p.y, panX: pan.x, panY: pan.y };
-    }
-  }
-
-  return {
-    zoom, pan, isGesturing: () => !!gestureRef.current,
-    handlers: { onDoubleClick: toggleZoom, onWheel, onPointerDown, onPointerMove, onPointerUp: endGesture, onPointerCancel: endGesture },
-  };
+// 사진 한 장 — 라이트박스 트랙 안 슬롯 하나. active일 때만 확대·이동 스타일을 받는다.
+// PC 관리자 콘솔(adminShared.jsx)의 라이트박스도 이 조각을 그대로 재사용한다.
+export function PhotoLightboxPane({ url, active, zoom, pan, isGesturing }) {
+  return (
+    <div className="w-full h-full shrink-0 flex items-center justify-center px-4">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt=""
+        draggable={false}
+        className={`max-w-full max-h-full object-contain select-none ${active && zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"}`}
+        style={active ? { transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transition: isGesturing() ? "none" : "transform 0.15s ease-out" } : undefined}
+      />
+    </div>
+  );
 }
 
 function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
-  const url = urls[index];
-  const { zoom, pan, isGesturing, handlers } = usePhotoZoomSwipe(index, urls.length, onIndexChange);
+  const { containerRef, idx, showPrev, showNext, trackStyle, zoom, pan, isGesturing, handlers } =
+    usePhotoLightboxGestures(urls.length, index, onIndexChange);
   const prev = () => onIndexChange((index - 1 + urls.length) % urls.length);
   const next = () => onIndexChange((index + 1) % urls.length);
 
@@ -238,23 +175,24 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
         <span className="text-sm font-semibold">{index + 1} / {urls.length}</span>
         <button onClick={onClose} className="p-1.5 text-white/80 hover:text-white"><X size={22} /></button>
       </div>
-      <div className="flex-1 flex items-center justify-center relative px-4 min-h-0 touch-none" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={containerRef}
+        className="flex-1 relative min-h-0 touch-none overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+        {...handlers}
+      >
         {urls.length > 1 && (
-          <button onClick={prev} className="absolute left-2 z-10 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
+          <button onClick={prev} className="absolute left-2 z-20 top-1/2 -translate-y-1/2 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
             <ChevronLeft size={24} />
           </button>
         )}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={url}
-          alt=""
-          draggable={false}
-          className={`max-w-full max-h-full object-contain select-none ${zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"}`}
-          style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transition: isGesturing() ? "none" : "transform 0.15s ease-out" }}
-          {...handlers}
-        />
+        <div className="flex h-full" style={trackStyle}>
+          {showPrev && <PhotoLightboxPane key={idx - 1} url={urls[idx - 1]} />}
+          <PhotoLightboxPane key={idx} url={urls[idx]} active zoom={zoom} pan={pan} isGesturing={isGesturing} />
+          {showNext && <PhotoLightboxPane key={idx + 1} url={urls[idx + 1]} />}
+        </div>
         {urls.length > 1 && (
-          <button onClick={next} className="absolute right-2 z-10 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
+          <button onClick={next} className="absolute right-2 z-20 top-1/2 -translate-y-1/2 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
             <ChevronRight size={24} />
           </button>
         )}

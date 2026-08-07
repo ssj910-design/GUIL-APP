@@ -7,7 +7,8 @@ import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, P
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
 import { shortDate, parseShortDate, autoFormatShortDate, formatUnitLabel, sortEngineersByDistance, busyStatusOf } from "@/lib/utils";
 import { confirmAsync } from "@/app/components/ConfirmHost";
-import { usePhotoZoomSwipe } from "@/app/components/ui";
+import { PhotoLightboxPane } from "@/app/components/ui";
+import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
 
 export const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
 
@@ -450,11 +451,12 @@ export function PhotoGrid({ urls = [], cols = 4, emptyText = "등록된 사진�
   );
 }
 
-// 크게보기 — 좌우 화살표로 이동, 더블클릭/휠로 확대(확대 중엔 드래그로 이동), 지금 보는
-// 사진 한 장 또는 전체(zip) 다운로드.
+// 크게보기 — 좌우 화살표·스와이프로 이동, 더블탭·핀치·휠로 확대(확대 중엔 드래그로 이동), 지금
+// 보는 사진 한 장 또는 전체(zip) 다운로드.
 function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
   const url = urls[index];
-  const { zoom, pan, isGesturing, handlers } = usePhotoZoomSwipe(index, urls.length, onIndexChange);
+  const { containerRef, idx, showPrev, showNext, trackStyle, zoom, pan, isGesturing, handlers } =
+    usePhotoLightboxGestures(urls.length, index, onIndexChange);
   const prev = () => onIndexChange((index - 1 + urls.length) % urls.length);
   const next = () => onIndexChange((index + 1) % urls.length);
 
@@ -492,23 +494,24 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
           <button onClick={onClose} className="p-1.5 text-white/80 hover:text-white"><X size={20} /></button>
         </div>
       </div>
-      <div className="flex-1 flex items-center justify-center relative px-4 min-h-0 touch-none" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={containerRef}
+        className="flex-1 relative min-h-0 touch-none overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+        {...handlers}
+      >
         {urls.length > 1 && (
-          <button onClick={prev} className="absolute left-2 md:left-6 z-10 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
+          <button onClick={prev} className="absolute left-2 md:left-6 z-20 top-1/2 -translate-y-1/2 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
             <ChevronLeft size={24} />
           </button>
         )}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={url}
-          alt=""
-          draggable={false}
-          className={`max-w-full max-h-full object-contain select-none ${zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"}`}
-          style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transition: isGesturing() ? "none" : "transform 0.15s ease-out" }}
-          {...handlers}
-        />
+        <div className="flex h-full" style={trackStyle}>
+          {showPrev && <PhotoLightboxPane key={idx - 1} url={urls[idx - 1]} />}
+          <PhotoLightboxPane key={idx} url={urls[idx]} active zoom={zoom} pan={pan} isGesturing={isGesturing} />
+          {showNext && <PhotoLightboxPane key={idx + 1} url={urls[idx + 1]} />}
+        </div>
         {urls.length > 1 && (
-          <button onClick={next} className="absolute right-2 md:right-6 z-10 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
+          <button onClick={next} className="absolute right-2 md:right-6 z-20 top-1/2 -translate-y-1/2 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
             <ChevronRight size={24} />
           </button>
         )}

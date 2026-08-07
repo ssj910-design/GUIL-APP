@@ -1,10 +1,50 @@
 import { useState, useContext, useRef } from "react";
-import { Send, Plus, X, Download, MessageCircle, ThumbsUp, MoreVertical, ChevronLeft, Pin, Search, Pencil } from "lucide-react";
+import { Send, Plus, X, Download, MessageCircle, ThumbsUp, MoreVertical, ChevronLeft, ChevronRight, Pin, Search, Pencil } from "lucide-react";
 import { AuthContext } from "@/app/components/context";
 import { uploadPhoto, downloadPhoto } from "@/lib/photos";
 import { confirmAsync } from "@/app/components/ConfirmHost";
+import { PhotoLightboxPane } from "@/app/components/ui";
+import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
 
 const isVideo = (url) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(url);
+
+// 게시글 사진 확대보기 — 여러 장이면 좌우 스와이프/화살표로 넘기고, 더블탭·핀치·휠로 확대.
+function PhotoViewerOverlay({ urls, index, onIndexChange, onClose }) {
+  const { containerRef, idx, showPrev, showNext, trackStyle, zoom, pan, isGesturing, handlers } =
+    usePhotoLightboxGestures(urls.length, index, onIndexChange);
+  return (
+    <div className="fixed inset-0 z-50 bg-black/90 flex flex-col" onClick={onClose}>
+      <div className="flex items-center justify-between px-4 py-3 shrink-0" onClick={(e) => e.stopPropagation()}>
+        <span className="text-white text-xs font-semibold">{urls.length > 1 ? `${index + 1} / ${urls.length}` : ""}</span>
+        <div className="flex items-center gap-2">
+          <button onClick={() => downloadPhoto(urls[index], "게시판-사진")} className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="사진 저장">
+            <Download size={18} />
+          </button>
+          <button onClick={onClose} className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="닫기">
+            <X size={18} />
+          </button>
+        </div>
+      </div>
+      <div ref={containerRef} className="flex-1 relative min-h-0 touch-none overflow-hidden" onClick={(e) => e.stopPropagation()} {...handlers}>
+        {urls.length > 1 && (
+          <button onClick={() => onIndexChange(Math.max(0, index - 1))} className="absolute left-2 z-20 top-1/2 -translate-y-1/2 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
+            <ChevronLeft size={24} />
+          </button>
+        )}
+        <div className="flex h-full" style={trackStyle}>
+          {showPrev && <PhotoLightboxPane key={idx - 1} url={urls[idx - 1]} />}
+          <PhotoLightboxPane key={idx} url={urls[idx]} active zoom={zoom} pan={pan} isGesturing={isGesturing} />
+          {showNext && <PhotoLightboxPane key={idx + 1} url={urls[idx + 1]} />}
+        </div>
+        {urls.length > 1 && (
+          <button onClick={() => onIndexChange(Math.min(urls.length - 1, index + 1))} className="absolute right-2 z-20 top-1/2 -translate-y-1/2 text-white bg-black/40 hover:bg-black/60 rounded-full p-2">
+            <ChevronRight size={24} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function renderText(text) {
   return (text ?? "").split(/(@[가-힣a-zA-Z0-9()]+)/g).map((s, i) =>
@@ -102,7 +142,7 @@ function PostHeader({ p, canManage, canNotice, menuOpen, onToggleMenu, onCloseMe
 // 게시글 본문(텍스트 수정폼 포함) — 목록 카드/상세화면 공용.
 // ★ 반드시 모듈 최상위에 둘 것: RoomTab 렌더 함수 안에 정의하면 매 렌더마다 새 컴포넌트 타입이 되어
 // 서브트리가 통째로 리마운트된다(수정 textarea가 키 입력마다 포커스를 잃고, 사진·영상이 깜빡임). (P1-3)
-function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEditingId, setViewerUrl }) {
+function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEditingId, onOpenPhoto }) {
   if (editingId === p.id) {
     return (
       <div className="mb-2">
@@ -120,14 +160,14 @@ function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEdit
       {(p.photoUrls ?? []).length > 0 && (
         full ? (
           <div className="space-y-1.5 mt-2">
-            {p.photoUrls.map((u) =>
+            {p.photoUrls.map((u, i) =>
               isVideo(u)
                 ? <video key={u} src={u} controls playsInline className="rounded-lg w-full" />
-                : <img key={u} src={u} alt="첨부 사진" className="rounded-lg w-full object-cover" onClick={() => setViewerUrl(u)} />
+                : <img key={u} src={u} alt="첨부 사진" className="rounded-lg w-full object-cover" onClick={() => onOpenPhoto(p.photoUrls, i)} />
             )}
           </div>
         ) : (
-          <button onClick={(e) => { e.stopPropagation(); setViewerUrl(p.photoUrls[0]); }} className="relative shrink-0">
+          <button onClick={(e) => { e.stopPropagation(); onOpenPhoto(p.photoUrls, 0); }} className="relative shrink-0">
             {isVideo(p.photoUrls[0])
               ? <video src={p.photoUrls[0]} className="w-16 h-16 rounded-lg object-cover" />
               : <img src={p.photoUrls[0]} alt="첨부 사진" className="w-16 h-16 rounded-lg object-cover" />}
@@ -148,7 +188,8 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   const [postIsNotice, setPostIsNotice] = useState(false);
   const [pendingPhotos, setPendingPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
-  const [viewerUrl, setViewerUrl] = useState(null);
+  const [viewer, setViewer] = useState(null); // { urls, index } | null
+  const openPhoto = (urls, index) => setViewer({ urls, index });
   const [commentDrafts, setCommentDrafts] = useState({});
   const [menuFor, setMenuFor] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -246,7 +287,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   }
 
   // 모듈 최상위 PostBody에 넘길 편집·뷰어 상태 묶음 (P1-3)
-  const bodyProps = { editingId, editText, setEditText, saveEdit, setEditingId, setViewerUrl };
+  const bodyProps = { editingId, editText, setEditText, saveEdit, setEditingId, onOpenPhoto: openPhoto };
 
   const openPost = shownPostId ? feed.find((p) => p.id === shownPostId) : null;
 
@@ -304,18 +345,13 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
             <Send size={14} />
           </button>
         </div>
-        {viewerUrl && (
-          <div className="fixed inset-0 z-50 bg-black/90 flex flex-col" onClick={() => setViewerUrl(null)}>
-            <div className="flex justify-end gap-2 p-4 shrink-0">
-              <button onClick={(e) => { e.stopPropagation(); downloadPhoto(viewerUrl, "게시판-사진"); }} className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="사진 저장">
-                <Download size={18} />
-              </button>
-              <button className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="닫기"><X size={18} /></button>
-            </div>
-            <div className="flex-1 flex items-center justify-center p-2 overflow-hidden">
-              <img src={viewerUrl} alt="확대 사진" className="max-w-full max-h-full object-contain" onClick={(e) => e.stopPropagation()} />
-            </div>
-          </div>
+        {viewer && (
+          <PhotoViewerOverlay
+            urls={viewer.urls}
+            index={viewer.index}
+            onIndexChange={(i) => setViewer((v) => ({ ...v, index: i }))}
+            onClose={() => setViewer(null)}
+          />
         )}
       </div>
     );
@@ -447,24 +483,13 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
       )}
 
       {/* 이미지 확대보기 — 저장/닫기 */}
-      {viewerUrl && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col" onClick={() => setViewerUrl(null)}>
-          <div className="flex justify-end gap-2 p-4 shrink-0">
-            <button
-              onClick={(e) => { e.stopPropagation(); downloadPhoto(viewerUrl, "게시판-사진"); }}
-              className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center"
-              aria-label="사진 저장"
-            >
-              <Download size={18} />
-            </button>
-            <button className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="닫기">
-              <X size={18} />
-            </button>
-          </div>
-          <div className="flex-1 flex items-center justify-center p-2 overflow-hidden">
-            <img src={viewerUrl} alt="확대 사진" className="max-w-full max-h-full object-contain" onClick={(e) => e.stopPropagation()} />
-          </div>
-        </div>
+      {viewer && (
+        <PhotoViewerOverlay
+          urls={viewer.urls}
+          index={viewer.index}
+          onIndexChange={(i) => setViewer((v) => ({ ...v, index: i }))}
+          onClose={() => setViewer(null)}
+        />
       )}
     </div>
   );
