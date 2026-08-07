@@ -266,7 +266,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
         </div>
       </div>
       <p className="text-xs text-slate-500 mb-6">
-        현장 {sites.length} · 호기 {units.length}대 · 기사 {profiles.filter((p) => p.role === "engineer" && p.is_active !== false).length}명 · 기준일 {TODAY_STR}
+        현장 {sites.length} · 호기 {units.filter((u) => u.isActive !== false).length}대 · 기사 {profiles.filter((p) => p.role === "engineer" && p.is_active !== false).length}명 · 기준일 {TODAY_STR}
       </p>
 
       {/* 계약 만료 임박 알림 — 종료일 30일 내(만료 포함) */}
