@@ -69,6 +69,17 @@ quote.totalAmount = PDF와 동일 계산식). 실제 등록 문안이 아래 원
 
 **버튼**: 웹링크(WL) · 이름 "견적서 확인하기" · Mobile/PC 링크: `https://#{link}`
 
+## 발송 결과 추적 (웹훅, 2026-08-07 추가)
+
+발송 API 응답은 "솔라피가 접수함"까지라, 카톡 미가입·차단·번호오류로 **못 받은 건도 화면엔
+성공으로 보인다.** 그래서 솔라피가 결과를 확정하면 우리 서버로 알려주게 붙였다.
+
+- 이벤트 `SINGLE-REPORT` → `https://guil-app-pi.vercel.app/api/solapi-webhook?token=…` (등록 완료)
+- 발송 시 `messageId`를 `quote_requests.send_log`에 저장 → 웹훅이 그 항목의 status를 채움
+- 화면(견적 상세·현장정보 견적 이력)에 `알림톡(010-…) ✓수신` / `✗실패(사유)` / `…확인중` 표기
+- ⚠️ **Vercel에 `SOLAPI_WEBHOOK_TOKEN`이 없으면 웹훅이 401로 실패**하고, 8회 연속 실패 시
+  솔라피가 웹훅을 자동 비활성화한다 — 환경변수 등록 후 배포할 것
+
 ## 환경변수 (이름만 — 값은 안전한 경로로)
 
 | 이름 | 값 출처 |
@@ -77,6 +88,7 @@ quote.totalAmount = PDF와 동일 계산식). 실제 등록 문안이 아래 원
 | `SOLAPI_PF_ID` | 채널 연동 완료 후 발신프로필 상세 |
 | `SOLAPI_TEMPLATE_ID` | 템플릿 승인 후 템플릿 상세 |
 | `SOLAPI_SENDER_PHONE` | 등록한 발신번호 (대체발송 안 쓰면 비워둠 — 그럼 알림톡만 감) |
+| `SOLAPI_WEBHOOK_TOKEN` | 웹훅 URL 인증용 (차호근이 생성·보관, 로컬 .env.local에 있음) |
 
 로컬은 `.env.local`에 등록 완료(키 2개). Vercel은 5개 전부 — 알리고 5개(`ALIGO_*`)와
 `ALIMTALK_RELAY_URL/SECRET`은 테스트 성공 후 삭제.

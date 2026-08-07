@@ -88,7 +88,16 @@ export function sentHistory(q) {
   return Array.from(groups.entries())
     .sort((a, b) => new Date(b[0]) - new Date(a[0]))
     .map(([sentAt, entries]) => {
-      const parts = entries.map((e) => `${e.channel === "email" ? "이메일" : "알림톡"}(${e.target})`);
+      // 알림톡은 "보냈다"와 "도착했다"가 다르다 — 웹훅(app/api/solapi-webhook)이 채워준
+      // status를 함께 보여줘야 미가입·차단으로 못 받은 건을 알아챌 수 있다.
+      const parts = entries.map((e) => {
+        const name = e.channel === "email" ? "이메일" : "알림톡";
+        const mark = e.channel !== "kakao" || !e.status ? ""
+          : e.status === "delivered" ? " ✓수신"
+          : e.status === "failed" ? ` ✗실패(${e.statusMessage ?? "사유미상"})`
+          : " …확인중";
+        return `${name}(${e.target})${mark}`;
+      });
       return `${shortDate(sentAt.slice(0, 10))} ${parts.join(", ")}`;
     });
 }

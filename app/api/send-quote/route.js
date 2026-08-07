@@ -42,10 +42,11 @@ export async function POST(request) {
 
   if (channels?.kakao) {
     try {
-      await sendQuoteAlimtalk({ to: recipientPhone, quote, pdfUrl: quote?.pdfUrl, noticeMessage });
+      const sent = await sendQuoteAlimtalk({ to: recipientPhone, quote, pdfUrl: quote?.pdfUrl, noticeMessage });
       results.kakao = { ok: true };
       patch.kakao_sent_at = now;
-      newLogEntries.push({ channel: "kakao", sentAt: now, target: recipientPhone });
+      // messageId를 남겨야 웹훅이 "이 발송의 결과"를 찾아 상태(수신완료/실패)를 채울 수 있다.
+      newLogEntries.push({ channel: "kakao", sentAt: now, target: recipientPhone, messageId: sent?.messageId ?? null, status: "pending" });
     } catch (err) {
       results.kakao = { ok: false, reason: err.message };
     }
