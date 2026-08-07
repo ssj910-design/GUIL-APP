@@ -83,8 +83,8 @@ const todayKst = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/
 function dayLabel(day) {
   const today = todayKst();
   if (day === today) return "오늘";
-  const y = new Date(`${today}T00:00:00`); y.setDate(y.getDate() - 1);
-  if (day === y.toISOString().slice(0, 10)) return "어제";
+  const y = new Date(`${today}T12:00:00`); y.setDate(y.getDate() - 1);
+  if (day === y.toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" })) return "어제";
   return shortDate(day);
 }
 
@@ -113,7 +113,7 @@ function SendLogRow({ e, onOpen }) {
 }
 
 function SendStatusPanel({ quotes, onOpen }) {
-  const [dayIdx, setDayIdx] = useState(0); // 0 = 가장 최근 발송일
+  const [dayIdx, setDayIdx] = useState(0); // 0 = 오늘, 1 = 어제 — 그 이전은 달력에서만
   const [calOpen, setCalOpen] = useState(false);
   const entries = quotes
     .flatMap((q) => (q.sendLog ?? []).map((e) => ({ ...e, quote: q })))
@@ -126,7 +126,10 @@ function SendStatusPanel({ quotes, onOpen }) {
     if (!byDay.has(d)) byDay.set(d, []);
     byDay.get(d).push(e);
   }
-  const days = [...byDay.keys()]; // 최근순 (entries가 최근순이라)
+  // 패널은 오늘/어제 두 장만 — 과거는 "달력으로 보기"가 담당한다 (넘김이 끝없이 길어지는 걸 방지)
+  const today = todayKst();
+  const yest = new Date(`${today}T12:00:00`); yest.setDate(yest.getDate() - 1);
+  const days = [today, yest.toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" })];
   const idx = Math.min(dayIdx, days.length - 1);
   const day = days[idx];
   const list = byDay.get(day) ?? [];
@@ -150,7 +153,9 @@ function SendStatusPanel({ quotes, onOpen }) {
         <button onClick={() => setCalOpen(true)} className="text-[11px] font-bold text-blue-700">달력으로 보기</button>
       </div>
       <div className="divide-y divide-slate-50">
-        {list.slice(0, 3).map((e, i) => <SendLogRow key={i} e={e} onOpen={onOpen} />)}
+        {list.length === 0
+          ? <p className="text-xs text-slate-400 text-center py-4">{dayLabel(day)} 보낸 견적이 없습니다</p>
+          : list.slice(0, 3).map((e, i) => <SendLogRow key={i} e={e} onOpen={onOpen} />)}
       </div>
       {list.length > 3 && (
         <button onClick={() => setCalOpen(true)} className="w-full py-2 text-[11px] font-bold text-slate-400 hover:text-blue-700 border-t border-slate-50">
