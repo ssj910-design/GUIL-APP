@@ -195,9 +195,6 @@ function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto
                   value={amounts[i] ?? ""}
                   onChange={(e) => setAmounts((m) => ({ ...m, [i]: e.target.value }))}
                 />
-                {qtyOf(part) > 1 && (
-                  <span className="text-[10px] text-slate-400 w-20 text-right shrink-0">= ₩{lineTotal(part, i).toLocaleString()}</span>
-                )}
               </div>
             );
           })}
