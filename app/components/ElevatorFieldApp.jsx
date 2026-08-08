@@ -36,7 +36,7 @@ const TABS = [
   { id: "checkup", label: "자체점검", icon: CalendarCheck },
   { id: "inspection", label: "검사관리", icon: ShieldCheck },
   { id: "material", label: "자재·견적", icon: Package },
-  { id: "billing", label: "비용청구", icon: Receipt },
+  { id: "billing", label: "청구", icon: Receipt },
   { id: "todo", label: "할일관리", icon: ListTodo },
   { id: "workcalendar", label: "워크캘린더", icon: CalendarClock },
   // 관리자 모드는 하단 탭에서 제외 — 관리자 전용 퀵버튼(게시판 FAB 위)으로만 진입

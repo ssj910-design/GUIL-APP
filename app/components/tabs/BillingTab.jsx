@@ -533,7 +533,7 @@ export function BillingHistoryScreen({ billings, onBack }) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
-      <DrillHeader title="비용청구 내역" onBack={onBack} onHome={onBack} />
+      <DrillHeader title="청구 내역" onBack={onBack} onHome={onBack} />
 
       <div className="px-5 py-3 bg-blue-950 shrink-0 flex items-center justify-between">
         <span className="text-xs text-blue-200">이번 달 총 {filtered.length}건</span>
