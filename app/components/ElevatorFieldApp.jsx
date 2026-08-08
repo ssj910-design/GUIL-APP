@@ -724,7 +724,8 @@ export default function App() {
         supabase.from("feed_posts").select("*").order("created_at", { ascending: true }), // 카톡식: 오래된 글이 위, 최신이 아래
         supabase.from("profiles").select("*").order("name"),
         supabase.from("units").select("*").order("seq"),
-        supabase.from("error_codes").select("*"),
+        // 기본 조회는 1000행에서 잘려 새로 추가된 코드가 누락될 수 있어(실제로 발생) 전체를 페이지네이션으로 받는다.
+        fetchAll("error_codes"),
         supabase.from("kit_stock").select("*"),
         fetchAll("self_checks"),
         supabase.from("attendances").select("*").eq("work_date", TODAY_STR),
