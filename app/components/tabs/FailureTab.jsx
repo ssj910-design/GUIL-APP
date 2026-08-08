@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect, useRef } from "react";
 import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle, Wrench, ChevronRight, Search, X, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf, unitBadgeLabel, normalizeModel, distinctModels } from "@/lib/utils";
+import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf, unitBadgeLabel, normalizeModel, normalizeCode, distinctModels } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
 import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -836,7 +836,7 @@ const FAILURE_RESULT_BTN_CLS = {
 function ErrorCodeRow({ code, model, errorCodes, failures, units, onChange, onRemove, canRemove, placeholder }) {
   const [open, setOpen] = useState(false);
   const codeOptions = model ? errorCodes.filter((e) => normalizeModel(e.model) === normalizeModel(model)) : [];
-  const filteredCodes = codeOptions.filter((e) => e.code.toLowerCase().includes(code.trim().toLowerCase()));
+  const filteredCodes = codeOptions.filter((e) => normalizeCode(e.code).toLowerCase().includes(normalizeCode(code).toLowerCase()));
   const matched = model ? findErrorCode(errorCodes, model, code) : null;
   const matchedHistory = matched ? errorCodeHistory(failures, units, model, code) : [];
   const unmatched = model && code.trim() && !matched;
