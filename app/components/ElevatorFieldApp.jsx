@@ -744,7 +744,7 @@ export default function App() {
       setFeed((feedRes.data ?? []).map(mapFeedPost));
       const allProfiles = engineersRes.data ?? [];
       setProfilesAll(allProfiles);
-      setEngineers(allProfiles.filter((p) => p.role === "engineer" && p.is_active !== false));
+      setEngineers(allProfiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false));
       setUnits((unitsRes.data ?? []).map(mapUnit)); // 테이블 없으면(마이그레이션 전) error → 빈 배열
       setErrorCodes((errorCodesRes.data ?? []).map(mapErrorCode)); // 테이블 없으면(마이그레이션 전) error → 빈 배열
       const loadedKitStock = (kitStockRes.data ?? []).map(mapKitStock); // kit_stock 테이블 없으면(마이그레이션 전) error → 빈 배열
