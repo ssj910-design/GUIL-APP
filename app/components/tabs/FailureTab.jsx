@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect, useRef } from "react";
 import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle, Wrench, ChevronRight, Search, X, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf, unitBadgeLabel } from "@/lib/utils";
+import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf, unitBadgeLabel, normalizeModel, distinctModels } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
 import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -835,7 +835,7 @@ const FAILURE_RESULT_BTN_CLS = {
 // 기사가 직접 써넣거나 등록을 요청할 수 없다 — 새 코드는 관리자웹 에러코드집에서만 등록한다.
 function ErrorCodeRow({ code, model, errorCodes, failures, units, onChange, onRemove, canRemove, placeholder }) {
   const [open, setOpen] = useState(false);
-  const codeOptions = model ? errorCodes.filter((e) => e.model === model) : [];
+  const codeOptions = model ? errorCodes.filter((e) => normalizeModel(e.model) === normalizeModel(model)) : [];
   const filteredCodes = codeOptions.filter((e) => e.code.toLowerCase().includes(code.trim().toLowerCase()));
   const matched = model ? findErrorCode(errorCodes, model, code) : null;
   const matchedHistory = matched ? errorCodeHistory(failures, units, model, code) : [];
@@ -915,7 +915,7 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
   const [photos, setPhotos] = useState([]);
   const units = useContext(UnitsContext);
   // 기종은 실제 호기 데이터가 아니라 에러코드집에 등록된 기종 중에서만 고른다.
-  const models = [...new Set(errorCodes.map((e) => e.model).filter(Boolean))].sort();
+  const models = distinctModels(errorCodes);
   const [selectedModel, setSelectedModel] = useState("");
 
   // 에러코드 없음(해당 없음 처리) — 체크하면 코드 입력 없이도 등록할 수 있다.

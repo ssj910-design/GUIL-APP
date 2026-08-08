@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { Plus, Upload, Download } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapErrorCode } from "@/lib/mappers";
-import { errorCodeHistory } from "@/lib/utils";
+import { errorCodeHistory, normalizeModel, distinctModels } from "@/lib/utils";
 import { AdminTable, Modal, inputCls } from "@/app/components/admin/adminShared";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 
@@ -218,7 +218,7 @@ function ImportErrorCodesModal({ onClose, onImportFile }) {
 export default function ErrorCodesAdmin({ data, setData }) {
   const { errorCodes = [], units, failures } = data;
   // 에러코드집의 기종은 실제 호기 기종 데이터와 별개로, 등록된 에러코드에 쓰인 기종만으로 관리한다.
-  const models = [...new Set(errorCodes.map((e) => e.model).filter(Boolean))].sort();
+  const models = distinctModels(errorCodes);
   const [modelFilter, setModelFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [registering, setRegistering] = useState(false);
@@ -226,7 +226,7 @@ export default function ErrorCodesAdmin({ data, setData }) {
   const [importOpen, setImportOpen] = useState(false);
 
   const rows = errorCodes.filter((e) => {
-    if (modelFilter !== "all" && e.model !== modelFilter) return false;
+    if (modelFilter !== "all" && normalizeModel(e.model) !== normalizeModel(modelFilter)) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return [e.model, e.code, e.faultName, e.meaning].filter(Boolean).join(" ").toLowerCase().includes(q);
