@@ -1,7 +1,7 @@
 "use client";
 
 // 에러코드집 관리 — 기종별 에러코드의 고장 이름·의미·조치사항을 등록한다. 과거 처리이력은 상세보기에서만 본다.
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Upload, Download } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapErrorCode } from "@/lib/mappers";
@@ -232,6 +232,11 @@ export default function ErrorCodesAdmin({ data, setData }) {
     return [e.model, e.code, e.faultName, e.meaning].filter(Boolean).join(" ").toLowerCase().includes(q);
   });
 
+  // ⚠️ 임시 진단 로그 — "STVF5가 몇 초 뒤 사라진다" 재현용. 원인 확인되면 지운다.
+  useEffect(() => {
+    console.log(`[에러코드집 진단] ${new Date().toISOString()} errorCodes=${errorCodes.length}건, 기종=${models.length}개`, models);
+  }, [errorCodes.length]);
+
   // 엑셀(.xlsx/.xls) 또는 CSV로 여러 건을 한 번에 등록 — 헤더에 "기종"·"코드"가 있는 행만 가져온다.
   // 이미 있는 (기종,코드) 조합은 upsert로 덮어쓴다(단일 등록과 동일한 규칙).
   async function importErrorCodesFile(file) {
@@ -278,12 +283,14 @@ export default function ErrorCodesAdmin({ data, setData }) {
       const { data: inserted, error } = await supabase.from("error_codes").upsert(payload, { onConflict: "model,code" }).select();
       if (error) { alert("대량입력 실패: " + error.message); return; }
       const mapped = (inserted ?? []).map(mapErrorCode);
+      console.log(`[에러코드집 진단] ${new Date().toISOString()} 업서트 응답 ${mapped.length}건`, mapped.map((m) => `${m.model}::${m.code}`));
       const key = (m, c) => `${m}::${c}`;
       const newKeys = new Set(mapped.map((m) => key(m.model, m.code)));
-      setData((prev) => ({
-        ...prev,
-        errorCodes: [...prev.errorCodes.filter((x) => !newKeys.has(key(x.model, x.code))), ...mapped],
-      }));
+      setData((prev) => {
+        const next = { ...prev, errorCodes: [...prev.errorCodes.filter((x) => !newKeys.has(key(x.model, x.code))), ...mapped] };
+        console.log(`[에러코드집 진단] ${new Date().toISOString()} setData 직후 errorCodes=${next.errorCodes.length}건`);
+        return next;
+      });
       alert(`${mapped.length}건을 등록했습니다.`);
     } catch (err) {
       alert("엑셀 파일을 읽는 중 오류가 발생했습니다: " + (err.message ?? "알 수 없는 오류"));

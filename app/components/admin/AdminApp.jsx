@@ -165,6 +165,8 @@ export default function AdminApp() {
 
   useEffect(() => {
     async function load() {
+      // ⚠️ 임시 진단 로그 — 에러코드집 데이터가 원인불명으로 되돌아가는 문제 추적용. 원인 확인되면 지운다.
+      console.log(`[에러코드집 진단] ${new Date().toISOString()} AdminApp load() 시작`);
       const [sites, units, siteManagers, failures, inspections, materials, quotes, restock, todos, billings, selfChecks, selfCheckItems, profiles, feed, errorCodes] =
         await Promise.all([
           supabase.from("sites").select("*").order("name"),
@@ -201,6 +203,7 @@ export default function AdminApp() {
         feed: (feed.data ?? []).map(mapFeedPost),
         errorCodes: (errorCodes.data ?? []).map(mapErrorCode),
       });
+      console.log(`[에러코드집 진단] ${new Date().toISOString()} AdminApp load() 완료, error_codes ${(errorCodes.data ?? []).length}건`);
       setLoading(false);
     }
     load();
