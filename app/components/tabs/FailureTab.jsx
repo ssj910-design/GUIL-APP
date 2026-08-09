@@ -1581,7 +1581,7 @@ function ErrorCodeBook({ errorCodes, failures }) {
           list.map((e) => (
             <button key={e.id} type="button" onClick={() => setSelected(e)} className="w-full text-left rounded-lg bg-white border border-slate-200 px-3 py-2.5 active:bg-slate-50">
               <p className="font-bold text-slate-800 text-sm">{e.code} {e.faultName && <span className="font-normal text-slate-500">· {e.faultName}</span>}</p>
-              <p className="text-xs text-slate-500 mt-0.5">{e.meaning || "의미 미등록"}</p>
+              <p className="text-xs text-slate-500 mt-0.5 whitespace-pre-line">{formatListText(e.meaning) || "의미 미등록"}</p>
             </button>
           ))
         )}
