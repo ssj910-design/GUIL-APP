@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect, useRef } from "react";
 import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle, Wrench, ChevronRight, Search, X, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf, unitBadgeLabel, normalizeModel, normalizeCode, distinctModels } from "@/lib/utils";
+import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, distanceKm, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf, unitBadgeLabel, normalizeModel, normalizeCode, distinctModels, formatListText } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
 import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -880,8 +880,8 @@ function ErrorCodeRow({ code, model, errorCodes, failures, units, onChange, onRe
       {matched && (
         <div className="bg-blue-50 rounded-xl p-3 mt-2">
           {matched.faultName && <p className="text-sm font-bold text-blue-800">{matched.faultName}</p>}
-          <p className="text-sm text-blue-700">{matched.meaning || "의미 미등록"}</p>
-          {matched.standardAction && <p className="text-xs text-blue-600 mt-1">조치사항: {matched.standardAction}</p>}
+          <p className="text-sm text-blue-700 whitespace-pre-line">{formatListText(matched.meaning) || "의미 미등록"}</p>
+          {matched.standardAction && <p className="text-xs text-blue-600 mt-1 whitespace-pre-line">조치사항: {formatListText(matched.standardAction)}</p>}
           <p className="text-xs font-bold text-blue-700 mt-2">과거 처리사례 {matchedHistory.length}건</p>
           {matchedHistory.length === 0 ? (
             <p className="text-xs text-blue-500 mt-1">아직 처리된 사례가 없습니다.</p>
@@ -1597,12 +1597,12 @@ function ErrorCodeBook({ errorCodes, failures }) {
             )}
             <div>
               <p className="text-xs font-bold text-slate-500 mb-1">의미</p>
-              <p className="text-sm text-slate-800">{selected.meaning || "의미 미등록"}</p>
+              <p className="text-sm text-slate-800 whitespace-pre-line">{formatListText(selected.meaning) || "의미 미등록"}</p>
             </div>
             {selected.standardAction && (
               <div>
                 <p className="text-xs font-bold text-slate-500 mb-1">조치사항</p>
-                <p className="text-sm text-slate-800">{selected.standardAction}</p>
+                <p className="text-sm text-slate-800 whitespace-pre-line">{formatListText(selected.standardAction)}</p>
               </div>
             )}
             <div>
