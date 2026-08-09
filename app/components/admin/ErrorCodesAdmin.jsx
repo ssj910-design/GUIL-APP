@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { Plus, Upload, Download } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { mapErrorCode } from "@/lib/mappers";
-import { errorCodeHistory, normalizeModel, distinctModels, formatListText } from "@/lib/utils";
+import { errorCodeHistory, normalizeModel, distinctModels } from "@/lib/utils";
 import { AdminTable, Modal, inputCls } from "@/app/components/admin/adminShared";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 
@@ -364,8 +364,8 @@ export default function ErrorCodesAdmin({ data, setData }) {
             <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{e.model}</td>
             <td className="px-3 py-2.5 font-bold whitespace-nowrap">{e.code}</td>
             <td className="px-3 py-2.5 text-slate-600">{e.faultName || <span className="text-slate-400">미등록</span>}</td>
-            <td className="px-3 py-2.5 text-slate-600 whitespace-pre-line">{formatListText(e.meaning) || <span className="text-slate-400">미등록</span>}</td>
-            <td className="px-3 py-2.5 text-slate-600 whitespace-pre-line">{formatListText(e.standardAction) || <span className="text-slate-400">미등록</span>}</td>
+            <td className="px-3 py-2.5 text-slate-600">{e.meaning || <span className="text-slate-400">미등록</span>}</td>
+            <td className="px-3 py-2.5 text-slate-600">{e.standardAction || <span className="text-slate-400">미등록</span>}</td>
           </tr>
         ))}
       </AdminTable>
