@@ -11,9 +11,10 @@
 // 여기 "바로 발송하기"는 먼저 PDF를 새로 생성한 뒤 그 pdfUrl로 발송한다 — 신규 발행
 // 건은 아직 quotePdfUrl이 없기 때문.
 //
-// 품목 테이블의 공급가액/세액/합계 컬럼과 할인 정보 섹션은 화면 표시 전용이다 — 실제
-// PDF(lib/quotePdf.js)와 저장 데이터(quote_items, transport_cost 등)는 그대로 두고
-// 입력 화면만 청구스(chungoose.ai) 스타일에 맞춰 다듬은 것.
+// 품목 테이블의 공급가액/세액 컬럼은 화면 표시 전용이다 — 실제 PDF(lib/quotePdf.js)와
+// 저장 데이터(quote_items, transport_cost 등)는 그대로 두고 입력 화면만 청구스
+// (chungoose.ai) 스타일에 맞춰 다듬은 것. 할인 정보(discount_amount)는 저장·PDF·
+// 재발송 총액까지 반영된다(lib/utils.js의 quoteGrandTotal, lib/quotePdf.js 참고).
 //
 // 오른쪽 미리보기 카드는 실제 PDF 서식을 재현하지 않는 간단한 요약이다 — 새 계산 없이
 // 이미 있는 값을 다시 보여줄 뿐이다.
@@ -54,7 +55,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
   const [safetyCost, setSafetyCost] = useState(quote.safetyCost || 0);
   const [profit, setProfit] = useState(quote.profit || 0);
   const [discountPercent, setDiscountPercent] = useState(0);
-  const [discountAmount, setDiscountAmount] = useState(0);
+  const [discountAmount, setDiscountAmount] = useState(() => Number(quote.discountAmount) || 0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [results, setResults] = useState(null);
@@ -73,6 +74,12 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
         .eq("quote_issued_date", TODAY_STR);
       setQuoteNumber(`${TODAY_STR.replace(/-/g, "")}1${(count || 0) + 1}`);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 이미 저장된 할인금액이 있으면(재편집) 소계 대비 할인율도 화면에 같이 보여준다.
+  useEffect(() => {
+    if (quote.discountAmount) handleDiscountAmount(quote.discountAmount);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -102,13 +109,15 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
   }
 
   const itemsSubtotal = items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.unitPrice || 0), 0);
-  const subtotal = itemsSubtotal + Number(transportCost || 0) + Number(safetyCost || 0) + Number(profit || 0);
-  const grandTotal = quoteGrandTotal(items, transportCost, safetyCost, profit);
-  const finalAmount = subtotal - discountAmount;
+  // 할인 적용 전 소계 — 할인율(%) 계산의 기준값(할인은 이 금액 대비 %).
+  const preDiscountSubtotal = itemsSubtotal + Number(transportCost || 0) + Number(safetyCost || 0) + Number(profit || 0);
+  // PDF(lib/quotePdf.js)의 "소계"와 동일하게 할인을 반영한 값 — 저장·발송 총액(grandTotal)의 기준.
+  const subtotal = preDiscountSubtotal - Number(discountAmount || 0);
+  const grandTotal = quoteGrandTotal(items, transportCost, safetyCost, profit, discountAmount);
 
-  // 오른쪽 미리보기 카드용 — 자재비/인건비 구분 없이 하나로 합치고, 운반비/안전관리비/이윤은
-  // 값이 0보다 클 때만 같은 목록에 끼워 넣는다. 새 계산 없이 기존 값을 다시 나열만 함.
-  // 구분(CATEGORIES) 순서로 정렬 — 왼쪽 폼·PDF(lib/quotePdf.js)와 같은 순서로 보여야
+  // 오른쪽 미리보기 카드용 — 자재비/인건비 구분 없이 하나로 합치고, 운반비/안전관리비/이윤/할인은
+  // 값이 0보다 클 때(할인은 입력했을 때)만 같은 목록에 끼워 넣는다. 새 계산 없이 기존 값을 다시
+  // 나열만 함. 구분(CATEGORIES) 순서로 정렬 — 왼쪽 폼·PDF(lib/quotePdf.js)와 같은 순서로 보여야
   // 발행 전 대조가 의미 있다. sort는 안정 정렬이라 같은 구분 내 순서는 보존된다.
   const previewRows = [
     ...[...items]
@@ -126,19 +135,20 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
     ]
       .filter((x) => Number(x.value) > 0)
       .map((x) => ({ name: x.name, qty: 1, unitPrice: Number(x.value), amount: Number(x.value) })),
+    ...(Number(discountAmount) > 0 ? [{ name: "할인", qty: 1, unitPrice: -Number(discountAmount), amount: -Number(discountAmount) }] : []),
   ];
 
-  // 할인율/할인금액은 서로의 값을 기준으로 자동 계산되는 화면 표시 전용 값 —
-  // handleSave의 patch나 PDF/발송 요청 바디 어디에도 들어가지 않는다.
+  // 할인율/할인금액은 서로의 값을 기준으로 자동 계산되는 입력 보조 — 실제 저장·PDF·발송
+  // 총액은 discountAmount(₩) 기준으로 quoteGrandTotal에 반영된다.
   function handleDiscountPercent(value) {
     const pct = Number(value) || 0;
     setDiscountPercent(pct);
-    setDiscountAmount(Math.round((subtotal * pct) / 100));
+    setDiscountAmount(Math.round((preDiscountSubtotal * pct) / 100));
   }
   function handleDiscountAmount(value) {
     const amt = Number(value) || 0;
     setDiscountAmount(amt);
-    setDiscountPercent(subtotal > 0 ? Math.round((amt / subtotal) * 1000) / 10 : 0);
+    setDiscountPercent(preDiscountSubtotal > 0 ? Math.round((amt / preDiscountSubtotal) * 1000) / 10 : 0);
   }
 
   // alsoSend=false → "저장"(발행만). alsoSend=true → "바로 발송하기"(발행 후 이어서 발송).
@@ -153,6 +163,9 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
       transport_cost: Number(transportCost) || 0,
       safety_cost: Number(safetyCost) || 0,
       profit: Number(profit) || 0,
+      // discount_amount 컬럼은 103 마이그레이션 이후에만 존재 — 할인을 실제로 쓸 때만 써서
+      // 마이그레이션 전에도(할인 안 쓰는) 기존 저장이 깨지지 않게 한다.
+      ...(Number(discountAmount) > 0 ? { discount_amount: Number(discountAmount) } : {}),
       quote_number: quoteNumber || null,
       recipient_name: recipientName || null,
       quote_title: quoteTitle || null,
@@ -166,7 +179,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
         quoteRequestId: quote.id,
         siteName: site?.name ?? quote.siteName,
         quoteNumber, recipientName, quoteTitle, quoteDate,
-        items, transportCost, safetyCost, profit,
+        items, transportCost, safetyCost, profit, discountAmount,
       }),
     }).then((r) => r.json()).catch((e) => ({ ok: false, reason: e.message }));
 
@@ -240,7 +253,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
 
     onSaved({
       quoteItems: items, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
-      profit: Number(profit) || 0, quoteNumber, recipientName, quoteTitle,
+      profit: Number(profit) || 0, discountAmount: Number(discountAmount) || 0, quoteNumber, recipientName, quoteTitle,
       quoteIssuedDate: quoteDate, quotePdfUrl: pdfRes.url, status: "견적발행",
       ...sendPatch,
     });
@@ -398,14 +411,13 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
           </div>
 
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm">
-            <p className="text-xs font-bold text-slate-500 mb-2">할인 정보 (화면 표시용 — 저장·PDF에는 반영되지 않습니다)</p>
-            <div className="grid grid-cols-2 gap-3 mb-2">
+            <p className="text-xs font-bold text-slate-500 mb-2">할인 정보 (입력하면 위 소계·합계와 PDF에 반영됩니다)</p>
+            <div className="grid grid-cols-2 gap-3">
               <div><p className="text-xs text-slate-500 mb-1">할인율(%)</p>
                 <input type="number" className={inputCls} value={discountPercent} onChange={(e) => handleDiscountPercent(e.target.value)} /></div>
               <div><p className="text-xs text-slate-500 mb-1">할인금액(원)</p>
                 <input type="number" className={inputCls} value={discountAmount} onChange={(e) => handleDiscountAmount(e.target.value)} /></div>
             </div>
-            <div className="flex justify-between font-bold text-blue-700"><span>최종금액</span><span>{finalAmount.toLocaleString()}원</span></div>
           </div>
         </div>
 
@@ -435,9 +447,6 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
             <div className="border-t border-slate-100 pt-2 space-y-1 text-xs">
               <div className="flex justify-between"><span className="text-slate-500">소계</span><span className="font-semibold">{subtotal.toLocaleString()}원</span></div>
               <div className="flex justify-between font-bold"><span>합계(VAT별도)</span><span>{grandTotal.toLocaleString()}원</span></div>
-              {discountAmount > 0 && (
-                <div className="flex justify-between font-bold text-blue-700"><span>최종금액</span><span>{finalAmount.toLocaleString()}원</span></div>
-              )}
             </div>
           </div>
         </div>
