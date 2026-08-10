@@ -56,19 +56,45 @@ export function SiteMapModal({ sites, units = [], onClose }) {
   const containerRef = useRef(null);
   const mapObjRef = useRef(null);
   const leafletRef = useRef(null);
-  const markersRef = useRef([]); // [{ marker, engineer, lat, lng }]
+  const markersRef = useRef([]); // [{ marker, engineer, lat, lng, site }]
   const searchMarkerRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [selectedEngineer, setSelectedEngineer] = useState(""); // "" = 전체, UNASSIGNED_KEY = 미배정만
   const [query, setQuery] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchMsg, setSearchMsg] = useState("");
   const engineerNames = [...new Set(sites.map((s) => s.assignedEngineer).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko"));
   const engineerColors = buildEngineerColors(engineerNames);
   const colorForEngineer = (name) => (name ? (engineerColors.get(name) ?? "#94a3b8") : "#94a3b8"); // 미배정 = 회색
 
+  const trimmedQuery = query.trim();
+  const suggestions = trimmedQuery
+    ? sites.filter((s) => s.lat != null && s.lng != null && ((s.name || "").includes(trimmedQuery) || (s.address || "").includes(trimmedQuery))).slice(0, 8)
+    : [];
+
   function toggleEngineer(key) {
     setSelectedEngineer((cur) => (cur === key ? "" : key));
+  }
+
+  // 목록에서 고르거나 검색어가 현장 하나와 정확히 걸렸을 때 — 마커 위치로 이동하고,
+  // 실제 마커 클릭과 똑같이 동작시켜(fire) 정보 팝업도 그대로 띄운다.
+  // 담당자 필터에 걸려 지금 안 보이는 마커일 수도 있으니, 필터 상태는 안 건드리고 그 마커만 임시로 얹는다.
+  function selectSite(site) {
+    const L = leafletRef.current;
+    const map = mapObjRef.current;
+    const entry = markersRef.current.find((m) => m.site === site);
+    if (!L || !map || !entry) return;
+    setQuery(site.name);
+    setShowSuggestions(false);
+    setSearchMsg("");
+    if (searchMarkerRef.current) {
+      map.removeLayer(searchMarkerRef.current);
+      searchMarkerRef.current = null;
+    }
+    if (!map.hasLayer(entry.marker)) entry.marker.addTo(map);
+    map.setView([site.lat, site.lng], 17);
+    entry.marker.fire("click");
   }
 
   async function runSearch() {
@@ -77,6 +103,7 @@ export function SiteMapModal({ sites, units = [], onClose }) {
     const map = mapObjRef.current;
     if (!q || !L || !map) return;
     setSearchMsg("");
+    setShowSuggestions(false);
     setSearching(true);
     if (searchMarkerRef.current) {
       map.removeLayer(searchMarkerRef.current);
@@ -87,9 +114,13 @@ export function SiteMapModal({ sites, units = [], onClose }) {
     const localMatches = sites.filter(
       (s) => s.lat != null && s.lng != null && ((s.name || "").includes(q) || (s.address || "").includes(q))
     );
-    if (localMatches.length > 0) {
-      if (localMatches.length === 1) map.setView([localMatches[0].lat, localMatches[0].lng], 17);
-      else map.fitBounds(L.latLngBounds(localMatches.map((s) => [s.lat, s.lng])), { padding: [40, 40] });
+    if (localMatches.length === 1) {
+      selectSite(localMatches[0]);
+      setSearching(false);
+      return;
+    }
+    if (localMatches.length > 1) {
+      map.fitBounds(L.latLngBounds(localMatches.map((s) => [s.lat, s.lng])), { padding: [40, 40] });
       setSearching(false);
       return;
     }
@@ -171,7 +202,7 @@ export function SiteMapModal({ sites, units = [], onClose }) {
         marker.on("popupclose", function () {
           pinned = false;
         });
-        markersRef.current.push({ marker, engineer: s.assignedEngineer || null, lat: s.lat, lng: s.lng });
+        markersRef.current.push({ marker, engineer: s.assignedEngineer || null, lat: s.lat, lng: s.lng, site: s });
       });
 
       // 구/군 이름표 — 해당 구에 속한 현장들의 중심 좌표에 텍스트만 표시 (클릭 불가, 마커보다 위에 표시).
@@ -247,22 +278,37 @@ export function SiteMapModal({ sites, units = [], onClose }) {
         <div className="relative w-full flex-1 min-h-0 rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
           {loading && <p className="absolute inset-0 flex items-center justify-center text-xs text-slate-400">지도 불러오는 중...</p>}
           <div ref={containerRef} className="w-full h-full" />
-          <div className="absolute top-3 right-3 z-[1000] flex flex-col items-end gap-1.5">
+          <div className="absolute top-3 right-3 z-[1000] w-64">
             <div className="flex gap-1.5 bg-white rounded-lg shadow-md border border-slate-200 p-1.5">
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") runSearch(); }}
-                placeholder="현장명 또는 주소 검색"
-                className="w-48 text-xs px-2 py-1.5 outline-none"
-              />
+              <div className="relative flex-1 min-w-0">
+                <input
+                  value={query}
+                  onChange={(e) => { setQuery(e.target.value); setShowSuggestions(true); }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setShowSuggestions(false)}
+                  onKeyDown={(e) => { if (e.key === "Enter") runSearch(); }}
+                  placeholder="현장명 또는 주소 검색"
+                  className="w-full text-xs px-2 py-1.5 outline-none"
+                />
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-md shadow-lg border border-slate-200 max-h-56 overflow-y-auto">
+                    {suggestions.map((s) => (
+                      <button key={s.id} type="button" onMouseDown={(e) => { e.preventDefault(); selectSite(s); }}
+                        className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-slate-50 border-b border-slate-100 last:border-0">
+                        <div className="font-semibold text-slate-800 truncate">{s.name}</div>
+                        <div className="text-slate-400 truncate">{s.address || "-"}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button type="button" onClick={runSearch} disabled={searching}
                 className="text-xs font-bold px-3 py-1.5 rounded-md bg-blue-600 text-white disabled:opacity-50 shrink-0">
                 검색
               </button>
             </div>
             {searchMsg && (
-              <span className="text-xs font-semibold text-red-600 bg-white rounded-md shadow-md border border-red-200 px-2.5 py-1.5">
+              <span className="block mt-1.5 text-xs font-semibold text-red-600 bg-white rounded-md shadow-md border border-red-200 px-2.5 py-1.5 w-fit ml-auto">
                 {searchMsg}
               </span>
             )}
