@@ -250,8 +250,11 @@ export default function SelfChecksAdmin({ data, setData, initialView }) {
       // 담당자는 출석부 생성 시점 스냅샷(c.assigneeId)이 아니라 현장정보에 지금 배정된 담당
       // 기사를 실시간으로 따른다 — 점검완료 여부(status·doneDate 등)는 그대로 c에서 유지된다.
       const currentAssignee = s?.assignedEngineer ? data.profiles.find((p) => p.name === s.assignedEngineer) : null;
-      return { ...c, assigneeId: currentAssignee?.id ?? null, loc: locOf(data, c.unitId), address: s?.address ?? null, gu: guOf(s?.address) };
+      return { ...c, assigneeId: currentAssignee?.id ?? null, loc: locOf(data, c.unitId), address: s?.address ?? null, gu: guOf(s?.address), siteActive: s?.isActive !== false };
     })
+    // 출석부는 생성 시점(매월 1일)에 활성 호기 전체로 만들어져서, 그 뒤 현장이 계약중지돼도
+    // 이미 만들어진 줄은 그대로 남는다 — 지금 계약중지인 현장의 줄은 화면에서 제외한다.
+    .filter((c) => c.siteActive)
     .sort((a, b) => a.loc.localeCompare(b.loc, "ko"));
   const done = rows.filter((c) => c.status === "완료");
 
