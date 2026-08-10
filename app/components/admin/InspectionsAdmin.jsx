@@ -169,6 +169,9 @@ export default function InspectionsAdmin({ data, setData }) {
         apiDueDate: li.dueDate,
         dueDate: manual?.dueDate ?? "",
         dueTime: manual?.dueTime ?? "",
+        // 실시간 연동 호기는 li.type이 항상 "정기검사"로 고정돼 있다 — 공단 API가 검사종류를 안
+        // 주기 때문. 관리자가 수기입력으로 정밀검사 등을 지정해뒀으면 그걸 우선한다.
+        type: manual?.type || li.type,
         notes: manual?.notes ?? "",
       };
     }),
