@@ -17,6 +17,11 @@ function daysLeftOf(dueDate, today) {
   return Math.ceil((new Date(dueDate) - new Date(today)) / 86400000);
 }
 
+// 주소 앞 시/도만 뗀 표시용 — "서울특별시 금천구 ..." → "금천구 ..." (시/도는 항상 첫 단어 하나뿐).
+function addressWithoutSido(address) {
+  return address ? address.replace(/^\S+\s+/, "") : "-";
+}
+
 const INSPECTION_TYPES = ["정기검사", "정밀검사", "수시검사"];
 
 // 검사예정일(수기입력)을 인라인으로 수정할 수 있는 행. 실시간 연동 현장이어도 수기입력 기한은 항상 편집 가능하다.
@@ -86,6 +91,7 @@ function FlaggedRow({ i, site, isLive }) {
   return (
     <tr className="border-b border-slate-50">
       <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap align-top">{i.siteName} · {i.unitLabel}</td>
+      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap align-top">{addressWithoutSido(site?.address)}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap align-top">{site?.assignedEngineer || "미배정"}</td>
       <td className="px-3 py-2.5 whitespace-nowrap align-top">
         {i.result === "fail" ? (
@@ -103,6 +109,7 @@ function FlaggedRow({ i, site, isLive }) {
           <span className="text-slate-400">
             {reason === "no_record" ? "검사이력 없음"
               : reason === "no_fail_code" ? "부적합코드 없음"
+              : reason === "no_items_for_fail_code" ? "부적합 상세 미등록"
               : reason === "fetch_failed" ? "조회 실패"
               : "부적합 상세 없음"}
           </span>
@@ -250,6 +257,7 @@ export default function InspectionsAdmin({ data, setData }) {
             <thead>
               <tr className="text-xs text-slate-400 border-b border-slate-100">
                 <SortableTh label="현장 · 호기" sortKey="loc" sort={sort} setSort={setSort} className="pl-5" />
+                <th className="px-3 py-2.5 font-semibold text-left">주소</th>
                 <SortableTh label="담당자" sortKey="person" sort={sort} setSort={setSort} />
                 <SortableTh label="보완기한" sortKey="dueDate" sort={sort} setSort={setSort} />
                 <th className="px-3 py-2.5 font-semibold text-left">부적합 내역</th>
