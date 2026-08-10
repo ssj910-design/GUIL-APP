@@ -1,0 +1,2 @@
+[functions.quote-viewer]
+verify_jwt = false
