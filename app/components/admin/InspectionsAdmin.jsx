@@ -93,6 +93,8 @@ function FlaggedRow({ i, site, isLive }) {
       <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap align-top">{i.siteName} · {i.unitLabel}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap align-top">{addressWithoutSido(site?.address)}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap align-top">{site?.assignedEngineer || "미배정"}</td>
+      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap align-top">{i.type || "-"}</td>
+      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap align-top">{i.startDate ? shortDate(i.startDate) : "-"}</td>
       <td className="px-3 py-2.5 whitespace-nowrap align-top">
         {i.result === "fail" ? (
           <span className="text-red-600 font-bold">불합격</span>
@@ -253,12 +255,14 @@ export default function InspectionsAdmin({ data, setData }) {
 
       {view === "flagged" ? (
         <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-          <table className="w-full min-w-[44rem] text-sm">
+          <table className="w-full min-w-[54rem] text-sm">
             <thead>
               <tr className="text-xs text-slate-400 border-b border-slate-100">
                 <SortableTh label="현장 · 호기" sortKey="loc" sort={sort} setSort={setSort} className="pl-5" />
                 <th className="px-3 py-2.5 font-semibold text-left">주소</th>
                 <SortableTh label="담당자" sortKey="person" sort={sort} setSort={setSort} />
+                <th className="px-3 py-2.5 font-semibold text-left">검사종류</th>
+                <th className="px-3 py-2.5 font-semibold text-left">검사일자</th>
                 <SortableTh label="보완기한" sortKey="dueDate" sort={sort} setSort={setSort} />
                 <th className="px-3 py-2.5 font-semibold text-left">부적합 내역</th>
               </tr>
