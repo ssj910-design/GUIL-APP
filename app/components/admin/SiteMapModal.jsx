@@ -53,6 +53,8 @@ export function pinIcon(L, color) {
 const UNASSIGNED_KEY = "__unassigned__";
 
 export function SiteMapModal({ sites, units = [], onClose }) {
+  // 계약중지(isActive:false) 현장은 지도·검색·대수 집계 어디에도 안 나와야 한다.
+  const activeSites = sites.filter((s) => s.isActive !== false);
   const containerRef = useRef(null);
   const mapObjRef = useRef(null);
   const leafletRef = useRef(null);
@@ -64,13 +66,13 @@ export function SiteMapModal({ sites, units = [], onClose }) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchMsg, setSearchMsg] = useState("");
-  const engineerNames = [...new Set(sites.map((s) => s.assignedEngineer).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko"));
+  const engineerNames = [...new Set(activeSites.map((s) => s.assignedEngineer).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko"));
   const engineerColors = buildEngineerColors(engineerNames);
   const colorForEngineer = (name) => (name ? (engineerColors.get(name) ?? "#94a3b8") : "#94a3b8"); // 미배정 = 회색
 
   const trimmedQuery = query.trim();
   const suggestions = trimmedQuery
-    ? sites.filter((s) => s.lat != null && s.lng != null && ((s.name || "").includes(trimmedQuery) || (s.address || "").includes(trimmedQuery))).slice(0, 8)
+    ? activeSites.filter((s) => s.lat != null && s.lng != null && ((s.name || "").includes(trimmedQuery) || (s.address || "").includes(trimmedQuery))).slice(0, 8)
     : [];
 
   function toggleEngineer(key) {
@@ -111,7 +113,7 @@ export function SiteMapModal({ sites, units = [], onClose }) {
     }
 
     // 담당 현장 중 이름·주소가 일치하는 곳부터 찾는다 — 등록된 현장이면 이쪽이 더 정확하다.
-    const localMatches = sites.filter(
+    const localMatches = activeSites.filter(
       (s) => s.lat != null && s.lng != null && ((s.name || "").includes(q) || (s.address || "").includes(q))
     );
     if (localMatches.length === 1) {
@@ -150,7 +152,7 @@ export function SiteMapModal({ sites, units = [], onClose }) {
     let cancelled = false;
     import("leaflet").then((L) => {
       if (cancelled || !containerRef.current) return;
-      const withCoords = sites.filter((s) => s.lat != null && s.lng != null);
+      const withCoords = activeSites.filter((s) => s.lat != null && s.lng != null);
 
       const map = L.map(containerRef.current).setView([37.5665, 126.978], 11);
       // CARTO Voyager — Google 지도처럼 옅고 깔끔해서 컬러 마커가 두드러진다 (키 발급 불필요).
@@ -260,11 +262,11 @@ export function SiteMapModal({ sites, units = [], onClose }) {
     if (visibleCoords.length > 0) map.fitBounds(L.latLngBounds(visibleCoords), { padding: [24, 24] });
   }, [selectedEngineer, loading]);
 
-  const withCoordsCount = sites.filter((s) => s.lat != null && s.lng != null).length;
+  const withCoordsCount = activeSites.filter((s) => s.lat != null && s.lng != null).length;
 
   // 담당자별 관리 대수 — 배정 현장의 활성 호기 수를 합산.
   const unitCountByEngineer = new Map();
-  sites.forEach((s) => {
+  activeSites.forEach((s) => {
     const key = s.assignedEngineer || null;
     const cnt = units.filter((u) => u.siteId === s.id && u.isActive !== false).length;
     unitCountByEngineer.set(key, (unitCountByEngineer.get(key) ?? 0) + cnt);

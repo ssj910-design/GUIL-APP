@@ -92,6 +92,8 @@ export function FailureDetailContent({ f, units, sites, profiles = [] }) {
 export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLeaves, onOpenTodos, onOpenMaterials, onOpenBillings, onOpenFailures, onOpenSelfChecks }) {
   const { sites, units, failures, inspections, materialRequests, quoteRequests, todos, billings, selfChecks, selfCheckItems, profiles } = data;
   const siteById = new Map(sites.map((s) => [s.id, s]));
+  // 계약중지(isActive:false) 현장의 호기는 관리 대수에서 제외 — 호기 자체 isActive는 계약과 별개로 그대로 남아있다.
+  const deadSiteIds = new Set(sites.filter((s) => s.isActive === false).map((s) => s.id));
   // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 관리자가 자재담당자에게도 배정할 수 있어야 한다.
   const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
   const engineerJobs = useMemo(() => engineerJobsByName(failures), [failures]);
@@ -266,7 +268,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
         </div>
       </div>
       <p className="text-xs text-slate-500 mb-6">
-        현장 {sites.length} · 호기 {units.filter((u) => u.isActive !== false).length}대 · 기사 {profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false).length}명 · 기준일 {TODAY_STR}
+        현장 {sites.length} · 호기 {units.filter((u) => u.isActive !== false && !deadSiteIds.has(u.siteId)).length}대 · 기사 {profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false).length}명 · 기준일 {TODAY_STR}
       </p>
 
       {/* 계약 만료 임박 알림 — 종료일 30일 내(만료 포함) */}
