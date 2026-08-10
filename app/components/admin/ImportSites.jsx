@@ -16,9 +16,9 @@ import { Modal } from "@/app/components/admin/adminShared";
 async function downloadSample() {
   const XLSX = await import("xlsx");
   const site = [
-    "구일빌딩", "서울특별시 강남구 테헤란로 123", "1층",
+    "○○빌딩", "서울특별시 강남구 테헤란로 123", "1층",
     "POG(일반계약)", "500000", "20200101", "20251231",
-    "김기사", "02-1234-5678", "02-1234-5679", "office@guil.co.kr", "정문 경비실에 문의", "SKT/국선",
+    "김기사", "02-1234-5678", "02-1234-5679", "office@example.co.kr", "정문 경비실에 문의", "SKT/국선",
     "관리소장", "홍길동", "010-1111-2222", "manager@building.com", "",
   ];
   const wsData = [

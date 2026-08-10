@@ -31,7 +31,8 @@ const notifications = [...notif.matchAll(/\{\s*key:\s*"([^"]+)",\s*label:\s*"([^
 
 // ── 3. 화이트라벨 대상 — 코드에 박힌 회사 브랜딩 ──────────────
 // 타사가 쓰려면 여기가 전부 회사 설정에서 나와야 한다. 새 코드에 "구일"이 들어오면 자동으로 잡힌다.
-const BRAND = /구일|guil/i;
+// "청구일"처럼 다른 단어에 우연히 낀 "구일"은 브랜딩이 아니다 — 앞 글자로 걸러낸다.
+const BRAND = /(?<![청지친])구일|guil/i;
 const SKIP_DIR = new Set(["node_modules", ".next", ".git", "android", "ios", "public", ".playwright-mcp", "docs"]);
 const brandHits = [];
 (function walk(dir) {
@@ -44,6 +45,9 @@ const brandHits = [];
     read(rel).split("\n").forEach((line, i) => {
       if (!BRAND.test(line)) return;
       if (/^\s*(\/\/|\*|--)/.test(line)) return;            // 주석은 브랜딩이 아님
+      // localStorage 키(guilAuthV1 등)는 화면에 안 보이는 저장소 이름이라 브랜딩이 아니다.
+      // 바꾸면 기존 로그인 세션이 날아가므로 구일에선 그대로 두고, Eleva는 처음부터 다른 이름을 쓴다.
+      if (/guilAuthV1|guilSavedLoginId/.test(line)) return;
       brandHits.push({ file: rel, line: i + 1, text: line.trim().slice(0, 110) });
     });
   }
@@ -65,7 +69,14 @@ const screenLinks = fs.readdirSync(path.join(ROOT, "docs/design/screens"))
 // ── HTML 출력 ────────────────────────────────────────────────
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
-const byFile = brandHits.reduce((m, h) => { (m[h.file] ??= []).push(h); return m; }, {});
+// 회사명이 있어도 정상인 곳 — 여기가 원본이거나, 바꾸면 안 되는 식별자다.
+// lib/company.js: 브랜딩 단일 원본(BRAND/COMPANY) — 화면들이 여기를 import한다.
+// capacitor.config.json: 안드로이드 패키지명·앱 이름 — 바꾸면 별개 앱이 된다(Eleva는 자체 값 사용).
+// supabase/migrations/: 이미 실행된 과거 기록 — 고치지 않는다(데이터 값이지 코드 브랜딩이 아니다).
+const IS_SOURCE = (f) => /lib\/company\.js|capacitor\.config\.json|supabase\/migrations\//.test(f);
+const sourceHits = brandHits.filter((h) => IS_SOURCE(h.file));
+const leftHits = brandHits.filter((h) => !IS_SOURCE(h.file));
+const byFile = leftHits.reduce((m, h) => { (m[h.file] ??= []).push(h); return m; }, {});
 const AUD = { engineer: "기사", admin: "관리자", all: "전원", engineer_admin: "기사+관리자" };
 
 const html = `<!doctype html>
@@ -100,8 +111,13 @@ const html = `<!doctype html>
     ${notifications.map((n) => `<tr><td>${esc(n.label)}</td><td>${AUD[n.audience] ?? n.audience}</td><td>${n.trigger === "instant" ? "즉시" : `정해진 시각${n.built ? "" : ' <span class="tbd">미구현</span>'}`}</td><td>${n.level === "urgent" ? "긴급" : n.level === "normal" ? "보통" : "낮음"}</td></tr>`).join("\n    ")}
   </table>
 
-  <h2>3. 화이트라벨 대상 <span style="font-size:13px;font-weight:400;color:var(--sub)">${brandHits.length}곳 · ${Object.keys(byFile).length}개 파일</span></h2>
-  <p>타사가 쓰려면 아래가 전부 <b>회사 설정에서 읽어오도록</b> 바뀌어야 합니다. 코드에 회사명이 새로 들어오면 다음 실행 때 자동으로 잡힙니다.</p>
+  <h2>3. 화이트라벨 대상 <span style="font-size:13px;font-weight:400;color:var(--sub)">남은 하드코딩 ${leftHits.length}곳${leftHits.length ? ` · ${Object.keys(byFile).length}개 파일` : ""}</span></h2>
+  <div class="callout">
+    <b>브랜딩은 <code>lib/company.js</code> 한 곳에 모여 있습니다</b> (BRAND·COMPANY, ${sourceHits.length}곳 — 정상).
+    화면·문서는 전부 그걸 import해서 쓰므로, 타사 입주 시엔 <b>이 파일만 테넌트 설정에서 읽어오게</b> 바꾸면 됩니다.
+    아래 목록은 아직 그 규칙을 안 따르는 잔여분입니다 — 새 코드에 회사명을 직접 쓰면 여기에 나타납니다.
+  </div>
+  ${leftHits.length === 0 ? "<p><b>잔여 하드코딩 없음</b> — 전부 company.js를 거칩니다.</p>" : ""}
   ${Object.entries(byFile).map(([f, hits]) => `<details class="history"><summary>${esc(f)} — ${hits.length}곳</summary>${hits.map((h) => `<div style="font-family:ui-monospace,monospace;font-size:12px;margin:3px 0"><span style="color:var(--faint)">${h.line}:</span> ${esc(h.text)}</div>`).join("")}</details>`).join("\n  ")}
 
   <h2>4. DB 마이그레이션 <span style="font-size:13px;font-weight:400;color:var(--sub)">${migrations.length}개</span></h2>

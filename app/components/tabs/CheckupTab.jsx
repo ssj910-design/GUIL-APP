@@ -1,4 +1,5 @@
 import { useState, useContext } from "react";
+import { BRAND } from "@/lib/company";
 import { Search, MapPin, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
@@ -340,7 +341,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     const digitsOnly = (v) => (v ?? "").replace(/[^0-9]/g, "");
     const ymCompact = ym.replace("-", "");
     const dateCompact = checkupDate.replace(/-/g, "");
-    const companyUniqueNo = mapped.govCompanyUniqueNo || `GUIL_${mapped.id.slice(0, 8)}`;
+    const companyUniqueNo = mapped.govCompanyUniqueNo || `${BRAND.code}_${mapped.id.slice(0, 8)}`;
     const subProfile = profilesAll.find((p) => p.id === checkupSubProfileId);
 
     const contents = {

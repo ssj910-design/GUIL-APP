@@ -4,6 +4,16 @@
   "totalLive": 865161,
   "elevatorsLive": 817805,
   "companies": 987,
-  "guil": { "units": 838, "rank": 196, "seoul": 770, "gyeonggi": 68 },
-  "pct": { "age20": 35.1, "age30": 12.5, "car": 1.4, "hydraulic": 2.4 }
+  "pct": {
+    "age20": 35.1,
+    "age30": 12.5,
+    "car": 1.4,
+    "hydraulic": 2.4
+  },
+  "self": {
+    "units": 838,
+    "rank": 196,
+    "seoul": 770,
+    "gyeonggi": 68
+  }
 }

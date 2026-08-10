@@ -72,7 +72,7 @@ function AddSiteModal({ engineers, onClose, onSave }) {
       <div className="space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div><p className="text-xs font-bold text-slate-500 mb-1">현장명</p>
-            <input className={inputCls} placeholder="예: 구일빌딩" value={form.name} onChange={(e) => set("name")(e.target.value)} autoFocus /></div>
+            <input className={inputCls} placeholder="예: ○○빌딩" value={form.name} onChange={(e) => set("name")(e.target.value)} autoFocus /></div>
           <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">주소</p>
             <input className={inputCls} placeholder="예: 서울특별시 강남구 테헤란로 123" value={form.address} onChange={(e) => set("address")(e.target.value)} /></div>
         </div>

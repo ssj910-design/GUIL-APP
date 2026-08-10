@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { BRAND } from "@/lib/company";
 import { createPortal } from "react-dom";
 import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
@@ -51,7 +52,7 @@ export function MapLinkButtons({ site, className = "", size = 30 }) {
 export function BrandSplash({ label }) {
   return (
     <div className="h-dvh w-screen bg-blue-950 flex flex-col items-center justify-center gap-4">
-      <img src="/icon-512.png" alt="구일엘리베이터" className="w-20 h-20 rounded-2xl shadow-lg" />
+      <img src="/icon-512.png" alt={BRAND.short} className="w-20 h-20 rounded-2xl shadow-lg" />
       {label && <p className="text-xs font-bold text-blue-200">{label}</p>}
     </div>
   );

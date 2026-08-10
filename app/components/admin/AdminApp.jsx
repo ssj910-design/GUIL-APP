@@ -4,6 +4,7 @@
 // v2 스키마(units, *_id FK)를 기본으로 사용한다. 데이터는 이 셸이 한 번에 로드해
 // 각 섹션에 props로 내린다 (모바일 App 셸과 같은 관례).
 import { useState, useEffect } from "react";
+import { BRAND } from "@/lib/company";
 import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, CalendarCheck, Users, LayoutDashboard, BarChart3, Menu , Bell, MessageSquare, BookOpen } from "lucide-react";
 import { supabase, fetchAll, loginFailReason } from "@/lib/supabaseClient";
 import {
@@ -241,14 +242,14 @@ export default function AdminApp() {
       <header className="lg:hidden sticky top-0 z-30 flex items-center gap-3 bg-blue-950 text-white px-4 py-3">
         <button onClick={() => setNavOpen(true)} aria-label="메뉴 열기"><Menu size={20} /></button>
         <p className="font-bold text-sm">{MENU.find((m) => m.id === menu)?.label}</p>
-        <p className="ml-auto text-[10px] text-blue-300">구일엘리베이터(주)</p>
+        <p className="ml-auto text-[10px] text-blue-300">{BRAND.name}</p>
       </header>
       {navOpen && <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={() => setNavOpen(false)} />}
 
       {/* 사이드바 — 모바일에선 드로어, PC에선 스크롤해도 안 움직이게 고정 */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-56 bg-blue-950 text-white flex flex-col transition-transform lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${navOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="px-5 py-5 border-b border-blue-900">
-          <p className="font-bold tracking-tight">구일엘리베이터(주)</p>
+          <p className="font-bold tracking-tight">{BRAND.name}</p>
           <p className="text-xs text-blue-300 mt-0.5">관리자 콘솔</p>
         </div>
         <nav className="flex-1 py-3">

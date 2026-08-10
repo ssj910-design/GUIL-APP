@@ -1,7 +1,9 @@
+import { BRAND } from "@/lib/company";
+
 export default function manifest() {
   return {
-    name: "구일엘리베이터(주) 현장관리",
-    short_name: "구일엘리베이터",
+    name: `${BRAND.name} ${BRAND.appTitle}`,
+    short_name: BRAND.short,
     description: "승강기 유지보수 현장관리 앱",
     start_url: "/",
     display: "standalone",

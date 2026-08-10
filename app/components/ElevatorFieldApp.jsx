@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { BRAND } from "@/lib/company";
 import { Home, AlertTriangle, CalendarCheck, CalendarClock, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound } from "lucide-react";
 import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk, fetchAll, loginFailReason } from "@/lib/supabaseClient";
@@ -2049,7 +2050,7 @@ export default function App() {
             </button>
           )}
           <ScreenHeader
-            title={tab === "home" ? "구일엘리베이터(주)" : tabTitle}
+            title={tab === "home" ? BRAND.name : tabTitle}
             right={
               <div className="relative flex items-center gap-1.5">
                 <button onClick={() => setMyPageOpen(true)} className="p-1.5 bg-blue-900 rounded-full" aria-label="마이페이지">

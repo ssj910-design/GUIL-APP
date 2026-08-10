@@ -137,7 +137,7 @@ export default function StatsAdmin({ data }) {
           전국 비교 <span className="text-slate-400 font-semibold">· 전국 운행중 {national.totalLive.toLocaleString()}대 · 유지관리업체 {national.companies.toLocaleString()}개사</span>
         </h2>
         <p className="text-xs text-slate-500 mt-1 mb-3">
-          구일은 관리대수 <b className="text-slate-700">전국 {national.guil.rank}위</b> ({national.guil.units.toLocaleString()}대 — 서울 {national.guil.seoul}·경기 {national.guil.gyeonggi}) · 공단 파일데이터 {national.asOf} 기준
+          우리 회사는 관리대수 <b className="text-slate-700">전국 {national.self.rank}위</b> ({national.self.units.toLocaleString()}대 — 서울 {national.self.seoul}·경기 {national.self.gyeonggi}) · 공단 파일데이터 {national.asOf} 기준
         </p>
         <table className="w-full text-sm">
           <thead>

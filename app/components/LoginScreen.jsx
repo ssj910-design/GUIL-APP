@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { BRAND } from "@/lib/company";
 import { PrimaryButton, Field, inputCls } from "@/app/components/ui";
 
 const SAVED_ID_KEY = "guilSavedLoginId"; // 아이디 저장(비번은 저장 안 함)
@@ -32,7 +33,7 @@ export function LoginScreen({ onLogin, error, submitting, demo }) {
     // PC에서도 접속하므로 반응형 — 모바일은 꽉 차게, PC는 가운데 카드로 보이게.
     <div className="min-h-dvh w-full bg-slate-50 flex items-center justify-center p-6">
       <div className="w-full max-w-sm sm:bg-white sm:border sm:border-slate-200 sm:rounded-2xl sm:shadow-sm sm:p-8">
-        <h1 className="text-xl font-extrabold text-blue-950 mb-1 text-center">구일엘리베이터(주)</h1>
+        <h1 className="text-xl font-extrabold text-blue-950 mb-1 text-center">{BRAND.name}</h1>
         <p className="text-xs text-slate-400 mb-8 text-center">현장관리 시스템 로그인</p>
 
         <Field label="아이디">

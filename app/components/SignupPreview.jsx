@@ -70,7 +70,7 @@ export default function SignupPreview() {
               </div>
               <div>
                 <label className={labelCls}>회사명</label>
-                <input className={inputCls} placeholder="예: 구일엘리베이터(주)" value={form.company} onChange={(e) => set({ company: e.target.value })} />
+                <input className={inputCls} placeholder="예: ○○엘리베이터(주)" value={form.company} onChange={(e) => set({ company: e.target.value })} />
               </div>
               <div>
                 <label className={labelCls}>대표자명</label>
