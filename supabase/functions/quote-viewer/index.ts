@@ -10,5 +10,7 @@ Deno.serve((req) => {
     return new Response("잘못된 요청입니다", { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>견적서</title></head><body style="margin:0"><iframe src="https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(url)}" style="width:100vw;height:100vh;border:0"></iframe></body></html>`;
-  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+  // 카카오 인앱 브라우저가 Content-Type을 무시하고 자체 판단(sniffing)해 원문을 그대로
+  // 텍스트로 보여주는 걸 막기 위해 nosniff를 명시한다.
+  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "X-Content-Type-Options": "nosniff" } });
 });
