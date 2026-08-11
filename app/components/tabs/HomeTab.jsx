@@ -359,11 +359,12 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
                 {done && (
                   <> · {mine.status} <span className="text-slate-800">{hhmm(mine.checkedOutAt)}</span></>
                 )}
-                {mine.lat != null
+                {/* 위치 수집 정지 중에는 상태 표시 자체를 숨긴다 — "미기록"이 마치 오류처럼 보이므로. */}
+                {LOCATION_TRACKING && (mine.lat != null
                   ? done
                     ? <span className="ml-1.5 text-[10px] font-bold text-gray-400">· 위치 공유 종료</span>
                     : <span className="ml-1.5 text-[10px] font-bold text-emerald-600">· 📍근무 중 위치 공유</span>
-                  : <span className="ml-1.5 text-[10px] font-bold text-amber-600">· 위치 미기록</span>}
+                  : <span className="ml-1.5 text-[10px] font-bold text-amber-600">· 위치 미기록</span>)}
               </p>
               {!done && (
                 <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 shrink-0 ${workTone}`}>{workLabel}</span>
