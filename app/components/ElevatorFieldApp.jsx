@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { BRAND } from "@/lib/company";
 import { Home, AlertTriangle, CalendarCheck, CalendarClock, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound } from "lucide-react";
 import { PullToRefresh } from "@/app/components/PullToRefresh";
-import { supabase, writeOk, fetchAll, loginFailReason } from "@/lib/supabaseClient";
+import { supabase, writeOk, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken } from "@/lib/supabaseClient";
 import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
@@ -191,7 +191,9 @@ export default function App() {
     if (skipLogin) return;
     try {
       const raw = localStorage.getItem("guilAuthV1");
-      setSession(raw ? JSON.parse(raw) : null);
+      const token = getAuthToken();
+      if (raw && token) setAuthToken(token);
+      setSession(raw && token ? JSON.parse(raw) : null);
     } catch {
       setSession(null);
     }
@@ -341,21 +343,34 @@ export default function App() {
   async function handleLogin(loginId, password) {
     setAuthSubmitting(true);
     setAuthError("");
-    // 민원24 아이디 + 비번을 DB 함수(verify_login)로 검증한다. 해시는 클라이언트로 안 나온다.
-    const { data, error } = await supabase.rpc("verify_login", { p_login_id: (loginId || "").trim(), p_password: password });
-    const row = Array.isArray(data) ? data[0] : data;
-    if (error || !row) {
-      setAuthError(await loginFailReason(loginId));
+    // 민원24 아이디 + 비번을 서버(/api/login)가 verify_login DB 함수로 검증한다.
+    let json;
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ loginId, password }),
+      });
+      json = await res.json().catch(() => ({ ok: false }));
+    } catch {
+      setAuthError("서버에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.");
       setAuthSubmitting(false);
       return;
     }
-    const sess = { id: row.id, name: row.name, role: row.role, mustChange: row.must_change };
+    if (!json.ok) {
+      setAuthError(json.reason || await loginFailReason(loginId));
+      setAuthSubmitting(false);
+      return;
+    }
+    const { profile: p, token } = json;
+    setAuthToken(token);
+    const sess = { id: p.id, name: p.name, role: p.role, mustChange: p.mustChange };
     localStorage.setItem("guilAuthV1", JSON.stringify(sess));
     setSession(sess);
     setAuthSubmitting(false);
     // 네이티브 앱은 로그인 직후 알림 권한을 바로 물어본다 — 마이페이지까지 찾아가서 직접
     // 켜야 하는 불편을 없앤다. 이미 허용/거부된 상태면 시스템이 조용히 넘어간다.
-    if (Capacitor.isNativePlatform()) enablePush(row.id).catch(() => {});
+    if (Capacitor.isNativePlatform()) enablePush(p.id).catch(() => {});
   }
 
   const adminIds = () => profilesAll.filter((p) => p.role === "admin" && p.is_active !== false).map((p) => p.id);
@@ -688,6 +703,7 @@ export default function App() {
 
   function handleLogout() {
     localStorage.removeItem("guilAuthV1");
+    clearAuthToken();
     setSession(null);
     setProfile(null);
   }
