@@ -33,6 +33,11 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
   );
   const [expandedIdx, setExpandedIdx] = useState(0);
 
+  const [transportCost, setTransportCost] = useState(existingQuote?.transportCost || 0);
+  const [safetyCost, setSafetyCost] = useState(existingQuote?.safetyCost || 0);
+  const [profit, setProfit] = useState(existingQuote?.profit || 0);
+  const grandTotal = itemsSubtotal + Number(transportCost || 0) + Number(safetyCost || 0) + Number(profit || 0);
+
   function addItem() {
     setItems((prev) => {
       const next = [...prev, { category: "자재비", name: "", spec: "", unit: "EA", qty: 1, unitPrice: 0, unitNo: "" }];
@@ -225,18 +230,38 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
           </>
         )}
 
+        {step === 2 && (
+          <>
+            {[
+              { label: "운반비", value: transportCost, setValue: setTransportCost },
+              { label: "안전관리비 및 기타", value: safetyCost, setValue: setSafetyCost },
+              { label: "이윤", value: profit, setValue: setProfit },
+            ].map(({ label, value, setValue }) => (
+              <div key={label} className="bg-white rounded-xl border border-slate-200 p-3.5">
+                <p className="text-xs font-bold text-slate-500 mb-1.5">{label}</p>
+                <input type="number" className={inputCls} value={value} onChange={(e) => setValue(e.target.value)} placeholder="0" />
+              </div>
+            ))}
+            <div className="bg-slate-100 rounded-xl p-3.5 flex items-center justify-between">
+              <span className="text-sm font-bold text-slate-600">합계(VAT별도)</span>
+              <span className="text-base font-extrabold text-slate-900">{grandTotal.toLocaleString()}원</span>
+            </div>
+          </>
+        )}
+
         {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
       </div>
 
       <div className="shrink-0 px-5 py-3 bg-white border-t border-slate-100 flex gap-2">
         <button
           onClick={() => {
-            if (step === 1 && !existingQuote) return setStep(0);
-            return handleCancel();
+            if (step === 0) return handleCancel();
+            if (step === 1 && existingQuote) return handleCancel();
+            return setStep(step - 1);
           }}
           className="flex-1 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200"
         >
-          {step === 1 && !existingQuote ? "이전" : "취소"}
+          {step === 0 || (step === 1 && existingQuote) ? "취소" : "이전"}
         </button>
         {step === 0 && (
           <button
@@ -253,6 +278,11 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
             disabled={items.length === 0}
             className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 flex items-center justify-center gap-1"
           >
+            다음 <ChevronRight size={14} />
+          </button>
+        )}
+        {step === 2 && (
+          <button onClick={() => setStep(3)} className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 flex items-center justify-center gap-1">
             다음 <ChevronRight size={14} />
           </button>
         )}
