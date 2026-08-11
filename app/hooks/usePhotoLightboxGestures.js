@@ -188,6 +188,10 @@ export function usePhotoLightboxGestures(urlsLength, index, onIndexChange, { whe
     zoom,
     pan,
     isGesturing: () => !!gestureRef.current,
-    handlers: { onDoubleClick: toggleZoom, onPointerDown, onPointerMove, onPointerUp: endGesture, onPointerCancel: endGesture },
+    // 더블클릭/더블탭 확대는 onPointerUp(endGesture)의 탭 간격 감지가 이미 처리한다(마우스·터치
+    // 공용). 여기 onDoubleClick까지 같이 붙어있으면 브라우저 네이티브 dblclick이 두 번째
+    // pointerup 직후 뒤늦게 또 한 번 toggleZoom을 불러 방금 켠 확대를 바로 꺼버리는 경쟁이
+    // 생겨 "될 때도 있고 안 될 때도 있는" 현상이 났다 — 중복 핸들러를 없앤다.
+    handlers: { onPointerDown, onPointerMove, onPointerUp: endGesture, onPointerCancel: endGesture },
   };
 }
