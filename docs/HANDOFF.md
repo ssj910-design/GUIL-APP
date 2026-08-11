@@ -6,6 +6,23 @@
 
 ---
 
+## 🚨 지금 장애 — 관리자 콘솔 로그인 불가 (2026-08-11 발견, 1분 수정)
+
+> `/api/login`이 **500 "서버 설정 오류 — SUPABASE_JWT_SECRET 미설정"**을 반환한다.
+> 커밋 b67828c(관리자 콘솔 JWT 로그인)가 요구하는 환경변수가 Vercel에 없어서다.
+>
+> **영향**: 관리자 콘솔(/admin) 신규 로그인 전면 불가. 이미 로그인된 브라우저는 세션이 남아 동작.
+> 기사 앱(/)은 verify_login RPC 직접 호출이라 **영향 없음**.
+>
+> **수정**: Vercel → Settings → Environment Variables (Production)
+> - 이름 `SUPABASE_JWT_SECRET`
+> - 값: Supabase 대시보드 → Project Settings → API → **JWT Settings → JWT Secret**
+> 등록 후 재배포.
+>
+> 확인법: `curl -X POST https://guil-app-pi.vercel.app/api/login -H 'Content-Type: application/json' -d '{"loginId":"x","password":"x"}'`
+> → "아이디 또는 비밀번호가 올바르지 않습니다"가 나오면 정상(500이 아니면 됨).
+
+
 ## 🔴🔴 긴급 — 저장소를 비공개(Private)로 전환 (차호근 → 친구, 2026-08-05, 1분 작업)
 
 > **GUIL-APP 저장소가 지금 PUBLIC(전체 공개)이다.** 소스·설계문서·운영 문서 전부 +
