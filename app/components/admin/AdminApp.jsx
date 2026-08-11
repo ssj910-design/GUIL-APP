@@ -165,6 +165,9 @@ export default function AdminApp() {
   const tier = SKIP_LOGIN ? "super" : me?.adminTier; // 로그인 꺼진 상태선 전 기능 노출(기존 동작)
 
   useEffect(() => {
+    // 로그인 전엔 절대 조회하지 않는다 — 화면(로그인창)만 막고 데이터는 그냥 불러오면,
+    // 로그인 안 한 상태에서도 네트워크 탭에 전체 데이터가 그대로 찍혀 새어나간다.
+    if (!SKIP_LOGIN && !me) return;
     async function load() {
       const [sites, units, siteManagers, failures, inspections, materials, quotes, restock, todos, billings, selfChecks, selfCheckItems, profiles, feed, errorCodes] =
         await Promise.all([
@@ -206,7 +209,7 @@ export default function AdminApp() {
       setLoading(false);
     }
     load();
-  }, []);
+  }, [me]);
 
   // ── 접근 통제 (로그인 켜졌을 때만) ──
   if (!SKIP_LOGIN && !authChecked) {
