@@ -8,6 +8,9 @@ import { parsePartQty, formatPhone, addDays } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { BillingHistoryScreen } from "@/app/components/tabs/BillingTab";
 import QuoteWizard from "@/app/components/tabs/QuoteWizard";
+import { sentHistory } from "@/app/components/admin/adminShared";
+import QuotePdfPreview from "@/app/components/admin/QuotePdfPreview";
+import { X } from "lucide-react";
 
 
 function AdminMenuRow({ icon: Icon, label, badge, onClick }) {
@@ -479,8 +482,12 @@ function MaterialsPanel({ pending, rejected, suppliedCount, engineerNames, onSup
 
 function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, onOpenWizard, onSendQuote, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onOpenHistory, focusId, onFocusHandled }) {
   const [detail, setDetail] = useState(null);
+  const [pdfFullscreen, setPdfFullscreen] = useState(false);
   const shownDetail = detail ?? (focusId ? active.find((q) => q.id === focusId) : null);
-  const closeDetail = () => { setDetail(null); if (focusId) onFocusHandled?.(); };
+  const closeDetail = () => { setDetail(null); setPdfFullscreen(false); if (focusId) onFocusHandled?.(); };
+  // 데스크탑 관리자웹(MaterialsAdmin.jsx의 RequestDetailModal)과 같은 기준 — 요청접수 이후(작성
+  // 이상)면 "견적 상세내역"으로, 공사내용 대신 견적명·PDF 미리보기를 보여준다.
+  const isDraftedQuote = shownDetail && shownDetail.status !== "요청접수";
   return (
     <div>
       <SwipeCarousel
@@ -508,48 +515,87 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
       )}
 
       {shownDetail && (
-        <Sheet title="견적 요청 상세" onClose={closeDetail}>
+        <Sheet title={isDraftedQuote ? "견적 상세내역" : "견적 요청 상세"} onClose={closeDetail}>
           <div className="space-y-3">
             <div className="bg-slate-100 rounded-xl p-3">
               <p className="text-[11px] text-slate-500">현장</p>
               <p className="font-bold text-slate-800">{shownDetail.siteName}</p>
             </div>
             <div className="bg-slate-100 rounded-xl p-3">
-              <p className="text-[11px] text-slate-500">견적 내역 (부품명, 수량)</p>
-              <p className="font-bold text-slate-800 whitespace-pre-wrap">{shownDetail.constructionType}</p>
+              <p className="text-[11px] text-slate-500">{isDraftedQuote ? "견적명" : "견적 내역 (부품명, 수량)"}</p>
+              <p className="font-bold text-slate-800 whitespace-pre-wrap">{isDraftedQuote ? (shownDetail.quoteTitle || "-") : shownDetail.constructionType}</p>
             </div>
             <div className="grid grid-cols-2 gap-2.5">
               <div className="bg-slate-100 rounded-xl p-3">
                 <p className="text-[11px] text-slate-500">현장 견적 담당자 연락처</p>
-                <p className="font-bold text-slate-800">{shownDetail.contactPhone}</p>
+                <p className="font-bold text-slate-800">{(isDraftedQuote ? shownDetail.recipientPhone : shownDetail.contactPhone) || "-"}</p>
               </div>
-              <div className="bg-slate-100 rounded-xl p-3">
-                <p className="text-[11px] text-slate-500">신청 기사</p>
-                <p className="font-bold text-slate-800">{shownDetail.engineer}</p>
-              </div>
+              {(shownDetail.requesterId || shownDetail.engineer) && (
+                <div className="bg-slate-100 rounded-xl p-3">
+                  <p className="text-[11px] text-slate-500">신청 기사</p>
+                  <p className="font-bold text-slate-800">{shownDetail.engineer}</p>
+                </div>
+              )}
               <div className="bg-slate-100 rounded-xl p-3 col-span-2">
-                <p className="text-[11px] text-slate-500">신청일</p>
-                <p className="font-bold text-slate-800">{shownDetail.requestedDate}</p>
+                <p className="text-[11px] text-slate-500">{isDraftedQuote ? "작성일" : "신청일"}</p>
+                <p className="font-bold text-slate-800">{isDraftedQuote ? shownDetail.quoteIssuedDate : shownDetail.requestedDate}</p>
               </div>
             </div>
+
+            {isDraftedQuote && (
+              <div className="bg-slate-100 rounded-xl p-3">
+                <p className="text-[11px] text-slate-500 mb-1">발송일</p>
+                {sentHistory(shownDetail).length === 0 ? (
+                  <p className="font-bold text-slate-800">-</p>
+                ) : (
+                  sentHistory(shownDetail).map((line, i) => <p key={i} className="font-bold text-slate-800">{line}</p>)
+                )}
+              </div>
+            )}
+
             {shownDetail.note && (
               <div className="bg-slate-100 rounded-xl p-3">
                 <p className="text-[11px] text-slate-500">기사 의견 (견적 사유 및 특이사항)</p>
                 <p className="text-sm text-slate-700 mt-0.5 whitespace-pre-wrap">{shownDetail.note}</p>
               </div>
             )}
-            <div>
-              <p className="text-xs font-bold text-slate-500 mb-2">기사가 첨부한 현장 상태 사진 ({shownDetail.photoCount ?? 1}장)</p>
-              {shownDetail.photoUrls?.length > 0
-                ? <PhotoGrid urls={shownDetail.photoUrls} />
-                : (
-                  <div className="grid grid-cols-3 gap-2">
-                    {Array.from({ length: shownDetail.photoCount ?? 1 }).map((_, i) => <PhotoThumb key={i} />)}
-                  </div>
-                )}
-            </div>
+
+            {isDraftedQuote && shownDetail.quotePdfUrl ? (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-bold text-slate-500">견적서 PDF 미리보기</p>
+                  <button onClick={() => setPdfFullscreen(true)} className="text-[11px] font-bold text-blue-600">전체화면으로 보기</button>
+                </div>
+                <button onClick={() => setPdfFullscreen(true)} className="w-full block">
+                  <QuotePdfPreview url={shownDetail.quotePdfUrl} height="50vh" />
+                </button>
+              </div>
+            ) : (
+              <div>
+                <p className="text-xs font-bold text-slate-500 mb-2">기사가 첨부한 현장 상태 사진 ({shownDetail.photoCount ?? 1}장)</p>
+                {shownDetail.photoUrls?.length > 0
+                  ? <PhotoGrid urls={shownDetail.photoUrls} />
+                  : (
+                    <div className="grid grid-cols-3 gap-2">
+                      {Array.from({ length: shownDetail.photoCount ?? 1 }).map((_, i) => <PhotoThumb key={i} />)}
+                    </div>
+                  )}
+              </div>
+            )}
           </div>
         </Sheet>
+      )}
+
+      {pdfFullscreen && shownDetail?.quotePdfUrl && (
+        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+          <div className="shrink-0 flex items-center justify-between px-4 py-3 bg-black/80">
+            <span className="text-sm font-bold text-white">견적서 미리보기</span>
+            <button onClick={() => setPdfFullscreen(false)} className="text-white p-1"><X size={20} /></button>
+          </div>
+          <div className="flex-1 min-h-0">
+            <QuotePdfPreview url={shownDetail.quotePdfUrl} height="100%" />
+          </div>
+        </div>
       )}
     </div>
   );
