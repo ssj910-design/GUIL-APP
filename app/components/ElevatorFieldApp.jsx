@@ -217,6 +217,7 @@ export default function App() {
       if (!alive) return;
       if (!data || data.is_active === false || data.deleted_at) {
         localStorage.removeItem("guilAuthV1");
+        clearAuthToken();
         setSession(null);
         setProfile(null);
         return;

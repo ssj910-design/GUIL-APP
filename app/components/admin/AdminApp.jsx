@@ -93,6 +93,9 @@ export default function AdminApp() {
         if (!alive) return;
         if (data && data.role === "admin" && data.is_active !== false && !data.deleted_at) {
           setMe({ id: data.id, name: data.name, role: data.role, adminTier: data.admin_tier, mustChange: s.mustChange });
+        } else {
+          localStorage.removeItem("guilAuthV1");
+          clearAuthToken();
         }
       } catch { /* 무시 — 로그인 화면으로 */ }
       if (alive) setAuthChecked(true);
