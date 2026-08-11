@@ -926,12 +926,15 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
   // PC 관리자 콘솔(EngineersAdmin)과 동일한 대상 — 기사 전체 + 최고관리자를 뺀 관리자 계정.
   const resettableAccounts = (profiles ?? [])
     .filter((p) => (p.role === "engineer" || (p.role === "admin" && p.admin_tier !== "super")) && p.is_active !== false);
-  const [page, setPage] = useState(null); // null | "billing" | "materialHistory" | "quoteHistory"
+  const [page, setPage] = useState(null); // null | "billing" | "materialHistory" | "quoteHistory" | "quoteManagement" | "quoteWizard"
   const [expanded, setExpanded] = useState(null); // "materials" | "restock" | "quotes" | "reassign" | null
   // 알림/푸시로 특정 자재·견적 신청이 지정되면(materialFocusId/quoteFocusId) 해당 아코디언을 자동으로
   // 펼친다 — effect 없이 open 조건에 바로 반영(상세 시트는 MaterialsPanel/QuotesPanel이 focusId로 직접 연다).
   const materialsOpen = expanded === "materials" || Boolean(materialFocusId);
-  const quotesOpen = expanded === "quotes" || Boolean(quoteFocusId);
+
+  useEffect(() => {
+    if (quoteFocusId) setPage("quoteManagement");
+  }, [quoteFocusId]);
 
   const materialPending = materialRequests.filter((r) => r.status === "승인대기");
   const materialRejected = materialRequests.filter((r) => r.status === "반려");
@@ -971,6 +974,28 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
         onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
         onBack={() => setPage(null)}
       />
+    );
+  }
+
+  if (page === "quoteManagement") {
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <DrillHeader title="견적관리" onBack={() => setPage(null)} onHome={() => setPage(null)} />
+        <div className="flex-1 overflow-y-auto px-5 pt-4 pb-4">
+          <QuotesPanel
+            active={quoteActive}
+            completedCount={completed.length}
+            engineerNames={engineerNames}
+            onAdvanceQuote={onAdvanceQuote}
+            onCompleteQuoteSupply={onCompleteQuoteSupply}
+            onAttachQuotePhoto={onAttachQuotePhoto}
+            onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
+            onOpenHistory={() => setPage("quoteHistory")}
+            focusId={quoteFocusId}
+            onFocusHandled={onQuoteFocusHandled}
+          />
+        </div>
+      </div>
     );
   }
 
@@ -1015,20 +1040,18 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
           </AccordionRow>
 
           {!isMaterialTier && (
-            <AccordionRow icon={FileText} label="견적 요청 관리" badge={quoteActive.length} open={quotesOpen} onToggle={() => toggle("quotes")}>
-              <QuotesPanel
-                active={quoteActive}
-                completedCount={completed.length}
-                engineerNames={engineerNames}
-                onAdvanceQuote={onAdvanceQuote}
-                onCompleteQuoteSupply={onCompleteQuoteSupply}
-                onAttachQuotePhoto={onAttachQuotePhoto}
-                onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
-                onOpenHistory={() => setPage("quoteHistory")}
-                focusId={quoteFocusId}
-                onFocusHandled={onQuoteFocusHandled}
-              />
-            </AccordionRow>
+            <button onClick={() => setPage("quoteManagement")} className="w-full flex items-center justify-between px-4 py-3.5 active:bg-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                  <FileText size={15} className="text-slate-600" />
+                </div>
+                <span className="text-sm font-bold text-slate-800">견적관리</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {quoteActive.length > 0 && <span className="text-[11px] font-bold text-white bg-blue-700 px-2 py-0.5 rounded-full">{quoteActive.length}</span>}
+                <ChevronRight size={16} className="text-slate-400" />
+              </div>
+            </button>
           )}
 
           {!isMaterialTier && (
