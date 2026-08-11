@@ -205,7 +205,11 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
   ];
 
   const ym = TODAY_STR.slice(0, 7);
-  const monthChecks = selfChecks.filter((c) => c.ym === ym);
+  // 출석부는 생성 시점(매월 1일)에 활성 호기 전체로 만들어져서, 그 뒤 현장이 계약중지돼도
+  // 이미 만들어진 줄은 그대로 남는다 — SelfChecksAdmin.jsx와 동일하게 지금 계약중지인
+  // 현장의 줄은 분모·분자 모두에서 제외한다.
+  const unitSiteId = new Map(units.map((u) => [u.id, u.siteId]));
+  const monthChecks = selfChecks.filter((c) => c.ym === ym && !deadSiteIds.has(unitSiteId.get(c.unitId)));
   const doneChecks = monthChecks.filter((c) => c.status === "완료");
 
   // 검사유효기간은 units의 DB 캐시를 쓴다 (전 호기 실시간 API 호출 금지 — 트래픽 한도).
