@@ -21,6 +21,7 @@
 ## 스펙과 다르게 조사 중 확정한 부분
 
 - 스펙은 "`send-quote`·`push/send`처럼 실제 발송하는 라우트는 관리자만"이라고 했지만, 실제 호출부를 확인해보니 `push/send`(`lib/push.js`의 `notify()`)는 기사용 모바일 화면(`ElevatorFieldApp.jsx`)에서도 호출된다. "로그인만 하면 전체 접근"이라는 이번 작업의 핵심 원칙에 맞춰, **`push/send`는 관리자 제한 없이 로그인한 아무 사용자면 허용**하고, **`send-quote`만 관리자 전용**으로 남긴다(호출부가 `app/components/admin/`뿐이라 실제로 관리자만 부름).
+- 계획 작성 도중 협업자가 `QuoteItemsModal.jsx`의 "바로 발송하기"(alsoSend) 기능을 통째로 제거하는 커밋을 올렸다 — 그 자리에 있던 `/api/send-quote` 호출부도 같이 사라졌다. 그래서 `send-quote`의 실제 클라이언트 호출부는 이제 `QuoteSendModal.jsx` 한 곳뿐이다(아래 Task 6에 반영).
 - `push/send`는 서버 크론 6개(`check-selfcheck`, `check-inspections`, `check-failures`, `check-duty-tomorrow`, `check-attendance`, `check-contracts`)에서도 내부적으로 호출한다 — 이 호출들은 로그인 토큰이 없으므로, `push/send`는 **유효한 로그인 토큰 OR `CRON_SECRET`** 둘 중 하나를 허용한다.
 - 조사 중 `sync-holidays`(CRON_SECRET 체크 자체가 없음)와 `sync-inspection-cache`(체크가 "설정 안 돼있으면 건너뜀"이라 사실상 무력화될 수 있는 구조)도 발견했다 — 이번 작업과 같은 종류의 문제라 마지막 태스크로 같이 정리한다.
 
@@ -549,7 +550,6 @@ git commit -m "[deploy] 모바일 앱 로그인 — /api/login으로 JWT 발급�
 - Modify: `app/components/InspectionFailDetailSheet.jsx`
 - Modify: `app/components/admin/SitesAdmin.jsx`
 - Modify: `app/components/admin/QuoteSendModal.jsx`
-- Modify: `app/components/admin/QuoteItemsModal.jsx`
 
 **Interfaces:**
 - Consumes: `authFetch` (Task 3)
@@ -694,35 +694,19 @@ import { authFetch } from "@/lib/apiFetch";
     const res = await authFetch("/api/send-quote", {
 ```
 
-- [ ] **Step 6: `app/components/admin/QuoteItemsModal.jsx`의 send-quote 호출 교체**
-
-파일 상단에 import 추가:
-```js
-import { authFetch } from "@/lib/apiFetch";
-```
-
-206행 기존:
-```js
-      const sendRes = await fetch("/api/send-quote", {
-```
-교체:
-```js
-      const sendRes = await authFetch("/api/send-quote", {
-```
-
-- [ ] **Step 7: 브라우저에서 5개 라우트 각각 한 번씩 실제로 동작시켜 네트워크 탭 확인**
+- [ ] **Step 6: 브라우저에서 5개 라우트 각각 한 번씩 실제로 동작시켜 네트워크 탭 확인**
 
 - 검사관리 화면에서 실시간 검사 정보 있는 현장 하나 열기 → `/api/elevator-info`, `/api/elevator-fail-detail` 요청에 Authorization 헤더 확인
 - 현장정보에서 새 현장 추가 → `/api/geocode-sites` 요청 확인
-- 자재·견적 신청내역에서 견적 발송 → `/api/send-quote` 요청 확인
+- 자재·견적 신청내역에서 견적 발송(발행된 견적 재발송, `QuoteSendModal`) → `/api/send-quote` 요청 확인
 - 아무 알림 트리거(예: 할일 배정) → `/api/push/send` 요청 확인
 
 Expected: 5개 요청 모두 Authorization 헤더 부착, 기능 자체는 지금까지와 동일하게 작동.
 
-- [ ] **Step 8: 커밋**
+- [ ] **Step 7: 커밋**
 
 ```bash
-git add lib/push.js app/hooks/useLiveInspections.js app/components/InspectionFailDetailSheet.jsx app/components/admin/SitesAdmin.jsx app/components/admin/QuoteSendModal.jsx app/components/admin/QuoteItemsModal.jsx
+git add lib/push.js app/hooks/useLiveInspections.js app/components/InspectionFailDetailSheet.jsx app/components/admin/SitesAdmin.jsx app/components/admin/QuoteSendModal.jsx
 git commit -m "[deploy] API 라우트 5종 호출부에 로그인 토큰 부착 (authFetch)"
 ```
 
