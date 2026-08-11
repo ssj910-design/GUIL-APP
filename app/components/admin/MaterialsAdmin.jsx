@@ -15,6 +15,7 @@ import { TODAY_STR } from "@/lib/constants";
 import { locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid, DateTextInput, lastSentDate, sentHistory } from "@/app/components/admin/adminShared";
 import QuoteItemsModal from "@/app/components/admin/QuoteItemsModal";
 import QuoteSendModal from "@/app/components/admin/QuoteSendModal";
+import QuotePdfPreview from "@/app/components/admin/QuotePdfPreview";
 
 const MATERIAL_TONE = { 승인대기: "blue", 지급완료: "green", 반려: "red", 교체완료: "indigo" };
 const QUOTE_TONE = { 요청접수: "blue", 견적발행: "amber", 승인: "amber", 지급완료: "green", 교체완료: "indigo" };
@@ -1052,7 +1053,7 @@ function RequestDetailModal({ target, data, onClose }) {
   const photos = [...(r.photoUrls ?? []), ...(r.supplyPhotoUrls ?? [])];
 
   return (
-    <Modal title={isMaterial ? "자재신청 상세내역" : isDraftedQuote ? "견적 상세내역" : "견적요청 상세내역"} onClose={onClose} wide>
+    <Modal title={isMaterial ? "자재신청 상세내역" : isDraftedQuote ? "견적 상세내역" : "견적요청 상세내역"} onClose={onClose} wide="2xl">
       <div className="space-y-3 mb-4">
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div><p className="text-xs font-bold text-slate-400 mb-1">현장 · 호기</p><p className="font-semibold text-slate-800">{locOf(data, r.unitId, r.siteName, r.elevatorNo)}</p></div>
@@ -1072,25 +1073,9 @@ function RequestDetailModal({ target, data, onClose }) {
           {assignee && (
             <div><p className="text-xs font-bold text-slate-400 mb-1">담당 기사</p><p className="font-semibold text-slate-800">{assignee}</p></div>
           )}
-          <div>
-            {isMaterial ? (
-              <StatusBadge tone={tone}>{displayStatus}</StatusBadge>
-            ) : (
-              (() => {
-                const { stage, dates } = quoteStageInfo(r, data.todos ?? []);
-                return (
-                  <div className="flex gap-1">
-                    {QUOTE_STAGES.map((s) => (
-                      <div key={s} className="flex flex-col items-center">
-                        <StatusBadge tone={s === stage ? QUOTE_STAGE_TONES[s] : "slate"}>{s}</StatusBadge>
-                        <span className="text-[9px] text-slate-400 mt-0.5">{dates[s]}</span>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()
-            )}
-          </div>
+          {isMaterial && (
+            <div><StatusBadge tone={tone}>{displayStatus}</StatusBadge></div>
+          )}
         </div>
 
         {!isMaterial && (
@@ -1102,6 +1087,22 @@ function RequestDetailModal({ target, data, onClose }) {
               ) : (
                 sentHistory(r).map((line, i) => <p key={i} className="font-semibold text-slate-800">{line}</p>)
               )}
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-400 mb-1">진행상태</p>
+              {(() => {
+                const { stage, dates } = quoteStageInfo(r, data.todos ?? []);
+                return (
+                  <div className="flex gap-1">
+                    {QUOTE_STAGES.map((s) => (
+                      <div key={s} className="flex flex-col items-center">
+                        <StatusBadge tone={s === stage ? QUOTE_STAGE_TONES[s] : "slate"}>{s}</StatusBadge>
+                        <span className="text-[9px] text-slate-400 mt-0.5">{dates[s]}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           </>
         )}
@@ -1124,12 +1125,7 @@ function RequestDetailModal({ target, data, onClose }) {
       {isDraftedQuote && r.quotePdfUrl ? (
         <div>
           <p className="text-xs font-bold text-slate-500 mb-2">견적서 PDF 미리보기</p>
-          <div className="border border-slate-200 rounded-xl overflow-hidden" style={{ height: 480 }}>
-            <iframe src={r.quotePdfUrl} title="견적서 PDF 미리보기" className="w-full h-full" />
-          </div>
-          <a href={r.quotePdfUrl} target="_blank" rel="noreferrer" className="inline-block mt-2 text-xs font-bold text-blue-700">
-            새 탭에서 크게 보기 →
-          </a>
+          <QuotePdfPreview url={r.quotePdfUrl} />
         </div>
       ) : photos.length > 0 ? (
         <div>
