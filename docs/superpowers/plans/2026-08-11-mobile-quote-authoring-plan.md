@@ -699,6 +699,10 @@ git commit -m "feat: 견적 마법사 - 품목 입력 단계(아코디언 카드
   const [transportCost, setTransportCost] = useState(existingQuote?.transportCost || 0);
   const [safetyCost, setSafetyCost] = useState(existingQuote?.safetyCost || 0);
   const [profit, setProfit] = useState(existingQuote?.profit || 0);
+```
+**주의**: `grandTotal`은 여기서 바로 선언하지 않는다 — `itemsSubtotal`이 이 지점보다 아래(`const itemsSubtotal = items.reduce(...)` 줄)에서 선언돼 있어서, 여기서 `itemsSubtotal`을 참조하면 temporal dead zone으로 렌더링마다 `ReferenceError`가 난다(실사고로 확인). 대신 `const itemsSubtotal = items.reduce(...)` 줄 바로 뒤에 추가한다:
+```js
+  const itemsSubtotal = items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.unitPrice || 0), 0);
   const grandTotal = itemsSubtotal + Number(transportCost || 0) + Number(safetyCost || 0) + Number(profit || 0);
 ```
 
