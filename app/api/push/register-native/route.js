@@ -1,7 +1,7 @@
 // 네이티브(Capacitor/FCM) 푸시 토큰 저장 — app/api/push/subscribe/route.js(웹푸시)의 네이티브 버전.
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-const db = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+const db = () => supabaseAdmin;
 
 export async function POST(request) {
   const { profileId, token, platform } = await request.json().catch(() => ({}));

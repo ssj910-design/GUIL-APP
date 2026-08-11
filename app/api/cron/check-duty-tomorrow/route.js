@@ -1,6 +1,6 @@
 // 내일 당직·숙직 예고 — pg_cron이 매분 호출, 18:00(KST)에만 동작.
 // 내일 duty_schedules에 배정된 사람에게 개별 알림.
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { addDays } from "@/lib/utils";
 
 async function handle(request) {
@@ -16,7 +16,7 @@ async function handle(request) {
   const todayStr = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
   const tomorrowStr = addDays(todayStr, 1);
 
-  const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  const db = supabaseAdmin;
   const origin = new URL(request.url).origin;
   const send = (body) =>
     fetch(`${origin}/api/push/send`, {

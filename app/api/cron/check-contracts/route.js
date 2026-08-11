@@ -1,6 +1,6 @@
 // 계약 만료 임박 — pg_cron이 매분 호출, 매주 월요일 09:00(KST)에만 동작.
 // 계약만료일이 오늘부터 30일 이내인 현장을 관리자에게 리스트로.
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { addDays } from "@/lib/utils";
 
 async function handle(request) {
@@ -17,7 +17,7 @@ async function handle(request) {
   const todayStr = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
   const untilStr = addDays(todayStr, 30);
 
-  const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  const db = supabaseAdmin;
   const { data: sites } = await db.from("sites").select("id,name,contract_end")
     .eq("is_active", true).gte("contract_end", todayStr).lte("contract_end", untilStr);
   if (!sites?.length) return Response.json({ ok: true, sites: 0 });

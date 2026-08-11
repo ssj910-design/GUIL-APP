@@ -3,7 +3,7 @@
 //  - status='누락' (매월 1일 자동 전환, 090 마이그레이션)
 //  - status='완료'인데 공단제출 결과가 성공(000)이 아닌 것
 // 등록(완료)하고 공단제출까지 성공(000)하면 다음 스윕부터 저절로 빠진다(자동 종료).
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 async function handle(request) {
   const secret = process.env.CRON_SECRET;
@@ -15,7 +15,7 @@ async function handle(request) {
   const kstMins = nowKst.getHours() * 60 + nowKst.getMinutes();
   if (kstMins !== 540) return Response.json({ ok: true, skipped: "시간대 아님" }); // 09:00
 
-  const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  const db = supabaseAdmin;
   const origin = new URL(request.url).origin;
   const send = (body) =>
     fetch(`${origin}/api/push/send`, {

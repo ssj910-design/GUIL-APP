@@ -4,7 +4,7 @@
 // ⚠️ HOLIDAY_API_KEY는 data.go.kr에서 "특일정보"를 별도 활용신청해야 발급된다.
 // 승강기 API 키로는 호출이 Forbidden으로 막힌다 (2026-07-20 확인).
 // 키가 없거나 실패하면 앱은 lib/holidays.json 폴백을 계속 쓴다 — 화면이 비지는 않는다.
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const maxDuration = 60;
 
@@ -43,7 +43,7 @@ export async function GET(request) {
     );
   }
 
-  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  const supabase = supabaseAdmin;
   const thisYear = new Date().getFullYear();
   const results = [];
 

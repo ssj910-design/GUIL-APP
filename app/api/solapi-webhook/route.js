@@ -8,9 +8,9 @@
 //   https://guil-app-pi.vercel.app/api/solapi-webhook?token=<SOLAPI_WEBHOOK_TOKEN>
 // 인증은 URL의 token 하나로 한다 — 솔라피 서명 방식에 의존하지 않아 단순하고, 토큰을
 // 모르면 아무나 상태를 조작할 수 없다.
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-const db = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+const db = () => supabaseAdmin;
 
 // 솔라피 상태코드 → 사람이 읽는 상태. 4000이 성공, 나머지는 실패 사유가 따라온다.
 function statusOf(report) {

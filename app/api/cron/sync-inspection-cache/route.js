@@ -8,7 +8,7 @@
 // 조건부합격/불합격으로 확인된 호기는 부적합 상세(getInspectsafeList → getInspectFailList)까지
 // 여기서 같이 가져와 units.fail_items에 캐싱해둔다 — 검사관리 조건부·불합격 탭이 페이지 열 때마다
 // 라이브로 부적합상세를 조회하느라 느렸던 문제 해결(이제 이 캐시만 읽어서 즉시 뜬다).
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { resolveLatestFailItems, fetchInspectionHistory, PRIOR_FLAGGED_WORDS } from "@/lib/govFailApi";
 import { addDays, formatUnitLabel, govDateToDashed } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
@@ -66,7 +66,7 @@ export async function GET(request) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  const supabase = supabaseAdmin;
 
   const { data: units, error } = await supabase
     .from("units")

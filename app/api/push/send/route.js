@@ -8,7 +8,7 @@ import webpush from "web-push";
 // API를 나눠 제공한다 — admin.credential.cert()/admin.messaging() 같은 옛 네임스페이스 방식은 없다.
 import { initializeApp, cert, getApps } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { NOTIFICATIONS, isEnabled, levelOf } from "@/lib/notifications";
 import { verifyAuthToken } from "@/lib/verifyToken";
 
@@ -61,7 +61,7 @@ async function handlePost(request) {
   if (!pub || !priv) return Response.json({ ok: false, reason: "VAPID 키 미설정" }, { status: 200 });
   webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:admin@example.com", pub, priv);
 
-  const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  const db = supabaseAdmin;
 
   // 받는 사람 결정: profileIds를 주면 그대로, 안 주면 알림 종류의 audience(admin/engineer/all)로 서버가 정한다.
   // 이러면 관리자 전체·기사 전체·전원 대상 알림은 호출자가 대상 목록을 몰라도 key만으로 보낼 수 있다.

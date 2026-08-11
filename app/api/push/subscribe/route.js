@@ -1,7 +1,7 @@
 // 푸시 구독 저장·삭제. 구독은 기기 단위라 한 사람이 여러 행을 가질 수 있다.
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-const db = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+const db = () => supabaseAdmin;
 
 export async function POST(request) {
   const { profileId, subscription, userAgent } = await request.json().catch(() => ({}));

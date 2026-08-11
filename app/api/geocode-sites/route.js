@@ -4,7 +4,7 @@
 // 주소는 거의 바뀌지 않으므로 한 번 변환해 두고 재사용한다.
 //
 // appKey는 서버에서만 쓴다 (클라이언트로 내려보내면 키가 노출된다).
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { geocodeAddress } from "@/lib/tmapGeocode";
 import { verifyAuthToken } from "@/lib/verifyToken";
 
@@ -24,7 +24,7 @@ export async function GET(request) {
   if (!key) return Response.json({ ok: false, reason: "TMAP_APP_KEY 미설정" }, { status: 200 });
 
   const limit = Math.min(Number(new URL(request.url).searchParams.get("limit")) || 50, 1000);
-  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  const supabase = supabaseAdmin;
 
   // 아직 변환하지 않은 현장만 처리한다 — 여러 번 돌려도 중복 호출이 없다
   const { data: sites, error } = await supabase

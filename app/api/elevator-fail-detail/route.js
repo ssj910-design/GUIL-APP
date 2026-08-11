@@ -12,7 +12,7 @@
 //
 // 실시간 조회 로직(XML 파싱·캐시·회차 매칭)은 lib/govFailApi.js에 있고, 매일 도는
 // sync-inspection-cache 크론(조건부·불합격 호기 부적합상세 선캐싱)도 같은 모듈을 쓴다.
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { fetchInspectionHistory, findRecordByAnchor, fetchFailItems } from "@/lib/govFailApi";
 import { verifyAuthToken } from "@/lib/verifyToken";
 
@@ -26,8 +26,8 @@ export async function GET(request) {
   if (!elevatorNo) {
     return Response.json({ error: "elevatorNo가 필요합니다" }, { status: 400 });
   }
-  const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+  const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+    ? supabaseAdmin
     : null;
 
   const records = await fetchInspectionHistory(elevatorNo);

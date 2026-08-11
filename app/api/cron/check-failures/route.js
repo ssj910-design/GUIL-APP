@@ -4,7 +4,7 @@
 //  2) 출동 미응답 5분: 배정됐는데 5분째 출동응답 없음 → 배정 기사 + 관리자에게 (근무시간 내 배정 후 30분까지 5분 간격, no_response_nag_at)
 // 재촉은 근무시간(월~금 08:00~17:30 KST)에만 — 야간·주말은 끔. 초기 긴급 알림은 즉시형이라 시간 무관하게 감.
 // 실제 발송은 기존 /api/push/send에 위임(회사·개인 알림설정·만료구독 정리를 거기서 처리).
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { NOTIFICATIONS, audienceTiersOf } from "@/lib/notifications";
 
 const CATALOG = Object.fromEntries(NOTIFICATIONS.map((n) => [n.key, n]));
@@ -26,7 +26,7 @@ async function handle(request) {
   const workHours = nowKst.getDay() >= 1 && nowKst.getDay() <= 5 && kstMins >= 480 && kstMins <= 1050;
   if (!workHours) return Response.json({ ok: true, skipped: "근무시간 외" });
 
-  const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  const db = supabaseAdmin;
   const origin = new URL(request.url).origin;
   const send = (body) =>
     fetch(`${origin}/api/push/send`, {

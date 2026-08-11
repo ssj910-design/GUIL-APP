@@ -2,7 +2,7 @@
 //  1) 09:01~09:30(KST, 평일) 매분: 아직 출근체크 안 한 기사에게 리마인드 (체크하면 다음 스윕부터 빠짐 — 자동 종료)
 //  2) 09:10(KST, 평일) 1회: 그 시점 미체크자 명단을 관리자에게 요약
 // 연차·공가·병가는 종일 제외, 반차는 오전반차만 제외(오후반차는 오전에 정상 출근이라 대상 포함).
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const FULL_DAY_EXCLUDE_KINDS = ["연차", "공가", "병가"];
 
@@ -19,7 +19,7 @@ async function handle(request) {
   if (!inWindow) return Response.json({ ok: true, skipped: "시간대 아님" });
 
   const todayStr = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
-  const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  const db = supabaseAdmin;
   const origin = new URL(request.url).origin;
   const send = (body) =>
     fetch(`${origin}/api/push/send`, {

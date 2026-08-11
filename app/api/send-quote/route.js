@@ -2,7 +2,7 @@
 // 실패해도 다른 하나의 발송은 그대로 진행하고, 성공한 채널만 발송시각을 기록한다.
 import { sendQuoteEmail } from "@/lib/email";
 import { sendQuoteAlimtalk } from "@/lib/alimtalk";
-import { supabase } from "@/lib/supabaseClient";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { verifyAuthToken } from "@/lib/verifyToken";
 
 export async function POST(request) {
@@ -69,7 +69,7 @@ export async function POST(request) {
   }
 
   if (newLogEntries.length) {
-    const { data: existing } = await supabase
+    const { data: existing } = await supabaseAdmin
       .from("quote_requests")
       .select("send_log")
       .eq("id", quoteRequestId)
@@ -77,7 +77,7 @@ export async function POST(request) {
     patch.send_log = [...(existing?.send_log ?? []), ...newLogEntries];
   }
 
-  const { error } = await supabase.from("quote_requests").update(patch).eq("id", quoteRequestId);
+  const { error } = await supabaseAdmin.from("quote_requests").update(patch).eq("id", quoteRequestId);
   if (error) {
     console.error(`Failed to update quote_requests id=${quoteRequestId}:`, error.message);
   }
