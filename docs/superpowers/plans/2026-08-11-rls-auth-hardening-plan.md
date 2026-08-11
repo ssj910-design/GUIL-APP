@@ -716,24 +716,69 @@ git commit -m "[deploy] API 라우트 5종 호출부에 로그인 토큰 부착 
 
 ---
 
-## Task 7: RLS 정책 SQL 작성
+## Task 7: RLS 정책 SQL 작성 — 카나리 먼저, 그다음 전체
+
+**변경 이력(2026-08-11):** 1단계(토큰 발급·부착) 배포 직후 실제로 데이터가 전부
+0건으로 보이는 사고가 있었다(원인: 발급 토큰의 `iat` 클레임 자체가 이 프로젝트
+Supabase에서 무조건 거부됨 — 이미 수정·재배포·확인 완료, 자세한 경위는
+`.superpowers/sdd/progress.md` 참고). 이 경험 때문에 RLS는 원래 계획한
+"24개 테이블 한 번에"가 아니라, **위험도 낮은 테이블 하나로 먼저 검증한 뒤 나머지를
+켜는 2단계 방식**으로 바꾼다.
 
 **Files:**
-- Create: `supabase/migrations/105_rls_policies.sql`
+- Create: `supabase/migrations/105_rls_canary.sql` (1개 테이블만)
+- Create: `supabase/migrations/106_rls_remaining.sql` (나머지 전부 + profiles 예외)
 
 **Interfaces:**
-- 이 SQL은 자동 실행되지 않는다 — 사용자가 Supabase 대시보드 SQL Editor에서 직접 실행한다(프로젝트 관례, `supabase/CLAUDE.md`).
-- Task 1단계(토큰 발급·부착)가 실제로 배포되고 검증된 뒤에만 실행해야 한다.
+- 두 SQL 다 자동 실행되지 않는다 — 사용자가 Supabase 대시보드 SQL Editor에서 직접 실행한다(프로젝트 관례, `supabase/CLAUDE.md`).
+- 1단계(토큰 발급·부착)가 실제로 배포·검증된 뒤에만 진행한다 — 이미 완료됨.
 
-- [ ] **Step 1: SQL 파일 작성**
+### 7-1. 카나리 (holidays 하나만)
+
+- [ ] **Step 1: `supabase/migrations/105_rls_canary.sql` 작성**
 
 ```sql
--- RLS 활성화 — 로그인(유효한 JWT)한 사용자만 데이터 접근 가능하게 한다.
--- 실행 전 필수 확인: 1단계(로그인 시 JWT 발급 + 클라이언트 부착)가 이미 배포되고
--- 실제로 Authorization 헤더가 붙는 것까지 확인된 뒤에 이 파일을 실행할 것 —
--- 순서를 지키지 않으면 실행 즉시 앱 전체가 멈춘다.
+-- RLS 카나리 테스트 — 공휴일 정보 하나만 먼저 켜서 실제로 문제없이 동작하는지
+-- 확인한 뒤 나머지 테이블(106)을 켠다. holidays는 화면 노출이 적고 민감하지
+-- 않은 테이블이라 먼저 고른다.
+alter table public.holidays enable row level security;
 
--- profiles를 제외한 모든 테이블: 로그인(authenticated)만 하면 읽기·쓰기 전부 허용.
+create policy "authenticated_full_access" on public.holidays
+  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+```
+
+- [ ] **Step 2: 커밋 (SQL 파일만 — 앱 코드 변경 없으므로 `[deploy]` 태그 불필요)**
+
+```bash
+git add supabase/migrations/105_rls_canary.sql
+git commit -m "RLS 카나리 SQL 작성 — holidays 하나만 (실행은 Supabase SQL Editor에서 별도)"
+```
+
+- [ ] **Step 3: 사용자가 Supabase 대시보드 SQL Editor에서 직접 실행**
+
+- [ ] **Step 4: 실행 후 검증 — 로그인 상태에서 정상 동작**
+
+로그인한 상태로 관리자 콘솔을 새로고침해서 전체적으로 정상 표시되는지 확인(공휴일 데이터를 직접 보여주는 화면이 없어도, RLS가 이 테이블에서만 켜져도 로그인 전체 흐름에 이상이 없는지가 핵심 확인 포인트).
+
+Expected: 이상 없음 — 여기서 뭔가 깨지면 7-2(나머지 테이블)로 넘어가지 말고 원인부터 다시 조사한다.
+
+- [ ] **Step 5: 실행 후 검증 — 로그인 없이 anon key로 직접 조회하면 막히는지 확인**
+
+```bash
+curl -s "https://kdptzotxnzpuwzdguzgh.supabase.co/rest/v1/holidays?select=id&limit=1" -H "apikey: <NEXT_PUBLIC_SUPABASE_ANON_KEY 값>" -H "Authorization: Bearer <같은 anon key 값>"
+```
+
+Expected: 빈 배열 `[]`.
+
+### 7-2. 나머지 테이블 전체 + profiles 예외
+
+7-1이 완전히 문제없음을 확인한 뒤에만 진행한다.
+
+- [ ] **Step 6: `supabase/migrations/106_rls_remaining.sql` 작성**
+
+```sql
+-- RLS 활성화 2/2 — 카나리(holidays, 105) 검증 통과 후 나머지 전부.
+-- profiles를 제외한 나머지 테이블: 로그인(authenticated)만 하면 읽기·쓰기 전부 허용.
 do $$
 declare
   t text;
@@ -742,7 +787,7 @@ begin
     'sites', 'units', 'site_managers', 'failures', 'inspections',
     'material_requests', 'quote_requests', 'restock_requests', 'todos', 'billings',
     'self_checks', 'self_check_items', 'feed_posts', 'error_codes', 'kit_stock',
-    'attendances', 'duty_schedules', 'duty_swaps', 'leaves', 'holidays',
+    'attendances', 'duty_schedules', 'duty_swaps', 'leaves',
     'inspection_fail_cache', 'push_subscriptions', 'native_push_tokens', 'notify_settings'
   ]
   loop
@@ -769,24 +814,22 @@ create policy "admin_only_access" on public.profiles
   );
 ```
 
-- [ ] **Step 2: 커밋 (SQL 파일만 — 앱 코드 변경 없으므로 `[deploy]` 태그 불필요)**
+- [ ] **Step 7: 커밋**
 
 ```bash
-git add supabase/migrations/105_rls_policies.sql
-git commit -m "RLS 정책 SQL 작성 (실행은 Supabase SQL Editor에서 별도)"
+git add supabase/migrations/106_rls_remaining.sql
+git commit -m "RLS 나머지 테이블 SQL 작성 (실행은 Supabase SQL Editor에서 별도)"
 ```
 
-- [ ] **Step 3: 사용자가 Supabase 대시보드 SQL Editor에서 직접 실행**
+- [ ] **Step 8: 사용자가 Supabase 대시보드 SQL Editor에서 직접 실행**
 
-이 스텝은 코드로 자동화하지 않는다 — 담당자가 대시보드에 로그인해 SQL Editor에 위 내용을 붙여넣고 실행한다.
-
-- [ ] **Step 4: 실행 후 검증 — 로그인 상태 정상 동작**
+- [ ] **Step 9: 실행 후 검증 — 로그인 상태 정상 동작**
 
 로그인한 상태로 관리자 콘솔의 주요 화면(대시보드, 현장정보, 고장관리, 자재·견적 신청내역, 인사관리)을 열어 데이터가 그대로 보이는지 확인.
 
 Expected: 1단계 배포 이전과 동일하게 전부 정상 표시.
 
-- [ ] **Step 5: 실행 후 검증 — 로그인 없이 anon key로 직접 조회하면 막히는지 확인**
+- [ ] **Step 10: 실행 후 검증 — 로그인 없이 anon key로 직접 조회하면 막히는지 확인**
 
 ```bash
 curl -s "https://kdptzotxnzpuwzdguzgh.supabase.co/rest/v1/sites?select=id,name&limit=1" -H "apikey: <NEXT_PUBLIC_SUPABASE_ANON_KEY 값>" -H "Authorization: Bearer <같은 anon key 값>"
