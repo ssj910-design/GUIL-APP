@@ -36,7 +36,6 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
   const [transportCost, setTransportCost] = useState(existingQuote?.transportCost || 0);
   const [safetyCost, setSafetyCost] = useState(existingQuote?.safetyCost || 0);
   const [profit, setProfit] = useState(existingQuote?.profit || 0);
-  const grandTotal = itemsSubtotal + Number(transportCost || 0) + Number(safetyCost || 0) + Number(profit || 0);
 
   function addItem() {
     setItems((prev) => {
@@ -53,6 +52,7 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
     setExpandedIdx(-1);
   }
   const itemsSubtotal = items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.unitPrice || 0), 0);
+  const grandTotal = itemsSubtotal + Number(transportCost || 0) + Number(safetyCost || 0) + Number(profit || 0);
 
   const site = sites.find((s) => s.id === siteId);
 
