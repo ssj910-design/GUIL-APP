@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { govDateToDashed } from "@/lib/utils";
+import { authFetch } from "@/lib/apiFetch";
 
 
 // 국가승강기정보센터 API의 최종검사판정결과 문자열을 앱 내부 코드로 변환합니다.
@@ -35,7 +36,7 @@ export function useLiveInspections(queries) {
       const results = await Promise.all(
         queries.map(async (q) => {
           try {
-            const res = await fetch(`/api/elevator-info?elevatorNo=${encodeURIComponent(q.govElevatorNo)}`);
+            const res = await authFetch(`/api/elevator-info?elevatorNo=${encodeURIComponent(q.govElevatorNo)}`);
             const data = await res.json();
             // 같은 건물의 다른 호기가 함께 반환될 수 있어, 실제로 등록한 번호와 일치하는 항목만 남깁니다.
             const items = (data.items ?? []).filter((item) => item.elevatorNo === q.govElevatorNo);
@@ -94,7 +95,7 @@ export function useInspectionHistory(govElevatorNo) {
     async function load() {
       setState({ loading: true, history: [], error: null });
       try {
-        const res = await fetch(`/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(govElevatorNo)}`);
+        const res = await authFetch(`/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(govElevatorNo)}`);
         const data = await res.json();
         if (!cancelled) setState({ loading: false, history: data.history ?? [], error: data.error ?? null });
       } catch {
@@ -131,7 +132,7 @@ export function useInspectionFailItems(govElevatorNo, startDate) {
         const url = hasAnchor
           ? `/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(govElevatorNo)}&anchorDate=${encodeURIComponent(startDate)}`
           : `/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(govElevatorNo)}`;
-        const res = await fetch(url);
+        const res = await authFetch(url);
         const data = await res.json();
         if (cancelled) return;
         if (hasAnchor) {
@@ -148,7 +149,7 @@ export function useInspectionFailItems(govElevatorNo, startDate) {
           if (!latestAnchor || Number.isNaN(new Date(latestAnchor).getTime())) {
             setState({ loading: false, items: [], reason: "no_record", record: latest.record ?? null });
           } else {
-            const res2 = await fetch(`/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(govElevatorNo)}&anchorDate=${encodeURIComponent(latestAnchor)}`);
+            const res2 = await authFetch(`/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(govElevatorNo)}&anchorDate=${encodeURIComponent(latestAnchor)}`);
             const data2 = await res2.json();
             if (cancelled) return;
             setState({ loading: false, items: data2.items ?? [], reason: data2.reason ?? null, record: data2.record ?? null });
@@ -180,7 +181,7 @@ export function usePriorFlaggedInspection(govElevatorNo) {
   useEffect(() => {
     if (!govElevatorNo) return;
     let cancelled = false;
-    fetch(`/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(govElevatorNo)}&latestOnly=1`)
+    authFetch(`/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(govElevatorNo)}&latestOnly=1`)
       .then((res) => res.json())
       .then((data) => { if (!cancelled) setRecords(data.records ?? []); })
       .catch(() => {});

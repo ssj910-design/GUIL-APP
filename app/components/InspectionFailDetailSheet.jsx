@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Badge, Sheet } from "@/app/components/ui";
 import { govDateToDashed, formatFullDate } from "@/lib/utils";
+import { authFetch } from "@/lib/apiFetch";
 
 
 function isValidDateStr(s) {
@@ -39,7 +40,7 @@ export function InspectionFailDetailSheet({ inspection, preloaded, onClose, Cont
         const url = hasValidAnchor
           ? `/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(inspection.govElevatorNo)}&anchorDate=${encodeURIComponent(retryAnchorDate)}`
           : `/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(inspection.govElevatorNo)}`;
-        const res = await fetch(url);
+        const res = await authFetch(url);
         const data = await res.json();
         if (cancelled) return;
         if (hasValidAnchor) {
@@ -58,7 +59,7 @@ export function InspectionFailDetailSheet({ inspection, preloaded, onClose, Cont
             if (!isValidDateStr(latestAnchor)) {
               setState({ loading: false, items: [], error: null, reason: "no_record", record: latest.record ?? null });
             } else {
-              const res2 = await fetch(`/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(inspection.govElevatorNo)}&anchorDate=${encodeURIComponent(latestAnchor)}`);
+              const res2 = await authFetch(`/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(inspection.govElevatorNo)}&anchorDate=${encodeURIComponent(latestAnchor)}`);
               const data2 = await res2.json();
               if (cancelled) return;
               setState({ loading: false, items: data2.items ?? [], error: data2.error ?? null, reason: data2.reason ?? null, record: data2.record ?? null });

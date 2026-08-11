@@ -19,6 +19,7 @@ import VerifyImport from "@/app/components/admin/VerifyImport";
 import ImportEmergencyPhones from "@/app/components/admin/ImportEmergencyPhones";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { uploadPhoto } from "@/lib/photos";
+import { authFetch } from "@/lib/apiFetch";
 
 const CONTRACT_TYPES = ["POG(일반계약)", "FM(종합계약)", "2회점검"];
 const CONTACT_ROLES = ["대표", "담당자", "관리소장", "건물주", "경비실", "입주민 대표", "총무", "기타"];
@@ -595,7 +596,7 @@ export default function SitesAdmin({ data, setData }) {
     // 새 현장은 좌표가 없어 티맵·카카오맵 연동 아이콘이 안 뜬다 — 지오코딩 배치를 바로 한 번
     // 돌려서 이 현장(+밀린 다른 현장 몇 개)의 좌표를 채운다. 실패해도 조용히 넘어가고
     // (나중에 배치가 다시 돌면 채워짐), UI 흐름을 막지 않는다.
-    fetch("/api/geocode-sites?limit=5")
+    authFetch("/api/geocode-sites?limit=5")
       .then(() => supabase.from("sites").select("lat, lng").eq("id", id).maybeSingle())
       .then(({ data: geo }) => {
         if (geo?.lat != null) {

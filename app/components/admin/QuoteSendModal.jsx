@@ -10,6 +10,7 @@ import { useState } from "react";
 import { Modal } from "@/app/components/admin/adminShared";
 import { useQuoteRecipientFields, QuoteRecipientInfo, QuoteRecipientExtras } from "@/app/components/admin/QuoteRecipientFields";
 import { quoteGrandTotal } from "@/lib/utils";
+import { authFetch } from "@/lib/apiFetch";
 
 export default function QuoteSendModal({ quote, site, siteManagers, profiles, onClose, onSaved }) {
   const rf = useQuoteRecipientFields(quote, siteManagers, profiles);
@@ -25,7 +26,7 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
     const supplierName = rf.supplier?.name || null;
     const supplierPhone = rf.supplier ? (rf.supplier.phone || rf.supplier.tel || null) : null;
 
-    const res = await fetch("/api/send-quote", {
+    const res = await authFetch("/api/send-quote", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
