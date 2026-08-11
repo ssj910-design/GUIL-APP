@@ -1,7 +1,7 @@
 "use client";
 
-// 자재·견적 처리 — 지급완료(자재)/견적발행·승인·자재지급완료(견적) 액션 포함.
-// 입력이 필요 없는 전환(견적발행·승인)은 행에서 바로 처리하고, 사진·담당기사·금액처럼
+// 자재·견적 처리 — 지급완료(자재)/작성·승인·자재지급완료(견적) 액션 포함.
+// 입력이 필요 없는 전환(작성·승인)은 행에서 바로 처리하고, 사진·담당기사·금액처럼
 // 입력이 필요한 전환(자재 지급완료, 견적 자재지급완료)만 모달을 쓴다 (하이브리드 설계 —
 // docs/superpowers/specs/2026-07-21-materials-admin-actions-design.md).
 import { useState } from "react";
@@ -18,7 +18,7 @@ import QuoteSendModal from "@/app/components/admin/QuoteSendModal";
 import QuotePdfPreview from "@/app/components/admin/QuotePdfPreview";
 
 const MATERIAL_TONE = { 승인대기: "blue", 지급완료: "green", 반려: "red", 교체완료: "indigo" };
-const QUOTE_TONE = { 요청접수: "blue", 견적발행: "amber", 승인: "amber", 지급완료: "green", 교체완료: "indigo" };
+const QUOTE_TONE = { 요청접수: "blue", 작성: "amber", 승인: "amber", 지급완료: "green", 교체완료: "indigo" };
 
 // 부품별 금액 필수 입력값을 지급 문자열("부품명(₩1,000)")에서 되찾아 수정 모달 기본값으로 쓴다.
 function parseAmountFromBillingPart(billingPart, part) {
@@ -37,7 +37,7 @@ function billingCompleteFor(todos, key, requestId) {
 }
 
 // 견적요청 목록의 "상태"·"발행/승인/지급/발송" 두 컬럼을 하나로 합친 진행상태 표시.
-// 요청접수 → 견적발행(미발송="작성"/발송함="발송") → 승인 → 자재지급완료(미교체="출하"/교체="교체")
+// 요청접수 → 작성(미발송="작성"/발송함="발송") → 승인 → 자재지급완료(미교체="출하"/교체="교체")
 // 6단계를 한 줄에 나열하고, 현재 해당하는 한 단계만 그 단계 고유 색으로, 나머지는 흑백(slate)
 // 으로 보여준다. 각 단계 밑에는 그 단계에 실제로 도달했을 때의 날짜를 표시한다(교체는 별도
 // 완료일 컬럼이 없어 자재지급일을 그대로 재사용).
@@ -49,7 +49,7 @@ function quoteStageInfo(q, todos) {
 
   let stage = null;
   if (q.status === "요청접수") stage = "요청";
-  else if (q.status === "견적발행") stage = sent ? "발송" : "작성";
+  else if (q.status === "작성") stage = sent ? "발송" : "작성";
   else if (q.status === "승인") stage = "승인";
   else if (q.status === "자재지급완료") stage = billingDone ? "교체" : "출하";
 
@@ -345,7 +345,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
   async function handleQuoteAdvance(quote) {
     const isIssue = quote.status === "요청접수";
     const patch = isIssue
-      ? { status: "견적발행", quote_issued_date: TODAY_STR }
+      ? { status: "작성", quote_issued_date: TODAY_STR }
       : { status: "승인", approved_date: TODAY_STR };
     const { error } = await supabase.from("quote_requests").update(patch).eq("id", quote.id);
     if (error) { alert("처리 실패: " + error.message); return; }
@@ -354,7 +354,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
       quoteRequests: prev.quoteRequests.map((x) => {
         if (x.id !== quote.id) return x;
         return isIssue
-          ? { ...x, status: "견적발행", quoteIssuedDate: TODAY_STR }
+          ? { ...x, status: "작성", quoteIssuedDate: TODAY_STR }
           : { ...x, status: "승인", approvedDate: TODAY_STR };
       }),
     }));
@@ -657,7 +657,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
                     + 새 견적서
                   </button>
                 )}
-                {q.status === "견적발행" && (
+                {q.status === "작성" && (
                   <div className="flex gap-1.5">
                     <button onClick={(e) => { e.stopPropagation(); handleQuoteAdvance(q); }} className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1.5 rounded-lg">
                       승인 처리

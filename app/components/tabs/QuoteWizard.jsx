@@ -12,7 +12,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { mapQuoteRequest, mapSiteManager } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
 
-const STEP_TITLES = ["현장·담당자", "품목 입력", "부대비용", "확인·발행"];
+const STEP_TITLES = ["현장·담당자", "품목 입력", "부대비용", "확인·작성"];
 
 export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, onDiscarded, onSaved }) {
   const sites = useContext(SitesContext);
@@ -109,7 +109,7 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
       recipient_email: recipientEmail || null,
       recipient_phone: recipientPhone || null,
       quote_pdf_url: pdfRes.url,
-      status: "견적발행",
+      status: "작성",
     };
     const { error: dbError } = await supabase.from("quote_requests").update(patch).eq("id", draft.id);
     if (dbError) {
@@ -121,7 +121,7 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
     onSaved({
       id: draft.id, quoteItems: items, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
       profit: Number(profit) || 0, quoteNumber, recipientName: managerName, quoteTitle, quoteIssuedDate: quoteDate,
-      quotePdfUrl: pdfRes.url, status: "견적발행", recipientEmail: recipientEmail || null, recipientPhone: recipientPhone || null,
+      quotePdfUrl: pdfRes.url, status: "작성", recipientEmail: recipientEmail || null, recipientPhone: recipientPhone || null,
     });
     setSaving(false);
   }
@@ -408,7 +408,7 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
             disabled={saving}
             className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300"
           >
-            {saving ? "발행 중..." : "발행하기"}
+            {saving ? "작성 중..." : "작성 완료"}
           </button>
         )}
       </div>

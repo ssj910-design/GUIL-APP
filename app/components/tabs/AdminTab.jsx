@@ -237,19 +237,32 @@ function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto
   );
 }
 
-// 견적 요청 한 건 — 상태(요청접수→견적발행→승인)에 따라 처리 버튼이 달라진다. 승인 단계에서 지급 폼 노출.
-function QuotePendingCard({ q, engineerNames, onAdvanceQuote, onOpenWizard, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onOpenDetail }) {
+// 견적 요청 한 건 — 상태(요청접수→작성→승인)에 따라 처리 버튼이 달라진다. 승인 단계에서 지급 폼 노출.
+function QuotePendingCard({ q, engineerNames, onAdvanceQuote, onOpenWizard, onSendQuote, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onOpenDetail }) {
   const [assignees, setAssignees] = useState([q.engineer]);
   const [dueDate, setDueDate] = useState(addDays(TODAY_STR, 30));
   const [description, setDescription] = useState("");
   const [advanced, setAdvanced] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendMsg, setSendMsg] = useState("");
   const canComplete = assignees.length > 0;
+
+  async function handleSend() {
+    setSending(true);
+    setSendMsg("");
+    const res = await onSendQuote(q.id);
+    const email = !q.recipientEmail ? null : res.results?.email?.ok ? "이메일 성공" : `이메일 실패(${res.results?.email?.reason ?? "-"})`;
+    const kakao = !q.recipientPhone ? null : res.results?.kakao?.ok ? "카카오 성공" : `카카오 실패(${res.results?.kakao?.reason ?? "-"})`;
+    setSendMsg([email, kakao].filter(Boolean).join(" · ") || "받는사람 이메일·전화번호가 없어 발송하지 못했습니다");
+    setSending(false);
+  }
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-3.5 mx-0.5">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-bold text-slate-800 min-w-0 truncate">{q.siteName} · {q.constructionType}</p>
         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-          q.status === "승인" ? "bg-indigo-100 text-indigo-700" : q.status === "견적발행" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+          q.status === "승인" ? "bg-indigo-100 text-indigo-700" : q.status === "작성" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
         }`}>{q.status}</span>
       </div>
       <p className="text-[11px] text-slate-500 mt-0.5">{q.engineer} 기사 · {q.requestedDate} · 현장담당 {q.contactPhone}</p>
@@ -258,8 +271,21 @@ function QuotePendingCard({ q, engineerNames, onAdvanceQuote, onOpenWizard, onCo
       {q.status === "요청접수" && (
         <button onClick={() => onOpenWizard(q)} className="w-full mt-2.5 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800">견적서 작성</button>
       )}
-      {q.status === "견적발행" && (
-        <button onClick={() => onAdvanceQuote(q.id)} className="w-full mt-2.5 bg-indigo-600 text-white text-xs font-bold py-2.5 rounded-lg active:bg-indigo-700">승인 처리</button>
+      {q.status === "작성" && (
+        <>
+          {(q.emailSentAt || q.kakaoSentAt) && (
+            <p className="text-[11px] text-emerald-600 font-semibold mt-2">
+              발송됨{q.emailSentAt ? " · 이메일" : ""}{q.kakaoSentAt ? " · 카카오" : ""}
+            </p>
+          )}
+          <div className="flex gap-1.5 mt-2.5">
+            <button onClick={handleSend} disabled={sending} className="flex-1 bg-emerald-600 disabled:bg-slate-300 text-white text-xs font-bold py-2.5 rounded-lg active:bg-emerald-700">
+              {sending ? "발송 중..." : "발송"}
+            </button>
+            <button onClick={() => onAdvanceQuote(q.id)} className="flex-1 bg-indigo-600 text-white text-xs font-bold py-2.5 rounded-lg active:bg-indigo-700">승인 처리</button>
+          </div>
+          {sendMsg && <p className="text-[11px] text-slate-500 font-semibold mt-1.5">{sendMsg}</p>}
+        </>
       )}
       {q.status === "승인" && (
         <div className="mt-2.5">
@@ -451,7 +477,7 @@ function MaterialsPanel({ pending, rejected, suppliedCount, engineerNames, onSup
   );
 }
 
-function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, onOpenWizard, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onOpenHistory, focusId, onFocusHandled }) {
+function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, onOpenWizard, onSendQuote, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onOpenHistory, focusId, onFocusHandled }) {
   const [detail, setDetail] = useState(null);
   const shownDetail = detail ?? (focusId ? active.find((q) => q.id === focusId) : null);
   const closeDetail = () => { setDetail(null); if (focusId) onFocusHandled?.(); };
@@ -466,6 +492,7 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
             engineerNames={engineerNames}
             onAdvanceQuote={onAdvanceQuote}
             onOpenWizard={onOpenWizard}
+            onSendQuote={onSendQuote}
             onCompleteQuoteSupply={onCompleteQuoteSupply}
             onAttachQuotePhoto={onAttachQuotePhoto}
             onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
@@ -917,7 +944,7 @@ function DashStat({ label, n, tone }) {
 }
 
 
-export function AdminTab({ materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onClearReassignRequest, onResetEngineerPassword, materialFocusId, onMaterialFocusHandled, quoteFocusId, onQuoteFocusHandled, onQuoteDraftCreated, onQuoteDiscarded, onQuoteWizardSaved }) {
+export function AdminTab({ materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onClearReassignRequest, onResetEngineerPassword, materialFocusId, onMaterialFocusHandled, quoteFocusId, onQuoteFocusHandled, onQuoteDraftCreated, onQuoteDiscarded, onQuoteWizardSaved, onSendQuote }) {
   const { engineerNames: ctxEngineerNames, adminTier, profiles } = useContext(AuthContext);
   // 자재담당관리자는 자재출하관리·상비부품보충만 본다 (견적·재배정·비용청구·계정관리는 다른 관리자 담당).
   const isMaterialTier = adminTier === "material";
@@ -998,6 +1025,7 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
             engineerNames={engineerNames}
             onAdvanceQuote={onAdvanceQuote}
             onOpenWizard={(q) => { setWizardTarget(q); setPage("quoteWizard"); }}
+            onSendQuote={onSendQuote}
             onCompleteQuoteSupply={onCompleteQuoteSupply}
             onAttachQuotePhoto={onAttachQuotePhoto}
             onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}

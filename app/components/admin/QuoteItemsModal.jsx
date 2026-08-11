@@ -197,7 +197,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
       return;
     }
     patch.quote_pdf_url = pdfRes.url;
-    patch.status = "견적발행";
+    patch.status = "작성";
 
     const { error: dbError } = await supabase.from("quote_requests").update(patch).eq("id", quote.id);
     if (dbError) {
@@ -209,7 +209,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
     onSaved({
       quoteItems: items, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
       profit: Number(profit) || 0, discountAmount: Number(discountAmount) || 0, quoteNumber, recipientName, quoteTitle,
-      quoteIssuedDate: quoteDate, quotePdfUrl: pdfRes.url, status: "견적발행",
+      quoteIssuedDate: quoteDate, quotePdfUrl: pdfRes.url, status: "작성",
       recipientEmail: rf.email || null, recipientPhone: rf.phone || null,
       senderCcEmail: rf.senderCcEmail || null, referenceEmail: rf.referenceEmail || null, referencePhone: rf.referencePhone || null,
       noticeMessage: rf.noticeMessage || null, attachmentUrls: rf.attachments,

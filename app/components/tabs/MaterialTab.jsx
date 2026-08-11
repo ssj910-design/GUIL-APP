@@ -253,7 +253,7 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack, onCancelQuot
   const [stage, setStage] = useState("전체");
   const [detailTarget, setDetailTarget] = useState(null);
   const [photoViewer, setPhotoViewer] = useState(null);
-  const stages = ["전체", "요청접수", "견적발행", "승인", "자재지급완료", "비용청구완료"];
+  const stages = ["전체", "요청접수", "작성", "승인", "자재지급완료", "비용청구완료"];
 
   const withStage = quoteRequests.map((q) => ({ ...q, displayStage: isQuoteBilled(q.id) ? "비용청구완료" : q.status }));
   const filtered = withStage
@@ -291,7 +291,7 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack, onCancelQuot
           <p className="text-xs text-slate-400 text-center py-10">해당 조건의 견적 요청 내역이 없습니다</p>
         ) : (
           filtered.map((q) => {
-            const bar = q.displayStage === "비용청구완료" ? "border-l-slate-400" : q.displayStage === "자재지급완료" ? "border-l-emerald-500" : q.displayStage === "승인" ? "border-l-indigo-500" : q.displayStage === "견적발행" ? "border-l-blue-500" : "border-l-amber-400";
+            const bar = q.displayStage === "비용청구완료" ? "border-l-slate-400" : q.displayStage === "자재지급완료" ? "border-l-emerald-500" : q.displayStage === "승인" ? "border-l-indigo-500" : q.displayStage === "작성" ? "border-l-blue-500" : "border-l-amber-400";
             return (
             <button
               key={q.id}
@@ -316,7 +316,7 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack, onCancelQuot
                     q.displayStage === "비용청구완료" ? "bg-slate-100 text-slate-500" :
                     q.displayStage === "자재지급완료" ? "bg-emerald-100 text-emerald-700" :
                     q.displayStage === "승인" ? "bg-indigo-100 text-indigo-700" :
-                    q.displayStage === "견적발행" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+                    q.displayStage === "작성" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
                   }`}
                 >
                   {q.displayStage === "비용청구완료" ? "비용청구 완료" : q.displayStage}
@@ -332,7 +332,7 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack, onCancelQuot
               </div>
               <div className="flex items-start mt-1">
                 {QUOTE_STAGES.map((s) => {
-                  const dateMap = { 요청접수: q.requestedDate, 견적발행: q.quoteIssuedDate, 승인: q.approvedDate, 자재지급완료: q.suppliedDate };
+                  const dateMap = { 요청접수: q.requestedDate, 작성: q.quoteIssuedDate, 승인: q.approvedDate, 자재지급완료: q.suppliedDate };
                   const d = dateMap[s];
                   return (
                     <div key={s} className="flex-1 flex flex-col items-center gap-0.5 px-0.5 min-w-0">

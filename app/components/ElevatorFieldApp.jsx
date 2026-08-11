@@ -5,6 +5,7 @@ import { BRAND } from "@/lib/company";
 import { Home, AlertTriangle, CalendarCheck, CalendarClock, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound } from "lucide-react";
 import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken } from "@/lib/supabaseClient";
+import { authFetch } from "@/lib/apiFetch";
 import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
@@ -1603,15 +1604,15 @@ export default function App() {
     setQuoteRequests((prev) => prev.map((q) => (q.id === patch.id ? { ...q, ...patch } : q)));
   }
 
-  // ★ 견적 진행 단계 전진: 요청접수 → 견적발행 → 승인 (사진 불필요)
+  // ★ 견적 진행 단계 전진: 요청접수 → 작성 → 승인 (사진 불필요)
   async function handleAdvanceQuote(quoteId) {
     const q = quoteRequests.find((x) => x.id === quoteId);
     if (!q) return;
     // 저장 실패했는데 화면만 다음 단계로 넘어가면, 이후 지급완료 처리가 실제 DB 상태와 다른
     // 단계를 기준으로 동작할 수 있다 — 실패 시 반영하지 않는다.
     if (q.status === "요청접수") {
-      if (!(await writeOk(supabase.from("quote_requests").update({ status: "견적발행", quote_issued_date: TODAY_STR }).eq("id", quoteId), "견적발행 처리 실패"))) return;
-    } else if (q.status === "견적발행") {
+      if (!(await writeOk(supabase.from("quote_requests").update({ status: "작성", quote_issued_date: TODAY_STR }).eq("id", quoteId), "작성 처리 실패"))) return;
+    } else if (q.status === "작성") {
       if (!(await writeOk(supabase.from("quote_requests").update({ status: "승인", approved_date: TODAY_STR }).eq("id", quoteId), "승인 처리 실패"))) return;
     } else {
       return;
@@ -1619,11 +1620,39 @@ export default function App() {
     setQuoteRequests((prev) =>
       prev.map((x) => {
         if (x.id !== quoteId) return x;
-        if (x.status === "요청접수") return { ...x, status: "견적발행", quoteIssuedDate: TODAY_STR };
-        if (x.status === "견적발행") return { ...x, status: "승인", approvedDate: TODAY_STR };
+        if (x.status === "요청접수") return { ...x, status: "작성", quoteIssuedDate: TODAY_STR };
+        if (x.status === "작성") return { ...x, status: "승인", approvedDate: TODAY_STR };
         return x;
       })
     );
+  }
+
+  // ★ "작성" 상태 견적을 이메일·카카오로 발송 — 기존 /api/send-quote를 그대로 호출한다
+  // (PC 관리자웹 QuoteSendModal이 쓰는 것과 동일 라우트). 수신처는 견적 작성 시 이미
+  // 저장해둔 recipientEmail/recipientPhone을 그대로 쓰고, 있는 채널만 시도한다.
+  async function handleSendQuote(quoteId) {
+    const q = quoteRequests.find((x) => x.id === quoteId);
+    if (!q) return { results: {} };
+    const res = await authFetch("/api/send-quote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        quoteRequestId: q.id,
+        channels: { email: !!q.recipientEmail, kakao: !!q.recipientPhone },
+        recipientEmail: q.recipientEmail,
+        recipientPhone: q.recipientPhone,
+        quote: { siteName: q.siteName, quoteTitle: q.quoteTitle, quoteDate: q.quoteIssuedDate, pdfUrl: q.quotePdfUrl },
+      }),
+    }).then((r) => r.json()).catch((e) => ({ results: {}, reason: e.message }));
+    const now = new Date().toISOString();
+    if (res.results?.email?.ok || res.results?.kakao?.ok) {
+      setQuoteRequests((prev) => prev.map((x) => (x.id === quoteId ? {
+        ...x,
+        emailSentAt: res.results?.email?.ok ? now : x.emailSentAt,
+        kakaoSentAt: res.results?.kakao?.ok ? now : x.kakaoSentAt,
+      } : x)));
+    }
+    return res;
   }
 
   // ★ 관리자가 지급할 자재 사진을 등록 (자재지급완료 처리의 선행 조건)
@@ -2349,7 +2378,7 @@ export default function App() {
               initialSubTab={workCalendarSubTab}
             />
           )}
-          {tab === "admin" && profile.role === "admin" && <AdminTab materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onClearReassignRequest={handleClearReassignRequest} onAssignTodo={handleAssignTodo} onResetEngineerPassword={handleResetEngineerPassword} materialFocusId={materialFocusId} onMaterialFocusHandled={() => setMaterialFocusId(null)} quoteFocusId={quoteFocusId} onQuoteFocusHandled={() => setQuoteFocusId(null)} onQuoteDraftCreated={handleQuoteDraftCreated} onQuoteDiscarded={handleQuoteDiscarded} onQuoteWizardSaved={handleQuoteWizardSaved} />}
+          {tab === "admin" && profile.role === "admin" && <AdminTab materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onClearReassignRequest={handleClearReassignRequest} onAssignTodo={handleAssignTodo} onResetEngineerPassword={handleResetEngineerPassword} materialFocusId={materialFocusId} onMaterialFocusHandled={() => setMaterialFocusId(null)} quoteFocusId={quoteFocusId} onQuoteFocusHandled={() => setQuoteFocusId(null)} onQuoteDraftCreated={handleQuoteDraftCreated} onQuoteDiscarded={handleQuoteDiscarded} onQuoteWizardSaved={handleQuoteWizardSaved} onSendQuote={handleSendQuote} />}
           </PullToRefresh>
 
           {/* 게시판 플로팅 버튼 — 어느 탭에서든 즉시 게시판으로 이동 (게시판 탭에서는 숨김) */}

@@ -187,7 +187,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
     supabase.from("leaves").select("id").eq("status", "신청").then(({ data: rows }) => setPendingLeaves(rows ?? []));
   }, []);
   const reassignTodos = todos.filter((t) => t.reassignRequested && !t.done);
-  const quotesForApproval = quoteRequests.filter((q) => q.status === "견적발행");
+  const quotesForApproval = quoteRequests.filter((q) => q.status === "작성");
   // billings엔 승인 상태 필드가 없어, 관리자 메모(notes)가 아직 없는 건을 "확인 전"으로 본다.
   const unconfirmedBillings = billings.filter((b) => !b.notes);
   const unassignedFailures = failures.filter((f) => f.status === "미처리" && !f.assignee);

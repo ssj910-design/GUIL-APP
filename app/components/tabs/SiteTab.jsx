@@ -231,7 +231,7 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
                   // 4단계(QUOTE_STAGES) + 비용청구완료 오버레이 배지를 그대로 재사용한다.
                   const isBilled = (todos ?? []).some((t) => t.quoteRequestId === q.id && t.done === true);
                   const displayStage = isBilled ? "비용청구완료" : q.status;
-                  const dateMap = { 요청접수: q.requestedDate, 견적발행: q.quoteIssuedDate, 승인: q.approvedDate, 자재지급완료: q.suppliedDate, 비용청구완료: q.suppliedDate };
+                  const dateMap = { 요청접수: q.requestedDate, 작성: q.quoteIssuedDate, 승인: q.approvedDate, 자재지급완료: q.suppliedDate, 비용청구완료: q.suppliedDate };
                   const stageDate = dateMap[displayStage];
                   return (
                     <div key={q.id} className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
@@ -243,7 +243,7 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
                               displayStage === "비용청구완료" ? "bg-slate-100 text-slate-500" :
                               displayStage === "자재지급완료" ? "bg-emerald-100 text-emerald-700" :
                               displayStage === "승인" ? "bg-indigo-100 text-indigo-700" :
-                              displayStage === "견적발행" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+                              displayStage === "작성" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
                             }`}
                           >
                             {displayStage === "비용청구완료" ? "비용청구 완료" : displayStage}

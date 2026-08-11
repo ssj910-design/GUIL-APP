@@ -384,7 +384,7 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
               {unitQuotes.map((q) => {
                 const displayStatus = q.status === "자재지급완료" ? "교체완료" : q.status;
                 const tone = displayStatus === "교체완료" ? "indigo"
-                  : (displayStatus === "승인" || displayStatus === "견적발행") ? "amber"
+                  : (displayStatus === "승인" || displayStatus === "작성") ? "amber"
                   : displayStatus === "요청접수" ? "blue" : "slate";
                 return (
                   <div key={q.id} className="border border-slate-200 rounded-lg p-3">
