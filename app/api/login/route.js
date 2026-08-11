@@ -36,9 +36,10 @@ export async function POST(request) {
     return Response.json({ ok: false, reason: "아이디 또는 비밀번호가 올바르지 않습니다." });
   }
 
-  // iat을 몇 초 과거로 앞당겨 서명한다 — Vercel 서버와 Supabase(PostgREST) 서버 간
-  // 미세한 시계 오차만으로도 PostgREST가 "JWT issued at future"(PGRST303)로 막아
-  // 로그인 직후 전체 조회가 조용히 빈 배열로 실패하는 사고가 실제로 있었다.
+  // iat(발급시각) 클레임을 아예 안 넣는다 — 이 프로젝트의 Supabase는 값과 무관하게
+  // iat이 있기만 하면 "JWT issued at future"(PGRST303)로 거부한다(실사고로 확인,
+  // 시계 오차 문제 아님 — iat만 빼면 나머지는 그대로 정상 통과). exp만으로도 만료는
+  // 정상 동작한다.
   const token = jwt.sign(
     {
       sub: profile.id,
@@ -46,10 +47,9 @@ export async function POST(request) {
       profile_id: profile.id,
       app_role: profile.role,
       admin_tier: profile.admin_tier ?? null,
-      iat: Math.floor(Date.now() / 1000) - 10,
     },
     secret,
-    { expiresIn: "24h" }
+    { expiresIn: "24h", noTimestamp: true }
   );
 
   return Response.json({
