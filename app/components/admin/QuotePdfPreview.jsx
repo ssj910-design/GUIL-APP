@@ -48,8 +48,10 @@ export default function QuotePdfPreview({ url, height = "70vh" }) {
   }, [url]);
 
   const pageCount = pages?.length ?? 0;
+  // 견적서는 모달 안에 인라인으로 떠서 휠 확대를 켜두면 스크롤과 헷갈리기 쉽다 —
+  // 더블클릭 확대만 남기고 휠 확대는 끈다.
   const { containerRef, idx, showPrev, showNext, trackStyle, zoom, pan, isGesturing, handlers } =
-    usePhotoLightboxGestures(pageCount, index, setIndex);
+    usePhotoLightboxGestures(pageCount, index, setIndex, { wheelZoom: false });
 
   if (pages === null) {
     return <div className="flex items-center justify-center text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded-xl" style={{ height }}>PDF 불러오는 중...</div>;
