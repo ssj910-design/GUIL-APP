@@ -1113,7 +1113,7 @@ function QuoteNewSiteModal({ sites, onClose, onSelect }) {
           autoFocus
         />
       </div>
-      <div className="max-h-72 overflow-y-auto space-y-1">
+      <div className="h-72 overflow-y-auto space-y-1">
         {filtered.length === 0 ? (
           <p className="text-xs text-slate-400 text-center py-6">검색 결과가 없습니다</p>
         ) : (
