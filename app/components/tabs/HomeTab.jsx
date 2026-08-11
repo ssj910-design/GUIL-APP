@@ -573,7 +573,7 @@ function WorkEndRow({ onAttendance, dutyKind }) {
     return (
       <button onClick={() => setOpen(true)}
         className="w-full mt-2 text-xs font-bold text-slate-700 bg-slate-100 border border-slate-300 rounded-lg py-2.5 active:bg-slate-200">
-        🏠 근무 종료하기{dutyKind ? ` (오늘 ${dutyKind})` : ""}
+        근무 종료하기{dutyKind ? ` (오늘 ${dutyKind})` : ""}
       </button>
     );
   }

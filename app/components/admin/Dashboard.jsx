@@ -14,6 +14,7 @@ import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetail
 import { Modal, StatusBadge, inputCls, PhotoGrid, ReassignModal } from "@/app/components/admin/adminShared";
 import { RegisterFailureModal } from "@/app/components/admin/FailuresAdmin";
 import { EngineerLocationMap } from "@/app/components/admin/EngineerLocationMap";
+import { LOCATION_TRACKING } from "@/lib/features";
 
 function unitLabel(units, sites, unitId, fallbackSiteName, fallbackLabel) {
   const u = units.find((x) => x.id === unitId);
@@ -259,9 +260,9 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
       <div className="flex items-center justify-between mb-1">
         <h1 className="text-xl font-extrabold">대시보드</h1>
         <div className="flex items-center gap-2">
-          <button onClick={() => setStaffMapOpen(true)} className="flex items-center gap-1.5 text-sm font-bold text-blue-700 border border-blue-200 bg-white rounded-xl px-4 py-2.5 whitespace-nowrap">
+          {LOCATION_TRACKING && <button onClick={() => setStaffMapOpen(true)} className="flex items-center gap-1.5 text-sm font-bold text-blue-700 border border-blue-200 bg-white rounded-xl px-4 py-2.5 whitespace-nowrap">
             <MapPin size={15} /> 지도
-          </button>
+          </button>}
           <button onClick={() => setRegistering(true)} className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
             <Plus size={15} /> 고장접수
           </button>
@@ -562,7 +563,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
         />
       )}
 
-      {staffMapOpen && (
+      {LOCATION_TRACKING && staffMapOpen && (
         <Modal title="지도" onClose={() => setStaffMapOpen(false)} wide="2xl">
           <EngineerLocationMap engineers={engineers} engineerJobs={engineerJobs} heightClass="h-[78vh]" alwaysShowLabels />
         </Modal>

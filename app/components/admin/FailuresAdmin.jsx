@@ -11,6 +11,7 @@ import { formatPhone, sortEngineersByDistance, engineerJobsByName } from "@/lib/
 import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls, ReassignModal } from "@/app/components/admin/adminShared";
 import { FailureDetailContent } from "@/app/components/admin/Dashboard";
 import { EngineerLocationMap } from "@/app/components/admin/EngineerLocationMap";
+import { LOCATION_TRACKING } from "@/lib/features";
 import { useHolidays } from "@/app/hooks/useHolidays";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
@@ -235,7 +236,7 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
   return (
     <Modal title="고장접수" onClose={onClose} wide="2xl">
       <div className="flex gap-4 items-start flex-wrap lg:flex-nowrap">
-      <div className="w-full lg:w-[620px] shrink-0">
+      {LOCATION_TRACKING && <div className="w-full lg:w-[620px] shrink-0">
         <EngineerLocationMap
           engineers={engineers}
           site={site}
@@ -243,7 +244,7 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
           selectedEngineer={form.assignee || null}
           onEngineerClick={(name) => setForm((f) => ({ ...f, assignee: name }))}
         />
-      </div>
+      </div>}
       <div className="space-y-3 flex-1 min-w-0">
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">현장 *</p>
