@@ -56,7 +56,7 @@ export function usePhotoLightboxGestures(urlsLength, index, onIndexChange, { whe
 
   function beginSinglePointerGesture(e) {
     if (zoom > 1) {
-      gestureRef.current = { type: "pan", startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y };
+      gestureRef.current = { type: "pan", startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y, startTime: Date.now() };
     } else {
       clearTimeout(settleTimer.current);
       axisRef.current = null;
