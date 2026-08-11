@@ -28,6 +28,27 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
 
+  const [items, setItems] = useState(() =>
+    existingQuote?.constructionType ? [{ category: "자재비", name: existingQuote.constructionType, spec: "", unit: "EA", qty: 1, unitPrice: 0, unitNo: "" }] : []
+  );
+  const [expandedIdx, setExpandedIdx] = useState(0);
+
+  function addItem() {
+    setItems((prev) => {
+      const next = [...prev, { category: "자재비", name: "", spec: "", unit: "EA", qty: 1, unitPrice: 0, unitNo: "" }];
+      setExpandedIdx(next.length - 1);
+      return next;
+    });
+  }
+  function updateItem(idx, patch) {
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+  }
+  function removeItem(idx) {
+    setItems((prev) => prev.filter((_, i) => i !== idx));
+    setExpandedIdx(-1);
+  }
+  const itemsSubtotal = items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.unitPrice || 0), 0);
+
   const site = sites.find((s) => s.id === siteId);
 
   useEffect(() => {
@@ -129,14 +150,93 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
           </>
         )}
 
-        {/* step 1(품목 입력)은 Task 3, step 2(부대비용)는 Task 4, step 3(확인·발행)은 Task 5에서 추가 */}
+        {step === 1 && (
+          <>
+            {items.map((it, idx) => {
+              const expanded = idx === expandedIdx;
+              const lineTotal = Number(it.qty || 0) * Number(it.unitPrice || 0);
+              return (
+                <div key={idx} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                  {!expanded ? (
+                    <button onClick={() => setExpandedIdx(idx)} className="w-full flex items-center justify-between px-3.5 py-3 text-left">
+                      <span className="text-sm font-semibold text-slate-700 truncate">
+                        {it.name || "(품명 없음)"} · {it.qty}{it.unit} × {Number(it.unitPrice || 0).toLocaleString()}원 = {lineTotal.toLocaleString()}원
+                      </span>
+                      <ChevronRight size={15} className="text-slate-300 shrink-0 ml-2" />
+                    </button>
+                  ) : (
+                    <div className="p-3.5 space-y-2.5">
+                      <div className="flex gap-2">
+                        {["자재비", "인건비"].map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => updateItem(idx, { category: c })}
+                            className={`flex-1 py-2 rounded-lg text-xs font-bold ${it.category === c ? "bg-blue-700 text-white" : "bg-slate-100 text-slate-500"}`}
+                          >
+                            {c}
+                          </button>
+                        ))}
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-bold text-slate-500 mb-1">품명</p>
+                        <input className={inputCls} value={it.name} onChange={(e) => updateItem(idx, { name: e.target.value })} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <p className="text-[11px] font-bold text-slate-500 mb-1">규격</p>
+                          <input className={inputCls} value={it.spec} onChange={(e) => updateItem(idx, { spec: e.target.value })} />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-bold text-slate-500 mb-1">호기 (선택)</p>
+                          <input className={inputCls} value={it.unitNo} onChange={(e) => updateItem(idx, { unitNo: e.target.value })} />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <p className="text-[11px] font-bold text-slate-500 mb-1">단위</p>
+                          <select className={inputCls} value={it.unit} onChange={(e) => updateItem(idx, { unit: e.target.value })}>
+                            <option value="EA">EA</option>
+                            <option value="SET">SET</option>
+                            <option value="식">식</option>
+                          </select>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-bold text-slate-500 mb-1">수량</p>
+                          <input type="number" className={inputCls} value={it.qty} onChange={(e) => updateItem(idx, { qty: e.target.value })} />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-bold text-slate-500 mb-1">단가</p>
+                          <input type="number" className={inputCls} value={it.unitPrice} onChange={(e) => updateItem(idx, { unitPrice: e.target.value })} />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-xs font-bold text-slate-500">소계 {lineTotal.toLocaleString()}원</span>
+                        <button onClick={() => removeItem(idx)} className="text-xs font-bold text-red-500">이 품목 삭제</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            <button onClick={addItem} className="w-full py-3 rounded-xl border-2 border-dashed border-blue-300 text-blue-700 text-sm font-bold">
+              + 품목 추가
+            </button>
+            {items.length === 0 && <p className="text-xs text-slate-400 text-center py-2">품목을 1개 이상 추가해주세요</p>}
+          </>
+        )}
 
         {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
       </div>
 
       <div className="shrink-0 px-5 py-3 bg-white border-t border-slate-100 flex gap-2">
-        <button onClick={handleCancel} className="flex-1 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200">
-          {step === 0 ? "취소" : "그만두기"}
+        <button
+          onClick={() => {
+            if (step === 1 && !existingQuote) return setStep(0);
+            return handleCancel();
+          }}
+          className="flex-1 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200"
+        >
+          {step === 1 && !existingQuote ? "이전" : "취소"}
         </button>
         {step === 0 && (
           <button
@@ -145,6 +245,15 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
             className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 flex items-center justify-center gap-1"
           >
             {creating ? "만드는 중..." : <>다음 <ChevronRight size={14} /></>}
+          </button>
+        )}
+        {step === 1 && (
+          <button
+            onClick={() => setStep(2)}
+            disabled={items.length === 0}
+            className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 flex items-center justify-center gap-1"
+          >
+            다음 <ChevronRight size={14} />
           </button>
         )}
       </div>
