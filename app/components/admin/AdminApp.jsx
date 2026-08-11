@@ -102,12 +102,19 @@ export default function AdminApp() {
 
   async function handleAdminLogin(loginId, password) {
     setAuthSubmitting(true); setAuthError("");
-    const res = await fetch("/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ loginId, password }),
-    });
-    const json = await res.json().catch(() => ({ ok: false }));
+    let json;
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ loginId, password }),
+      });
+      json = await res.json().catch(() => ({ ok: false }));
+    } catch {
+      setAuthError("서버에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.");
+      setAuthSubmitting(false);
+      return;
+    }
     if (!json.ok) { setAuthError(json.reason || await loginFailReason(loginId)); setAuthSubmitting(false); return; }
     const { profile: p, token } = json;
     if (p.role !== "admin") { setAuthError("관리자만 접근할 수 있는 페이지입니다."); setAuthSubmitting(false); return; }
