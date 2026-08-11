@@ -47,8 +47,8 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
     // 처음 여는 경우 기사 원본(부품명+수량)을 자재비 1행에 프리필
     return quote.part ? [{ ...emptyItem("자재비"), name: quote.part, qty: quote.quantity || 1 }] : [];
   });
-  const [recipientName, setRecipientName] = useState(quote.recipientName || "");
-  const [quoteTitle, setQuoteTitle] = useState(quote.quoteTitle || quote.constructionType || "");
+  const [recipientName, setRecipientName] = useState(quote.recipientName || (site?.name ?? quote.siteName ? `${site?.name ?? quote.siteName} 대표 귀중` : ""));
+  const [quoteTitle, setQuoteTitle] = useState(quote.quoteTitle || "");
   const [quoteNumber, setQuoteNumber] = useState(quote.quoteNumber || "");
   const [quoteDate, setQuoteDate] = useState(quote.quoteIssuedDate || TODAY_STR);
   const [transportCost, setTransportCost] = useState(quote.transportCost || 0);
