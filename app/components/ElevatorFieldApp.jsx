@@ -16,6 +16,7 @@ import { Capacitor } from "@capacitor/core";
 import { ScreenHeader, BrandSplash } from "@/app/components/ui";
 import { ConfirmHost, confirmAsync } from "@/app/components/ConfirmHost";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
+import { LOCATION_TRACKING } from "@/lib/features";
 import { LoginScreen } from "@/app/components/LoginScreen";
 import { PasswordChangeForm } from "@/app/components/PasswordChangeForm";
 import { SiteTab } from "@/app/components/tabs/SiteTab";
@@ -384,6 +385,9 @@ export default function App() {
   // 권한 거부·시간초과여도 출근 체크는 그대로 진행한다(좌표만 비워둔다).
   function getPositionOnce() {
     return new Promise((resolve) => {
+      // 위치 수집 정지 (lib/features.js) — 동의 절차를 갖출 때까지 GPS를 아예 요청하지 않는다.
+      // 여기서 막으면 저장·전송 경로 전체가 함께 멈춘다(거리 정렬·T맵·지도는 값이 없어 자동 비활성).
+      if (!LOCATION_TRACKING) return resolve(null);
       if (typeof navigator === "undefined" || !navigator.geolocation) return resolve(null);
       navigator.geolocation.getCurrentPosition(
         (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
@@ -410,7 +414,7 @@ export default function App() {
   function markAtSite(failure, label) {
     const site = sites.find((s) => s.id === failure.siteId);
     const pid = failure.assigneeId ?? profileIdByName(profilesAll, failure.assignee);
-    if (site?.lat != null && pid) updateLastLocation(pid, site.lat, site.lng, `${site.name} ${label}`);
+    if (LOCATION_TRACKING && site?.lat != null && pid) updateLastLocation(pid, site.lat, site.lng, `${site.name} ${label}`);
   }
 
   // 어제 마감 안 한 숙직을 마감한다 (익일 출근 시 자동 호출 / 연차·미출근이면 홈 버튼).

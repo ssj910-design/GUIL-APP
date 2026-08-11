@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, distanceKm, activeSites } from "@/lib/utils";
 import { Badge, DDay, SmsToast, Sheet } from "@/app/components/ui";
+import { LOCATION_TRACKING } from "@/lib/features";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { usePriorFlaggedBadge } from "@/app/hooks/useLiveInspections";
@@ -149,21 +150,23 @@ function AdminAttendanceCard({ attendances, engineers, todayLeaves = [] }) {
         <span className="flex items-center gap-1.5">
           <span className="text-[11px] font-bold text-slate-400 whitespace-nowrap">{leaveStats}</span>
           {staleRows.length > 0 && <span className="text-[10px] font-extrabold text-white bg-red-500 rounded-full px-1.5 py-0.5">2시간+ 미확인 {staleRows.length}</span>}
-          {geoOff.length > 0 && <span className="text-[10px] font-extrabold text-white bg-amber-500 rounded-full px-1.5 py-0.5">위치 미설정 {geoOff.length}</span>}
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setMapOpen(true); }}
-            className="p-0.5 text-blue-700"
-            aria-label="전직원 위치지도"
-          >
-            <MapIcon size={14} />
-          </button>
+          {LOCATION_TRACKING && geoOff.length > 0 && <span className="text-[10px] font-extrabold text-white bg-amber-500 rounded-full px-1.5 py-0.5">위치 미설정 {geoOff.length}</span>}
+          {LOCATION_TRACKING && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setMapOpen(true); }}
+              className="p-0.5 text-blue-700"
+              aria-label="전직원 위치지도"
+            >
+              <MapIcon size={14} />
+            </button>
+          )}
         </span>
       </div>
 
       {open && (
         <div className="px-4 pb-3 border-t border-slate-100 pt-2.5">
-          {geoOff.length > 0 && (
+          {LOCATION_TRACKING && geoOff.length > 0 && (
             <p className="text-[11px] text-slate-400 mb-2.5 leading-relaxed">
               위치 미설정 기사에게는 본인 앱에서 켜라는 안내가 자동으로 뜹니다 (게시판에 노출되지 않음).
             </p>
@@ -234,6 +237,7 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
     // 제대로 반영하지 않아서(권한을 허용해도 "prompt"로 되돌아옴 — 재현 확인됨) 이 안내 카드가
     // 계속 뜬다. 네이티브에서는 안드로이드 자체 시스템 권한 팝업이 이미 정상 동작하므로
     // (출근 체크 시 getCurrentPosition이 알아서 띄움) 이 카드 자체를 건너뛴다.
+    if (!LOCATION_TRACKING) return; // 위치 수집 정지 중이면 권한 안내·보고도 하지 않는다
     if (Capacitor.isNativePlatform()) return;
     if (role === "admin" || typeof navigator === "undefined" || !navigator.permissions?.query) return;
     let p;
