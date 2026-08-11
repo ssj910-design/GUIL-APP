@@ -1,5 +1,7 @@
 // 국가승강기정보센터(한국승강기안전공단) 건물별승강기정보 조회 서비스를 서버에서 대신 호출합니다.
 // 인증키를 브라우저에 노출하지 않기 위해 클라이언트가 아닌 이 라우트에서만 호출합니다.
+import { verifyAuthToken } from "@/lib/verifyToken";
+
 const GOV_API_URL = "https://apis.data.go.kr/B553664/BuldElevatorService/getBuldElvtrList";
 
 function parseItems(xml) {
@@ -13,6 +15,8 @@ function parseItems(xml) {
 }
 
 export async function GET(request) {
+  if (!verifyAuthToken(request)) return Response.json({ error: "unauthorized" }, { status: 401 });
+
   const { searchParams } = new URL(request.url);
   const elevatorNo = searchParams.get("elevatorNo");
   if (!elevatorNo) {

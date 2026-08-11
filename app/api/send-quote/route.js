@@ -3,8 +3,12 @@
 import { sendQuoteEmail } from "@/lib/email";
 import { sendQuoteAlimtalk } from "@/lib/alimtalk";
 import { supabase } from "@/lib/supabaseClient";
+import { verifyAuthToken } from "@/lib/verifyToken";
 
 export async function POST(request) {
+  const auth = verifyAuthToken(request);
+  if (!auth || auth.appRole !== "admin") return Response.json({ results: {}, reason: "unauthorized" }, { status: 401 });
+
   const body = await request.json().catch(() => null);
   if (!body?.quoteRequestId) {
     return Response.json({ results: {} }, { status: 200 });

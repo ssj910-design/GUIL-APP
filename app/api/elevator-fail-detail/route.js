@@ -14,8 +14,11 @@
 // sync-inspection-cache 크론(조건부·불합격 호기 부적합상세 선캐싱)도 같은 모듈을 쓴다.
 import { createClient } from "@supabase/supabase-js";
 import { fetchInspectionHistory, findRecordByAnchor, fetchFailItems } from "@/lib/govFailApi";
+import { verifyAuthToken } from "@/lib/verifyToken";
 
 export async function GET(request) {
+  if (!verifyAuthToken(request)) return Response.json({ error: "unauthorized" }, { status: 401 });
+
   const { searchParams } = new URL(request.url);
   const elevatorNo = searchParams.get("elevatorNo");
   const anchorDate = searchParams.get("anchorDate");

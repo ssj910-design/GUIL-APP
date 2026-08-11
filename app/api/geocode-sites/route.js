@@ -6,6 +6,7 @@
 // appKey는 서버에서만 쓴다 (클라이언트로 내려보내면 키가 노출된다).
 import { createClient } from "@supabase/supabase-js";
 import { geocodeAddress } from "@/lib/tmapGeocode";
+import { verifyAuthToken } from "@/lib/verifyToken";
 
 export const maxDuration = 300;
 
@@ -17,6 +18,8 @@ const GAP_MS = 250;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export async function GET(request) {
+  if (!verifyAuthToken(request)) return Response.json({ ok: false, reason: "unauthorized" }, { status: 401 });
+
   const key = process.env.TMAP_APP_KEY;
   if (!key) return Response.json({ ok: false, reason: "TMAP_APP_KEY 미설정" }, { status: 200 });
 

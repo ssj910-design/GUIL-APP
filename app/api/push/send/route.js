@@ -10,6 +10,7 @@ import { initializeApp, cert, getApps } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 import { createClient } from "@supabase/supabase-js";
 import { NOTIFICATIONS, isEnabled, levelOf } from "@/lib/notifications";
+import { verifyAuthToken } from "@/lib/verifyToken";
 
 // lib/constants.js는 useEffect 쓰는 다른 코드와 같이 있어 서버 라우트에서 못 불러온다(클라이언트 전용
 // 모듈로 취급됨) — TODAY_STR과 같은 한 줄이라 여기 직접 둔다.
@@ -33,7 +34,15 @@ function firebaseApp() {
   });
 }
 
+function isAuthorized(request) {
+  if (verifyAuthToken(request)) return true;
+  const secret = process.env.CRON_SECRET;
+  const header = request.headers.get("authorization") || "";
+  return !!secret && header === `Bearer ${secret}`;
+}
+
 export async function POST(request) {
+  if (!isAuthorized(request)) return Response.json({ ok: false, reason: "unauthorized" }, { status: 401 });
   try {
     return await handlePost(request);
   } catch (e) {
