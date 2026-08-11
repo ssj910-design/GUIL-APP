@@ -25,7 +25,7 @@ async function handle(request) {
   const origin = new URL(request.url).origin;
   const ok = await fetch(`${origin}/api/push/send`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
     body: JSON.stringify({
       key: "contract_expiring",
       title: "계약 만료 임박 현장",

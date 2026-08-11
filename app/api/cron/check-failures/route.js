@@ -31,7 +31,7 @@ async function handle(request) {
   const send = (body) =>
     fetch(`${origin}/api/push/send`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
       body: JSON.stringify(body),
     }).then((r) => r.ok).catch(() => false);
   const label = (f) => `${f.site_name ?? ""}${f.elevator_no ? ` · ${f.elevator_no}` : ""}`.trim();
