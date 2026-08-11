@@ -2,7 +2,7 @@
 // Supabase가 RLS에서 알아볼 수 있는 서명된 JWT를 발급한다. 로그인 화면·과정 자체는
 // 안 바뀐다 — 이 라우트가 기존 클라이언트 직접 rpc 호출을 대신할 뿐이다.
 import jwt from "jsonwebtoken";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function POST(request) {
   const body = await request.json().catch(() => null);
@@ -17,9 +17,11 @@ export async function POST(request) {
     return Response.json({ ok: false, reason: "서버 설정 오류 — SUPABASE_JWT_SECRET 미설정" }, { status: 500 });
   }
 
-  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-
-  const { data, error } = await supabase.rpc("verify_login", { p_login_id: loginId, p_password: password });
+  // RLS를 통과할 로그인 토큰이 아직 없는 시점이라(지금 발급하는 중) anon key로는
+  // profiles를 못 읽는다 — service_role로 우회한다. verify_login 자체는 security
+  // definer라 RLS와 무관하게 항상 동작했지만, 그 뒤 profiles 재조회가 이걸로 막혀
+  // 모든 로그인이 "아이디/비번 틀림"으로 실패하고 있었다(실사고).
+  const { data, error } = await supabaseAdmin.rpc("verify_login", { p_login_id: loginId, p_password: password });
   const row = Array.isArray(data) ? data[0] : data;
   if (error || !row) {
     return Response.json({ ok: false, reason: "아이디 또는 비밀번호가 올바르지 않습니다." });
@@ -27,7 +29,7 @@ export async function POST(request) {
 
   // 비활성·삭제된 계정은 verify_login 통과 후에도 다시 막는다 — 기존 AdminApp.jsx/
   // ElevatorFieldApp.jsx의 세션 재확인 로직과 같은 목적.
-  const { data: profile } = await supabase
+  const { data: profile } = await supabaseAdmin
     .from("profiles")
     .select("id,name,role,admin_tier,is_active,deleted_at")
     .eq("id", row.id)
