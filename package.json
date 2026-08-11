@@ -11,6 +11,7 @@
     "deploy": "git push && git commit --allow-empty -m '[deploy] 운영 반영' && git push"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.116.0",
     "@capacitor/android": "^8.4.2",
     "@capacitor/core": "^8.4.2",
     "@capacitor/push-notifications": "^8.1.2",
