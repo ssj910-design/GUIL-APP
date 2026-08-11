@@ -17,9 +17,9 @@ export function useQuoteRecipientFields(quote, siteManagers, profiles) {
   const primaryManager = (siteManagers ?? []).find((m) => m.isPrimary) ?? (siteManagers ?? [])[0];
   const [email, setEmail] = useState(quote.recipientEmail || primaryManager?.email || "");
   const [phone, setPhone] = useState(quote.recipientPhone || primaryManager?.phone || "");
-  const [senderCcEmail, setSenderCcEmail] = useState("");
-  const [referenceEmail, setReferenceEmail] = useState("");
-  const [referencePhone, setReferencePhone] = useState("");
+  const [senderCcEmail, setSenderCcEmail] = useState(quote.senderCcEmail || "");
+  const [referenceEmail, setReferenceEmail] = useState(quote.referenceEmail || "");
+  const [referencePhone, setReferencePhone] = useState(quote.referencePhone || "");
   const [sendEmail, setSendEmail] = useState(true);
   const [sendKakao, setSendKakao] = useState(true);
   const [noticeMessage, setNoticeMessage] = useState(quote.noticeMessage || "");
@@ -36,9 +36,21 @@ export function useQuoteRecipientFields(quote, siteManagers, profiles) {
   const defaultSupplier = staffByName.find((p) => p.name === "신석주" && p.phone) ?? null;
 
   const [supplierId, setSupplierId] = useState(defaultSupplier?.id ?? "");
-  const [supplierCcId, setSupplierCcId] = useState("");
-  const [customerManagerId, setCustomerManagerId] = useState(primaryManager?.id ?? "");
-  const [customerCcId, setCustomerCcId] = useState("");
+  // 이미 저장된 수신자·참조인 정보(recipientEmail/Phone, referenceEmail/Phone, senderCcEmail)가
+  // 있으면 그 값과 일치하는 담당자를 찾아 드롭다운도 실제 저장값과 맞춘다 — 안 그러면 이미
+  // 저장돼 있는 담당자를 다시 열었을 때 드롭다운이 대표 담당자로 되돌아가 보인다.
+  const matchedManager = (siteManagers ?? []).find(
+    (m) => (quote.recipientEmail && m.email === quote.recipientEmail) || (quote.recipientPhone && m.phone === quote.recipientPhone)
+  );
+  const matchedCc = (siteManagers ?? []).find(
+    (m) => (quote.referenceEmail && m.email === quote.referenceEmail) || (quote.referencePhone && m.phone === quote.referencePhone)
+  );
+  const matchedSupplierCc = staffWithEmail.find((p) => quote.senderCcEmail && p.email === quote.senderCcEmail);
+  const [supplierCcId, setSupplierCcId] = useState(matchedSupplierCc?.id ?? "");
+  const [customerManagerId, setCustomerManagerId] = useState(
+    (quote.recipientEmail || quote.recipientPhone) ? (matchedManager?.id ?? "") : (primaryManager?.id ?? "")
+  );
+  const [customerCcId, setCustomerCcId] = useState(matchedCc?.id ?? "");
 
   const supplier = staffByName.find((p) => p.id === supplierId);
   const otherManagers = (siteManagers ?? []).filter((m) => m.id !== customerManagerId);
@@ -168,7 +180,7 @@ export function QuoteRecipientInfo({ rf, siteManagers }) {
   );
 }
 
-export function QuoteRecipientExtras({ rf }) {
+export function QuoteRecipientExtras({ rf, showChannels = true }) {
   const fileInputRef = useRef(null);
 
   return (
@@ -213,16 +225,18 @@ export function QuoteRecipientExtras({ rf }) {
         )}
       </div>
 
-      <div className="flex gap-4 mb-4">
-        <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-          <input type="checkbox" checked={rf.sendEmail} onChange={(e) => rf.setSendEmail(e.target.checked)} />
-          이메일
-        </label>
-        <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-          <input type="checkbox" checked={rf.sendKakao} onChange={(e) => rf.setSendKakao(e.target.checked)} />
-          카카오 알림톡
-        </label>
-      </div>
+      {showChannels && (
+        <div className="flex gap-4 mb-4">
+          <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+            <input type="checkbox" checked={rf.sendEmail} onChange={(e) => rf.setSendEmail(e.target.checked)} />
+            이메일
+          </label>
+          <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+            <input type="checkbox" checked={rf.sendKakao} onChange={(e) => rf.setSendKakao(e.target.checked)} />
+            카카오 알림톡
+          </label>
+        </div>
+      )}
     </>
   );
 }

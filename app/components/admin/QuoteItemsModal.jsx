@@ -1,15 +1,13 @@
 "use client";
 
-// 견적요청 품목편집+발행+발송 통합 화면 — 기사가 신청한 부품명/수량(원본, 읽기전용
-// 참고)을 관리자가 세부 품목(자재비/인건비 구분·규격·단가 등)으로 확장하고, "저장"으로
-// 발행만 하거나(PDF 생성만, 발송 안 함 — 나중에 검토 후 보내는 흐름) "바로 발송하기"로
-// 발행과 발송을 한 번에 처리한다(설계:
-// docs/superpowers/specs/2026-07-29-quote-issue-send-merge-design.md).
+// 견적요청 품목편집+발행 화면 — 기사가 신청한 부품명/수량(원본, 읽기전용 참고)을
+// 관리자가 세부 품목(자재비/인건비 구분·규격·단가 등)으로 확장해 "저장"으로 발행한다
+// (PDF 생성 + DB 저장, 발송은 하지 않음). 발송은 목록의 "재발송"(QuoteSendModal)에서
+// 따로 처리한다 — 품목편집과 발송을 분리해 실수로 같이 눌러 중복발송되는 걸 막는다.
 //
-// 공급자/고객 정보·안내메시지·첨부파일·채널 체크박스는 QuoteRecipientFields.jsx를
-// QuoteSendModal.jsx(재발송)과 공유한다. 재발송은 이미 있는 quotePdfUrl로 바로 보내지만,
-// 여기 "바로 발송하기"는 먼저 PDF를 새로 생성한 뒤 그 pdfUrl로 발송한다 — 신규 발행
-// 건은 아직 quotePdfUrl이 없기 때문.
+// 공급자/고객 정보·안내메시지·첨부파일은 QuoteRecipientFields.jsx를 QuoteSendModal.jsx
+// (재발송)과 공유한다. 여기서 입력한 수신자·참조인 정보는 "저장" 시 quote_requests에
+// 그대로 저장돼, 나중에 재발송을 열 때 이어서 쓸 수 있다.
 //
 // 품목 테이블의 공급가액/세액 컬럼은 화면 표시 전용이다 — 실제 PDF(lib/quotePdf.js)와
 // 저장 데이터(quote_items, transport_cost 등)는 그대로 두고 입력 화면만 청구스
@@ -58,7 +56,6 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
   const [discountAmount, setDiscountAmount] = useState(() => Number(quote.discountAmount) || 0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [results, setResults] = useState(null);
 
   const rf = useQuoteRecipientFields(quote, siteManagers, profiles);
 
@@ -151,12 +148,13 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
     setDiscountPercent(preDiscountSubtotal > 0 ? Math.round((amt / preDiscountSubtotal) * 1000) / 10 : 0);
   }
 
-  // alsoSend=false → "저장"(발행만). alsoSend=true → "바로 발송하기"(발행 후 이어서 발송).
-  async function handleSave(alsoSend) {
+  // 발행만 한다 — 발송은 목록의 "재발송"(QuoteSendModal)에서 따로 처리한다(품목편집과 발송을
+  // 분리해 실수로 같이 눌러 중복발송되는 걸 막고, 저장 시점에 입력해둔 수신자·참조인 정보가
+  // 그대로 남게 한다).
+  async function handleSave() {
     if (items.length === 0) return;
     setSaving(true);
     setError("");
-    setResults(null);
 
     const patch = {
       quote_items: items,
@@ -170,6 +168,16 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
       recipient_name: recipientName || null,
       quote_title: quoteTitle || null,
       quote_issued_date: quoteDate,
+      // 발송 화면(QuoteRecipientInfo/Extras)에서 입력한 값도 저장 시 같이 반영한다 — 전엔
+      // "바로 발송하기"를 눌러야만 저장돼서, 저장만 하면 담당자·참조인 변경이 다음에 열어도
+      // 사라져 있던 문제가 있었다.
+      recipient_email: rf.email || null,
+      recipient_phone: rf.phone || null,
+      sender_cc_email: rf.senderCcEmail || null,
+      reference_email: rf.referenceEmail || null,
+      reference_phone: rf.referencePhone || null,
+      notice_message: rf.noticeMessage || null,
+      attachment_urls: rf.attachments,
     };
 
     const pdfRes = await fetch("/api/generate-quote-pdf", {
@@ -198,77 +206,19 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
       return;
     }
 
-    let sendPatch = {};
-    if (alsoSend) {
-      const supplierName = rf.supplier?.name || null;
-      const supplierPhone = rf.supplier ? (rf.supplier.phone || rf.supplier.tel || null) : null;
-
-      const sendRes = await fetch("/api/send-quote", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          quoteRequestId: quote.id,
-          channels: { email: rf.sendEmail, kakao: rf.sendKakao },
-          recipientEmail: rf.email,
-          recipientPhone: rf.phone,
-          senderCcEmail: rf.senderCcEmail || null,
-          referenceEmail: rf.referenceEmail || null,
-          referencePhone: rf.referencePhone || null,
-          supplierName,
-          supplierPhone,
-          noticeMessage: rf.noticeMessage || null,
-          attachmentUrls: rf.attachments,
-          quote: {
-            siteName: site?.name ?? quote.siteName,
-            quoteTitle,
-            quoteDate,
-            pdfUrl: pdfRes.url,
-            totalAmount: grandTotal,
-          },
-        }),
-      })
-        .then((r) => r.json())
-        .catch((e) => ({ results: { email: { ok: false, reason: e.message }, kakao: { ok: false, reason: e.message } } }));
-
-      setResults(sendRes.results ?? {});
-
-      const now = new Date().toISOString();
-      const newLogEntries = [];
-      if (sendRes.results?.email?.ok) newLogEntries.push({ channel: "email", sentAt: now, target: rf.email });
-      if (sendRes.results?.kakao?.ok) newLogEntries.push({ channel: "kakao", sentAt: now, target: rf.phone });
-
-      sendPatch = {
-        recipientEmail: rf.email,
-        recipientPhone: rf.phone,
-        senderCcEmail: rf.senderCcEmail || null,
-        referenceEmail: rf.referenceEmail || null,
-        referencePhone: rf.referencePhone || null,
-        noticeMessage: rf.noticeMessage || null,
-        attachmentUrls: rf.attachments,
-      };
-      if (sendRes.results?.email?.ok) sendPatch.emailSentAt = now;
-      if (sendRes.results?.kakao?.ok) sendPatch.kakaoSentAt = now;
-      if (newLogEntries.length) sendPatch.sendLog = [...(quote.sendLog ?? []), ...newLogEntries];
-    }
-
     onSaved({
       quoteItems: items, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
       profit: Number(profit) || 0, discountAmount: Number(discountAmount) || 0, quoteNumber, recipientName, quoteTitle,
       quoteIssuedDate: quoteDate, quotePdfUrl: pdfRes.url, status: "견적발행",
-      ...sendPatch,
+      recipientEmail: rf.email || null, recipientPhone: rf.phone || null,
+      senderCcEmail: rf.senderCcEmail || null, referenceEmail: rf.referenceEmail || null, referencePhone: rf.referencePhone || null,
+      noticeMessage: rf.noticeMessage || null, attachmentUrls: rf.attachments,
     });
     setSaving(false);
-
-    // "저장"만 눌렀을 땐 지금처럼 바로 닫는다. "바로 발송하기"는 채널별 발송 결과를
-    // 화면에 보여줘야 하므로 자동으로 닫지 않는다 — 확인 후 "닫기"로 직접 닫는다.
-    if (!alsoSend) onClose();
+    onClose();
   }
 
   const saveDisabled = items.length === 0 || saving;
-  // 발송 성공 후 버튼을 그대로 두면 실수로 다시 눌러 이메일/카카오(유료)가 중복 발송될 수 있다 —
-  // 한 번 성공하면 "바로 발송하기"를 다시 누르지 못하게 막는다(실패는 재시도할 수 있어야 하므로 제외).
-  const sendSucceeded = results?.email?.ok || results?.kakao?.ok;
-  const sendDisabled = saveDisabled || !rf.canSend || sendSucceeded;
 
   return (
     <Modal title={`${site?.name ?? quote.siteName} 견적 품목편집`} onClose={saving ? () => {} : onClose} wide="2xl">
@@ -452,40 +402,18 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
         </div>
       </div>
 
-      <QuoteRecipientExtras rf={rf} />
+      <QuoteRecipientExtras rf={rf} showChannels={false} />
 
       {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">{error}</p>}
-
-      {results && (
-        <div className="space-y-1.5 mb-3 text-sm">
-          {rf.sendEmail && (
-            <p className={results.email?.ok ? "text-green-700" : "text-red-600"}>
-              이메일: {results.email?.ok ? "✅ 발송 완료" : `❌ 실패 - ${results.email?.reason}`}
-            </p>
-          )}
-          {rf.sendKakao && (
-            <p className={results.kakao?.ok ? "text-green-700" : "text-red-600"}>
-              카카오 알림톡: {results.kakao?.ok ? "✅ 발송 완료" : `❌ 실패 - ${results.kakao?.reason}`}
-            </p>
-          )}
-        </div>
-      )}
 
       <div className="flex justify-end gap-2">
         <button onClick={onClose} disabled={saving} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5 disabled:opacity-40">닫기</button>
         <button
-          onClick={() => handleSave(false)}
+          onClick={handleSave}
           disabled={saveDisabled}
-          className="text-sm font-bold text-slate-700 bg-slate-100 disabled:bg-slate-50 disabled:text-slate-300 rounded-xl px-4 py-2.5"
-        >
-          {saving ? "저장 중..." : "저장"}
-        </button>
-        <button
-          onClick={() => handleSave(true)}
-          disabled={sendDisabled}
           className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2.5"
         >
-          {saving ? "처리 중..." : "바로 발송하기"}
+          {saving ? "저장 중..." : "저장"}
         </button>
       </div>
     </Modal>
