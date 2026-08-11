@@ -714,7 +714,9 @@ export default function App() {
         leaveRes,
       ] = await Promise.all([
         supabase.from("sites").select("*"),
-        supabase.from("site_managers").select("*"),
+        // site_managers는 1021행(2026-08-11 기준)으로 기본 1000행 한도를 넘어서, 페이지네이션
+        // 없이 조회하면 최근에 추가된 담당자가 조용히 누락된다(실제로 발생) — 전체를 받는다.
+        fetchAll("site_managers"),
         supabase.from("failures").select("*").order("created_at", { ascending: false }),
         supabase.from("inspections").select("*"),
         supabase.from("material_requests").select("*").order("created_at", { ascending: false }),
