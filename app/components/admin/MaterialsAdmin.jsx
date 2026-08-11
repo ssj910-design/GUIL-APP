@@ -621,15 +621,15 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
           );
         })()}
         {(() => {
-          const renderQuoteRow = (q) => (
+          const renderQuoteRow = (q, drafted) => (
             <tr
               key={q.id}
               className="border-b border-slate-50 cursor-pointer hover:bg-slate-50"
               onClick={() => setDetailTarget({ type: "quote", data: q })}
             >
-              <td className="pl-5 pr-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(q.requestedDate)}</td>
+              <td className="pl-5 pr-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(drafted ? q.quoteIssuedDate : q.requestedDate)}</td>
               <td className="px-3 py-2.5 font-semibold whitespace-nowrap">{locOf(data, q.unitId, q.siteName, q.elevatorNo)}</td>
-              <td className="px-3 py-2.5 text-slate-600">{q.constructionType}</td>
+              <td className="px-3 py-2.5 text-slate-600">{drafted ? (q.quoteTitle || "-") : q.constructionType}</td>
               <td className="px-3 py-2.5 whitespace-nowrap">
                 {!q.requesterId && !q.engineer
                   ? <StatusBadge tone="slate">관리자발행</StatusBadge>
@@ -689,15 +689,16 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
               </td>
             </tr>
           );
-          const head = ["신청일", "현장 · 호기", "공사 내용", "신청 기사", "진행상태", "처리"];
+          const pendingHead = ["신청일", "현장 · 호기", "공사 내용", "신청 기사", "진행상태", "처리"];
+          const draftedHead = ["작성일", "현장 · 호기", "견적명", "신청 기사", "진행상태", "처리"];
           return (
             <>
               <h3 className="text-xs font-bold text-red-600 mb-2">견적요청만 들어옴 ({pendingQuoteRequests.length})</h3>
-              <AdminTable head={head}>{pendingQuoteRequests.map(renderQuoteRow)}</AdminTable>
+              <AdminTable head={pendingHead}>{pendingQuoteRequests.map((q) => renderQuoteRow(q, false))}</AdminTable>
               {pendingQuoteRequests.length === 0 && <p className="text-xs text-slate-400 text-center py-6">해당하는 건이 없습니다</p>}
 
               <h3 className="text-xs font-bold text-slate-400 mb-2 mt-6">견적작성 이후 ({draftedQuoteRequests.length})</h3>
-              <AdminTable head={head}>{draftedQuoteRequests.map(renderQuoteRow)}</AdminTable>
+              <AdminTable head={draftedHead}>{draftedQuoteRequests.map((q) => renderQuoteRow(q, true))}</AdminTable>
               {draftedQuoteRequests.length === 0 && <p className="text-xs text-slate-400 text-center py-6">해당하는 건이 없습니다</p>}
             </>
           );
@@ -1030,7 +1031,16 @@ function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
 function RequestDetailModal({ target, data, onClose }) {
   const { type, data: r } = target;
   const isMaterial = type === "material";
+  // 견적요청은 아직 견적서를 만들기 전(요청접수)과 이미 작성한 이후로 상세내역 구성이 달라진다 —
+  // 작성 이후엔 공사내용 대신 견적명, 신청일 대신 작성일, 사진 대신 PDF 미리보기를 보여준다.
+  const isDraftedQuote = !isMaterial && r.status !== "요청접수";
   const assignee = assigneeNames(data, isMaterial ? "materialRequestId" : "quoteRequestId", r.id);
+  const hasRequester = !!(r.requesterId || r.engineer);
+  // 견적요청서에 기사가 적어둔 연락처가 비어있는 경우가 많아, 현장 대표 담당자 연락처로 대체한다.
+  const primaryManager = !isMaterial
+    ? (data.siteManagers ?? []).filter((m) => m.siteId === r.siteId).find((m) => m.isPrimary)
+      ?? (data.siteManagers ?? []).find((m) => m.siteId === r.siteId)
+    : null;
   const displayStatus = isMaterial
     ? r.status === "지급완료"
       ? (billingCompleteFor(data.todos ?? [], "materialRequestId", r.id) ? "교체완료" : "지급완료")
@@ -1042,16 +1052,26 @@ function RequestDetailModal({ target, data, onClose }) {
   const photos = [...(r.photoUrls ?? []), ...(r.supplyPhotoUrls ?? [])];
 
   return (
-    <Modal title={isMaterial ? "자재신청 상세내역" : "견적요청 상세내역"} onClose={onClose} wide>
+    <Modal title={isMaterial ? "자재신청 상세내역" : isDraftedQuote ? "견적 상세내역" : "견적요청 상세내역"} onClose={onClose} wide>
       <div className="space-y-3 mb-4">
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div><p className="text-xs font-bold text-slate-400 mb-1">현장 · 호기</p><p className="font-semibold text-slate-800">{locOf(data, r.unitId, r.siteName, r.elevatorNo)}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">현장 주소</p><p className="font-semibold text-slate-800">{addressOf(data, r.unitId, r.siteName)}</p></div>
-          <div><p className="text-xs font-bold text-slate-400 mb-1">{isMaterial ? "부품 내역" : "공사 내용"}</p><p className="font-semibold text-slate-800">{isMaterial ? r.part : r.constructionType}</p></div>
-          <div><p className="text-xs font-bold text-slate-400 mb-1">{isMaterial ? "긴급도" : "현장 담당자 연락처"}</p><p className="font-semibold text-slate-800">{isMaterial ? r.urgency : (r.contactPhone || "-")}</p></div>
-          <div><p className="text-xs font-bold text-slate-400 mb-1">신청일</p><p className="font-semibold text-slate-800">{shortDate(r.requestedDate)}</p></div>
-          <div><p className="text-xs font-bold text-slate-400 mb-1">신청 기사</p><p className="font-semibold text-slate-800">{personOf(data, r.requesterId, r.engineer)}</p></div>
-          <div><p className="text-xs font-bold text-slate-400 mb-1">담당 기사</p><p className="font-semibold text-slate-800">{assignee ?? "미배정"}</p></div>
+          {isMaterial ? (
+            <div><p className="text-xs font-bold text-slate-400 mb-1">부품 내역</p><p className="font-semibold text-slate-800">{r.part}</p></div>
+          ) : isDraftedQuote ? (
+            <div><p className="text-xs font-bold text-slate-400 mb-1">견적명</p><p className="font-semibold text-slate-800">{r.quoteTitle || "-"}</p></div>
+          ) : (
+            <div><p className="text-xs font-bold text-slate-400 mb-1">공사 내용</p><p className="font-semibold text-slate-800">{r.constructionType}</p></div>
+          )}
+          <div><p className="text-xs font-bold text-slate-400 mb-1">{isMaterial ? "긴급도" : "현장 담당자 연락처"}</p><p className="font-semibold text-slate-800">{isMaterial ? r.urgency : (r.contactPhone || primaryManager?.phone || "-")}</p></div>
+          <div><p className="text-xs font-bold text-slate-400 mb-1">{isDraftedQuote ? "작성일" : "신청일"}</p><p className="font-semibold text-slate-800">{shortDate(isDraftedQuote ? r.quoteIssuedDate : r.requestedDate)}</p></div>
+          {(isMaterial || hasRequester) && (
+            <div><p className="text-xs font-bold text-slate-400 mb-1">신청 기사</p><p className="font-semibold text-slate-800">{personOf(data, r.requesterId, r.engineer)}</p></div>
+          )}
+          {assignee && (
+            <div><p className="text-xs font-bold text-slate-400 mb-1">담당 기사</p><p className="font-semibold text-slate-800">{assignee}</p></div>
+          )}
           <div>
             {isMaterial ? (
               <StatusBadge tone={tone}>{displayStatus}</StatusBadge>
@@ -1101,10 +1121,22 @@ function RequestDetailModal({ target, data, onClose }) {
         )}
       </div>
 
-      <div>
-        <p className="text-xs font-bold text-slate-500 mb-2">사진 ({photos.length}장)</p>
-        <PhotoGrid urls={photos} />
-      </div>
+      {isDraftedQuote && r.quotePdfUrl ? (
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-2">견적서 PDF 미리보기</p>
+          <div className="border border-slate-200 rounded-xl overflow-hidden" style={{ height: 480 }}>
+            <iframe src={r.quotePdfUrl} title="견적서 PDF 미리보기" className="w-full h-full" />
+          </div>
+          <a href={r.quotePdfUrl} target="_blank" rel="noreferrer" className="inline-block mt-2 text-xs font-bold text-blue-700">
+            새 탭에서 크게 보기 →
+          </a>
+        </div>
+      ) : photos.length > 0 ? (
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-2">사진 ({photos.length}장)</p>
+          <PhotoGrid urls={photos} />
+        </div>
+      ) : null}
     </Modal>
   );
 }
