@@ -667,7 +667,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
                     {q.quotePdfUrl && (
                       <>
                         <button onClick={(e) => { e.stopPropagation(); setSendTarget(q); }} className="text-xs font-bold text-green-700 bg-green-50 px-2.5 py-1.5 rounded-lg">
-                          재발송
+                          {q.emailSentAt || q.kakaoSentAt ? "재발송" : "발송"}
                         </button>
                         <a href={q.quotePdfUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs font-bold text-blue-700 border border-blue-200 px-2.5 py-1.5 rounded-lg">
                           PDF 보기

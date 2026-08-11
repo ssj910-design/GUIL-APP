@@ -1,7 +1,8 @@
 "use client";
 
-// 이미 발행된 견적서를 다시 이메일/카카오 알림톡으로 재발송 — 품목편집 화면
-// (QuoteItemsModal)의 "바로 발송하기"로 처음 발송한 뒤, 나중에 다시 보낼 때 쓴다.
+// 발행된 견적서를 이메일/카카오 알림톡으로 발송 — 품목편집(QuoteItemsModal)에서 저장만
+// 하고 닫으면, 이 모달이 유일한 발송 경로다(최초 발송·재발송 모두). 한 번이라도 보낸
+// 적이 있으면(emailSentAt/kakaoSentAt) 제목·버튼을 "재발송"으로, 없으면 "발송"으로 표시.
 // 두 채널은 독립적으로 시도되고, 실패해도 조용히 숨기지 않고 채널별로 성공/실패를
 // 그대로 보여준다. 공급자/고객 정보·안내메시지·첨부파일·채널 체크박스는
 // QuoteRecipientFields.jsx로 뽑아 QuoteItemsModal과 공유한다.
@@ -14,6 +15,8 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
   const rf = useQuoteRecipientFields(quote, siteManagers, profiles);
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState(null);
+  const alreadySent = !!(quote.emailSentAt || quote.kakaoSentAt);
+  const actionLabel = alreadySent ? "재발송" : "발송";
 
   async function handleSend() {
     setSending(true);
@@ -73,7 +76,7 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
   }
 
   return (
-    <Modal title={`${site?.name ?? quote.siteName} 견적 재발송`} onClose={onClose} wide="xl">
+    <Modal title={`${site?.name ?? quote.siteName} 견적 ${actionLabel}`} onClose={onClose} wide="xl">
       <QuoteRecipientInfo rf={rf} siteManagers={siteManagers} />
       <QuoteRecipientExtras rf={rf} />
 
@@ -101,7 +104,7 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
           disabled={sending || !rf.canSend}
           className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2.5"
         >
-          {sending ? "발송 중..." : "재발송"}
+          {sending ? "발송 중..." : actionLabel}
         </button>
       </div>
     </Modal>
