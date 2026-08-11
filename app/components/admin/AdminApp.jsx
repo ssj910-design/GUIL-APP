@@ -6,7 +6,7 @@
 import { useState, useEffect } from "react";
 import { BRAND } from "@/lib/company";
 import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, CalendarCheck, Users, LayoutDashboard, BarChart3, Menu , Bell, MessageSquare, BookOpen } from "lucide-react";
-import { supabase, fetchAll, loginFailReason } from "@/lib/supabaseClient";
+import { supabase, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken } from "@/lib/supabaseClient";
 import {
   mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest,
   mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck, mapSelfCheckItem, mapFeedPost, mapRestockRequest, mapErrorCode,
@@ -85,7 +85,9 @@ export default function AdminApp() {
     (async () => {
       try {
         const raw = localStorage.getItem("guilAuthV1");
-        if (!raw) { if (alive) setAuthChecked(true); return; }
+        const token = getAuthToken();
+        if (!raw || !token) { if (alive) setAuthChecked(true); return; }
+        setAuthToken(token);
         const s = JSON.parse(raw);
         const { data } = await supabase.from("profiles").select("id,name,role,admin_tier,is_active,deleted_at").eq("id", s.id).single();
         if (!alive) return;
@@ -100,24 +102,29 @@ export default function AdminApp() {
 
   async function handleAdminLogin(loginId, password) {
     setAuthSubmitting(true); setAuthError("");
-    const { data, error } = await supabase.rpc("verify_login", { p_login_id: (loginId || "").trim(), p_password: password });
-    const row = Array.isArray(data) ? data[0] : data;
-    if (error || !row) { setAuthError(await loginFailReason(loginId)); setAuthSubmitting(false); return; }
-    if (row.role !== "admin") { setAuthError("관리자만 접근할 수 있는 페이지입니다."); setAuthSubmitting(false); return; }
-    const { data: p } = await supabase.from("profiles").select("admin_tier").eq("id", row.id).single();
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ loginId, password }),
+    });
+    const json = await res.json().catch(() => ({ ok: false }));
+    if (!json.ok) { setAuthError(json.reason || await loginFailReason(loginId)); setAuthSubmitting(false); return; }
+    const { profile: p, token } = json;
+    if (p.role !== "admin") { setAuthError("관리자만 접근할 수 있는 페이지입니다."); setAuthSubmitting(false); return; }
     // 자재담당관리자는 모바일 앱 관리자 모드(자재출하관리·상비부품보충)만 쓰고 PC 콘솔은 못 들어온다 —
     // 기사가 role!=='admin'이라 못 들어오는 것과 같은 구조(로그인 성공 직후 클라이언트에서 차단).
-    if (p?.admin_tier === "material") {
+    if (p.adminTier === "material") {
       setAuthError("이 계정은 PC 관리자 콘솔에 접근할 수 없습니다. 모바일 앱을 이용해주세요.");
       setAuthSubmitting(false);
       return;
     }
-    localStorage.setItem("guilAuthV1", JSON.stringify({ id: row.id, name: row.name, role: row.role, mustChange: row.must_change }));
-    setMe({ id: row.id, name: row.name, role: row.role, adminTier: p?.admin_tier, mustChange: row.must_change });
+    setAuthToken(token);
+    localStorage.setItem("guilAuthV1", JSON.stringify({ id: p.id, name: p.name, role: p.role, mustChange: p.mustChange }));
+    setMe({ id: p.id, name: p.name, role: p.role, adminTier: p.adminTier, mustChange: p.mustChange });
     setAuthSubmitting(false);
   }
 
-  function adminLogout() { localStorage.removeItem("guilAuthV1"); setMe(null); }
+  function adminLogout() { localStorage.removeItem("guilAuthV1"); clearAuthToken(); setMe(null); }
 
   // 관리자 알림(연차 신청·계약 만료·출근 미체크 요약) 푸시 딥링크 — 모바일 App 셸의
   // checkOpenParams와 같은 패턴. 알림이 이미 떠 있는 창을 재사용(navigate)할 수도 있어
