@@ -9,7 +9,7 @@ import { SitesContext } from "@/app/components/context";
 import { SiteSearchSelect } from "@/app/components/formWidgets";
 import { inputCls } from "@/app/components/ui";
 import { supabase } from "@/lib/supabaseClient";
-import { mapSiteManager } from "@/lib/mappers";
+import { mapQuoteRequest, mapSiteManager } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
 
 const STEP_TITLES = ["현장·담당자", "품목 입력", "부대비용", "확인·발행"];
@@ -57,6 +57,21 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
   const [saving, setSaving] = useState(false);
   const managerName = siteManagers.find((m) => m.id === managerId)?.name ?? "";
 
+  // 견적번호 = 오늘날짜(YYYYMMDD) + "1" + 오늘 발행 순번 — 데스크탑 QuoteItemsModal.jsx와 동일한
+  // 채번 규칙. 없으면 PDF·DB에 번호가 안 남아(발행 전엔 항상 빈 문자열이라 이 훅이 필요하다).
+  const [quoteNumber, setQuoteNumber] = useState(existingQuote?.quoteNumber || "");
+  useEffect(() => {
+    if (quoteNumber) return;
+    (async () => {
+      const { count } = await supabase
+        .from("quote_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("quote_issued_date", TODAY_STR);
+      setQuoteNumber(`${TODAY_STR.replace(/-/g, "")}1${(count || 0) + 1}`);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function handlePublish() {
     if (!draft || items.length === 0) return;
     setSaving(true);
@@ -71,7 +86,7 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
       body: JSON.stringify({
         quoteRequestId: draft.id,
         siteName: site?.name ?? draft.siteName,
-        quoteNumber: "", recipientName: managerName, quoteTitle, quoteDate,
+        quoteNumber, recipientName: managerName, quoteTitle, quoteDate,
         items, transportCost, safetyCost, profit, discountAmount: 0,
       }),
     }).then((r) => r.json()).catch((e) => ({ ok: false, reason: e.message }));
@@ -87,6 +102,7 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
       transport_cost: Number(transportCost) || 0,
       safety_cost: Number(safetyCost) || 0,
       profit: Number(profit) || 0,
+      quote_number: quoteNumber || null,
       recipient_name: managerName || null,
       quote_title: quoteTitle,
       quote_issued_date: quoteDate,
@@ -104,7 +120,7 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
 
     onSaved({
       id: draft.id, quoteItems: items, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
-      profit: Number(profit) || 0, recipientName: managerName, quoteTitle, quoteIssuedDate: quoteDate,
+      profit: Number(profit) || 0, quoteNumber, recipientName: managerName, quoteTitle, quoteIssuedDate: quoteDate,
       quotePdfUrl: pdfRes.url, status: "견적발행", recipientEmail: recipientEmail || null, recipientPhone: recipientPhone || null,
     });
     setSaving(false);
@@ -136,9 +152,11 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
   }
 
   async function handleCancel() {
-    // 새 초안을 실제로 만든 뒤(2단계 이상 진행)에만 정리 대상 — 기존 요청에서 이어간 경우
-    // (existingQuote 있음)는 그 행을 지우면 안 된다(요청자 정보가 있어 애초에 조건도 안 맞음).
-    if (draft && !existingQuote && draft.status === "요청접수" && !draft.requesterId && !draft.engineer) {
+    // 데스크탑(MaterialsAdmin.jsx)과 동일 조건 — 요청자 정보(requesterId/engineer)가 있으면
+    // 기사가 올린 진짜 요청이니 지우지 않는다. existingQuote로 들어왔더라도 그 값이 둘 다
+    // null이면(예: 마법사를 도중에 나갔다가 목록에서 다시 연 관리자 발행 빈 초안) 여전히
+    // 지울 수 있어야 한다 — 안 그러면 그 초안이 영영 안 지워지는 고아 상태로 남는다.
+    if (draft && draft.status === "요청접수" && !draft.requesterId && !draft.engineer) {
       await supabase.from("quote_requests").delete().eq("id", draft.id);
       onDiscarded?.(draft.id);
     }
@@ -147,6 +165,18 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
 
   async function handleNextFromStep0() {
     if (!site) return;
+    // 이미 초안을 만든 뒤 뒤로가기로 여기 다시 왔다면 — 새로 insert하지 않는다(안 그러면
+    // "다음" 누를 때마다 빈 초안이 하나씩 더 생긴다). 그 사이 현장을 바꿨으면 기존 초안의
+    // 현장만 갱신한다.
+    if (draft) {
+      if (draft.siteId !== site.id) {
+        const { error: updateError } = await supabase.from("quote_requests").update({ site_id: site.id, site_name: site.name }).eq("id", draft.id);
+        if (updateError) { setError("현장 변경 실패: " + updateError.message); return; }
+        setDraft((prev) => ({ ...prev, siteId: site.id, siteName: site.name }));
+      }
+      setStep(1);
+      return;
+    }
     setCreating(true);
     setError("");
     const row = {
@@ -166,7 +196,9 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
     const { error: insertError } = await supabase.from("quote_requests").insert(row);
     setCreating(false);
     if (insertError) { setError("초안 생성 실패: " + insertError.message); return; }
-    const created = { id: row.id, siteId: site.id, siteName: site.name, status: "요청접수", requesterId: null, engineer: null };
+    // mapQuoteRequest로 전체 필드를 채운 shape을 쓴다 — 일부 필드만 채운 객체를 로컬 목록에
+    // 반영하면 목록 카드가 "undefined · undefined"처럼 깨져 보인다(실사고로 발견).
+    const created = mapQuoteRequest(row);
     setDraft(created);
     onDraftCreated?.(created);
     setStep(1);
@@ -308,6 +340,7 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
         {step === 3 && (
           <>
             <div className="bg-white rounded-xl border border-slate-200 p-3.5 space-y-1.5 text-sm">
+              <div className="flex justify-between"><span className="text-slate-500">견적번호</span><span className="font-semibold text-slate-800">{quoteNumber || "-"}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">현장</span><span className="font-semibold text-slate-800">{site?.name ?? draft?.siteName}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">수신 담당자</span><span className="font-semibold text-slate-800">{managerName || "-"}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">이메일</span><span className="font-semibold text-slate-800">{recipientEmail || "-"}</span></div>

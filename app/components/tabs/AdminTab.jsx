@@ -936,8 +936,9 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
   const materialsOpen = expanded === "materials" || Boolean(materialFocusId);
 
   useEffect(() => {
-    if (quoteFocusId) setPage("quoteManagement");
-  }, [quoteFocusId]);
+    // 자재담당관리자는 견적관리 메뉴 자체가 안 보이므로(isMaterialTier) 여기서도 안 들어가게 막는다.
+    if (quoteFocusId && !isMaterialTier) setPage("quoteManagement");
+  }, [quoteFocusId, isMaterialTier]);
 
   const materialPending = materialRequests.filter((r) => r.status === "승인대기");
   const materialRejected = materialRequests.filter((r) => r.status === "반려");
