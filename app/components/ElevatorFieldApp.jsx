@@ -974,7 +974,7 @@ export default function App() {
       });
       const admins = profilesAll.filter((p) => p.role === "admin").map((p) => "@" + p.name).join(" ");
       handleSendFeedPost(
-        `⚠️ ${profile.name}님이 ${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` — 사유: ${reason.trim()}` : ""}. 재배정이 필요합니다 ${admins}`.trim()
+        `[출동 거부] ${profile.name}님이 ${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` — 사유: ${reason.trim()}` : ""}. 재배정이 필요합니다 ${admins}`.trim()
       );
       notifyFailure("출동 거부됨 — 미배정으로 이동, 관리자에게 알림");
     } finally {

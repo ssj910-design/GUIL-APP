@@ -237,7 +237,10 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                           <p className="text-[11px] text-red-500 mt-1">수리비를 입력해주세요</p>
                         ) : (
                           selected?.billingAmount != null && Number(materialCost) !== Number(selected.billingAmount) && (
-                            <p className="text-[11px] text-amber-600 mt-1">⚠️ 사전승인 금액과 달라요 — 맞는지 한 번 더 확인해주세요</p>
+                            <p className="text-[11px] text-amber-600 mt-1 flex items-start gap-1">
+                              <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                              사전승인 금액과 달라요 — 맞는지 한 번 더 확인해주세요
+                            </p>
                           )
                         )}
                       </>

@@ -815,11 +815,12 @@ function formatTimeInput(raw) {
 }
 
 
+// 처리결과 — 색으로 심각도를 구분한다(이모지 대신 색점 SVG). dot은 선택 버튼의 원 색상.
 const FAILURE_RESULT_OPTIONS = [
-  { value: "처리완료", emoji: "🟢" },
-  { value: "지원요청", emoji: "🟡" },
-  { value: "운행정지", emoji: "🔴" },
-  { value: "오신고", emoji: "⚪" },
+  { value: "처리완료", dot: "bg-emerald-500", on: "border-emerald-500 bg-emerald-50 text-emerald-700" },
+  { value: "지원요청", dot: "bg-amber-500", on: "border-amber-500 bg-amber-50 text-amber-700" },
+  { value: "운행정지", dot: "bg-red-500", on: "border-red-500 bg-red-50 text-red-700" },
+  { value: "오신고", dot: "bg-slate-400", on: "border-slate-400 bg-slate-50 text-slate-600" },
 ];
 
 const FAILURE_RESULT_BTN_CLS = {
@@ -941,11 +942,22 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
       <div className="space-y-3.5">
         <div>
           <label className="text-xs font-bold text-slate-600 mb-1 block">처리결과</label>
-          <select className={inputCls} value={result} onChange={(e) => setResult(e.target.value)}>
-            {FAILURE_RESULT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.emoji} {o.value}</option>
-            ))}
-          </select>
+          <div className="grid grid-cols-4 gap-1.5">
+            {FAILURE_RESULT_OPTIONS.map((o) => {
+              const on = result === o.value;
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => setResult(o.value)}
+                  className={`flex flex-col items-center gap-1 py-2 rounded-lg border text-[11px] font-bold transition-colors ${on ? o.on : "border-slate-200 text-slate-400"}`}
+                >
+                  <span className={`w-2.5 h-2.5 rounded-full ${on ? o.dot : "bg-slate-300"}`} />
+                  {o.value}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <div>
           <label className="text-xs font-bold text-slate-600 mb-1 block">증상 <span className="text-red-500">*</span></label>
