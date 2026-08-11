@@ -54,6 +54,62 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
   const itemsSubtotal = items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.unitPrice || 0), 0);
   const grandTotal = itemsSubtotal + Number(transportCost || 0) + Number(safetyCost || 0) + Number(profit || 0);
 
+  const [saving, setSaving] = useState(false);
+  const managerName = siteManagers.find((m) => m.id === managerId)?.name ?? "";
+
+  async function handlePublish() {
+    if (!draft || items.length === 0) return;
+    setSaving(true);
+    setError("");
+
+    const quoteTitle = items[0]?.name || "견적서";
+    const quoteDate = TODAY_STR;
+
+    const pdfRes = await fetch("/api/generate-quote-pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        quoteRequestId: draft.id,
+        siteName: site?.name ?? draft.siteName,
+        quoteNumber: "", recipientName: managerName, quoteTitle, quoteDate,
+        items, transportCost, safetyCost, profit, discountAmount: 0,
+      }),
+    }).then((r) => r.json()).catch((e) => ({ ok: false, reason: e.message }));
+
+    if (!pdfRes.ok) {
+      setError("PDF 생성 실패: " + pdfRes.reason);
+      setSaving(false);
+      return;
+    }
+
+    const patch = {
+      quote_items: items,
+      transport_cost: Number(transportCost) || 0,
+      safety_cost: Number(safetyCost) || 0,
+      profit: Number(profit) || 0,
+      recipient_name: managerName || null,
+      quote_title: quoteTitle,
+      quote_issued_date: quoteDate,
+      recipient_email: recipientEmail || null,
+      recipient_phone: recipientPhone || null,
+      quote_pdf_url: pdfRes.url,
+      status: "견적발행",
+    };
+    const { error: dbError } = await supabase.from("quote_requests").update(patch).eq("id", draft.id);
+    if (dbError) {
+      setError("저장 실패: " + dbError.message);
+      setSaving(false);
+      return;
+    }
+
+    onSaved({
+      id: draft.id, quoteItems: items, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
+      profit: Number(profit) || 0, recipientName: managerName, quoteTitle, quoteIssuedDate: quoteDate,
+      quotePdfUrl: pdfRes.url, status: "견적발행", recipientEmail: recipientEmail || null, recipientPhone: recipientPhone || null,
+    });
+    setSaving(false);
+  }
+
   const site = sites.find((s) => s.id === siteId);
 
   useEffect(() => {
@@ -249,6 +305,33 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
           </>
         )}
 
+        {step === 3 && (
+          <>
+            <div className="bg-white rounded-xl border border-slate-200 p-3.5 space-y-1.5 text-sm">
+              <div className="flex justify-between"><span className="text-slate-500">현장</span><span className="font-semibold text-slate-800">{site?.name ?? draft?.siteName}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">수신 담당자</span><span className="font-semibold text-slate-800">{managerName || "-"}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">이메일</span><span className="font-semibold text-slate-800">{recipientEmail || "-"}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">전화번호</span><span className="font-semibold text-slate-800">{recipientPhone || "-"}</span></div>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-3.5 space-y-1 text-sm">
+              <p className="text-xs font-bold text-slate-500 mb-1">품목</p>
+              {items.map((it, i) => (
+                <div key={i} className="flex justify-between text-xs">
+                  <span className="text-slate-600 truncate">{it.name || "(품명 없음)"}</span>
+                  <span className="text-slate-500">{it.qty}{it.unit} × {Number(it.unitPrice || 0).toLocaleString()} = {(Number(it.qty || 0) * Number(it.unitPrice || 0)).toLocaleString()}원</span>
+                </div>
+              ))}
+              {Number(transportCost) > 0 && <div className="flex justify-between text-xs"><span className="text-slate-600">운반비</span><span className="text-slate-500">{Number(transportCost).toLocaleString()}원</span></div>}
+              {Number(safetyCost) > 0 && <div className="flex justify-between text-xs"><span className="text-slate-600">안전관리비 및 기타</span><span className="text-slate-500">{Number(safetyCost).toLocaleString()}원</span></div>}
+              {Number(profit) > 0 && <div className="flex justify-between text-xs"><span className="text-slate-600">이윤</span><span className="text-slate-500">{Number(profit).toLocaleString()}원</span></div>}
+            </div>
+            <div className="bg-slate-100 rounded-xl p-3.5 flex items-center justify-between">
+              <span className="text-sm font-bold text-slate-600">합계(VAT별도)</span>
+              <span className="text-base font-extrabold text-slate-900">{grandTotal.toLocaleString()}원</span>
+            </div>
+          </>
+        )}
+
         {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
       </div>
 
@@ -284,6 +367,15 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
         {step === 2 && (
           <button onClick={() => setStep(3)} className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 flex items-center justify-center gap-1">
             다음 <ChevronRight size={14} />
+          </button>
+        )}
+        {step === 3 && (
+          <button
+            onClick={handlePublish}
+            disabled={saving}
+            className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300"
+          >
+            {saving ? "발행 중..." : "발행하기"}
           </button>
         )}
       </div>
