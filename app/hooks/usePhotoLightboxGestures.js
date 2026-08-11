@@ -35,10 +35,22 @@ export function usePhotoLightboxGestures(urlsLength, index, onIndexChange) {
     setZoom((z) => (z > 1 ? 1 : 2.5));
     setPan({ x: 0, y: 0 });
   }
-  function onWheel(e) {
-    e.preventDefault();
-    setZoom((z) => Math.min(4, Math.max(1, z - e.deltaY * 0.01)));
-  }
+
+  // 휠로 확대 — 네이티브 리스너를 {passive:false}로 직접 붙인다. React의 합성 onWheel으로도
+  // preventDefault는 되지만, 이 라이트박스가 스크롤 가능한 조상(모달 본문 등) 안에 그대로
+  // 끼워질 때(포탈로 body에 붙는 경우가 아닐 때)는 휠 이벤트가 새서 그 조상이 같이
+  // 스크롤되는 경우가 있었다 — 네이티브 리스너로 확실히 막는다. 감도도 완만하게 낮췄다
+  // (예전엔 휠 한 칸에 최대 확대폭의 1/3씩 훅 뛰던 걸 1/13 수준으로).
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    function handleWheel(e) {
+      e.preventDefault();
+      setZoom((z) => Math.min(4, Math.max(1, z - e.deltaY * 0.0025)));
+    }
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, []);
 
   function beginSinglePointerGesture(e) {
     if (zoom > 1) {
@@ -174,6 +186,6 @@ export function usePhotoLightboxGestures(urlsLength, index, onIndexChange) {
     zoom,
     pan,
     isGesturing: () => !!gestureRef.current,
-    handlers: { onDoubleClick: toggleZoom, onWheel, onPointerDown, onPointerMove, onPointerUp: endGesture, onPointerCancel: endGesture },
+    handlers: { onDoubleClick: toggleZoom, onPointerDown, onPointerMove, onPointerUp: endGesture, onPointerCancel: endGesture },
   };
 }
