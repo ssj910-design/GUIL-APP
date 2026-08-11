@@ -242,9 +242,6 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
   const quoteRequests = quoteRequestsSearched.filter((q) =>
     quoteStageFilter === "all" || quoteStageInfo(q, data.todos ?? []).stage === quoteStageFilter
   );
-  // 아직 견적서를 만들기 전(요청만 들어온 건)과 이미 작성을 시작한 건을 목록에서 바로 구분해 보여준다.
-  const pendingQuoteRequests = quoteRequests.filter((q) => q.status === "요청접수");
-  const draftedQuoteRequests = quoteRequests.filter((q) => q.status !== "요청접수");
 
   async function handleMaterialSupplyComplete(request, { assigneeId, billingPart, billingAmount, photoUrls }) {
     const engineer = (data.profiles ?? []).find((p) => p.id === assigneeId);
@@ -620,8 +617,8 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
             </div>
           );
         })()}
-        {(() => {
-          const renderQuoteRow = (q) => (
+        <AdminTable head={["신청일", "현장 · 호기", "공사 내용", "신청 기사", "진행상태", "처리"]}>
+          {quoteRequests.map((q) => (
             <tr
               key={q.id}
               className="border-b border-slate-50 cursor-pointer hover:bg-slate-50"
@@ -688,20 +685,8 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
                 )}
               </td>
             </tr>
-          );
-          const head = ["신청일", "현장 · 호기", "공사 내용", "신청 기사", "진행상태", "처리"];
-          return (
-            <>
-              <h3 className="text-xs font-bold text-red-600 mb-2">견적요청만 들어옴 ({pendingQuoteRequests.length})</h3>
-              <AdminTable head={head}>{pendingQuoteRequests.map(renderQuoteRow)}</AdminTable>
-              {pendingQuoteRequests.length === 0 && <p className="text-xs text-slate-400 text-center py-6">해당하는 건이 없습니다</p>}
-
-              <h3 className="text-xs font-bold text-slate-400 mb-2 mt-6">견적작성 이후 ({draftedQuoteRequests.length})</h3>
-              <AdminTable head={head}>{draftedQuoteRequests.map(renderQuoteRow)}</AdminTable>
-              {draftedQuoteRequests.length === 0 && <p className="text-xs text-slate-400 text-center py-6">해당하는 건이 없습니다</p>}
-            </>
-          );
-        })()}
+          ))}
+        </AdminTable>
         </>
       )}
       <p className="text-[10px] text-slate-400 mt-2">* 반려 처리는 기사 전용 기능으로, 모바일 관리자 모드에서 진행합니다.</p>
