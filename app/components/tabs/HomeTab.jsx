@@ -298,7 +298,7 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
 
   return (
     <>
-      {showGeoModal && (
+      {LOCATION_TRACKING && showGeoModal && (
         <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center px-8" onClick={() => setGeoModalDismissed(true)}>
           <div className="bg-white rounded-2xl w-full max-w-xs p-5" onClick={(e) => e.stopPropagation()}>
             <p className="text-base font-extrabold text-slate-800 text-center">📍 위치 권한을 켜주세요</p>
@@ -324,7 +324,7 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
         {!mine?.checkedInAt ? (
           <>
             {/* 위치 권한을 아직 안 물어봤으면 먼저 맥락을 주고 허용을 유도한다 (거부율↓, 아이폰 대응) */}
-            {geoPerm === "prompt" && (
+            {LOCATION_TRACKING && geoPerm === "prompt" && (
               <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-2">
                 <p className="text-xs font-bold text-blue-800">📍 위치 사용 안내</p>
                 <p className="text-[11px] text-blue-700 mt-1 leading-relaxed">
@@ -335,7 +335,7 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
                 </button>
               </div>
             )}
-            {geoPerm === "denied" && (
+            {LOCATION_TRACKING && geoPerm === "denied" && (
               <p className="text-[11px] text-amber-600 font-semibold bg-amber-50 rounded-lg px-3 py-2 mb-2 leading-relaxed">
                 위치 권한이 꺼져 있습니다. 켜면 급한 출동 때 가까운 현장을 먼저 안내받을 수 있어요 — 설정 → 위치, 또는 주소창 자물쇠 → 위치에서 허용.
               </p>
@@ -347,7 +347,9 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
             >
               {checking ? "확인 중…" : "출근 체크"}
             </button>
-            <p className="text-[10px] text-slate-400 mt-1.5 px-1">출근할 때 위치를 한 번만 확인해요 · 급한 출동 때 가까운 현장 우선 안내에 쓰여요</p>
+            {LOCATION_TRACKING && (
+              <p className="text-[10px] text-slate-400 mt-1.5 px-1">출근할 때 위치를 한 번만 확인해요 · 급한 출동 때 가까운 현장 우선 안내에 쓰여요</p>
+            )}
           </>
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
@@ -369,7 +371,7 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
             </div>
 
             {/* 위치를 못 받았으면 다시 받을 수 있게 (처음에 권한 거부했어도 나중에 켜서 재수집) */}
-            {mine.lat == null && !done && (
+            {LOCATION_TRACKING && mine.lat == null && !done && (
               <button onClick={relocate} disabled={checking}
                 className="w-full mt-2 text-[11px] font-bold text-blue-700 bg-blue-50 rounded-lg py-2 disabled:opacity-60">
                 {checking ? "위치 확인 중…" : "📍 위치 다시 받기"}
