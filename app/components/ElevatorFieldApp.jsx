@@ -1588,6 +1588,21 @@ export default function App() {
     });
   }
 
+  // 마법사가 새 초안을 만들면(1단계 완료 시) 로컬 목록에도 즉시 반영 — 안 그러면 같은 마법사
+  // 안에서 뒤로가기/취소로 그 초안을 다시 찾을 때(예: 재진입) 목록에 없어 보인다.
+  function handleQuoteDraftCreated(row) {
+    setQuoteRequests((prev) => [{ ...row, quoteItems: [], transportCost: 0, safetyCost: 0, profit: 0 }, ...prev]);
+  }
+  // 마법사를 취소해서 빈 초안이 삭제되면 로컬 목록에서도 제거.
+  function handleQuoteDiscarded(id) {
+    setQuoteRequests((prev) => prev.filter((q) => q.id !== id));
+  }
+  // 마법사에서 발행 완료(품목·PDF까지 다 저장)되면 그 건을 patch로 덮어쓴다 — 기존
+  // 요청에서 이어간 경우도, 새로 만든 초안도 같은 방식으로 반영된다.
+  function handleQuoteWizardSaved(patch) {
+    setQuoteRequests((prev) => prev.map((q) => (q.id === patch.id ? { ...q, ...patch } : q)));
+  }
+
   // ★ 견적 진행 단계 전진: 요청접수 → 견적발행 → 승인 (사진 불필요)
   async function handleAdvanceQuote(quoteId) {
     const q = quoteRequests.find((x) => x.id === quoteId);
@@ -2334,7 +2349,7 @@ export default function App() {
               initialSubTab={workCalendarSubTab}
             />
           )}
-          {tab === "admin" && profile.role === "admin" && <AdminTab materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onClearReassignRequest={handleClearReassignRequest} onAssignTodo={handleAssignTodo} onResetEngineerPassword={handleResetEngineerPassword} materialFocusId={materialFocusId} onMaterialFocusHandled={() => setMaterialFocusId(null)} quoteFocusId={quoteFocusId} onQuoteFocusHandled={() => setQuoteFocusId(null)} />}
+          {tab === "admin" && profile.role === "admin" && <AdminTab materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onClearReassignRequest={handleClearReassignRequest} onAssignTodo={handleAssignTodo} onResetEngineerPassword={handleResetEngineerPassword} materialFocusId={materialFocusId} onMaterialFocusHandled={() => setMaterialFocusId(null)} quoteFocusId={quoteFocusId} onQuoteFocusHandled={() => setQuoteFocusId(null)} onQuoteDraftCreated={handleQuoteDraftCreated} onQuoteDiscarded={handleQuoteDiscarded} onQuoteWizardSaved={handleQuoteWizardSaved} />}
           </PullToRefresh>
 
           {/* 게시판 플로팅 버튼 — 어느 탭에서든 즉시 게시판으로 이동 (게시판 탭에서는 숨김) */}

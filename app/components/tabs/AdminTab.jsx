@@ -7,6 +7,7 @@ import { MultiPhotoUpload } from "@/app/components/formWidgets";
 import { parsePartQty, formatPhone, addDays } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { BillingHistoryScreen } from "@/app/components/tabs/BillingTab";
+import QuoteWizard from "@/app/components/tabs/QuoteWizard";
 
 
 function AdminMenuRow({ icon: Icon, label, badge, onClick }) {
@@ -237,7 +238,7 @@ function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto
 }
 
 // 견적 요청 한 건 — 상태(요청접수→견적발행→승인)에 따라 처리 버튼이 달라진다. 승인 단계에서 지급 폼 노출.
-function QuotePendingCard({ q, engineerNames, onAdvanceQuote, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onOpenDetail }) {
+function QuotePendingCard({ q, engineerNames, onAdvanceQuote, onOpenWizard, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onOpenDetail }) {
   const [assignees, setAssignees] = useState([q.engineer]);
   const [dueDate, setDueDate] = useState(addDays(TODAY_STR, 30));
   const [description, setDescription] = useState("");
@@ -255,7 +256,7 @@ function QuotePendingCard({ q, engineerNames, onAdvanceQuote, onCompleteQuoteSup
       <button onClick={() => onOpenDetail(q)} className="mt-1 text-[11px] font-bold text-blue-600 flex items-center gap-0.5">상세 <ChevronRight size={12} /></button>
 
       {q.status === "요청접수" && (
-        <button onClick={() => onAdvanceQuote(q.id)} className="w-full mt-2.5 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800">견적발행 처리</button>
+        <button onClick={() => onOpenWizard(q)} className="w-full mt-2.5 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800">견적서 작성</button>
       )}
       {q.status === "견적발행" && (
         <button onClick={() => onAdvanceQuote(q.id)} className="w-full mt-2.5 bg-indigo-600 text-white text-xs font-bold py-2.5 rounded-lg active:bg-indigo-700">승인 처리</button>
@@ -450,7 +451,7 @@ function MaterialsPanel({ pending, rejected, suppliedCount, engineerNames, onSup
   );
 }
 
-function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onOpenHistory, focusId, onFocusHandled }) {
+function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, onOpenWizard, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onOpenHistory, focusId, onFocusHandled }) {
   const [detail, setDetail] = useState(null);
   const shownDetail = detail ?? (focusId ? active.find((q) => q.id === focusId) : null);
   const closeDetail = () => { setDetail(null); if (focusId) onFocusHandled?.(); };
@@ -464,6 +465,7 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
             q={q}
             engineerNames={engineerNames}
             onAdvanceQuote={onAdvanceQuote}
+            onOpenWizard={onOpenWizard}
             onCompleteQuoteSupply={onCompleteQuoteSupply}
             onAttachQuotePhoto={onAttachQuotePhoto}
             onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
@@ -915,7 +917,7 @@ function DashStat({ label, n, tone }) {
 }
 
 
-export function AdminTab({ materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onClearReassignRequest, onResetEngineerPassword, materialFocusId, onMaterialFocusHandled, quoteFocusId, onQuoteFocusHandled }) {
+export function AdminTab({ materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onClearReassignRequest, onResetEngineerPassword, materialFocusId, onMaterialFocusHandled, quoteFocusId, onQuoteFocusHandled, onQuoteDraftCreated, onQuoteDiscarded, onQuoteWizardSaved }) {
   const { engineerNames: ctxEngineerNames, adminTier, profiles } = useContext(AuthContext);
   // 자재담당관리자는 자재출하관리·상비부품보충만 본다 (견적·재배정·비용청구·계정관리는 다른 관리자 담당).
   const isMaterialTier = adminTier === "material";
@@ -927,6 +929,7 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
   const resettableAccounts = (profiles ?? [])
     .filter((p) => (p.role === "engineer" || (p.role === "admin" && p.admin_tier !== "super")) && p.is_active !== false);
   const [page, setPage] = useState(null); // null | "billing" | "materialHistory" | "quoteHistory" | "quoteManagement" | "quoteWizard"
+  const [wizardTarget, setWizardTarget] = useState(null); // null = 새 견적, quote 객체 = 기존 요청에서 이어감
   const [expanded, setExpanded] = useState(null); // "materials" | "restock" | "quotes" | "reassign" | null
   // 알림/푸시로 특정 자재·견적 신청이 지정되면(materialFocusId/quoteFocusId) 해당 아코디언을 자동으로
   // 펼친다 — effect 없이 open 조건에 바로 반영(상세 시트는 MaterialsPanel/QuotesPanel이 focusId로 직접 연다).
@@ -982,11 +985,18 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
       <div className="flex-1 flex flex-col overflow-hidden">
         <DrillHeader title="견적관리" onBack={() => setPage(null)} onHome={() => setPage(null)} />
         <div className="flex-1 overflow-y-auto px-5 pt-4 pb-4">
+          <button
+            onClick={() => { setWizardTarget(null); setPage("quoteWizard"); }}
+            className="w-full mb-3 py-3 rounded-xl border-2 border-dashed border-blue-300 text-blue-700 text-sm font-bold"
+          >
+            + 새 견적 작성
+          </button>
           <QuotesPanel
             active={quoteActive}
             completedCount={completed.length}
             engineerNames={engineerNames}
             onAdvanceQuote={onAdvanceQuote}
+            onOpenWizard={(q) => { setWizardTarget(q); setPage("quoteWizard"); }}
             onCompleteQuoteSupply={onCompleteQuoteSupply}
             onAttachQuotePhoto={onAttachQuotePhoto}
             onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
@@ -996,6 +1006,17 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
           />
         </div>
       </div>
+    );
+  }
+  if (page === "quoteWizard") {
+    return (
+      <QuoteWizard
+        existingQuote={wizardTarget}
+        onDraftCreated={onQuoteDraftCreated}
+        onDiscarded={onQuoteDiscarded}
+        onSaved={(patch) => { onQuoteWizardSaved(patch); setPage("quoteManagement"); setWizardTarget(null); }}
+        onClose={() => { setPage("quoteManagement"); setWizardTarget(null); }}
+      />
     );
   }
 
