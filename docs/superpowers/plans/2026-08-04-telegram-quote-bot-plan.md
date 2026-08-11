@@ -35,13 +35,21 @@ Next.js API Route, Supabase.
   다른 하나는 그대로 진행하고, 결과를 텔레그램 메시지에 채널별로 그대로 보여준다.
 - 취소 시 빈 초안 삭제 조건은 `app/components/admin/MaterialsAdmin.jsx:596-619`(품목편집 취소 시
   정리 로직)와 동일: `status === "요청접수"` AND `requester_id`/`engineer` 둘 다 없을 때만 삭제.
+- **웹훅 라우트는 `@/lib/supabaseClient`의 `supabase`(로그인 브라우저용 anon key)가 아니라
+  `@/lib/supabaseAdmin`의 `supabaseAdmin`(service_role, RLS 우회)을 써야 한다.** 이 프로젝트는
+  2026-08-11에 전 테이블 RLS를 켰고(`authenticated`만 허용), 텔레그램 웹훅은 로그인 세션이 아니라
+  텔레그램 시크릿 토큰 + `profiles.telegram_user_id` 화이트리스트로 인가하는 서버-서버 호출이라
+  붙일 로그인 JWT가 없다 — anon key로 그대로 두면 `sites`/`site_managers`/`profiles`/
+  `quote_requests`/Storage 전부 RLS에 막혀 빈 결과만 받는다(에러 없이 조용히 실패 — 오늘 크론·
+  API 라우트들이 겪은 것과 같은 문제, `.superpowers/sdd/progress.md`의 긴급 수정 기록 참고).
+  아래 Task 5·6 코드 블록은 이미 `supabaseAdmin` 기준으로 고쳐 반영했다.
 
 ---
 
 ### Task 1: 마이그레이션 — profiles.telegram_user_id
 
 **Files:**
-- Create: `supabase/migrations/101_telegram_admin_link_DRAFT.sql`
+- Create: `supabase/migrations/108_telegram_admin_link_DRAFT.sql`
 
 **Interfaces:**
 - Produces: `profiles`에 `telegram_user_id bigint unique` 컬럼. Task 5(발신자 인가)가 이 컬럼으로 조회한다.
@@ -49,7 +57,7 @@ Next.js API Route, Supabase.
 - [ ] **Step 1: 마이그레이션 파일 작성**
 
 ```sql
--- 101: 관리자 프로필 ↔ 텔레그램 계정 연결 (2026-08-04)
+-- 108: 관리자 프로필 ↔ 텔레그램 계정 연결 (2026-08-04, 실행 시점 재정렬)
 -- 자체점검 CNFIRM처럼 자유 입력 컬럼 하나 — 화이트리스트 겸 텔레그램 견적봇 발신자 인가에 쓴다.
 alter table public.profiles add column if not exists telegram_user_id bigint unique;
 
@@ -67,7 +75,7 @@ Supabase 대시보드 SQL Editor에서 직접 실행 요청(`supabase/CLAUDE.md`
 - [ ] **Step 3: 커밋**
 
 ```bash
-git add supabase/migrations/101_telegram_admin_link_DRAFT.sql
+git add supabase/migrations/108_telegram_admin_link_DRAFT.sql
 git commit -m "마이그레이션: 프로필-텔레그램 계정 연결 컬럼 (실행 전 DRAFT)"
 ```
 
@@ -252,7 +260,7 @@ git commit -m "feat: 텔레그램 견적 문장 파싱(parseQuoteMessage) 추가
 
 **Interfaces:**
 - Consumes: `sendTelegramMessage`, `sendTelegramDocument`(Task 3), `parseQuoteMessage`(Task 4),
-  `buildQuotePdfBytes`(`@/lib/quotePdf`, 기존), `supabase`(`@/lib/supabaseClient`, 기존).
+  `buildQuotePdfBytes`(`@/lib/quotePdf`, 기존), `supabaseAdmin`(`@/lib/supabaseAdmin`, 기존).
 - Produces: `POST /api/telegram-webhook` — 이 태스크에서는 `update.message` 분기만 구현(`update.callback_query`는 Task 6).
 
 - [ ] **Step 1: 구현**
@@ -266,11 +274,14 @@ import { parseQuoteMessage } from "@/lib/telegramQuoteParse";
 import { buildQuotePdfBytes } from "@/lib/quotePdf";
 import { sendQuoteEmail } from "@/lib/email";
 import { sendQuoteAlimtalk } from "@/lib/alimtalk";
-import { supabase } from "@/lib/supabaseClient";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { TODAY_STR } from "@/lib/constants";
 
+// 로그인 세션이 없는 서버-서버 웹훅이라 supabaseAdmin(service_role, RLS 우회)을 쓴다 — 위
+// Global Constraints 참고. 브라우저용 lib/supabaseClient의 supabase를 여기서 쓰면 RLS에
+// 막혀 전부 빈 결과만 받는다.
 async function authorizedAdmin(telegramUserId) {
-  const { data } = await supabase
+  const { data } = await supabaseAdmin
     .from("profiles")
     .select("id, name, role")
     .eq("telegram_user_id", telegramUserId)
@@ -296,7 +307,7 @@ async function handleMessage(message) {
     return Response.json({ ok: true });
   }
 
-  const { data: sites } = await supabase.from("sites").select("id, name").eq("is_active", true);
+  const { data: sites } = await supabaseAdmin.from("sites").select("id, name").eq("is_active", true);
   const candidates = matchSites(sites ?? [], parsed.siteQuery);
   if (candidates.length !== 1) {
     const text = candidates.length === 0
@@ -307,7 +318,7 @@ async function handleMessage(message) {
   }
   const site = candidates[0];
 
-  const { data: managers } = await supabase.from("site_managers").select("*").eq("site_id", site.id);
+  const { data: managers } = await supabaseAdmin.from("site_managers").select("*").eq("site_id", site.id);
   const primary = (managers ?? []).find((m) => m.is_primary) ?? (managers ?? [])[0];
   // 담당자지정 — 지정한 이름으로 못 찾으면 되묻지 않고 주담당자로 대체(§4.5) 후 미리보기에 표시.
   const nameMatch = parsed.managerName?.trim()
@@ -327,7 +338,7 @@ async function handleMessage(message) {
     qty: parsed.qty || 1,
     unitPrice: parsed.unitPrice,
   }];
-  const { data: draft, error: draftError } = await supabase
+  const { data: draft, error: draftError } = await supabaseAdmin
     .from("quote_requests")
     .insert({
       id: `q-tg-${Date.now()}`,
@@ -361,15 +372,15 @@ async function handleMessage(message) {
   }
 
   const path = `quotes/${draft.id}/${Date.now()}.pdf`;
-  const { error: uploadError } = await supabase.storage
+  const { error: uploadError } = await supabaseAdmin.storage
     .from("photos")
     .upload(path, Buffer.from(pdfBytes), { contentType: "application/pdf", upsert: true });
   if (uploadError) {
     await sendTelegramMessage({ chatId, text: "PDF 업로드에 실패했어요: " + uploadError.message });
     return Response.json({ ok: true });
   }
-  const { data: pub } = supabase.storage.from("photos").getPublicUrl(path);
-  await supabase.from("quote_requests").update({ quote_pdf_url: pub.publicUrl, status: "견적발행" }).eq("id", draft.id);
+  const { data: pub } = supabaseAdmin.storage.from("photos").getPublicUrl(path);
+  await supabaseAdmin.from("quote_requests").update({ quote_pdf_url: pub.publicUrl, status: "견적발행" }).eq("id", draft.id);
 
   const recipientLine = manager
     ? `수신: ${manager.name ?? "-"} (${manager.email ?? "이메일 없음"} / ${manager.phone ?? "전화 없음"})`
@@ -443,7 +454,7 @@ async function handleCallback(callbackQuery) {
   if (!admin) return Response.json({ ok: true });
 
   const [action, quoteRequestId] = (callbackQuery.data ?? "").split(":");
-  const { data: draft } = await supabase.from("quote_requests").select("*").eq("id", quoteRequestId).maybeSingle();
+  const { data: draft } = await supabaseAdmin.from("quote_requests").select("*").eq("id", quoteRequestId).maybeSingle();
   if (!draft) {
     await answerTelegramCallback({ callbackQueryId: callbackQuery.id, text: "이미 처리된 요청이에요" });
     return Response.json({ ok: true });
@@ -452,7 +463,7 @@ async function handleCallback(callbackQuery) {
   if (action === "cancel") {
     // MaterialsAdmin.jsx의 빈 초안 정리 조건과 동일 — 봇이 만든 초안은 항상 이 조건을 만족한다.
     if (draft.status === "요청접수" && !draft.requester_id && !draft.engineer) {
-      await supabase.from("quote_requests").delete().eq("id", quoteRequestId);
+      await supabaseAdmin.from("quote_requests").delete().eq("id", quoteRequestId);
     }
     await answerTelegramCallback({ callbackQueryId: callbackQuery.id, text: "취소했습니다" });
     await sendTelegramMessage({ chatId, text: "취소했습니다." });
@@ -460,12 +471,12 @@ async function handleCallback(callbackQuery) {
   }
 
   if (action === "send") {
-    const { data: managers } = await supabase.from("site_managers").select("*").eq("site_id", draft.site_id);
+    const { data: managers } = await supabaseAdmin.from("site_managers").select("*").eq("site_id", draft.site_id);
     // 초안 생성 시점(§4.5)에 정한 수신자를 그대로 재사용 — 발송 시점에 다시 "주담당자"로
     // 재계산하면 미리보기 캡션에 보여준 수신자와 실제 발송 대상이 어긋날 수 있다.
     const recipient = (managers ?? []).find((m) => m.name === draft.recipient_name)
       ?? (managers ?? []).find((m) => m.is_primary) ?? (managers ?? [])[0];
-    const { data: site } = await supabase.from("sites").select("name").eq("id", draft.site_id).single();
+    const { data: site } = await supabaseAdmin.from("sites").select("name").eq("id", draft.site_id).single();
 
     const quote = { siteName: site?.name, quoteTitle: draft.quote_title, quoteDate: draft.quote_issued_date };
     const results = {};
@@ -491,7 +502,7 @@ async function handleCallback(callbackQuery) {
     }
 
     if (Object.keys(patch).length) {
-      await supabase.from("quote_requests").update({ ...patch, recipient_email: recipient?.email ?? null, recipient_phone: recipient?.phone ?? null }).eq("id", quoteRequestId);
+      await supabaseAdmin.from("quote_requests").update({ ...patch, recipient_email: recipient?.email ?? null, recipient_phone: recipient?.phone ?? null }).eq("id", quoteRequestId);
     }
 
     const lines = [
