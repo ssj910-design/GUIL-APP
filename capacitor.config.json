@@ -4,6 +4,7 @@
   "webDir": "public",
   "server": {
     "url": "https://guil-app-pi.vercel.app",
-    "cleartext": false
+    "cleartext": false,
+    "allowNavigation": ["*.supabase.co"]
   }
 }
