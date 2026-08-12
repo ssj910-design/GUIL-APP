@@ -15,13 +15,21 @@ function PartLeafRow({ unitId, category, subcategory, part, photos, onAdd, onRem
 
   // FileCarousel은 "다음 urls 배열"만 넘겨준다 — 우리는 사진 1장=1행으로 저장하므로
   // 이전 urls와 비교해서 추가/삭제 중 뭐가 일어났는지 여기서 판단한다.
+  // 단순 includes() 비교로는 같은 url이 두 장 이상 겹칠 때(중복 업로드 등) 삭제된 장을
+  // 못 찾아 아무 반응이 없었다 — 개수 기반(멀티셋) 비교로 정확히 몇 번째가 빠졌는지 찾는다.
   async function handleSave(nextUrls) {
     if (nextUrls.length > urls.length) {
       const addedUrl = nextUrls.find((u) => !urls.includes(u));
       await onAdd({ unitId, category, subcategory, part, url: addedUrl });
     } else {
-      const removedUrl = urls.find((u) => !nextUrls.includes(u));
-      const removed = mine.find((p) => p.url === removedUrl);
+      const nextCounts = new Map();
+      nextUrls.forEach((u) => nextCounts.set(u, (nextCounts.get(u) ?? 0) + 1));
+      const removedIndex = urls.findIndex((u) => {
+        const remaining = nextCounts.get(u) ?? 0;
+        if (remaining > 0) { nextCounts.set(u, remaining - 1); return false; }
+        return true;
+      });
+      const removed = removedIndex >= 0 ? mine[removedIndex] : undefined;
       if (removed) await onRemove(removed.id);
     }
   }
