@@ -3,7 +3,7 @@
 // 관리자 콘솔 공용 헬퍼 — 표기(호기·담당자)는 v2 FK 우선, 옛 라벨 fallback.
 import { useState, useRef, createContext } from "react";
 import { createPortal } from "react-dom";
-import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil, Paperclip, Camera, Image as ImageIcon } from "lucide-react";
+import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil, Paperclip, Camera, Image as ImageIcon, Download } from "lucide-react";
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
 import { shortDate, parseShortDate, autoFormatShortDate, formatUnitLabel, sortEngineersByDistance, busyStatusOf } from "@/lib/utils";
 import { confirmAsync } from "@/app/components/ConfirmHost";
@@ -552,33 +552,35 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
     usePhotoLightboxGestures(urls.length, index, onIndexChange);
   const prev = () => onIndexChange((index - 1 + urls.length) % urls.length);
   const next = () => onIndexChange((index + 1) % urls.length);
+  const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   // 다운로드는 앱에서 안드로이드 다운로드 매니저로 넘기고 나면 끝 — 눌러도 화면이 그대로라
-  // "됐나?" 싶은 게 당연하다. 잠깐 중/완료 표시를 해서 눌렸다는 걸 눈으로 보여준다.
-  const [downloadState, setDownloadState] = useState("idle"); // idle | busy | done
-  const [downloadAllState, setDownloadAllState] = useState("idle");
+  // "됐나?" 싶은 게 당연하다. 카톡처럼 하단에 진행 토스트를 잠깐 띄운다.
+  const [toast, setToast] = useState(null);
 
   async function downloadOne() {
-    setDownloadState("busy");
+    setDownloadMenuOpen(false);
+    setToast("다운로드중...");
     try {
-      // 앱에서는 다운로드 매니저로 넘기기만 하고 바로 끝나서, 최소 시간은 "다운로드중..."이
-      // 눈에 보이게 깔아준다(0초만에 "저장완료"로 바뀌면 눌린 건지 알기 어렵다).
+      // 앱에서는 다운로드 매니저로 넘기기만 하고 바로 끝나서, 최소 시간은 토스트가
+      // 눈에 보이게 깔아준다(0초만에 "저장했습니다"로 바뀌면 눌린 건지 알기 어렵다).
       await Promise.all([downloadPhoto(url, `사진_${index + 1}.${extOf(url)}`), new Promise((r) => setTimeout(r, 400))]);
-      setDownloadState("done");
-      setTimeout(() => setDownloadState("idle"), 1500);
+      setToast("저장했습니다.");
+      setTimeout(() => setToast(null), 1500);
     } catch (err) {
-      setDownloadState("idle");
+      setToast(null);
       alert("다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
     }
   }
 
   async function downloadAll() {
-    setDownloadAllState("busy");
+    setDownloadMenuOpen(false);
+    setToast("다운로드중...");
     try {
       await Promise.all([downloadPhotosAsZip(urls, "사진.zip", "사진"), new Promise((r) => setTimeout(r, 400))]);
-      setDownloadAllState("done");
-      setTimeout(() => setDownloadAllState("idle"), 1500);
+      setToast("저장했습니다.");
+      setTimeout(() => setToast(null), 1500);
     } catch (err) {
-      setDownloadAllState("idle");
+      setToast(null);
       alert("전체 다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
     }
   }
@@ -590,14 +592,9 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
       <div className="flex items-center justify-between px-4 py-3 text-white shrink-0" onClick={(e) => e.stopPropagation()}>
         <span className="text-sm font-semibold">{index + 1} / {urls.length}</span>
         <div className="flex items-center gap-2">
-          <button onClick={downloadOne} disabled={downloadState === "busy"} className="text-xs font-bold bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg disabled:opacity-60">
-            {downloadState === "busy" ? "다운로드중..." : downloadState === "done" ? "저장완료" : "이 사진 다운로드"}
+          <button onClick={() => setDownloadMenuOpen(true)} className="p-1.5 text-white/80 hover:text-white" aria-label="다운로드">
+            <Download size={20} />
           </button>
-          {urls.length > 1 && (
-            <button onClick={downloadAll} disabled={downloadAllState === "busy"} className="text-xs font-bold bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg disabled:opacity-60">
-              {downloadAllState === "busy" ? "다운로드중..." : downloadAllState === "done" ? "저장완료" : "전체 다운로드"}
-            </button>
-          )}
           <button onClick={onClose} className="p-1.5 text-white/80 hover:text-white"><X size={20} /></button>
         </div>
       </div>
@@ -626,6 +623,27 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
           </button>
         )}
       </div>
+
+      {downloadMenuOpen && (
+        <div className="fixed inset-0 z-[80] flex flex-col justify-end bg-black/40" onClick={() => setDownloadMenuOpen(false)}>
+          <div className="bg-white rounded-t-2xl p-3 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+            {urls.length > 1 && (
+              <button onClick={downloadAll} className="w-full text-center text-sm font-bold text-slate-800 py-3.5 rounded-xl active:bg-slate-100">
+                {urls.length}장 모두 저장
+              </button>
+            )}
+            <button onClick={downloadOne} className="w-full text-center text-sm font-bold text-slate-800 py-3.5 rounded-xl active:bg-slate-100">
+              이 사진만 저장
+            </button>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[80] bg-slate-800/90 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-lg">
+          {toast}
+        </div>
+      )}
     </div>,
     document.body
   );
