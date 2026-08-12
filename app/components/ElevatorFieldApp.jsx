@@ -1628,19 +1628,22 @@ export default function App() {
   }
 
   // ★ "작성" 상태 견적을 이메일·카카오로 발송 — 기존 /api/send-quote를 그대로 호출한다
-  // (PC 관리자웹 QuoteSendModal이 쓰는 것과 동일 라우트). 수신처는 견적 작성 시 이미
-  // 저장해둔 recipientEmail/recipientPhone을 그대로 쓰고, 있는 채널만 시도한다.
-  async function handleSendQuote(quoteId) {
+  // (PC 관리자웹 QuoteSendModal이 쓰는 것과 동일 라우트). 발송 확인 모달에서 고른/수정한
+  // 담당자(override)가 있으면 그걸 쓰고, 없으면 견적 작성 시 저장해둔 recipientEmail/
+  // recipientPhone을 기본값으로 쓴다. 있는 채널만 시도한다.
+  async function handleSendQuote(quoteId, override) {
     const q = quoteRequests.find((x) => x.id === quoteId);
     if (!q) return { results: {} };
+    const recipientName = override?.recipientName ?? q.recipientName;
+    const recipientEmail = override?.recipientEmail ?? q.recipientEmail;
+    const recipientPhone = override?.recipientPhone ?? q.recipientPhone;
     const res = await authFetch("/api/send-quote", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         quoteRequestId: q.id,
-        channels: { email: !!q.recipientEmail, kakao: !!q.recipientPhone },
-        recipientEmail: q.recipientEmail,
-        recipientPhone: q.recipientPhone,
+        channels: { email: !!recipientEmail, kakao: !!recipientPhone },
+        recipientName, recipientEmail, recipientPhone,
         quote: { siteName: q.siteName, quoteTitle: q.quoteTitle, quoteDate: q.quoteIssuedDate, pdfUrl: q.quotePdfUrl },
       }),
     }).then((r) => r.json()).catch((e) => ({ results: {}, reason: e.message }));
@@ -1648,6 +1651,7 @@ export default function App() {
     if (res.results?.email?.ok || res.results?.kakao?.ok) {
       setQuoteRequests((prev) => prev.map((x) => (x.id === quoteId ? {
         ...x,
+        recipientName, recipientEmail, recipientPhone,
         emailSentAt: res.results?.email?.ok ? now : x.emailSentAt,
         kakaoSentAt: res.results?.kakao?.ok ? now : x.kakaoSentAt,
       } : x)));

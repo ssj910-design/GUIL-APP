@@ -7,6 +7,8 @@ import { confirmAsync } from "@/app/components/ConfirmHost";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
 import { parsePartQty, formatPhone, addDays } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
+import { supabase } from "@/lib/supabaseClient";
+import { mapSiteManager } from "@/lib/mappers";
 import { BillingHistoryScreen } from "@/app/components/tabs/BillingTab";
 import QuoteWizard from "@/app/components/tabs/QuoteWizard";
 import { sentHistory } from "@/app/components/admin/adminShared";
@@ -272,19 +274,9 @@ function QuoteDetailActions({ q, engineerNames, onAdvanceQuote, onOpenWizard, on
   const [dueDate, setDueDate] = useState(addDays(TODAY_STR, 30));
   const [description, setDescription] = useState("");
   const [advanced, setAdvanced] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [sendMsg, setSendMsg] = useState("");
+  const [sendModalOpen, setSendModalOpen] = useState(false);
   const canComplete = assignees.length > 0;
-
-  async function handleSend() {
-    setSending(true);
-    setSendMsg("");
-    const res = await onSendQuote(q.id);
-    const email = !q.recipientEmail ? null : res.results?.email?.ok ? "이메일 성공" : `이메일 실패(${res.results?.email?.reason ?? "-"})`;
-    const kakao = !q.recipientPhone ? null : res.results?.kakao?.ok ? "카카오 성공" : `카카오 실패(${res.results?.kakao?.reason ?? "-"})`;
-    setSendMsg([email, kakao].filter(Boolean).join(" · ") || "받는사람 이메일·전화번호가 없어 발송하지 못했습니다");
-    setSending(false);
-  }
+  const alreadySent = !!(q.emailSentAt || q.kakaoSentAt);
 
   if (q.status === "요청접수") {
     return (
@@ -294,18 +286,20 @@ function QuoteDetailActions({ q, engineerNames, onAdvanceQuote, onOpenWizard, on
   if (q.status === "작성") {
     return (
       <div className="mt-4">
-        {(q.emailSentAt || q.kakaoSentAt) && (
+        {alreadySent && (
           <p className="text-[11px] text-emerald-600 font-semibold mb-2">
             발송됨{q.emailSentAt ? " · 이메일" : ""}{q.kakaoSentAt ? " · 카카오" : ""}
           </p>
         )}
         <div className="flex gap-1.5">
-          <button onClick={handleSend} disabled={sending} className="flex-1 bg-emerald-600 disabled:bg-slate-300 text-white text-sm font-bold py-3 rounded-xl active:bg-emerald-700">
-            {sending ? "발송 중..." : "발송"}
+          <button onClick={() => setSendModalOpen(true)} className="flex-1 bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl active:bg-emerald-700">
+            {alreadySent ? "재발송" : "발송"}
           </button>
           <button onClick={() => onAdvanceQuote(q.id)} className="flex-1 bg-indigo-600 text-white text-sm font-bold py-3 rounded-xl active:bg-indigo-700">승인 처리</button>
         </div>
-        {sendMsg && <p className="text-[11px] text-slate-500 font-semibold mt-1.5">{sendMsg}</p>}
+        {sendModalOpen && (
+          <QuoteSendConfirmModal q={q} alreadySent={alreadySent} onClose={() => setSendModalOpen(false)} onSendQuote={onSendQuote} />
+        )}
       </div>
     );
   }
@@ -351,6 +345,84 @@ function QuoteDetailActions({ q, engineerNames, onAdvanceQuote, onOpenWizard, on
     );
   }
   return null;
+}
+
+// 발송/재발송 전 수신처 확인·수정 모달 — 현장 담당자(site_managers)에서 고르거나 직접
+// 입력할 수 있다. 기본값은 이 견적의 최근 수신처(q.recipientName/Email/Phone — 보낼 때마다
+// 최신으로 갱신됨, lib/mappers.js의 mapQuoteRequest 참고). Sheet(z-30)보다 위에 떠야 하므로
+// PDF 전체화면과 같은 방식으로 body에 직접 포털한다.
+function QuoteSendConfirmModal({ q, alreadySent, onClose, onSendQuote }) {
+  const [managers, setManagers] = useState([]);
+  const [managerId, setManagerId] = useState("");
+  const [name, setName] = useState(q.recipientName || "");
+  const [email, setEmail] = useState(q.recipientEmail || "");
+  const [phone, setPhone] = useState(q.recipientPhone || "");
+  const [sending, setSending] = useState(false);
+  const [resultMsg, setResultMsg] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    supabase.from("site_managers").select("*").eq("site_id", q.siteId).then(({ data }) => {
+      if (alive) setManagers((data ?? []).map(mapSiteManager));
+    });
+    return () => { alive = false; };
+  }, [q.siteId]);
+
+  function selectManager(id) {
+    setManagerId(id);
+    const m = managers.find((x) => x.id === id);
+    if (m) { setName(m.name || ""); setEmail(m.email || ""); setPhone(m.phone || ""); }
+  }
+
+  async function handleConfirm() {
+    setSending(true);
+    setResultMsg("");
+    const res = await onSendQuote(q.id, { recipientName: name, recipientEmail: email, recipientPhone: phone });
+    const emailMsg = !email ? null : res.results?.email?.ok ? "이메일 성공" : `이메일 실패(${res.results?.email?.reason ?? "-"})`;
+    const kakaoMsg = !phone ? null : res.results?.kakao?.ok ? "카카오 성공" : `카카오 실패(${res.results?.kakao?.reason ?? "-"})`;
+    setResultMsg([emailMsg, kakaoMsg].filter(Boolean).join(" · ") || "이메일·전화번호가 없어 발송하지 못했습니다");
+    setSending(false);
+    if (res.results?.email?.ok || res.results?.kakao?.ok) setTimeout(onClose, 1200);
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-40 bg-black/50 flex flex-col justify-end" onClick={onClose}>
+      <div className="bg-white rounded-t-3xl p-5 max-h-[85%] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-bold text-slate-900 mb-3">{alreadySent ? "재발송" : "발송"} — 수신처 확인</h3>
+        <div className="space-y-2.5">
+          <div>
+            <label className="text-[11px] font-bold text-slate-500 block mb-1">담당자 선택</label>
+            <select className={inputCls} value={managerId} onChange={(e) => selectManager(e.target.value)}>
+              <option value="">직접 입력</option>
+              {managers.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}{m.isPrimary ? " (대표)" : ""}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-500 block mb-1">담당자 이름</label>
+            <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-500 block mb-1">이메일</label>
+            <input className={inputCls} value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-500 block mb-1">전화번호</label>
+            <input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </div>
+        </div>
+        {resultMsg && <p className="text-xs text-slate-600 font-semibold mt-3">{resultMsg}</p>}
+        <div className="flex gap-2 mt-4">
+          <button onClick={onClose} className="flex-1 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200">취소</button>
+          <button onClick={handleConfirm} disabled={sending} className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-emerald-600 disabled:bg-slate-300">
+            {sending ? "발송 중..." : alreadySent ? "재발송하기" : "발송하기"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
 }
 
 // 상비부품 보충 대기 한 건.

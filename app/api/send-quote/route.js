@@ -15,7 +15,7 @@ export async function POST(request) {
   }
 
   const {
-    quoteRequestId, channels, recipientEmail, recipientPhone,
+    quoteRequestId, channels, recipientName, recipientEmail, recipientPhone,
     senderCcEmail, referenceEmail, referencePhone, quote,
     supplierName, supplierPhone, noticeMessage, attachmentUrls,
   } = body;
@@ -30,6 +30,10 @@ export async function POST(request) {
     reference_phone: referencePhone || null,
     notice_message: noticeMessage || null,
     attachment_urls: attachmentUrls && attachmentUrls.length ? attachmentUrls : [],
+    // recipientName은 선택 필드 — 보낸 쪽(지금은 폰 앱)이 담당자 이름을 같이 넘기면 그 이름도
+    // "최근 발송 담당자"로 저장한다. 안 보내는 호출(데스크탑 QuoteSendModal 등)은 기존처럼
+    // recipient_name을 건드리지 않는다(빈 문자열로 지우지 않도록 undefined면 patch에서 뺀다).
+    ...(recipientName !== undefined ? { recipient_name: recipientName || null } : {}),
   };
 
   if (channels?.email) {
