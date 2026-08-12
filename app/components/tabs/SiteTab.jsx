@@ -1,10 +1,10 @@
-import React, { useState, useContext } from "react";
+import React, { useState, useContext, useRef, useEffect } from "react";
 import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Download, KeyRound, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, shortDate, recentFailuresBySite, siteMatchesQuery, unitContractBadges, unitBadgeLabel } from "@/lib/utils";
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
-import { Badge, TimelineRow, HistoryCard, PrimaryButton, Sheet, Field, inputCls, DrillHeader, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, PhotoLightboxPane } from "@/app/components/ui";
+import { Badge, TimelineRow, HistoryCard, PrimaryButton, Sheet, Field, inputCls, DrillHeader, MapLinkButtons, SwipeSubtabTrack, PhotoLightboxPane } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { BillingCard } from "@/app/components/tabs/BillingTab";
@@ -41,6 +41,10 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
   const [photoViewer, setPhotoViewer] = useState(null);
   const elevatorSubTabs = ["정보", "고장", "검사", "부품교체내역", "부품현황", "견적내역"];
   const swipe = useSwipeSubtab(elevatorSubTabs, subTab, setSubTab);
+  const subTabRefs = useRef({});
+  useEffect(() => {
+    subTabRefs.current[subTab]?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [subTab]);
 
   // 정보/고장/검사/부품교체내역/부품현황 각 탭의 패널 — SwipeSubtabTrack이 드래그 중 옆 탭을 함께 렌더링할 때 쓴다.
   function renderElevatorPane(tab) {
@@ -279,17 +283,17 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
       <DrillHeader title="승강기정보" onBack={onBack} onHome={onHome} />
-      <div className="flex border-b border-slate-100 shrink-0 relative">
+      <div className="flex overflow-x-auto border-b border-slate-100 shrink-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {elevatorSubTabs.map((t) => (
           <button
             key={t}
+            ref={(el) => { subTabRefs.current[t] = el; }}
             onClick={() => setSubTab(t)}
-            className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1 min-w-0 truncate ${subTab === t ? "text-blue-700" : "text-slate-400"}`}
+            className={`shrink-0 py-3 px-3 text-xs font-bold whitespace-nowrap border-b-2 ${subTab === t ? "text-blue-700 border-blue-700" : "text-slate-400 border-transparent"}`}
           >
             {t}
           </button>
         ))}
-        <SwipeIndicatorBar swipe={swipe} />
       </div>
 
       <SwipeSubtabTrack
