@@ -1,9 +1,13 @@
 package com.guilelevator.app;
 
 import android.Manifest;
+import android.app.DownloadManager;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.webkit.GeolocationPermissions;
+import android.webkit.URLUtil;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
@@ -36,6 +40,28 @@ public class MainActivity extends BridgeActivity {
                         new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
                         LOCATION_PERMISSION_REQUEST
                 );
+            }
+        });
+
+        // 웹뷰는 blob: URL 다운로드를 받아줄 다운로드 매니저가 기본적으로 없다 — 사진(다운로드
+        // 전용 URL, lib/photos.js가 ?download= 붙여서 연결)을 눌렀을 때 이 리스너가 대신
+        // 안드로이드 DownloadManager로 넘겨서 앱을 벗어나지 않고 바로 다운로드되게 한다.
+        // Content-Disposition: attachment로 응답하는 URL(Supabase Storage의 ?download 파라미터)만
+        // 이 리스너가 걸린다 — 이미지처럼 웹뷰가 직접 렌더링 가능한 응답은 안 걸린다.
+        getBridge().getWebView().setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
+            try {
+                String filename = URLUtil.guessFileName(url, contentDisposition, mimetype);
+                DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+                request.addRequestHeader("User-Agent", userAgent);
+                request.setMimeType(mimetype);
+                request.setTitle(filename);
+                request.setDescription("구일엘리베이터 앱 다운로드");
+                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename);
+                DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                if (dm != null) dm.enqueue(request);
+            } catch (Exception e) {
+                // 다운로드 실패해도 앱 자체는 계속 동작해야 한다 — 조용히 무시.
             }
         });
     }
