@@ -552,19 +552,33 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
     usePhotoLightboxGestures(urls.length, index, onIndexChange);
   const prev = () => onIndexChange((index - 1 + urls.length) % urls.length);
   const next = () => onIndexChange((index + 1) % urls.length);
+  // 다운로드는 앱에서 안드로이드 다운로드 매니저로 넘기고 나면 끝 — 눌러도 화면이 그대로라
+  // "됐나?" 싶은 게 당연하다. 잠깐 중/완료 표시를 해서 눌렸다는 걸 눈으로 보여준다.
+  const [downloadState, setDownloadState] = useState("idle"); // idle | busy | done
+  const [downloadAllState, setDownloadAllState] = useState("idle");
 
   async function downloadOne() {
+    setDownloadState("busy");
     try {
-      await downloadPhoto(url, `사진_${index + 1}.${extOf(url)}`);
+      // 앱에서는 다운로드 매니저로 넘기기만 하고 바로 끝나서, 최소 시간은 "다운로드중..."이
+      // 눈에 보이게 깔아준다(0초만에 "저장완료"로 바뀌면 눌린 건지 알기 어렵다).
+      await Promise.all([downloadPhoto(url, `사진_${index + 1}.${extOf(url)}`), new Promise((r) => setTimeout(r, 400))]);
+      setDownloadState("done");
+      setTimeout(() => setDownloadState("idle"), 1500);
     } catch (err) {
+      setDownloadState("idle");
       alert("다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
     }
   }
 
   async function downloadAll() {
+    setDownloadAllState("busy");
     try {
-      await downloadPhotosAsZip(urls, "사진.zip", "사진");
+      await Promise.all([downloadPhotosAsZip(urls, "사진.zip", "사진"), new Promise((r) => setTimeout(r, 400))]);
+      setDownloadAllState("done");
+      setTimeout(() => setDownloadAllState("idle"), 1500);
     } catch (err) {
+      setDownloadAllState("idle");
       alert("전체 다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
     }
   }
@@ -576,12 +590,12 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
       <div className="flex items-center justify-between px-4 py-3 text-white shrink-0" onClick={(e) => e.stopPropagation()}>
         <span className="text-sm font-semibold">{index + 1} / {urls.length}</span>
         <div className="flex items-center gap-2">
-          <button onClick={downloadOne} className="text-xs font-bold bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg">
-            이 사진 다운로드
+          <button onClick={downloadOne} disabled={downloadState === "busy"} className="text-xs font-bold bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg disabled:opacity-60">
+            {downloadState === "busy" ? "다운로드중..." : downloadState === "done" ? "저장완료" : "이 사진 다운로드"}
           </button>
           {urls.length > 1 && (
-            <button onClick={downloadAll} className="text-xs font-bold bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg">
-              전체 다운로드
+            <button onClick={downloadAll} disabled={downloadAllState === "busy"} className="text-xs font-bold bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg disabled:opacity-60">
+              {downloadAllState === "busy" ? "다운로드중..." : downloadAllState === "done" ? "저장완료" : "전체 다운로드"}
             </button>
           )}
           <button onClick={onClose} className="p-1.5 text-white/80 hover:text-white"><X size={20} /></button>
