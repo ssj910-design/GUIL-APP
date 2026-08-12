@@ -219,7 +219,10 @@ export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파
   }
 
   function handleFile(e) {
-    const files = e.target.files;
+    // input.value를 지우면 브라우저가 input.files를 새 빈 FileList로 바꾸므로,
+    // 반드시 먼저 배열로 복사해 둔 다음에 지워야 한다(순서 반대로 하면 일부
+    // 환경에서 파일이 안 잡힌 채로 넘어간다 — MultiPhotoUpload와 동일한 순서로 맞춤).
+    const files = [...(e.target.files ?? [])];
     e.target.value = "";
     uploadFiles(files);
   }
