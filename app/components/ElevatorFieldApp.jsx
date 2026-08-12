@@ -7,7 +7,7 @@ import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken } from "@/lib/supabaseClient";
 import { authFetch } from "@/lib/apiFetch";
 import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode } from "@/lib/mappers";
-import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent } from "@/lib/utils";
+import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent, quoteGrandTotal } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { DutySwapNotice } from "@/app/components/DutyRoster";
 import { WorkCalendarSheet } from "@/app/components/WorkCalendarSheet";
@@ -1644,7 +1644,10 @@ export default function App() {
         quoteRequestId: q.id,
         channels: { email: !!recipientEmail, kakao: !!recipientPhone },
         recipientName, recipientEmail, recipientPhone,
-        quote: { siteName: q.siteName, quoteTitle: q.quoteTitle, quoteDate: q.quoteIssuedDate, pdfUrl: q.quotePdfUrl },
+        quote: {
+          siteName: q.siteName, quoteTitle: q.quoteTitle, quoteDate: q.quoteIssuedDate, pdfUrl: q.quotePdfUrl,
+          totalAmount: quoteGrandTotal(q.quoteItems, q.transportCost, q.safetyCost, q.profit, q.discountAmount),
+        },
       }),
     }).then((r) => r.json()).catch((e) => ({ results: {}, reason: e.message }));
     const now = new Date().toISOString();
