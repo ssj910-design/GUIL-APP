@@ -20,6 +20,7 @@ create index if not exists unit_part_photos_unit_id_idx on public.unit_part_phot
 
 -- RLS: 106_rls_remaining.sql과 동일한 패턴 — 로그인(authenticated)만 하면 전부 허용.
 alter table public.unit_part_photos enable row level security;
+drop policy if exists "authenticated_full_access" on public.unit_part_photos;
 create policy "authenticated_full_access" on public.unit_part_photos
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 

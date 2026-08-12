@@ -44,7 +44,7 @@ function PartLeafRow({ unitId, category, subcategory, part, photos, onAdd, onRem
             accept="image/*"
             uploadLabel="사진 촬영/선택"
             height="h-40"
-            onUpload={(file) => uploadPhoto(file, `unit-parts/${unitId}/${category}/${subcategory ?? "_"}/${part}`)}
+            onUpload={(file) => uploadPhoto(file, `unit-parts/${unitId}`)}
             onSave={handleSave}
           />
         </div>

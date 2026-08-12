@@ -42,7 +42,7 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
   const elevatorSubTabs = ["정보", "고장", "검사", "부품교체내역", "부품현황", "견적내역"];
   const swipe = useSwipeSubtab(elevatorSubTabs, subTab, setSubTab);
 
-  // 정보/고장/검사/부품교체내역 각 탭의 패널 — SwipeSubtabTrack이 드래그 중 옆 탭을 함께 렌더링할 때 쓴다.
+  // 정보/고장/검사/부품교체내역/부품현황 각 탭의 패널 — SwipeSubtabTrack이 드래그 중 옆 탭을 함께 렌더링할 때 쓴다.
   function renderElevatorPane(tab) {
     if (tab === "정보") return (
           <div className="bg-slate-50 pb-6">
@@ -284,7 +284,7 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
           <button
             key={t}
             onClick={() => setSubTab(t)}
-            className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1 ${subTab === t ? "text-blue-700" : "text-slate-400"}`}
+            className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1 min-w-0 truncate ${subTab === t ? "text-blue-700" : "text-slate-400"}`}
           >
             {t}
           </button>
