@@ -39,10 +39,10 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
   const unitPhotos = (unitPartPhotos ?? []).filter((p) => p.unitId === realUnit?.id);
   const [inspectionFailTarget, setInspectionFailTarget] = useState(null);
   const [photoViewer, setPhotoViewer] = useState(null);
-  const elevatorSubTabs = ["정보", "고장", "검사", "부품교체내역", "부품현황", "견적내역"];
+  const elevatorSubTabs = ["정보", "고장", "검사", "교체내역", "부품현황", "견적내역"];
   const swipe = useSwipeSubtab(elevatorSubTabs, subTab, setSubTab);
 
-  // 정보/고장/검사/부품교체내역/부품현황 각 탭의 패널 — SwipeSubtabTrack이 드래그 중 옆 탭을 함께 렌더링할 때 쓴다.
+  // 정보/고장/검사/교체내역/부품현황 각 탭의 패널 — SwipeSubtabTrack이 드래그 중 옆 탭을 함께 렌더링할 때 쓴다.
   function renderElevatorPane(tab) {
     if (tab === "정보") return (
           <div className="bg-slate-50 pb-6">
@@ -202,9 +202,9 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
           </div>
         );
 
-    if (tab === "부품교체내역") return (
+    if (tab === "교체내역") return (
           <div className="bg-slate-50 pt-4 pb-6 px-5">
-            <p className="pb-3 text-xs font-bold text-slate-400">부품교체내역</p>
+            <p className="pb-3 text-xs font-bold text-slate-400">교체내역</p>
             {unitBillings.length === 0 ? (
               <p className="text-xs text-slate-400 text-center py-10">등록된 부품교체 내역이 없습니다</p>
             ) : (
