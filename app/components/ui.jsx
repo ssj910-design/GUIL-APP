@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { BRAND } from "@/lib/company";
 import { createPortal } from "react-dom";
-import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
+import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Download } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
@@ -170,18 +170,32 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
     usePhotoLightboxGestures(urls.length, index, onIndexChange);
   const prev = () => onIndexChange((index - 1 + urls.length) % urls.length);
   const next = () => onIndexChange((index + 1) % urls.length);
+  const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  // 다운로드는 앱에서 안드로이드 다운로드 매니저로 넘기고 나면 끝 — 눌러도 화면이 그대로라
+  // "됐나?" 싶은 게 당연하다. 카톡처럼 하단에 진행 토스트를 잠깐 띄운다.
+  const [toast, setToast] = useState(null);
 
   async function downloadOne() {
+    setDownloadMenuOpen(false);
+    setToast("다운로드중...");
     try {
-      await downloadPhoto(urls[index], `사진_${index + 1}.${extOf(urls[index])}`);
+      await Promise.all([downloadPhoto(urls[index], `사진_${index + 1}.${extOf(urls[index])}`), new Promise((r) => setTimeout(r, 400))]);
+      setToast("저장했습니다.");
+      setTimeout(() => setToast(null), 1500);
     } catch (err) {
+      setToast(null);
       alert("다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
     }
   }
   async function downloadAll() {
+    setDownloadMenuOpen(false);
+    setToast("다운로드중...");
     try {
-      await downloadPhotosAsZip(urls, "사진.zip", "사진");
+      await Promise.all([downloadPhotosAsZip(urls, "사진.zip", "사진"), new Promise((r) => setTimeout(r, 400))]);
+      setToast("저장했습니다.");
+      setTimeout(() => setToast(null), 1500);
     } catch (err) {
+      setToast(null);
       alert("전체 다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
     }
   }
@@ -191,14 +205,9 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
       <div className="flex items-center justify-between px-4 py-3 text-white shrink-0" onClick={(e) => e.stopPropagation()}>
         <span className="text-sm font-semibold">{index + 1} / {urls.length}</span>
         <div className="flex items-center gap-2">
-          <button onClick={downloadOne} className="text-xs font-bold bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg">
-            이 사진 다운로드
+          <button onClick={() => setDownloadMenuOpen(true)} className="p-1.5 text-white/80 hover:text-white" aria-label="다운로드">
+            <Download size={20} />
           </button>
-          {urls.length > 1 && (
-            <button onClick={downloadAll} className="text-xs font-bold bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg">
-              전체 다운로드
-            </button>
-          )}
           <button onClick={onClose} className="p-1.5 text-white/80 hover:text-white"><X size={22} /></button>
         </div>
       </div>
@@ -224,6 +233,27 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
           </button>
         )}
       </div>
+
+      {downloadMenuOpen && (
+        <div className="fixed inset-0 z-[80] flex flex-col justify-end bg-black/40" onClick={() => setDownloadMenuOpen(false)}>
+          <div className="bg-white rounded-t-2xl p-3 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+            {urls.length > 1 && (
+              <button onClick={downloadAll} className="w-full text-center text-sm font-bold text-slate-800 py-3.5 rounded-xl active:bg-slate-100">
+                {urls.length}장 모두 저장
+              </button>
+            )}
+            <button onClick={downloadOne} className="w-full text-center text-sm font-bold text-slate-800 py-3.5 rounded-xl active:bg-slate-100">
+              이 사진만 저장
+            </button>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[80] bg-slate-800/90 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-lg">
+          {toast}
+        </div>
+      )}
     </div>,
     document.body
   );

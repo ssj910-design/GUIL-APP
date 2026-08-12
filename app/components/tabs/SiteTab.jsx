@@ -323,41 +323,53 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
 // 사진이 여러 장이면 좌우로 드래그해서 넘겨볼 수 있는 전체화면 뷰어입니다. 확대는 더블탭·핀치·휠.
 export function PhotoViewerSheet({ urls, index, siteName, date, onClose }) {
   const [current, setCurrent] = useState(index);
-  const [downloading, setDownloading] = useState(false);
   const baseName = sanitizeFilename(`${siteName || "사진"}_${date || ""}`.replace(/_$/, ""));
   const { containerRef, idx, showPrev, showNext, trackStyle, zoom, pan, isGesturing, handlers } =
     usePhotoLightboxGestures(urls.length, current, setCurrent);
+  const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  // 다운로드는 앱에서 안드로이드 다운로드 매니저로 넘기고 나면 끝 — 눌러도 화면이 그대로라
+  // "됐나?" 싶은 게 당연하다. 카톡처럼 하단에 진행 토스트를 잠깐 띄운다.
+  const [toast, setToast] = useState(null);
 
   async function handleDownloadOne() {
-    if (downloading) return;
-    setDownloading(true);
+    setDownloadMenuOpen(false);
+    setToast("다운로드중...");
     try {
       const filename = urls.length > 1 ? `${baseName}_${current + 1}.${extOf(urls[current])}` : `${baseName}.${extOf(urls[current])}`;
-      await downloadPhoto(urls[current], filename);
+      await Promise.all([downloadPhoto(urls[current], filename), new Promise((r) => setTimeout(r, 400))]);
+      setToast("저장했습니다.");
+      setTimeout(() => setToast(null), 1500);
     } catch {
+      setToast(null);
       alert("사진 다운로드에 실패했습니다");
     }
-    setDownloading(false);
   }
 
   async function handleDownloadAll() {
-    if (downloading) return;
-    setDownloading(true);
+    setDownloadMenuOpen(false);
+    setToast("다운로드중...");
     try {
-      await downloadPhotosAsZip(urls, `${baseName}.zip`, baseName);
+      await Promise.all([downloadPhotosAsZip(urls, `${baseName}.zip`, baseName), new Promise((r) => setTimeout(r, 400))]);
+      setToast("저장했습니다.");
+      setTimeout(() => setToast(null), 1500);
     } catch {
+      setToast(null);
       alert("사진 다운로드에 실패했습니다");
     }
-    setDownloading(false);
   }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
         <span className="text-white text-xs font-semibold">{current + 1} / {urls.length}</span>
-        <button type="button" onClick={onClose} className="text-white p-1">
-          <X size={22} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setDownloadMenuOpen(true)} className="text-white p-1" aria-label="다운로드">
+            <Download size={20} />
+          </button>
+          <button type="button" onClick={onClose} className="text-white p-1">
+            <X size={22} />
+          </button>
+        </div>
       </div>
       <div ref={containerRef} className="flex-1 relative min-h-0 touch-none overflow-hidden" {...handlers}>
         {urls.length > 1 && (
@@ -377,32 +389,33 @@ export function PhotoViewerSheet({ urls, index, siteName, date, onClose }) {
         )}
       </div>
       {urls.length > 1 && (
-        <div className="flex justify-center gap-1.5 pt-2 shrink-0">
+        <div className="flex justify-center gap-1.5 pt-2 pb-5 shrink-0">
           {urls.map((_, i) => (
             <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === current ? "bg-white" : "bg-white/30"}`} />
           ))}
         </div>
       )}
-      <div className="flex gap-2 px-4 pt-3 pb-5 shrink-0">
-        <button
-          type="button"
-          onClick={handleDownloadOne}
-          disabled={downloading}
-          className="flex-1 flex items-center justify-center gap-1.5 bg-white/10 text-white text-xs font-bold py-2.5 rounded-xl active:bg-white/20 disabled:opacity-50"
-        >
-          <Download size={14} /> 이 사진 다운로드
-        </button>
-        {urls.length > 1 && (
-          <button
-            type="button"
-            onClick={handleDownloadAll}
-            disabled={downloading}
-            className="flex-1 flex items-center justify-center gap-1.5 bg-white text-slate-900 text-xs font-bold py-2.5 rounded-xl active:bg-slate-200 disabled:opacity-50"
-          >
-            <Download size={14} /> 전체 다운로드 ({urls.length}장 · zip)
-          </button>
-        )}
-      </div>
+
+      {downloadMenuOpen && (
+        <div className="fixed inset-0 z-[60] flex flex-col justify-end bg-black/40" onClick={() => setDownloadMenuOpen(false)}>
+          <div className="bg-white rounded-t-2xl p-3 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+            {urls.length > 1 && (
+              <button onClick={handleDownloadAll} className="w-full text-center text-sm font-bold text-slate-800 py-3.5 rounded-xl active:bg-slate-100">
+                {urls.length}장 모두 저장
+              </button>
+            )}
+            <button onClick={handleDownloadOne} className="w-full text-center text-sm font-bold text-slate-800 py-3.5 rounded-xl active:bg-slate-100">
+              이 사진만 저장
+            </button>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[60] bg-slate-800/90 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-lg">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

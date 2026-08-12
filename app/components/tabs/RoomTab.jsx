@@ -12,18 +12,32 @@ const isVideo = (url) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(url);
 function PhotoViewerOverlay({ urls, index, onIndexChange, onClose }) {
   const { containerRef, idx, showPrev, showNext, trackStyle, zoom, pan, isGesturing, handlers } =
     usePhotoLightboxGestures(urls.length, index, onIndexChange);
+  const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  // 다운로드는 앱에서 안드로이드 다운로드 매니저로 넘기고 나면 끝 — 눌러도 화면이 그대로라
+  // "됐나?" 싶은 게 당연하다. 카톡처럼 하단에 진행 토스트를 잠깐 띄운다.
+  const [toast, setToast] = useState(null);
 
   async function downloadOne() {
+    setDownloadMenuOpen(false);
+    setToast("다운로드중...");
     try {
-      await downloadPhoto(urls[index], `게시판-사진_${index + 1}.${extOf(urls[index])}`);
+      await Promise.all([downloadPhoto(urls[index], `게시판-사진_${index + 1}.${extOf(urls[index])}`), new Promise((r) => setTimeout(r, 400))]);
+      setToast("저장했습니다.");
+      setTimeout(() => setToast(null), 1500);
     } catch (err) {
+      setToast(null);
       alert("다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
     }
   }
   async function downloadAll() {
+    setDownloadMenuOpen(false);
+    setToast("다운로드중...");
     try {
-      await downloadPhotosAsZip(urls, "게시판-사진.zip", "게시판-사진");
+      await Promise.all([downloadPhotosAsZip(urls, "게시판-사진.zip", "게시판-사진"), new Promise((r) => setTimeout(r, 400))]);
+      setToast("저장했습니다.");
+      setTimeout(() => setToast(null), 1500);
     } catch (err) {
+      setToast(null);
       alert("전체 다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
     }
   }
@@ -33,14 +47,9 @@ function PhotoViewerOverlay({ urls, index, onIndexChange, onClose }) {
       <div className="flex items-center justify-between px-4 py-3 shrink-0" onClick={(e) => e.stopPropagation()}>
         <span className="text-white text-xs font-semibold">{urls.length > 1 ? `${index + 1} / ${urls.length}` : ""}</span>
         <div className="flex items-center gap-2">
-          <button onClick={downloadOne} className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="사진 저장">
+          <button onClick={() => setDownloadMenuOpen(true)} className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="다운로드">
             <Download size={18} />
           </button>
-          {urls.length > 1 && (
-            <button onClick={downloadAll} className="text-xs font-bold bg-white/15 text-white px-3 h-10 rounded-full" aria-label="전체 다운로드">
-              전체
-            </button>
-          )}
           <button onClick={onClose} className="w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center" aria-label="닫기">
             <X size={18} />
           </button>
@@ -63,6 +72,27 @@ function PhotoViewerOverlay({ urls, index, onIndexChange, onClose }) {
           </button>
         )}
       </div>
+
+      {downloadMenuOpen && (
+        <div className="fixed inset-0 z-[60] flex flex-col justify-end bg-black/40" onClick={() => setDownloadMenuOpen(false)}>
+          <div className="bg-white rounded-t-2xl p-3 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+            {urls.length > 1 && (
+              <button onClick={downloadAll} className="w-full text-center text-sm font-bold text-slate-800 py-3.5 rounded-xl active:bg-slate-100">
+                {urls.length}장 모두 저장
+              </button>
+            )}
+            <button onClick={downloadOne} className="w-full text-center text-sm font-bold text-slate-800 py-3.5 rounded-xl active:bg-slate-100">
+              이 사진만 저장
+            </button>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[60] bg-slate-800/90 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-lg">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
