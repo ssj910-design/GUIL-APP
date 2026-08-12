@@ -1,7 +1,8 @@
 import { useState, useContext, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Package, Receipt, ChevronRight, ChevronLeft, ChevronDown, FileText, PackageCheck, RotateCcw, PackageX, Search, Repeat, KeyRound } from "lucide-react";
 import { Badge, PhotoThumb, PhotoGrid, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
-import { AuthContext } from "@/app/components/context";
+import { AuthContext, SitesContext } from "@/app/components/context";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
 import { parsePartQty, formatPhone, addDays } from "@/lib/utils";
@@ -481,6 +482,7 @@ function MaterialsPanel({ pending, rejected, suppliedCount, engineerNames, onSup
 }
 
 function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, onOpenWizard, onSendQuote, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onOpenHistory, focusId, onFocusHandled }) {
+  const sites = useContext(SitesContext);
   const [detail, setDetail] = useState(null);
   const [pdfFullscreen, setPdfFullscreen] = useState(false);
   const shownDetail = detail ?? (focusId ? active.find((q) => q.id === focusId) : null);
@@ -488,6 +490,7 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
   // 데스크탑 관리자웹(MaterialsAdmin.jsx의 RequestDetailModal)과 같은 기준 — 요청접수 이후(작성
   // 이상)면 "견적 상세내역"으로, 공사내용 대신 견적명·PDF 미리보기를 보여준다.
   const isDraftedQuote = shownDetail && shownDetail.status !== "요청접수";
+  const shownSite = shownDetail && sites.find((s) => s.id === shownDetail.siteId);
   return (
     <div>
       <SwipeCarousel
@@ -517,9 +520,15 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
       {shownDetail && (
         <Sheet title={isDraftedQuote ? "견적 상세내역" : "견적 요청 상세"} onClose={closeDetail}>
           <div className="space-y-3">
-            <div className="bg-slate-100 rounded-xl p-3">
-              <p className="text-[11px] text-slate-500">현장</p>
-              <p className="font-bold text-slate-800">{shownDetail.siteName}</p>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="bg-slate-100 rounded-xl p-3">
+                <p className="text-[11px] text-slate-500">현장</p>
+                <p className="font-bold text-slate-800">{shownDetail.siteName}</p>
+              </div>
+              <div className="bg-slate-100 rounded-xl p-3">
+                <p className="text-[11px] text-slate-500">현장 주소</p>
+                <p className="font-bold text-slate-800">{shownSite?.address || "-"}</p>
+              </div>
             </div>
             <div className="bg-slate-100 rounded-xl p-3">
               <p className="text-[11px] text-slate-500">{isDraftedQuote ? "견적명" : "견적 내역 (부품명, 수량)"}</p>
@@ -527,7 +536,11 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
             </div>
             <div className="grid grid-cols-2 gap-2.5">
               <div className="bg-slate-100 rounded-xl p-3">
-                <p className="text-[11px] text-slate-500">현장 견적 담당자 연락처</p>
+                <p className="text-[11px] text-slate-500">현장 견적 담당자</p>
+                <p className="font-bold text-slate-800">{(isDraftedQuote ? shownDetail.recipientName : null) || "-"}</p>
+              </div>
+              <div className="bg-slate-100 rounded-xl p-3">
+                <p className="text-[11px] text-slate-500">담당자 연락처</p>
                 <p className="font-bold text-slate-800">{(isDraftedQuote ? shownDetail.recipientPhone : shownDetail.contactPhone) || "-"}</p>
               </div>
               {(shownDetail.requesterId || shownDetail.engineer) && (
@@ -586,8 +599,8 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
         </Sheet>
       )}
 
-      {pdfFullscreen && shownDetail?.quotePdfUrl && (
-        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+      {pdfFullscreen && shownDetail?.quotePdfUrl && createPortal(
+        <div className="fixed inset-0 z-40 bg-black flex flex-col">
           <div className="shrink-0 flex items-center justify-between px-4 py-3 bg-black/80">
             <span className="text-sm font-bold text-white">견적서 미리보기</span>
             <button onClick={() => setPdfFullscreen(false)} className="text-white p-1"><X size={20} /></button>
@@ -595,7 +608,8 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
           <div className="flex-1 min-h-0">
             <QuotePdfPreview url={shownDetail.quotePdfUrl} height="100%" />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
