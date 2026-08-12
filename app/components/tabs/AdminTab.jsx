@@ -241,8 +241,33 @@ function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto
   );
 }
 
-// 견적 요청 한 건 — 상태(요청접수→작성→승인)에 따라 처리 버튼이 달라진다. 승인 단계에서 지급 폼 노출.
-function QuotePendingCard({ q, engineerNames, onAdvanceQuote, onOpenWizard, onSendQuote, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onOpenDetail }) {
+// 견적 목록 한 줄 — 정보만 보여주고(현장명·상태·견적명/내역·날짜·발송여부), 탭하면 상세 시트가
+// 열린다. 처리 버튼(작성/발송/승인 등)은 목록 줄이 아니라 상세 시트 안(QuoteDetailActions)에 있다 —
+// 견적 건수가 늘어도 목록이 계속 간결하게 유지되도록.
+function QuoteListRow({ q, onOpenDetail }) {
+  const isDrafted = q.status !== "요청접수";
+  const sent = !!(q.emailSentAt || q.kakaoSentAt);
+  return (
+    <button onClick={() => onOpenDetail(q)} className="w-full text-left bg-white rounded-xl border border-slate-200 p-3 mb-2 active:bg-slate-50">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-bold text-slate-800 truncate">{q.siteName}</p>
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+          q.status === "승인" ? "bg-indigo-100 text-indigo-700" : q.status === "작성" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+        }`}>{q.status}</span>
+      </div>
+      <div className="flex items-center justify-between gap-2 mt-0.5">
+        <p className="text-[11px] text-slate-500 truncate">
+          {isDrafted ? (q.quoteTitle || q.constructionType || "-") : q.constructionType} · {isDrafted ? q.quoteIssuedDate : q.requestedDate}
+        </p>
+        {sent && <span className="text-[10px] font-bold text-emerald-600 shrink-0">✓ 발송</span>}
+      </div>
+    </button>
+  );
+}
+
+// 견적 상세 시트 하단의 처리 액션 — 상태(요청접수→작성→승인)에 따라 다르다. 승인 단계에서 지급 폼 노출.
+// (QuotesPanel의 Sheet 안에서 key={shownDetail.id}로 렌더돼 다른 건을 열면 로컬 상태가 초기화된다.)
+function QuoteDetailActions({ q, engineerNames, onAdvanceQuote, onOpenWizard, onSendQuote, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto }) {
   const [assignees, setAssignees] = useState([q.engineer]);
   const [dueDate, setDueDate] = useState(addDays(TODAY_STR, 30));
   const [description, setDescription] = useState("");
@@ -261,77 +286,71 @@ function QuotePendingCard({ q, engineerNames, onAdvanceQuote, onOpenWizard, onSe
     setSending(false);
   }
 
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-3.5 mx-0.5">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-bold text-slate-800 min-w-0 truncate">{q.siteName} · {q.constructionType}</p>
-        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-          q.status === "승인" ? "bg-indigo-100 text-indigo-700" : q.status === "작성" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
-        }`}>{q.status}</span>
-      </div>
-      <p className="text-[11px] text-slate-500 mt-0.5">{q.engineer} 기사 · {q.requestedDate} · 현장담당 {q.contactPhone}</p>
-      <button onClick={() => onOpenDetail(q)} className="mt-1 text-[11px] font-bold text-blue-600 flex items-center gap-0.5">상세 <ChevronRight size={12} /></button>
-
-      {q.status === "요청접수" && (
-        <button onClick={() => onOpenWizard(q)} className="w-full mt-2.5 bg-blue-700 text-white text-xs font-bold py-2.5 rounded-lg active:bg-blue-800">견적서 작성</button>
-      )}
-      {q.status === "작성" && (
-        <>
-          {(q.emailSentAt || q.kakaoSentAt) && (
-            <p className="text-[11px] text-emerald-600 font-semibold mt-2">
-              발송됨{q.emailSentAt ? " · 이메일" : ""}{q.kakaoSentAt ? " · 카카오" : ""}
-            </p>
-          )}
-          <div className="flex gap-1.5 mt-2.5">
-            <button onClick={handleSend} disabled={sending} className="flex-1 bg-emerald-600 disabled:bg-slate-300 text-white text-xs font-bold py-2.5 rounded-lg active:bg-emerald-700">
-              {sending ? "발송 중..." : "발송"}
-            </button>
-            <button onClick={() => onAdvanceQuote(q.id)} className="flex-1 bg-indigo-600 text-white text-xs font-bold py-2.5 rounded-lg active:bg-indigo-700">승인 처리</button>
-          </div>
-          {sendMsg && <p className="text-[11px] text-slate-500 font-semibold mt-1.5">{sendMsg}</p>}
-        </>
-      )}
-      {q.status === "승인" && (
-        <div className="mt-2.5">
-          <MultiPhotoUpload
-            photos={(q.supplyPhotoUrls ?? (q.supplyPhotoUrl ? [q.supplyPhotoUrl] : [])).map((url) => ({ url }))}
-            uploadFolder={`quotes/${q.id}/supply`}
-            onUploaded={(url) => onAttachQuotePhoto(q.id, url)}
-            onRemove={(idx) => onRemoveQuoteSupplyPhoto(q.id, idx)}
-            label="지급할 자재 사진 촬영"
-            required={false}
-          />
-          <button type="button" onClick={() => setAdvanced((v) => !v)} className="mt-2.5 flex items-center gap-0.5 text-[11px] font-bold text-slate-400">
-            담당기사 · 기한 · 내용 <ChevronDown size={13} className={advanced ? "rotate-180" : ""} />
+  if (q.status === "요청접수") {
+    return (
+      <button onClick={() => onOpenWizard(q)} className="w-full mt-4 bg-blue-700 text-white text-sm font-bold py-3 rounded-xl active:bg-blue-800">견적서 작성</button>
+    );
+  }
+  if (q.status === "작성") {
+    return (
+      <div className="mt-4">
+        {(q.emailSentAt || q.kakaoSentAt) && (
+          <p className="text-[11px] text-emerald-600 font-semibold mb-2">
+            발송됨{q.emailSentAt ? " · 이메일" : ""}{q.kakaoSentAt ? " · 카카오" : ""}
+          </p>
+        )}
+        <div className="flex gap-1.5">
+          <button onClick={handleSend} disabled={sending} className="flex-1 bg-emerald-600 disabled:bg-slate-300 text-white text-sm font-bold py-3 rounded-xl active:bg-emerald-700">
+            {sending ? "발송 중..." : "발송"}
           </button>
-          {advanced && (
-            <div className="mt-2 space-y-2.5">
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">담당 기사 (2명 이상 가능 · 기본 신청자)</label>
-                <MultiAssigneeSelect values={assignees} options={engineerNames} onChange={setAssignees} />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">할 일 기한</label>
-                <input type="date" className={inputCls} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">내용</label>
-                <textarea className={inputCls} rows={2} placeholder="담당 기사에게 전달할 내용" value={description} onChange={(e) => setDescription(e.target.value)} />
-              </div>
-            </div>
-          )}
-          {!canComplete && <p className="text-[10px] text-slate-400 mt-2">담당 기사를 1명 이상 선택해주세요</p>}
-          <button
-            onClick={() => canComplete && onCompleteQuoteSupply(q.id, assignees, dueDate, description)}
-            disabled={!canComplete}
-            className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg bg-blue-700 disabled:bg-slate-300 text-white active:bg-blue-800"
-          >
-            <PackageCheck size={14} /> 자재 지급 완료 체크
-          </button>
+          <button onClick={() => onAdvanceQuote(q.id)} className="flex-1 bg-indigo-600 text-white text-sm font-bold py-3 rounded-xl active:bg-indigo-700">승인 처리</button>
         </div>
-      )}
-    </div>
-  );
+        {sendMsg && <p className="text-[11px] text-slate-500 font-semibold mt-1.5">{sendMsg}</p>}
+      </div>
+    );
+  }
+  if (q.status === "승인") {
+    return (
+      <div className="mt-4">
+        <MultiPhotoUpload
+          photos={(q.supplyPhotoUrls ?? (q.supplyPhotoUrl ? [q.supplyPhotoUrl] : [])).map((url) => ({ url }))}
+          uploadFolder={`quotes/${q.id}/supply`}
+          onUploaded={(url) => onAttachQuotePhoto(q.id, url)}
+          onRemove={(idx) => onRemoveQuoteSupplyPhoto(q.id, idx)}
+          label="지급할 자재 사진 촬영"
+          required={false}
+        />
+        <button type="button" onClick={() => setAdvanced((v) => !v)} className="mt-2.5 flex items-center gap-0.5 text-[11px] font-bold text-slate-400">
+          담당기사 · 기한 · 내용 <ChevronDown size={13} className={advanced ? "rotate-180" : ""} />
+        </button>
+        {advanced && (
+          <div className="mt-2 space-y-2.5">
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 block mb-1">담당 기사 (2명 이상 가능 · 기본 신청자)</label>
+              <MultiAssigneeSelect values={assignees} options={engineerNames} onChange={setAssignees} />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 block mb-1">할 일 기한</label>
+              <input type="date" className={inputCls} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 block mb-1">내용</label>
+              <textarea className={inputCls} rows={2} placeholder="담당 기사에게 전달할 내용" value={description} onChange={(e) => setDescription(e.target.value)} />
+            </div>
+          </div>
+        )}
+        {!canComplete && <p className="text-[10px] text-slate-400 mt-2">담당 기사를 1명 이상 선택해주세요</p>}
+        <button
+          onClick={() => canComplete && onCompleteQuoteSupply(q.id, assignees, dueDate, description)}
+          disabled={!canComplete}
+          className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg bg-blue-700 disabled:bg-slate-300 text-white active:bg-blue-800"
+        >
+          <PackageCheck size={14} /> 자재 지급 완료 체크
+        </button>
+      </div>
+    );
+  }
+  return null;
 }
 
 // 상비부품 보충 대기 한 건.
@@ -485,31 +504,52 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
   const sites = useContext(SitesContext);
   const [detail, setDetail] = useState(null);
   const [pdfFullscreen, setPdfFullscreen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("전체");
   const shownDetail = detail ?? (focusId ? active.find((q) => q.id === focusId) : null);
   const closeDetail = () => { setDetail(null); setPdfFullscreen(false); if (focusId) onFocusHandled?.(); };
   // 데스크탑 관리자웹(MaterialsAdmin.jsx의 RequestDetailModal)과 같은 기준 — 요청접수 이후(작성
   // 이상)면 "견적 상세내역"으로, 공사내용 대신 견적명·PDF 미리보기를 보여준다.
   const isDraftedQuote = shownDetail && shownDetail.status !== "요청접수";
   const shownSite = shownDetail && sites.find((s) => s.id === shownDetail.siteId);
+
+  const addressOf = (q) => sites.find((s) => s.id === q.siteId)?.address ?? "";
+  const trimmedQuery = query.trim().toLowerCase();
+  const filtered = active
+    .filter((r) => statusFilter === "전체" || r.status === statusFilter)
+    .filter((r) => !trimmedQuery || r.siteName?.toLowerCase().includes(trimmedQuery) || addressOf(r).toLowerCase().includes(trimmedQuery));
+  const counts = {
+    전체: active.length,
+    요청접수: active.filter((r) => r.status === "요청접수").length,
+    작성: active.filter((r) => r.status === "작성").length,
+    승인: active.filter((r) => r.status === "승인").length,
+  };
+
   return (
     <div>
-      <SwipeCarousel
-        items={active}
-        emptyText="진행 중인 견적 요청이 없습니다"
-        renderItem={(q) => (
-          <QuotePendingCard
-            q={q}
-            engineerNames={engineerNames}
-            onAdvanceQuote={onAdvanceQuote}
-            onOpenWizard={onOpenWizard}
-            onSendQuote={onSendQuote}
-            onCompleteQuoteSupply={onCompleteQuoteSupply}
-            onAttachQuotePhoto={onAttachQuotePhoto}
-            onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
-            onOpenDetail={setDetail}
-          />
-        )}
-      />
+      <div className="relative mb-2.5">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input className={`${inputCls} pl-8`} placeholder="현장명·주소 검색" value={query} onChange={(e) => setQuery(e.target.value)} />
+      </div>
+      <div className="flex gap-1.5 mb-3 overflow-x-auto">
+        {["전체", "요청접수", "작성", "승인"].map((s) => (
+          <button
+            key={s}
+            onClick={() => setStatusFilter(s)}
+            className={`shrink-0 text-[11px] font-bold px-2.5 py-1.5 rounded-full ${statusFilter === s ? "bg-blue-700 text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+          >
+            {s} {counts[s]}
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <p className="text-xs text-slate-400 text-center py-8">
+          {active.length === 0 ? "진행 중인 견적 요청이 없습니다" : "검색 결과가 없습니다"}
+        </p>
+      ) : (
+        filtered.map((q) => <QuoteListRow key={q.id} q={q} onOpenDetail={setDetail} />)
+      )}
 
       {completedCount > 0 && (
         <button onClick={onOpenHistory} className="w-full mt-3 flex items-center justify-center gap-1 text-xs font-bold text-blue-600 py-2">
@@ -596,6 +636,17 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
               </div>
             )}
           </div>
+          <QuoteDetailActions
+            key={shownDetail.id}
+            q={shownDetail}
+            engineerNames={engineerNames}
+            onAdvanceQuote={onAdvanceQuote}
+            onOpenWizard={onOpenWizard}
+            onSendQuote={onSendQuote}
+            onCompleteQuoteSupply={onCompleteQuoteSupply}
+            onAttachQuotePhoto={onAttachQuotePhoto}
+            onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
+          />
         </Sheet>
       )}
 
