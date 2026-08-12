@@ -3,11 +3,11 @@
 // 관리자 콘솔 공용 헬퍼 — 표기(호기·담당자)는 v2 FK 우선, 옛 라벨 fallback.
 import { useState, useRef, createContext } from "react";
 import { createPortal } from "react-dom";
-import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil, Paperclip } from "lucide-react";
+import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil, Paperclip, Camera, Image as ImageIcon } from "lucide-react";
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
 import { shortDate, parseShortDate, autoFormatShortDate, formatUnitLabel, sortEngineersByDistance, busyStatusOf } from "@/lib/utils";
 import { confirmAsync } from "@/app/components/ConfirmHost";
-import { PhotoLightboxPane } from "@/app/components/ui";
+import { PhotoLightboxPane, Sheet } from "@/app/components/ui";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
 
 export const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
@@ -186,36 +186,48 @@ export function Modal({ title, onClose, children, wide }) {
 // 여러 장이면 좌우로 넘기고, 다운로드·삭제·추가까지 한 곳에서 한다 (현장정보 계약서와 인사관리 첨부 공통 사용).
 export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파일 첨부 (사진/PDF)", height = "h-[60vh]", onUpload, onSave }) {
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [choosing, setChoosing] = useState(false);
   const [idx, setIdx] = useState(0);
+  const [viewerIndex, setViewerIndex] = useState(null);
   const current = urls[Math.min(idx, urls.length - 1)];
   const isPdf = (current ?? "").toLowerCase().includes(".pdf");
+  // 사진만 받는 곳(부품현황 등)에서만 카메라/사진첩 선택 시트 + 크게보기를 켠다 — PDF도 받는
+  // 곳(계약서 등)은 카메라 촬영이 의미 없고, PDF가 섞여 있으면 크게보기 인덱스가 어긋난다.
+  const photoOnly = accept === "image/*";
 
-  async function uploadFile(file) {
-    if (!file) return;
+  async function uploadFiles(fileList) {
+    const files = [...(fileList ?? [])];
+    if (files.length === 0) return;
     setUploading(true);
-    try {
-      const url = await onUpload(file);
-      const next = [...urls, url];
-      await onSave(next);
-      setIdx(next.length - 1);
-    } catch (err) {
-      alert("업로드 실패: " + (err.message ?? "알 수 없는 오류"));
+    let currentUrls = urls;
+    for (const file of files) {
+      try {
+        const url = await onUpload(file);
+        currentUrls = [...currentUrls, url];
+        // 여러 장을 연달아 올릴 때 저장 요청이 순서대로 끝나야 서로 덮어쓰지 않는다.
+        await onSave(currentUrls);
+        setIdx(currentUrls.length - 1);
+      } catch (err) {
+        alert("업로드 실패: " + (err.message ?? "알 수 없는 오류"));
+      }
     }
     setUploading(false);
   }
 
   function handleFile(e) {
-    const file = e.target.files?.[0];
+    const files = e.target.files;
     e.target.value = "";
-    uploadFile(file);
+    uploadFiles(files);
   }
 
   function handleDrop(e) {
     e.preventDefault();
     setDragOver(false);
-    uploadFile(e.dataTransfer.files?.[0]);
+    uploadFiles(e.dataTransfer.files);
   }
 
   const dragProps = {
@@ -231,13 +243,48 @@ export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파
     setIdx((i) => Math.max(0, Math.min(i, next.length - 1)));
   }
 
+  function openPicker() {
+    if (photoOnly) setChoosing(true);
+    else fileInputRef.current?.click();
+  }
+
+  const pickerInputs = photoOnly ? (
+    <>
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
+      <input ref={galleryInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFile} />
+    </>
+  ) : (
+    <input ref={fileInputRef} type="file" accept={accept} className="hidden" onChange={handleFile} />
+  );
+
+  const chooserSheet = choosing && (
+    <Sheet title="사진 추가" onClose={() => setChoosing(false)}>
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={() => { setChoosing(false); cameraInputRef.current?.click(); }}
+          className="w-full flex items-center gap-2.5 text-sm font-bold text-slate-800 bg-slate-100 rounded-xl px-4 py-3.5 active:bg-slate-200"
+        >
+          <Camera size={18} /> 카메라로 촬영
+        </button>
+        <button
+          type="button"
+          onClick={() => { setChoosing(false); galleryInputRef.current?.click(); }}
+          className="w-full flex items-center gap-2.5 text-sm font-bold text-slate-800 bg-slate-100 rounded-xl px-4 py-3.5 active:bg-slate-200"
+        >
+          <ImageIcon size={18} /> 사진첩에서 선택
+        </button>
+      </div>
+    </Sheet>
+  );
+
   if (urls.length === 0) {
     return (
       <>
-        <input ref={fileInputRef} type="file" accept={accept} className="hidden" onChange={handleFile} />
+        {pickerInputs}
         <button
           type="button"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={openPicker}
           disabled={uploading}
           {...dragProps}
           className={`w-full border-2 border-dashed rounded-xl py-8 flex flex-col items-center gap-1.5 disabled:opacity-50 ${dragOver ? "border-blue-400 bg-blue-50 text-blue-500" : "border-slate-300 text-slate-500"}`}
@@ -245,6 +292,7 @@ export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파
           <Paperclip size={22} />
           <span className="text-xs font-semibold">{uploading ? "업로드 중..." : dragOver ? "여기에 놓기" : `${uploadLabel} (끌어다 놓기 가능)`}</span>
         </button>
+        {chooserSheet}
       </>
     );
   }
@@ -266,7 +314,12 @@ export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파
         {isPdf ? (
           <iframe src={current} className="w-full h-full" title="첨부파일" />
         ) : (
-          <img src={current} alt="첨부파일" className="max-w-full max-h-full object-contain" />
+          <img
+            src={current}
+            alt="첨부파일"
+            className={`max-w-full max-h-full object-contain ${photoOnly ? "cursor-pointer" : ""}`}
+            onClick={photoOnly ? () => setViewerIndex(idx) : undefined}
+          />
         )}
         {urls.length > 1 && (
           <>
@@ -294,16 +347,20 @@ export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파
             삭제
           </button>
         </div>
-        <input ref={fileInputRef} type="file" accept={accept} className="hidden" onChange={handleFile} />
+        {pickerInputs}
         <button
           type="button"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={openPicker}
           disabled={uploading}
           className="flex items-center gap-1 text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 disabled:opacity-50"
         >
           <Paperclip size={13} /> {uploading ? "업로드 중..." : "추가"}
         </button>
       </div>
+      {chooserSheet}
+      {photoOnly && viewerIndex != null && (
+        <PhotoLightbox urls={urls} index={viewerIndex} onIndexChange={setViewerIndex} onClose={() => setViewerIndex(null)} />
+      )}
     </div>
   );
 }
