@@ -6,7 +6,7 @@ import { Home, AlertTriangle, CalendarCheck, CalendarClock, ShieldCheck, Package
 import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken } from "@/lib/supabaseClient";
 import { authFetch } from "@/lib/apiFetch";
-import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode } from "@/lib/mappers";
+import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode, mapUnitPartPhoto } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent, quoteGrandTotal } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { DutySwapNotice } from "@/app/components/DutyRoster";
@@ -121,6 +121,7 @@ export default function App() {
   const [inspections, setInspections] = useState([]);
   const [todos, setTodos] = useState([]);
   const [billings, setBillings] = useState([]);
+  const [unitPartPhotos, setUnitPartPhotos] = useState([]); // 호기별 부품현황 사진(1장=1행)
   const [materialRequests, setMaterialRequests] = useState([]);
   const [quoteRequests, setQuoteRequests] = useState([]);
   const [restockRequests, setRestockRequests] = useState([]);
@@ -734,6 +735,7 @@ export default function App() {
         dutyRes,
         dutySwapRes,
         leaveRes,
+        unitPartPhotosRes,
       ] = await Promise.all([
         supabase.from("sites").select("*"),
         // site_managers는 1021행(2026-08-11 기준)으로 기본 1000행 한도를 넘어서, 페이지네이션
@@ -757,6 +759,7 @@ export default function App() {
         supabase.from("duty_schedules").select("*").gte("duty_date", TODAY_STR.slice(0, 8) + "01").order("duty_date"),
         supabase.from("duty_swaps").select("*"),
         supabase.from("leaves").select("*").lte("start_date", TODAY_STR).gte("end_date", TODAY_STR),
+        supabase.from("unit_part_photos").select("*"), // 테이블 없으면(마이그레이션 전) error → 빈 배열
       ]);
       setSites((sitesRes.data ?? []).map(mapSite));
       setSiteManagers((siteManagersRes.data ?? []).map(mapSiteManager));
@@ -766,6 +769,7 @@ export default function App() {
       setTodos((todosRes.data ?? []).map(mapTodo));
       setQuoteRequests((quoteRes.data ?? []).map(mapQuoteRequest));
       setBillings((billingsRes.data ?? []).map(mapBilling));
+      setUnitPartPhotos((unitPartPhotosRes.data ?? []).map(mapUnitPartPhoto));
       setRestockRequests((restockRes.data ?? []).map(mapRestockRequest));
       setFeed((feedRes.data ?? []).map(mapFeedPost));
       const allProfiles = engineersRes.data ?? [];
@@ -835,6 +839,21 @@ export default function App() {
   async function handleUpdateSiteAccessInfo(siteId, accessInfo) {
     if (!(await writeOk(supabase.from("sites").update({ access_info: accessInfo }).eq("id", siteId), "출입 정보 저장 실패"))) return;
     setSites((prev) => prev.map((s) => (s.id === siteId ? { ...s, accessInfo } : s)));
+  }
+
+  async function handleAddUnitPartPhoto({ unitId, category, subcategory, part, url }) {
+    const { data, error } = await supabase
+      .from("unit_part_photos")
+      .insert({ unit_id: unitId, category, subcategory, part, url, uploaded_by: profile?.id })
+      .select()
+      .single();
+    if (error) { alert("사진 저장 실패\n" + error.message); return; }
+    setUnitPartPhotos((prev) => [...prev, mapUnitPartPhoto(data)]);
+  }
+
+  async function handleRemoveUnitPartPhoto(photoId) {
+    if (!(await writeOk(supabase.from("unit_part_photos").delete().eq("id", photoId), "사진 삭제 실패"))) return;
+    setUnitPartPhotos((prev) => prev.filter((p) => p.id !== photoId));
   }
 
   // ★ 고장 출동 응답/내가 출동하기 → ETA 확정 (홈, 고장접수 탭 공용)
@@ -2320,7 +2339,7 @@ export default function App() {
               toast={failureToast}
             />
           )}
-          {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} quoteRequests={quoteRequests} todos={todos} siteManagers={siteManagers} onUpdateSiteNotes={handleUpdateSiteNotes} onUpdateSiteAccessInfo={handleUpdateSiteAccessInfo} />}
+          {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} quoteRequests={quoteRequests} todos={todos} siteManagers={siteManagers} onUpdateSiteNotes={handleUpdateSiteNotes} onUpdateSiteAccessInfo={handleUpdateSiteAccessInfo} unitPartPhotos={unitPartPhotos} onAddUnitPartPhoto={handleAddUnitPartPhoto} onRemoveUnitPartPhoto={handleRemoveUnitPartPhoto} />}
           {tab === "failure" && (
             <FailureTab
               onReported={handleFailureReported}

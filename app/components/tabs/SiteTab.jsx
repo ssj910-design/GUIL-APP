@@ -10,10 +10,11 @@ import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetail
 import { BillingCard } from "@/app/components/tabs/BillingTab";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
+import { PartPhotosPanel } from "@/app/components/tabs/PartPhotosPanel";
 
 
 /* ---- 승강기정보 화면 (정보 / 고장 / 검사) ---- */
-function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspections, billings, quoteRequests, todos, onBack, onHome }) {
+function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspections, billings, quoteRequests, todos, unitPartPhotos, onAddUnitPartPhoto, onRemoveUnitPartPhoto, onBack, onHome }) {
   // v2: units 테이블에서 이 호기의 실제 정보(호기별 모델·설치일·고유번호)를 찾는다.
   // 마이그레이션 전 DB에서는 realUnit이 없어 기존 방식(site 공통값) 그대로 동작.
   const allUnits = useContext(UnitsContext);
@@ -35,9 +36,10 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
   const unitQuotes = [...quoteRequests
     .filter((q) => (realUnit?.id && q.unitId ? q.unitId === realUnit.id : q.siteId === site.id && q.elevatorNo === unit))]
     .sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate));
+  const unitPhotos = (unitPartPhotos ?? []).filter((p) => p.unitId === realUnit?.id);
   const [inspectionFailTarget, setInspectionFailTarget] = useState(null);
   const [photoViewer, setPhotoViewer] = useState(null);
-  const elevatorSubTabs = ["정보", "고장", "검사", "부품교체내역", "견적내역"];
+  const elevatorSubTabs = ["정보", "고장", "검사", "부품교체내역", "부품현황", "견적내역"];
   const swipe = useSwipeSubtab(elevatorSubTabs, subTab, setSubTab);
 
   // 정보/고장/검사/부품교체내역 각 탭의 패널 — SwipeSubtabTrack이 드래그 중 옆 탭을 함께 렌더링할 때 쓴다.
@@ -218,6 +220,15 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
             )}
           </div>
         );
+
+    if (tab === "부품현황") return (
+      <PartPhotosPanel
+        unitId={realUnit?.id}
+        photos={unitPhotos}
+        onAdd={onAddUnitPartPhoto}
+        onRemove={onRemoveUnitPartPhoto}
+      />
+    );
 
     return (
           <div className="bg-slate-50 pt-4 pb-6 px-5">
@@ -575,7 +586,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
 }
 
 
-export function SiteTab({ inspections, failures, billings, quoteRequests, todos, siteManagers, onUpdateSiteNotes, onUpdateSiteAccessInfo }) {
+export function SiteTab({ inspections, failures, billings, quoteRequests, todos, siteManagers, onUpdateSiteNotes, onUpdateSiteAccessInfo, unitPartPhotos, onAddUnitPartPhoto, onRemoveUnitPartPhoto }) {
   const allSites = useContext(SitesContext);
   const allUnits = useContext(UnitsContext);
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
@@ -624,6 +635,9 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
         billings={billings}
         quoteRequests={quoteRequests}
         todos={todos}
+        unitPartPhotos={unitPartPhotos}
+        onAddUnitPartPhoto={onAddUnitPartPhoto}
+        onRemoveUnitPartPhoto={onRemoveUnitPartPhoto}
         onBack={() => setView("site")}
         onHome={backToList}
       />
