@@ -339,14 +339,9 @@ export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파
         )}
       </div>
       <div className="flex items-center justify-between">
-        <div className="flex gap-2">
-          <button onClick={() => downloadPhoto(current, `attachment-${idx + 1}.${extOf(current)}`)} className="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5">
-            다운로드
-          </button>
-          <button onClick={removeCurrent} className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">
-            삭제
-          </button>
-        </div>
+        <button onClick={removeCurrent} className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">
+          삭제
+        </button>
         {pickerInputs}
         <button
           type="button"
