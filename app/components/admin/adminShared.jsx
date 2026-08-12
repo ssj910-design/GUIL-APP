@@ -187,13 +187,12 @@ export function Modal({ title, onClose, children, wide }) {
 export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파일 첨부 (사진/PDF)", height = "h-[60vh]", onUpload, onSave }) {
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [idx, setIdx] = useState(0);
   const current = urls[Math.min(idx, urls.length - 1)];
   const isPdf = (current ?? "").toLowerCase().includes(".pdf");
 
-  async function handleFile(e) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
+  async function uploadFile(file) {
     if (!file) return;
     setUploading(true);
     try {
@@ -206,6 +205,24 @@ export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파
     }
     setUploading(false);
   }
+
+  function handleFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    uploadFile(file);
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    setDragOver(false);
+    uploadFile(e.dataTransfer.files?.[0]);
+  }
+
+  const dragProps = {
+    onDragOver: (e) => { e.preventDefault(); setDragOver(true); },
+    onDragLeave: () => setDragOver(false),
+    onDrop: handleDrop,
+  };
 
   async function removeCurrent() {
     if (!(await confirmAsync("이 파일을 삭제할까요?"))) return;
@@ -222,10 +239,11 @@ export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
-          className="w-full border-2 border-dashed border-slate-300 rounded-xl py-8 flex flex-col items-center gap-1.5 text-slate-500 disabled:opacity-50"
+          {...dragProps}
+          className={`w-full border-2 border-dashed rounded-xl py-8 flex flex-col items-center gap-1.5 disabled:opacity-50 ${dragOver ? "border-blue-400 bg-blue-50 text-blue-500" : "border-slate-300 text-slate-500"}`}
         >
           <Paperclip size={22} />
-          <span className="text-xs font-semibold">{uploading ? "업로드 중..." : uploadLabel}</span>
+          <span className="text-xs font-semibold">{uploading ? "업로드 중..." : dragOver ? "여기에 놓기" : `${uploadLabel} (끌어다 놓기 가능)`}</span>
         </button>
       </>
     );
@@ -233,7 +251,15 @@ export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파
 
   return (
     <div className="space-y-3">
-      <div className={`relative bg-slate-50 border border-slate-200 rounded-xl overflow-hidden ${height} flex items-center justify-center`}>
+      <div
+        {...dragProps}
+        className={`relative bg-slate-50 border rounded-xl overflow-hidden ${height} flex items-center justify-center ${dragOver ? "border-blue-400 ring-2 ring-blue-200" : "border-slate-200"}`}
+      >
+        {dragOver && (
+          <div className="absolute inset-0 z-20 bg-blue-50/90 flex items-center justify-center text-sm font-bold text-blue-600">
+            여기에 놓기
+          </div>
+        )}
         {urls.length > 1 && (
           <span className="absolute top-2 right-2 z-10 text-[11px] font-bold text-white bg-black/50 rounded-full px-2 py-0.5">{idx + 1}/{urls.length}</span>
         )}
