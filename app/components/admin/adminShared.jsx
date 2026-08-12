@@ -593,6 +593,9 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
         ref={containerRef}
         className="flex-1 relative min-h-0 touch-none overflow-hidden"
         onClick={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
         {...handlers}
       >
         {urls.length > 1 && (
