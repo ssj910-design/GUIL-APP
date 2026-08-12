@@ -1,7 +1,7 @@
 import { useState, useContext, useRef } from "react";
 import { X, Camera, Search, Image as ImageIcon } from "lucide-react";
 import { uploadPhoto } from "@/lib/photos";
-import { inputCls } from "@/app/components/ui";
+import { inputCls, Sheet } from "@/app/components/ui";
 import { SitesContext } from "@/app/components/context";
 import { activeSites } from "@/lib/utils";
 
@@ -54,7 +54,13 @@ export function SiteSearchSelect({ value, onChange, placeholder = "현장명을 
 
 
 export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = true, uploadFolder, onUploaded }) {
-  const fileInputRef = useRef(null);
+  // iOS Safari는 accept="image/*" 입력칸에 multiple까지 붙으면(여러 장 한꺼번에 선택) 카메라
+  // 촬영 옵션을 아예 빼고 곧장 사진 라이브러리 선택 화면으로 건너뛴다 — "촬영하면서 동시에
+  // 여러 장 선택"은 말이 안 되기 때문. 그래서 카메라 입력칸(한 장, capture)과 사진첩 입력칸
+  // (여러 장, multiple)을 따로 두고, "추가" 버튼을 누르면 그중 뭘 쓸지 먼저 고르게 한다.
+  const cameraInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
+  const [choosing, setChoosing] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   async function handleFiles(e) {
@@ -92,17 +98,11 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
         ))}
         {uploadFolder ? (
           <>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={handleFiles}
-            />
+            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFiles} />
+            <input ref={galleryInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => setChoosing(true)}
               disabled={uploading}
               className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 active:bg-slate-50 disabled:opacity-50"
             >
@@ -124,6 +124,26 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
       <p className={`text-[10px] ${required && photos.length === 0 ? "text-red-500 font-semibold" : "text-slate-400"}`}>
         {label} · {required ? "최소 1장 필수, " : ""}장수 제한 없음 · 현재 {photos.length}장
       </p>
+      {choosing && (
+        <Sheet title="사진 추가" onClose={() => setChoosing(false)}>
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => { setChoosing(false); cameraInputRef.current?.click(); }}
+              className="w-full flex items-center gap-2.5 text-sm font-bold text-slate-800 bg-slate-100 rounded-xl px-4 py-3.5 active:bg-slate-200"
+            >
+              <Camera size={18} /> 카메라로 촬영
+            </button>
+            <button
+              type="button"
+              onClick={() => { setChoosing(false); galleryInputRef.current?.click(); }}
+              className="w-full flex items-center gap-2.5 text-sm font-bold text-slate-800 bg-slate-100 rounded-xl px-4 py-3.5 active:bg-slate-200"
+            >
+              <ImageIcon size={18} /> 사진첩에서 선택
+            </button>
+          </div>
+        </Sheet>
+      )}
     </div>
   );
 }
