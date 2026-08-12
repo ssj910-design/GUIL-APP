@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { BRAND } from "@/lib/company";
 import { createPortal } from "react-dom";
-import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
@@ -450,6 +450,29 @@ export function DrillHeader({ title, onBack, onHome }) {
   );
 }
 
+// 메뉴 줄을 눌러 아래로 펼쳐지는 아코디언 (관리자앱 자재출하관리 등에서 쓰던 것을
+// 공용으로 옮김 — SiteTab.jsx의 부품현황에서도 재사용). icon을 안 넘기면 아이콘 없이.
+export function AccordionRow({ icon: Icon, label, badge, open, onToggle, children }) {
+  return (
+    <div>
+      <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-3.5 active:bg-slate-50">
+        <div className="flex items-center gap-3">
+          {Icon && (
+            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+              <Icon size={15} className="text-slate-600" />
+            </div>
+          )}
+          <span className="text-sm font-bold text-slate-800">{label}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {!!badge && <span className="text-[11px] font-bold text-white bg-blue-700 px-2 py-0.5 rounded-full">{badge}</span>}
+          <ChevronDown size={16} className={`text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+        </div>
+      </button>
+      {open && <div className="px-3 pb-4 pt-1 bg-slate-50/60 border-t border-slate-100">{children}</div>}
+    </div>
+  );
+}
 
 export function SmsToast({ message }) {
   if (!message) return null;

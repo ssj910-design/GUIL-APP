@@ -1,7 +1,7 @@
 import { useState, useContext, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Package, Receipt, ChevronRight, ChevronLeft, ChevronDown, FileText, PackageCheck, RotateCcw, PackageX, Search, Repeat, KeyRound } from "lucide-react";
-import { Badge, PhotoThumb, PhotoGrid, PrimaryButton, Sheet, Field, inputCls, DrillHeader } from "@/app/components/ui";
+import { Badge, PhotoThumb, PhotoGrid, PrimaryButton, Sheet, Field, inputCls, DrillHeader, AccordionRow } from "@/app/components/ui";
 import { AuthContext, SitesContext } from "@/app/components/context";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
@@ -33,26 +33,6 @@ function AdminMenuRow({ icon: Icon, label, badge, onClick }) {
   );
 }
 
-// 메뉴 줄을 눌러 아래로 펼쳐지는 아코디언. 펼친 영역엔 처리 대기 건을 한 건씩 스와이프로 넘기는 캐러셀이 들어간다.
-function AccordionRow({ icon: Icon, label, badge, open, onToggle, children }) {
-  return (
-    <div>
-      <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-3.5 active:bg-slate-50">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-            <Icon size={15} className="text-slate-600" />
-          </div>
-          <span className="text-sm font-bold text-slate-800">{label}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {!!badge && <span className="text-[11px] font-bold text-white bg-blue-700 px-2 py-0.5 rounded-full">{badge}</span>}
-          <ChevronDown size={16} className={`text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
-        </div>
-      </button>
-      {open && <div className="px-3 pb-4 pt-1 bg-slate-50/60 border-t border-slate-100">{children}</div>}
-    </div>
-  );
-}
 
 // 처리 대기 건을 한 화면에 한 건씩 보여주고 좌우 스와이프(또는 화살표)로 넘긴다. 네이티브 가로 스크롤 스냅 사용.
 function SwipeCarousel({ items, renderItem, emptyText }) {
