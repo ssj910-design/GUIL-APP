@@ -98,8 +98,10 @@ function LeafDetail({ unitId, selected, photos, onAdd, onRemove }) {
       </p>
       <h3 className="text-sm font-extrabold text-slate-800 mb-3">{selected.part}</h3>
       <FileCarousel
+        key={`${selected.category}|${selected.subcategory}|${selected.part}`}
         urls={urls}
         accept="image/*"
+        chooser={false}
         uploadLabel="사진 촬영/선택"
         height="h-64"
         onUpload={(file) => uploadPhoto(file, `unit-parts/${unitId}`)}

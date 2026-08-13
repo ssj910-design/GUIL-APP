@@ -207,8 +207,9 @@ export default function AdminApp() {
           supabase.from("feed_posts").select("*").order("created_at", { ascending: true }),
           // 기본 조회는 1000행에서 잘려 새로 추가된 코드가 누락될 수 있어(실제로 발생) 전체를 페이지네이션으로 받는다.
           fetchAll("error_codes"),
-          // 부품현황 사진 — 모바일 ElevatorFieldApp.jsx와 동일하게 페이지네이션 없는 단순 조회.
-          supabase.from("unit_part_photos").select("*"),
+          // 부품현황 사진 — 호기당 38리프×사진 1행이라 전체 시스템 기준 1000행을 금방 넘는다.
+          // site_managers·error_codes와 같은 이유로 페이지네이션 없이는 조용히 잘린다.
+          fetchAll("unit_part_photos"),
         ]);
       setData({
         sites: (sites.data ?? []).map(mapSite),

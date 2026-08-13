@@ -184,7 +184,7 @@ export function Modal({ title, onClose, children, wide }) {
 
 // 계약서·지급대장 등 첨부파일 뷰어 — 클릭해서 새 탭을 열 필요 없이 바로 보여주고,
 // 여러 장이면 좌우로 넘기고, 다운로드·삭제·추가까지 한 곳에서 한다 (현장정보 계약서와 인사관리 첨부 공통 사용).
-export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파일 첨부 (사진/PDF)", height = "h-[60vh]", onUpload, onSave }) {
+export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파일 첨부 (사진/PDF)", height = "h-[60vh]", onUpload, onSave, chooser = true }) {
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
@@ -247,20 +247,21 @@ export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파
   }
 
   function openPicker() {
-    if (photoOnly) setChoosing(true);
+    if (photoOnly && chooser) setChoosing(true);
+    else if (photoOnly) galleryInputRef.current?.click();
     else fileInputRef.current?.click();
   }
 
   const pickerInputs = photoOnly ? (
     <>
-      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
+      {chooser && <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />}
       <input ref={galleryInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFile} />
     </>
   ) : (
     <input ref={fileInputRef} type="file" accept={accept} className="hidden" onChange={handleFile} />
   );
 
-  const chooserSheet = choosing && (
+  const chooserSheet = chooser && choosing && (
     <Sheet title="사진 추가" onClose={() => setChoosing(false)}>
       <div className="space-y-2">
         <button
