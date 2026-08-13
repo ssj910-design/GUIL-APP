@@ -7,13 +7,14 @@
 import { useState } from "react";
 import { Plus, Trash2, Paperclip, FileText, ShieldCheck, BadgeCheck, PhoneCall } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { mapUnit, mapSite } from "@/lib/mappers";
+import { mapUnit, mapSite, mapUnitPartPhoto } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
 import { addDays, govDateToDashed, siteMatchesQuery, siteMatchReasons, formatPhone, shortDate, realInstallPlace, unitContractBadges } from "@/lib/utils";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { Modal, StatusBadge, DateTextInput, FileCarousel, sentHistory, Highlight } from "@/app/components/admin/adminShared";
+import { PartsStatusTab } from "@/app/components/admin/PartsStatusTab";
 import ImportSites from "@/app/components/admin/ImportSites";
 import VerifyImport from "@/app/components/admin/VerifyImport";
 import ImportEmergencyPhones from "@/app/components/admin/ImportEmergencyPhones";
@@ -173,7 +174,7 @@ function legacySiteFields(siteUnits) {
 }
 
 // 호기 상세정보 — 승강기정보(국가승강기정보센터 연동)/고장내역/검사내역/부품교체내역/견적내역
-function UnitDetailModal({ unit, site, failures, inspections, billings, quoteRequests, onClose, onSave }) {
+function UnitDetailModal({ unit, site, failures, inspections, billings, quoteRequests, unitPartPhotos, onAddPartPhoto, onRemovePartPhoto, onClose, onSave }) {
   const [tab, setTab] = useState("정보");
   const [failTarget, setFailTarget] = useState(null);
   // 정보 탭 — 건물명·호기 빼고는 여기서 직접 수정한다(승강기고유번호·설치일자는 표에서
@@ -210,19 +211,21 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
   const unitQuotes = quoteRequests
     .filter((q) => (q.unitId ? q.unitId === unit.id : q.siteId === site.id))
     .sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate));
+  const unitPhotos = unitPartPhotos.filter((p) => p.unitId === unit.id);
 
   return (
-    <Modal title={`${site.name} · ${unit.unitNo} 상세정보`} onClose={onClose} wide>
+    <Modal title={`${site.name} · ${unit.unitNo} 상세정보`} onClose={onClose} wide="xl">
       <div className="flex gap-1 mb-4 border-b border-slate-100 shrink-0">
-        {["정보", "고장내역", "검사내역", "부품교체내역", "견적내역"].map((t) => (
+        {["정보", "고장내역", "검사내역", "부품교체내역", "견적내역", "부품현황"].map((t) => (
           <button key={t} onClick={() => setTab(t)} className={`px-3 py-2 text-xs font-bold ${tab === t ? "text-blue-700 border-b-2 border-blue-700" : "text-slate-400"}`}>
             {t}
           </button>
         ))}
       </div>
 
-      {/* 탭마다 팝업 크기가 달라지지 않도록 고정 높이 + 내부 스크롤로 통일 */}
-      <div className="h-[26rem] overflow-y-auto">
+      {/* 탭마다 팝업 크기가 달라지지 않도록 고정 높이로 통일 — 부품현황은 좌우 2단이라
+          바깥은 넘침을 감추고 안쪽 두 단이 각자 스크롤한다. */}
+      <div className={tab === "부품현황" ? "h-[26rem] overflow-hidden" : "h-[26rem] overflow-y-auto"}>
         {tab === "정보" && (
           <div className="space-y-2 text-sm">
             <div className="flex justify-between border-b border-slate-50 pb-2">
@@ -418,6 +421,10 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
             </div>
           )
         )}
+
+        {tab === "부품현황" && (
+          <PartsStatusTab unitId={unit.id} photos={unitPhotos} onAdd={onAddPartPhoto} onRemove={onRemovePartPhoto} />
+        )}
       </div>
 
       {failTarget && (
@@ -510,7 +517,7 @@ function ContactRow({ c, onSave, onDelete, onSetPrimary, isDefault }) {
 }
 
 export default function SitesAdmin({ data, setData }) {
-  const { sites, units, profiles, failures, inspections, billings, siteManagers, quoteRequests } = data;
+  const { sites, units, profiles, failures, inspections, billings, siteManagers, quoteRequests, unitPartPhotos } = data;
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState(null);
   const [siteForm, setSiteForm] = useState(null); // 선택 현장 기본정보 편집값
@@ -727,6 +734,24 @@ export default function SitesAdmin({ data, setData }) {
     const nextUnits = units.map((u) => (u.id === unit.id ? { ...u, ...localPatch } : u));
     setData((prev) => ({ ...prev, units: nextUnits }));
     await syncLegacy(unit.siteId, nextUnits); // model·govNo가 legacy site 컬럼(elevator_model·gov_elevator_nos)에도 반영돼야 함
+  }
+
+  // 부품현황 탭 — 사진 1장 추가/삭제. 모바일 ElevatorFieldApp.jsx의
+  // handleAddUnitPartPhoto/handleRemoveUnitPartPhoto와 같은 테이블(unit_part_photos)을
+  // 쓰지만, 이 파일 관례대로 직접 supabase 호출 후 setData로 로컬 반영한다.
+  async function addUnitPartPhoto({ unitId, category, subcategory, part, url }) {
+    const { data: created, error } = await supabase
+      .from("unit_part_photos")
+      .insert({ unit_id: unitId, category, subcategory, part, url })
+      .select().single();
+    if (error) { alert("사진 저장 실패: " + error.message); return; }
+    setData((prev) => ({ ...prev, unitPartPhotos: [...prev.unitPartPhotos, mapUnitPartPhoto(created)] }));
+  }
+
+  async function removeUnitPartPhoto(photoId) {
+    const { error } = await supabase.from("unit_part_photos").delete().eq("id", photoId);
+    if (error) { alert("사진 삭제 실패: " + error.message); return; }
+    setData((prev) => ({ ...prev, unitPartPhotos: prev.unitPartPhotos.filter((p) => p.id !== photoId) }));
   }
 
   async function toggleUnitActive(unit) {
@@ -1391,6 +1416,9 @@ export default function SitesAdmin({ data, setData }) {
           inspections={inspections}
           billings={billings}
           quoteRequests={quoteRequests ?? []}
+          unitPartPhotos={unitPartPhotos}
+          onAddPartPhoto={addUnitPartPhoto}
+          onRemovePartPhoto={removeUnitPartPhoto}
           onClose={() => setUnitDetail(null)}
           onSave={saveUnitDetail}
         />
