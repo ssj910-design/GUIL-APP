@@ -3,7 +3,7 @@
 // 관리자 콘솔 공용 헬퍼 — 표기(호기·담당자)는 v2 FK 우선, 옛 라벨 fallback.
 import { useState, useRef, createContext } from "react";
 import { createPortal } from "react-dom";
-import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil, Paperclip, Camera, Image as ImageIcon, Download } from "lucide-react";
+import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil, Paperclip, Camera, Image as ImageIcon, Download, Trash2 } from "lucide-react";
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
 import { shortDate, parseShortDate, autoFormatShortDate, formatUnitLabel, sortEngineersByDistance, busyStatusOf } from "@/lib/utils";
 import { confirmAsync } from "@/app/components/ConfirmHost";
@@ -184,7 +184,7 @@ export function Modal({ title, onClose, children, wide }) {
 
 // 계약서·지급대장 등 첨부파일 뷰어 — 클릭해서 새 탭을 열 필요 없이 바로 보여주고,
 // 여러 장이면 좌우로 넘기고, 다운로드·삭제·추가까지 한 곳에서 한다 (현장정보 계약서와 인사관리 첨부 공통 사용).
-export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파일 첨부 (사진/PDF)", height = "h-[60vh]", onUpload, onSave, chooser = true }) {
+export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파일 첨부 (사진/PDF)", height = "h-[60vh]", onUpload, onSave, chooser = true, layout = "carousel" }) {
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
@@ -246,6 +246,15 @@ export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파
     setIdx((i) => Math.max(0, Math.min(i, next.length - 1)));
   }
 
+  // grid 모드 전용 — 라이트박스에서 삭제를 확정했을 때 호출된다. 확인 대화상자는
+  // PhotoLightbox의 onDelete 핸들러가 이미 띄우고 난 뒤라 여기서는 바로 지운다.
+  async function deleteAt(i) {
+    const next = urls.filter((_, idx2) => idx2 !== i);
+    await onSave(next);
+    if (next.length === 0) setViewerIndex(null);
+    else setViewerIndex((v) => Math.min(v, next.length - 1));
+  }
+
   function openPicker() {
     if (photoOnly && chooser) setChoosing(true);
     else if (photoOnly) galleryInputRef.current?.click();
@@ -281,6 +290,54 @@ export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파
       </div>
     </Sheet>
   );
+
+  if (layout === "grid") {
+    return (
+      <div className="space-y-2">
+        {pickerInputs}
+        <div
+          {...dragProps}
+          className={`relative grid gap-2 rounded-xl ${dragOver ? "ring-2 ring-blue-300 bg-blue-50/40" : ""}`}
+          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(76px, 1fr))" }}
+        >
+          {dragOver && (
+            <div className="absolute inset-0 z-20 rounded-xl bg-blue-50/90 flex items-center justify-center text-xs font-bold text-blue-600 pointer-events-none">
+              여기에 놓기
+            </div>
+          )}
+          {urls.map((url, i) => (
+            <button
+              key={`${url}-${i}`}
+              type="button"
+              onClick={() => setViewerIndex(i)}
+              className="aspect-square rounded-xl overflow-hidden border border-slate-200"
+            >
+              <img src={url} alt="사진" className="w-full h-full object-cover" />
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={openPicker}
+            disabled={uploading}
+            className="aspect-square rounded-xl border-2 border-dashed border-slate-300 text-slate-400 flex flex-col items-center justify-center gap-1 disabled:opacity-50 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50"
+          >
+            <Paperclip size={16} />
+            <span className="text-[10px] font-semibold">{uploading ? "업로드 중..." : "추가"}</span>
+          </button>
+        </div>
+        {chooserSheet}
+        {viewerIndex != null && (
+          <PhotoLightbox
+            urls={urls}
+            index={viewerIndex}
+            onIndexChange={setViewerIndex}
+            onClose={() => setViewerIndex(null)}
+            onDelete={() => deleteAt(viewerIndex)}
+          />
+        )}
+      </div>
+    );
+  }
 
   if (urls.length === 0) {
     return (
@@ -547,7 +604,7 @@ export function PhotoGrid({ urls = [], cols = 4, emptyText = "등록된 사진�
 
 // 크게보기 — 좌우 화살표·스와이프로 이동, 더블탭·핀치·휠로 확대(확대 중엔 드래그로 이동), 지금
 // 보는 사진 한 장 또는 전체(zip) 다운로드.
-function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
+function PhotoLightbox({ urls, index, onIndexChange, onClose, onDelete }) {
   const url = urls[index];
   const { containerRef, idx, showPrev, showNext, trackStyle, zoom, pan, isGesturing, handlers } =
     usePhotoLightboxGestures(urls.length, index, onIndexChange);
@@ -586,6 +643,11 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
     }
   }
 
+  async function handleDelete() {
+    if (!(await confirmAsync("이 파일을 삭제할까요?"))) return;
+    await onDelete();
+  }
+
   // 사이드바(z-50)에 화살표가 가려지지 않도록 body에 바로 붙인다 — 이 div는 관리자 콘솔
   // 레이아웃(사이드바·본문) 트리 밖에서 렌더링되어 항상 전체 뷰포트 기준으로 뜬다.
   return createPortal(
@@ -596,6 +658,11 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
           <button onClick={() => setDownloadMenuOpen(true)} className="p-1.5 text-white/80 hover:text-white" aria-label="다운로드">
             <Download size={20} />
           </button>
+          {onDelete && (
+            <button onClick={handleDelete} className="p-1.5 text-white/80 hover:text-red-400" aria-label="삭제">
+              <Trash2 size={20} />
+            </button>
+          )}
           <button onClick={onClose} className="p-1.5 text-white/80 hover:text-white"><X size={20} /></button>
         </div>
       </div>
