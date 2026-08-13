@@ -60,10 +60,12 @@
 - 현재 모바일 `PartLeafRow`(`app/components/tabs/PartPhotosPanel.jsx`) 안에 있는
   "다음 urls와 이전 urls를 비교해 추가/삭제 중 뭐가 일어났는지 판별"하는 로직
   (사진 URL이 여러 장 겹칠 때를 위한 멀티셋 기반 비교, 기존 주석에 설명된 그 로직)을
-  새 훅 `app/hooks/usePartLeafPhotos.js`로 뽑아낸다.
-  시그니처: `usePartLeafPhotos({ unitId, category, subcategory, part, photos, onAdd, onRemove })`
-  → `{ urls, handleSave }`.
-  모바일 `PartLeafRow`와 관리자웹 우측 상세 패널이 이 훅 하나를 같이 쓴다 — 로직은
+  새 파일 `lib/partLeafPhotos.js`로 뽑아낸다. React 상태(useState 등)를 쓰지 않는
+  순수 함수라 "훅"이 아니라 일반 유틸 함수로 둔다(더 단순하고, `unitPartTaxonomy.js`처럼
+  `.check.mjs`로 바로 단위 검증 가능).
+  시그니처: `partLeafPhotos(photos, category, subcategory, part)` → `{ mine, urls }`,
+  `savePartLeafPhotos({ unitId, category, subcategory, part, mine, urls, nextUrls, onAdd, onRemove })`.
+  모바일 `PartLeafRow`와 관리자웹 우측 상세 패널이 이 두 함수를 같이 쓴다 — 로직은
   한 곳, 감싸는 UI(아코디언 행 vs 상세 패널)만 다르다.
 
 **신규**
