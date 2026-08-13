@@ -9,7 +9,7 @@ import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, Cale
 import { supabase, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken } from "@/lib/supabaseClient";
 import {
   mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest,
-  mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck, mapSelfCheckItem, mapFeedPost, mapRestockRequest, mapErrorCode,
+  mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck, mapSelfCheckItem, mapFeedPost, mapRestockRequest, mapErrorCode, mapUnitPartPhoto,
 } from "@/lib/mappers";
 import Dashboard from "@/app/components/admin/Dashboard";
 import SitesAdmin from "@/app/components/admin/SitesAdmin";
@@ -63,7 +63,7 @@ export default function AdminApp() {
   const [data, setData] = useState({
     sites: [], units: [], siteManagers: [], failures: [], inspections: [],
     materialRequests: [], quoteRequests: [], restockRequests: [], todos: [], billings: [],
-    selfChecks: [], selfCheckItems: [], profiles: [], feed: [], errorCodes: [],
+    selfChecks: [], selfCheckItems: [], profiles: [], feed: [], errorCodes: [], unitPartPhotos: [],
   });
 
   // ── 콘솔 로그인 (관리자만) ──
@@ -186,7 +186,7 @@ export default function AdminApp() {
     // 로그인 안 한 상태에서도 네트워크 탭에 전체 데이터가 그대로 찍혀 새어나간다.
     if (!SKIP_LOGIN && !me) return;
     async function load() {
-      const [sites, units, siteManagers, failures, inspections, materials, quotes, restock, todos, billings, selfChecks, selfCheckItems, profiles, feed, errorCodes] =
+      const [sites, units, siteManagers, failures, inspections, materials, quotes, restock, todos, billings, selfChecks, selfCheckItems, profiles, feed, errorCodes, unitPartPhotos] =
         await Promise.all([
           supabase.from("sites").select("*").order("name"),
           supabase.from("units").select("*").order("seq"),
@@ -207,6 +207,8 @@ export default function AdminApp() {
           supabase.from("feed_posts").select("*").order("created_at", { ascending: true }),
           // 기본 조회는 1000행에서 잘려 새로 추가된 코드가 누락될 수 있어(실제로 발생) 전체를 페이지네이션으로 받는다.
           fetchAll("error_codes"),
+          // 부품현황 사진 — 모바일 ElevatorFieldApp.jsx와 동일하게 페이지네이션 없는 단순 조회.
+          supabase.from("unit_part_photos").select("*"),
         ]);
       setData({
         sites: (sites.data ?? []).map(mapSite),
@@ -224,6 +226,7 @@ export default function AdminApp() {
         profiles: profiles.data ?? [],
         feed: (feed.data ?? []).map(mapFeedPost),
         errorCodes: (errorCodes.data ?? []).map(mapErrorCode),
+        unitPartPhotos: (unitPartPhotos.data ?? []).map(mapUnitPartPhoto),
       });
       setLoading(false);
     }
