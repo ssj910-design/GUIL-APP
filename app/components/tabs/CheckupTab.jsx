@@ -59,6 +59,13 @@ function siteFlagResult(site, units) {
   return null;
 }
 
+// 이 탭(자체점검) 전용 — 호이스트/주차기/턴테이블처럼 법정 승강기가 아닌 설비(requiresSelfCheck
+// = false)는 대수 표시·호기 선택·일정등록·등록 대상에서 전부 뺀다. 고장접수 등 다른 탭은
+// 이 필터 없이 siteUnitList를 그대로 쓰므로 여기서만 감싼다.
+function selfCheckUnitList(site, units) {
+  return siteUnitList(site, units).filter((u) => u.id && u.requiresSelfCheck !== false);
+}
+
 // 검사관리-검사도래현장과 같은 기준(관리자 수기입력 검사일정, 기간 제한 없음, 판정 전)으로
 // 이 현장에 도래한 검사가 있으면 "정기검사 8월 26일" 형태로 보여준다(시간은 뺌). 검사일이
 // 지나면(daysLeft < 0) 자동으로 빠진다.
@@ -129,7 +136,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
 
   // 이 현장 이번 달 점검 예정일(가장 빠른 것) — 일정 등록된 현장만 값이 있다. 없으면 null(미정).
   const plannedDateOf = (s) => {
-    const uids = siteUnitList(s, units).filter((u) => u.id).map((u) => u.id);
+    const uids = selfCheckUnitList(s, units).map((u) => u.id);
     const dates = checksThisMonth
       .filter((c) => uids.includes(c.unitId) && c.status === "예정" && c.plannedDate)
       .map((c) => c.plannedDate);
@@ -146,7 +153,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   // 로컬 등록(status: 완료)만 보고 숨기면 안 된다 — 공단 제출에 실패한 건(gov_result_code가
   // "000"이 아니거나 아예 없음)은 재제출이 필요하므로 계획 목록에 계속 남아 있어야 한다.
   function isSiteDoneThisMonth(s) {
-    const siteUnits = siteUnitList(s, units).filter((u) => u.id);
+    const siteUnits = selfCheckUnitList(s, units);
     if (siteUnits.length === 0) return false;
     return siteUnits.every((u) => checksThisMonth.some((c) => c.unitId === u.id && c.status === "완료" && c.govResultCode === "000"));
   }
@@ -209,7 +216,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   const { days: HOLIDAY } = useHolidays(year);
 
   async function registerSchedule() {
-    const targetUnits = siteUnitList(scheduleTarget, units).filter((u) => u.id);
+    const targetUnits = selfCheckUnitList(scheduleTarget, units);
     if (targetUnits.length === 0) { setScheduleTarget(null); return; }
     setSavingSchedule(true);
     const { error: genError } = await supabase.rpc("generate_self_checks", { p_ym: ym });
@@ -277,7 +284,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   }
 
   function openCheckup(s) {
-    const targetUnits = siteUnitList(s, units).filter((u) => u.id);
+    const targetUnits = selfCheckUnitList(s, units);
     if (targetUnits.length === 0) return;
     setCheckupTarget(s);
     loadCheckupForUnit(targetUnits[0].id, s);
@@ -428,7 +435,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
           </div>
           <div className="space-y-2.5">
             {planSites.map((s) => {
-              const hasUnits = siteUnitList(s, units).filter((u) => u.id).length > 0;
+              const hasUnits = selfCheckUnitList(s, units).length > 0;
               const planned = plannedDateOf(s);
               const dist = distOf(s);
               const dueSoonLabel = siteDueSoonLabel(s, inspections, TODAY_STR);
@@ -437,7 +444,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
                   {/* 윗줄: 현장명·대수 + 예정일 배지 / 거리·주소 — 개요라 정보 먼저 */}
                   <div className="p-3.5 pb-2.5">
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <p className="font-bold text-slate-800 text-sm truncate min-w-0">{s.name} · {siteUnitList(s, units).length}대</p>
+                      <p className="font-bold text-slate-800 text-sm truncate min-w-0">{s.name} · {selfCheckUnitList(s, units).length}대</p>
                       <span className="shrink-0 flex items-center gap-1.5">
                         <Badge result={siteFlagResult(s, units)} />
                         {dueSoonLabel && (
@@ -626,10 +633,10 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
 
       {checkupTarget && (
         <Sheet title={`${checkupTarget.name} 자체점검 등록`} onClose={() => setCheckupTarget(null)} full>
-          {siteUnitList(checkupTarget, units).filter((u) => u.id).length > 1 && (
+          {selfCheckUnitList(checkupTarget, units).length > 1 && (
             <Field label="호기">
               <select className={inputCls} value={checkupUnitId ?? ""} onChange={(e) => loadCheckupForUnit(e.target.value, checkupTarget)}>
-                {siteUnitList(checkupTarget, units).filter((u) => u.id).map((u) => (
+                {selfCheckUnitList(checkupTarget, units).map((u) => (
                   <option key={u.id} value={u.id}>{u.unitNo}</option>
                 ))}
               </select>
