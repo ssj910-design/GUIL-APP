@@ -121,7 +121,6 @@ function toPlan(rows, existingGovNos) {
     while (b.units.some((u) => u.seq === seq)) seq++;
     b.units.push({
       seq, govNo,
-      unitType: (r[C.kind] ?? "").includes("에스컬레이터") ? "에스컬레이터" : "엘리베이터",
       kind: (r[C.kind] ?? "").trim() || null,
       form: (r[C.form] ?? "").trim() || null,
       model: (r[C.model] ?? "").trim() || null,
@@ -187,7 +186,7 @@ export default function ImportSites({ data, setData, onClose }) {
       }
       for (const u of b.units) {
         unitRows.push({
-          site_id: siteId, seq: u.seq, unit_no: `${u.seq}호기`, unit_type: u.unitType,
+          site_id: siteId, seq: u.seq, unit_no: `${u.seq}호기`,
           kind: u.kind, form: u.form, model: u.model, manufacturer: u.manufacturer,
           install_date: u.installDate, gov_no: u.govNo, is_active: u.isActive,
           install_place: u.installPlace, run_section: u.runSection,

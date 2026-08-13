@@ -23,7 +23,6 @@ import { authFetch } from "@/lib/apiFetch";
 
 const CONTRACT_TYPES = ["POG(일반계약)", "FM(종합계약)", "2회점검"];
 const CONTACT_ROLES = ["대표", "담당자", "관리소장", "건물주", "경비실", "입주민 대표", "총무", "기타"];
-const UNIT_TYPES = ["엘리베이터", "에스컬레이터", "휠체어리프트", "카리프트"];
 const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
 const TERMINATION_BASIS = ["중지공문", "구두통보", "기타"];
 
@@ -424,10 +423,10 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
 function UnitRow({ unit, emergencyPhone, maintenanceCostReady, onSave, onSaveEmergencyPhone, onToggleActive, onDelete, onOpenDetail, contractTypeReady }) {
   // 승강기고유번호·설치일자·설치장소는 여기서 안 다룬다 — 호기 상세정보(onOpenDetail)의
   // "정보" 탭에서 수정한다. 표는 목록으로 훑어볼 항목만, 상세는 상세정보에서.
-  const [form, setForm] = useState({ unitType: unit.unitType, model: unit.model ?? "", contractType: unit.contractType ?? CONTRACT_TYPES[0], maintenanceCost: unit.maintenanceCost ?? "" });
+  const [form, setForm] = useState({ model: unit.model ?? "", contractType: unit.contractType ?? CONTRACT_TYPES[0], maintenanceCost: unit.maintenanceCost ?? "" });
   const [emergencyDraft, setEmergencyDraft] = useState(emergencyPhone ?? "");
   const [saving, setSaving] = useState(false);
-  const dirty = form.unitType !== unit.unitType || form.model !== (unit.model ?? "") || form.contractType !== (unit.contractType ?? CONTRACT_TYPES[0]) || String(form.maintenanceCost) !== String(unit.maintenanceCost ?? "");
+  const dirty = form.model !== (unit.model ?? "") || form.contractType !== (unit.contractType ?? CONTRACT_TYPES[0]) || String(form.maintenanceCost) !== String(unit.maintenanceCost ?? "");
   const emergencyDirty = emergencyDraft !== (emergencyPhone ?? "");
 
   return (
@@ -435,11 +434,7 @@ function UnitRow({ unit, emergencyPhone, maintenanceCostReady, onSave, onSaveEme
       <td className="px-4 py-2 font-bold whitespace-nowrap">
         <button onClick={() => onOpenDetail(unit)} className="text-blue-700 hover:underline">{unit.unitNo}</button>
       </td>
-      <td className="px-2 py-2">
-        <select className={inputCls} value={form.unitType} onChange={(e) => setForm({ ...form, unitType: e.target.value })}>
-          {UNIT_TYPES.map((t) => <option key={t}>{t}</option>)}
-        </select>
-      </td>
+      <td className="px-2 py-2 text-slate-600 truncate" title={unit.kind ?? ""}>{unit.kind || "-"}</td>
       <td className="px-2 py-2"><input className={inputCls} value={form.model} placeholder="모델명" onChange={(e) => setForm({ ...form, model: e.target.value })} /></td>
       <td className="px-2 py-2">
         {/* 호기별 계약구분 — 한 현장 안에서 FM/POG가 섞인 예외 케이스 대응. 기본값 POG(일반계약). */}
@@ -662,14 +657,14 @@ export default function SitesAdmin({ data, setData }) {
   // 여기서 같이 patch에 넣으면 표에서 저장할 때마다 상세정보에서 입력한 값을 지워버린다.
   async function saveUnit(unit, form) {
     const patch = {
-      unit_type: form.unitType, model: form.model || null,
+      model: form.model || null,
       ...(unitContractTypeReady ? { contract_type: form.contractType || null } : {}),
       ...(unitMaintenanceCostReady ? { maintenance_cost: form.maintenanceCost === "" ? null : Number(form.maintenanceCost) } : {}),
     };
     const { error } = await supabase.from("units").update(patch).eq("id", unit.id);
     if (error) { alert("저장 실패: " + error.message); return; }
     const nextUnits = units.map((u) => (u.id === unit.id ? {
-      ...u, unitType: form.unitType, model: form.model || null,
+      ...u, model: form.model || null,
       ...(unitContractTypeReady ? { contractType: form.contractType || null } : {}),
       ...(unitMaintenanceCostReady ? { maintenanceCost: form.maintenanceCost === "" ? null : Number(form.maintenanceCost) } : {}),
     } : u));
@@ -1346,7 +1341,7 @@ export default function SitesAdmin({ data, setData }) {
                             className={`border-b border-slate-50 cursor-pointer hover:bg-slate-50 ${u.isActive === false ? "opacity-40" : ""}`}
                           >
                             <td className="px-4 py-2 font-bold truncate text-blue-700" title={unitPlaceLabel}>{unitPlaceLabel}</td>
-                            <td className="px-2 py-2 truncate" title={u.kind || u.unitType}>{u.kind || u.unitType}</td>
+                            <td className="px-2 py-2 truncate" title={u.kind ?? ""}>{u.kind || "-"}</td>
                             <td className="px-2 py-2 truncate" title={u.model ?? ""}>{u.model || "-"}</td>
                             {unitContractTypeReady && <td className="px-2 py-2 truncate">{u.contractType || CONTRACT_TYPES[0]}</td>}
                             <td className="px-2 py-2 truncate">{unitMaintenanceCostReady ? (u.maintenanceCost != null ? Number(u.maintenanceCost).toLocaleString() + "원" : "-") : "마이그레이션 대기"}</td>

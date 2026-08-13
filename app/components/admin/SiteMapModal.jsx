@@ -164,7 +164,7 @@ export function SiteMapModal({ sites, units = [], onClose }) {
 
       withCoords.forEach((s) => {
         const siteUnits = units.filter((u) => u.siteId === s.id && u.isActive !== false);
-        const kinds = [...new Set(siteUnits.map((u) => u.kind || u.unitType).filter(Boolean))].join(", ") || "-";
+        const kinds = [...new Set(siteUnits.map((u) => u.kind).filter(Boolean))].join(", ") || "-";
         const models = [...new Set(siteUnits.map((u) => u.model).filter(Boolean))].join(", ") || "-";
         const color = colorForEngineer(s.assignedEngineer);
         const marker = L.marker([s.lat, s.lng], { icon: pinIcon(L, color) })
