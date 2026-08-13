@@ -183,10 +183,10 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
     installPlace: unit.installPlace ?? "", govNo: unit.govNo ?? "", kind: unit.kind ?? "", form: unit.form ?? "", model: unit.model ?? "",
     manufacturer: unit.manufacturer ?? "", installDate: unit.installDate ?? "", runSection: unit.runSection ?? "",
     loadKg: unit.loadKg ?? "", capacityPersons: unit.capacityPersons ?? "", ratedSpeed: unit.ratedSpeed ?? "",
-    insurer: unit.insurer ?? "", insuranceEnd: unit.insuranceEnd ?? "",
+    insurer: unit.insurer ?? "", insuranceEnd: unit.insuranceEnd ?? "", requiresSelfCheck: unit.requiresSelfCheck ?? true,
   });
   const [savingDetail, setSavingDetail] = useState(false);
-  const detailKeys = ["installPlace", "govNo", "kind", "form", "model", "manufacturer", "installDate", "runSection", "loadKg", "capacityPersons", "ratedSpeed", "insurer", "insuranceEnd"];
+  const detailKeys = ["installPlace", "govNo", "kind", "form", "model", "manufacturer", "installDate", "runSection", "loadKg", "capacityPersons", "ratedSpeed", "insurer", "insuranceEnd", "requiresSelfCheck"];
   const detailDirty = detailKeys.some((k) => String(editForm[k] ?? "") !== String(unit[k] ?? ""));
   // units.gov_no가 아직 안 채워진 호기가 있다(마이그레이션 진행 중) — 그런 경우
   // 모바일 앱과 동일하게 sites의 옛 컬럼(gov_elevator_nos)에서 찾아 폴백한다.
@@ -271,6 +271,18 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
               <span className="text-slate-400 shrink-0">보험 만기일</span>
               <DateTextInput key={editForm.insuranceEnd} value={editForm.insuranceEnd} onChange={(v) => setEditForm({ ...editForm, insuranceEnd: v })} />
             </div>
+            {/* 호이스트·주차기·턴테이블처럼 승강기 계약에 같이 딸려오지만 법정 승강기가
+                아닌 설비는 꺼서 매달 자체점검 출석부에 안 뜨게 한다(종류는 위 "승강기종류"
+                칸에 그냥 입력). */}
+            <label className="flex items-center justify-between border-b border-slate-50 pb-2 gap-3 cursor-pointer">
+              <span className="text-slate-400 shrink-0">자체점검 대상</span>
+              <input
+                type="checkbox"
+                checked={editForm.requiresSelfCheck}
+                onChange={(e) => setEditForm({ ...editForm, requiresSelfCheck: e.target.checked })}
+                className="w-4 h-4"
+              />
+            </label>
             <div className="flex justify-end pt-1">
               <button
                 disabled={!detailDirty || savingDetail}
@@ -693,6 +705,7 @@ export default function SitesAdmin({ data, setData }) {
       ratedSpeed: ["rated_speed", numOrNull(form.ratedSpeed), unit.ratedSpeed ?? null],
       insurer: ["insurer", form.insurer || null, unit.insurer ?? null],
       insuranceEnd: ["insurance_end", form.insuranceEnd || null, unit.insuranceEnd ?? null],
+      requiresSelfCheck: ["requires_self_check", form.requiresSelfCheck, unit.requiresSelfCheck ?? true],
     };
     const patch = {};
     const localPatch = {};
