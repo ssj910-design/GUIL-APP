@@ -208,13 +208,16 @@ export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파
       try {
         const url = await onUpload(file);
         currentUrls = [...currentUrls, url];
-        // 여러 장을 연달아 올릴 때 저장 요청이 순서대로 끝나야 서로 덮어쓰지 않는다.
-        await onSave(currentUrls);
         setIdx(currentUrls.length - 1);
       } catch (err) {
         alert("업로드 실패: " + (err.message ?? "알 수 없는 오류"));
       }
     }
+    // onSave는 배치가 다 끝난 뒤 한 번만 부른다 — 파일마다 불렀더니, "이전 urls
+    // 대비 뭐가 새로 생겼는지" 비교하는 onSave(부품현황)는 같은 배치 안 호출들이
+    // 전부 업로드 시작 시점에 굳어진 낡은 urls를 기준으로 비교해서, 2장 이상 한
+    // 번에 올리면 첫 장만 중복 기록되고 나머지는 유실됐다.
+    if (currentUrls.length !== urls.length) await onSave(currentUrls);
     setUploading(false);
   }
 
