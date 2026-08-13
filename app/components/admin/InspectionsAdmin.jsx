@@ -6,7 +6,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
-import { unitsToInspections, shortDate } from "@/lib/utils";
+import { unitsToInspections, shortDate, groupBySite } from "@/lib/utils";
 import { mapInspection } from "@/lib/mappers";
 import { Badge, DDay, inputCls as mobileInputCls } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -201,9 +201,20 @@ export default function InspectionsAdmin({ data, setData }) {
     }
   };
 
+  // 같은 현장의 호기들은 정렬 결과 안에서 흩어지지 않게 묶어서 보여준다(lib/utils.js의
+  // groupBySite — 기사어플 InspectionTab의 도래현장 목록도 같은 헬퍼를 씀). 정렬을 먼저
+  // 끝낸 다음 묶어야 그룹 안에서(그 현장 호기끼리는) 정렬 순서가 그대로 유지된다 —
+  // 반대로 하면(묶은 다음 정렬) 묶은 게 다시 흩어진다.
+
   // 불합격은 정렬 기준(보완기한 등)과 무관하게 항상 맨 위 — 조건부합격보다 시급하다.
+  // (현장 묶기는 이 불합격/조건부합격 구분을 넘어서지 않는다 — 각 구간 안에서만 묶는다.)
   const rows = view === "flagged"
-    ? sortRows(filteredRows, sort, getFlaggedVal).sort((a, b) => (a.result === "fail" ? 0 : 1) - (b.result === "fail" ? 0 : 1))
+    ? (() => {
+        const sorted = sortRows(filteredRows, sort, getFlaggedVal);
+        const fails = groupBySite(sorted.filter((i) => i.result === "fail"));
+        const conditionals = groupBySite(sorted.filter((i) => i.result !== "fail"));
+        return [...fails, ...conditionals];
+      })()
     : filteredRows.sort((a, b) => (a.dueDate ? a.daysLeft : Infinity) - (b.dueDate ? b.daysLeft : Infinity));
 
   // manualId가 있으면 기존 수기입력 행을 갱신하고, 없으면(실시간 연동 현장에 수기입력 기한이 처음 등록되는 경우) 새로 만든다.

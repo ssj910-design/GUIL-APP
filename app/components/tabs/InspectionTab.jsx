@@ -125,12 +125,20 @@ export function InspectionTab({ inspections }) {
         return (a.dueDate ? +new Date(a.dueDate) : Infinity) - (b.dueDate ? +new Date(b.dueDate) : Infinity);
       }
     : (a, b) => (a.dueDate ? +new Date(a.dueDate) : Infinity) - (b.dueDate ? +new Date(b.dueDate) : Infinity);
-  const flagged = groupBySite(
-    combined
-      .filter((i) => i.result === "conditional" || i.result === "fail")
-      .filter((i) => !i.dueDate || Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) <= 60)
-      .filter((i) => !search || (i.siteName ?? "").toLowerCase().includes(search.toLowerCase()))
-  ).sort(flagCmp);
+  // groupBySite는 "이미 정렬된 목록"을 받아 그 순서를 유지한 채로만 같은 현장끼리
+  // 묶는다 — 정렬(.sort)을 groupBySite보다 먼저 해야 한다. 원래 여기 순서가
+  // 반대(묶은 다음 정렬)였어서 정렬이 그룹을 도로 흩어놨었다(관리자웹에도 같은
+  // 문제가 있어 같이 고침). severity 모드는 "불합격이 조건부합격보다 항상 위"
+  // 규칙이 있어서, 그 규칙이 현장 묶기 때문에 깨지지 않게 불합격/조건부합격을
+  // 각각 따로 묶은 뒤 이어 붙인다. imminent 모드는 그런 구분이 없어 그냥 묶는다.
+  const flaggedBase = combined
+    .filter((i) => i.result === "conditional" || i.result === "fail")
+    .filter((i) => !i.dueDate || Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) <= 60)
+    .filter((i) => !search || (i.siteName ?? "").toLowerCase().includes(search.toLowerCase()))
+    .sort(flagCmp);
+  const flagged = flagSort === "severity"
+    ? [...groupBySite(flaggedBase.filter((i) => i.result === "fail")), ...groupBySite(flaggedBase.filter((i) => i.result !== "fail"))]
+    : groupBySite(flaggedBase);
 
   const inspectionSubTabs = ["검사도래현장", "조건부/불합격 현장"];
   const swipe = useSwipeSubtab(inspectionSubTabs, subTab, setSubTab);
