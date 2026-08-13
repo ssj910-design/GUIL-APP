@@ -33,8 +33,8 @@ function PartLeafRow({ unitId, category, subcategory, part, photos, onAdd, onRem
           <FileCarousel
             urls={urls}
             accept="image/*"
+            layout="grid"
             uploadLabel="사진 촬영/선택"
-            height="h-40"
             onUpload={(file) => uploadPhoto(file, `unit-parts/${unitId}`)}
             onSave={handleSave}
           />

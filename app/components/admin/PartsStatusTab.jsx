@@ -101,9 +101,9 @@ function LeafDetail({ unitId, selected, photos, onAdd, onRemove }) {
         key={`${selected.category}|${selected.subcategory}|${selected.part}`}
         urls={urls}
         accept="image/*"
+        layout="grid"
         chooser={false}
         uploadLabel="사진 촬영/선택"
-        height="h-64"
         onUpload={(file) => uploadPhoto(file, `unit-parts/${unitId}`)}
         onSave={handleSave}
       />
