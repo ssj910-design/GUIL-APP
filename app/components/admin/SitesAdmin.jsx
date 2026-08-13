@@ -715,6 +715,15 @@ export default function SitesAdmin({ data, setData }) {
     if (!Object.keys(patch).length) return;
     const { error } = await supabase.from("units").update(patch).eq("id", unit.id);
     if (error) { alert("저장 실패: " + error.message); return; }
+    // 자체점검 대상을 방금 껐으면, 다음 달 자동생성이 스킵되는 것만으론 "이번 순간부터
+    // 반영"이 안 된다 — 이번 달 것이 이미 생성돼있을 수 있으니(매달 1일 자동생성) 그
+    // 줄도 같이 지운다. 이미 완료·누락 처리된 줄(과거 기록)은 감사기록이라 안 건드리고,
+    // 아직 '예정'인 것만 지운다.
+    if ("requiresSelfCheck" in localPatch && localPatch.requiresSelfCheck === false) {
+      const { error: delError } = await supabase.from("self_checks")
+        .delete().eq("unit_id", unit.id).eq("ym", TODAY_STR.slice(0, 7)).eq("status", "예정");
+      if (delError) console.error("이번 달 자체점검 항목 삭제 실패:", delError.message);
+    }
     const nextUnits = units.map((u) => (u.id === unit.id ? { ...u, ...localPatch } : u));
     setData((prev) => ({ ...prev, units: nextUnits }));
     await syncLegacy(unit.siteId, nextUnits); // model·govNo가 legacy site 컬럼(elevator_model·gov_elevator_nos)에도 반영돼야 함
