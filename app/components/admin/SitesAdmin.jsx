@@ -670,7 +670,7 @@ export default function SitesAdmin({ data, setData }) {
     }
     setData((prev) => ({
       ...prev,
-      sites: prev.sites.map((x) => (checkedIds.has(x.id) ? { ...x, assignedEngineer: bulkEngineer } : x)),
+      sites: prev.sites.map((x) => (checkedIds.has(x.id) ? { ...x, assignedEngineer: bulkEngineer, assignedEngineers: [bulkEngineer] } : x)),
     }));
     await syncInspectionTodoAssignee(ids, bulkEngineer);
     setBulkBusy(false);
