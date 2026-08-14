@@ -1225,8 +1225,16 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
     : f.escalation === "운행정지" ? { label: "운행정지", bar: "border-l-red-600", chip: "bg-red-100 text-red-700" }
     : f.escalation === "지원요청" ? { label: "지원미배정", bar: "border-l-amber-500", chip: "bg-amber-100 text-amber-700" }
     : { label: "미배정", bar: "border-l-red-500", chip: "bg-red-50 text-red-600" };
+  // escalation(운행정지/지원요청)은 결과입력에서 기사가 직접 조치 불가로 판단한 건만 채워지는
+  // 필드다(접수 시점엔 절대 안 채워짐 — handleFailureResult가 유일한 write 지점). 재배정·출동·
+  // 도착으로 단계가 넘어가도 완료 처리 전까진 계속 살아있으므로, 진행 단계와 무관하게 카드
+  // 전체 테두리로 눈에 띄게 강조한다(기존엔 미배정일 때만 왼쪽 테두리로만 표시돼 배정되는 순간
+  // 사라졌었다).
+  const escalationBorder = f.escalation === "운행정지" ? "border-2 border-red-500"
+    : f.escalation === "지원요청" ? "border-2 border-amber-500"
+    : `border border-slate-200 border-l-4 ${state.bar}`;
   return (
-    <div className={`w-full rounded-xl border border-slate-200 border-l-4 ${state.bar} bg-white overflow-hidden`}>
+    <div className={`w-full rounded-xl ${escalationBorder} bg-white overflow-hidden`}>
       {/* 개요 카드 — 현장명을 윗줄에 통째로 두고, 지도·버튼은 아랫줄로 내려 이름이 눌리지 않게 한다 */}
       <button type="button" onClick={() => onOpenDetail(f)} className="w-full text-left px-3.5 pt-3 pb-2">
         <div className="flex items-center gap-1.5">
