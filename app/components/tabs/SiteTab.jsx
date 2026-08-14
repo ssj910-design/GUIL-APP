@@ -616,7 +616,7 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
   const list = sites
     .filter((s) => query.trim() || s.isActive !== false)
     .filter((s) => siteMatchesQuery(s, query, { units: allUnits, siteManagers }))
-    .filter((s) => !onlyMine || s.assignedEngineer === CURRENT_ENGINEER);
+    .filter((s) => !onlyMine || s.assignedEngineers?.includes(CURRENT_ENGINEER));
 
   function latestInspection(siteId) {
     return inspections.find((i) => i.siteId === siteId) ?? null;
