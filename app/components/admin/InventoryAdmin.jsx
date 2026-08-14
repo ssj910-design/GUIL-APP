@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useContext } from "react";
 import { Pencil, Trash2, Camera, Paperclip, X } from "lucide-react";
 import { currentStock, stockHistory } from "@/lib/inventoryStock";
 import { supabase } from "@/lib/supabaseClient";
 import { mapInventoryProduct, mapInventoryStockMovement } from "@/lib/mappers";
-import { inputCls, Modal } from "@/app/components/admin/adminShared";
+import { inputCls, Modal, AdminAuthContext } from "@/app/components/admin/adminShared";
 import { PhotoLightbox } from "@/app/components/ui";
 import { uploadPhoto } from "@/lib/photos";
 import { confirmAsync } from "@/app/components/ConfirmHost";
@@ -232,7 +232,7 @@ function StockMovementModal({ type, onClose, onSubmit }) {
   );
 }
 
-function ProductDetail({ product, movements, onSave, onDelete, onMovement }) {
+function ProductDetail({ product, movements, profiles, onSave, onDelete, onMovement }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(null);
   const [movementType, setMovementType] = useState(null);
@@ -318,18 +318,21 @@ function ProductDetail({ product, movements, onSave, onDelete, onMovement }) {
         {history.length === 0 ? (
           <p className="text-xs text-slate-400 text-center py-6">내역이 없습니다</p>
         ) : (
-          history.map((m) => (
+          history.map((m) => {
+            const doer = profiles.find((p) => p.id === m.createdBy)?.name;
+            return (
             <div key={m.id} className="flex justify-between py-2 border-b border-slate-50">
               <div>
                 <p className="text-sm font-bold">{MOVEMENT_LABEL[m.type]}</p>
-                <p className="text-[11px] text-slate-400">{m.createdAt.slice(0, 10)}{m.note ? ` · ${m.note}` : ""}</p>
+                <p className="text-[11px] text-slate-400">{m.createdAt.slice(0, 10)}{doer ? ` · ${doer}` : ""}{m.note ? ` · ${m.note}` : ""}</p>
               </div>
               <div className="text-right">
                 <p className={`text-sm font-bold ${m.qtyDelta >= 0 ? "text-emerald-600" : "text-red-600"}`}>{m.qtyDelta >= 0 ? "+" : ""}{m.qtyDelta}</p>
                 <p className="text-[11px] text-slate-400">{m.balance}</p>
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
@@ -346,7 +349,8 @@ function ProductDetail({ product, movements, onSave, onDelete, onMovement }) {
 }
 
 export default function InventoryAdmin({ data, setData }) {
-  const { inventoryProducts = [], inventoryStockMovements = [] } = data;
+  const { inventoryProducts = [], inventoryStockMovements = [], profiles = [] } = data;
+  const { id: meId } = useContext(AdminAuthContext);
   const [sub, setSub] = useState("제품목록");
   const [search, setSearch] = useState("");
   const [onlyInStock, setOnlyInStock] = useState(false);
@@ -428,7 +432,7 @@ export default function InventoryAdmin({ data, setData }) {
   }
 
   async function addMovement(product, type, { qtyDelta, note }) {
-    const row = { product_id: product.id, type, qty_delta: qtyDelta, note };
+    const row = { product_id: product.id, type, qty_delta: qtyDelta, note, created_by: meId ?? null };
     const { data: inserted, error } = await supabase.from("inventory_stock_movements").insert(row).select().maybeSingle();
     if (error) { alert("재고 반영 실패: " + error.message); return; }
     if (!inserted) { alert("재고 반영 실패: 저장된 결과를 받지 못했습니다."); return; }
@@ -514,6 +518,7 @@ export default function InventoryAdmin({ data, setData }) {
                   key={selected.id}
                   product={selected}
                   movements={inventoryStockMovements}
+                  profiles={profiles}
                   onSave={saveProduct}
                   onDelete={deleteProduct}
                   onMovement={addMovement}
