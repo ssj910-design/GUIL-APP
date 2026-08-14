@@ -104,8 +104,8 @@ function ProductDetail({ product, onSave, onDelete }) {
   }
 
   async function save() {
-    await onSave(product, form);
-    setEditing(false);
+    const ok = await onSave(product, form);
+    if (ok) setEditing(false);
   }
 
   async function remove() {
@@ -213,10 +213,11 @@ export default function InventoryAdmin({ data, setData }) {
       sale_price: form.salePrice === "" ? null : Number(form.salePrice),
     };
     const { data: updated, error } = await supabase.from("inventory_products").update(patch).eq("id", product.id).select().maybeSingle();
-    if (error) { alert("저장 실패: " + error.message); return; }
-    if (!updated) { alert("저장 실패: 저장된 결과를 받지 못했습니다."); return; }
+    if (error) { alert("저장 실패: " + error.message); return false; }
+    if (!updated) { alert("저장 실패: 저장된 결과를 받지 못했습니다."); return false; }
     const mapped = mapInventoryProduct(updated);
     setData((prev) => ({ ...prev, inventoryProducts: prev.inventoryProducts.map((p) => (p.id === mapped.id ? mapped : p)) }));
+    return true;
   }
 
   async function deleteProduct(product) {
