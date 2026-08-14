@@ -2051,10 +2051,10 @@ export default function App() {
   const notifFailures = failures.filter((f) => f.status !== "완료" && (f.assignee === myName || !f.assignee) && !dismissedIds.has("fail:" + f.id));
   // 담당기사(현장 기본 담당)와 배정기사(이 건을 실제로 처리한 기사)가 다른 경우,
   // 배정기사가 처리완료했을 때 담당기사에게 알려준다.
-  const siteAssigneeById = new Map(sites.map((s) => [s.id, s.assignedEngineer]));
+  const siteAssigneesById = new Map(sites.map((s) => [s.id, s.assignedEngineers ?? []]));
   const notifCompletedFailures = failures.filter((f) => {
     if (f.status !== "완료" || !f.assignee || f.assignee === myName) return false;
-    if (siteAssigneeById.get(f.siteId) !== myName) return false;
+    if (!(siteAssigneesById.get(f.siteId) ?? []).includes(myName)) return false;
     return !dismissedIds.has("faildone:" + f.id);
   });
   const notifTodos = todos.filter((t) => t.assignee === myName && !t.done && !dismissedIds.has("todo:" + t.id));
