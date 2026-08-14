@@ -19,8 +19,11 @@ import com.getcapacitor.BridgeWebChromeClient;
 // 위치 권한 콜백만 추가한다(완전히 새 WebChromeClient로 교체하지 않음).
 public class MainActivity extends BridgeActivity {
     private static final int LOCATION_PERMISSION_REQUEST = 9001;
+    private static final long DOWNLOAD_DEDUPE_WINDOW_MS = 2000;
     private GeolocationPermissions.Callback pendingGeoCallback;
     private String pendingGeoOrigin;
+    private String lastDownloadUrl;
+    private long lastDownloadAtMs;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -49,6 +52,17 @@ public class MainActivity extends BridgeActivity {
         // Content-Disposition: attachment로 응답하는 URL(Supabase Storage의 ?download 파라미터)만
         // 이 리스너가 걸린다 — 이미지처럼 웹뷰가 직접 렌더링 가능한 응답은 안 걸린다.
         getBridge().getWebView().setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
+            // 웹뷰가 같은 다운로드 URL에 대해 리스너를 두 번 이상 연달아 호출하는 경우가 실측으로
+            // 확인됨(파일은 1개만 저장되는데 "다운로드 완료" 알림만 여러 개 뜸) — 같은 URL이 짧은
+            // 시간 안에 다시 들어오면 무시한다.
+            // ponytail: URL+시간 기반 디바운스라 원인 자체(왜 리스너가 중복 호출되는지)는 안 고쳤음.
+            // 알림 중복이 다시 보이면 창을 늘리거나 근본 원인을 더 파야 함.
+            long now = System.currentTimeMillis();
+            if (url.equals(lastDownloadUrl) && now - lastDownloadAtMs < DOWNLOAD_DEDUPE_WINDOW_MS) {
+                return;
+            }
+            lastDownloadUrl = url;
+            lastDownloadAtMs = now;
             try {
                 String filename = URLUtil.guessFileName(url, contentDisposition, mimetype);
                 DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
