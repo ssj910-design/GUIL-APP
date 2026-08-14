@@ -12,14 +12,14 @@ import { confirmAsync } from "@/app/components/ConfirmHost";
 const SUBS = ["제품목록", "입출고내역", "구매"];
 const MOVEMENT_LABEL = { in: "입고", out: "출고", adjust: "조정" };
 
-// 자재번호 자동생성 — MAT- + 임의 8자, 이미 쓰는 번호와 겹치면 다시 뽑는다.
-function randomMaterialNo(existing) {
-  const used = new Set(existing);
-  let no;
-  do {
-    no = "MAT-" + Math.random().toString(36).slice(2, 10).toUpperCase();
-  } while (used.has(no));
-  return no;
+// 자재번호 자동생성 — 6자리 숫자를 000000부터 순번으로. 기존 번호 중 6자리 숫자
+// 형식인 것만 보고 가장 큰 값 다음 번호를 매긴다(자유 텍스트로 다르게 입력된
+// 번호는 순번 계산에서 무시 — 충돌 없이 다음 번호만 결정하면 되므로 그걸로 충분).
+function nextMaterialNo(existing) {
+  const max = existing
+    .filter((no) => /^\d{6}$/.test(no))
+    .reduce((m, no) => Math.max(m, Number(no)), -1);
+  return String(max + 1).padStart(6, "0");
 }
 
 // 등록 패널과 상세 인라인수정이 같은 필드 셋을 쓴다 — 첨부(제품 수정) 레이아웃 그대로:
@@ -27,7 +27,7 @@ function randomMaterialNo(existing) {
 function ProductFormFields({ form, setForm, onGenerateMaterialNo }) {
   return (
     <div>
-      <div className="flex gap-4 mb-4">
+      <div className="flex items-center gap-4 mb-4">
         <div className="flex-1 space-y-3">
           <div>
             <p className="text-xs font-bold text-slate-500 mb-1">자재번호 *</p>
@@ -92,7 +92,7 @@ function ProductFormFields({ form, setForm, onGenerateMaterialNo }) {
 // creating을 꺼주고 새 제품을 선택해줘서 이 패널은 자연스럽게 ProductDetail로 바뀐다.
 function ProductCreatePanel({ existingNos, onCancel, onCreate }) {
   const [form, setForm] = useState({
-    materialNo: randomMaterialNo(existingNos), name: "", photoUrl: "", spec: "", location: "",
+    materialNo: nextMaterialNo(existingNos), name: "", photoUrl: "", spec: "", location: "",
     vendor: "", priceDate: "", memo: "", purchasePrice: "", salePrice: "", initialQty: "",
   });
   const [saving, setSaving] = useState(false);
@@ -108,7 +108,7 @@ function ProductCreatePanel({ existingNos, onCancel, onCreate }) {
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-5 lg:h-full overflow-y-auto">
       <p className="text-sm font-extrabold mb-4">제품 등록</p>
-      <ProductFormFields form={form} setForm={setForm} onGenerateMaterialNo={() => setForm({ ...form, materialNo: randomMaterialNo(existingNos) })} />
+      <ProductFormFields form={form} setForm={setForm} onGenerateMaterialNo={() => setForm({ ...form, materialNo: nextMaterialNo(existingNos) })} />
       <div className="border-t border-slate-100 mt-3 pt-3">
         <p className="text-xs font-bold text-slate-500 mb-1">초기 수량</p>
         <input type="number" step="1" className={inputCls} placeholder="0" value={form.initialQty} onChange={(e) => setForm({ ...form, initialQty: e.target.value })} />
