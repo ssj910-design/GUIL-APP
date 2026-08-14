@@ -761,7 +761,9 @@ export default function App() {
         supabase.from("duty_swaps").select("*"),
         supabase.from("leaves").select("*").lte("start_date", TODAY_STR).gte("end_date", TODAY_STR),
         supabase.from("unit_part_photos").select("*"), // 테이블 없으면(마이그레이션 전) error → 빈 배열
-        supabase.from("site_assignments").select("*"),
+        // site_assignments는 현재 760행이지만 기사 2인 배정이 늘수록 1000행 한도를 넘어설 수 있어
+        // 페이지네이션 없이는 조용히 잘린다 — site_managers·error_codes와 같은 이유로 전체를 받는다.
+        fetchAll("site_assignments"),
       ]);
       setSites(mergeAssignedEngineers((sitesRes.data ?? []).map(mapSite), siteAssignmentsRes.data ?? [], engineersRes.data ?? []));
       setSiteManagers((siteManagersRes.data ?? []).map(mapSiteManager));

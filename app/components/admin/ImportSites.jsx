@@ -179,7 +179,7 @@ export default function ImportSites({ data, setData, onClose }) {
           notes: b.notes, emergency_phone: b.emergencyPhone,
         });
         // sites.assigned_engineer는 표시용 텍스트 듀얼라이트일 뿐, 자체점검 담당 배정 등
-        // 실제 기준은 site_assignments(SitesAdmin.jsx의 changeLead와 동일 패턴) — 같이 안 넣으면
+        // 실제 기준은 site_assignments(SitesAdmin.jsx의 changeAssignees와 동일 패턴) — 같이 안 넣으면
         // 자체점검현황 등에서 담당자로 안 잡힌다.
         const tech = data.profiles.find((p) => p.name === b.assignedEngineer);
         if (tech) assignmentRows.push({ site_id: siteId, tech_id: tech.id, is_lead: true });

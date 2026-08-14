@@ -624,7 +624,9 @@ export default function SitesAdmin({ data, setData }) {
     }
     const { data: created, error: fetchErr } = await supabase.from("sites").select("*").eq("id", id).single();
     if (fetchErr || !created) { alert("추가는 됐지만 불러오기 실패: " + (fetchErr?.message ?? "")); return; }
-    const mapped = mapSite(created);
+    // mapSite만으론 assignedEngineers가 안 채워진다(전체 로드 시 mergeAssignedEngineers가 하는 일) —
+    // 방금 위에서 등록한 담당자 목록을 그대로 얹어서 "미배정"으로 잘못 보이는 걸 막는다.
+    const mapped = { ...mapSite(created), assignedEngineers: form.assignedEngineers };
     setData((prev) => ({ ...prev, sites: [...prev.sites, mapped] }));
     setAddingSite(false);
     setSearch("");

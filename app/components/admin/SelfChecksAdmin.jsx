@@ -257,7 +257,8 @@ export default function SelfChecksAdmin({ data, setData, initialView }) {
       const currentAssigneeIds = (s?.assignedEngineers ?? [])
         .map((name) => profileIdByName(data.profiles, name))
         .filter(Boolean);
-      return { ...c, assigneeIds: currentAssigneeIds, loc: locOf(data, c.unitId), address: s?.address ?? null, gu: guOf(s?.address), siteActive: s?.isActive !== false };
+      // assigneeId(단수, 옛 스냅샷)는 더 이상 의미 없다 — 실수로 참조하는 일이 없도록 명시적으로 비운다.
+      return { ...c, assigneeId: undefined, assigneeIds: currentAssigneeIds, loc: locOf(data, c.unitId), address: s?.address ?? null, gu: guOf(s?.address), siteActive: s?.isActive !== false };
     })
     // 출석부는 생성 시점(매월 1일)에 활성 호기 전체로 만들어져서, 그 뒤 현장이 계약중지돼도
     // 이미 만들어진 줄은 그대로 남는다 — 지금 계약중지인 현장의 줄은 화면에서 제외한다.

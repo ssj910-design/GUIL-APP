@@ -8,7 +8,7 @@ import { BRAND } from "@/lib/company";
 import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, CalendarCheck, Users, LayoutDashboard, BarChart3, Menu , Bell, MessageSquare, BookOpen } from "lucide-react";
 import { supabase, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken } from "@/lib/supabaseClient";
 import {
-  mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest,
+  mapSite, mergeAssignedEngineers, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest,
   mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck, mapSelfCheckItem, mapFeedPost, mapRestockRequest, mapErrorCode, mapUnitPartPhoto,
 } from "@/lib/mappers";
 import Dashboard from "@/app/components/admin/Dashboard";
@@ -186,7 +186,7 @@ export default function AdminApp() {
     // 로그인 안 한 상태에서도 네트워크 탭에 전체 데이터가 그대로 찍혀 새어나간다.
     if (!SKIP_LOGIN && !me) return;
     async function load() {
-      const [sites, units, siteManagers, failures, inspections, materials, quotes, restock, todos, billings, selfChecks, selfCheckItems, profiles, feed, errorCodes, unitPartPhotos] =
+      const [sites, units, siteManagers, failures, inspections, materials, quotes, restock, todos, billings, selfChecks, selfCheckItems, profiles, feed, errorCodes, unitPartPhotos, siteAssignments] =
         await Promise.all([
           supabase.from("sites").select("*").order("name"),
           supabase.from("units").select("*").order("seq"),
@@ -210,9 +210,12 @@ export default function AdminApp() {
           // 부품현황 사진 — 호기당 38리프×사진 1행이라 전체 시스템 기준 1000행을 금방 넘는다.
           // site_managers·error_codes와 같은 이유로 페이지네이션 없이는 조용히 잘린다.
           fetchAll("unit_part_photos"),
+          // site_assignments는 현재 760행이지만 기사 2인 배정이 늘수록 1000행 한도를 넘어설 수 있어
+          // 페이지네이션 없이는 조용히 잘린다 — site_managers·error_codes와 같은 이유로 전체를 받는다.
+          fetchAll("site_assignments"),
         ]);
       setData({
-        sites: (sites.data ?? []).map(mapSite),
+        sites: mergeAssignedEngineers((sites.data ?? []).map(mapSite), siteAssignments.data ?? [], profiles.data ?? []),
         units: (units.data ?? []).map(mapUnit),
         siteManagers: (siteManagers.data ?? []).map(mapSiteManager),
         failures: (failures.data ?? []).map(mapFailure),
