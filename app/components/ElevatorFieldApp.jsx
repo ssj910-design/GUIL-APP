@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { BRAND } from "@/lib/company";
-import { Home, AlertTriangle, CalendarCheck, CalendarClock, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound } from "lucide-react";
+import { Home, AlertTriangle, CalendarCheck, CalendarClock, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound, Boxes } from "lucide-react";
 import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken } from "@/lib/supabaseClient";
 import { authFetch } from "@/lib/apiFetch";
-import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode, mapUnitPartPhoto } from "@/lib/mappers";
+import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode, mapUnitPartPhoto, mapInventoryProduct, mapInventoryStockMovement } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent, quoteGrandTotal } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { DutySwapNotice } from "@/app/components/DutyRoster";
@@ -28,6 +28,7 @@ import { InspectionTab } from "@/app/components/tabs/InspectionTab";
 import { MaterialTab } from "@/app/components/tabs/MaterialTab";
 import { BillingTab } from "@/app/components/tabs/BillingTab";
 import { TodoTab } from "@/app/components/tabs/TodoTab";
+import { InventoryTab } from "@/app/components/tabs/InventoryTab";
 import { AdminTab } from "@/app/components/tabs/AdminTab";
 import { RoomTab } from "@/app/components/tabs/RoomTab";
 
@@ -39,6 +40,7 @@ const TABS = [
   { id: "checkup", label: "자체점검", icon: CalendarCheck },
   { id: "inspection", label: "검사관리", icon: ShieldCheck },
   { id: "material", label: "자재·견적", icon: Package },
+  { id: "inventory", label: "재고관리", icon: Boxes },
   { id: "billing", label: "청구", icon: Receipt },
   { id: "todo", label: "할일관리", icon: ListTodo },
   { id: "workcalendar", label: "워크캘린더", icon: CalendarClock },
@@ -127,6 +129,8 @@ export default function App() {
   const [restockRequests, setRestockRequests] = useState([]);
   const [kitStock, setKitStock] = useState([]);
   const [kitStockReady, setKitStockReady] = useState(false);
+  const [inventoryProducts, setInventoryProducts] = useState([]);
+  const [inventoryStockMovements, setInventoryStockMovements] = useState([]);
   const [selfChecks, setSelfChecks] = useState([]); // 자체점검 출석부(월별, 호기당 1건)
   const [feed, setFeed] = useState([]);
   // is_notice 컬럼은 마이그레이션 022 실행 전엔 존재하지 않는다 — undefined면 아직 미실행으로 간주.
@@ -736,6 +740,8 @@ export default function App() {
         dutySwapRes,
         leaveRes,
         unitPartPhotosRes,
+        inventoryProductsRes,
+        inventoryStockMovementsRes,
       ] = await Promise.all([
         supabase.from("sites").select("*"),
         // site_managers는 1021행(2026-08-11 기준)으로 기본 1000행 한도를 넘어서, 페이지네이션
@@ -760,6 +766,8 @@ export default function App() {
         supabase.from("duty_swaps").select("*"),
         supabase.from("leaves").select("*").lte("start_date", TODAY_STR).gte("end_date", TODAY_STR),
         supabase.from("unit_part_photos").select("*"), // 테이블 없으면(마이그레이션 전) error → 빈 배열
+        supabase.from("inventory_products").select("*").order("created_at", { ascending: false }),
+        supabase.from("inventory_stock_movements").select("*"),
       ]);
       setSites((sitesRes.data ?? []).map(mapSite));
       setSiteManagers((siteManagersRes.data ?? []).map(mapSiteManager));
@@ -770,6 +778,8 @@ export default function App() {
       setQuoteRequests((quoteRes.data ?? []).map(mapQuoteRequest));
       setBillings((billingsRes.data ?? []).map(mapBilling));
       setUnitPartPhotos((unitPartPhotosRes.data ?? []).map(mapUnitPartPhoto));
+      setInventoryProducts((inventoryProductsRes.data ?? []).map(mapInventoryProduct));
+      setInventoryStockMovements((inventoryStockMovementsRes.data ?? []).map(mapInventoryStockMovement));
       setRestockRequests((restockRes.data ?? []).map(mapRestockRequest));
       setFeed((feedRes.data ?? []).map(mapFeedPost));
       const allProfiles = engineersRes.data ?? [];
@@ -1309,6 +1319,64 @@ export default function App() {
       const post = feed.find((p) => p.id === postId);
       notify("room_notice", { title: "새 공지가 등록됐어요", body: (post?.text ?? "").slice(0, 60), url: `/?openPost=${postId}` });
     }
+  }
+
+  // ★ 재고관리 — PC 관리자웹(admin/InventoryAdmin.jsx)과 완전히 같은 테이블(inventory_products/
+  // inventory_stock_movements)·같은 컬럼을 쓴다. 모바일 폼은 사진 한 장만 다루므로(InventoryTab
+  // 참고) form.photoUrl(단수)을 photo_urls 배열로 감싸 저장 — PC의 여러 장 사진과 스키마 호환.
+  async function handleCreateInventoryProduct(form) {
+    const row = {
+      material_no: form.materialNo.trim(),
+      name: form.name.trim(),
+      photo_urls: form.photoUrl ? [form.photoUrl] : [],
+      spec: form.spec.trim() || null,
+      memo: form.memo.trim() || null,
+      location: form.location.trim() || null,
+      vendor: form.vendor.trim() || null,
+      price_date: form.priceDate || null,
+      purchase_price: form.purchasePrice === "" ? null : Number(form.purchasePrice),
+      sale_price: form.salePrice === "" ? null : Number(form.salePrice),
+    };
+    const { data, error } = await supabase.from("inventory_products").insert(row).select().maybeSingle();
+    if (error || !data) { alert("등록 실패: " + (error?.message ?? "저장된 결과를 받지 못했습니다.")); return null; }
+    const mapped = mapInventoryProduct(data);
+    setInventoryProducts((prev) => [mapped, ...prev]);
+    return mapped;
+  }
+
+  async function handleSaveInventoryProduct(product, form) {
+    const patch = {
+      material_no: form.materialNo.trim(),
+      name: form.name.trim(),
+      photo_urls: form.photoUrl ? [form.photoUrl] : [],
+      spec: form.spec.trim() || null,
+      memo: form.memo.trim() || null,
+      location: form.location.trim() || null,
+      vendor: form.vendor.trim() || null,
+      price_date: form.priceDate || null,
+      purchase_price: form.purchasePrice === "" ? null : Number(form.purchasePrice),
+      sale_price: form.salePrice === "" ? null : Number(form.salePrice),
+    };
+    const { data, error } = await supabase.from("inventory_products").update(patch).eq("id", product.id).select().maybeSingle();
+    if (error || !data) { alert("저장 실패: " + (error?.message ?? "저장된 결과를 받지 못했습니다.")); return false; }
+    const mapped = mapInventoryProduct(data);
+    setInventoryProducts((prev) => prev.map((p) => (p.id === mapped.id ? mapped : p)));
+    return true;
+  }
+
+  async function handleDeleteInventoryProduct(product) {
+    if (!(await writeOk(supabase.from("inventory_products").update({ active: false }).eq("id", product.id), "삭제 실패"))) return false;
+    setInventoryProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, active: false } : p)));
+    return true;
+  }
+
+  async function handleAddInventoryMovement(product, type, { qtyDelta, note }) {
+    const createdBy = profile?.id ?? profileIdByName(profilesAll, profile?.name) ?? null;
+    const row = { product_id: product.id, type, qty_delta: qtyDelta, note, created_by: createdBy };
+    const { data, error } = await supabase.from("inventory_stock_movements").insert(row).select().maybeSingle();
+    if (error || !data) { alert("재고 반영 실패: " + (error?.message ?? "저장된 결과를 받지 못했습니다.")); return false; }
+    setInventoryStockMovements((prev) => [...prev, mapInventoryStockMovement(data)]);
+    return true;
   }
 
   // ★ 자재 신청 등록 — 탭에서 폼만 만들고 실제 DB 쓰기·에러체크는 여기서 한다(다른 handleXxx와 동일 패턴).
@@ -2362,6 +2430,7 @@ export default function App() {
           {tab === "checkup" && <CheckupTab selfChecks={selfChecks} setSelfChecks={setSelfChecks} siteManagers={siteManagers} profilesAll={profilesAll} inspections={inspections} />}
           {tab === "inspection" && <InspectionTab inspections={inspections} />}
           {tab === "material" && <MaterialTab requests={materialRequests} onAddMaterialRequest={handleAddMaterialRequest} onCancelMaterialRequest={handleCancelMaterialRequest} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} onAddQuoteRequest={handleAddQuoteRequest} onCancelQuoteRequest={handleCancelQuoteRequest} restockRequests={restockRequests} kitStock={kitStock} onReceiveRestock={handleReceiveRestock} focusRestockHistory={focusRestockHistory} onRestockHistoryHandled={() => setFocusRestockHistory(false)} />}
+          {tab === "inventory" && <InventoryTab products={inventoryProducts} movements={inventoryStockMovements} onCreateProduct={handleCreateInventoryProduct} onSaveProduct={handleSaveInventoryProduct} onDeleteProduct={handleDeleteInventoryProduct} onAddMovement={handleAddInventoryMovement} />}
           {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} />}
           {tab === "todo" && (
             <TodoTab
