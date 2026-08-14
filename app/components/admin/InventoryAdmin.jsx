@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
-import { currentStock } from "@/lib/inventoryStock";
+import { currentStock, stockHistory } from "@/lib/inventoryStock";
 import { supabase } from "@/lib/supabaseClient";
-import { mapInventoryProduct } from "@/lib/mappers";
+import { mapInventoryProduct, mapInventoryStockMovement } from "@/lib/mappers";
 import { inputCls, Modal } from "@/app/components/admin/adminShared";
 import { SinglePhotoUpload } from "@/app/components/formWidgets";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 
 const SUBS = ["제품목록", "입출고내역", "구매"];
+const MOVEMENT_LABEL = { in: "입고", out: "출고", adjust: "조정" };
 
 // 자재번호 자동생성 — MAT- + 임의 8자, 이미 쓰는 번호와 겹치면 다시 뽑는다.
 function randomMaterialNo(existing) {
@@ -64,7 +65,7 @@ function ProductFormFields({ form, setForm, onGenerateMaterialNo }) {
 function RegisterProductModal({ existingNos, onClose, onCreate }) {
   const [form, setForm] = useState({
     materialNo: randomMaterialNo(existingNos), name: "", photoUrl: "", spec: "", location: "",
-    vendor: "", priceDate: "", memo: "", purchasePrice: "", salePrice: "",
+    vendor: "", priceDate: "", memo: "", purchasePrice: "", salePrice: "", initialQty: "",
   });
   const [saving, setSaving] = useState(false);
   const valid = form.materialNo.trim() && form.name.trim();
@@ -80,6 +81,10 @@ function RegisterProductModal({ existingNos, onClose, onCreate }) {
   return (
     <Modal title="제품 등록" onClose={onClose}>
       <ProductFormFields form={form} setForm={setForm} onGenerateMaterialNo={() => setForm({ ...form, materialNo: randomMaterialNo(existingNos) })} />
+      <div>
+        <p className="text-xs font-bold text-slate-500 mb-1 mt-3">초기 수량</p>
+        <input type="number" className={inputCls} placeholder="0" value={form.initialQty} onChange={(e) => setForm({ ...form, initialQty: e.target.value })} />
+      </div>
       <div className="flex justify-end pt-4">
         <button disabled={!valid || saving} onClick={submit} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
           {saving ? "등록 중..." : "등록하기"}
@@ -89,9 +94,50 @@ function RegisterProductModal({ existingNos, onClose, onCreate }) {
   );
 }
 
-function ProductDetail({ product, onSave, onDelete }) {
+function StockMovementModal({ type, onClose, onSubmit }) {
+  const [qty, setQty] = useState("");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const label = MOVEMENT_LABEL[type];
+  const n = Number(qty);
+  const valid = qty.trim() !== "" && !Number.isNaN(n) && n !== 0 && (type === "adjust" || n > 0);
+
+  async function submit() {
+    if (!valid) return;
+    setSaving(true);
+    const qtyDelta = type === "out" ? -Math.abs(n) : type === "in" ? Math.abs(n) : n;
+    await onSubmit({ qtyDelta, note: note.trim() || null });
+    setSaving(false);
+    onClose();
+  }
+
+  return (
+    <Modal title={`재고 ${label}`} onClose={onClose}>
+      <div className="space-y-3">
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">{type === "adjust" ? "증감량 (예: -4)" : "수량"}</p>
+          <input type="number" className={inputCls} value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
+        </div>
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">메모</p>
+          <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} />
+        </div>
+        <div className="flex justify-end pt-2">
+          <button disabled={!valid || saving} onClick={submit} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
+            {saving ? "저장 중..." : `${label} 등록`}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ProductDetail({ product, movements, onSave, onDelete, onMovement }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(null);
+  const [movementType, setMovementType] = useState(null);
+  const stock = currentStock(movements, product.id);
+  const history = stockHistory(movements, product.id);
 
   function startEdit() {
     setForm({
@@ -114,6 +160,7 @@ function ProductDetail({ product, onSave, onDelete }) {
   }
 
   return (
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5">
     <div className="bg-white rounded-xl border border-slate-200 p-5">
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm font-extrabold">제품 정보</p>
@@ -158,6 +205,43 @@ function ProductDetail({ product, onSave, onDelete }) {
         </>
       )}
     </div>
+
+    <div className="bg-white rounded-xl border border-slate-200 p-5">
+      <p className="text-sm font-extrabold mb-1">현재 재고 및 내역</p>
+      <p className="text-3xl font-extrabold text-blue-700 mb-3">{stock}</p>
+      <div className="flex gap-1.5 mb-4">
+        <button onClick={() => setMovementType("in")} className="flex-1 text-xs font-bold text-white bg-blue-700 rounded-lg py-2">입고</button>
+        <button onClick={() => setMovementType("out")} className="flex-1 text-xs font-bold text-white bg-red-600 rounded-lg py-2">출고</button>
+        <button onClick={() => setMovementType("adjust")} className="flex-1 text-xs font-bold text-white bg-slate-500 rounded-lg py-2">조정</button>
+      </div>
+      <div className="border-t border-slate-100">
+        {history.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-6">내역이 없습니다</p>
+        ) : (
+          history.map((m) => (
+            <div key={m.id} className="flex justify-between py-2 border-b border-slate-50">
+              <div>
+                <p className="text-sm font-bold">{MOVEMENT_LABEL[m.type]}</p>
+                <p className="text-[11px] text-slate-400">{m.createdAt.slice(0, 10)}{m.note ? ` · ${m.note}` : ""}</p>
+              </div>
+              <div className="text-right">
+                <p className={`text-sm font-bold ${m.qtyDelta >= 0 ? "text-emerald-600" : "text-red-600"}`}>{m.qtyDelta >= 0 ? "+" : ""}{m.qtyDelta}</p>
+                <p className="text-[11px] text-slate-400">{m.balance}</p>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+
+    {movementType && (
+      <StockMovementModal
+        type={movementType}
+        onClose={() => setMovementType(null)}
+        onSubmit={(payload) => onMovement(product, movementType, payload)}
+      />
+    )}
+    </div>
   );
 }
 
@@ -196,6 +280,10 @@ export default function InventoryAdmin({ data, setData }) {
     if (!inserted) { alert("등록 실패: 저장된 결과를 받지 못했습니다."); return; }
     const mapped = mapInventoryProduct(inserted);
     setData((prev) => ({ ...prev, inventoryProducts: [mapped, ...prev.inventoryProducts] }));
+    const initialQty = Number(form.initialQty);
+    if (initialQty > 0) {
+      await addMovement(mapped, "adjust", { qtyDelta: initialQty, note: "초기 수량" });
+    }
     setSelectedId(mapped.id);
   }
 
@@ -225,6 +313,15 @@ export default function InventoryAdmin({ data, setData }) {
     if (error) { alert("삭제 실패: " + error.message); return; }
     setData((prev) => ({ ...prev, inventoryProducts: prev.inventoryProducts.map((p) => (p.id === product.id ? { ...p, active: false } : p)) }));
     setSelectedId(null);
+  }
+
+  async function addMovement(product, type, { qtyDelta, note }) {
+    const row = { product_id: product.id, type, qty_delta: qtyDelta, note };
+    const { data: inserted, error } = await supabase.from("inventory_stock_movements").insert(row).select().maybeSingle();
+    if (error) { alert("재고 반영 실패: " + error.message); return; }
+    if (!inserted) { alert("재고 반영 실패: 저장된 결과를 받지 못했습니다."); return; }
+    const mapped = mapInventoryStockMovement(inserted);
+    setData((prev) => ({ ...prev, inventoryStockMovements: [...prev.inventoryStockMovements, mapped] }));
   }
 
   return (
@@ -292,7 +389,13 @@ export default function InventoryAdmin({ data, setData }) {
                   왼쪽 목록에서 제품을 선택하세요
                 </div>
               ) : (
-                <ProductDetail product={selected} onSave={saveProduct} onDelete={deleteProduct} />
+                <ProductDetail
+                  product={selected}
+                  movements={inventoryStockMovements}
+                  onSave={saveProduct}
+                  onDelete={deleteProduct}
+                  onMovement={addMovement}
+                />
               )}
             </div>
           </div>
