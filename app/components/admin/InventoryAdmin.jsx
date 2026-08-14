@@ -6,6 +6,7 @@ import { currentStock, stockHistory } from "@/lib/inventoryStock";
 import { supabase } from "@/lib/supabaseClient";
 import { mapInventoryProduct, mapInventoryStockMovement } from "@/lib/mappers";
 import { inputCls, Modal } from "@/app/components/admin/adminShared";
+import { PhotoLightbox } from "@/app/components/ui";
 import { SinglePhotoUpload } from "@/app/components/formWidgets";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 
@@ -165,6 +166,7 @@ function ProductDetail({ product, movements, onSave, onDelete, onMovement }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(null);
   const [movementType, setMovementType] = useState(null);
+  const [viewingPhoto, setViewingPhoto] = useState(false);
   const stock = currentStock(movements, product.id);
   const history = stockHistory(movements, product.id);
 
@@ -216,7 +218,7 @@ function ProductDetail({ product, movements, onSave, onDelete, onMovement }) {
               <span className="text-slate-400">제품명</span><span className="font-bold">{product.name}</span>
             </div>
             {product.photoUrl ? (
-              <img src={product.photoUrl} alt="" className="w-24 h-24 rounded-lg object-cover border border-slate-100 shrink-0" />
+              <img src={product.photoUrl} alt="" className="w-24 h-24 rounded-lg object-cover border border-slate-100 shrink-0 cursor-zoom-in" onClick={() => setViewingPhoto(true)} />
             ) : (
               <div className="w-24 h-24 rounded-lg bg-slate-100 shrink-0" />
             )}
@@ -270,6 +272,9 @@ function ProductDetail({ product, movements, onSave, onDelete, onMovement }) {
         onClose={() => setMovementType(null)}
         onSubmit={(payload) => onMovement(product, movementType, payload)}
       />
+    )}
+    {viewingPhoto && (
+      <PhotoLightbox urls={[product.photoUrl]} index={0} onIndexChange={() => {}} onClose={() => setViewingPhoto(false)} />
     )}
     </div>
   );

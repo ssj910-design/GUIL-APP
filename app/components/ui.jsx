@@ -165,7 +165,7 @@ export function PhotoLightboxPane({ url, active, zoom, pan, isGesturing }) {
   );
 }
 
-function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
+export function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
   const { containerRef, idx, showPrev, showNext, trackStyle, zoom, pan, isGesturing, handlers } =
     usePhotoLightboxGestures(urls.length, index, onIndexChange);
   const prev = () => onIndexChange((index - 1 + urls.length) % urls.length);

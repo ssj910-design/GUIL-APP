@@ -1,7 +1,7 @@
 import { useState, useContext, useRef } from "react";
 import { X, Camera, Search, Image as ImageIcon } from "lucide-react";
 import { uploadPhoto } from "@/lib/photos";
-import { inputCls, Sheet } from "@/app/components/ui";
+import { inputCls, Sheet, PhotoLightbox } from "@/app/components/ui";
 import { SitesContext } from "@/app/components/context";
 import { activeSites } from "@/lib/utils";
 
@@ -153,6 +153,7 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
 export function SinglePhotoUpload({ label, url, uploadFolder, onUploaded, onRemove }) {
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
+  const [viewing, setViewing] = useState(false);
 
   async function handleFile(e) {
     const file = e.target.files?.[0];
@@ -170,16 +171,21 @@ export function SinglePhotoUpload({ label, url, uploadFolder, onUploaded, onRemo
 
   if (url) {
     return (
-      <div className="relative rounded-xl overflow-hidden border border-slate-200 h-32">
-        <img src={url} alt="" className="w-full h-full object-cover" />
-        <button
-          type="button"
-          onClick={onRemove}
-          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-slate-900/70 text-white flex items-center justify-center"
-        >
-          <X size={13} />
-        </button>
-      </div>
+      <>
+        <div className="relative rounded-xl overflow-hidden border border-slate-200 h-32">
+          <img src={url} alt="" className="w-full h-full object-cover cursor-zoom-in" onClick={() => setViewing(true)} />
+          <button
+            type="button"
+            onClick={onRemove}
+            className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-slate-900/70 text-white flex items-center justify-center"
+          >
+            <X size={13} />
+          </button>
+        </div>
+        {viewing && (
+          <PhotoLightbox urls={[url]} index={0} onIndexChange={() => {}} onClose={() => setViewing(false)} />
+        )}
+      </>
     );
   }
 
