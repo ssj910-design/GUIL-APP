@@ -382,10 +382,10 @@ export default function App() {
 
   // 최고+중간관리자만(자재담당 제외) — 고장 흐름 관련 알림 중 관리자 등급을 좁혀 보내는 곳에서 쓴다.
   const seniorAdminIds = () => profilesAll.filter((p) => p.role === "admin" && p.is_active !== false && p.admin_tier !== "material").map((p) => p.id);
-  // 그 현장의 상시 담당기사 profile id — 미배정 상태에서도 늘 알아야 하는 사람이라 failure.assignee와 별개로 구한다.
-  const siteEngineerId = (siteId) => {
+  // 그 현장의 상시 담당기사 전원의 profile id — 미배정 상태에서도 늘 알아야 하는 사람들이라 failure.assignee와 별개로 구한다.
+  const siteEngineerIds = (siteId) => {
     const site = sites.find((s) => s.id === siteId);
-    return site?.assignedEngineer ? profileIdByName(profilesAll, site.assignedEngineer) : null;
+    return (site?.assignedEngineers ?? []).map((name) => profileIdByName(profilesAll, name)).filter(Boolean);
   };
 
   // 알림 발송 — 실패해도 앱 동작을 막지 않는다(알림은 부가 기능이라 조용히 넘어간다).
@@ -930,9 +930,9 @@ export default function App() {
     const where = `${first.siteName} · ${created.map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean).join(", ") || "호기 미상"}`;
     const what = parseErrorCode(first.errorCode).faultType;
     const more = created.length > 1 ? ` 외 ${created.length - 1}건` : "";
-    const engId = siteEngineerId(first.siteId);
+    const engIds = siteEngineerIds(first.siteId);
 
-    sendPush("failure_reported", [...new Set([...seniorAdminIds(), engId].filter(Boolean))], {
+    sendPush("failure_reported", [...new Set([...seniorAdminIds(), ...engIds])], {
       title: `고장 접수 — ${what}`,
       body: `${where}${more}`,
       url: `/?openFailure=${first.id}`,
@@ -941,8 +941,8 @@ export default function App() {
       sendPush("failure_escalated", adminIds(), { title: "중대 고장 접수", body: `${where} — ${what}`, url: `/?openFailure=${first.id}` });
     }
     if (!first.assignee) {
-      // 해당현장 담당기사는 위 failure_reported로 이미 알림을 받았으니 여기서 또 안 보낸다.
-      sendPush("failure_unassigned", engineerIds().filter((id) => id !== engId), {
+      // 해당현장 담당기사(전원)는 위 failure_reported로 이미 알림을 받았으니 여기서 또 안 보낸다.
+      sendPush("failure_unassigned", engineerIds().filter((id) => !engIds.includes(id)), {
         title: "미배정 고장 — 먼저 잡는 사람이 담당",
         body: `${where} — ${what}`,
         url: `/?openFailure=${first.id}`,
@@ -1146,9 +1146,9 @@ export default function App() {
     );
     const unit = formatUnitLabel(failure.elevatorNo);
     if (isClosed) {
-      // 처리완료·오신고 — 최고+중간관리자와 그 현장 담당기사에게. 담당기사가 직접 처리한
+      // 처리완료·오신고 — 최고+중간관리자와 그 현장 담당기사 전원에게. 담당기사가 직접 처리한
       // 본인 건이어도 "확인용"으로 그대로 보낸다(누가 처리했든 알아야 하는 관리 성격의 알림).
-      sendPush("failure_completed", [...new Set([...seniorAdminIds(), siteEngineerId(failure.siteId)].filter(Boolean))], {
+      sendPush("failure_completed", [...new Set([...seniorAdminIds(), ...siteEngineerIds(failure.siteId)])], {
         title: `고장 처리완료 — ${result}`,
         body: `${failure.siteName}${unit ? ` ${unit}` : ""}`,
         url: `/?openFailure=${failure.id}`,
