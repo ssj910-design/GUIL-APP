@@ -182,16 +182,16 @@ function ProductDetail({ product, movements, onSave, onDelete, onMovement }) {
         <ProductFormFields form={form} setForm={setForm} onGenerateMaterialNo={null} />
       ) : (
         <>
-          <div className="flex gap-3.5 mb-4">
-            {product.photoUrl ? (
-              <img src={product.photoUrl} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-100" />
-            ) : (
-              <div className="w-16 h-16 rounded-lg bg-slate-100" />
-            )}
+          <div className="flex items-start justify-between gap-3.5 mb-4">
             <div className="grid grid-cols-[80px_1fr] gap-y-2 text-sm flex-1">
               <span className="text-slate-400">자재번호</span><span className="font-bold">{product.materialNo}</span>
               <span className="text-slate-400">제품명</span><span className="font-bold">{product.name}</span>
             </div>
+            {product.photoUrl ? (
+              <img src={product.photoUrl} alt="" className="w-24 h-24 rounded-lg object-cover border border-slate-100 shrink-0" />
+            ) : (
+              <div className="w-24 h-24 rounded-lg bg-slate-100 shrink-0" />
+            )}
           </div>
           <div className="border-t border-slate-100 pt-3 grid grid-cols-[100px_1fr] gap-y-2 text-sm">
             <span className="text-slate-400">규격</span><span>{product.spec || "-"}</span>
