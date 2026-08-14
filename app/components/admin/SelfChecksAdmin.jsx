@@ -8,7 +8,7 @@ import { Search, Map as MapIcon } from "lucide-react";
 import { supabase, fetchAll } from "@/lib/supabaseClient";
 import { mapSelfCheck, mapSelfCheckItem, mapTodo } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
-import { shortDate, addDays } from "@/lib/utils";
+import { shortDate, addDays, profileIdByName } from "@/lib/utils";
 import { locOf, personOf, StatusBadge, AdminTable, Modal, PhotoGrid, inputCls } from "@/app/components/admin/adminShared";
 import { SiteMapModal } from "@/app/components/admin/SiteMapModal";
 import { confirmAsync } from "@/app/components/ConfirmHost";
@@ -248,9 +248,11 @@ export default function SelfChecksAdmin({ data, setData, initialView }) {
       const u = data.units.find((x) => x.id === c.unitId);
       const s = u ? data.sites.find((x) => x.id === u.siteId) : null;
       // 담당자는 출석부 생성 시점 스냅샷(c.assigneeId)이 아니라 현장정보에 지금 배정된 담당
-      // 기사를 실시간으로 따른다 — 점검완료 여부(status·doneDate 등)는 그대로 c에서 유지된다.
-      const currentAssignee = s?.assignedEngineer ? data.profiles.find((p) => p.name === s.assignedEngineer) : null;
-      return { ...c, assigneeId: currentAssignee?.id ?? null, loc: locOf(data, c.unitId), address: s?.address ?? null, gu: guOf(s?.address), siteActive: s?.isActive !== false };
+      // 기사 전원을 실시간으로 따른다 — 점검완료 여부(status·doneDate 등)는 그대로 c에서 유지된다.
+      const currentAssigneeIds = (s?.assignedEngineers ?? [])
+        .map((name) => profileIdByName(data.profiles, name))
+        .filter(Boolean);
+      return { ...c, assigneeIds: currentAssigneeIds, loc: locOf(data, c.unitId), address: s?.address ?? null, gu: guOf(s?.address), siteActive: s?.isActive !== false };
     })
     // 출석부는 생성 시점(매월 1일)에 활성 호기 전체로 만들어져서, 그 뒤 현장이 계약중지돼도
     // 이미 만들어진 줄은 그대로 남는다 — 지금 계약중지인 현장의 줄은 화면에서 제외한다.
@@ -258,11 +260,16 @@ export default function SelfChecksAdmin({ data, setData, initialView }) {
     .sort((a, b) => a.loc.localeCompare(b.loc, "ko"));
   const done = rows.filter((c) => c.status === "완료");
 
+  // 총대수(rows.length)는 위에서 이미 확정 — 아래는 기사별 집계만, row를 복제하지 않고
+  // 배정된 기사 수만큼 같은 row 참조를 여러 그룹에 push한다(2명 배정 현장은 두 기사의
+  // "담당대수"엔 각각 반영되지만 rows.length·done.length는 늘지 않는다).
   const groups = new Map();
   for (const r of rows) {
-    const key = r.assigneeId ?? "__unassigned";
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(r);
+    const keys = r.assigneeIds.length ? r.assigneeIds : ["__unassigned"];
+    for (const key of keys) {
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(r);
+    }
   }
   const summaryRows = [...groups.entries()]
     .map(([key, list]) => ({
