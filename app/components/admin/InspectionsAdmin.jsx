@@ -92,7 +92,7 @@ function FlaggedRow({ i, site, isLive }) {
     <tr className="border-b border-slate-50">
       <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap align-top">{i.siteName} · {i.unitLabel}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap align-top">{addressWithoutSido(site?.address)}</td>
-      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap align-top">{site?.assignedEngineer || "미배정"}</td>
+      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap align-top">{site?.assignedEngineers?.length ? site.assignedEngineers.join(", ") : "미배정"}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap align-top">{i.type || "-"}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap align-top">{i.startDate ? shortDate(i.startDate) : "-"}</td>
       <td className="px-3 py-2.5 whitespace-nowrap align-top">
@@ -195,7 +195,7 @@ export default function InspectionsAdmin({ data, setData }) {
   const getFlaggedVal = (i, key) => {
     switch (key) {
       case "loc": return `${i.siteName ?? ""} · ${i.unitLabel ?? ""}`;
-      case "person": return sites.find((s) => s.id === i.siteId)?.assignedEngineer ?? "";
+      case "person": return sites.find((s) => s.id === i.siteId)?.assignedEngineers?.join(" ") ?? "";
       case "dueDate": return i.result === "fail" ? null : (i.apiDueDate || i.dueDate || null);
       default: return "";
     }

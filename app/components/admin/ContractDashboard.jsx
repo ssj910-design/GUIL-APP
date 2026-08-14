@@ -143,7 +143,7 @@ export default function ContractDashboard({ data }) {
                 <tr key={s.id} className="border-b border-slate-50">
                   <td className="pl-5 pr-3 py-2.5">
                     <p className="font-bold whitespace-nowrap">{s.name}</p>
-                    <p className="text-[10px] text-slate-400">{s.contractType ?? "계약구분 없음"} · {s.assignedEngineer ?? "담당 미지정"}</p>
+                    <p className="text-[10px] text-slate-400">{s.contractType ?? "계약구분 없음"} · {s.assignedEngineers?.length ? s.assignedEngineers.join(", ") : "담당 미지정"}</p>
                   </td>
                   <td className="px-3 py-2.5 text-right whitespace-nowrap text-slate-500 text-[11px]">{shortDate(s.contractEnd)}</td>
                   <td className="px-3 py-2.5 text-right whitespace-nowrap">

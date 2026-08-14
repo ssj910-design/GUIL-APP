@@ -49,7 +49,7 @@ export function FailureDetailContent({ f, units, sites, profiles = [] }) {
     { label: "현장 주소", value: loc.siteObj?.address ?? "-" },
     { label: "접수일시", value: f.reportedAt },
     { label: "접수자", value: reporter },
-    { label: "담당 기사", value: loc.siteObj?.assignedEngineer || "미배정" },
+    { label: "담당 기사", value: loc.siteObj?.assignedEngineers?.length ? loc.siteObj.assignedEngineers.join(", ") : "미배정" },
     { label: "배정 기사", value: f.assignee || "미배정" },
     { label: "출동 / 도착시간", value: `${f.dispatchedAt || "-"} / ${f.arrivalTime || "-"}` },
     { label: "처리완료시간", value: f.completeTime || "-" },
@@ -389,7 +389,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
                     <td className="pl-5 pr-2 py-2.5 text-slate-500 whitespace-nowrap">{f.reportedAt}</td>
                     <td className="px-1 py-2.5 font-semibold whitespace-nowrap">{loc.site} · {unitWithPlace(loc)}</td>
                     <td className="px-2 py-2.5 text-slate-600">{f.errorCode}</td>
-                    <td className="px-2 py-2.5 whitespace-nowrap">{loc.siteObj?.assignedEngineer || "미배정"}</td>
+                    <td className="px-2 py-2.5 whitespace-nowrap">{loc.siteObj?.assignedEngineers?.length ? loc.siteObj.assignedEngineers.join(", ") : "미배정"}</td>
                     <td className="px-2 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <span className="text-slate-700 font-semibold mr-2">{engineerName(f.assigneeId, f.assignee)}</span>
                       <button
@@ -436,7 +436,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
                     <p className="font-semibold truncate">{loc.site} · {loc.unit}</p>
                     <p className="text-[11px] text-slate-400 truncate">{f.reportedAt} · {f.errorCode}</p>
                     <p className="text-[11px] text-slate-400 truncate">
-                      담당 {loc.siteObj?.assignedEngineer || "미배정"} · 배정 {engineerName(f.assigneeId, f.assignee)}
+                      담당 {loc.siteObj?.assignedEngineers?.length ? loc.siteObj.assignedEngineers.join(", ") : "미배정"} · 배정 {engineerName(f.assigneeId, f.assignee)}
                     </p>
                   </div>
                   <span className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${stateCls}`}>

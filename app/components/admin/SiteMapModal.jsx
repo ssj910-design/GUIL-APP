@@ -176,7 +176,7 @@ export function SiteMapModal({ sites, units = [], onClose }) {
               <div>종류: ${kinds}</div>
               <div>모델: ${models}</div>
               <div>대수: ${siteUnits.length}대</div>
-              <div>담당자: ${s.assignedEngineer || "미배정"}</div>
+              <div>담당자: ${s.assignedEngineers?.length ? s.assignedEngineers.join(", ") : "미배정"}</div>
             </div>`
           );
         // 기본 클릭-토글 동작을 떼고, 아래에서 호버=미리보기 / 클릭=고정 동작으로 새로 붙인다.
