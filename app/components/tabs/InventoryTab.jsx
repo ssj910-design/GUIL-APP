@@ -27,7 +27,7 @@ function ProductListRow({ p, stock, isAdmin, onClick }) {
   return (
     <button onClick={onClick} className="w-full flex items-center gap-3 px-4 py-3 border-b border-slate-50 active:bg-slate-50 text-left">
       {p.photoUrls?.[0] ? (
-        <img src={p.photoUrls[0]} alt="" className="w-11 h-11 rounded-lg object-cover shrink-0" />
+        <img src={p.photoUrls[0]} alt="" loading="lazy" className="w-11 h-11 rounded-lg object-cover shrink-0" />
       ) : (
         <div className="w-11 h-11 rounded-lg bg-slate-100 shrink-0" />
       )}

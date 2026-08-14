@@ -597,7 +597,7 @@ export default function InventoryAdmin({ data, setData }) {
                           selectedId === p.id ? "bg-blue-50" : "hover:bg-slate-50"
                         }`}>
                         {p.photoUrls?.[0] ? (
-                          <img src={p.photoUrls[0]} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0" />
+                          <img src={p.photoUrls[0]} alt="" loading="lazy" className="w-9 h-9 rounded-lg object-cover shrink-0" />
                         ) : (
                           <div className="w-9 h-9 rounded-lg bg-slate-100 shrink-0" />
                         )}
