@@ -9,6 +9,7 @@ import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets
 import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
+import { LawQaPanel } from "@/app/components/tabs/LawQaPanel";
 
 
 /* ------------------------------------------------------------------ */
@@ -1653,7 +1654,7 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
   useEffect(() => {
     if (focusSubTab) { setSubTab(focusSubTab); onFocusHandled?.(); }
   }, [focusSubTab]); // eslint-disable-line react-hooks/exhaustive-deps
-  const subTabs = ["접수등록", "미배정", "처리등록", "처리현황", "에러코드집"];
+  const subTabs = ["접수등록", "미배정", "처리등록", "처리현황", "에러코드집", "검사기준"];
   const unassignedCount = failures.filter((f) => !f.assignee && f.status === "미처리").length;
   // 처리등록 배지는 그 탭에서 보여주는 "처리중인 고장"(active) 목록과 동일한 기준 —
   // 미처리(출동 전)뿐 아니라 진행중(도착 후 결과 미등록)도 아직 처리등록이 끝난 게 아니라서 포함한다.
@@ -1667,6 +1668,7 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
     if (tab === "접수등록") return <FailureRegisterForm onReported={onReported} onDispatch={onDispatch} failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />;
     if (tab === "미배정") return <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
     if (tab === "처리등록") return <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
+    if (tab === "검사기준") return <LawQaPanel />;
     if (tab === "처리현황") return <FailureStatusOverview failures={failures} onReassign={onReassign} attendances={attendances} todayLeaves={todayLeaves} />;
     return <ErrorCodeBook errorCodes={errorCodes} failures={failures} />;
   }
