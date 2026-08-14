@@ -26,7 +26,8 @@ function nextMaterialNo(existing) {
 // 제품 사진 여러 장 — 첫 번째(urls[0])가 메인 사진이라 크게, 나머지는 오른쪽에 작게
 // + 추가 타일. 업로드는 항상 배열 끝에 append — 메인 자리가 비어 있으면 그게 곧
 // 메인이 된다(순서로만 표현, 별도 "메인 지정" 조작 없음). 클릭하면 전체화면 라이트박스.
-function ProductPhotos({ urls, onChange }) {
+// readOnly면 상세 조회 화면용 — 추가/삭제 버튼 없이 보기·전체화면만.
+function ProductPhotos({ urls, onChange, readOnly = false }) {
   const mainInputRef = useRef(null);
   const addInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
@@ -50,39 +51,49 @@ function ProductPhotos({ urls, onChange }) {
     onChange(urls.filter((_, idx) => idx !== i));
   }
 
+  if (readOnly && urls.length === 0) return null;
+
   return (
     <div className="flex items-start gap-3">
-      <input ref={mainInputRef} type="file" accept="image/*" className="hidden" onChange={addFile} />
+      {!readOnly && <input ref={mainInputRef} type="file" accept="image/*" className="hidden" onChange={addFile} />}
       {urls[0] ? (
-        <div className="relative w-28 h-28 shrink-0 rounded-xl overflow-hidden border border-slate-200">
+        <div className="relative w-56 h-56 shrink-0 rounded-xl overflow-hidden border border-slate-200">
           <img src={urls[0]} alt="" className="w-full h-full object-cover cursor-zoom-in" onClick={() => setViewingIndex(0)} />
-          <button type="button" onClick={() => removeAt(0)} className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-slate-900/70 text-white flex items-center justify-center">
-            <X size={13} />
-          </button>
+          {!readOnly && (
+            <button type="button" onClick={() => removeAt(0)} className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-slate-900/70 text-white flex items-center justify-center">
+              <X size={13} />
+            </button>
+          )}
         </div>
-      ) : (
+      ) : !readOnly ? (
         <button type="button" onClick={() => mainInputRef.current?.click()} disabled={uploading}
-          className="w-28 h-28 shrink-0 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center gap-1 text-slate-500 disabled:opacity-50">
-          <Camera size={20} />
-          <span className="text-[10px] font-semibold">{uploading ? "업로드 중..." : "사진 추가"}</span>
+          className="w-56 h-56 shrink-0 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center gap-1.5 text-slate-500 disabled:opacity-50">
+          <Camera size={28} />
+          <span className="text-xs font-semibold">{uploading ? "업로드 중..." : "메인 사진 추가"}</span>
         </button>
-      )}
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         {urls.slice(1).map((url, i) => (
           <div key={url} className="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-200">
             <img src={url} alt="" className="w-full h-full object-cover cursor-zoom-in" onClick={() => setViewingIndex(i + 1)} />
-            <button type="button" onClick={() => removeAt(i + 1)} className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-slate-900/70 text-white flex items-center justify-center">
-              <X size={9} />
-            </button>
+            {!readOnly && (
+              <button type="button" onClick={() => removeAt(i + 1)} className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-slate-900/70 text-white flex items-center justify-center">
+                <X size={9} />
+              </button>
+            )}
           </div>
         ))}
-        <input ref={addInputRef} type="file" accept="image/*" className="hidden" onChange={addFile} />
-        <button type="button" onClick={() => addInputRef.current?.click()} disabled={uploading}
-          className="w-16 h-16 shrink-0 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center gap-0.5 text-slate-500 disabled:opacity-50">
-          <Paperclip size={16} />
-          <span className="text-[9px] font-semibold">추가</span>
-        </button>
+        {!readOnly && (
+          <>
+            <input ref={addInputRef} type="file" accept="image/*" className="hidden" onChange={addFile} />
+            <button type="button" onClick={() => addInputRef.current?.click()} disabled={uploading}
+              className="w-16 h-16 shrink-0 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center gap-0.5 text-slate-500 disabled:opacity-50">
+              <Paperclip size={16} />
+              <span className="text-[9px] font-semibold">추가</span>
+            </button>
+          </>
+        )}
       </div>
 
       {viewingIndex != null && (
@@ -97,21 +108,19 @@ function ProductPhotos({ urls, onChange }) {
 function ProductFormFields({ form, setForm, onGenerateMaterialNo }) {
   return (
     <div>
-      <div className="flex items-start gap-4 mb-4">
-        <div className="flex-1 space-y-3">
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">자재번호 *</p>
-            <div className="flex gap-1.5">
-              <input className={inputCls} value={form.materialNo} onChange={(e) => setForm({ ...form, materialNo: e.target.value })} />
-              {onGenerateMaterialNo && (
-                <button type="button" onClick={onGenerateMaterialNo} className="text-xs font-bold text-white bg-emerald-600 rounded-lg px-3 whitespace-nowrap">자동 생성</button>
-              )}
-            </div>
+      <div className="space-y-3 mb-4">
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">자재번호 *</p>
+          <div className="flex gap-1.5">
+            <input className={inputCls} value={form.materialNo} onChange={(e) => setForm({ ...form, materialNo: e.target.value })} />
+            {onGenerateMaterialNo && (
+              <button type="button" onClick={onGenerateMaterialNo} className="text-xs font-bold text-white bg-emerald-600 rounded-lg px-3 whitespace-nowrap">자동 생성</button>
+            )}
           </div>
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">제품명 *</p>
-            <input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </div>
+        </div>
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">제품명 *</p>
+          <input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </div>
         <ProductPhotos urls={form.photoUrls} onChange={(photoUrls) => setForm({ ...form, photoUrls })} />
       </div>
@@ -227,7 +236,6 @@ function ProductDetail({ product, movements, onSave, onDelete, onMovement }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(null);
   const [movementType, setMovementType] = useState(null);
-  const [viewingIndex, setViewingIndex] = useState(null);
   const stock = currentStock(movements, product.id);
   const history = stockHistory(movements, product.id);
   const photoUrls = product.photoUrls ?? [];
@@ -274,17 +282,15 @@ function ProductDetail({ product, movements, onSave, onDelete, onMovement }) {
         </>
       ) : (
         <>
-          <div className="flex items-start justify-between gap-3.5 mb-4">
-            <div className="grid grid-cols-[80px_1fr] gap-y-2 text-sm flex-1">
-              <span className="text-slate-400">자재번호</span><span className="font-bold">{product.materialNo}</span>
-              <span className="text-slate-400">제품명</span><span className="font-bold">{product.name}</span>
-            </div>
-            {photoUrls[0] ? (
-              <img src={photoUrls[0]} alt="" className="w-24 h-24 rounded-lg object-cover border border-slate-100 shrink-0 cursor-zoom-in" onClick={() => setViewingIndex(0)} />
-            ) : (
-              <div className="w-24 h-24 rounded-lg bg-slate-100 shrink-0" />
-            )}
+          <div className="grid grid-cols-[80px_1fr] gap-y-2 text-sm mb-4">
+            <span className="text-slate-400">자재번호</span><span className="font-bold">{product.materialNo}</span>
+            <span className="text-slate-400">제품명</span><span className="font-bold">{product.name}</span>
           </div>
+          {photoUrls.length > 0 && (
+            <div className="mb-4">
+              <ProductPhotos urls={photoUrls} readOnly />
+            </div>
+          )}
           <div className="border-t border-slate-100 pt-3 grid grid-cols-[100px_1fr] gap-y-2 text-sm">
             <span className="text-slate-400">규격</span><span>{product.spec || "-"}</span>
             <span className="text-slate-400">비고</span><span>{product.memo || "-"}</span>
@@ -334,9 +340,6 @@ function ProductDetail({ product, movements, onSave, onDelete, onMovement }) {
         onClose={() => setMovementType(null)}
         onSubmit={(payload) => onMovement(product, movementType, payload)}
       />
-    )}
-    {viewingIndex != null && (
-      <PhotoLightbox urls={photoUrls} index={viewingIndex} onIndexChange={setViewingIndex} onClose={() => setViewingIndex(null)} />
     )}
     </div>
   );
