@@ -22,49 +22,75 @@ function randomMaterialNo(existing) {
   return no;
 }
 
-// 등록 모달과 상세 인라인수정이 같은 필드 셋을 쓴다.
+// 등록 패널과 상세 인라인수정이 같은 필드 셋을 쓴다 — 첨부(제품 수정) 레이아웃 그대로:
+// 자재번호·제품명(+우측 사진) → 구분선 → 제품 속성(세로 1열) → 구분선 → 가격 정보.
 function ProductFormFields({ form, setForm, onGenerateMaterialNo }) {
   return (
-    <div className="space-y-3">
-      <div>
-        <p className="text-xs font-bold text-slate-500 mb-1">자재번호 *</p>
-        <div className="flex gap-1.5">
-          <input className={inputCls} value={form.materialNo} onChange={(e) => setForm({ ...form, materialNo: e.target.value })} />
-          {onGenerateMaterialNo && (
-            <button type="button" onClick={onGenerateMaterialNo} className="text-xs font-bold text-white bg-emerald-600 rounded-lg px-3 whitespace-nowrap">자동 생성</button>
-          )}
+    <div>
+      <div className="flex gap-4 mb-4">
+        <div className="flex-1 space-y-3">
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">자재번호 *</p>
+            <div className="flex gap-1.5">
+              <input className={inputCls} value={form.materialNo} onChange={(e) => setForm({ ...form, materialNo: e.target.value })} />
+              {onGenerateMaterialNo && (
+                <button type="button" onClick={onGenerateMaterialNo} className="text-xs font-bold text-white bg-emerald-600 rounded-lg px-3 whitespace-nowrap">자동 생성</button>
+              )}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">제품명 *</p>
+            <input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </div>
+        </div>
+        <div className="w-28 shrink-0">
+          <SinglePhotoUpload
+            label="사진 추가"
+            url={form.photoUrl}
+            uploadFolder="inventory"
+            onUploaded={(url) => setForm({ ...form, photoUrl: url })}
+            onRemove={() => setForm({ ...form, photoUrl: "" })}
+          />
         </div>
       </div>
-      <div>
-        <p className="text-xs font-bold text-slate-500 mb-1">제품명 *</p>
-        <input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+
+      <div className="border-t border-slate-100 pt-3 mb-3">
+        <p className="text-xs font-extrabold text-slate-700 mb-3">제품 속성</p>
+        <div className="space-y-3">
+          <div><p className="text-xs font-bold text-slate-500 mb-1">규격</p><input className={inputCls} placeholder="텍스트 입력" value={form.spec} onChange={(e) => setForm({ ...form, spec: e.target.value })} /></div>
+          <div><p className="text-xs font-bold text-slate-500 mb-1">비고</p><input className={inputCls} placeholder="텍스트 입력" value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} /></div>
+          <div><p className="text-xs font-bold text-slate-500 mb-1">위치</p><input className={inputCls} placeholder="텍스트 입력" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></div>
+          <div><p className="text-xs font-bold text-slate-500 mb-1">구매처</p><input className={inputCls} placeholder="텍스트 입력" value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} /></div>
+          <div><p className="text-xs font-bold text-slate-500 mb-1">단가 기준일자</p><input type="date" className={inputCls} value={form.priceDate} onChange={(e) => setForm({ ...form, priceDate: e.target.value })} /></div>
+        </div>
       </div>
-      <SinglePhotoUpload
-        label="사진 추가"
-        url={form.photoUrl}
-        uploadFolder="inventory"
-        onUploaded={(url) => setForm({ ...form, photoUrl: url })}
-        onRemove={() => setForm({ ...form, photoUrl: "" })}
-      />
-      <div className="grid grid-cols-2 gap-3">
-        <div><p className="text-xs font-bold text-slate-500 mb-1">규격</p><input className={inputCls} value={form.spec} onChange={(e) => setForm({ ...form, spec: e.target.value })} /></div>
-        <div><p className="text-xs font-bold text-slate-500 mb-1">위치</p><input className={inputCls} value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></div>
-        <div><p className="text-xs font-bold text-slate-500 mb-1">구매처</p><input className={inputCls} value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} /></div>
-        <div><p className="text-xs font-bold text-slate-500 mb-1">단가 기준일자</p><input type="date" className={inputCls} value={form.priceDate} onChange={(e) => setForm({ ...form, priceDate: e.target.value })} /></div>
-      </div>
-      <div>
-        <p className="text-xs font-bold text-slate-500 mb-1">비고</p>
-        <input className={inputCls} value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div><p className="text-xs font-bold text-slate-500 mb-1">구매가</p><input type="number" className={inputCls} value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })} /></div>
-        <div><p className="text-xs font-bold text-slate-500 mb-1">판매가</p><input type="number" className={inputCls} value={form.salePrice} onChange={(e) => setForm({ ...form, salePrice: e.target.value })} /></div>
+
+      <div className="border-t border-slate-100 pt-3">
+        <p className="text-xs font-extrabold text-slate-700 mb-3">가격 정보</p>
+        <div className="space-y-3">
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">구매가</p>
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₩</span>
+              <input type="number" className={`${inputCls} pl-6`} value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })} />
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">판매가</p>
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₩</span>
+              <input type="number" className={`${inputCls} pl-6`} value={form.salePrice} onChange={(e) => setForm({ ...form, salePrice: e.target.value })} />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function RegisterProductModal({ existingNos, onClose, onCreate }) {
+// 모달이 아니라 "제품 정보" 칸 자리에 그대로 뜬다 — 등록 성공 시 상위(InventoryAdmin)가
+// creating을 꺼주고 새 제품을 선택해줘서 이 패널은 자연스럽게 ProductDetail로 바뀐다.
+function ProductCreatePanel({ existingNos, onCancel, onCreate }) {
   const [form, setForm] = useState({
     materialNo: randomMaterialNo(existingNos), name: "", photoUrl: "", spec: "", location: "",
     vendor: "", priceDate: "", memo: "", purchasePrice: "", salePrice: "", initialQty: "",
@@ -75,24 +101,25 @@ function RegisterProductModal({ existingNos, onClose, onCreate }) {
   async function submit() {
     if (!valid) return;
     setSaving(true);
-    const ok = await onCreate(form);
+    await onCreate(form);
     setSaving(false);
-    if (ok) onClose();
   }
 
   return (
-    <Modal title="제품 등록" onClose={onClose}>
+    <div className="bg-white rounded-xl border border-slate-200 p-5 lg:h-full overflow-y-auto">
+      <p className="text-sm font-extrabold mb-4">제품 등록</p>
       <ProductFormFields form={form} setForm={setForm} onGenerateMaterialNo={() => setForm({ ...form, materialNo: randomMaterialNo(existingNos) })} />
-      <div>
-        <p className="text-xs font-bold text-slate-500 mb-1 mt-3">초기 수량</p>
+      <div className="border-t border-slate-100 mt-3 pt-3">
+        <p className="text-xs font-bold text-slate-500 mb-1">초기 수량</p>
         <input type="number" step="1" className={inputCls} placeholder="0" value={form.initialQty} onChange={(e) => setForm({ ...form, initialQty: e.target.value })} />
       </div>
-      <div className="flex justify-end pt-4">
+      <div className="flex gap-2 mt-5">
         <button disabled={!valid || saving} onClick={submit} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
-          {saving ? "등록 중..." : "등록하기"}
+          {saving ? "등록 중..." : "저장"}
         </button>
+        <button onClick={onCancel} className="text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl px-5 py-2.5">취소</button>
       </div>
-    </Modal>
+    </div>
   );
 }
 
@@ -162,24 +189,25 @@ function ProductDetail({ product, movements, onSave, onDelete, onMovement }) {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5">
-    <div className="bg-white rounded-xl border border-slate-200 p-5">
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 lg:h-full">
+    <div className="bg-white rounded-xl border border-slate-200 p-5 lg:h-full overflow-y-auto">
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm font-extrabold">제품 정보</p>
-        {!editing ? (
+        <p className="text-sm font-extrabold">{editing ? "제품 수정" : "제품 정보"}</p>
+        {!editing && (
           <div className="flex gap-1.5">
             <button onClick={startEdit} className="flex items-center gap-1 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5"><Pencil size={13} /> 수정</button>
             <button onClick={remove} className="flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 rounded-lg px-3 py-1.5"><Trash2 size={13} /> 삭제</button>
           </div>
-        ) : (
-          <div className="flex gap-1.5">
-            <button onClick={() => setEditing(false)} className="text-xs font-bold text-slate-500 bg-slate-100 rounded-lg px-3 py-1.5">취소</button>
-            <button onClick={save} className="text-xs font-bold text-white bg-blue-700 rounded-lg px-3 py-1.5">저장</button>
-          </div>
         )}
       </div>
       {editing ? (
-        <ProductFormFields form={form} setForm={setForm} onGenerateMaterialNo={null} />
+        <>
+          <ProductFormFields form={form} setForm={setForm} onGenerateMaterialNo={null} />
+          <div className="flex gap-2 mt-5">
+            <button onClick={save} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-5 py-2.5">저장</button>
+            <button onClick={() => setEditing(false)} className="text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl px-5 py-2.5">취소</button>
+          </div>
+        </>
       ) : (
         <>
           <div className="flex items-start justify-between gap-3.5 mb-4">
@@ -208,7 +236,7 @@ function ProductDetail({ product, movements, onSave, onDelete, onMovement }) {
       )}
     </div>
 
-    <div className="bg-white rounded-xl border border-slate-200 p-5">
+    <div className="bg-white rounded-xl border border-slate-200 p-5 lg:h-full overflow-y-auto">
       <p className="text-sm font-extrabold mb-1">현재 재고 및 내역</p>
       <p className="text-3xl font-extrabold text-blue-700 mb-3">{stock}</p>
       <div className="flex gap-1.5 mb-4">
@@ -253,7 +281,7 @@ export default function InventoryAdmin({ data, setData }) {
   const [search, setSearch] = useState("");
   const [onlyInStock, setOnlyInStock] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
-  const [registering, setRegistering] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   const active = inventoryProducts.filter((p) => p.active !== false);
   const rows = active.filter((p) => {
@@ -263,6 +291,16 @@ export default function InventoryAdmin({ data, setData }) {
     return true;
   });
   const selected = active.find((p) => p.id === selectedId) ?? null;
+
+  function selectProduct(id) {
+    setCreating(false);
+    setSelectedId(id);
+  }
+
+  function startCreating() {
+    setSelectedId(null);
+    setCreating(true);
+  }
 
   async function createProduct(form) {
     const row = {
@@ -286,6 +324,7 @@ export default function InventoryAdmin({ data, setData }) {
     if (initialQty > 0) {
       await addMovement(mapped, "adjust", { qtyDelta: initialQty, note: "초기 수량" });
     }
+    setCreating(false);
     setSelectedId(mapped.id);
     return true;
   }
@@ -346,7 +385,7 @@ export default function InventoryAdmin({ data, setData }) {
         <>
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-extrabold">제품목록</h1>
-            <button onClick={() => setRegistering(true)} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5">+ 제품 추가</button>
+            <button onClick={startCreating} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5">+ 제품 추가</button>
           </div>
           <div className="flex gap-2 mb-3">
             <input className={`${inputCls} flex-1`} placeholder="자재번호·제품명 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -355,14 +394,17 @@ export default function InventoryAdmin({ data, setData }) {
             </label>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-7 gap-5 items-start">
-            <div className="xl:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <ul className="max-h-[calc(100vh-20rem)] overflow-y-auto">
+          <div className="grid grid-cols-1 xl:grid-cols-7 gap-5 items-stretch">
+            <div className="xl:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col xl:h-[calc(100vh-20rem)]">
+              {rows.length === 0 ? (
+                <p className="flex-1 flex items-center justify-center text-xs text-slate-400 text-center py-10">등록된 제품이 없습니다</p>
+              ) : (
+              <ul className="flex-1 overflow-y-auto">
                 {rows.map((p) => {
                   const stock = currentStock(inventoryStockMovements, p.id);
                   return (
                     <li key={p.id}>
-                      <button onClick={() => setSelectedId(p.id)}
+                      <button onClick={() => selectProduct(p.id)}
                         className={`w-full flex items-center gap-2.5 text-left px-3 py-2.5 border-b border-slate-50 ${
                           selectedId === p.id ? "bg-blue-50" : "hover:bg-slate-50"
                         }`}>
@@ -383,12 +425,18 @@ export default function InventoryAdmin({ data, setData }) {
                   );
                 })}
               </ul>
-              {rows.length === 0 && <p className="text-xs text-slate-400 text-center py-10">등록된 제품이 없습니다</p>}
+              )}
             </div>
 
-            <div className="xl:col-span-5">
-              {!selected ? (
-                <div className="bg-white rounded-xl border border-slate-200 h-40 xl:h-64 flex items-center justify-center text-sm text-slate-400">
+            <div className="xl:col-span-5 xl:h-[calc(100vh-20rem)]">
+              {creating ? (
+                <ProductCreatePanel
+                  existingNos={active.map((p) => p.materialNo)}
+                  onCancel={() => setCreating(false)}
+                  onCreate={createProduct}
+                />
+              ) : !selected ? (
+                <div className="bg-white rounded-xl border border-slate-200 h-40 xl:h-full flex items-center justify-center text-sm text-slate-400">
                   왼쪽 목록에서 제품을 선택하세요
                 </div>
               ) : (
@@ -403,14 +451,6 @@ export default function InventoryAdmin({ data, setData }) {
               )}
             </div>
           </div>
-
-          {registering && (
-            <RegisterProductModal
-              existingNos={active.map((p) => p.materialNo)}
-              onClose={() => setRegistering(false)}
-              onCreate={createProduct}
-            />
-          )}
         </>
       )}
     </div>
