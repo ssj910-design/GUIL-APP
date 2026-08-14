@@ -6,7 +6,7 @@ import { Home, AlertTriangle, CalendarCheck, CalendarClock, ShieldCheck, Package
 import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken } from "@/lib/supabaseClient";
 import { authFetch } from "@/lib/apiFetch";
-import { mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode, mapUnitPartPhoto } from "@/lib/mappers";
+import { mapSite, mergeAssignedEngineers, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode, mapUnitPartPhoto } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent, quoteGrandTotal } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { DutySwapNotice } from "@/app/components/DutyRoster";
@@ -736,6 +736,7 @@ export default function App() {
         dutySwapRes,
         leaveRes,
         unitPartPhotosRes,
+        siteAssignmentsRes,
       ] = await Promise.all([
         supabase.from("sites").select("*"),
         // site_managers는 1021행(2026-08-11 기준)으로 기본 1000행 한도를 넘어서, 페이지네이션
@@ -760,8 +761,9 @@ export default function App() {
         supabase.from("duty_swaps").select("*"),
         supabase.from("leaves").select("*").lte("start_date", TODAY_STR).gte("end_date", TODAY_STR),
         supabase.from("unit_part_photos").select("*"), // 테이블 없으면(마이그레이션 전) error → 빈 배열
+        supabase.from("site_assignments").select("*"),
       ]);
-      setSites((sitesRes.data ?? []).map(mapSite));
+      setSites(mergeAssignedEngineers((sitesRes.data ?? []).map(mapSite), siteAssignmentsRes.data ?? [], engineersRes.data ?? []));
       setSiteManagers((siteManagersRes.data ?? []).map(mapSiteManager));
       setFailures((failuresRes.data ?? []).map(mapFailure));
       setInspections((inspectionsRes.data ?? []).map(mapInspection));
