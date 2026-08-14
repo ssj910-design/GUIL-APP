@@ -119,6 +119,7 @@ export default function InventoryAdmin({ data, setData }) {
     };
     const { data: inserted, error } = await supabase.from("inventory_products").insert(row).select().maybeSingle();
     if (error) { alert("등록 실패: " + error.message); return; }
+    if (!inserted) { alert("등록 실패: 저장된 결과를 받지 못했습니다."); return; }
     const mapped = mapInventoryProduct(inserted);
     setData((prev) => ({ ...prev, inventoryProducts: [mapped, ...prev.inventoryProducts] }));
     setSelectedId(mapped.id);

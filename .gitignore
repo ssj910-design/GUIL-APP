@@ -45,3 +45,6 @@ next-env.d.ts
 
 # supabase CLI local state
 supabase/.temp/
+
+# superpowers scratch (brainstorm mockups, sdd progress ledger/briefs) — local only
+.superpowers/
