@@ -170,8 +170,13 @@
   2초 안에 다시 들어오면 무시). 근본 원인(왜 중복 호출되는지)은 안 고친 우회책이라 표시해둠
   — 알림 중복이 다시 보이면 `adb logcat`으로 실제 호출 횟수부터 확인 필요.
 
-  **필요한 작업**: 이 네이티브 코드 수정은 웹 배포(Vercel)로는 반영 안 됨 — APK 재빌드 후
-  기기에 재설치해야 함.
+  **필요한 작업**: 이 네이티브 코드 수정은 웹 배포(Vercel)로는 반영 안 됨 — APK를 다시 빌드해서
+  기기에 재설치해야 함. `gradlew assembleDebug`/`assembleRelease`는 이 환경에서 정상 동작 확인함
+  (Android Studio 번들 JBR로 컴파일 성공). 다만 release 빌드는 서명이 안 돼 있음
+  (`android/app/build.gradle`에 signingConfig가 없어 `assembleRelease`를 돌리면
+  `app-release-unsigned.apk`가 나옴) — 기존 배포용 `android/app/release/app-release.apk`는
+  Android Studio의 Generate Signed Bundle/APK 같은 별도 서명 과정을 거친 것으로 보임. 그
+  서명 키스토어를 아는 쪽에서 Android Studio로 Signed APK를 새로 뽑아 기기에 재설치하면 됨.
 
 - **푸시알림건 — 눌러도 해당 화면으로 안 감 (안드로이드 관리자에게 전체 이관, 2026-08-01)**
 
