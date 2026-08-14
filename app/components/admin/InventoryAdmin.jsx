@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { Pencil, Trash2 } from "lucide-react";
 import { currentStock } from "@/lib/inventoryStock";
 import { supabase } from "@/lib/supabaseClient";
 import { mapInventoryProduct } from "@/lib/mappers";
 import { inputCls, Modal } from "@/app/components/admin/adminShared";
 import { SinglePhotoUpload } from "@/app/components/formWidgets";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 
 const SUBS = ["제품목록", "입출고내역", "구매"];
 
@@ -87,6 +89,78 @@ function RegisterProductModal({ existingNos, onClose, onCreate }) {
   );
 }
 
+function ProductDetail({ product, onSave, onDelete }) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState(null);
+
+  function startEdit() {
+    setForm({
+      materialNo: product.materialNo, name: product.name, photoUrl: product.photoUrl ?? "",
+      spec: product.spec ?? "", location: product.location ?? "", vendor: product.vendor ?? "",
+      priceDate: product.priceDate ?? "", memo: product.memo ?? "",
+      purchasePrice: product.purchasePrice ?? "", salePrice: product.salePrice ?? "",
+    });
+    setEditing(true);
+  }
+
+  async function save() {
+    await onSave(product, form);
+    setEditing(false);
+  }
+
+  async function remove() {
+    if (!(await confirmAsync(`"${product.name}"을(를) 삭제할까요?`))) return;
+    await onDelete(product);
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-5">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm font-extrabold">제품 정보</p>
+        {!editing ? (
+          <div className="flex gap-1.5">
+            <button onClick={startEdit} className="flex items-center gap-1 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5"><Pencil size={13} /> 수정</button>
+            <button onClick={remove} className="flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 rounded-lg px-3 py-1.5"><Trash2 size={13} /> 삭제</button>
+          </div>
+        ) : (
+          <div className="flex gap-1.5">
+            <button onClick={() => setEditing(false)} className="text-xs font-bold text-slate-500 bg-slate-100 rounded-lg px-3 py-1.5">취소</button>
+            <button onClick={save} className="text-xs font-bold text-white bg-blue-700 rounded-lg px-3 py-1.5">저장</button>
+          </div>
+        )}
+      </div>
+      {editing ? (
+        <ProductFormFields form={form} setForm={setForm} onGenerateMaterialNo={() => {}} />
+      ) : (
+        <>
+          <div className="flex gap-3.5 mb-4">
+            {product.photoUrl ? (
+              <img src={product.photoUrl} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-100" />
+            ) : (
+              <div className="w-16 h-16 rounded-lg bg-slate-100" />
+            )}
+            <div className="grid grid-cols-[80px_1fr] gap-y-2 text-sm flex-1">
+              <span className="text-slate-400">자재번호</span><span className="font-bold">{product.materialNo}</span>
+              <span className="text-slate-400">제품명</span><span className="font-bold">{product.name}</span>
+            </div>
+          </div>
+          <div className="border-t border-slate-100 pt-3 grid grid-cols-[100px_1fr] gap-y-2 text-sm">
+            <span className="text-slate-400">규격</span><span>{product.spec || "-"}</span>
+            <span className="text-slate-400">비고</span><span>{product.memo || "-"}</span>
+            <span className="text-slate-400">위치</span><span>{product.location || "-"}</span>
+            <span className="text-slate-400">구매처</span><span>{product.vendor || "-"}</span>
+            <span className="text-slate-400">단가 기준일자</span><span>{product.priceDate || "-"}</span>
+          </div>
+          <div className="border-t border-slate-100 mt-3 pt-3 grid grid-cols-[100px_1fr] gap-y-2 text-sm">
+            <span className="text-slate-400">구매가</span><span>₩{Number(product.purchasePrice ?? 0).toLocaleString()}</span>
+            <span className="text-slate-400">판매가</span><span>₩{Number(product.salePrice ?? 0).toLocaleString()}</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function InventoryAdmin({ data, setData }) {
   const { inventoryProducts = [], inventoryStockMovements = [] } = data;
   const [sub, setSub] = useState("제품목록");
@@ -123,6 +197,33 @@ export default function InventoryAdmin({ data, setData }) {
     const mapped = mapInventoryProduct(inserted);
     setData((prev) => ({ ...prev, inventoryProducts: [mapped, ...prev.inventoryProducts] }));
     setSelectedId(mapped.id);
+  }
+
+  async function saveProduct(product, form) {
+    const patch = {
+      material_no: form.materialNo.trim(),
+      name: form.name.trim(),
+      photo_url: form.photoUrl || null,
+      spec: form.spec.trim() || null,
+      memo: form.memo.trim() || null,
+      location: form.location.trim() || null,
+      vendor: form.vendor.trim() || null,
+      price_date: form.priceDate || null,
+      purchase_price: form.purchasePrice === "" ? null : Number(form.purchasePrice),
+      sale_price: form.salePrice === "" ? null : Number(form.salePrice),
+    };
+    const { data: updated, error } = await supabase.from("inventory_products").update(patch).eq("id", product.id).select().maybeSingle();
+    if (error) { alert("저장 실패: " + error.message); return; }
+    if (!updated) { alert("저장 실패: 저장된 결과를 받지 못했습니다."); return; }
+    const mapped = mapInventoryProduct(updated);
+    setData((prev) => ({ ...prev, inventoryProducts: prev.inventoryProducts.map((p) => (p.id === mapped.id ? mapped : p)) }));
+  }
+
+  async function deleteProduct(product) {
+    const { error } = await supabase.from("inventory_products").update({ active: false }).eq("id", product.id);
+    if (error) { alert("삭제 실패: " + error.message); return; }
+    setData((prev) => ({ ...prev, inventoryProducts: prev.inventoryProducts.map((p) => (p.id === product.id ? { ...p, active: false } : p)) }));
+    setSelectedId(null);
   }
 
   return (
@@ -190,9 +291,7 @@ export default function InventoryAdmin({ data, setData }) {
                   왼쪽 목록에서 제품을 선택하세요
                 </div>
               ) : (
-                <div className="bg-white rounded-xl border border-slate-200 p-5 text-sm text-slate-400">
-                  {selected.name} — 상세 화면은 다음 태스크에서 채운다
-                </div>
+                <ProductDetail product={selected} onSave={saveProduct} onDelete={deleteProduct} />
               )}
             </div>
           </div>
