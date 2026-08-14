@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { useState, useRef } from "react";
+import { Pencil, Trash2, Camera, Paperclip, X } from "lucide-react";
 import { currentStock, stockHistory } from "@/lib/inventoryStock";
 import { supabase } from "@/lib/supabaseClient";
 import { mapInventoryProduct, mapInventoryStockMovement } from "@/lib/mappers";
 import { inputCls, Modal } from "@/app/components/admin/adminShared";
 import { PhotoLightbox } from "@/app/components/ui";
-import { SinglePhotoUpload } from "@/app/components/formWidgets";
+import { uploadPhoto } from "@/lib/photos";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 
 const SUBS = ["제품목록", "입출고내역", "구매"];
@@ -23,39 +23,101 @@ function nextMaterialNo(existing) {
   return String(max + 1).padStart(6, "0");
 }
 
-// 등록 패널과 상세 인라인수정이 같은 필드 셋을 쓴다 — 첨부(제품 수정) 레이아웃 그대로:
-// 자재번호·제품명(+우측 사진) → 구분선 → 제품 속성(세로 1열) → 구분선 → 가격 정보.
+// 제품 사진 여러 장 — 첫 번째(urls[0])가 메인 사진이라 크게, 나머지는 오른쪽에 작게
+// + 추가 타일. 업로드는 항상 배열 끝에 append — 메인 자리가 비어 있으면 그게 곧
+// 메인이 된다(순서로만 표현, 별도 "메인 지정" 조작 없음). 클릭하면 전체화면 라이트박스.
+function ProductPhotos({ urls, onChange }) {
+  const mainInputRef = useRef(null);
+  const addInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [viewingIndex, setViewingIndex] = useState(null);
+
+  async function addFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadPhoto(file, "inventory");
+      onChange([...urls, url]);
+    } catch (err) {
+      alert("사진 업로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
+    }
+    setUploading(false);
+  }
+
+  function removeAt(i) {
+    onChange(urls.filter((_, idx) => idx !== i));
+  }
+
+  return (
+    <div className="flex items-start gap-3">
+      <input ref={mainInputRef} type="file" accept="image/*" className="hidden" onChange={addFile} />
+      {urls[0] ? (
+        <div className="relative w-56 h-56 shrink-0 rounded-xl overflow-hidden border border-slate-200">
+          <img src={urls[0]} alt="" className="w-full h-full object-cover cursor-zoom-in" onClick={() => setViewingIndex(0)} />
+          <button type="button" onClick={() => removeAt(0)} className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-slate-900/70 text-white flex items-center justify-center">
+            <X size={13} />
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => mainInputRef.current?.click()} disabled={uploading}
+          className="w-56 h-56 shrink-0 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center gap-1.5 text-slate-500 disabled:opacity-50">
+          <Camera size={28} />
+          <span className="text-xs font-semibold">{uploading ? "업로드 중..." : "메인 사진 추가"}</span>
+        </button>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {urls.slice(1).map((url, i) => (
+          <div key={url} className="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-200">
+            <img src={url} alt="" className="w-full h-full object-cover cursor-zoom-in" onClick={() => setViewingIndex(i + 1)} />
+            <button type="button" onClick={() => removeAt(i + 1)} className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-slate-900/70 text-white flex items-center justify-center">
+              <X size={9} />
+            </button>
+          </div>
+        ))}
+        <input ref={addInputRef} type="file" accept="image/*" className="hidden" onChange={addFile} />
+        <button type="button" onClick={() => addInputRef.current?.click()} disabled={uploading}
+          className="w-16 h-16 shrink-0 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center gap-0.5 text-slate-500 disabled:opacity-50">
+          <Paperclip size={16} />
+          <span className="text-[9px] font-semibold">추가</span>
+        </button>
+      </div>
+
+      {viewingIndex != null && (
+        <PhotoLightbox urls={urls} index={viewingIndex} onIndexChange={setViewingIndex} onClose={() => setViewingIndex(null)} />
+      )}
+    </div>
+  );
+}
+
+// 등록 패널과 상세 인라인수정이 같은 필드 셋을 쓴다 — 사진(메인+추가) → 자재번호·제품명
+// → 구분선 → 제품 속성(세로 1열) → 구분선 → 가격 정보.
 function ProductFormFields({ form, setForm, onGenerateMaterialNo }) {
   return (
     <div>
-      <div className="flex items-center gap-4 mb-4">
-        <div className="flex-1 space-y-3">
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">자재번호 *</p>
-            <div className="flex gap-1.5">
-              <input className={inputCls} value={form.materialNo} onChange={(e) => setForm({ ...form, materialNo: e.target.value })} />
-              {onGenerateMaterialNo && (
-                <button type="button" onClick={onGenerateMaterialNo} className="text-xs font-bold text-white bg-emerald-600 rounded-lg px-3 whitespace-nowrap">자동 생성</button>
-              )}
-            </div>
-          </div>
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">제품명 *</p>
-            <input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+      <div className="mb-4">
+        <ProductPhotos urls={form.photoUrls} onChange={(photoUrls) => setForm({ ...form, photoUrls })} />
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">자재번호 *</p>
+          <div className="flex gap-1.5">
+            <input className={inputCls} value={form.materialNo} onChange={(e) => setForm({ ...form, materialNo: e.target.value })} />
+            {onGenerateMaterialNo && (
+              <button type="button" onClick={onGenerateMaterialNo} className="text-xs font-bold text-white bg-emerald-600 rounded-lg px-3 whitespace-nowrap">자동 생성</button>
+            )}
           </div>
         </div>
-        <div className="w-28 shrink-0">
-          <SinglePhotoUpload
-            label="사진 추가"
-            url={form.photoUrl}
-            uploadFolder="inventory"
-            onUploaded={(url) => setForm({ ...form, photoUrl: url })}
-            onRemove={() => setForm({ ...form, photoUrl: "" })}
-          />
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">제품명 *</p>
+          <input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </div>
       </div>
 
-      <div className="border-t border-slate-100 pt-3 mb-3">
+      <div className="border-t border-slate-100 pt-3 mt-3 mb-3">
         <p className="text-xs font-extrabold text-slate-700 mb-3">제품 속성</p>
         <div className="space-y-3">
           <div><p className="text-xs font-bold text-slate-500 mb-1">규격</p><input className={inputCls} placeholder="텍스트 입력" value={form.spec} onChange={(e) => setForm({ ...form, spec: e.target.value })} /></div>
@@ -93,7 +155,7 @@ function ProductFormFields({ form, setForm, onGenerateMaterialNo }) {
 // creating을 꺼주고 새 제품을 선택해줘서 이 패널은 자연스럽게 ProductDetail로 바뀐다.
 function ProductCreatePanel({ existingNos, onCancel, onCreate }) {
   const [form, setForm] = useState({
-    materialNo: nextMaterialNo(existingNos), name: "", photoUrl: "", spec: "", location: "",
+    materialNo: nextMaterialNo(existingNos), name: "", photoUrls: [], spec: "", location: "",
     vendor: "", priceDate: "", memo: "", purchasePrice: "", salePrice: "", initialQty: "",
   });
   const [saving, setSaving] = useState(false);
@@ -166,13 +228,14 @@ function ProductDetail({ product, movements, onSave, onDelete, onMovement }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(null);
   const [movementType, setMovementType] = useState(null);
-  const [viewingPhoto, setViewingPhoto] = useState(false);
+  const [viewingIndex, setViewingIndex] = useState(null);
   const stock = currentStock(movements, product.id);
   const history = stockHistory(movements, product.id);
+  const photoUrls = product.photoUrls ?? [];
 
   function startEdit() {
     setForm({
-      materialNo: product.materialNo, name: product.name, photoUrl: product.photoUrl ?? "",
+      materialNo: product.materialNo, name: product.name, photoUrls,
       spec: product.spec ?? "", location: product.location ?? "", vendor: product.vendor ?? "",
       priceDate: product.priceDate ?? "", memo: product.memo ?? "",
       purchasePrice: product.purchasePrice ?? "", salePrice: product.salePrice ?? "",
@@ -217,8 +280,8 @@ function ProductDetail({ product, movements, onSave, onDelete, onMovement }) {
               <span className="text-slate-400">자재번호</span><span className="font-bold">{product.materialNo}</span>
               <span className="text-slate-400">제품명</span><span className="font-bold">{product.name}</span>
             </div>
-            {product.photoUrl ? (
-              <img src={product.photoUrl} alt="" className="w-24 h-24 rounded-lg object-cover border border-slate-100 shrink-0 cursor-zoom-in" onClick={() => setViewingPhoto(true)} />
+            {photoUrls[0] ? (
+              <img src={photoUrls[0]} alt="" className="w-24 h-24 rounded-lg object-cover border border-slate-100 shrink-0 cursor-zoom-in" onClick={() => setViewingIndex(0)} />
             ) : (
               <div className="w-24 h-24 rounded-lg bg-slate-100 shrink-0" />
             )}
@@ -273,8 +336,8 @@ function ProductDetail({ product, movements, onSave, onDelete, onMovement }) {
         onSubmit={(payload) => onMovement(product, movementType, payload)}
       />
     )}
-    {viewingPhoto && (
-      <PhotoLightbox urls={[product.photoUrl]} index={0} onIndexChange={() => {}} onClose={() => setViewingPhoto(false)} />
+    {viewingIndex != null && (
+      <PhotoLightbox urls={photoUrls} index={viewingIndex} onIndexChange={setViewingIndex} onClose={() => setViewingIndex(null)} />
     )}
     </div>
   );
@@ -311,7 +374,7 @@ export default function InventoryAdmin({ data, setData }) {
     const row = {
       material_no: form.materialNo.trim(),
       name: form.name.trim(),
-      photo_url: form.photoUrl || null,
+      photo_urls: form.photoUrls,
       spec: form.spec.trim() || null,
       memo: form.memo.trim() || null,
       location: form.location.trim() || null,
@@ -338,7 +401,7 @@ export default function InventoryAdmin({ data, setData }) {
     const patch = {
       material_no: form.materialNo.trim(),
       name: form.name.trim(),
-      photo_url: form.photoUrl || null,
+      photo_urls: form.photoUrls,
       spec: form.spec.trim() || null,
       memo: form.memo.trim() || null,
       location: form.location.trim() || null,
@@ -413,8 +476,8 @@ export default function InventoryAdmin({ data, setData }) {
                         className={`w-full flex items-center gap-2.5 text-left px-3 py-2.5 border-b border-slate-50 ${
                           selectedId === p.id ? "bg-blue-50" : "hover:bg-slate-50"
                         }`}>
-                        {p.photoUrl ? (
-                          <img src={p.photoUrl} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0" />
+                        {p.photoUrls?.[0] ? (
+                          <img src={p.photoUrls[0]} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0" />
                         ) : (
                           <div className="w-9 h-9 rounded-lg bg-slate-100 shrink-0" />
                         )}
