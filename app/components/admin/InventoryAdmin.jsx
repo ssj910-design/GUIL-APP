@@ -23,6 +23,48 @@ function nextMaterialNo(existing) {
   return String(max + 1).padStart(6, "0");
 }
 
+// 입고/출고현장 자동완성 — 우리 현장(호기까지) 중에서 골라도 되고, 관리 대상이 아닌
+// 곳은 그냥 직접 타이핑해도 된다(값 자체가 자유텍스트라 선택 안 해도 그대로 저장됨).
+// adminShared.jsx의 locOf와 같은 "현장명 · 호기" 표기를 그대로 따른다.
+function SiteUnitAutocomplete({ value, onChange, sites, units, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const q = value.trim().toLowerCase();
+  const suggestions = q
+    ? sites
+        .filter((s) => s.name.toLowerCase().includes(q))
+        .flatMap((s) => {
+          const siteUnits = units.filter((u) => u.siteId === s.id && u.isActive !== false);
+          return siteUnits.length
+            ? siteUnits.map((u) => ({ key: u.id, label: `${s.name} · ${u.unitNo}` }))
+            : [{ key: s.id, label: s.name }];
+        })
+        .slice(0, 15)
+    : [];
+
+  return (
+    <div className="relative">
+      <input
+        className={inputCls}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      {open && suggestions.length > 0 && (
+        <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+          {suggestions.map((s) => (
+            <button key={s.key} type="button" onMouseDown={() => { onChange(s.label); setOpen(false); }}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0">
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // 제품 사진 여러 장 — 첫 번째(urls[0])가 메인 사진이라 크게, 나머지는 오른쪽에 작게
 // + 추가 타일. 업로드는 항상 배열 끝에 append — 메인 자리가 비어 있으면 그게 곧
 // 메인이 된다(순서로만 표현, 별도 "메인 지정" 조작 없음). 클릭하면 전체화면 라이트박스.
@@ -194,28 +236,85 @@ function ProductCreatePanel({ existingNos, onCancel, onCreate }) {
   );
 }
 
-function StockMovementModal({ type, onClose, onSubmit }) {
+// 입고/출고 — 모달이 아니라 "제품 정보" 칸 자리에 뜬다(첨부 레이아웃 참고, 위치는 단일
+// 창고라 뺌, 거래처는 구매처로, 입고/출고현장은 우리 현장 자동완성 + 자유텍스트 겸용).
+function StockMovementPanel({ type, onCancel, onSubmit, sites, units }) {
   const [qty, setQty] = useState("");
+  const [vendorText, setVendorText] = useState("");
+  const [siteText, setSiteText] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const label = MOVEMENT_LABEL[type];
+  const color = type === "in" ? "text-blue-600" : "text-red-600";
   const n = Number(qty);
-  const valid = qty.trim() !== "" && Number.isInteger(n) && n !== 0 && (type === "adjust" || n > 0);
+  const valid = qty.trim() !== "" && Number.isInteger(n) && n > 0;
 
   async function submit() {
     if (!valid) return;
     setSaving(true);
-    const qtyDelta = type === "out" ? -Math.abs(n) : type === "in" ? Math.abs(n) : n;
-    await onSubmit({ qtyDelta, note: note.trim() || null });
+    const ok = await onSubmit({
+      qtyDelta: type === "out" ? -n : n,
+      note: note.trim() || null,
+      vendorText: vendorText.trim() || null,
+      siteText: siteText.trim() || null,
+    });
+    setSaving(false);
+    if (ok) onCancel();
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-5 lg:h-full overflow-y-auto">
+      <p className={`text-lg font-extrabold mb-4 ${color}`}>{label}</p>
+      <div className="space-y-3">
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">구매처</p>
+          <input className={inputCls} placeholder="텍스트 입력" value={vendorText} onChange={(e) => setVendorText(e.target.value)} />
+        </div>
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">{label}현장</p>
+          <SiteUnitAutocomplete value={siteText} onChange={setSiteText} sites={sites} units={units} placeholder="현장명 검색(호기까지) 또는 직접 입력" />
+        </div>
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">{label} 수량 *</p>
+          <input type="number" step="1" className={inputCls} value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
+        </div>
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">메모</p>
+          <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} />
+        </div>
+      </div>
+      <div className="flex gap-2 mt-5">
+        <button disabled={!valid || saving} onClick={submit} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
+          {saving ? "저장 중..." : `${label} 완료`}
+        </button>
+        <button onClick={onCancel} className="text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl px-5 py-2.5">취소</button>
+      </div>
+    </div>
+  );
+}
+
+// 조정만 남은 작은 모달 — 입고/출고와 달리 부호 있는 증감량 하나만 받으면 되는
+// 간단한 입력이라 굳이 인라인 패널로 안 바꿈(요청 범위: 입고/출고만).
+function AdjustModal({ onClose, onSubmit }) {
+  const [qty, setQty] = useState("");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const n = Number(qty);
+  const valid = qty.trim() !== "" && Number.isInteger(n) && n !== 0;
+
+  async function submit() {
+    if (!valid) return;
+    setSaving(true);
+    await onSubmit({ qtyDelta: n, note: note.trim() || null });
     setSaving(false);
     onClose();
   }
 
   return (
-    <Modal title={`재고 ${label}`} onClose={onClose}>
+    <Modal title="재고 조정" onClose={onClose}>
       <div className="space-y-3">
         <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">{type === "adjust" ? "증감량 (예: -4)" : "수량"}</p>
+          <p className="text-xs font-bold text-slate-500 mb-1">증감량 (예: -4)</p>
           <input type="number" step="1" className={inputCls} value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
         </div>
         <div>
@@ -224,7 +323,7 @@ function StockMovementModal({ type, onClose, onSubmit }) {
         </div>
         <div className="flex justify-end pt-2">
           <button disabled={!valid || saving} onClick={submit} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
-            {saving ? "저장 중..." : `${label} 등록`}
+            {saving ? "저장 중..." : "조정 등록"}
           </button>
         </div>
       </div>
@@ -232,10 +331,11 @@ function StockMovementModal({ type, onClose, onSubmit }) {
   );
 }
 
-function ProductDetail({ product, movements, profiles, onSave, onDelete, onMovement }) {
+function ProductDetail({ product, movements, profiles, sites, units, onSave, onDelete, onMovement }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(null);
-  const [movementType, setMovementType] = useState(null);
+  const [formType, setFormType] = useState(null); // "in" | "out" | null — 제품정보 칸에 뜨는 입고/출고
+  const [adjusting, setAdjusting] = useState(false); // 조정만 여전히 모달
   const stock = currentStock(movements, product.id);
   const history = stockHistory(movements, product.id);
   const photoUrls = product.photoUrls ?? [];
@@ -263,15 +363,15 @@ function ProductDetail({ product, movements, profiles, onSave, onDelete, onMovem
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 lg:h-full">
     <div className="bg-white rounded-xl border border-slate-200 p-5 lg:h-full overflow-y-auto">
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm font-extrabold">{editing ? "제품 수정" : "제품 정보"}</p>
-        {!editing && (
+      {!editing && !formType && (
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm font-extrabold">제품 정보</p>
           <div className="flex gap-1.5">
             <button onClick={startEdit} className="flex items-center gap-1 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5"><Pencil size={13} /> 수정</button>
             <button onClick={remove} className="flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 rounded-lg px-3 py-1.5"><Trash2 size={13} /> 삭제</button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
       {editing ? (
         <>
           <ProductFormFields form={form} setForm={setForm} onGenerateMaterialNo={null} />
@@ -280,6 +380,14 @@ function ProductDetail({ product, movements, profiles, onSave, onDelete, onMovem
             <button onClick={() => setEditing(false)} className="text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl px-5 py-2.5">취소</button>
           </div>
         </>
+      ) : formType ? (
+        <StockMovementPanel
+          type={formType}
+          sites={sites}
+          units={units}
+          onCancel={() => setFormType(null)}
+          onSubmit={(payload) => onMovement(product, formType, payload)}
+        />
       ) : (
         <>
           <div className="grid grid-cols-[80px_1fr] gap-y-2 text-sm mb-4">
@@ -310,9 +418,9 @@ function ProductDetail({ product, movements, profiles, onSave, onDelete, onMovem
       <p className="text-sm font-extrabold mb-1">현재 재고 및 내역</p>
       <p className="text-3xl font-extrabold text-blue-700 mb-3">{stock}</p>
       <div className="flex gap-1.5 mb-4">
-        <button onClick={() => setMovementType("in")} className="flex-1 text-xs font-bold text-white bg-blue-700 rounded-lg py-2">입고</button>
-        <button onClick={() => setMovementType("out")} className="flex-1 text-xs font-bold text-white bg-red-600 rounded-lg py-2">출고</button>
-        <button onClick={() => setMovementType("adjust")} className="flex-1 text-xs font-bold text-white bg-slate-500 rounded-lg py-2">조정</button>
+        <button onClick={() => { setEditing(false); setFormType("in"); }} className="flex-1 text-xs font-bold text-white bg-blue-700 rounded-lg py-2">입고</button>
+        <button onClick={() => { setEditing(false); setFormType("out"); }} className="flex-1 text-xs font-bold text-white bg-red-600 rounded-lg py-2">출고</button>
+        <button onClick={() => setAdjusting(true)} className="flex-1 text-xs font-bold text-white bg-slate-500 rounded-lg py-2">조정</button>
       </div>
       <div className="border-t border-slate-100">
         {history.length === 0 ? (
@@ -337,11 +445,10 @@ function ProductDetail({ product, movements, profiles, onSave, onDelete, onMovem
       </div>
     </div>
 
-    {movementType && (
-      <StockMovementModal
-        type={movementType}
-        onClose={() => setMovementType(null)}
-        onSubmit={(payload) => onMovement(product, movementType, payload)}
+    {adjusting && (
+      <AdjustModal
+        onClose={() => setAdjusting(false)}
+        onSubmit={(payload) => onMovement(product, "adjust", payload)}
       />
     )}
     </div>
@@ -349,7 +456,7 @@ function ProductDetail({ product, movements, profiles, onSave, onDelete, onMovem
 }
 
 export default function InventoryAdmin({ data, setData }) {
-  const { inventoryProducts = [], inventoryStockMovements = [], profiles = [] } = data;
+  const { inventoryProducts = [], inventoryStockMovements = [], profiles = [], sites = [], units = [] } = data;
   const { id: meId } = useContext(AdminAuthContext);
   const [sub, setSub] = useState("제품목록");
   const [search, setSearch] = useState("");
@@ -431,13 +538,18 @@ export default function InventoryAdmin({ data, setData }) {
     setSelectedId(null);
   }
 
-  async function addMovement(product, type, { qtyDelta, note }) {
-    const row = { product_id: product.id, type, qty_delta: qtyDelta, note, created_by: meId ?? null };
+  async function addMovement(product, type, { qtyDelta, note, vendorText, siteText }) {
+    const row = {
+      product_id: product.id, type, qty_delta: qtyDelta, note,
+      vendor_text: vendorText ?? null, site_text: siteText ?? null,
+      created_by: meId ?? null,
+    };
     const { data: inserted, error } = await supabase.from("inventory_stock_movements").insert(row).select().maybeSingle();
-    if (error) { alert("재고 반영 실패: " + error.message); return; }
-    if (!inserted) { alert("재고 반영 실패: 저장된 결과를 받지 못했습니다."); return; }
+    if (error) { alert("재고 반영 실패: " + error.message); return false; }
+    if (!inserted) { alert("재고 반영 실패: 저장된 결과를 받지 못했습니다."); return false; }
     const mapped = mapInventoryStockMovement(inserted);
     setData((prev) => ({ ...prev, inventoryStockMovements: [...prev.inventoryStockMovements, mapped] }));
+    return true;
   }
 
   return (
@@ -519,6 +631,8 @@ export default function InventoryAdmin({ data, setData }) {
                   product={selected}
                   movements={inventoryStockMovements}
                   profiles={profiles}
+                  sites={sites}
+                  units={units}
                   onSave={saveProduct}
                   onDelete={deleteProduct}
                   onMovement={addMovement}
