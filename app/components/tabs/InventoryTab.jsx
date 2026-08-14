@@ -204,14 +204,12 @@ function ProductDetail({ product, movements, isAdmin, existingNos, onBack, onHom
           <p className="text-2xl font-extrabold text-blue-700">{stock}</p>
         </div>
 
-        {isAdmin ? (
+        {isAdmin && (
           <div className="flex gap-1.5 mb-4">
             <button onClick={() => setMovementType("in")} className="flex-1 text-xs font-bold text-white bg-blue-700 rounded-lg py-2.5">입고</button>
             <button onClick={() => setMovementType("out")} className="flex-1 text-xs font-bold text-white bg-red-600 rounded-lg py-2.5">출고</button>
             <button onClick={() => setMovementType("adjust")} className="flex-1 text-xs font-bold text-white bg-slate-500 rounded-lg py-2.5">조정</button>
           </div>
-        ) : (
-          <p className="text-[11px] text-slate-400 text-center mb-4">입고/출고/조정은 관리자·자재담당자만 가능합니다</p>
         )}
 
         <div className="border-t border-slate-100 pt-3 space-y-2 text-sm">
@@ -235,22 +233,26 @@ function ProductDetail({ product, movements, isAdmin, existingNos, onBack, onHom
           </div>
         )}
 
-        <p className="text-xs font-extrabold text-slate-700 mt-6 mb-2">재고 변동 내역</p>
-        {history.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-6">내역이 없습니다</p>
-        ) : (
-          history.map((m) => (
-            <div key={m.id} className="flex justify-between py-2 border-b border-slate-50">
-              <div>
-                <p className="text-sm font-bold">{MOVEMENT_LABEL[m.type]}</p>
-                <p className="text-[11px] text-slate-400">{m.createdAt.slice(0, 10)}</p>
-              </div>
-              <div className="text-right">
-                <p className={`text-sm font-bold ${m.qtyDelta >= 0 ? "text-emerald-600" : "text-red-600"}`}>{m.qtyDelta >= 0 ? "+" : ""}{m.qtyDelta}</p>
-                <p className="text-[11px] text-slate-400">{m.balance}</p>
-              </div>
-            </div>
-          ))
+        {isAdmin && (
+          <>
+            <p className="text-xs font-extrabold text-slate-700 mt-6 mb-2">재고 변동 내역</p>
+            {history.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-6">내역이 없습니다</p>
+            ) : (
+              history.map((m) => (
+                <div key={m.id} className="flex justify-between py-2 border-b border-slate-50">
+                  <div>
+                    <p className="text-sm font-bold">{MOVEMENT_LABEL[m.type]}</p>
+                    <p className="text-[11px] text-slate-400">{m.createdAt.slice(0, 10)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-sm font-bold ${m.qtyDelta >= 0 ? "text-emerald-600" : "text-red-600"}`}>{m.qtyDelta >= 0 ? "+" : ""}{m.qtyDelta}</p>
+                    <p className="text-[11px] text-slate-400">{m.balance}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </>
         )}
       </div>
 
