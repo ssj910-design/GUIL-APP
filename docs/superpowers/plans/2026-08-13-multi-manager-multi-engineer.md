@@ -50,6 +50,8 @@ migration 003부터 이미 있어서 **스키마 자체는 이미 여러 명을 
    - `InspectionTab.jsx`(검사관리, 95번째 줄)
 4. 고장 알림 등 담당기사에게 보내는 알림(`ElevatorFieldApp.jsx`의 `siteEngineerId()`,
    925-948·1147-1153·2050-2056번째 줄) — 지금은 1명한테만 가는데 2명 다 받게 팬아웃 필요
+5. `SelfChecksAdmin.jsx`(관리자 콘솔 "자체점검 현황") — 아래 B-1 참고. 위 4곳과 달리
+   "내 현장 필터"가 아니라 "기사별 집계+총계" 화면이라 별도로 챙겨야 함.
 
 **다행히 새로 설계할 패턴은 아님:** 견적/자재 지급완료 시 `assignees` 배열로 여러
 담당자에게 할일·알림을 각각 만드는 로직(`handleCompleteQuoteSupply`)이 이미 있어서,
@@ -57,11 +59,53 @@ migration 003부터 이미 있어서 **스키마 자체는 이미 여러 명을 
 이미 있으니 "주담당/보조" 구분(예: 누가 대표로 알림 받는지)이 필요하면 이걸 재사용
 하면 됨 — `site_managers.is_primary`와 같은 역할.
 
+## B-1. 집계 화면(자체점검현황) — 총대수 이중계산 주의 (2026-08-14 추가)
+
+위 4곳(`HomeTab`·`SiteTab`·`CheckupTab`·`InspectionTab`)은 전부 "로그인한 기사 본인
+기준으로 내 현장만 거르는" 필터라 `===`를 `.includes()`로 바꾸기만 하면 끝난다. 그런데
+`SelfChecksAdmin.jsx`(관리자 콘솔)는 성격이 다르다 — **기사 전원을 한 화면에 집계**하는
+표라서, 같은 방식으로 손대면 총대수가 부풀어 오르는 버그가 생긴다.
+
+**지금 구조** ([SelfChecksAdmin.jsx:245-278](../../../app/components/admin/SelfChecksAdmin.jsx#L245)):
+
+```js
+const rows = selfChecks.filter(c => c.ym === ym).map(c => {
+  const currentAssignee = s?.assignedEngineer ? data.profiles.find(p => p.name === s.assignedEngineer) : null;
+  return { ...c, assigneeId: currentAssignee?.id ?? null, ... };
+});
+const done = rows.filter(c => c.status === "완료");   // 총대수: "ym 진행률 — 완료 X / rows.length"
+
+const groups = new Map();
+for (const r of rows) {
+  const key = r.assigneeId ?? "__unassigned";          // 기사 1명당 그룹 1개 → "담당대수"(g.total)
+  groups.get(key).push(r);
+}
+```
+
+`rows`는 **호기(unit) × 월 = 1줄**이라 지금은 총대수가 항상 정확하다. 문제는
+`assignedEngineer`가 배열이 됐을 때 흔히 하는 실수 — "기사 수만큼 줄을 복제해서
+groups에 넣자"는 식으로 **`rows` 생성 단계 자체에서 팬아웃**하면, 2명 배정된 현장의
+호기가 두 줄이 되면서 `rows.length`(=상단 총대수·진행률)까지 같이 부풀어버린다.
+
+**설계 원칙 — 총계 소스와 집계 소스를 분리한다:**
+
+- `rows`(총대수·진행률의 근거)는 지금처럼 **호기 1개 = 1줄**을 절대 건드리지 않는다.
+  `assigneeId`는 이제 배열(`assigneeIds`)이 되지만, row 자체는 복제하지 않는다.
+- `groups`(기사별 "담당대수" 집계)를 만드는 단계에서만 `assigneeIds`를 순회해서
+  **같은 row 참조를 여러 그룹에 push**한다. 이러면 2명 배정 현장은 두 기사의
+  "담당대수" 열엔 각각 반영되지만, `rows.length` 자체는 늘지 않으니 상단 총대수는
+  그대로 유지된다.
+- 즉 고칠 곳은 딱 `groups` 구성 루프(261-266번째 줄) — `assigneeId` 단일값 순회를
+  `assigneeIds` 배열 순회로 바꾸되, **`rows` 배열 자체에는 손대지 않는다.**
+
+이 원칙(총계는 원본 레코드에서 직접 계산, 그룹별 집계에서만 배열을 펼친다)은 이번에
+새로 생길 수 있는 다른 "기사별 집계+합계" 화면에도 그대로 적용해야 한다.
+
 ## 요약 비교
 
 | | 현장 담당자(고객사) | 담당 기사(우리 회사) |
 |---|---|---|
 | 스키마 | 이미 N:1 설계, 사용 중 | N:M 테이블 있는데 미사용(늘 1건으로 눌림) |
-| 손볼 화면 수 | 1곳(`MaterialsAdmin` 표시만) | 최소 6곳(배정 UI·매퍼·필터 4곳·알림) |
+| 손볼 화면 수 | 1곳(`MaterialsAdmin` 표시만) | 최소 7곳(배정 UI·매퍼·필터 4곳·집계 화면·알림) |
 | 필요한 새 패턴 | 없음 | 없음(견적 다중배정 팬아웃 재사용 가능) |
-| 난이도 | 낮음 | 중간 — 필터링·알림까지 건드려야 함 |
+| 난이도 | 낮음 | 중간 — 필터링·집계·알림까지 건드려야 함 |
