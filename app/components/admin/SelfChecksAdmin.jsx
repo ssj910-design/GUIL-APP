@@ -155,7 +155,7 @@ function FlaggedItemsView({ data, setData }) {
         ym: check.ym,
         unitId: check.unitId,
         siteId: site?.id ?? null,
-        assignedEngineer: site?.assignedEngineer ?? null,
+        assignedEngineers: site?.assignedEngineers ?? [],
         itemName: meta ? `${meta.no} ${meta.name}${meta.detail ? ` - ${meta.detail}` : ""}` : it.itemCd,
         todo,
       };
@@ -165,30 +165,35 @@ function FlaggedItemsView({ data, setData }) {
     .sort((a, b) => (a.result === b.result ? (b.ym ?? "").localeCompare(a.ym ?? "") : a.result === "C" ? -1 : 1));
 
   async function publish(row) {
-    if (!(await confirmAsync(`${locOf(data, row.unitId)} · ${row.itemName} — 할일로 발행할까요?\n담당기사: ${row.assignedEngineer ?? "미배정"}`))) return;
+    const names = row.assignedEngineers.length ? row.assignedEngineers : [null];
+    const confirmNames = row.assignedEngineers.length ? row.assignedEngineers.join(", ") : "미배정";
+    if (!(await confirmAsync(`${locOf(data, row.unitId)} · ${row.itemName} — 할일로 발행할까요?\n담당기사: ${confirmNames}`))) return;
     setPublishing(row.id);
-    const engineer = row.assignedEngineer ? data.profiles.find((p) => p.name === row.assignedEngineer) : null;
     const gradeLabel = RESULT_LABEL[row.result] ?? row.result;
-    const patch = {
-      id: `todo-selfcheck-${row.id}`,
-      source: "selfcheck",
-      self_check_item_id: row.id,
-      title: `${locOf(data, row.unitId)} 자체점검 지적사항 — ${row.itemName} (${gradeLabel})`,
-      site_name: data.sites.find((s) => s.id === row.siteId)?.name ?? null,
-      elevator_no: data.units.find((u) => u.id === row.unitId)?.unitNo ?? null,
-      unit_id: row.unitId,
-      part: "자체점검 지적사항",
-      assignee: row.assignedEngineer,
-      assignee_id: engineer?.id ?? null,
-      assigned_date: TODAY_STR,
-      due_date: addDays(TODAY_STR, row.result === "C" ? 7 : 14),
-      done: false,
-      description: row.remark || "특이사항 입력 없음",
-    };
-    const { data: inserted, error } = await supabase.from("todos").insert(patch).select().single();
+    const dueDate = addDays(TODAY_STR, row.result === "C" ? 7 : 14);
+    const patches = names.map((name, idx) => {
+      const engineer = name ? data.profiles.find((p) => p.name === name) : null;
+      return {
+        id: `todo-selfcheck-${row.id}-${idx}`,
+        source: "selfcheck",
+        self_check_item_id: row.id,
+        title: `${locOf(data, row.unitId)} 자체점검 지적사항 — ${row.itemName} (${gradeLabel})`,
+        site_name: data.sites.find((s) => s.id === row.siteId)?.name ?? null,
+        elevator_no: data.units.find((u) => u.id === row.unitId)?.unitNo ?? null,
+        unit_id: row.unitId,
+        part: "자체점검 지적사항",
+        assignee: name,
+        assignee_id: engineer?.id ?? null,
+        assigned_date: TODAY_STR,
+        due_date: dueDate,
+        done: false,
+        description: row.remark || "특이사항 입력 없음",
+      };
+    });
+    const { data: inserted, error } = await supabase.from("todos").insert(patches).select();
     setPublishing(null);
     if (error) { alert("발행 실패: " + error.message); return; }
-    setData((prev) => ({ ...prev, todos: [mapTodo(inserted), ...prev.todos] }));
+    setData((prev) => ({ ...prev, todos: [...(inserted ?? []).map(mapTodo), ...prev.todos] }));
   }
 
   return (
