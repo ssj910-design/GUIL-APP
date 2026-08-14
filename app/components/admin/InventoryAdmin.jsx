@@ -54,7 +54,7 @@ function ProductPhotos({ urls, onChange }) {
     <div className="flex items-start gap-3">
       <input ref={mainInputRef} type="file" accept="image/*" className="hidden" onChange={addFile} />
       {urls[0] ? (
-        <div className="relative w-56 h-56 shrink-0 rounded-xl overflow-hidden border border-slate-200">
+        <div className="relative w-28 h-28 shrink-0 rounded-xl overflow-hidden border border-slate-200">
           <img src={urls[0]} alt="" className="w-full h-full object-cover cursor-zoom-in" onClick={() => setViewingIndex(0)} />
           <button type="button" onClick={() => removeAt(0)} className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-slate-900/70 text-white flex items-center justify-center">
             <X size={13} />
@@ -62,9 +62,9 @@ function ProductPhotos({ urls, onChange }) {
         </div>
       ) : (
         <button type="button" onClick={() => mainInputRef.current?.click()} disabled={uploading}
-          className="w-56 h-56 shrink-0 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center gap-1.5 text-slate-500 disabled:opacity-50">
-          <Camera size={28} />
-          <span className="text-xs font-semibold">{uploading ? "업로드 중..." : "메인 사진 추가"}</span>
+          className="w-28 h-28 shrink-0 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center gap-1 text-slate-500 disabled:opacity-50">
+          <Camera size={20} />
+          <span className="text-[10px] font-semibold">{uploading ? "업로드 중..." : "사진 추가"}</span>
         </button>
       )}
 
@@ -97,24 +97,23 @@ function ProductPhotos({ urls, onChange }) {
 function ProductFormFields({ form, setForm, onGenerateMaterialNo }) {
   return (
     <div>
-      <div className="mb-4">
-        <ProductPhotos urls={form.photoUrls} onChange={(photoUrls) => setForm({ ...form, photoUrls })} />
-      </div>
-
-      <div className="space-y-3">
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">자재번호 *</p>
-          <div className="flex gap-1.5">
-            <input className={inputCls} value={form.materialNo} onChange={(e) => setForm({ ...form, materialNo: e.target.value })} />
-            {onGenerateMaterialNo && (
-              <button type="button" onClick={onGenerateMaterialNo} className="text-xs font-bold text-white bg-emerald-600 rounded-lg px-3 whitespace-nowrap">자동 생성</button>
-            )}
+      <div className="flex items-start gap-4 mb-4">
+        <div className="flex-1 space-y-3">
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">자재번호 *</p>
+            <div className="flex gap-1.5">
+              <input className={inputCls} value={form.materialNo} onChange={(e) => setForm({ ...form, materialNo: e.target.value })} />
+              {onGenerateMaterialNo && (
+                <button type="button" onClick={onGenerateMaterialNo} className="text-xs font-bold text-white bg-emerald-600 rounded-lg px-3 whitespace-nowrap">자동 생성</button>
+              )}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">제품명 *</p>
+            <input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </div>
         </div>
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">제품명 *</p>
-          <input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        </div>
+        <ProductPhotos urls={form.photoUrls} onChange={(photoUrls) => setForm({ ...form, photoUrls })} />
       </div>
 
       <div className="border-t border-slate-100 pt-3 mt-3 mb-3">
