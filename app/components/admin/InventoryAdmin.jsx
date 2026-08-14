@@ -30,7 +30,9 @@ function ProductFormFields({ form, setForm, onGenerateMaterialNo }) {
         <p className="text-xs font-bold text-slate-500 mb-1">자재번호 *</p>
         <div className="flex gap-1.5">
           <input className={inputCls} value={form.materialNo} onChange={(e) => setForm({ ...form, materialNo: e.target.value })} />
-          <button type="button" onClick={onGenerateMaterialNo} className="text-xs font-bold text-white bg-emerald-600 rounded-lg px-3 whitespace-nowrap">자동 생성</button>
+          {onGenerateMaterialNo && (
+            <button type="button" onClick={onGenerateMaterialNo} className="text-xs font-bold text-white bg-emerald-600 rounded-lg px-3 whitespace-nowrap">자동 생성</button>
+          )}
         </div>
       </div>
       <div>
@@ -73,9 +75,9 @@ function RegisterProductModal({ existingNos, onClose, onCreate }) {
   async function submit() {
     if (!valid) return;
     setSaving(true);
-    await onCreate(form);
+    const ok = await onCreate(form);
     setSaving(false);
-    onClose();
+    if (ok) onClose();
   }
 
   return (
@@ -83,7 +85,7 @@ function RegisterProductModal({ existingNos, onClose, onCreate }) {
       <ProductFormFields form={form} setForm={setForm} onGenerateMaterialNo={() => setForm({ ...form, materialNo: randomMaterialNo(existingNos) })} />
       <div>
         <p className="text-xs font-bold text-slate-500 mb-1 mt-3">초기 수량</p>
-        <input type="number" className={inputCls} placeholder="0" value={form.initialQty} onChange={(e) => setForm({ ...form, initialQty: e.target.value })} />
+        <input type="number" step="1" className={inputCls} placeholder="0" value={form.initialQty} onChange={(e) => setForm({ ...form, initialQty: e.target.value })} />
       </div>
       <div className="flex justify-end pt-4">
         <button disabled={!valid || saving} onClick={submit} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
@@ -100,7 +102,7 @@ function StockMovementModal({ type, onClose, onSubmit }) {
   const [saving, setSaving] = useState(false);
   const label = MOVEMENT_LABEL[type];
   const n = Number(qty);
-  const valid = qty.trim() !== "" && !Number.isNaN(n) && n !== 0 && (type === "adjust" || n > 0);
+  const valid = qty.trim() !== "" && Number.isInteger(n) && n !== 0 && (type === "adjust" || n > 0);
 
   async function submit() {
     if (!valid) return;
@@ -116,7 +118,7 @@ function StockMovementModal({ type, onClose, onSubmit }) {
       <div className="space-y-3">
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">{type === "adjust" ? "증감량 (예: -4)" : "수량"}</p>
-          <input type="number" className={inputCls} value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
+          <input type="number" step="1" className={inputCls} value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
         </div>
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">메모</p>
@@ -177,7 +179,7 @@ function ProductDetail({ product, movements, onSave, onDelete, onMovement }) {
         )}
       </div>
       {editing ? (
-        <ProductFormFields form={form} setForm={setForm} onGenerateMaterialNo={() => {}} />
+        <ProductFormFields form={form} setForm={setForm} onGenerateMaterialNo={null} />
       ) : (
         <>
           <div className="flex gap-3.5 mb-4">
@@ -276,8 +278,8 @@ export default function InventoryAdmin({ data, setData }) {
       sale_price: form.salePrice === "" ? null : Number(form.salePrice),
     };
     const { data: inserted, error } = await supabase.from("inventory_products").insert(row).select().maybeSingle();
-    if (error) { alert("등록 실패: " + error.message); return; }
-    if (!inserted) { alert("등록 실패: 저장된 결과를 받지 못했습니다."); return; }
+    if (error) { alert("등록 실패: " + error.message); return false; }
+    if (!inserted) { alert("등록 실패: 저장된 결과를 받지 못했습니다."); return false; }
     const mapped = mapInventoryProduct(inserted);
     setData((prev) => ({ ...prev, inventoryProducts: [mapped, ...prev.inventoryProducts] }));
     const initialQty = Number(form.initialQty);
@@ -285,6 +287,7 @@ export default function InventoryAdmin({ data, setData }) {
       await addMovement(mapped, "adjust", { qtyDelta: initialQty, note: "초기 수량" });
     }
     setSelectedId(mapped.id);
+    return true;
   }
 
   async function saveProduct(product, form) {
@@ -390,6 +393,7 @@ export default function InventoryAdmin({ data, setData }) {
                 </div>
               ) : (
                 <ProductDetail
+                  key={selected.id}
                   product={selected}
                   movements={inventoryStockMovements}
                   onSave={saveProduct}

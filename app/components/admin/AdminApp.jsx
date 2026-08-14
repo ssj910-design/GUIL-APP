@@ -214,8 +214,11 @@ export default function AdminApp() {
           // 부품현황 사진 — 호기당 38리프×사진 1행이라 전체 시스템 기준 1000행을 금방 넘는다.
           // site_managers·error_codes와 같은 이유로 페이지네이션 없이는 조용히 잘린다.
           fetchAll("unit_part_photos"),
-          supabase.from("inventory_products").select("*").order("created_at", { ascending: false }),
-          supabase.from("inventory_stock_movements").select("*"),
+          // 재고이력(inventory_stock_movements)은 제품마다 입고/출고/조정이 쌓이는 append-only
+          // 원장이라 무제한으로 늘어난다 — site_managers·error_codes와 같은 이유로
+          // 페이지네이션 없이는 1000행 기본 한도를 넘는 순간 재고 합계가 조용히 틀려진다.
+          fetchAll("inventory_products"),
+          fetchAll("inventory_stock_movements"),
         ]);
       setData({
         sites: (sites.data ?? []).map(mapSite),
