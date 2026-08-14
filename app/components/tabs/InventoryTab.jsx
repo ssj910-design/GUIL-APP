@@ -7,7 +7,7 @@
 import { useContext, useRef, useState } from "react";
 import { Camera, ChevronDown, ChevronUp, Minus, Plus, RefreshCw, Search } from "lucide-react";
 import { AuthContext } from "@/app/components/context";
-import { DrillHeader, Sheet, inputCls } from "@/app/components/ui";
+import { DrillHeader, PhotoLightbox, Sheet, inputCls } from "@/app/components/ui";
 import { SinglePhotoUpload } from "@/app/components/formWidgets";
 import { currentStock, stockHistory } from "@/lib/inventoryStock";
 import { confirmAsync } from "@/app/components/ConfirmHost";
@@ -171,14 +171,13 @@ function editForm(product) {
 
 function ProductDetail({ product, movements, isAdmin, existingNos, onBack, onHome, onSave, onDelete, onMovement }) {
   const [editing, setEditing] = useState(false);
-  const [actionsOpen, setActionsOpen] = useState(false);
   const [movementType, setMovementType] = useState(null);
+  const [viewingPhoto, setViewingPhoto] = useState(false);
   const stock = currentStock(movements, product.id);
   const history = stockHistory(movements, product.id);
 
   async function remove() {
     if (!(await confirmAsync(`"${product.name}"을(를) 삭제할까요?`))) return;
-    setActionsOpen(false);
     await onDelete(product);
     onBack();
   }
@@ -189,7 +188,7 @@ function ProductDetail({ product, movements, isAdmin, existingNos, onBack, onHom
       <div className="flex-1 overflow-y-auto p-4">
         <div className="flex gap-3 mb-3">
           {product.photoUrls?.[0] ? (
-            <img src={product.photoUrls[0]} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" />
+            <img src={product.photoUrls[0]} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0 cursor-zoom-in" onClick={() => setViewingPhoto(true)} />
           ) : (
             <div className="w-16 h-16 rounded-xl bg-slate-100 shrink-0" />
           )}
@@ -272,6 +271,9 @@ function ProductDetail({ product, movements, isAdmin, existingNos, onBack, onHom
           onClose={() => setEditing(false)}
           onSubmit={(form) => onSave(product, form)}
         />
+      )}
+      {viewingPhoto && product.photoUrls?.[0] && (
+        <PhotoLightbox urls={product.photoUrls} index={0} onIndexChange={() => {}} onClose={() => setViewingPhoto(false)} />
       )}
     </div>
   );
