@@ -266,10 +266,12 @@ function StockMovementPanel({ type, onCancel, onSubmit, sites, units }) {
     <div className="bg-white rounded-xl border border-slate-200 p-5 lg:h-full overflow-y-auto">
       <p className={`text-lg font-extrabold mb-4 ${color}`}>{label}</p>
       <div className="space-y-3">
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">구매처</p>
-          <input className={inputCls} placeholder="텍스트 입력" value={vendorText} onChange={(e) => setVendorText(e.target.value)} />
-        </div>
+        {type === "in" && (
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">구매처</p>
+            <input className={inputCls} placeholder="텍스트 입력" value={vendorText} onChange={(e) => setVendorText(e.target.value)} />
+          </div>
+        )}
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">{label}현장</p>
           <SiteUnitAutocomplete value={siteText} onChange={setSiteText} sites={sites} units={units} placeholder="현장명 검색(호기까지) 또는 직접 입력" />
