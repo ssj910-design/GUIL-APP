@@ -1,0 +1,99 @@
+"use client";
+
+import { useState } from "react";
+import { currentStock } from "@/lib/inventoryStock";
+import { inputCls } from "@/app/components/admin/adminShared";
+
+const SUBS = ["제품목록", "입출고내역", "구매"];
+
+export default function InventoryAdmin({ data, setData }) {
+  const { inventoryProducts = [], inventoryStockMovements = [] } = data;
+  const [sub, setSub] = useState("제품목록");
+  const [search, setSearch] = useState("");
+  const [onlyInStock, setOnlyInStock] = useState(false);
+  const [selectedId, setSelectedId] = useState(null);
+
+  const active = inventoryProducts.filter((p) => p.active !== false);
+  const rows = active.filter((p) => {
+    const q = search.trim().toLowerCase();
+    if (q && !`${p.materialNo} ${p.name}`.toLowerCase().includes(q)) return false;
+    if (onlyInStock && currentStock(inventoryStockMovements, p.id) <= 0) return false;
+    return true;
+  });
+  const selected = active.find((p) => p.id === selectedId) ?? null;
+
+  return (
+    <div className="max-w-[100rem] mx-auto">
+      <div className="flex gap-1 mb-4 border-b border-slate-200">
+        {SUBS.map((s) => (
+          <button key={s} onClick={() => setSub(s)}
+            className={`text-sm font-bold px-4 py-2.5 -mb-px border-b-2 ${
+              sub === s ? "text-blue-700 border-blue-700" : "text-slate-400 border-transparent"
+            }`}>
+            {s}
+          </button>
+        ))}
+      </div>
+
+      {sub !== "제품목록" ? (
+        <p className="pt-20 text-center text-sm text-slate-400">준비 중입니다 (다음 단계)</p>
+      ) : (
+        <>
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-xl font-extrabold">제품목록</h1>
+          </div>
+          <div className="flex gap-2 mb-3">
+            <input className={`${inputCls} flex-1`} placeholder="자재번호·제품명 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 border border-slate-200 rounded-lg px-3 whitespace-nowrap">
+              <input type="checkbox" checked={onlyInStock} onChange={(e) => setOnlyInStock(e.target.checked)} /> 재고 보유
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-7 gap-5 items-start">
+            <div className="xl:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <ul className="max-h-[calc(100vh-20rem)] overflow-y-auto">
+                {rows.map((p) => {
+                  const stock = currentStock(inventoryStockMovements, p.id);
+                  return (
+                    <li key={p.id}>
+                      <button onClick={() => setSelectedId(p.id)}
+                        className={`w-full flex items-center gap-2.5 text-left px-3 py-2.5 border-b border-slate-50 ${
+                          selectedId === p.id ? "bg-blue-50" : "hover:bg-slate-50"
+                        }`}>
+                        {p.photoUrl ? (
+                          <img src={p.photoUrl} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-lg bg-slate-100 shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-700 truncate">{p.name}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            ₩{Number(p.purchasePrice ?? 0).toLocaleString()} / ₩{Number(p.salePrice ?? 0).toLocaleString()} · {p.materialNo}
+                          </p>
+                        </div>
+                        <p className={`text-sm font-extrabold ${stock > 0 ? "text-blue-700" : "text-slate-300"}`}>{stock}</p>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              {rows.length === 0 && <p className="text-xs text-slate-400 text-center py-10">등록된 제품이 없습니다</p>}
+            </div>
+
+            <div className="xl:col-span-5">
+              {!selected ? (
+                <div className="bg-white rounded-xl border border-slate-200 h-40 xl:h-64 flex items-center justify-center text-sm text-slate-400">
+                  왼쪽 목록에서 제품을 선택하세요
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl border border-slate-200 p-5 text-sm text-slate-400">
+                  {selected.name} — 상세 화면은 다음 태스크에서 채운다
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

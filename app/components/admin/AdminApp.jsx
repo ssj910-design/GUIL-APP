@@ -5,11 +5,12 @@
 // 각 섹션에 props로 내린다 (모바일 App 셸과 같은 관례).
 import { useState, useEffect } from "react";
 import { BRAND } from "@/lib/company";
-import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, CalendarCheck, Users, LayoutDashboard, BarChart3, Menu , Bell, MessageSquare, BookOpen } from "lucide-react";
+import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, CalendarCheck, Users, LayoutDashboard, BarChart3, Menu , Bell, MessageSquare, BookOpen, Boxes } from "lucide-react";
 import { supabase, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken } from "@/lib/supabaseClient";
 import {
   mapSite, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest,
   mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck, mapSelfCheckItem, mapFeedPost, mapRestockRequest, mapErrorCode, mapUnitPartPhoto,
+  mapInventoryProduct, mapInventoryStockMovement,
 } from "@/lib/mappers";
 import Dashboard from "@/app/components/admin/Dashboard";
 import SitesAdmin from "@/app/components/admin/SitesAdmin";
@@ -21,6 +22,7 @@ import TodosAdmin from "@/app/components/admin/TodosAdmin";
 import SelfChecksAdmin from "@/app/components/admin/SelfChecksAdmin";
 import EngineersAdmin from "@/app/components/admin/EngineersAdmin";
 import StatsAdmin from "@/app/components/admin/StatsAdmin";
+import InventoryAdmin from "@/app/components/admin/InventoryAdmin";
 import NotifySettings from "@/app/components/admin/NotifySettings";
 import RoomAdmin from "@/app/components/admin/RoomAdmin";
 import ErrorCodesAdmin from "@/app/components/admin/ErrorCodesAdmin";
@@ -42,6 +44,7 @@ const MENU = [
   { id: "inspections", label: "검사관리", icon: ShieldCheck },
   { id: "materials", label: "자재·견적 신청내역", icon: Package },
   { id: "billings", label: "부품교체·공사 내역", icon: Receipt },
+  { id: "inventory", label: "재고관리", icon: Boxes },
   { id: "todos", label: "할 일 관리", icon: ListTodo },
   { id: "selfChecks", label: "자체점검 현황", icon: CalendarCheck },
   { id: "room", label: "게시판", icon: MessageSquare },
@@ -64,6 +67,7 @@ export default function AdminApp() {
     sites: [], units: [], siteManagers: [], failures: [], inspections: [],
     materialRequests: [], quoteRequests: [], restockRequests: [], todos: [], billings: [],
     selfChecks: [], selfCheckItems: [], profiles: [], feed: [], errorCodes: [], unitPartPhotos: [],
+    inventoryProducts: [], inventoryStockMovements: [],
   });
 
   // ── 콘솔 로그인 (관리자만) ──
@@ -186,7 +190,7 @@ export default function AdminApp() {
     // 로그인 안 한 상태에서도 네트워크 탭에 전체 데이터가 그대로 찍혀 새어나간다.
     if (!SKIP_LOGIN && !me) return;
     async function load() {
-      const [sites, units, siteManagers, failures, inspections, materials, quotes, restock, todos, billings, selfChecks, selfCheckItems, profiles, feed, errorCodes, unitPartPhotos] =
+      const [sites, units, siteManagers, failures, inspections, materials, quotes, restock, todos, billings, selfChecks, selfCheckItems, profiles, feed, errorCodes, unitPartPhotos, inventoryProducts, inventoryStockMovements] =
         await Promise.all([
           supabase.from("sites").select("*").order("name"),
           supabase.from("units").select("*").order("seq"),
@@ -210,6 +214,8 @@ export default function AdminApp() {
           // 부품현황 사진 — 호기당 38리프×사진 1행이라 전체 시스템 기준 1000행을 금방 넘는다.
           // site_managers·error_codes와 같은 이유로 페이지네이션 없이는 조용히 잘린다.
           fetchAll("unit_part_photos"),
+          supabase.from("inventory_products").select("*").order("created_at", { ascending: false }),
+          supabase.from("inventory_stock_movements").select("*"),
         ]);
       setData({
         sites: (sites.data ?? []).map(mapSite),
@@ -228,6 +234,8 @@ export default function AdminApp() {
         feed: (feed.data ?? []).map(mapFeedPost),
         errorCodes: (errorCodes.data ?? []).map(mapErrorCode),
         unitPartPhotos: (unitPartPhotos.data ?? []).map(mapUnitPartPhoto),
+        inventoryProducts: (inventoryProducts.data ?? []).map(mapInventoryProduct),
+        inventoryStockMovements: (inventoryStockMovements.data ?? []).map(mapInventoryStockMovement),
       });
       setLoading(false);
     }
@@ -349,6 +357,8 @@ export default function AdminApp() {
           <MaterialsAdmin data={data} setData={setData} initialTab={materialsInitialTab} />
         ) : menu === "billings" ? (
           <BillingsAdmin data={data} setData={setData} />
+        ) : menu === "inventory" ? (
+          <InventoryAdmin data={data} setData={setData} />
         ) : menu === "todos" ? (
           <TodosAdmin data={data} setData={setData} initialView={todosInitialView} />
         ) : menu === "selfChecks" ? (
