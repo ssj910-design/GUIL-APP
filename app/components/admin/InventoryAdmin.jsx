@@ -57,7 +57,7 @@ function ProductPhotos({ urls, onChange, readOnly = false }) {
     <div className="flex items-start gap-3">
       {!readOnly && <input ref={mainInputRef} type="file" accept="image/*" className="hidden" onChange={addFile} />}
       {urls[0] ? (
-        <div className="relative w-56 h-56 shrink-0 rounded-xl overflow-hidden border border-slate-200">
+        <div className="relative w-[336px] h-[336px] shrink-0 rounded-xl overflow-hidden border border-slate-200">
           <img src={urls[0]} alt="" className="w-full h-full object-cover cursor-zoom-in" onClick={() => setViewingIndex(0)} />
           {!readOnly && (
             <button type="button" onClick={() => removeAt(0)} className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-slate-900/70 text-white flex items-center justify-center">
@@ -67,7 +67,7 @@ function ProductPhotos({ urls, onChange, readOnly = false }) {
         </div>
       ) : !readOnly ? (
         <button type="button" onClick={() => mainInputRef.current?.click()} disabled={uploading}
-          className="w-56 h-56 shrink-0 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center gap-1.5 text-slate-500 disabled:opacity-50">
+          className="w-[336px] h-[336px] shrink-0 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center gap-1.5 text-slate-500 disabled:opacity-50">
           <Camera size={28} />
           <span className="text-xs font-semibold">{uploading ? "업로드 중..." : "메인 사진 추가"}</span>
         </button>
