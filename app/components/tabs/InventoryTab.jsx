@@ -280,8 +280,10 @@ function ProductDetail({ product, movements, isAdmin, existingNos, onBack, onHom
 }
 
 export function InventoryTab({ products, movements, onCreateProduct, onSaveProduct, onDeleteProduct, onAddMovement }) {
-  const { role } = useContext(AuthContext);
-  const isAdmin = role === "admin";
+  const { role, adminTier } = useContext(AuthContext);
+  // 자재담당관리자(admin_tier "material")는 모바일 앱에서 role이 engineer로 스코프되지만
+  // (기사앱을 기사와 동일하게 쓰는 다른 화면들과 달리) 재고관리는 PC 관리자웹과 동일 권한이어야 한다.
+  const isAdmin = role === "admin" || adminTier === "material";
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState(null);
   const [creating, setCreating] = useState(false);

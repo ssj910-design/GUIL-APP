@@ -2090,8 +2090,12 @@ export default function App() {
     );
   }
 
-  const tabTitle = tab === "room" ? "게시판" : TABS.find((t) => t.id === tab)?.label ?? "";
-  const visibleTabs = TABS.filter((t) => t.id !== "admin" || profile?.role === "admin");
+  // 기사(순수 engineer, 재고관리 조회만 가능)에게는 "재고관리" 대신 "재고현황"으로 문구를 바꾼다.
+  // 자재담당관리자는 role은 "admin"이라 그대로 "재고관리"로 보인다(재고 전체 권한이 있으므로).
+  const inventoryLabel = profile?.role === "admin" ? "재고관리" : "재고현황";
+  const tabTitle = tab === "room" ? "게시판" : tab === "inventory" ? inventoryLabel : TABS.find((t) => t.id === tab)?.label ?? "";
+  const visibleTabs = TABS.filter((t) => t.id !== "admin" || profile?.role === "admin")
+    .map((t) => (t.id === "inventory" ? { ...t, label: inventoryLabel } : t));
 
   // 게시판 안읽음/멘션 — 세션 로컬 읽음 시각이 있으면 그걸, 없으면 DB(profiles.feed_read_at) 기준
   const myName = profile?.name ?? "";
