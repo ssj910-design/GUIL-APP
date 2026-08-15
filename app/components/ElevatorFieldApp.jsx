@@ -135,7 +135,6 @@ export default function App() {
   const [feed, setFeed] = useState([]);
   // is_notice 컬럼은 마이그레이션 022 실행 전엔 존재하지 않는다 — undefined면 아직 미실행으로 간주.
   const feedNoticeReady = feed.some((p) => p.isNotice !== undefined);
-  const todoBillingReady = todos.some((t) => t.billingAmount !== undefined);
   // failures.assigned_at 컬럼 존재 여부 — 마이그레이션 074 전엔 컬럼이 없어, 있을 때만 배정 시각을 쓴다(미구현 시 배정이 깨지지 않게).
   const assignedAtReady = failures.some((f) => f.assignedAt !== undefined);
   // 지급 사진을 여러 장 연달아 올릴 때, setState 업데이터 함수가 React 렌더링 타이밍에 따라
@@ -1503,7 +1502,8 @@ export default function App() {
           unit_id: req.unitId ?? unitIdFor(units, req.siteId, req.elevatorNo),
           assignee_id: profileIdByName(profilesAll, newTodo.assignee),
         } : {}),
-        ...(todoBillingReady ? { billing_part: newTodo.billingPart, billing_amount: newTodo.billingAmount } : {}),
+        billing_part: newTodo.billingPart,
+        billing_amount: newTodo.billingAmount,
       }),
       "할 일 생성 실패 — 자재 지급완료 처리를 중단했습니다"
     );
@@ -1540,7 +1540,8 @@ export default function App() {
       due_date: finalDueDate,
       description: description || null,
       ...(v2Ready ? { assignee_id: profileIdByName(profilesAll, assigneeName) } : {}),
-      ...(todoBillingReady ? { billing_part: billingPart || null, billing_amount: billingAmount || null } : {}),
+      billing_part: billingPart || null,
+      billing_amount: billingAmount || null,
     };
     const { error } = await supabase.from("todos").update(patch).eq("id", todoId);
     if (error) { alert("수정 실패: " + error.message); return; }
@@ -1550,7 +1551,8 @@ export default function App() {
       dueDate: finalDueDate,
       description: description || null,
       ...(v2Ready ? { assigneeId: patch.assignee_id } : {}),
-      ...(todoBillingReady ? { billingPart: billingPart || null, billingAmount: billingAmount || null } : {}),
+      billingPart: billingPart || null,
+      billingAmount: billingAmount || null,
     } : t)));
   }
 
