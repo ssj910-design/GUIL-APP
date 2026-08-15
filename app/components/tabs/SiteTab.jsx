@@ -1,4 +1,5 @@
 import React, { useState, useContext } from "react";
+import { createPortal } from "react-dom";
 import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Download, KeyRound, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, shortDate, recentFailuresBySite, siteMatchesQuery, unitContractBadges, unitBadgeLabel } from "@/lib/utils";
 import { RESULT_LABEL } from "@/lib/constants";
@@ -358,7 +359,9 @@ export function PhotoViewerSheet({ urls, index, siteName, date, onClose }) {
     }
   }
 
-  return (
+  // body Portal로 렌더 — 이 화면 트리 어딘가의 transform(예: PullToRefresh)에 fixed가
+  // 갇혀서 다른 모달(Sheet 등, 이미 body 포탈) 뒤로 숨어버리는 걸 피한다.
+  return createPortal(
     <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
         <span className="text-white text-xs font-semibold">{current + 1} / {urls.length}</span>
@@ -416,7 +419,8 @@ export function PhotoViewerSheet({ urls, index, siteName, date, onClose }) {
           {toast}
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
 
