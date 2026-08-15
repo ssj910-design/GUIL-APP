@@ -57,10 +57,15 @@ function RequestDetailSheet({ target, onClose, onPhotoClick, todos, onCancelMate
         )}
         {linkedTodo?.billingAmount != null && (
           <div className="bg-slate-100 rounded-xl p-3">
-            <p className="text-[11px] text-slate-500">청구 부품·금액</p>
-            <p className="font-bold text-blue-700">
-              {linkedTodo.billingPart ? `${linkedTodo.billingPart} · ` : ""}합계 ₩{Number(linkedTodo.billingAmount).toLocaleString()}
-            </p>
+            <p className="text-[11px] text-slate-500 mb-1">관리자 지급 부품·수량·금액</p>
+            {linkedTodo.billingPart && (
+              <div className="space-y-0.5">
+                {linkedTodo.billingPart.split(", ").map((seg, i) => (
+                  <p key={i} className="text-sm font-bold text-slate-800">{seg}</p>
+                ))}
+              </div>
+            )}
+            <p className="text-sm font-bold text-blue-700 mt-1">합계 ₩{Number(linkedTodo.billingAmount).toLocaleString()}</p>
           </div>
         )}
         <div className="grid grid-cols-2 gap-2.5">
