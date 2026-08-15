@@ -185,7 +185,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
                 <button type="button" onClick={() => setExpanded(expanded ? null : t.id)} className="flex-1 min-w-0 text-left">
                   <div className="flex items-center gap-1.5">
                     {overdue && <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />}
-                    <p className={`text-sm font-bold min-w-0 truncate ${t.done ? "line-through text-slate-400" : "text-slate-800"}`}>{t.title}</p>
+                    <p className={`text-sm font-bold min-w-0 ${expanded ? "" : "truncate"} ${t.done ? "line-through text-slate-400" : "text-slate-800"}`}>{t.title}</p>
                     {t.reassignRequested && <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full"><Repeat size={9} strokeWidth={2.8} />재배정 요청</span>}
                     <ChevronDown size={15} className={`shrink-0 text-slate-300 ml-auto transition-transform ${expanded ? "rotate-180" : ""}`} />
                   </div>
