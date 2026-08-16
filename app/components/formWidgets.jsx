@@ -1,6 +1,6 @@
 import { useState, useContext, useRef, useEffect } from "react";
 import { X, Camera, Search, Image as ImageIcon } from "lucide-react";
-import { uploadPhoto } from "@/lib/photos";
+import { uploadPhoto, dataUrlToBlob } from "@/lib/photos";
 import { inputCls, Sheet, PhotoLightbox } from "@/app/components/ui";
 import { SitesContext } from "@/app/components/context";
 import { activeSites } from "@/lib/utils";
@@ -266,6 +266,10 @@ export function SignaturePad({ url, uploadFolder, onSigned, onClear }) {
     canvas.height = rect.height * dpr;
     const ctx = canvas.getContext("2d");
     ctx.scale(dpr, dpr);
+    // 캔버스를 흰 배경으로 채워둔다 — 안 채우면 투명(알파) 상태로 남아, JPEG로 압축될 때
+    // 알파가 없어져 배경이 검게 뜬다.
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, rect.width, rect.height);
     ctx.lineWidth = 2.4;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -298,7 +302,12 @@ export function SignaturePad({ url, uploadFolder, onSigned, onClear }) {
 
   function clearCanvas() {
     const canvas = canvasRef.current;
-    if (canvas) canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
     hasDrawnRef.current = false;
     setEmpty(true);
   }
@@ -308,8 +317,11 @@ export function SignaturePad({ url, uploadFolder, onSigned, onClear }) {
     setSaving(true);
     try {
       const canvas = canvasRef.current;
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
-      const file = new File([blob], "signature.png", { type: "image/png" });
+      // canvas.toBlob()은 이미지 크기와 무관하게 ~13초씩 걸리는 버그가 있어(lib/photos.js
+      // compressImage 참고) 같은 이유로 동기 방식인 toDataURL을 쓴다.
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+      const blob = dataUrlToBlob(dataUrl);
+      const file = new File([blob], "signature.jpg", { type: "image/jpeg" });
       const uploadedUrl = await uploadPhoto(file, uploadFolder);
       onSigned(uploadedUrl);
     } catch (err) {
@@ -336,7 +348,14 @@ export function SignaturePad({ url, uploadFolder, onSigned, onClear }) {
 
   return (
     <div>
-      <div ref={padRef} className="relative rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 h-40" style={{ touchAction: "none" }}>
+      <div
+        ref={padRef}
+        className="relative rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 h-40"
+        style={{ touchAction: "none" }}
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
+      >
         <canvas
           ref={canvasRef}
           className="absolute inset-0 w-full h-full rounded-xl"
