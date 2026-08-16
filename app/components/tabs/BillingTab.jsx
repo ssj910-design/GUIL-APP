@@ -5,7 +5,7 @@ import { siteUnitList, formatPhone } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
 import { DDay, PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
-import { SiteSearchSelect, MultiPhotoUpload, SinglePhotoUpload } from "@/app/components/formWidgets";
+import { SiteSearchSelect, MultiPhotoUpload, SinglePhotoUpload, SignaturePad } from "@/app/components/formWidgets";
 import { emptyPartRow, formatPartRows, PartsRowsInput, UnitPickGrid } from "@/app/components/tabs/MaterialTab";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 
@@ -14,7 +14,7 @@ import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 /* BILLING (비용청구)                                                    */
 /* ------------------------------------------------------------------ */
 
-const BILL_STEP_TITLES = ["청구 정보", "증빙 사진"]; // 자재 지급건(2-step)
+const BILL_STEP_TITLES = ["청구 정보", "증빙 사진", "완료 서명"]; // 자재 지급건(3-step)
 const MAN_BILL_TITLES = ["현장·호기", "교체 내역·비용", "증빙 사진"]; // 직접 입력(3-step)
 
 export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
@@ -38,19 +38,29 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const [materialReplaceDate, setMaterialReplaceDate] = useState(TODAY_STR);
   const [submitted, setSubmitted] = useState(null);
   const [manualForm, setManualForm] = useState({ siteId: "", units: [], parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
-  const [materialPhotos, setMaterialPhotos] = useState({ before: [], after: [], confirm: null });
+  const [materialPhotos, setMaterialPhotos] = useState({ before: [], after: [] });
   const [manualPhotos, setManualPhotos] = useState({ before: [], after: [], confirm: null });
-  const [billStep, setBillStep] = useState(0); // 0 정보 · 1 증빙사진
+  const [billStep, setBillStep] = useState(0); // 0 정보 · 1 증빙사진 · 2 완료서명
   const [billToast, setBillToast] = useState(null); // { msg, ok }
   function toastBill(msg, ok = false) { setBillToast({ msg, ok }); setTimeout(() => setBillToast(null), 2500); }
+
+  // 지류 교체확인서 대신 현장에서 바로 받는 서명, 또는 고객 부재중일 때의 전화승인 정보.
+  const [signatureUrl, setSignatureUrl] = useState(null);
+  const [absentMode, setAbsentMode] = useState(false);
+  const [approverName, setApproverName] = useState("");
+  const [approverPhone, setApproverPhone] = useState("");
+  const [absentConfirmed, setAbsentConfirmed] = useState(false);
 
   const selected = todos.find((t) => t.id === selectedId);
   // 견적 연동 건은 이미 견적서에 수리비가 정해져 있어, 직접 입력 대신 "견적서 참조"로 고정합니다.
   const isQuoteBilling = selected?.source === "quote";
-  // 증빙 사진(교체 전·후·확인서)은 청구 필수 — 이게 없으면 제출을 막는다.
-  const materialPhotosOk = materialPhotos.before.length > 0 && materialPhotos.after.length > 0 && !!materialPhotos.confirm;
+  // 청구 대상이 바뀌면 관리자가 지급 확정한 금액으로 미리 채워둔다 — 맞으면 그대로, 다르면 수정.
+  useEffect(() => {
+    setMaterialCost(selected?.billingAmount != null ? String(selected.billingAmount) : "");
+  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 증빙 사진(교체 전·후)은 청구 필수 — 이게 없으면 제출을 막는다. 확인은 이제 3단계 서명으로 받는다.
+  const materialPhotosOk = materialPhotos.before.length > 0 && materialPhotos.after.length > 0;
   const manualPhotosOk = manualPhotos.before.length > 0 && manualPhotos.after.length > 0 && !!manualPhotos.confirm;
-  const materialValid = selected && (isQuoteBilling || Number(materialCost) > 0) && materialPhotosOk;
   const manualValid = manualForm.siteId && manualForm.units.length > 0 && formatPartRows(manualForm.parts) && manualForm.replaceDate && manualForm.contactPhone.trim() && Number(manualForm.cost) > 0 && manualPhotosOk;
 
   // 스텝별 필수 검증 — 미입력이면 안내 문구 반환(다음/제출 막힘), 없으면 null.
@@ -62,7 +72,15 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     if (step === 1) {
       if (materialPhotos.before.length === 0) return "교체 전 사진을 등록해주세요";
       if (materialPhotos.after.length === 0) return "교체 후 사진을 등록해주세요";
-      if (!materialPhotos.confirm) return "교체확인서를 등록해주세요";
+    }
+    if (step === 2) {
+      if (absentMode) {
+        if (!approverName.trim()) return "담당자 성함 또는 직책을 입력해주세요";
+        if (!approverPhone.trim()) return "연락처를 입력해주세요";
+        if (!absentConfirmed) return "전화 승인 확인란에 체크해주세요";
+      } else if (!signatureUrl) {
+        return "고객 서명을 받아주세요";
+      }
     }
     return null;
   }
@@ -114,7 +132,12 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       contactPhone: null,
       beforePhotoUrls: materialPhotos.before.map((p) => p.url),
       afterPhotoUrls: materialPhotos.after.map((p) => p.url),
-      confirmPhotoUrl: materialPhotos.confirm,
+      // 지류 교체확인서 대신: 서명했으면 서명 이미지, 고객 부재중이면 전화승인자 정보.
+      signatureUrl: absentMode ? null : signatureUrl,
+      approvalMethod: absentMode ? "전화승인" : "서명",
+      approverName: absentMode ? approverName.trim() : null,
+      approverPhone: absentMode ? approverPhone.trim() : null,
+      approvedAt: new Date().toISOString(),
     });
     // ★ 청구 저장 성공 후에만 할일 완료 처리 — insert 실패 시 "완료됐는데 청구 없음"(자재 로스) 방지 (P1-2)
     if (!ok) return;
@@ -130,7 +153,12 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     setSelectedId(openTodos.find((t) => t.id !== selected.id)?.id ?? "");
     setMaterialCost("");
     setMaterialReplaceDate(TODAY_STR);
-    setMaterialPhotos({ before: [], after: [], confirm: null });
+    setMaterialPhotos({ before: [], after: [] });
+    setSignatureUrl(null);
+    setAbsentMode(false);
+    setApproverName("");
+    setApproverPhone("");
+    setAbsentConfirmed(false);
     setBillStep(0);
     setTimeout(() => setSubmitted(null), 2600);
   }
@@ -269,26 +297,72 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                       label="교체 후 표준 화질 사진 등록"
                     />
                   </Field>
-                  <Field label="교체확인서 (필수)">
-                    <SinglePhotoUpload
-                      label="교체확인서 종이 사진 등록"
-                      url={materialPhotos.confirm}
-                      uploadFolder={`billings/${uploadSession}`}
-                      onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, confirm: url }))}
-                      onRemove={() => setMaterialPhotos((p) => ({ ...p, confirm: null }))}
-                    />
-                  </Field>
+                </>
+              )}
+
+              {billStep === 2 && (
+                <>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 space-y-1">
+                    <p className="text-xs font-extrabold text-slate-700">완료보고서 미리보기</p>
+                    <p className="text-[11px] text-slate-500">{selected?.siteName}{selected?.elevatorNo ? ` · ${selected.elevatorNo}` : ""}</p>
+                    <p className="text-sm font-bold text-slate-800">{selected?.part}</p>
+                    <p className="text-sm font-extrabold text-blue-700">
+                      {isQuoteBilling ? "견적서 참조" : `₩${Number(materialCost || 0).toLocaleString()}`}
+                    </p>
+                    {(materialPhotos.before[0] || materialPhotos.after[0]) && (
+                      <div className="flex gap-1.5 pt-1">
+                        {materialPhotos.before[0] && (
+                          <img src={materialPhotos.before[0].url} alt="교체 전" className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
+                        )}
+                        {materialPhotos.after[0] && (
+                          <img src={materialPhotos.after[0].url} alt="교체 후" className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {!absentMode ? (
+                    <>
+                      <Field label="고객 서명 (필수)">
+                        <SignaturePad
+                          url={signatureUrl}
+                          uploadFolder={`billings/${uploadSession}/signature`}
+                          onSigned={setSignatureUrl}
+                          onClear={() => setSignatureUrl(null)}
+                        />
+                      </Field>
+                      <button type="button" onClick={() => setAbsentMode(true)} className="w-full text-center text-xs font-bold text-slate-400 underline underline-offset-2 mt-1">
+                        고객이 부재중이에요
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <Field label="담당자 (성함 또는 직책)">
+                        <input type="text" className={inputCls} placeholder="예: 김O식 관리소장" value={approverName} onChange={(e) => setApproverName(e.target.value)} />
+                      </Field>
+                      <Field label="연락처">
+                        <input type="tel" className={inputCls} placeholder="010-0000-0000" value={approverPhone} onChange={(e) => setApproverPhone(e.target.value)} />
+                      </Field>
+                      <label className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2.5 mt-1">
+                        <input type="checkbox" checked={absentConfirmed} onChange={(e) => setAbsentConfirmed(e.target.checked)} />
+                        <span className="text-xs font-bold text-slate-700">전화로 승인받았습니다</span>
+                      </label>
+                      <button type="button" onClick={() => setAbsentMode(false)} className="w-full text-center text-xs font-bold text-slate-400 underline underline-offset-2 mt-2">
+                        고객이 돌아왔어요 — 서명으로
+                      </button>
+                    </>
+                  )}
                 </>
               )}
 
               <div className="flex gap-2 mt-2">
                 {billStep > 0 && (
-                  <button type="button" onClick={() => setBillStep(0)} className="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200">이전</button>
+                  <button type="button" onClick={() => setBillStep(billStep - 1)} className="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200">이전</button>
                 )}
-                {billStep < 1 ? (
-                  <button type="button" onClick={() => { const err = matStepError(0); if (err) { toastBill(err); return; } setBillStep(1); }} className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 active:bg-blue-800">다음</button>
+                {billStep < 2 ? (
+                  <button type="button" onClick={() => { const err = matStepError(billStep); if (err) { toastBill(err); return; } setBillStep(billStep + 1); }} className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 active:bg-blue-800">다음</button>
                 ) : (
-                  <div className="flex-1"><PrimaryButton onClick={() => { const err = matStepError(1); if (err) { toastBill(err); return; } submitMaterial(); }}>청구 요청 제출</PrimaryButton></div>
+                  <div className="flex-1"><PrimaryButton onClick={() => { const err = matStepError(2); if (err) { toastBill(err); return; } submitMaterial(); }}>청구 요청 제출</PrimaryButton></div>
                 )}
               </div>
               {submitted && !submitted.manual && (

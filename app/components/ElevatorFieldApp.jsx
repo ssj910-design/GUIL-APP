@@ -137,6 +137,9 @@ export default function App() {
   const feedNoticeReady = feed.some((p) => p.isNotice !== undefined);
   // failures.assigned_at 컬럼 존재 여부 — 마이그레이션 074 전엔 컬럼이 없어, 있을 때만 배정 시각을 쓴다(미구현 시 배정이 깨지지 않게).
   const assignedAtReady = failures.some((f) => f.assignedAt !== undefined);
+  // billings.signature_url 등 컬럼 존재 여부 — 마이그레이션 119 실행 전엔 컬럼이 없어, 있을 때만
+  // 서명/전화승인 정보를 같이 쓴다(미실행 시에도 청구 저장 자체는 깨지지 않게).
+  const billingApprovalReady = billings.some((b) => b.signatureUrl !== undefined);
   // 지급 사진을 여러 장 연달아 올릴 때, setState 업데이터 함수가 React 렌더링 타이밍에 따라
   // 아직 반영되지 않은 상태를 기준으로 계산될 수 있어(경쟁 상태) ref에 최신값을 직접 보관합니다.
   const supplyPhotoUrlsRef = useRef({ material: {}, quote: {}, restock: {} });
@@ -1172,7 +1175,7 @@ export default function App() {
     }
   }
 
-  async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId }) {
+  async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId, signatureUrl, approvalMethod, approverName, approverPhone, approvedAt }) {
     // 같은 자재신청 건에 이미 청구기록이 있으면 막는다 — 할 일 완료 처리가 실패해 재시도하는
     // 과정에서 청구 자체는 또 저장돼버리는(중복청구) 경로를 막기 위함.
     if (materialRequestId) {
@@ -1204,6 +1207,11 @@ export default function App() {
       beforePhotoUrls: beforePhotoUrls?.length ? beforePhotoUrls : [],
       afterPhotoUrls: afterPhotoUrls?.length ? afterPhotoUrls : [],
       confirmPhotoUrl: confirmPhotoUrl || null,
+      signatureUrl: signatureUrl || null,
+      approvalMethod: approvalMethod || null,
+      approverName: approverName || null,
+      approverPhone: approverPhone || null,
+      approvedAt: approvedAt || null,
     };
     const { error } = await supabase.from("billings").insert({
       id: newBilling.id,
@@ -1219,6 +1227,13 @@ export default function App() {
       before_photo_urls: newBilling.beforePhotoUrls.length ? newBilling.beforePhotoUrls : null,
       after_photo_urls: newBilling.afterPhotoUrls.length ? newBilling.afterPhotoUrls : null,
       confirm_photo_url: newBilling.confirmPhotoUrl,
+      ...(billingApprovalReady ? {
+        signature_url: newBilling.signatureUrl,
+        approval_method: newBilling.approvalMethod,
+        approver_name: newBilling.approverName,
+        approver_phone: newBilling.approverPhone,
+        approved_at: newBilling.approvedAt,
+      } : {}),
       ...(v2Ready ? {
         unit_id: billUnitId,
         engineer_id: profileIdByName(profilesAll, profile.name),
