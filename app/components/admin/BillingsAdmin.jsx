@@ -35,7 +35,8 @@ function buildCertificateData(b, data) {
     issuedDate: shortDate(new Date().toISOString().slice(0, 10)),
     siteUnit: locOf(data, b.unitId, b.siteName, b.elevatorNo),
     address: addressOf(data, b.unitId, b.siteName),
-    engineerName: b.isOutsourced ? (b.vendorName || "-") : personOf(data, b.engineerId, b.engineer),
+    // 고객이 보는 문서라 외주 여부는 노출하지 않는다 — 담당 기사 이름을 그대로 쓴다.
+    engineerName: personOf(data, b.engineerId, b.engineer),
     replaceDate: shortDate(b.replaceDate),
     items,
     totalCost: b.cost,
