@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from "react";
-import { Receipt, Check, Search, AlertTriangle } from "lucide-react";
+import { Receipt, Check, Search, AlertTriangle, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, formatPhone } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
@@ -17,7 +17,7 @@ import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 const BILL_STEP_TITLES = ["청구 정보", "증빙 사진", "완료 서명"]; // 자재 지급건(3-step)
 const MAN_BILL_TITLES = ["현장·호기", "교체 내역·비용", "증빙 사진"]; // 직접 입력(3-step)
 
-export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
+export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, siteManagers = [] }) {
   const sites = useContext(SitesContext);
   const allUnits = useContext(UnitsContext);
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
@@ -51,6 +51,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const [approverName, setApproverName] = useState("");
   const [approverPhone, setApproverPhone] = useState("");
   const [absentConfirmed, setAbsentConfirmed] = useState(false);
+  const [signerPhone, setSignerPhone] = useState("");
 
   const selected = todos.find((t) => t.id === selectedId);
   // 견적 연동 건은 이미 견적서에 수리비가 정해져 있어, 직접 입력 대신 "견적서 참조"로 고정합니다.
@@ -58,6 +59,12 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   // 청구 대상이 바뀌면 관리자가 지급 확정한 금액으로 미리 채워둔다 — 맞으면 그대로, 다르면 수정.
   useEffect(() => {
     setMaterialCost(selected?.billingAmount != null ? String(selected.billingAmount) : "");
+  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 서명자 연락처는 현장담당자 번호로 미리 채워두고, 다르면 현장에서 바로 고쳐 쓸 수 있게 합니다.
+  useEffect(() => {
+    const siteId = allUnits.find((u) => u.id === selected?.unitId)?.siteId;
+    const manager = siteManagers.filter((m) => m.siteId === siteId).sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0))[0];
+    setSignerPhone(manager?.phone ?? "");
   }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
   // 관리자가 지급 확정한 부품이 2개 이상이면 부품별로 전/후 사진을 따로 받는다 — 1개면
   // 나눌 이유가 없어 지금처럼 통합 업로더를 그대로 쓴다.
@@ -85,8 +92,9 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
         if (!approverName.trim()) return "담당자 성함 또는 직책을 입력해주세요";
         if (!approverPhone.trim()) return "연락처를 입력해주세요";
         if (!absentConfirmed) return "전화 승인 확인란에 체크해주세요";
-      } else if (!signatureUrl) {
-        return "고객 서명을 받아주세요";
+      } else {
+        if (!signerPhone.trim()) return "서명자 연락처를 입력해주세요";
+        if (!signatureUrl) return "고객 서명을 받아주세요";
       }
     }
     return null;
@@ -168,7 +176,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       signatureUrl: absentMode ? null : signatureUrl,
       approvalMethod: absentMode ? "전화승인" : "서명",
       approverName: absentMode ? approverName.trim() : null,
-      approverPhone: absentMode ? approverPhone.trim() : null,
+      approverPhone: absentMode ? approverPhone.trim() : signerPhone.trim(),
       approvedAt: new Date().toISOString(),
     });
     // ★ 청구 저장 성공 후에만 할일 완료 처리 — insert 실패 시 "완료됐는데 청구 없음"(자재 로스) 방지 (P1-2)
@@ -192,6 +200,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     setApproverName("");
     setApproverPhone("");
     setAbsentConfirmed(false);
+    setSignerPhone("");
     setBillStep(0);
     setTimeout(() => setSubmitted(null), 2600);
   }
@@ -381,10 +390,16 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                             </div>
                             <div className="flex gap-1.5 mt-1">
                               {partPhotos[i]?.before?.[0] && (
-                                <img src={partPhotos[i].before[0].url} alt={`${part.name} 교체 전`} className="w-28 h-28 rounded-lg object-cover border border-slate-200" />
+                                <div className="relative flex-1 min-w-0">
+                                  <img src={partPhotos[i].before[0].url} alt={`${part.name} 교체 전`} className="w-full aspect-square rounded-lg object-cover border border-slate-200" />
+                                  <button type="button" onClick={() => updatePartPhotos(i, "before", (arr) => arr.slice(1))} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-800/80 text-white flex items-center justify-center"><X size={12} /></button>
+                                </div>
                               )}
                               {partPhotos[i]?.after?.[0] && (
-                                <img src={partPhotos[i].after[0].url} alt={`${part.name} 교체 후`} className="w-28 h-28 rounded-lg object-cover border border-slate-200" />
+                                <div className="relative flex-1 min-w-0">
+                                  <img src={partPhotos[i].after[0].url} alt={`${part.name} 교체 후`} className="w-full aspect-square rounded-lg object-cover border border-slate-200" />
+                                  <button type="button" onClick={() => updatePartPhotos(i, "after", (arr) => arr.slice(1))} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-800/80 text-white flex items-center justify-center"><X size={12} /></button>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -401,10 +416,16 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                         {(materialPhotos.before[0] || materialPhotos.after[0]) && (
                           <div className="flex gap-1.5 mt-1">
                             {materialPhotos.before[0] && (
-                              <img src={materialPhotos.before[0].url} alt="교체 전" className="w-28 h-28 rounded-lg object-cover border border-slate-200" />
+                              <div className="relative flex-1 min-w-0">
+                                <img src={materialPhotos.before[0].url} alt="교체 전" className="w-full aspect-square rounded-lg object-cover border border-slate-200" />
+                                <button type="button" onClick={() => setMaterialPhotos((p) => ({ ...p, before: p.before.slice(1) }))} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-800/80 text-white flex items-center justify-center"><X size={12} /></button>
+                              </div>
                             )}
                             {materialPhotos.after[0] && (
-                              <img src={materialPhotos.after[0].url} alt="교체 후" className="w-28 h-28 rounded-lg object-cover border border-slate-200" />
+                              <div className="relative flex-1 min-w-0">
+                                <img src={materialPhotos.after[0].url} alt="교체 후" className="w-full aspect-square rounded-lg object-cover border border-slate-200" />
+                                <button type="button" onClick={() => setMaterialPhotos((p) => ({ ...p, after: p.after.slice(1) }))} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-800/80 text-white flex items-center justify-center"><X size={12} /></button>
+                              </div>
                             )}
                           </div>
                         )}
@@ -414,13 +435,21 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                     <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-200">
                       <p className="text-xs font-bold text-slate-500">합계</p>
                       <p className="text-sm font-extrabold text-blue-700">
-                        {isQuoteBilling ? "견적서 참조" : `₩${Number(materialCost || 0).toLocaleString()}`}
+                        {isQuoteBilling ? "견적서 참조" : (
+                          <>
+                            ₩{Number(materialCost || 0).toLocaleString()}
+                            <span className="text-[11px] font-semibold text-slate-400 ml-1">(VAT별도)</span>
+                          </>
+                        )}
                       </p>
                     </div>
                   </div>
 
                   {!absentMode ? (
                     <>
+                      <Field label="서명자 연락처">
+                        <input type="tel" className={inputCls} placeholder="010-0000-0000" value={signerPhone} onChange={(e) => setSignerPhone(e.target.value)} />
+                      </Field>
                       <Field label="고객 서명 (필수)">
                         <SignaturePad
                           url={signatureUrl}

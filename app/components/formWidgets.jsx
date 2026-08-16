@@ -121,11 +121,11 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
           </button>
         )}
       </div>
-      <p className={`text-[10px] ${required && photos.length === 0 ? "text-red-500 font-semibold" : "text-slate-400"}`}>
-        {compactHint
-          ? (required ? "최소 1장 필수" : "")
-          : `${label} · ${required ? "최소 1장 필수, " : ""}장수 제한 없음 · 현재 ${photos.length}장`}
-      </p>
+      {!compactHint && (
+        <p className={`text-[10px] ${required && photos.length === 0 ? "text-red-500 font-semibold" : "text-slate-400"}`}>
+          {`${label} · ${required ? "최소 1장 필수, " : ""}장수 제한 없음 · 현재 ${photos.length}장`}
+        </p>
+      )}
       {choosing && (
         <Sheet title="사진 추가" onClose={() => setChoosing(false)}>
           <div className="space-y-2">
