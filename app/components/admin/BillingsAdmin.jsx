@@ -20,14 +20,14 @@ function buildCertificateData(b, data) {
     name: p.name,
     qty: p.qty,
     amount: p.amount ?? null,
-    beforeUrl: p.beforeUrls?.[0] ?? null,
-    afterUrl: p.afterUrls?.[0] ?? null,
+    beforeUrls: p.beforeUrls ?? [],
+    afterUrls: p.afterUrls ?? [],
   })) ?? [{
     name: b.part,
     qty: null,
     amount: b.isFree ? null : b.cost,
-    beforeUrl: b.beforePhotoUrls?.[0] ?? null,
-    afterUrl: b.afterPhotoUrls?.[0] ?? null,
+    beforeUrls: b.beforePhotoUrls ?? [],
+    afterUrls: b.afterPhotoUrls ?? [],
   }];
 
   return {
