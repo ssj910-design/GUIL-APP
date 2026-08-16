@@ -39,6 +39,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const [submitted, setSubmitted] = useState(null);
   const [manualForm, setManualForm] = useState({ siteId: "", units: [], parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
   const [materialPhotos, setMaterialPhotos] = useState({ before: [], after: [] });
+  const [partPhotos, setPartPhotos] = useState({}); // 부품 2개 이상일 때만 사용: { [index]: { before: [], after: [] } }
   const [manualPhotos, setManualPhotos] = useState({ before: [], after: [], confirm: null });
   const [billStep, setBillStep] = useState(0); // 0 정보 · 1 증빙사진 · 2 완료서명
   const [billToast, setBillToast] = useState(null); // { msg, ok }
@@ -58,8 +59,9 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   useEffect(() => {
     setMaterialCost(selected?.billingAmount != null ? String(selected.billingAmount) : "");
   }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
-  // 증빙 사진(교체 전·후)은 청구 필수 — 이게 없으면 제출을 막는다. 확인은 이제 3단계 서명으로 받는다.
-  const materialPhotosOk = materialPhotos.before.length > 0 && materialPhotos.after.length > 0;
+  // 관리자가 지급 확정한 부품이 2개 이상이면 부품별로 전/후 사진을 따로 받는다 — 1개면
+  // 나눌 이유가 없어 지금처럼 통합 업로더를 그대로 쓴다.
+  const billingParts = selected?.billingPartRows?.length > 1 ? selected.billingPartRows : null;
   const manualPhotosOk = manualPhotos.before.length > 0 && manualPhotos.after.length > 0 && !!manualPhotos.confirm;
   const manualValid = manualForm.siteId && manualForm.units.length > 0 && formatPartRows(manualForm.parts) && manualForm.replaceDate && manualForm.contactPhone.trim() && Number(manualForm.cost) > 0 && manualPhotosOk;
 
@@ -70,8 +72,13 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       if (!isQuoteBilling && !(Number(materialCost) > 0)) return "수리비를 입력해주세요";
     }
     if (step === 1) {
-      if (materialPhotos.before.length === 0) return "교체 전 사진을 등록해주세요";
-      if (materialPhotos.after.length === 0) return "교체 후 사진을 등록해주세요";
+      if (billingParts) {
+        const allFilled = billingParts.every((_, i) => (partPhotos[i]?.before?.length > 0) && (partPhotos[i]?.after?.length > 0));
+        if (!allFilled) return "모든 부품의 교체 전/후 사진을 등록해주세요";
+      } else {
+        if (materialPhotos.before.length === 0) return "교체 전 사진을 등록해주세요";
+        if (materialPhotos.after.length === 0) return "교체 후 사진을 등록해주세요";
+      }
     }
     if (step === 2) {
       if (absentMode) {
@@ -103,6 +110,14 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     return null;
   }
 
+  // 부품별 전/후 사진 슬롯 하나를 갱신 — { [index]: { before: [...], after: [...] } } 형태를 유지한다.
+  function updatePartPhotos(index, key, updater) {
+    setPartPhotos((prev) => {
+      const cur = prev[index] ?? { before: [], after: [] };
+      return { ...prev, [index]: { ...cur, [key]: updater(cur[key]) } };
+    });
+  }
+
   async function submitMaterial() {
     if (!selected) return;
     // 견적 지급 시 담당자를 2명 이상 지정한 경우, 같은 quoteRequestId(또는 materialRequestId)를
@@ -118,6 +133,22 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
           )
           .map((t) => t.id)
       : [selected.id];
+    // 부품이 여러 개면 부품별 전/후 사진을 따로 묶어 보내고, 어떤 사진이든 다 볼 수 있게
+    // 통합 배열(beforePhotoUrls/afterPhotoUrls)에도 전체를 합쳐 같이 남긴다(기존 화면 호환).
+    const partPhotosPayload = billingParts
+      ? billingParts.map((part, i) => ({
+          name: part.name,
+          qty: part.qty ?? null,
+          beforeUrls: (partPhotos[i]?.before ?? []).map((p) => p.url),
+          afterUrls: (partPhotos[i]?.after ?? []).map((p) => p.url),
+        }))
+      : null;
+    const beforePhotoUrls = billingParts
+      ? partPhotosPayload.flatMap((p) => p.beforeUrls)
+      : materialPhotos.before.map((p) => p.url);
+    const afterPhotoUrls = billingParts
+      ? partPhotosPayload.flatMap((p) => p.afterUrls)
+      : materialPhotos.after.map((p) => p.url);
     const ok = await onSubmitBilling({
       type: "material",
       siteName: selected.siteName,
@@ -130,8 +161,9 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       cost: isQuoteBilling ? null : materialCost,
       replaceDate: materialReplaceDate,
       contactPhone: null,
-      beforePhotoUrls: materialPhotos.before.map((p) => p.url),
-      afterPhotoUrls: materialPhotos.after.map((p) => p.url),
+      beforePhotoUrls,
+      afterPhotoUrls,
+      partPhotos: partPhotosPayload,
       // 지류 교체확인서 대신: 서명했으면 서명 이미지, 고객 부재중이면 전화승인자 정보.
       signatureUrl: absentMode ? null : signatureUrl,
       approvalMethod: absentMode ? "전화승인" : "서명",
@@ -154,6 +186,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     setMaterialCost("");
     setMaterialReplaceDate(TODAY_STR);
     setMaterialPhotos({ before: [], after: [] });
+    setPartPhotos({});
     setSignatureUrl(null);
     setAbsentMode(false);
     setApproverName("");
@@ -278,26 +311,54 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
               )}
 
               {billStep === 1 && (
-                <>
-                  <Field label="교체 전 사진 (필수)">
-                    <MultiPhotoUpload
-                      photos={materialPhotos.before}
-                      uploadFolder={`billings/${uploadSession}/before`}
-                      onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, before: [...p.before, { url }] }))}
-                      onRemove={(idx) => setMaterialPhotos((p) => ({ ...p, before: p.before.filter((_, i) => i !== idx) }))}
-                      label="교체 전 표준 화질 사진 등록"
-                    />
-                  </Field>
-                  <Field label="교체 후 사진 (필수)">
-                    <MultiPhotoUpload
-                      photos={materialPhotos.after}
-                      uploadFolder={`billings/${uploadSession}/after`}
-                      onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, after: [...p.after, { url }] }))}
-                      onRemove={(idx) => setMaterialPhotos((p) => ({ ...p, after: p.after.filter((_, i) => i !== idx) }))}
-                      label="교체 후 표준 화질 사진 등록"
-                    />
-                  </Field>
-                </>
+                billingParts ? (
+                  <div className="space-y-4">
+                    {billingParts.map((part, i) => (
+                      <div key={i} className="border border-slate-200 rounded-xl p-3">
+                        <p className="text-xs font-extrabold text-slate-700 mb-2">{part.name}{part.qty ? ` ${part.qty}` : ""}</p>
+                        <Field label="교체 전 사진 (필수)">
+                          <MultiPhotoUpload
+                            photos={partPhotos[i]?.before ?? []}
+                            uploadFolder={`billings/${uploadSession}/part${i}/before`}
+                            onUploaded={(url) => updatePartPhotos(i, "before", (arr) => [...arr, { url }])}
+                            onRemove={(idx) => updatePartPhotos(i, "before", (arr) => arr.filter((_, bi) => bi !== idx))}
+                            label="교체 전 표준 화질 사진 등록"
+                          />
+                        </Field>
+                        <Field label="교체 후 사진 (필수)">
+                          <MultiPhotoUpload
+                            photos={partPhotos[i]?.after ?? []}
+                            uploadFolder={`billings/${uploadSession}/part${i}/after`}
+                            onUploaded={(url) => updatePartPhotos(i, "after", (arr) => [...arr, { url }])}
+                            onRemove={(idx) => updatePartPhotos(i, "after", (arr) => arr.filter((_, ai) => ai !== idx))}
+                            label="교체 후 표준 화질 사진 등록"
+                          />
+                        </Field>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    <Field label="교체 전 사진 (필수)">
+                      <MultiPhotoUpload
+                        photos={materialPhotos.before}
+                        uploadFolder={`billings/${uploadSession}/before`}
+                        onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, before: [...p.before, { url }] }))}
+                        onRemove={(idx) => setMaterialPhotos((p) => ({ ...p, before: p.before.filter((_, i) => i !== idx) }))}
+                        label="교체 전 표준 화질 사진 등록"
+                      />
+                    </Field>
+                    <Field label="교체 후 사진 (필수)">
+                      <MultiPhotoUpload
+                        photos={materialPhotos.after}
+                        uploadFolder={`billings/${uploadSession}/after`}
+                        onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, after: [...p.after, { url }] }))}
+                        onRemove={(idx) => setMaterialPhotos((p) => ({ ...p, after: p.after.filter((_, i) => i !== idx) }))}
+                        label="교체 후 표준 화질 사진 등록"
+                      />
+                    </Field>
+                  </>
+                )
               )}
 
               {billStep === 2 && (
@@ -309,15 +370,33 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                     <p className="text-sm font-extrabold text-blue-700">
                       {isQuoteBilling ? "견적서 참조" : `₩${Number(materialCost || 0).toLocaleString()}`}
                     </p>
-                    {(materialPhotos.before[0] || materialPhotos.after[0]) && (
-                      <div className="flex gap-1.5 pt-1">
-                        {materialPhotos.before[0] && (
-                          <img src={materialPhotos.before[0].url} alt="교체 전" className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
-                        )}
-                        {materialPhotos.after[0] && (
-                          <img src={materialPhotos.after[0].url} alt="교체 후" className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
-                        )}
+                    {billingParts ? (
+                      <div className="space-y-1.5 pt-1">
+                        {billingParts.map((part, i) => (
+                          <div key={i}>
+                            <p className="text-[11px] font-bold text-slate-500">{part.name}{part.qty ? ` ${part.qty}` : ""}</p>
+                            <div className="flex gap-1.5 mt-0.5">
+                              {partPhotos[i]?.before?.[0] && (
+                                <img src={partPhotos[i].before[0].url} alt={`${part.name} 교체 전`} className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
+                              )}
+                              {partPhotos[i]?.after?.[0] && (
+                                <img src={partPhotos[i].after[0].url} alt={`${part.name} 교체 후`} className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
+                    ) : (
+                      (materialPhotos.before[0] || materialPhotos.after[0]) && (
+                        <div className="flex gap-1.5 pt-1">
+                          {materialPhotos.before[0] && (
+                            <img src={materialPhotos.before[0].url} alt="교체 전" className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
+                          )}
+                          {materialPhotos.after[0] && (
+                            <img src={materialPhotos.after[0].url} alt="교체 후" className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
+                          )}
+                        </div>
+                      )
                     )}
                   </div>
 

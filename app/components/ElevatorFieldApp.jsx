@@ -140,6 +140,9 @@ export default function App() {
   // billings.signature_url 등 컬럼 존재 여부 — 마이그레이션 119 실행 전엔 컬럼이 없어, 있을 때만
   // 서명/전화승인 정보를 같이 쓴다(미실행 시에도 청구 저장 자체는 깨지지 않게).
   const billingApprovalReady = billings.some((b) => b.signatureUrl !== undefined);
+  // billings.part_photos 컬럼 존재 여부 — 마이그레이션 120 실행 전엔 컬럼이 없어, 있을 때만
+  // 부품별 전/후 사진 묶음을 같이 쓴다.
+  const billingPartPhotosReady = billings.some((b) => b.partPhotos !== undefined);
   // todos.billing_part_rows 컬럼 존재 여부 — 마이그레이션 112 실행 전엔 컬럼이 없어, 있을 때만
   // 관리자가 지급 확정한 부품별 구조화 행(이름·수량·금액)을 같이 쓴다.
   const billingPartRowsReady = todos.some((t) => t.billingPartRows !== undefined);
@@ -1178,7 +1181,7 @@ export default function App() {
     }
   }
 
-  async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId, signatureUrl, approvalMethod, approverName, approverPhone, approvedAt }) {
+  async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId, signatureUrl, approvalMethod, approverName, approverPhone, approvedAt, partPhotos }) {
     // 같은 자재신청 건에 이미 청구기록이 있으면 막는다 — 할 일 완료 처리가 실패해 재시도하는
     // 과정에서 청구 자체는 또 저장돼버리는(중복청구) 경로를 막기 위함.
     if (materialRequestId) {
@@ -1215,6 +1218,7 @@ export default function App() {
       approverName: approverName || null,
       approverPhone: approverPhone || null,
       approvedAt: approvedAt || null,
+      partPhotos: partPhotos?.length ? partPhotos : null,
     };
     const { error } = await supabase.from("billings").insert({
       id: newBilling.id,
@@ -1237,6 +1241,7 @@ export default function App() {
         approver_phone: newBilling.approverPhone,
         approved_at: newBilling.approvedAt,
       } : {}),
+      ...(billingPartPhotosReady ? { part_photos: newBilling.partPhotos } : {}),
       ...(v2Ready ? {
         unit_id: billUnitId,
         engineer_id: profileIdByName(profilesAll, profile.name),
