@@ -55,7 +55,7 @@ function stitchCanvasesToJpegBlob(canvases) {
   return new Promise((resolve) => out.toBlob(resolve, "image/jpeg", 0.92));
 }
 
-export default function ReplacementCertificateViewer({ cert, filenameBase, onClose }) {
+export default function ReplacementCertificateViewer({ cert, filenameBase, cachedUrl, onGenerated, onClose }) {
   const [status, setStatus] = useState("loading"); // loading | ready | error
   const [error, setError] = useState("");
   const [canvases, setCanvases] = useState([]);
@@ -66,17 +66,28 @@ export default function ReplacementCertificateViewer({ cert, filenameBase, onClo
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/generate-replacement-certificate-pdf", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(cert),
-        });
-        const contentType = res.headers.get("content-type") ?? "";
-        if (!res.ok || !contentType.includes("application/pdf")) {
-          const body = await res.json().catch(() => null);
-          throw new Error(body?.reason ?? "교체확인서를 만들지 못했습니다");
+        let blob;
+        if (cachedUrl) {
+          // 이미 한 번 만들어 Storage에 올려둔 파일이 있으면 다시 그리지 않고 그대로 받아온다
+          // — 매번 새로 만들 때 몇 초씩 걸리던 한글 폰트 임베딩을 건너뛴다.
+          const res = await fetch(cachedUrl);
+          if (!res.ok) throw new Error("저장된 교체확인서를 불러오지 못했습니다");
+          blob = await res.blob();
+        } else {
+          const res = await fetch("/api/generate-replacement-certificate-pdf", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(cert),
+          });
+          const contentType = res.headers.get("content-type") ?? "";
+          if (!res.ok || !contentType.includes("application/pdf")) {
+            const body = await res.json().catch(() => null);
+            throw new Error(body?.reason ?? "교체확인서를 만들지 못했습니다");
+          }
+          const newCertUrl = res.headers.get("x-certificate-url");
+          if (newCertUrl) onGenerated?.(newCertUrl);
+          blob = await res.blob();
         }
-        const blob = await res.blob();
         if (cancelled) return;
         pdfBlobRef.current = blob;
         const blobUrl = URL.createObjectURL(blob);

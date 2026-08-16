@@ -1,8 +1,10 @@
 // app/api/generate-replacement-certificate-pdf/route.js
-// 교체확인서 PDF를 매 요청마다 즉석에서 만들어 그대로 돌려준다 — 스토리지에 올려두지
-// 않는다(견적서 PDF와 달리, 열람 이력을 남길 필요가 없고 원본 데이터가 바뀌면 그때그때
-// 최신 내용으로 다시 열람돼야 한다). pdf-lib는 파일시스템(폰트) 접근이 필요해 서버에서만.
+// 교체확인서 PDF를 만들어 그대로 돌려주면서(첫 열람도 곧장 보이게), 동시에 Storage에도
+// 올려 URL을 X-Certificate-Url 헤더로 함께 준다. 호출부(BillingsAdmin)가 이 URL을
+// billings.certificate_pdf_url에 저장해두면, 다음부터는 이 API를 다시 부르지 않고 그
+// 파일을 바로 열어서 몇 초씩 걸리던 재생성(특히 한글 폰트 임베딩)을 건너뛸 수 있다.
 import { buildReplacementCertificatePdfBytes } from "@/lib/replacementCertificatePdf";
+import { supabase } from "@/lib/supabaseClient";
 
 export async function POST(request) {
   const cert = await request.json().catch(() => null);
@@ -17,8 +19,22 @@ export async function POST(request) {
     return Response.json({ ok: false, reason: `PDF 생성 실패: ${err.message}` }, { status: 200 });
   }
 
+  let certUrl = null;
+  if (cert.billingId) {
+    const path = `certificates/${cert.billingId}/${Date.now()}.pdf`;
+    const { error: uploadError } = await supabase.storage
+      .from("photos")
+      .upload(path, Buffer.from(bytes), { contentType: "application/pdf", upsert: true });
+    if (!uploadError) {
+      certUrl = supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
+    }
+  }
+
   return new Response(Buffer.from(bytes), {
     status: 200,
-    headers: { "Content-Type": "application/pdf" },
+    headers: {
+      "Content-Type": "application/pdf",
+      ...(certUrl ? { "X-Certificate-Url": certUrl } : {}),
+    },
   });
 }

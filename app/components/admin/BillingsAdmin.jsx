@@ -31,6 +31,7 @@ function buildCertificateData(b, data) {
   }];
 
   return {
+    billingId: b.id,
     docNumber: `${BRAND.code}-${b.id.slice(0, 8).toUpperCase()}`,
     issuedDate: shortDate(new Date().toISOString().slice(0, 10)),
     siteUnit: locOf(data, b.unitId, b.siteName, b.elevatorNo),
@@ -203,6 +204,8 @@ export default function BillingsAdmin({ data, setData }) {
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState(null);
   const [certTarget, setCertTarget] = useState(null);
+  // billings.certificate_pdf_url 컬럼 존재 여부 — 마이그레이션 122 실행 전엔 컬럼이 없다.
+  const certUrlReady = billings.some((b) => b.certificatePdfUrl !== undefined);
 
   const q = search.trim().toLowerCase();
   const rows = billings.filter((b) =>
@@ -216,7 +219,10 @@ export default function BillingsAdmin({ data, setData }) {
   const total = rows.reduce((sum, b) => sum + (b.isFree ? 0 : Number(b.cost) || 0), 0);
 
   async function saveBilling(b, patch) {
-    const { error } = await supabase.from("billings").update(patch).eq("id", b.id);
+    // 담당자·교체일자가 바뀌면 교체확인서 내용도 바뀌어야 하니, 저장해둔 PDF는 비워서
+    // 다음에 열 때 새로 만들어지게 한다.
+    const fullPatch = { ...patch, ...(certUrlReady ? { certificate_pdf_url: null } : {}) };
+    const { error } = await supabase.from("billings").update(fullPatch).eq("id", b.id);
     if (error) { alert("저장 실패: " + error.message); return; }
     setData((prev) => ({
       ...prev,
@@ -224,6 +230,7 @@ export default function BillingsAdmin({ data, setData }) {
         ...x,
         engineerId: patch.engineer_id, engineer: patch.engineer, replaceDate: patch.replace_date,
         ...("notes" in patch ? { notes: patch.notes } : {}),
+        ...(certUrlReady ? { certificatePdfUrl: null } : {}),
       } : x)),
     }));
   }
@@ -240,7 +247,7 @@ export default function BillingsAdmin({ data, setData }) {
   async function toggleFree(b, reason) {
     const next = !b.isFree;
     const notesReady = data.billings.some((x) => x.notes !== undefined);
-    const patch = { is_free: next };
+    const patch = { is_free: next, ...(certUrlReady ? { certificate_pdf_url: null } : {}) };
     if (next && reason && notesReady) {
       patch.notes = (b.notes ? b.notes + "\n" : "") + `[무상처리] ${reason}`;
     }
@@ -248,15 +255,24 @@ export default function BillingsAdmin({ data, setData }) {
     if (error) { alert("저장 실패: " + error.message); return; }
     setData((prev) => ({
       ...prev,
-      billings: prev.billings.map((x) => (x.id === b.id ? { ...x, isFree: next, ...(patch.notes !== undefined ? { notes: patch.notes } : {}) } : x)),
+      billings: prev.billings.map((x) => (x.id === b.id ? {
+        ...x, isFree: next,
+        ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
+        ...(certUrlReady ? { certificatePdfUrl: null } : {}),
+      } : x)),
     }));
   }
 
-  // 가격 조정 — 청구 상세내역에서 금액을 다시 입력했을 때 반영한다.
+  // 가격 조정 — 청구 상세내역에서 금액을 다시 입력했을 때 반영한다. 금액이 바뀌면 교체확인서에
+  // 찍힌 합계도 달라지니 저장해둔 PDF는 비워서 다음에 열 때 새로 만들어지게 한다.
   async function adjustPrice(b, cost) {
-    const { error } = await supabase.from("billings").update({ cost }).eq("id", b.id);
+    const patch = { cost, ...(certUrlReady ? { certificate_pdf_url: null } : {}) };
+    const { error } = await supabase.from("billings").update(patch).eq("id", b.id);
     if (error) { alert("저장 실패: " + error.message); return; }
-    setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, cost } : x)) }));
+    setData((prev) => ({
+      ...prev,
+      billings: prev.billings.map((x) => (x.id === b.id ? { ...x, cost, ...(certUrlReady ? { certificatePdfUrl: null } : {}) } : x)),
+    }));
   }
 
   return (
@@ -323,6 +339,12 @@ export default function BillingsAdmin({ data, setData }) {
         <ReplacementCertificateViewer
           cert={buildCertificateData(certTarget, data)}
           filenameBase={`교체확인서_${locOf(data, certTarget.unitId, certTarget.siteName, certTarget.elevatorNo).replace(/[\\/:*?"<>|\s]+/g, "")}`}
+          cachedUrl={certTarget.certificatePdfUrl}
+          onGenerated={(url) => {
+            if (!certUrlReady) return;
+            supabase.from("billings").update({ certificate_pdf_url: url }).eq("id", certTarget.id).then(() => {});
+            setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === certTarget.id ? { ...x, certificatePdfUrl: url } : x)) }));
+          }}
           onClose={() => setCertTarget(null)}
         />
       )}
