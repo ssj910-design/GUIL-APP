@@ -18,7 +18,7 @@ const BILL_STEP_TITLES = ["청구 정보", "증빙 사진", "완료 서명"]; //
 const draftKey = (todoId) => `guilBillingDraftV1:${todoId}`;
 const MAN_BILL_TITLES = ["현장·호기", "교체 내역·비용", "증빙 사진", "완료 서명"]; // 직접 입력(4-step)
 
-export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
+export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quoteRequests = [] }) {
   const sites = useContext(SitesContext);
   const allUnits = useContext(UnitsContext);
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
@@ -66,7 +66,16 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
 
   const selected = todos.find((t) => t.id === selectedId);
   // 견적 연동 건은 이미 견적서에 수리비가 정해져 있어, 직접 입력 대신 "견적서 참조"로 고정합니다.
-  const isQuoteBilling = selected?.source === "quote";
+  // 다만 외주 처리된 견적건은 관리자가 대신 청구를 제출하는 것이라 실제 금액을 이 시스템에도
+  // 남겨야 해서(부품교체·공사내역에 반영) 일반 견적 청구와 다르게 취급합니다.
+  const isQuoteBilling = selected?.source === "quote" && !selected?.isOutsourced;
+  // 외주 견적건은 승인된 견적서 품목(자재·수량·금액)을 그대로 청구 화면에 프리필합니다.
+  const quoteBillingItems = selected?.source === "quote" && selected?.isOutsourced
+    ? (quoteRequests.find((q) => q.id === selected.quoteRequestId)?.quoteItems ?? [])
+        .filter((it) => it.name?.trim())
+        .map((it) => ({ name: it.name, qty: it.qty || null, amount: Math.round(Number(it.qty || 0) * Number(it.unitPrice || 0)) }))
+    : null;
+  const [vendorNameInput, setVendorNameInput] = useState("");
   // 청구 대상이 바뀌면, 그 건에 임시저장해둔 내용이 있으면 그대로 이어서 하고(사진 찍다 앱을
   // 나갔다 돌아온 경우 등), 없으면 관리자가 지급 확정한 금액으로 미리 채운 빈 폼으로 시작합니다.
   useEffect(() => {
@@ -89,16 +98,19 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       setAbsentConfirmed(draft.absentConfirmed ?? false);
       setSignerName(draft.signerName ?? "");
       setSignerPhone(draft.signerPhone ?? "");
+      setVendorNameInput(draft.vendorName ?? "");
       toastBill("임시저장된 내용을 불러왔습니다", true);
     } else {
-      setMaterialCost(selected?.billingAmount != null ? String(selected.billingAmount) : "");
+      const quoteTotal = quoteBillingItems?.length ? quoteBillingItems.reduce((sum, it) => sum + (it.amount || 0), 0) : null;
+      setMaterialCost(quoteTotal != null ? String(quoteTotal) : selected?.billingAmount != null ? String(selected.billingAmount) : "");
       setSignerName("");
       setSignerPhone("");
+      setVendorNameInput(selected?.vendorName ?? "");
     }
   }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
   // 관리자가 지급 확정한 부품이 2개 이상이면 부품별로 전/후 사진을 따로 받는다 — 1개면
-  // 나눌 이유가 없어 지금처럼 통합 업로더를 그대로 쓴다.
-  const billingParts = selected?.billingPartRows?.length > 1 ? selected.billingPartRows : null;
+  // 나눌 이유가 없어 지금처럼 통합 업로더를 그대로 쓴다. 외주 견적건은 견적 품목을 우선한다.
+  const billingParts = quoteBillingItems?.length > 1 ? quoteBillingItems : selected?.billingPartRows?.length > 1 ? selected.billingPartRows : null;
   const manualPhotosOk = manualPhotos.before.length > 0 && manualPhotos.after.length > 0;
   const manualApprovalOk = manualAbsentMode
     ? manualApproverName.trim() && manualApproverPhone.replace(/\D/g, "").length >= 9 && manualAbsentConfirmed
@@ -110,6 +122,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     if (step === 0) {
       if (!selected) return "청구 대상 건을 선택해주세요";
       if (!isQuoteBilling && !(Number(materialCost) > 0)) return "수리비를 입력해주세요";
+      if (selected?.isOutsourced && !vendorNameInput.trim()) return "작업 업체명을 입력해주세요";
     }
     if (step === 1) {
       if (billingParts) {
@@ -186,6 +199,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       localStorage.setItem(draftKey(selected.id), JSON.stringify({
         billStep, materialCost, materialReplaceDate, materialPhotos, partPhotos,
         signatureUrl, absentMode, approverName, approverPhone, absentConfirmed, signerName, signerPhone,
+        vendorName: vendorNameInput,
       }));
       toastBill("임시저장했습니다", true);
     } catch {
@@ -246,6 +260,8 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       approverName: absentMode ? approverName.trim() : signerName.trim(),
       approverPhone: absentMode ? approverPhone.trim() : signerPhone.trim(),
       approvedAt: new Date().toISOString(),
+      isOutsourced: !!selected.isOutsourced,
+      vendorName: selected.isOutsourced ? vendorNameInput.trim() : null,
     });
     // ★ 청구 저장 성공 후에만 할일 완료 처리 — insert 실패 시 "완료됐는데 청구 없음"(자재 로스) 방지 (P1-2)
     if (!ok) return;
@@ -271,6 +287,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     setAbsentConfirmed(false);
     setSignerName("");
     setSignerPhone("");
+    setVendorNameInput("");
     setBillStep(0);
     setTimeout(() => setSubmitted(null), 2600);
   }
@@ -361,6 +378,17 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                       <span className="text-xs text-blue-700 font-semibold">지급일 {selected.assignedDate} 기준</span>
                       <DDay dueDate={selected.dueDate} />
                     </div>
+                  )}
+                  {selected?.isOutsourced && (
+                    <Field label="작업 업체*">
+                      <input
+                        type="text"
+                        className={inputCls}
+                        placeholder="예: OO엘리베이터설비"
+                        value={vendorNameInput}
+                        onChange={(e) => setVendorNameInput(e.target.value)}
+                      />
+                    </Field>
                   )}
                   <Field label="교체일자">
                     <input

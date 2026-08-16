@@ -146,6 +146,9 @@ export default function App() {
   // todos.billing_part_rows 컬럼 존재 여부 — 마이그레이션 112 실행 전엔 컬럼이 없어, 있을 때만
   // 관리자가 지급 확정한 부품별 구조화 행(이름·수량·금액)을 같이 쓴다.
   const billingPartRowsReady = todos.some((t) => t.billingPartRows !== undefined);
+  // todos.is_outsourced / billings.is_outsourced 등 — 마이그레이션 121 실행 전엔 컬럼이 없다.
+  const todoOutsourcedReady = todos.some((t) => t.isOutsourced !== undefined);
+  const billingOutsourcedReady = billings.some((b) => b.isOutsourced !== undefined);
   // 지급 사진을 여러 장 연달아 올릴 때, setState 업데이터 함수가 React 렌더링 타이밍에 따라
   // 아직 반영되지 않은 상태를 기준으로 계산될 수 있어(경쟁 상태) ref에 최신값을 직접 보관합니다.
   const supplyPhotoUrlsRef = useRef({ material: {}, quote: {}, restock: {} });
@@ -1181,7 +1184,7 @@ export default function App() {
     }
   }
 
-  async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId, signatureUrl, approvalMethod, approverName, approverPhone, approvedAt, partPhotos }) {
+  async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId, signatureUrl, approvalMethod, approverName, approverPhone, approvedAt, partPhotos, isOutsourced, vendorName }) {
     // 같은 자재신청 건에 이미 청구기록이 있으면 막는다 — 할 일 완료 처리가 실패해 재시도하는
     // 과정에서 청구 자체는 또 저장돼버리는(중복청구) 경로를 막기 위함.
     if (materialRequestId) {
@@ -1219,6 +1222,8 @@ export default function App() {
       approverPhone: approverPhone || null,
       approvedAt: approvedAt || null,
       partPhotos: partPhotos?.length ? partPhotos : null,
+      isOutsourced: !!isOutsourced,
+      vendorName: isOutsourced ? (vendorName || null) : null,
     };
     const { error } = await supabase.from("billings").insert({
       id: newBilling.id,
@@ -1242,6 +1247,7 @@ export default function App() {
         approved_at: newBilling.approvedAt,
       } : {}),
       ...(billingPartPhotosReady ? { part_photos: newBilling.partPhotos } : {}),
+      ...(billingOutsourcedReady ? { is_outsourced: newBilling.isOutsourced, vendor_name: newBilling.vendorName } : {}),
       ...(v2Ready ? {
         unit_id: billUnitId,
         engineer_id: profileIdByName(profilesAll, profile.name),
@@ -1808,7 +1814,7 @@ export default function App() {
   // assignees(배열)를 넘기면 신청자 외에 실제 시공 기사를 2명 이상 지정할 수 있고,
   // 각 담당자마다 할 일이 하나씩 생성됩니다 (같은 quoteRequestId를 공유 — 한 명이 비용청구를
   // 하면 나머지 담당자의 할 일도 함께 자동완료됩니다).
-  async function handleCompleteQuoteSupply(quoteId, assignees, dueDate, description) {
+  async function handleCompleteQuoteSupply(quoteId, assignees, dueDate, description, isOutsourced, vendorName) {
     const q = quoteRequests.find((x) => x.id === quoteId);
     if (!q) return;
     const finalAssignees = assignees?.length ? assignees : [q.engineer];
@@ -1828,6 +1834,8 @@ export default function App() {
       dueDate: finalDueDate,
       done: false,
       description: description || null,
+      isOutsourced: !!isOutsourced,
+      vendorName: isOutsourced ? (vendorName || null) : null,
     }));
     // ★ 할 일을 먼저 만든 뒤 견적 상태를 바꾼다 — 자재 지급완료(handleSupplyComplete)와 동일 패턴.
     // id가 견적당 고정이라 upsert면 재시도도 안전하다.
@@ -1846,6 +1854,7 @@ export default function App() {
           due_date: t.dueDate,
           done: t.done,
           description: t.description,
+          ...(todoOutsourcedReady ? { is_outsourced: t.isOutsourced, vendor_name: t.vendorName } : {}),
           ...(v2Ready ? {
             unit_id: q.unitId ?? unitIdFor(units, q.siteId, q.elevatorNo),
             assignee_id: profileIdByName(profilesAll, t.assignee),
@@ -1882,11 +1891,12 @@ export default function App() {
   // 담당 기사 구성이 바뀐 만큼만 할 일을 정리한다: 빠진 담당자는 할 일 삭제, 새로 추가된
   // 담당자는 할 일 신규 생성, 그대로 남는 담당자는 새 기한/내용으로 갱신 (admin 콘솔의
   // handleQuoteEdit과 동일한 로직 — 새 할 일을 무작정 다시 만들지 않는다).
-  async function handleQuoteSupplyEdit(quoteId, assignees, dueDate, description) {
+  async function handleQuoteSupplyEdit(quoteId, assignees, dueDate, description, isOutsourced, vendorName) {
     const q = quoteRequests.find((x) => x.id === quoteId);
     if (!q) return;
     const finalAssignees = assignees?.length ? assignees : [q.engineer];
     const finalDueDate = dueDate || addDays(TODAY_STR, 30);
+    const finalVendorName = isOutsourced ? (vendorName || null) : null;
 
     const existingTodos = todos.filter((t) => t.quoteRequestId === quoteId);
     const kept = existingTodos.filter((t) => finalAssignees.includes(t.assignee));
@@ -1899,7 +1909,10 @@ export default function App() {
     }
     if (kept.length) {
       const { error: keepError } = await supabase.from("todos")
-        .update({ due_date: finalDueDate, description: description || null })
+        .update({
+          due_date: finalDueDate, description: description || null,
+          ...(todoOutsourcedReady ? { is_outsourced: !!isOutsourced, vendor_name: finalVendorName } : {}),
+        })
         .in("id", kept.map((t) => t.id));
       if (keepError) { alert("할 일 수정 실패: " + keepError.message); return; }
     }
@@ -1918,6 +1931,8 @@ export default function App() {
       dueDate: finalDueDate,
       done: false,
       description: description || null,
+      isOutsourced: !!isOutsourced,
+      vendorName: finalVendorName,
     }));
     if (newTodos.length) {
       const { error: insError } = await supabase.from("todos").insert(
@@ -1925,6 +1940,7 @@ export default function App() {
           id: t.id, quote_request_id: t.quoteRequestId, source: t.source, title: t.title,
           site_name: t.siteName, elevator_no: t.elevatorNo, part: t.part, assignee: t.assignee,
           assigned_date: t.assignedDate, due_date: t.dueDate, done: t.done, description: t.description,
+          ...(todoOutsourcedReady ? { is_outsourced: t.isOutsourced, vendor_name: t.vendorName } : {}),
           ...(v2Ready ? {
             unit_id: q.unitId ?? unitIdFor(units, q.siteId, q.elevatorNo),
             assignee_id: profileIdByName(profilesAll, t.assignee),
@@ -1938,7 +1954,7 @@ export default function App() {
       ...newTodos,
       ...prev
         .filter((t) => !toRemove.some((r) => r.id === t.id))
-        .map((t) => (kept.some((k) => k.id === t.id) ? { ...t, dueDate: finalDueDate, description: description || null } : t)),
+        .map((t) => (kept.some((k) => k.id === t.id) ? { ...t, dueDate: finalDueDate, description: description || null, isOutsourced: !!isOutsourced, vendorName: finalVendorName } : t)),
     ]);
   }
 
@@ -2469,7 +2485,7 @@ export default function App() {
           {tab === "inspection" && <InspectionTab inspections={inspections} />}
           {tab === "material" && <MaterialTab requests={materialRequests} onAddMaterialRequest={handleAddMaterialRequest} onCancelMaterialRequest={handleCancelMaterialRequest} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} onAddQuoteRequest={handleAddQuoteRequest} onCancelQuoteRequest={handleCancelQuoteRequest} restockRequests={restockRequests} kitStock={kitStock} onReceiveRestock={handleReceiveRestock} focusRestockHistory={focusRestockHistory} onRestockHistoryHandled={() => setFocusRestockHistory(false)} />}
           {tab === "inventory" && <InventoryTab products={inventoryProducts} movements={inventoryStockMovements} onCreateProduct={handleCreateInventoryProduct} onSaveProduct={handleSaveInventoryProduct} onDeleteProduct={handleDeleteInventoryProduct} onAddMovement={handleAddInventoryMovement} />}
-          {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} />}
+          {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} quoteRequests={quoteRequests} />}
           {tab === "todo" && (
             <TodoTab
               todos={todos}

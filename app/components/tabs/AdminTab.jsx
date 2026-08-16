@@ -261,7 +261,9 @@ function QuoteDetailActions({ q, engineerNames, onAdvanceQuote, onOpenWizard, on
   const [description, setDescription] = useState("");
   const [advanced, setAdvanced] = useState(false);
   const [sendModalOpen, setSendModalOpen] = useState(false);
-  const canComplete = assignees.length > 0;
+  const [outsourced, setOutsourced] = useState(false);
+  const [vendorName, setVendorName] = useState("");
+  const canComplete = assignees.length > 0 && (!outsourced || vendorName.trim());
   const alreadySent = !!(q.emailSentAt || q.kakaoSentAt);
 
   if (q.status === "요청접수") {
@@ -309,6 +311,16 @@ function QuoteDetailActions({ q, engineerNames, onAdvanceQuote, onOpenWizard, on
               <label className="text-[10px] font-bold text-slate-400 block mb-1">담당 기사 (2명 이상 가능 · 기본 신청자)</label>
               <MultiAssigneeSelect values={assignees} options={engineerNames} onChange={setAssignees} />
             </div>
+            <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
+              <input type="checkbox" checked={outsourced} onChange={(e) => setOutsourced(e.target.checked)} />
+              외주 처리 (작업 업체에 의뢰)
+            </label>
+            {outsourced && (
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">작업 업체명</label>
+                <input className={inputCls} placeholder="예: OO엘리베이터설비" value={vendorName} onChange={(e) => setVendorName(e.target.value)} />
+              </div>
+            )}
             <div>
               <label className="text-[10px] font-bold text-slate-400 block mb-1">할 일 기한</label>
               <input type="date" className={inputCls} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
@@ -319,9 +331,9 @@ function QuoteDetailActions({ q, engineerNames, onAdvanceQuote, onOpenWizard, on
             </div>
           </div>
         )}
-        {!canComplete && <p className="text-[10px] text-slate-400 mt-2">담당 기사를 1명 이상 선택해주세요</p>}
+        {!canComplete && <p className="text-[10px] text-slate-400 mt-2">{assignees.length === 0 ? "담당 기사를 1명 이상 선택해주세요" : "작업 업체명을 입력해주세요"}</p>}
         <button
-          onClick={() => canComplete && onCompleteQuoteSupply(q.id, assignees, dueDate, description)}
+          onClick={() => canComplete && onCompleteQuoteSupply(q.id, assignees, dueDate, description, outsourced, vendorName.trim())}
           disabled={!canComplete}
           className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg bg-blue-700 disabled:bg-slate-300 text-white active:bg-blue-800"
         >
@@ -980,13 +992,15 @@ function QuoteSupplyEditForm({ q, existingTodos, engineerNames, onSubmit, onAtta
   const [assignees, setAssignees] = useState(existingTodos.length ? existingTodos.map((t) => t.assignee) : [q.engineer]);
   const [dueDate, setDueDate] = useState(existingTodos[0]?.dueDate ?? addDays(TODAY_STR, 30));
   const [description, setDescription] = useState(existingTodos[0]?.description ?? "");
+  const [outsourced, setOutsourced] = useState(!!existingTodos[0]?.isOutsourced);
+  const [vendorName, setVendorName] = useState(existingTodos[0]?.vendorName ?? "");
   const [saving, setSaving] = useState(false);
-  const canSave = assignees.length > 0;
+  const canSave = assignees.length > 0 && (!outsourced || vendorName.trim());
 
   async function submit() {
     if (!canSave) return;
     setSaving(true);
-    await onSubmit(assignees, dueDate, description);
+    await onSubmit(assignees, dueDate, description, outsourced, vendorName.trim());
     setSaving(false);
   }
 
@@ -1014,6 +1028,17 @@ function QuoteSupplyEditForm({ q, existingTodos, engineerNames, onSubmit, onAtta
         <MultiAssigneeSelect values={assignees} options={engineerNames} onChange={setAssignees} />
         {assignees.length === 0 && <p className="text-[10px] text-slate-400 mt-1">담당 기사를 1명 이상 선택해주세요</p>}
       </div>
+
+      <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
+        <input type="checkbox" checked={outsourced} onChange={(e) => setOutsourced(e.target.checked)} />
+        외주 처리 (작업 업체에 의뢰)
+      </label>
+      {outsourced && (
+        <div>
+          <label className="text-[10px] font-bold text-slate-400 block mb-1">작업 업체명</label>
+          <input className={inputCls} placeholder="예: OO엘리베이터설비" value={vendorName} onChange={(e) => setVendorName(e.target.value)} />
+        </div>
+      )}
 
       <div>
         <label className="text-[10px] font-bold text-slate-400 block mb-1">할 일 기한</label>
@@ -1094,8 +1119,8 @@ function QuoteSupplyHistoryScreen({ completed, todos, engineerNames, onQuoteSupp
             engineerNames={engineerNames}
             onAttachQuotePhoto={onAttachQuotePhoto}
             onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
-            onSubmit={async (assignees, dueDate, description) => {
-              await onQuoteSupplyEdit(editTarget.id, assignees, dueDate, description);
+            onSubmit={async (assignees, dueDate, description, outsourced, vendorName) => {
+              await onQuoteSupplyEdit(editTarget.id, assignees, dueDate, description, outsourced, vendorName);
               setEditTarget(null);
             }}
           />

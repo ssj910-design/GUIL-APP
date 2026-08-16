@@ -234,6 +234,8 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
   // todos.billing_part_rows 컬럼 존재 여부 — 마이그레이션 112 실행 전엔 컬럼이 없어, 있을 때만
   // 부품별 구조화 행(이름·수량·금액)을 같이 쓴다.
   const billingPartRowsReady = (data.todos ?? []).some((t) => t.billingPartRows !== undefined);
+  // todos.is_outsourced 컬럼 존재 여부 — 마이그레이션 121 실행 전엔 컬럼이 없다.
+  const todoOutsourcedReady = (data.todos ?? []).some((t) => t.isOutsourced !== undefined);
 
   const query = search.trim().toLowerCase();
   const materialRequests = allMaterialRequests.filter((m) =>
@@ -369,8 +371,9 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
     }));
   }
 
-  async function handleQuoteSupplyComplete(quote, { assigneeIds, photoUrls, dueDate, description }) {
+  async function handleQuoteSupplyComplete(quote, { assigneeIds, photoUrls, dueDate, description, isOutsourced, vendorName }) {
     const unitId = quote.unitId ?? unitIdFor(data.units, quote.siteId, quote.elevatorNo);
+    const finalVendorName = isOutsourced ? (vendorName || null) : null;
     const newTodos = assigneeIds.map((assigneeId, idx) => {
       const engineer = (data.profiles ?? []).find((p) => p.id === assigneeId);
       return {
@@ -389,6 +392,8 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         unitId,
         assigneeId,
         description: description || null,
+        isOutsourced: !!isOutsourced,
+        vendorName: finalVendorName,
       };
     });
     // 할 일을 먼저 upsert(=재시도 시 같은 id로 다시 써도 안전)한 뒤 상태를 바꾼다 — 자재
@@ -399,6 +404,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         site_name: t.siteName, elevator_no: t.elevatorNo, part: t.part,
         assignee: t.assignee, assigned_date: t.assignedDate, due_date: t.dueDate, done: t.done,
         unit_id: t.unitId, assignee_id: t.assigneeId, description: t.description,
+        ...(todoOutsourcedReady ? { is_outsourced: t.isOutsourced, vendor_name: t.vendorName } : {}),
       }))
     );
     if (todoError) { alert("할 일 생성 실패: " + todoError.message); return; }
@@ -431,7 +437,8 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
   // 자재지급완료(표시상 지급완료)된 견적요청 수정 — 사진과 담당 기사 구성을 바꾼다.
   // 담당 기사가 빠지면 그 사람 할 일은 삭제하고, 새로 추가되면 할 일을 새로 만들고,
   // 그대로 남는 담당자는 새로 입력한 기한/내용으로 갱신한다.
-  async function handleQuoteEdit(quote, { assigneeIds, photoUrls, dueDate, description }) {
+  async function handleQuoteEdit(quote, { assigneeIds, photoUrls, dueDate, description, isOutsourced, vendorName }) {
+    const finalVendorName = isOutsourced ? (vendorName || null) : null;
     const patch = {
       has_supply_photo: photoUrls.length > 0,
       supply_photo_urls: photoUrls.length ? photoUrls : null,
@@ -452,7 +459,10 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
     if (kept.length) {
       const { error: keepError } = await supabase
         .from("todos")
-        .update({ due_date: dueDate, description: description || null })
+        .update({
+          due_date: dueDate, description: description || null,
+          ...(todoOutsourcedReady ? { is_outsourced: !!isOutsourced, vendor_name: finalVendorName } : {}),
+        })
         .in("id", kept.map((t) => t.id));
       if (keepError) { alert("할 일 수정 실패: " + keepError.message); return; }
     }
@@ -477,6 +487,8 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         unitId,
         assigneeId,
         description: description || null,
+        isOutsourced: !!isOutsourced,
+        vendorName: finalVendorName,
       };
     });
     if (newTodos.length) {
@@ -486,6 +498,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
           site_name: t.siteName, elevator_no: t.elevatorNo, part: t.part,
           assignee: t.assignee, assigned_date: t.assignedDate, due_date: t.dueDate, done: t.done,
           unit_id: t.unitId, assignee_id: t.assigneeId, description: t.description,
+          ...(todoOutsourcedReady ? { is_outsourced: t.isOutsourced, vendor_name: t.vendorName } : {}),
         }))
       );
       if (todoError) { alert("할 일 생성 실패: " + todoError.message); return; }
@@ -504,7 +517,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         ...newTodos,
         ...prev.todos
           .filter((t) => !toRemove.some((r) => r.id === t.id))
-          .map((t) => (kept.some((k) => k.id === t.id) ? { ...t, dueDate, description: description || null } : t)),
+          .map((t) => (kept.some((k) => k.id === t.id) ? { ...t, dueDate, description: description || null, isOutsourced: !!isOutsourced, vendorName: finalVendorName } : t)),
       ],
     }));
   }
@@ -944,6 +957,8 @@ function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
   const [dueDate, setDueDate] = useState(existingTodosForQuote[0]?.dueDate ?? addDays(TODAY_STR, 30));
   const [description, setDescription] = useState(existingTodosForQuote[0]?.description ?? "");
   const [photos, setPhotos] = useState(quote.supplyPhotoUrls ?? []);
+  const [outsourced, setOutsourced] = useState(!!existingTodosForQuote[0]?.isOutsourced);
+  const [vendorName, setVendorName] = useState(existingTodosForQuote[0]?.vendorName ?? "");
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -968,8 +983,9 @@ function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
 
   async function submit() {
     if (assigneeIds.length === 0) return;
+    if (outsourced && !vendorName.trim()) return;
     setSaving(true);
-    await onSubmit({ assigneeIds, photoUrls: photos, dueDate, description });
+    await onSubmit({ assigneeIds, photoUrls: photos, dueDate, description, isOutsourced: outsourced, vendorName: vendorName.trim() });
     setSaving(false);
   }
 
@@ -1011,6 +1027,18 @@ function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
           {assigneeIds.length === 0 && <p className="text-[10px] text-red-500 mt-1">담당 기사를 1명 이상 선택해주세요</p>}
         </div>
 
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={outsourced} onChange={(e) => setOutsourced(e.target.checked)} />
+          외주 처리 (작업 업체에 의뢰)
+        </label>
+        {outsourced && (
+          <div>
+            <label className="text-xs font-bold text-slate-400 block mb-1">작업 업체명</label>
+            <input className={inputCls} placeholder="예: OO엘리베이터설비" value={vendorName} onChange={(e) => setVendorName(e.target.value)} />
+            {!vendorName.trim() && <p className="text-[10px] text-red-500 mt-1">작업 업체명을 입력해주세요</p>}
+          </div>
+        )}
+
         <div>
           <label className="text-xs font-bold text-slate-400 block mb-1">할 일 기한</label>
           <DateTextInput key={dueDate} value={dueDate} onChange={setDueDate} />
@@ -1029,7 +1057,7 @@ function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
 
         <button
           onClick={submit}
-          disabled={saving || uploading || assigneeIds.length === 0}
+          disabled={saving || uploading || assigneeIds.length === 0 || (outsourced && !vendorName.trim())}
           className="w-full bg-blue-700 disabled:bg-slate-300 text-white text-sm font-bold py-2.5 rounded-lg"
         >
           {saving ? "처리 중..." : isEdit ? "수정 저장" : "자재 지급 완료 체크"}

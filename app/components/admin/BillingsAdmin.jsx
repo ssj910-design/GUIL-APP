@@ -35,7 +35,7 @@ function buildCertificateData(b, data) {
     issuedDate: shortDate(new Date().toISOString().slice(0, 10)),
     siteUnit: locOf(data, b.unitId, b.siteName, b.elevatorNo),
     address: addressOf(data, b.unitId, b.siteName),
-    engineerName: personOf(data, b.engineerId, b.engineer),
+    engineerName: b.isOutsourced ? (b.vendorName || "-") : personOf(data, b.engineerId, b.engineer),
     replaceDate: shortDate(b.replaceDate),
     items,
     totalCost: b.cost,
@@ -131,10 +131,14 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
           </div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">제출일</p><p className="font-semibold text-slate-800">{shortDate(b.submittedAt)}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">현장 담당자 연락처</p><p className="font-semibold text-slate-800">{b.contactPhone || "-"}</p></div>
+          {b.isOutsourced && (
+            <div><p className="text-xs font-bold text-slate-400 mb-1">작업 업체</p><p className="font-semibold text-slate-800">{b.vendorName || "-"}</p></div>
+          )}
           <div>
             {b.materialRequestId || b.type === "material"
               ? <StatusBadge tone="blue">자재 지급건</StatusBadge>
               : <StatusBadge tone="slate">직접 입력</StatusBadge>}
+            {b.isOutsourced && <span className="ml-1.5"><StatusBadge tone="purple">외주</StatusBadge></span>}
           </div>
         </div>
 
@@ -204,7 +208,8 @@ export default function BillingsAdmin({ data, setData }) {
     !q ||
     locOf(data, b.unitId, b.siteName, b.elevatorNo).toLowerCase().includes(q) ||
     (b.part ?? "").toLowerCase().includes(q) ||
-    personOf(data, b.engineerId, b.engineer).toLowerCase().includes(q)
+    personOf(data, b.engineerId, b.engineer).toLowerCase().includes(q) ||
+    (b.vendorName ?? "").toLowerCase().includes(q)
   );
   // 무상 처리된 건은 합계에서 제외한다.
   const total = rows.reduce((sum, b) => sum + (b.isFree ? 0 : Number(b.cost) || 0), 0);
@@ -270,7 +275,13 @@ export default function BillingsAdmin({ data, setData }) {
           <tr key={b.id} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setDetail(b)}>
             <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{locOf(data, b.unitId, b.siteName, b.elevatorNo)}</td>
             <td className="px-3 py-2.5 whitespace-nowrap">{siteManagerOf(data, b.unitId, b.siteName)}</td>
-            <td className="px-3 py-2.5 whitespace-nowrap">{personOf(data, b.engineerId, b.engineer)}</td>
+            <td className="px-3 py-2.5 whitespace-nowrap">
+              {b.isOutsourced ? (
+                <span className="inline-flex items-center gap-1">
+                  <StatusBadge tone="purple">외주</StatusBadge> {b.vendorName || "-"}
+                </span>
+              ) : personOf(data, b.engineerId, b.engineer)}
+            </td>
             <td className="px-3 py-2.5 text-slate-600">{b.part}</td>
             <td className="px-3 py-2.5 whitespace-nowrap">
               {b.isFree ? (
