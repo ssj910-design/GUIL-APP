@@ -13,17 +13,19 @@ async function renderPdfToCanvases(blobUrl) {
   const pdfjsLib = await import("pdfjs-dist");
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
   const doc = await pdfjsLib.getDocument(blobUrl).promise;
-  const canvases = [];
-  for (let i = 1; i <= doc.numPages; i++) {
+  // scale 2는 인쇄용 수준으로 과하다 — 화면(최대 max-w-3xl)에서는 1.5로도 충분히 선명하고,
+  // 캔버스가 작아지는 만큼 렌더링·PNG 인코딩도 빨라진다. 페이지도 순서대로 기다리지 않고
+  // 한꺼번에 렌더링한다(대부분 1~2페이지라 체감은 작지만 여러 페이지일 때 도움이 된다).
+  const pageNums = Array.from({ length: doc.numPages }, (_, i) => i + 1);
+  return Promise.all(pageNums.map(async (i) => {
     const page = await doc.getPage(i);
-    const viewport = page.getViewport({ scale: 2 });
+    const viewport = page.getViewport({ scale: 1.5 });
     const canvas = document.createElement("canvas");
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
-    canvases.push(canvas);
-  }
-  return canvases;
+    return canvas;
+  }));
 }
 
 function triggerDownload(blob, filename) {
