@@ -338,7 +338,7 @@ export default function BillingsAdmin({ data, setData }) {
       {certTarget && (
         <ReplacementCertificateViewer
           cert={buildCertificateData(certTarget, data)}
-          filenameBase={`교체확인서_${locOf(data, certTarget.unitId, certTarget.siteName, certTarget.elevatorNo).replace(/[\\/:*?"<>|\s]+/g, "")}`}
+          filenameBase="교체확인서(교체내역 및 교체사진)"
           cachedUrl={certTarget.certificatePdfUrl}
           onGenerated={(url) => {
             if (!certUrlReady) return;
