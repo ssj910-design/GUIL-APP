@@ -15,6 +15,7 @@ import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 /* ------------------------------------------------------------------ */
 
 const BILL_STEP_TITLES = ["청구 정보", "증빙 사진", "완료 서명"]; // 자재 지급건(3-step)
+const draftKey = (todoId) => `guilBillingDraftV1:${todoId}`;
 const MAN_BILL_TITLES = ["현장·호기", "교체 내역·비용", "증빙 사진"]; // 직접 입력(3-step)
 
 export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
@@ -56,14 +57,33 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const selected = todos.find((t) => t.id === selectedId);
   // 견적 연동 건은 이미 견적서에 수리비가 정해져 있어, 직접 입력 대신 "견적서 참조"로 고정합니다.
   const isQuoteBilling = selected?.source === "quote";
-  // 청구 대상이 바뀌면 관리자가 지급 확정한 금액으로 미리 채워둔다 — 맞으면 그대로, 다르면 수정.
+  // 청구 대상이 바뀌면, 그 건에 임시저장해둔 내용이 있으면 그대로 이어서 하고(사진 찍다 앱을
+  // 나갔다 돌아온 경우 등), 없으면 관리자가 지급 확정한 금액으로 미리 채운 빈 폼으로 시작합니다.
   useEffect(() => {
-    setMaterialCost(selected?.billingAmount != null ? String(selected.billingAmount) : "");
+    if (!selectedId) return;
+    let draft = null;
+    try {
+      const raw = localStorage.getItem(draftKey(selectedId));
+      if (raw) draft = JSON.parse(raw);
+    } catch { /* 손상된 임시저장은 무시하고 빈 폼으로 시작 */ }
+    if (draft) {
+      setBillStep(draft.billStep ?? 0);
+      setMaterialCost(draft.materialCost ?? "");
+      setMaterialReplaceDate(draft.materialReplaceDate ?? TODAY_STR);
+      setMaterialPhotos(draft.materialPhotos ?? { before: [], after: [] });
+      setPartPhotos(draft.partPhotos ?? {});
+      setSignatureUrl(draft.signatureUrl ?? null);
+      setAbsentMode(draft.absentMode ?? false);
+      setApproverName(draft.approverName ?? "");
+      setApproverPhone(draft.approverPhone ?? "");
+      setAbsentConfirmed(draft.absentConfirmed ?? false);
+      setSignerPhone(draft.signerPhone ?? "");
+      toastBill("임시저장된 내용을 불러왔습니다", true);
+    } else {
+      setMaterialCost(selected?.billingAmount != null ? String(selected.billingAmount) : "");
+      setSignerPhone("");
+    }
   }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
-  // 청구 대상이 바뀌면 이전 건의 서명자 연락처가 남지 않도록 비워, 매번 직접 입력하게 합니다.
-  useEffect(() => {
-    setSignerPhone("");
-  }, [selectedId]);
   // 관리자가 지급 확정한 부품이 2개 이상이면 부품별로 전/후 사진을 따로 받는다 — 1개면
   // 나눌 이유가 없어 지금처럼 통합 업로더를 그대로 쓴다.
   const billingParts = selected?.billingPartRows?.length > 1 ? selected.billingPartRows : null;
@@ -126,6 +146,21 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     });
   }
 
+  // 증빙사진 이후 단계(사진·서명)는 현장에서 중간에 끊기기 쉬워, 지금까지 입력한 내용을
+  // 기기에 임시저장해뒀다가 이 건으로 돌아오면 자동으로 이어서 하게 합니다.
+  function saveDraft() {
+    if (!selected) return;
+    try {
+      localStorage.setItem(draftKey(selected.id), JSON.stringify({
+        billStep, materialCost, materialReplaceDate, materialPhotos, partPhotos,
+        signatureUrl, absentMode, approverName, approverPhone, absentConfirmed, signerPhone,
+      }));
+      toastBill("임시저장했습니다", true);
+    } catch {
+      toastBill("임시저장에 실패했습니다");
+    }
+  }
+
   async function submitMaterial() {
     if (!selected) return;
     // 견적 지급 시 담당자를 2명 이상 지정한 경우, 같은 quoteRequestId(또는 materialRequestId)를
@@ -181,6 +216,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     });
     // ★ 청구 저장 성공 후에만 할일 완료 처리 — insert 실패 시 "완료됐는데 청구 없음"(자재 로스) 방지 (P1-2)
     if (!ok) return;
+    try { localStorage.removeItem(draftKey(selected.id)); } catch { /* 임시저장 정리 실패는 무시 */ }
     // 할일 완료 처리 자체가 실패할 수도 있다 — 이 결과를 확인 안 하면 DB엔 아직 미완료인데
     // 화면만 완료로 보여서, 그 할일이 다시 청구 대상 목록에 남아 재청구(중복청구) 유혹이 생긴다.
     const { error: todoError } = await supabase.from("todos").update({ done: true }).in("id", idsToComplete);
@@ -473,6 +509,9 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
               <div className="flex gap-2 mt-2">
                 {billStep > 0 && (
                   <button type="button" onClick={() => setBillStep(billStep - 1)} className="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200">이전</button>
+                )}
+                {billStep >= 1 && (
+                  <button type="button" onClick={saveDraft} className="px-4 py-3 rounded-xl text-sm font-bold text-blue-700 border border-blue-200 bg-blue-50">임시저장</button>
                 )}
                 {billStep < 2 ? (
                   <button type="button" onClick={() => { const err = matStepError(billStep); if (err) { toastBill(err); return; } setBillStep(billStep + 1); }} className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 active:bg-blue-800">다음</button>
