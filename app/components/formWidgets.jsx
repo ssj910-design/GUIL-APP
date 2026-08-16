@@ -53,7 +53,7 @@ export function SiteSearchSelect({ value, onChange, placeholder = "현장명을 
 }
 
 
-export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = true, uploadFolder, onUploaded }) {
+export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = true, uploadFolder, onUploaded, compactHint = false }) {
   // iOS Safari는 accept="image/*" 입력칸에 multiple까지 붙으면(여러 장 한꺼번에 선택) 카메라
   // 촬영 옵션을 아예 빼고 곧장 사진 라이브러리 선택 화면으로 건너뛴다 — "촬영하면서 동시에
   // 여러 장 선택"은 말이 안 되기 때문. 그래서 카메라 입력칸(한 장, capture)과 사진첩 입력칸
@@ -122,7 +122,9 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
         )}
       </div>
       <p className={`text-[10px] ${required && photos.length === 0 ? "text-red-500 font-semibold" : "text-slate-400"}`}>
-        {label} · {required ? "최소 1장 필수, " : ""}장수 제한 없음 · 현재 {photos.length}장
+        {compactHint
+          ? (required ? "최소 1장 필수" : "")
+          : `${label} · ${required ? "최소 1장 필수, " : ""}장수 제한 없음 · 현재 ${photos.length}장`}
       </p>
       {choosing && (
         <Sheet title="사진 추가" onClose={() => setChoosing(false)}>

@@ -316,22 +316,24 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                     {billingParts.map((part, i) => (
                       <div key={i} className="border border-slate-200 rounded-xl p-3">
                         <p className="text-xs font-extrabold text-slate-700 mb-2">{part.name}{part.qty ? ` ${part.qty}` : ""}</p>
-                        <Field label="교체 전 사진 (필수)">
+                        <Field label="교체 전">
                           <MultiPhotoUpload
                             photos={partPhotos[i]?.before ?? []}
                             uploadFolder={`billings/${uploadSession}/part${i}/before`}
                             onUploaded={(url) => updatePartPhotos(i, "before", (arr) => [...arr, { url }])}
                             onRemove={(idx) => updatePartPhotos(i, "before", (arr) => arr.filter((_, bi) => bi !== idx))}
                             label="교체 전 표준 화질 사진 등록"
+                            compactHint
                           />
                         </Field>
-                        <Field label="교체 후 사진 (필수)">
+                        <Field label="교체 후">
                           <MultiPhotoUpload
                             photos={partPhotos[i]?.after ?? []}
                             uploadFolder={`billings/${uploadSession}/part${i}/after`}
                             onUploaded={(url) => updatePartPhotos(i, "after", (arr) => [...arr, { url }])}
                             onRemove={(idx) => updatePartPhotos(i, "after", (arr) => arr.filter((_, ai) => ai !== idx))}
                             label="교체 후 표준 화질 사진 등록"
+                            compactHint
                           />
                         </Field>
                       </div>
@@ -339,22 +341,24 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                   </div>
                 ) : (
                   <>
-                    <Field label="교체 전 사진 (필수)">
+                    <Field label="교체 전">
                       <MultiPhotoUpload
                         photos={materialPhotos.before}
                         uploadFolder={`billings/${uploadSession}/before`}
                         onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, before: [...p.before, { url }] }))}
                         onRemove={(idx) => setMaterialPhotos((p) => ({ ...p, before: p.before.filter((_, i) => i !== idx) }))}
                         label="교체 전 표준 화질 사진 등록"
+                        compactHint
                       />
                     </Field>
-                    <Field label="교체 후 사진 (필수)">
+                    <Field label="교체 후">
                       <MultiPhotoUpload
                         photos={materialPhotos.after}
                         uploadFolder={`billings/${uploadSession}/after`}
                         onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, after: [...p.after, { url }] }))}
                         onRemove={(idx) => setMaterialPhotos((p) => ({ ...p, after: p.after.filter((_, i) => i !== idx) }))}
                         label="교체 후 표준 화질 사진 등록"
+                        compactHint
                       />
                     </Field>
                   </>
@@ -363,41 +367,56 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
 
               {billStep === 2 && (
                 <>
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 space-y-1">
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3">
                     <p className="text-xs font-extrabold text-slate-700">완료보고서 미리보기</p>
-                    <p className="text-[11px] text-slate-500">{selected?.siteName}{selected?.elevatorNo ? ` · ${selected.elevatorNo}` : ""}</p>
-                    <p className="text-sm font-bold text-slate-800">{selected?.part}</p>
-                    <p className="text-sm font-extrabold text-blue-700">
-                      {isQuoteBilling ? "견적서 참조" : `₩${Number(materialCost || 0).toLocaleString()}`}
-                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">{selected?.siteName}{selected?.elevatorNo ? ` · ${selected.elevatorNo}` : ""}</p>
+
                     {billingParts ? (
-                      <div className="space-y-1.5 pt-1">
+                      <div className="space-y-3 mt-2">
                         {billingParts.map((part, i) => (
                           <div key={i}>
-                            <p className="text-[11px] font-bold text-slate-500">{part.name}{part.qty ? ` ${part.qty}` : ""}</p>
-                            <div className="flex gap-1.5 mt-0.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-bold text-slate-800">{part.name}{part.qty ? ` ${part.qty}` : ""}</p>
+                              <p className="text-sm font-extrabold text-blue-700 shrink-0">₩{Number(part.amount || 0).toLocaleString()}</p>
+                            </div>
+                            <div className="flex gap-1.5 mt-1">
                               {partPhotos[i]?.before?.[0] && (
-                                <img src={partPhotos[i].before[0].url} alt={`${part.name} 교체 전`} className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
+                                <img src={partPhotos[i].before[0].url} alt={`${part.name} 교체 전`} className="w-28 h-28 rounded-lg object-cover border border-slate-200" />
                               )}
                               {partPhotos[i]?.after?.[0] && (
-                                <img src={partPhotos[i].after[0].url} alt={`${part.name} 교체 후`} className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
+                                <img src={partPhotos[i].after[0].url} alt={`${part.name} 교체 후`} className="w-28 h-28 rounded-lg object-cover border border-slate-200" />
                               )}
                             </div>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      (materialPhotos.before[0] || materialPhotos.after[0]) && (
-                        <div className="flex gap-1.5 pt-1">
-                          {materialPhotos.before[0] && (
-                            <img src={materialPhotos.before[0].url} alt="교체 전" className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
-                          )}
-                          {materialPhotos.after[0] && (
-                            <img src={materialPhotos.after[0].url} alt="교체 후" className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
+                      <div className="mt-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-bold text-slate-800">{selected?.part}</p>
+                          {!isQuoteBilling && (
+                            <p className="text-sm font-extrabold text-blue-700 shrink-0">₩{Number(materialCost || 0).toLocaleString()}</p>
                           )}
                         </div>
-                      )
+                        {(materialPhotos.before[0] || materialPhotos.after[0]) && (
+                          <div className="flex gap-1.5 mt-1">
+                            {materialPhotos.before[0] && (
+                              <img src={materialPhotos.before[0].url} alt="교체 전" className="w-28 h-28 rounded-lg object-cover border border-slate-200" />
+                            )}
+                            {materialPhotos.after[0] && (
+                              <img src={materialPhotos.after[0].url} alt="교체 후" className="w-28 h-28 rounded-lg object-cover border border-slate-200" />
+                            )}
+                          </div>
+                        )}
+                      </div>
                     )}
+
+                    <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-200">
+                      <p className="text-xs font-bold text-slate-500">합계</p>
+                      <p className="text-sm font-extrabold text-blue-700">
+                        {isQuoteBilling ? "견적서 참조" : `₩${Number(materialCost || 0).toLocaleString()}`}
+                      </p>
+                    </div>
                   </div>
 
                   {!absentMode ? (
