@@ -182,6 +182,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       ? billingParts.map((part, i) => ({
           name: part.name,
           qty: part.qty ?? null,
+          amount: part.amount ?? null,
           beforeUrls: (partPhotos[i]?.before ?? []).map((p) => p.url),
           afterUrls: (partPhotos[i]?.after ?? []).map((p) => p.url),
         }))

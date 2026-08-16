@@ -6,9 +6,51 @@ import { useState, useContext } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { shortDate } from "@/lib/utils";
+import { BRAND } from "@/lib/company";
 import { locOf, addressOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate, AdminAuthContext } from "@/app/components/admin/adminShared";
+import ReplacementCertificateViewer from "@/app/components/admin/ReplacementCertificateViewer";
 
 const BILLING_METHODS = ["계좌이체", "CMS", "지로"];
+
+// 청구 건 하나를 교체확인서 PDF 입력 형태로 바꾼다. 부품이 2개 이상(billing_part_rows
+// 기반 구조화 저장건)이면 부품별 단가·금액까지 나오고, 그 전 방식(부품 1개 또는 옛
+// 데이터)으로 남은 건은 단가 정보가 없어 수량만 보여준다 — 없는 값을 지어내지 않는다.
+function buildCertificateData(b, data) {
+  const items = (b.partPhotos?.length > 1 ? b.partPhotos : null)?.map((p) => ({
+    name: p.name,
+    qty: p.qty,
+    amount: p.amount ?? null,
+    beforeUrl: p.beforeUrls?.[0] ?? null,
+    afterUrl: p.afterUrls?.[0] ?? null,
+  })) ?? [{
+    name: b.part,
+    qty: null,
+    amount: b.isFree ? null : b.cost,
+    beforeUrl: b.beforePhotoUrls?.[0] ?? null,
+    afterUrl: b.afterPhotoUrls?.[0] ?? null,
+  }];
+
+  return {
+    docNumber: `${BRAND.code}-${b.id.slice(0, 8).toUpperCase()}`,
+    issuedDate: shortDate(new Date().toISOString().slice(0, 10)),
+    siteUnit: locOf(data, b.unitId, b.siteName, b.elevatorNo),
+    address: addressOf(data, b.unitId, b.siteName),
+    engineerName: personOf(data, b.engineerId, b.engineer),
+    replaceDate: shortDate(b.replaceDate),
+    items,
+    totalCost: b.cost,
+    isFree: b.isFree,
+    approval: b.approvalMethod
+      ? {
+          method: b.approvalMethod,
+          signatureUrl: b.signatureUrl,
+          approverName: b.approverName,
+          approverPhone: b.approverPhone,
+          approvedAt: b.approvedAt ? shortDate(b.approvedAt.slice(0, 10)) : null,
+        }
+      : null,
+  };
+}
 
 // 현장 담당자(현장 측 연락 담당) — 청구는 unitId(v2)만 있고 siteId가 없어 units를 거쳐 찾는다.
 function siteManagerOf(data, unitId, fallbackSiteName) {
@@ -155,6 +197,7 @@ export default function BillingsAdmin({ data, setData }) {
   const { billings } = data;
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState(null);
+  const [certTarget, setCertTarget] = useState(null);
 
   const q = search.trim().toLowerCase();
   const rows = billings.filter((b) =>
@@ -222,7 +265,7 @@ export default function BillingsAdmin({ data, setData }) {
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input className={`${inputCls} pl-8`} placeholder="현장·부품·기사명 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
-      <AdminTable head={["현장 · 호기", "담당자", "작업자", "교체내역", "금액", "교체일", "근거", "청구일", "청구방식"]}>
+      <AdminTable head={["현장 · 호기", "담당자", "작업자", "교체내역", "금액", "교체일", "교체확인서", "청구일", "청구방식"]}>
         {rows.map((b) => (
           <tr key={b.id} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setDetail(b)}>
             <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{locOf(data, b.unitId, b.siteName, b.elevatorNo)}</td>
@@ -237,10 +280,14 @@ export default function BillingsAdmin({ data, setData }) {
               )}
             </td>
             <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(b.replaceDate)}</td>
-            <td className="px-3 py-2.5">
-              {b.materialRequestId || b.type === "material"
-                ? <StatusBadge tone="blue">자재 지급건</StatusBadge>
-                : <StatusBadge tone="slate">직접 입력</StatusBadge>}
+            <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={() => setCertTarget(b)}
+                className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5 whitespace-nowrap hover:bg-blue-100"
+              >
+                교체확인서 보기
+              </button>
             </td>
             <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
               <EditableDate key={b.billingDate ?? "unset"} value={b.billingDate} onCommit={(v) => updateManualField(b, "billing_date", "billingDate", v)} />
@@ -260,6 +307,13 @@ export default function BillingsAdmin({ data, setData }) {
       </AdminTable>
 
       {detail && <BillingDetailModal b={detail} data={data} onClose={() => setDetail(null)} onSave={saveBilling} onToggleFree={toggleFree} onAdjustPrice={adjustPrice} />}
+      {certTarget && (
+        <ReplacementCertificateViewer
+          cert={buildCertificateData(certTarget, data)}
+          filenameBase={`교체확인서_${locOf(data, certTarget.unitId, certTarget.siteName, certTarget.elevatorNo).replace(/[\\/:*?"<>|\s]+/g, "")}`}
+          onClose={() => setCertTarget(null)}
+        />
+      )}
     </div>
   );
 }
