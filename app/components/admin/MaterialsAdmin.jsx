@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
 import { mapQuoteRequest } from "@/lib/mappers";
 import { uploadPhoto } from "@/lib/photos";
-import { unitIdFor, addDays, shortDate } from "@/lib/utils";
+import { unitIdFor, addDays, shortDate, parsePartQty } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid, DateTextInput, lastSentDate, sentHistory } from "@/app/components/admin/adminShared";
 import QuoteItemsModal from "@/app/components/admin/QuoteItemsModal";
@@ -231,6 +231,9 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
   const [itemsTarget, setItemsTarget] = useState(null); // 품목편집 중인 견적요청
   const [sendTarget, setSendTarget] = useState(null); // 발송 중인 견적요청
   const [pickingSite, setPickingSite] = useState(false); // 새 견적 발행 — 현장선택 모달
+  // todos.billing_part_rows 컬럼 존재 여부 — 마이그레이션 112 실행 전엔 컬럼이 없어, 있을 때만
+  // 부품별 구조화 행(이름·수량·금액)을 같이 쓴다.
+  const billingPartRowsReady = (data.todos ?? []).some((t) => t.billingPartRows !== undefined);
 
   const query = search.trim().toLowerCase();
   const materialRequests = allMaterialRequests.filter((m) =>
@@ -247,13 +250,14 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
   const pendingQuoteRequests = quoteRequests.filter((q) => q.status === "요청접수");
   const draftedQuoteRequests = quoteRequests.filter((q) => q.status !== "요청접수");
 
-  async function handleMaterialSupplyComplete(request, { assigneeId, billingPart, billingAmount, photoUrls }) {
+  async function handleMaterialSupplyComplete(request, { assigneeId, billingPart, billingAmount, billingPartRows, photoUrls }) {
     const engineer = (data.profiles ?? []).find((p) => p.id === assigneeId);
     const assigneeName = engineer?.name ?? request.engineer;
 
     const todoId = "todo-" + request.id;
     const dueDate = addDays(TODAY_STR, 30);
     const unitId = request.unitId ?? unitIdFor(data.units, request.siteId, request.elevatorNo);
+    const rowsToSave = billingPartRows?.length ? billingPartRows : null;
     const todoRow = {
       id: todoId,
       material_request_id: request.id,
@@ -270,6 +274,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
       assignee_id: assigneeId || null,
       billing_part: billingPart,
       billing_amount: billingAmount,
+      ...(billingPartRowsReady ? { billing_part_rows: rowsToSave } : {}),
     };
     // 할 일을 먼저 upsert(=재시도 시 같은 id로 다시 써도 안전)한 뒤 상태를 바꾼다 —
     // 반대 순서면 상태 변경 후 할 일 생성이 실패했을 때 DB(지급완료)와 화면(승인대기)이
@@ -299,7 +304,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
           id: todoId, materialRequestId: request.id, quoteRequestId: null, source: "material", title: todoRow.title,
           siteName: request.siteName, elevatorNo: request.elevatorNo, part: request.part,
           assignee: assigneeName, assignedDate: TODAY_STR, dueDate, done: false,
-          unitId, assigneeId: assigneeId || null, billingPart, billingAmount,
+          unitId, assigneeId: assigneeId || null, billingPart, billingAmount, billingPartRows: rowsToSave,
         },
         ...prev.todos,
       ],
@@ -308,7 +313,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
 
   // 지급완료된 자재신청 수정 — 상태/지급일은 그대로 두고 사진·담당기사·금액만 바꾼다
   // (연결된 할 일은 이미 있으므로 새로 만들지 않고 그 자리에서 update).
-  async function handleMaterialEdit(request, { assigneeId, billingPart, billingAmount, photoUrls }) {
+  async function handleMaterialEdit(request, { assigneeId, billingPart, billingAmount, billingPartRows, photoUrls }) {
     const engineer = (data.profiles ?? []).find((p) => p.id === assigneeId);
     const assigneeName = engineer?.name ?? request.engineer;
 
@@ -324,7 +329,11 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
     // material_requests엔 담당기사 컬럼이 없어 할 일이 유일한 기준이다.
     const prevAssigneeId = (data.todos ?? []).find((t) => t.id === todoId)?.assigneeId;
     const assigneeChanged = assigneeId && assigneeId !== prevAssigneeId;
-    const todoPatch = { assignee: assigneeName, assignee_id: assigneeId || null, billing_part: billingPart, billing_amount: billingAmount };
+    const rowsToSave = billingPartRows?.length ? billingPartRows : null;
+    const todoPatch = {
+      assignee: assigneeName, assignee_id: assigneeId || null, billing_part: billingPart, billing_amount: billingAmount,
+      ...(billingPartRowsReady ? { billing_part_rows: rowsToSave } : {}),
+    };
     const { error: todoError } = await supabase.from("todos").update(todoPatch).eq("id", todoId);
     if (todoError) { alert("할 일 수정 실패: " + todoError.message); return; }
     if (assigneeChanged) {
@@ -337,7 +346,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         r.id === request.id ? { ...r, hasSupplyPhoto: patch.has_supply_photo, supplyPhotoUrls: photoUrls } : r
       ),
       todos: prev.todos.map((t) =>
-        t.id === todoId ? { ...t, assignee: assigneeName, assigneeId: assigneeId || null, billingPart, billingAmount } : t
+        t.id === todoId ? { ...t, assignee: assigneeName, assigneeId: assigneeId || null, billingPart, billingAmount, billingPartRows: rowsToSave } : t
       ),
     }));
   }
@@ -833,6 +842,10 @@ function MaterialSupplyModal({ request, profiles, todos, onClose, onSubmit }) {
     .map((part, i) => (amounts[i] ? `${part}(₩${Number(amounts[i]).toLocaleString()})` : part))
     .join(", ");
   const allAmountsFilled = parts.every((_, i) => Number(amounts[i]) > 0);
+  const billingPartRows = parts.map((part, i) => {
+    const { name, qty } = parsePartQty(part);
+    return { name: name || part, qty: qty || null, amount: Number(amounts[i]) || 0 };
+  });
 
   async function handleFiles(e) {
     const files = Array.from(e.target.files ?? []);
@@ -851,7 +864,7 @@ function MaterialSupplyModal({ request, profiles, todos, onClose, onSubmit }) {
 
   async function submit() {
     setSaving(true);
-    await onSubmit({ assigneeId, billingPart: billingPartText || null, billingAmount: total || null, photoUrls: photos });
+    await onSubmit({ assigneeId, billingPart: billingPartText || null, billingAmount: total || null, billingPartRows, photoUrls: photos });
     setSaving(false);
   }
 

@@ -147,6 +147,12 @@ function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto
   const billingPartText = parts
     .map((part, i) => (amounts[i] ? `${part}(₩${lineTotal(part, i).toLocaleString()})` : part))
     .join(", ");
+  // billingPartText(표시용 문자열)와 별도로, 나중에 부품별 사진 등에 그대로 다시 쓸 수 있도록
+  // 구조화된 행도 같이 남긴다 — 문자열을 역파싱할 필요가 없게.
+  const billingPartRows = parts.map((part, i) => {
+    const { name, qty } = parsePartQty(part);
+    return { name: name || part, qty: qty || null, amount: Number(amounts[i]) || 0 };
+  });
   return (
     <div className="bg-white rounded-xl border border-amber-200 p-3.5 mx-0.5">
       <div className="flex items-start justify-between gap-2">
@@ -213,7 +219,7 @@ function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto
 
       {!allAmountsFilled && <p className="text-[10px] text-red-500 mt-2">모든 부품의 금액을 입력해주세요</p>}
       <button
-        onClick={() => allAmountsFilled && onSupplyComplete(r.id, assignee, billingPartText || null, total || null, dueDate, description)}
+        onClick={() => allAmountsFilled && onSupplyComplete(r.id, assignee, billingPartText || null, total || null, dueDate, description, billingPartRows)}
         disabled={!allAmountsFilled}
         className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg bg-blue-700 disabled:bg-slate-300 text-white active:bg-blue-800"
       >
@@ -818,11 +824,15 @@ function SupplyEditForm({ r, existingTodo, engineerNames, onSubmit, onAttachPhot
     .map((part, i) => (amounts[i] ? `${part}(₩${Number(amounts[i]).toLocaleString()})` : part))
     .join(", ");
   const allAmountsFilled = parts.every((_, i) => Number(amounts[i]) > 0);
+  const billingPartRows = parts.map((part, i) => {
+    const { name, qty } = parsePartQty(part);
+    return { name: name || part, qty: qty || null, amount: Number(amounts[i]) || 0 };
+  });
 
   async function submit() {
     if (!allAmountsFilled) return;
     setSaving(true);
-    await onSubmit(assignee, billingPartText || null, total || null, dueDate, description);
+    await onSubmit(assignee, billingPartText || null, total || null, dueDate, description, billingPartRows);
     setSaving(false);
   }
 
@@ -953,8 +963,8 @@ function SupplyHistoryScreen({ supplied, todos, engineerNames, onSupplyEdit, onA
             engineerNames={engineerNames}
             onAttachPhoto={onAttachPhoto}
             onRemoveSupplyPhoto={onRemoveSupplyPhoto}
-            onSubmit={async (assignee, billingPart, billingAmount, dueDate, description) => {
-              await onSupplyEdit(editTarget.id, assignee, billingPart, billingAmount, dueDate, description);
+            onSubmit={async (assignee, billingPart, billingAmount, dueDate, description, billingPartRows) => {
+              await onSupplyEdit(editTarget.id, assignee, billingPart, billingAmount, dueDate, description, billingPartRows);
               setEditTarget(null);
             }}
           />

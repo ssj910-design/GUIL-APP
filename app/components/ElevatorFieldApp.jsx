@@ -140,6 +140,9 @@ export default function App() {
   // billings.signature_url 등 컬럼 존재 여부 — 마이그레이션 119 실행 전엔 컬럼이 없어, 있을 때만
   // 서명/전화승인 정보를 같이 쓴다(미실행 시에도 청구 저장 자체는 깨지지 않게).
   const billingApprovalReady = billings.some((b) => b.signatureUrl !== undefined);
+  // todos.billing_part_rows 컬럼 존재 여부 — 마이그레이션 112 실행 전엔 컬럼이 없어, 있을 때만
+  // 관리자가 지급 확정한 부품별 구조화 행(이름·수량·금액)을 같이 쓴다.
+  const billingPartRowsReady = todos.some((t) => t.billingPartRows !== undefined);
   // 지급 사진을 여러 장 연달아 올릴 때, setState 업데이터 함수가 React 렌더링 타이밍에 따라
   // 아직 반영되지 않은 상태를 기준으로 계산될 수 있어(경쟁 상태) ref에 최신값을 직접 보관합니다.
   const supplyPhotoUrlsRef = useRef({ material: {}, quote: {}, restock: {} });
@@ -1476,7 +1479,7 @@ export default function App() {
   // ★ 자재 지급 완료 트리거: 이 순간에만 할 일이 자동 생성됩니다 (D-30 시작)
   // assignee를 넘기면(신청자와 실제 교체 기사가 다른 경우) 그 이름으로 할 일이 생성되고,
   // 생략하면 지금처럼 신청 기사 본인 앞으로 생성됩니다.
-  async function handleSupplyComplete(requestId, assignee, billingPart, billingAmount, dueDate, description) {
+  async function handleSupplyComplete(requestId, assignee, billingPart, billingAmount, dueDate, description, billingPartRows) {
     const req = materialRequests.find((r) => r.id === requestId);
     if (!req) return;
 
@@ -1494,6 +1497,7 @@ export default function App() {
       done: false,
       billingPart: billingPart || null,
       billingAmount: billingAmount || null,
+      billingPartRows: billingPartRows?.length ? billingPartRows : null,
       description: description || null,
     };
     // ★ 할 일을 먼저 만든 뒤 자재 상태를 바꾼다 — 순서가 반대면 todo insert 실패 시
@@ -1519,6 +1523,7 @@ export default function App() {
         } : {}),
         billing_part: newTodo.billingPart,
         billing_amount: newTodo.billingAmount,
+        ...(billingPartRowsReady ? { billing_part_rows: newTodo.billingPartRows } : {}),
       }),
       "할 일 생성 실패 — 자재 지급완료 처리를 중단했습니다"
     );
@@ -1544,12 +1549,13 @@ export default function App() {
 
   // ★ 이미 지급완료된 자재신청 수정 — 상태/지급일/사진(별도 handleAttachPhoto)은 그대로 두고
   // 연결된 할 일(담당기사·청구금액·기한·내용)만 그 자리에서 갱신한다 (새 할 일을 만들지 않음).
-  async function handleSupplyEdit(requestId, assignee, billingPart, billingAmount, dueDate, description) {
+  async function handleSupplyEdit(requestId, assignee, billingPart, billingAmount, dueDate, description, billingPartRows) {
     const req = materialRequests.find((r) => r.id === requestId);
     if (!req) return;
     const todoId = "todo-" + requestId;
     const assigneeName = assignee || req.engineer;
     const finalDueDate = dueDate || addDays(TODAY_STR, 30);
+    const rowsToSave = billingPartRows?.length ? billingPartRows : null;
     const patch = {
       assignee: assigneeName,
       due_date: finalDueDate,
@@ -1557,6 +1563,7 @@ export default function App() {
       ...(v2Ready ? { assignee_id: profileIdByName(profilesAll, assigneeName) } : {}),
       billing_part: billingPart || null,
       billing_amount: billingAmount || null,
+      ...(billingPartRowsReady ? { billing_part_rows: rowsToSave } : {}),
     };
     const { error } = await supabase.from("todos").update(patch).eq("id", todoId);
     if (error) { alert("수정 실패: " + error.message); return; }
@@ -1568,6 +1575,7 @@ export default function App() {
       ...(v2Ready ? { assigneeId: patch.assignee_id } : {}),
       billingPart: billingPart || null,
       billingAmount: billingAmount || null,
+      billingPartRows: rowsToSave,
     } : t)));
   }
 
