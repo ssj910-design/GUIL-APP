@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from "react";
-import { Receipt, Check, Search, AlertTriangle, X } from "lucide-react";
+import { Receipt, Check, Search, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, formatPhone } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
@@ -17,7 +17,7 @@ import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 const BILL_STEP_TITLES = ["청구 정보", "증빙 사진", "완료 서명"]; // 자재 지급건(3-step)
 const MAN_BILL_TITLES = ["현장·호기", "교체 내역·비용", "증빙 사진"]; // 직접 입력(3-step)
 
-export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, siteManagers = [] }) {
+export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const sites = useContext(SitesContext);
   const allUnits = useContext(UnitsContext);
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
@@ -60,12 +60,10 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, sit
   useEffect(() => {
     setMaterialCost(selected?.billingAmount != null ? String(selected.billingAmount) : "");
   }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
-  // 서명자 연락처는 현장담당자 번호로 미리 채워두고, 다르면 현장에서 바로 고쳐 쓸 수 있게 합니다.
+  // 청구 대상이 바뀌면 이전 건의 서명자 연락처가 남지 않도록 비워, 매번 직접 입력하게 합니다.
   useEffect(() => {
-    const siteId = allUnits.find((u) => u.id === selected?.unitId)?.siteId;
-    const manager = siteManagers.filter((m) => m.siteId === siteId).sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0))[0];
-    setSignerPhone(manager?.phone ?? "");
-  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+    setSignerPhone("");
+  }, [selectedId]);
   // 관리자가 지급 확정한 부품이 2개 이상이면 부품별로 전/후 사진을 따로 받는다 — 1개면
   // 나눌 이유가 없어 지금처럼 통합 업로더를 그대로 쓴다.
   const billingParts = selected?.billingPartRows?.length > 1 ? selected.billingPartRows : null;
@@ -94,6 +92,8 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, sit
         if (!absentConfirmed) return "전화 승인 확인란에 체크해주세요";
       } else {
         if (!signerPhone.trim()) return "서명자 연락처를 입력해주세요";
+        const digits = signerPhone.replace(/\D/g, "").length;
+        if (digits < 9 || digits > 11) return "전화번호를 확인해주세요";
         if (!signatureUrl) return "고객 서명을 받아주세요";
       }
     }
@@ -390,16 +390,10 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, sit
                             </div>
                             <div className="flex gap-1.5 mt-1">
                               {partPhotos[i]?.before?.[0] && (
-                                <div className="relative flex-1 min-w-0">
-                                  <img src={partPhotos[i].before[0].url} alt={`${part.name} 교체 전`} className="w-full aspect-square rounded-lg object-cover border border-slate-200" />
-                                  <button type="button" onClick={() => updatePartPhotos(i, "before", (arr) => arr.slice(1))} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-800/80 text-white flex items-center justify-center"><X size={12} /></button>
-                                </div>
+                                <img src={partPhotos[i].before[0].url} alt={`${part.name} 교체 전`} className="flex-1 min-w-0 aspect-square rounded-lg object-cover border border-slate-200" />
                               )}
                               {partPhotos[i]?.after?.[0] && (
-                                <div className="relative flex-1 min-w-0">
-                                  <img src={partPhotos[i].after[0].url} alt={`${part.name} 교체 후`} className="w-full aspect-square rounded-lg object-cover border border-slate-200" />
-                                  <button type="button" onClick={() => updatePartPhotos(i, "after", (arr) => arr.slice(1))} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-800/80 text-white flex items-center justify-center"><X size={12} /></button>
-                                </div>
+                                <img src={partPhotos[i].after[0].url} alt={`${part.name} 교체 후`} className="flex-1 min-w-0 aspect-square rounded-lg object-cover border border-slate-200" />
                               )}
                             </div>
                           </div>
@@ -416,16 +410,10 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, sit
                         {(materialPhotos.before[0] || materialPhotos.after[0]) && (
                           <div className="flex gap-1.5 mt-1">
                             {materialPhotos.before[0] && (
-                              <div className="relative flex-1 min-w-0">
-                                <img src={materialPhotos.before[0].url} alt="교체 전" className="w-full aspect-square rounded-lg object-cover border border-slate-200" />
-                                <button type="button" onClick={() => setMaterialPhotos((p) => ({ ...p, before: p.before.slice(1) }))} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-800/80 text-white flex items-center justify-center"><X size={12} /></button>
-                              </div>
+                              <img src={materialPhotos.before[0].url} alt="교체 전" className="flex-1 min-w-0 aspect-square rounded-lg object-cover border border-slate-200" />
                             )}
                             {materialPhotos.after[0] && (
-                              <div className="relative flex-1 min-w-0">
-                                <img src={materialPhotos.after[0].url} alt="교체 후" className="w-full aspect-square rounded-lg object-cover border border-slate-200" />
-                                <button type="button" onClick={() => setMaterialPhotos((p) => ({ ...p, after: p.after.slice(1) }))} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-800/80 text-white flex items-center justify-center"><X size={12} /></button>
-                              </div>
+                              <img src={materialPhotos.after[0].url} alt="교체 후" className="flex-1 min-w-0 aspect-square rounded-lg object-cover border border-slate-200" />
                             )}
                           </div>
                         )}
@@ -447,10 +435,10 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, sit
 
                   {!absentMode ? (
                     <>
-                      <Field label="서명자 연락처">
-                        <input type="tel" className={inputCls} placeholder="010-0000-0000" value={signerPhone} onChange={(e) => setSignerPhone(e.target.value)} />
+                      <Field label="서명자 연락처*">
+                        <input type="tel" className={inputCls} placeholder="010-0000-0000" value={signerPhone} onChange={(e) => setSignerPhone(formatPhone(e.target.value))} />
                       </Field>
-                      <Field label="고객 서명 (필수)">
+                      <Field label="고객 서명*">
                         <SignaturePad
                           url={signatureUrl}
                           uploadFolder={`billings/${uploadSession}/signature`}
