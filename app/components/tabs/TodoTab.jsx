@@ -1,10 +1,9 @@
 import { useState, useContext, useEffect } from "react";
-import { ListTodo, Check, CheckCircle2, Search, Lock, Image as ImageIcon, Download, Plus, Repeat, ChevronDown } from "lucide-react";
+import { ListTodo, Check, CheckCircle2, Search, Lock, Plus, Repeat, ChevronDown } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { addDays, formatShortDate, formatYyMmDd } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
-import { downloadPhoto, sanitizeFilename, extOf } from "@/lib/photos";
-import { PrimaryButton, Sheet, Field, inputCls } from "@/app/components/ui";
+import { PrimaryButton, Sheet, Field, inputCls, PhotoGrid } from "@/app/components/ui";
 import { SitesContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 import { confirmAsync } from "@/app/components/ConfirmHost";
@@ -457,32 +456,13 @@ export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoU
       {supplyPhotoUrls.length > 0 && (
         <div className="mb-4">
           <p className="text-xs font-bold text-slate-500 mb-2">지급된 자재 사진 ({supplyPhotoUrls.length})</p>
-          <div className="grid grid-cols-3 gap-2">
-            {supplyPhotoUrls.map((url, i) => (
-              <a key={i} href={url} target="_blank" rel="noreferrer">
-                <img src={url} alt="" className="w-full aspect-square rounded-xl object-cover border border-slate-200" />
-              </a>
-            ))}
-          </div>
+          <PhotoGrid urls={supplyPhotoUrls} cols={3} />
         </div>
       )}
       {todo.photoUrls?.length > 0 && (
         <div className="mb-4">
           <p className="text-xs font-bold text-slate-500 mb-2">첨부파일 ({todo.photoUrls.length})</p>
-          <div className="space-y-1.5">
-            {todo.photoUrls.map((url, i) => {
-              const filename = `${sanitizeFilename(todo.siteName)}_${i + 1}.${extOf(url)}`;
-              return (
-                <div key={i} className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2">
-                  <ImageIcon size={16} className="text-slate-400 shrink-0" />
-                  <span className="flex-1 text-xs text-slate-600 truncate">{filename}</span>
-                  <button type="button" onClick={() => downloadPhoto(url, filename)} className="text-blue-600 shrink-0">
-                    <Download size={16} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+          <PhotoGrid urls={todo.photoUrls} cols={3} />
         </div>
       )}
       {onToggle ? (

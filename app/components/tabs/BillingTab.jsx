@@ -52,6 +52,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const [approverName, setApproverName] = useState("");
   const [approverPhone, setApproverPhone] = useState("");
   const [absentConfirmed, setAbsentConfirmed] = useState(false);
+  const [signerName, setSignerName] = useState("");
   const [signerPhone, setSignerPhone] = useState("");
 
   const selected = todos.find((t) => t.id === selectedId);
@@ -77,10 +78,12 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       setApproverName(draft.approverName ?? "");
       setApproverPhone(draft.approverPhone ?? "");
       setAbsentConfirmed(draft.absentConfirmed ?? false);
+      setSignerName(draft.signerName ?? "");
       setSignerPhone(draft.signerPhone ?? "");
       toastBill("임시저장된 내용을 불러왔습니다", true);
     } else {
       setMaterialCost(selected?.billingAmount != null ? String(selected.billingAmount) : "");
+      setSignerName("");
       setSignerPhone("");
     }
   }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -109,8 +112,11 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       if (absentMode) {
         if (!approverName.trim()) return "담당자 성함 또는 직책을 입력해주세요";
         if (!approverPhone.trim()) return "연락처를 입력해주세요";
+        const absentDigits = approverPhone.replace(/\D/g, "").length;
+        if (absentDigits < 9 || absentDigits > 11) return "전화번호를 확인해주세요";
         if (!absentConfirmed) return "전화 승인 확인란에 체크해주세요";
       } else {
+        if (!signerName.trim()) return "서명자 성함을 입력해주세요";
         if (!signerPhone.trim()) return "서명자 연락처를 입력해주세요";
         const digits = signerPhone.replace(/\D/g, "").length;
         if (digits < 9 || digits > 11) return "전화번호를 확인해주세요";
@@ -153,7 +159,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     try {
       localStorage.setItem(draftKey(selected.id), JSON.stringify({
         billStep, materialCost, materialReplaceDate, materialPhotos, partPhotos,
-        signatureUrl, absentMode, approverName, approverPhone, absentConfirmed, signerPhone,
+        signatureUrl, absentMode, approverName, approverPhone, absentConfirmed, signerName, signerPhone,
       }));
       toastBill("임시저장했습니다", true);
     } catch {
@@ -211,7 +217,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
       // 지류 교체확인서 대신: 서명했으면 서명 이미지, 고객 부재중이면 전화승인자 정보.
       signatureUrl: absentMode ? null : signatureUrl,
       approvalMethod: absentMode ? "전화승인" : "서명",
-      approverName: absentMode ? approverName.trim() : null,
+      approverName: absentMode ? approverName.trim() : signerName.trim(),
       approverPhone: absentMode ? approverPhone.trim() : signerPhone.trim(),
       approvedAt: new Date().toISOString(),
     });
@@ -237,6 +243,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     setApproverName("");
     setApproverPhone("");
     setAbsentConfirmed(false);
+    setSignerName("");
     setSignerPhone("");
     setBillStep(0);
     setTimeout(() => setSubmitted(null), 2600);
@@ -472,6 +479,9 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
 
                   {!absentMode ? (
                     <>
+                      <Field label="서명자 성함*">
+                        <input type="text" className={inputCls} placeholder="예: 김O식 관리소장" value={signerName} onChange={(e) => setSignerName(e.target.value)} />
+                      </Field>
                       <Field label="서명자 연락처*">
                         <input type="tel" className={inputCls} placeholder="010-0000-0000" value={signerPhone} onChange={(e) => setSignerPhone(formatPhone(e.target.value))} />
                       </Field>
@@ -493,7 +503,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                         <input type="text" className={inputCls} placeholder="예: 김O식 관리소장" value={approverName} onChange={(e) => setApproverName(e.target.value)} />
                       </Field>
                       <Field label="연락처">
-                        <input type="tel" className={inputCls} placeholder="010-0000-0000" value={approverPhone} onChange={(e) => setApproverPhone(e.target.value)} />
+                        <input type="tel" className={inputCls} placeholder="010-0000-0000" value={approverPhone} onChange={(e) => setApproverPhone(formatPhone(e.target.value))} />
                       </Field>
                       <label className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2.5 mt-1">
                         <input type="checkbox" checked={absentConfirmed} onChange={(e) => setAbsentConfirmed(e.target.checked)} />
