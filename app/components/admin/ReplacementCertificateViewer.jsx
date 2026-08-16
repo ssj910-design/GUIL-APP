@@ -1,10 +1,13 @@
 "use client";
 
 // 교체확인서 전체화면 뷰어 — "부품교체·공사 내역" 목록의 "근거" 자리에서 여는 버튼으로
-// 뜬다. 서버(app/api/generate-replacement-certificate-pdf)에서 그때그때 새로 그린 PDF를
-// 받아, PhotoLightbox와 같은 방식(전체화면 어두운 배경 + createPortal)으로 보여준다.
-// 미리보기는 pdfjs-dist로 각 페이지를 캔버스에 렌더링(QuotePdfPreview와 동일한 기법)해
-// 세로로 이어 붙이고, 그 캔버스를 그대로 JPG 다운로드에도 재사용한다.
+// 뜬다. 서버(app/api/generate-replacement-certificate-pdf)에서 그때그때 새로 그린(또는
+// 캐시된) PDF를 받아, PhotoLightbox와 같은 방식(전체화면 어두운 배경 + createPortal)으로
+// 보여준다.
+// 미리보기는 브라우저 내장 PDF 뷰어(<iframe>)를 그대로 쓴다 — pdfjs-dist로 캔버스에 직접
+// 그리던 이전 방식은 열 때마다 pdf.js 워커를 CDN에서 받아와 페이지를 렌더링해야 해서
+// (캐시된 PDF를 열 때도 마찬가지) 체감이 계속 느렸다. iframe은 그 비용이 전혀 없다.
+// pdf.js는 "JPG" 다운로드를 실제로 누를 때만(드물게, 필요할 때만) 지연 로드한다.
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Download, Loader2 } from "lucide-react";
@@ -13,13 +16,10 @@ async function renderPdfToCanvases(blobUrl) {
   const pdfjsLib = await import("pdfjs-dist");
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
   const doc = await pdfjsLib.getDocument(blobUrl).promise;
-  // scale 2는 인쇄용 수준으로 과하다 — 화면(최대 max-w-3xl)에서는 1.5로도 충분히 선명하고,
-  // 캔버스가 작아지는 만큼 렌더링·PNG 인코딩도 빨라진다. 페이지도 순서대로 기다리지 않고
-  // 한꺼번에 렌더링한다(대부분 1~2페이지라 체감은 작지만 여러 페이지일 때 도움이 된다).
   const pageNums = Array.from({ length: doc.numPages }, (_, i) => i + 1);
   return Promise.all(pageNums.map(async (i) => {
     const page = await doc.getPage(i);
-    const viewport = page.getViewport({ scale: 1.5 });
+    const viewport = page.getViewport({ scale: 2 });
     const canvas = document.createElement("canvas");
     canvas.width = viewport.width;
     canvas.height = viewport.height;
@@ -60,12 +60,13 @@ function stitchCanvasesToJpegBlob(canvases) {
 export default function ReplacementCertificateViewer({ cert, filenameBase, cachedUrl, onGenerated, onClose }) {
   const [status, setStatus] = useState("loading"); // loading | ready | error
   const [error, setError] = useState("");
-  const [canvases, setCanvases] = useState([]);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [downloading, setDownloading] = useState(null); // "pdf" | "jpg" | null
   const pdfBlobRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
+    let objectUrl = null;
     (async () => {
       try {
         let blob;
@@ -92,11 +93,8 @@ export default function ReplacementCertificateViewer({ cert, filenameBase, cache
         }
         if (cancelled) return;
         pdfBlobRef.current = blob;
-        const blobUrl = URL.createObjectURL(blob);
-        const rendered = await renderPdfToCanvases(blobUrl);
-        URL.revokeObjectURL(blobUrl);
-        if (cancelled) return;
-        setCanvases(rendered);
+        objectUrl = URL.createObjectURL(blob);
+        setPreviewUrl(objectUrl);
         setStatus("ready");
       } catch (err) {
         if (!cancelled) {
@@ -105,7 +103,10 @@ export default function ReplacementCertificateViewer({ cert, filenameBase, cache
         }
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -116,11 +117,20 @@ export default function ReplacementCertificateViewer({ cert, filenameBase, cache
     setDownloading(null);
   }
 
+  // JPG는 자주 쓰는 기능이 아니라 여기서만 pdf.js를 지연 로드한다 — 미리보기(iframe)는
+  // 이 비용을 안 치른다.
   async function downloadJpg() {
-    if (!canvases.length) return;
+    if (!pdfBlobRef.current) return;
     setDownloading("jpg");
-    const blob = await stitchCanvasesToJpegBlob(canvases);
-    triggerDownload(blob, `${filenameBase}.jpg`);
+    try {
+      const blobUrl = URL.createObjectURL(pdfBlobRef.current);
+      const canvases = await renderPdfToCanvases(blobUrl);
+      URL.revokeObjectURL(blobUrl);
+      const jpegBlob = await stitchCanvasesToJpegBlob(canvases);
+      triggerDownload(jpegBlob, `${filenameBase}.jpg`);
+    } catch (err) {
+      alert("JPG 변환에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
+    }
     setDownloading(null);
   }
 
@@ -154,10 +164,10 @@ export default function ReplacementCertificateViewer({ cert, filenameBase, cache
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center gap-4 p-4 md:p-8">
+      <div className="flex-1 min-h-0 flex flex-col items-stretch p-4 md:p-8">
         {status === "loading" && (
           <div className="flex-1 flex items-center justify-center text-sm font-semibold text-white/70 gap-2">
-            <Loader2 size={16} className="animate-spin" /> 교체확인서를 만드는 중...
+            <Loader2 size={16} className="animate-spin" /> 교체확인서를 불러오는 중...
           </div>
         )}
         {status === "error" && (
@@ -165,14 +175,9 @@ export default function ReplacementCertificateViewer({ cert, filenameBase, cache
             {error}
           </div>
         )}
-        {status === "ready" && canvases.map((canvas, i) => (
-          <img
-            key={i}
-            src={canvas.toDataURL("image/png")}
-            alt={`교체확인서 ${i + 1}페이지`}
-            className="w-full max-w-3xl rounded-lg shadow-2xl bg-white"
-          />
-        ))}
+        {status === "ready" && (
+          <iframe src={previewUrl} title="교체확인서" className="w-full h-full rounded-lg shadow-2xl bg-white border-0" />
+        )}
       </div>
     </div>,
     document.body
