@@ -5,7 +5,7 @@ import { siteUnitList, formatPhone } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
 import { DDay, PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
-import { SiteSearchSelect, MultiPhotoUpload, SinglePhotoUpload, SignaturePad } from "@/app/components/formWidgets";
+import { SiteSearchSelect, MultiPhotoUpload, SignaturePad } from "@/app/components/formWidgets";
 import { emptyPartRow, formatPartRows, PartsRowsInput, UnitPickGrid } from "@/app/components/tabs/MaterialTab";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 
@@ -16,7 +16,7 @@ import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 
 const BILL_STEP_TITLES = ["청구 정보", "증빙 사진", "완료 서명"]; // 자재 지급건(3-step)
 const draftKey = (todoId) => `guilBillingDraftV1:${todoId}`;
-const MAN_BILL_TITLES = ["현장·호기", "교체 내역·비용", "증빙 사진"]; // 직접 입력(3-step)
+const MAN_BILL_TITLES = ["현장·호기", "교체 내역·비용", "증빙 사진", "완료 서명"]; // 직접 입력(4-step)
 
 export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const sites = useContext(SitesContext);
@@ -41,7 +41,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const [manualForm, setManualForm] = useState({ siteId: "", units: [], parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
   const [materialPhotos, setMaterialPhotos] = useState({ before: [], after: [] });
   const [partPhotos, setPartPhotos] = useState({}); // 부품 2개 이상일 때만 사용: { [index]: { before: [], after: [] } }
-  const [manualPhotos, setManualPhotos] = useState({ before: [], after: [], confirm: null });
+  const [manualPhotos, setManualPhotos] = useState({ before: [], after: [] });
   const [billStep, setBillStep] = useState(0); // 0 정보 · 1 증빙사진 · 2 완료서명
   const [billToast, setBillToast] = useState(null); // { msg, ok }
   function toastBill(msg, ok = false) { setBillToast({ msg, ok }); setTimeout(() => setBillToast(null), 2500); }
@@ -54,6 +54,15 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   const [absentConfirmed, setAbsentConfirmed] = useState(false);
   const [signerName, setSignerName] = useState("");
   const [signerPhone, setSignerPhone] = useState("");
+  // 직접입력(수동청구)도 동일하게 서명/전화승인을 받되, 자재지급건과 상태를 공유하면
+  // 두 모드를 오가는 동안 서로 값이 섞일 수 있어 별도 state로 둔다.
+  const [manualSignatureUrl, setManualSignatureUrl] = useState(null);
+  const [manualAbsentMode, setManualAbsentMode] = useState(false);
+  const [manualApproverName, setManualApproverName] = useState("");
+  const [manualApproverPhone, setManualApproverPhone] = useState("");
+  const [manualAbsentConfirmed, setManualAbsentConfirmed] = useState(false);
+  const [manualSignerName, setManualSignerName] = useState("");
+  const [manualSignerPhone, setManualSignerPhone] = useState("");
 
   const selected = todos.find((t) => t.id === selectedId);
   // 견적 연동 건은 이미 견적서에 수리비가 정해져 있어, 직접 입력 대신 "견적서 참조"로 고정합니다.
@@ -90,8 +99,11 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
   // 관리자가 지급 확정한 부품이 2개 이상이면 부품별로 전/후 사진을 따로 받는다 — 1개면
   // 나눌 이유가 없어 지금처럼 통합 업로더를 그대로 쓴다.
   const billingParts = selected?.billingPartRows?.length > 1 ? selected.billingPartRows : null;
-  const manualPhotosOk = manualPhotos.before.length > 0 && manualPhotos.after.length > 0 && !!manualPhotos.confirm;
-  const manualValid = manualForm.siteId && manualForm.units.length > 0 && formatPartRows(manualForm.parts) && manualForm.replaceDate && manualForm.contactPhone.trim() && Number(manualForm.cost) > 0 && manualPhotosOk;
+  const manualPhotosOk = manualPhotos.before.length > 0 && manualPhotos.after.length > 0;
+  const manualApprovalOk = manualAbsentMode
+    ? manualApproverName.trim() && manualApproverPhone.replace(/\D/g, "").length >= 9 && manualAbsentConfirmed
+    : manualSignerName.trim() && manualSignerPhone.replace(/\D/g, "").length >= 9 && !!manualSignatureUrl;
+  const manualValid = manualForm.siteId && manualForm.units.length > 0 && formatPartRows(manualForm.parts) && manualForm.replaceDate && manualForm.contactPhone.trim() && Number(manualForm.cost) > 0 && manualPhotosOk && manualApprovalOk;
 
   // 스텝별 필수 검증 — 미입력이면 안내 문구 반환(다음/제출 막힘), 없으면 null.
   function matStepError(step) {
@@ -139,7 +151,21 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     if (step === 2) {
       if (manualPhotos.before.length === 0) return "교체 전 사진을 등록해주세요";
       if (manualPhotos.after.length === 0) return "교체 후 사진을 등록해주세요";
-      if (!manualPhotos.confirm) return "교체확인서를 등록해주세요";
+    }
+    if (step === 3) {
+      if (manualAbsentMode) {
+        if (!manualApproverName.trim()) return "담당자 성함 또는 직책을 입력해주세요";
+        if (!manualApproverPhone.trim()) return "연락처를 입력해주세요";
+        const absentDigits = manualApproverPhone.replace(/\D/g, "").length;
+        if (absentDigits < 9 || absentDigits > 11) return "전화번호를 확인해주세요";
+        if (!manualAbsentConfirmed) return "전화 승인 확인란에 체크해주세요";
+      } else {
+        if (!manualSignerName.trim()) return "서명자 성함을 입력해주세요";
+        if (!manualSignerPhone.trim()) return "서명자 연락처를 입력해주세요";
+        const digits = manualSignerPhone.replace(/\D/g, "").length;
+        if (digits < 9 || digits > 11) return "전화번호를 확인해주세요";
+        if (!manualSignatureUrl) return "고객 서명을 받아주세요";
+      }
     }
     return null;
   }
@@ -269,9 +295,14 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
         cost: manualForm.cost,
         beforePhotoUrls: manualPhotos.before.map((p) => p.url),
         afterPhotoUrls: manualPhotos.after.map((p) => p.url),
-        confirmPhotoUrl: manualPhotos.confirm,
         replaceDate: manualForm.replaceDate,
         contactPhone: manualForm.contactPhone,
+        // 지류 교체확인서 대신: 서명했으면 서명 이미지, 고객 부재중이면 전화승인자 정보.
+        signatureUrl: manualAbsentMode ? null : manualSignatureUrl,
+        approvalMethod: manualAbsentMode ? "전화승인" : "서명",
+        approverName: manualAbsentMode ? manualApproverName.trim() : manualSignerName.trim(),
+        approverPhone: manualAbsentMode ? manualApproverPhone.trim() : manualSignerPhone.trim(),
+        approvedAt: new Date().toISOString(),
       });
       if (!ok) {
         if (manualForm.units.length) setManualForm((f) => ({ ...f, units: targets.slice(i) }));
@@ -287,7 +318,14 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
     }
     setSubmitted({ siteName: site.name, part: partText, manual: true, fromKit: manualForm.fromKit });
     setManualForm({ siteId: "", units: [], parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
-    setManualPhotos({ before: [], after: [], confirm: null });
+    setManualPhotos({ before: [], after: [] });
+    setManualSignatureUrl(null);
+    setManualAbsentMode(false);
+    setManualApproverName("");
+    setManualApproverPhone("");
+    setManualAbsentConfirmed(false);
+    setManualSignerName("");
+    setManualSignerPhone("");
     setBillStep(0);
     setTimeout(() => setSubmitted(null), 2600);
   }
@@ -643,15 +681,76 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
                     label="교체 후 표준 화질 사진 등록"
                   />
                 </Field>
-                <Field label="교체확인서 (필수)">
-                  <SinglePhotoUpload
-                    label="교체확인서 종이 사진 등록"
-                    url={manualPhotos.confirm}
-                    uploadFolder={`billings/${uploadSession}`}
-                    onUploaded={(url) => setManualPhotos((p) => ({ ...p, confirm: url }))}
-                    onRemove={() => setManualPhotos((p) => ({ ...p, confirm: null }))}
-                  />
-                </Field>
+              </>
+            )}
+
+            {billStep === 3 && (
+              <>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3">
+                  <p className="text-xs font-extrabold text-slate-700">완료보고서 미리보기</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{sites.find((s) => s.id === manualForm.siteId)?.name}{manualForm.units.length ? ` · ${manualForm.units.join(", ")}` : ""}</p>
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-bold text-slate-800">{formatPartRows(manualForm.parts)}</p>
+                      <p className="text-sm font-extrabold text-blue-700 shrink-0">₩{Number(manualForm.cost || 0).toLocaleString()}</p>
+                    </div>
+                    {(manualPhotos.before[0] || manualPhotos.after[0]) && (
+                      <div className="flex gap-1.5 mt-1">
+                        {manualPhotos.before[0] && (
+                          <img src={manualPhotos.before[0].url} alt="교체 전" className="flex-1 min-w-0 aspect-square rounded-lg object-cover border border-slate-200" />
+                        )}
+                        {manualPhotos.after[0] && (
+                          <img src={manualPhotos.after[0].url} alt="교체 후" className="flex-1 min-w-0 aspect-square rounded-lg object-cover border border-slate-200" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-200">
+                    <p className="text-xs font-bold text-slate-500">합계</p>
+                    <p className="text-sm font-extrabold text-blue-700">
+                      ₩{Number(manualForm.cost || 0).toLocaleString()}
+                      <span className="text-[11px] font-semibold text-slate-400 ml-1">(VAT별도)</span>
+                    </p>
+                  </div>
+                </div>
+
+                {!manualAbsentMode ? (
+                  <>
+                    <Field label="서명자 성함*">
+                      <input type="text" className={inputCls} placeholder="예: 김O식 관리소장" value={manualSignerName} onChange={(e) => setManualSignerName(e.target.value)} />
+                    </Field>
+                    <Field label="서명자 연락처*">
+                      <input type="tel" className={inputCls} placeholder="010-0000-0000" value={manualSignerPhone} onChange={(e) => setManualSignerPhone(formatPhone(e.target.value))} />
+                    </Field>
+                    <Field label="고객 서명*">
+                      <SignaturePad
+                        url={manualSignatureUrl}
+                        uploadFolder={`billings/${uploadSession}/manual-signature`}
+                        onSigned={setManualSignatureUrl}
+                        onClear={() => setManualSignatureUrl(null)}
+                      />
+                    </Field>
+                    <button type="button" onClick={() => setManualAbsentMode(true)} className="w-full text-center text-xs font-bold text-slate-400 underline underline-offset-2 mt-1">
+                      고객이 부재중이에요
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Field label="담당자 (성함 또는 직책)">
+                      <input type="text" className={inputCls} placeholder="예: 김O식 관리소장" value={manualApproverName} onChange={(e) => setManualApproverName(e.target.value)} />
+                    </Field>
+                    <Field label="연락처">
+                      <input type="tel" className={inputCls} placeholder="010-0000-0000" value={manualApproverPhone} onChange={(e) => setManualApproverPhone(formatPhone(e.target.value))} />
+                    </Field>
+                    <label className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2.5 mt-1">
+                      <input type="checkbox" checked={manualAbsentConfirmed} onChange={(e) => setManualAbsentConfirmed(e.target.checked)} />
+                      <span className="text-xs font-bold text-slate-700">전화로 승인받았습니다</span>
+                    </label>
+                    <button type="button" onClick={() => setManualAbsentMode(false)} className="w-full text-center text-xs font-bold text-slate-400 underline underline-offset-2 mt-2">
+                      고객이 돌아왔어요 — 서명으로
+                    </button>
+                  </>
+                )}
               </>
             )}
 
@@ -659,10 +758,10 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart }) {
               {billStep > 0 && (
                 <button type="button" onClick={() => setBillStep((s) => s - 1)} className="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200">이전</button>
               )}
-              {billStep < 2 ? (
+              {billStep < 3 ? (
                 <button type="button" onClick={() => { const err = manStepError(billStep); if (err) { toastBill(err); return; } setBillStep((s) => s + 1); }} className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 active:bg-blue-800">다음</button>
               ) : (
-                <div className="flex-1"><PrimaryButton onClick={() => { const err = manStepError(2); if (err) { toastBill(err); return; } submitManual(); }}>청구 요청 제출</PrimaryButton></div>
+                <div className="flex-1"><PrimaryButton onClick={() => { const err = manStepError(3); if (err) { toastBill(err); return; } submitManual(); }}>청구 요청 제출</PrimaryButton></div>
               )}
             </div>
             {submitted && submitted.manual && (
