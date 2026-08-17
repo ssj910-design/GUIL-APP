@@ -286,6 +286,7 @@ function QuoteDetailActions({ q, engineerNames, onAdvanceQuote, onOpenWizard, on
           <button onClick={() => setSendModalOpen(true)} className="flex-1 bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl active:bg-emerald-700">
             {alreadySent ? "재발송" : "발송"}
           </button>
+          <button onClick={() => onOpenWizard(q)} className="flex-1 bg-slate-600 text-white text-sm font-bold py-3 rounded-xl active:bg-slate-700">수정하기</button>
           <button onClick={() => onAdvanceQuote(q.id)} className="flex-1 bg-indigo-600 text-white text-sm font-bold py-3 rounded-xl active:bg-indigo-700">승인 처리</button>
         </div>
         {sendModalOpen && (

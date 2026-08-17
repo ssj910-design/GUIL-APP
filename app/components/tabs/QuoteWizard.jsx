@@ -5,32 +5,41 @@
 // 시작한다 — 새 초안을 만들지 않고 그 요청 행을 그대로 쓴다.
 import { useState, useContext, useEffect } from "react";
 import { ChevronRight } from "lucide-react";
-import { SitesContext } from "@/app/components/context";
+import { SitesContext, UnitsContext } from "@/app/components/context";
 import { SiteSearchSelect } from "@/app/components/formWidgets";
 import { inputCls } from "@/app/components/ui";
 import { supabase } from "@/lib/supabaseClient";
 import { mapQuoteRequest, mapSiteManager } from "@/lib/mappers";
+import { siteUnitList } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 
 const STEP_TITLES = ["현장·담당자", "품목 입력", "부대비용", "확인·작성"];
 
 export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, onDiscarded, onSaved }) {
   const sites = useContext(SitesContext);
+  const allUnits = useContext(UnitsContext);
   const [step, setStep] = useState(existingQuote ? 1 : 0);
   const [siteId, setSiteId] = useState(existingQuote?.siteId ?? "");
   const [siteManagers, setSiteManagers] = useState([]);
   const [managerId, setManagerId] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
-  const [recipientPhone, setRecipientPhone] = useState(existingQuote?.contactPhone ?? "");
+  const [recipientPhone, setRecipientPhone] = useState(existingQuote?.recipientPhone || existingQuote?.contactPhone || "");
+  const [quoteTitleInput, setQuoteTitleInput] = useState(existingQuote?.quoteTitle ?? "");
   // 새 견적(요청 없이 시작)은 1단계를 넘어갈 때 빈 초안을 만든다 — 기존 요청에서 이어가면 그
   // 요청 행을 그대로 쓰므로 draft가 필요 없다.
   const [draft, setDraft] = useState(existingQuote ?? null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
 
-  const [items, setItems] = useState(() =>
-    existingQuote?.constructionType ? [{ category: "자재비", name: existingQuote.constructionType, spec: "", unit: "EA", qty: 1, unitPrice: 0, unitNo: "" }] : []
-  );
+  // "수정하기"로 이미 작성된 견적을 다시 열면 실제 저장된 품목(quoteItems)을 그대로 불러오고,
+  // 기사 요청에서 막 넘어온 경우(아직 작성 전, constructionType만 있음)엔 그 값으로 품목 1개를
+  // 미리 채워둔다 — 호기는 대부분 1호기라 기본값으로 넣어두고 필요하면 바꾸게 한다.
+  const [items, setItems] = useState(() => {
+    if (existingQuote?.quoteItems?.length) return existingQuote.quoteItems;
+    return existingQuote?.constructionType
+      ? [{ category: "자재비", name: existingQuote.constructionType, spec: "", unit: "EA", qty: 1, unitPrice: 0, unitNo: "1호기" }]
+      : [];
+  });
   const [expandedIdx, setExpandedIdx] = useState(0);
 
   const [transportCost, setTransportCost] = useState(existingQuote?.transportCost || 0);
@@ -39,7 +48,7 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
 
   function addItem() {
     setItems((prev) => {
-      const next = [...prev, { category: "자재비", name: "", spec: "", unit: "EA", qty: 1, unitPrice: 0, unitNo: "" }];
+      const next = [...prev, { category: "자재비", name: "", spec: "", unit: "EA", qty: 1, unitPrice: 0, unitNo: "1호기" }];
       setExpandedIdx(next.length - 1);
       return next;
     });
@@ -77,7 +86,7 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
     setSaving(true);
     setError("");
 
-    const quoteTitle = items[0]?.name || "견적서";
+    const quoteTitle = quoteTitleInput.trim() || items[0]?.name || "견적서";
     const quoteDate = TODAY_STR;
 
     const pdfRes = await fetch("/api/generate-quote-pdf", {
@@ -127,6 +136,7 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
   }
 
   const site = sites.find((s) => s.id === siteId);
+  const siteUnitOptions = site ? siteUnitList(site, allUnits).map((u) => u.unitNo) : [];
 
   useEffect(() => {
     if (!siteId) { setSiteManagers([]); return; }
@@ -135,14 +145,18 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
       if (!alive) return;
       const mapped = (data ?? []).map(mapSiteManager);
       setSiteManagers(mapped);
-      const primary = mapped.find((m) => m.isPrimary) ?? mapped[0];
-      if (primary) {
-        setManagerId(primary.id);
-        setRecipientEmail(primary.email || "");
-        setRecipientPhone(primary.phone || "");
+      // "수정하기"로 이미 작성된 견적을 다시 열면 예전에 고른 수신자를 그대로 유지한다
+      // (없으면 지금처럼 대표 담당자로).
+      const matched = existingQuote?.recipientName ? mapped.find((m) => m.name === existingQuote.recipientName) : null;
+      const chosen = matched ?? mapped.find((m) => m.isPrimary) ?? mapped[0];
+      if (chosen) {
+        setManagerId(chosen.id);
+        setRecipientEmail(existingQuote?.recipientEmail || chosen.email || "");
+        setRecipientPhone(existingQuote?.recipientPhone || chosen.phone || "");
       }
     });
     return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siteId]);
 
   function selectManager(id) {
@@ -222,6 +236,15 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
               <p className="text-xs font-bold text-slate-500 mb-1.5">현장명 *</p>
               <SiteSearchSelect value={siteId} onChange={setSiteId} placeholder="현장명 검색" />
             </div>
+            <div>
+              <p className="text-xs font-bold text-slate-500 mb-1.5">견적명</p>
+              <input
+                className={inputCls}
+                placeholder="예: OO빌딩 승강기 도어스위치 외 3건 교체"
+                value={quoteTitleInput}
+                onChange={(e) => setQuoteTitleInput(e.target.value)}
+              />
+            </div>
             {site && (
               <div>
                 <p className="text-xs font-bold text-slate-500 mb-1.5">수신 담당자</p>
@@ -280,8 +303,15 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
                           <input className={inputCls} value={it.spec} onChange={(e) => updateItem(idx, { spec: e.target.value })} />
                         </div>
                         <div>
-                          <p className="text-[11px] font-bold text-slate-500 mb-1">호기 (선택)</p>
-                          <input className={inputCls} value={it.unitNo} onChange={(e) => updateItem(idx, { unitNo: e.target.value })} />
+                          <p className="text-[11px] font-bold text-slate-500 mb-1">호기</p>
+                          {siteUnitOptions.length > 0 ? (
+                            <select className={inputCls} value={it.unitNo} onChange={(e) => updateItem(idx, { unitNo: e.target.value })}>
+                              {!siteUnitOptions.includes(it.unitNo) && <option value={it.unitNo}>{it.unitNo || "선택"}</option>}
+                              {siteUnitOptions.map((u) => <option key={u} value={u}>{u}</option>)}
+                            </select>
+                          ) : (
+                            <input className={inputCls} value={it.unitNo} onChange={(e) => updateItem(idx, { unitNo: e.target.value })} />
+                          )}
                         </div>
                       </div>
                       <div className="grid grid-cols-3 gap-2">
