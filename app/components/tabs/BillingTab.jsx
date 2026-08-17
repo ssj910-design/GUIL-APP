@@ -18,6 +18,13 @@ const BILL_STEP_TITLES = ["청구 정보", "증빙 사진", "완료 서명"]; //
 const draftKey = (todoId) => `guilBillingDraftV1:${todoId}`;
 const MAN_BILL_TITLES = ["현장·호기", "교체 내역·비용", "증빙 사진", "완료 서명"]; // 직접 입력(4-step)
 
+// 자릿수(9~11)만 보면 "191-494-949"처럼 0으로 시작하지 않는 엉뚱한 숫자도 통과한다 —
+// 국내 전화번호는 항상 0으로 시작하므로 그것까지 같이 확인한다.
+function isValidPhoneDigits(v) {
+  const d = (v ?? "").replace(/\D/g, "");
+  return d.startsWith("0") && d.length >= 9 && d.length <= 11;
+}
+
 export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quoteRequests = [] }) {
   const sites = useContext(SitesContext);
   const allUnits = useContext(UnitsContext);
@@ -137,14 +144,12 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       if (absentMode) {
         if (!approverName.trim()) return "담당자 성함 또는 직책을 입력해주세요";
         if (!approverPhone.trim()) return "연락처를 입력해주세요";
-        const absentDigits = approverPhone.replace(/\D/g, "").length;
-        if (absentDigits < 9 || absentDigits > 11) return "전화번호를 확인해주세요";
+        if (!isValidPhoneDigits(approverPhone)) return "전화번호를 확인해주세요";
         if (!absentConfirmed) return "전화 승인 확인란에 체크해주세요";
       } else {
         if (!signerName.trim()) return "서명자 성함을 입력해주세요";
         if (!signerPhone.trim()) return "서명자 연락처를 입력해주세요";
-        const digits = signerPhone.replace(/\D/g, "").length;
-        if (digits < 9 || digits > 11) return "전화번호를 확인해주세요";
+        if (!isValidPhoneDigits(signerPhone)) return "전화번호를 확인해주세요";
         if (!signatureUrl) return "고객 서명을 받아주세요";
       }
     }
@@ -169,14 +174,12 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       if (manualAbsentMode) {
         if (!manualApproverName.trim()) return "담당자 성함 또는 직책을 입력해주세요";
         if (!manualApproverPhone.trim()) return "연락처를 입력해주세요";
-        const absentDigits = manualApproverPhone.replace(/\D/g, "").length;
-        if (absentDigits < 9 || absentDigits > 11) return "전화번호를 확인해주세요";
+        if (!isValidPhoneDigits(manualApproverPhone)) return "전화번호를 확인해주세요";
         if (!manualAbsentConfirmed) return "전화 승인 확인란에 체크해주세요";
       } else {
         if (!manualSignerName.trim()) return "서명자 성함을 입력해주세요";
         if (!manualSignerPhone.trim()) return "서명자 연락처를 입력해주세요";
-        const digits = manualSignerPhone.replace(/\D/g, "").length;
-        if (digits < 9 || digits > 11) return "전화번호를 확인해주세요";
+        if (!isValidPhoneDigits(manualSignerPhone)) return "전화번호를 확인해주세요";
         if (!manualSignatureUrl) return "고객 서명을 받아주세요";
       }
     }
