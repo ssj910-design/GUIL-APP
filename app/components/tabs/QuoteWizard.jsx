@@ -15,6 +15,7 @@ import { siteUnitList } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 
 const STEP_TITLES = ["현장·담당자", "품목 입력", "부대비용", "확인·작성"];
+const draftKey = (id) => `guilQuoteWizardDraftV1:${id}`;
 
 export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, onDiscarded, onSaved }) {
   const sites = useContext(SitesContext);
@@ -65,7 +66,42 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
   const grandTotal = itemsSubtotal + Number(transportCost || 0) + Number(safetyCost || 0) + Number(profit || 0);
 
   const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState("");
+  function notify(msg) { setToast(msg); setTimeout(() => setToast(""), 2000); }
   const managerName = siteManagers.find((m) => m.id === managerId)?.name ?? "";
+
+  // 품목 입력하다가 현장에서 끊기기 쉬워, 여기까지 입력한 내용(품목·부대비용·견적명)을 기기에
+  // 임시저장해뒀다가 이 견적으로 돌아오면 자동으로 이어서 하게 한다. 수신 담당자 정보는 현장
+  // 담당자 목록에서 항상 다시 채워지므로 여기엔 담지 않는다.
+  useEffect(() => {
+    if (!draft?.id) return;
+    let saved = null;
+    try {
+      const raw = localStorage.getItem(draftKey(draft.id));
+      if (raw) saved = JSON.parse(raw);
+    } catch { /* 손상된 임시저장은 무시하고 그대로 진행 */ }
+    if (saved) {
+      setStep(saved.step ?? 1);
+      setItems(saved.items ?? []);
+      setTransportCost(saved.transportCost ?? 0);
+      setSafetyCost(saved.safetyCost ?? 0);
+      setProfit(saved.profit ?? 0);
+      setQuoteTitleInput(saved.quoteTitleInput ?? "");
+      notify("임시저장된 내용을 불러왔습니다");
+    }
+  }, [draft?.id]);
+
+  function saveDraft() {
+    if (!draft?.id) return;
+    try {
+      localStorage.setItem(draftKey(draft.id), JSON.stringify({
+        step, items, transportCost, safetyCost, profit, quoteTitleInput,
+      }));
+      notify("임시저장했습니다");
+    } catch {
+      notify("임시저장에 실패했습니다");
+    }
+  }
 
   // 견적번호 = 오늘날짜(YYYYMMDD) + "1" + 오늘 발행 순번 — 데스크탑 QuoteItemsModal.jsx와 동일한
   // 채번 규칙. 없으면 PDF·DB에 번호가 안 남아(발행 전엔 항상 빈 문자열이라 이 훅이 필요하다).
@@ -128,6 +164,7 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
       return;
     }
 
+    try { localStorage.removeItem(draftKey(draft.id)); } catch { /* 임시저장 정리 실패는 무시 */ }
     onSaved({
       id: draft.id, quoteItems: items, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
       profit: Number(profit) || 0, quoteNumber, recipientName: managerName, quoteTitle, quoteIssuedDate: quoteDate,
@@ -173,6 +210,7 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
     // 지울 수 있어야 한다 — 안 그러면 그 초안이 영영 안 지워지는 고아 상태로 남는다.
     if (draft && draft.status === "요청접수" && !draft.requesterId && !draft.engineer) {
       await supabase.from("quote_requests").delete().eq("id", draft.id);
+      try { localStorage.removeItem(draftKey(draft.id)); } catch { /* 임시저장 정리 실패는 무시 */ }
       onDiscarded?.(draft.id);
     }
     onClose();
@@ -405,10 +443,13 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
             if (step === 0) return handleCancel();
             return setStep(step - 1);
           }}
-          className="flex-1 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200"
+          className="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200"
         >
           {step === 0 ? "취소" : "이전"}
         </button>
+        {step >= 1 && draft?.id && (
+          <button type="button" onClick={saveDraft} className="px-4 py-3 rounded-xl text-sm font-bold text-blue-700 border border-blue-200 bg-blue-50">임시저장</button>
+        )}
         {step === 0 && (
           <button
             onClick={handleNextFromStep0}
@@ -442,6 +483,12 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
           </button>
         )}
       </div>
+
+      {toast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-1.5 whitespace-nowrap">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
