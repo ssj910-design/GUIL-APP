@@ -1,6 +1,6 @@
 import { useState, useContext, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Package, Receipt, ChevronRight, ChevronLeft, ChevronDown, FileText, PackageCheck, RotateCcw, PackageX, Search, Repeat, KeyRound } from "lucide-react";
+import { Package, Receipt, ChevronRight, ChevronLeft, ChevronDown, FileText, PackageCheck, RotateCcw, PackageX, Search, Repeat, KeyRound, Check } from "lucide-react";
 import { Badge, PhotoThumb, PhotoGrid, PrimaryButton, Sheet, Field, inputCls, DrillHeader, AccordionRow } from "@/app/components/ui";
 import { AuthContext, SitesContext } from "@/app/components/context";
 import { confirmAsync } from "@/app/components/ConfirmHost";
@@ -135,13 +135,18 @@ function parseAmountFromBillingPart(billingPart, part) {
 /* ---------- 처리 대기 카드 (캐러셀 한 칸) ---------- */
 
 // 자재 지급 대기 한 건 — 관리자 주 입력은 금액이라 그것만 앞에 두고, 담당기사·기한·내용은 "추가 설정"으로 접는다.
-function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto, onRemoveSupplyPhoto, onOpenDetail }) {
+function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto, onRemoveSupplyPhoto, onOpenDetail, onNotify }) {
   const parts = (r.part ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   const [amounts, setAmounts] = useState({});
   const [assignee, setAssignee] = useState(r.engineer);
   const [dueDate, setDueDate] = useState(addDays(TODAY_STR, 30));
   const [description, setDescription] = useState("");
   const [advanced, setAdvanced] = useState(false);
+  const [saving, setSaving] = useState(false);
+  // 완료 처리되면 이 카드가 지급대기 목록에서 곧바로 빠지며 통째로 사라진다 — 그 사이 setSaving을
+  // 부르면 "unmounted 컴포넌트 갱신" 경고가 나므로 마운트 여부를 확인하고 갱신한다.
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
   // amounts[i]는 개당 단가 — 부품별 합계는 단가 × 신청 수량으로 계산한다.
   const qtyOf = (part) => { const q = parsePartQty(part).qty; return q ? parseInt(q, 10) : 1; };
   const lineTotal = (part, i) => (Number(amounts[i]) || 0) * qtyOf(part);
@@ -222,11 +227,20 @@ function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto
 
       {!allAmountsFilled && <p className="text-[10px] text-red-500 mt-2">모든 부품의 금액을 입력해주세요</p>}
       <button
-        onClick={() => allAmountsFilled && onSupplyComplete(r.id, assignee, billingPartText || null, total || null, dueDate, description, billingPartRows)}
-        disabled={!allAmountsFilled}
+        onClick={async () => {
+          if (!allAmountsFilled || saving) return;
+          setSaving(true);
+          try {
+            await onSupplyComplete(r.id, assignee, billingPartText || null, total || null, dueDate, description, billingPartRows);
+            onNotify?.("자재 지급 완료 처리했습니다");
+          } finally {
+            if (mountedRef.current) setSaving(false);
+          }
+        }}
+        disabled={!allAmountsFilled || saving}
         className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg bg-blue-700 disabled:bg-slate-300 text-white active:bg-blue-800"
       >
-        <PackageCheck size={14} /> 자재 지급 완료 체크
+        <PackageCheck size={14} /> {saving ? "처리 중..." : "자재 지급 완료 체크"}
       </button>
     </div>
   );
@@ -258,7 +272,7 @@ function QuoteListRow({ q, onOpenDetail }) {
 
 // 견적 상세 시트 하단의 처리 액션 — 상태(요청접수→작성→승인)에 따라 다르다. 승인 단계에서 지급 폼 노출.
 // (QuotesPanel의 Sheet 안에서 key={shownDetail.id}로 렌더돼 다른 건을 열면 로컬 상태가 초기화된다.)
-function QuoteDetailActions({ q, engineerNames, onAdvanceQuote, onOpenWizard, onSendQuote, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto }) {
+function QuoteDetailActions({ q, engineerNames, onAdvanceQuote, onOpenWizard, onSendQuote, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onNotify }) {
   const [assignees, setAssignees] = useState([q.engineer]);
   const [dueDate, setDueDate] = useState(addDays(TODAY_STR, 30));
   const [description, setDescription] = useState("");
@@ -266,6 +280,12 @@ function QuoteDetailActions({ q, engineerNames, onAdvanceQuote, onOpenWizard, on
   const [sendModalOpen, setSendModalOpen] = useState(false);
   const [outsourced, setOutsourced] = useState(false);
   const [vendorName, setVendorName] = useState("");
+  const [advancing, setAdvancing] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  // 지급완료 처리되면 이 견적이 진행중 목록에서 빠지면서 상세 시트가 통째로 닫힐 수 있다 — 그 뒤
+  // setCompleting을 부르면 "unmounted 컴포넌트 갱신" 경고가 나므로 마운트 여부를 확인한다.
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
   const canComplete = assignees.length > 0 && (!outsourced || vendorName.trim());
   const alreadySent = !!(q.emailSentAt || q.kakaoSentAt);
 
@@ -287,7 +307,22 @@ function QuoteDetailActions({ q, engineerNames, onAdvanceQuote, onOpenWizard, on
             {alreadySent ? "재발송" : "발송"}
           </button>
           <button onClick={() => onOpenWizard(q)} className="flex-1 bg-slate-600 text-white text-sm font-bold py-3 rounded-xl active:bg-slate-700">수정하기</button>
-          <button onClick={() => onAdvanceQuote(q.id)} className="flex-1 bg-indigo-600 text-white text-sm font-bold py-3 rounded-xl active:bg-indigo-700">승인 처리</button>
+          <button
+            onClick={async () => {
+              if (advancing) return;
+              setAdvancing(true);
+              try {
+                await onAdvanceQuote(q.id);
+                onNotify?.("견적을 승인 처리했습니다");
+              } finally {
+                if (mountedRef.current) setAdvancing(false);
+              }
+            }}
+            disabled={advancing}
+            className="flex-1 bg-indigo-600 text-white text-sm font-bold py-3 rounded-xl active:bg-indigo-700 disabled:opacity-60"
+          >
+            {advancing ? "처리 중..." : "승인 처리"}
+          </button>
         </div>
         {sendModalOpen && (
           <QuoteSendConfirmModal q={q} alreadySent={alreadySent} onClose={() => setSendModalOpen(false)} onSendQuote={onSendQuote} />
@@ -337,11 +372,20 @@ function QuoteDetailActions({ q, engineerNames, onAdvanceQuote, onOpenWizard, on
         )}
         {!canComplete && <p className="text-[10px] text-slate-400 mt-2">{assignees.length === 0 ? "담당 기사를 1명 이상 선택해주세요" : "작업 업체명을 입력해주세요"}</p>}
         <button
-          onClick={() => canComplete && onCompleteQuoteSupply(q.id, assignees, dueDate, description, outsourced, vendorName.trim())}
-          disabled={!canComplete}
+          onClick={async () => {
+            if (!canComplete || completing) return;
+            setCompleting(true);
+            try {
+              await onCompleteQuoteSupply(q.id, assignees, dueDate, description, outsourced, vendorName.trim());
+              onNotify?.("자재 지급 완료 처리했습니다");
+            } finally {
+              if (mountedRef.current) setCompleting(false);
+            }
+          }}
+          disabled={!canComplete || completing}
           className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg bg-blue-700 disabled:bg-slate-300 text-white active:bg-blue-800"
         >
-          <PackageCheck size={14} /> 자재 지급 완료 체크
+          <PackageCheck size={14} /> {completing ? "처리 중..." : "자재 지급 완료 체크"}
         </button>
       </div>
     );
@@ -480,6 +524,8 @@ function MaterialsPanel({ pending, rejected, suppliedCount, engineerNames, onSup
   // effect 없이 렌더 시점에 바로 찾아서 보여준다.
   const shownDetail = detail ?? (focusId ? pending.find((r) => r.id === focusId) : null);
   const closeDetail = () => { setDetail(null); if (focusId) onFocusHandled?.(); };
+  const [toast, setToast] = useState("");
+  function notify(msg) { setToast(msg); setTimeout(() => setToast(""), 2000); }
   return (
     <div>
       {rejected.length > 0 && (
@@ -516,6 +562,7 @@ function MaterialsPanel({ pending, rejected, suppliedCount, engineerNames, onSup
             onAttachPhoto={onAttachPhoto}
             onRemoveSupplyPhoto={onRemoveSupplyPhoto}
             onOpenDetail={setDetail}
+            onNotify={notify}
           />
         )}
       />
@@ -570,6 +617,12 @@ function MaterialsPanel({ pending, rejected, suppliedCount, engineerNames, onSup
           </div>
         </Sheet>
       )}
+
+      {toast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-1.5 whitespace-nowrap">
+          <Check size={14} className="shrink-0" /> {toast}
+        </div>
+      )}
     </div>
   );
 }
@@ -580,8 +633,13 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
   const [pdfFullscreen, setPdfFullscreen] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("전체");
-  const shownDetail = detail ?? (focusId ? active.find((q) => q.id === focusId) : null);
+  // detail은 행을 누른 시점의 스냅샷이라 승인 처리·지급완료처럼 그 안에서 상태를 바꾸는
+  // 액션 뒤에도 active 배열의 최신 값으로 다시 찾아 보여준다 — 안 그러면 버튼을 눌러도
+  // 시트가 그대로라 "아무 반응이 없다"처럼 보인다.
+  const shownDetail = detail ? (active.find((q) => q.id === detail.id) ?? detail) : (focusId ? active.find((q) => q.id === focusId) : null);
   const closeDetail = () => { setDetail(null); setPdfFullscreen(false); if (focusId) onFocusHandled?.(); };
+  const [toast, setToast] = useState("");
+  function notify(msg) { setToast(msg); setTimeout(() => setToast(""), 2000); }
   // 데스크탑 관리자웹(MaterialsAdmin.jsx의 RequestDetailModal)과 같은 기준 — 요청접수 이후(작성
   // 이상)면 "견적 상세내역"으로, 공사내용 대신 견적명·PDF 미리보기를 보여준다.
   const isDraftedQuote = shownDetail && shownDetail.status !== "요청접수";
@@ -720,8 +778,15 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
             onCompleteQuoteSupply={onCompleteQuoteSupply}
             onAttachQuotePhoto={onAttachQuotePhoto}
             onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
+            onNotify={notify}
           />
         </Sheet>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-1.5 whitespace-nowrap">
+          <Check size={14} className="shrink-0" /> {toast}
+        </div>
       )}
 
       {pdfFullscreen && shownDetail?.quotePdfUrl && createPortal(

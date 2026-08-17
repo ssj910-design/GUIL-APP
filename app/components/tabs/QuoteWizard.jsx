@@ -1,8 +1,9 @@
 "use client";
 
 // 관리자 모드 폰앱 — 새 견적서 작성 마법사. 고장접수(FailureTab.jsx)와 같은 스텝형 UI를 쓴다.
-// existingQuote가 있으면(기사 요청에서 이어감) 1단계(현장 선택)를 건너뛰고 2단계(품목 입력)부터
-// 시작한다 — 새 초안을 만들지 않고 그 요청 행을 그대로 쓴다.
+// existingQuote가 있어도(기사 요청에서 이어감) 1단계(현장·견적명)부터 시작한다 — 요청은 현장만
+// 정해져 있고 견적명은 아직 없으므로 여기서 입력받아야 한다. 새 초안을 만들지 않고 그 요청 행을
+// 그대로 쓴다.
 import { useState, useContext, useEffect } from "react";
 import { ChevronRight } from "lucide-react";
 import { SitesContext, UnitsContext } from "@/app/components/context";
@@ -18,7 +19,7 @@ const STEP_TITLES = ["현장·담당자", "품목 입력", "부대비용", "확�
 export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, onDiscarded, onSaved }) {
   const sites = useContext(SitesContext);
   const allUnits = useContext(UnitsContext);
-  const [step, setStep] = useState(existingQuote ? 1 : 0);
+  const [step, setStep] = useState(0);
   const [siteId, setSiteId] = useState(existingQuote?.siteId ?? "");
   const [siteManagers, setSiteManagers] = useState([]);
   const [managerId, setManagerId] = useState("");
@@ -402,12 +403,11 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
         <button
           onClick={() => {
             if (step === 0) return handleCancel();
-            if (step === 1 && existingQuote) return handleCancel();
             return setStep(step - 1);
           }}
           className="flex-1 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200"
         >
-          {step === 0 || (step === 1 && existingQuote) ? "취소" : "이전"}
+          {step === 0 ? "취소" : "이전"}
         </button>
         {step === 0 && (
           <button
