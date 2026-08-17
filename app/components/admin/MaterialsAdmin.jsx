@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
 import { mapQuoteRequest } from "@/lib/mappers";
 import { uploadPhoto } from "@/lib/photos";
-import { unitIdFor, addDays, shortDate, parsePartQty } from "@/lib/utils";
+import { unitIdFor, addDays, shortDate, parsePartQty, formatUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid, DateTextInput, lastSentDate, sentHistory } from "@/app/components/admin/adminShared";
 import QuoteItemsModal from "@/app/components/admin/QuoteItemsModal";
@@ -19,6 +19,18 @@ import QuotePdfPreview from "@/app/components/admin/QuotePdfPreview";
 
 const MATERIAL_TONE = { 승인대기: "blue", 지급완료: "green", 반려: "red", 교체완료: "indigo" };
 const QUOTE_TONE = { 요청접수: "blue", 작성: "amber", 승인: "amber", 지급완료: "green", 교체완료: "indigo" };
+
+// 할 일 제목에 쓸 호기 — v2 unit_id가 있으면 그걸 우선하고(관리자 콘솔은 v2 네이티브),
+// 없으면 견적 요청 자체의 elevatorNo, 그것도 없으면(관리자가 새로 작성한 견적) 품목에
+// 적어둔 호기로 대신한다 — 품목마다 호기가 다르면 특정할 수 없으니 표시하지 않는다.
+function quoteUnitLabel(data, quote, unitId) {
+  const u = (data.units ?? []).find((x) => x.id === unitId);
+  if (u) return u.unitNo;
+  const fromRequest = formatUnitLabel(quote.elevatorNo);
+  if (fromRequest) return fromRequest;
+  const uniqueUnits = [...new Set((quote.quoteItems ?? []).map((it) => it.unitNo).filter(Boolean))];
+  return uniqueUnits.length === 1 ? uniqueUnits[0] : "";
+}
 
 // 부품별 금액 필수 입력값을 지급 문자열("부품명(₩1,000)")에서 되찾아 수정 모달 기본값으로 쓴다.
 function parseAmountFromBillingPart(billingPart, part) {
@@ -381,7 +393,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         quoteRequestId: quote.id,
         materialRequestId: null,
         source: "quote",
-        title: `${quote.siteName} ${quote.constructionType} 시공 확인 및 서류 제출`,
+        title: `${quote.siteName}${quoteUnitLabel(data, quote, unitId) ? ` ${quoteUnitLabel(data, quote, unitId)}` : ""} ${quote.quoteTitle || quote.constructionType} 시공 확인 및 서류 제출`,
         siteName: quote.siteName,
         elevatorNo: quote.elevatorNo,
         // 부품교체·공사내역 목록엔 공사구분(카테고리)보다 실제 작성한 견적명이 더 구체적이라 그걸 쓴다.
@@ -477,7 +489,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         quoteRequestId: quote.id,
         materialRequestId: null,
         source: "quote",
-        title: `${quote.siteName} ${quote.constructionType} 시공 확인 및 서류 제출`,
+        title: `${quote.siteName}${quoteUnitLabel(data, quote, unitId) ? ` ${quoteUnitLabel(data, quote, unitId)}` : ""} ${quote.quoteTitle || quote.constructionType} 시공 확인 및 서류 제출`,
         siteName: quote.siteName,
         elevatorNo: quote.elevatorNo,
         // 부품교체·공사내역 목록엔 공사구분(카테고리)보다 실제 작성한 견적명이 더 구체적이라 그걸 쓴다.

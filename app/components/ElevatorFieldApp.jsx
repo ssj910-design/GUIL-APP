@@ -1810,6 +1810,15 @@ export default function App() {
       .eq("id", quoteId);
   }
 
+  // 견적 요청 자체(elevatorNo)에 호기가 없으면(관리자가 새로 작성한 견적) 품목에 적어둔
+  // 호기로 대신한다 — 품목마다 호기가 다르면 특정할 수 없으니 표시하지 않는다.
+  function quoteUnitLabel(q) {
+    const fromRequest = formatUnitLabel(q.elevatorNo);
+    if (fromRequest) return fromRequest;
+    const uniqueUnits = [...new Set((q.quoteItems ?? []).map((it) => it.unitNo).filter(Boolean))];
+    return uniqueUnits.length === 1 ? uniqueUnits[0] : "";
+  }
+
   // ★ 자재지급완료 트리거: 이 순간 담당 기사(들)에게 할 일이 자동 생성됩니다
   // assignees(배열)를 넘기면 신청자 외에 실제 시공 기사를 2명 이상 지정할 수 있고,
   // 각 담당자마다 할 일이 하나씩 생성됩니다 (같은 quoteRequestId를 공유 — 한 명이 비용청구를
@@ -1825,7 +1834,7 @@ export default function App() {
       materialRequestId: null,
       quoteRequestId: quoteId,
       source: "quote",
-      title: `${q.siteName}${formatUnitLabel(q.elevatorNo) ? ` ${formatUnitLabel(q.elevatorNo)}` : ""} ${q.constructionType} 시공 확인 및 서류 제출`,
+      title: `${q.siteName}${quoteUnitLabel(q) ? ` ${quoteUnitLabel(q)}` : ""} ${q.quoteTitle || q.constructionType} 시공 확인 및 서류 제출`,
       siteName: q.siteName,
       elevatorNo: q.elevatorNo,
       // 부품교체·공사내역 목록엔 공사구분(카테고리)보다 실제 작성한 견적명이 더 구체적이라 그걸 쓴다.
@@ -1923,7 +1932,7 @@ export default function App() {
       materialRequestId: null,
       quoteRequestId: quoteId,
       source: "quote",
-      title: `${q.siteName}${formatUnitLabel(q.elevatorNo) ? ` ${formatUnitLabel(q.elevatorNo)}` : ""} ${q.constructionType} 시공 확인 및 서류 제출`,
+      title: `${q.siteName}${quoteUnitLabel(q) ? ` ${quoteUnitLabel(q)}` : ""} ${q.quoteTitle || q.constructionType} 시공 확인 및 서류 제출`,
       siteName: q.siteName,
       elevatorNo: q.elevatorNo,
       // 부품교체·공사내역 목록엔 공사구분(카테고리)보다 실제 작성한 견적명이 더 구체적이라 그걸 쓴다.
