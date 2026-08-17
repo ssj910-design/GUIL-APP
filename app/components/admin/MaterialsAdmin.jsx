@@ -32,6 +32,18 @@ function quoteUnitLabel(data, quote, unitId) {
   return uniqueUnits.length === 1 ? uniqueUnits[0] : "";
 }
 
+// 견적 자동생성 할일 내용에 "교체품목" 목록을 기본으로 넣는다 — 견적 작성 때 적은 품목
+// 그대로(품명 수량단위)라 담당 기사가 뭘 챙겨야 하는지 할일만 봐도 알 수 있다. 관리자가
+// 지급완료 처리 때 따로 적은 전달내용이 있으면 그 아래에 이어붙인다.
+function quotePartsSummary(items) {
+  const rows = (items ?? []).filter((it) => it.name?.trim());
+  if (!rows.length) return "";
+  return "교체품목\n" + rows.map((it) => `${it.name.trim()} ${it.qty || 1}${(it.unit || "EA").toLowerCase()}`).join("\n");
+}
+function quoteTodoDescription(quote, adminNote) {
+  return [quotePartsSummary(quote.quoteItems), adminNote || ""].filter(Boolean).join("\n\n") || null;
+}
+
 // 부품별 금액 필수 입력값을 지급 문자열("부품명(₩1,000)")에서 되찾아 수정 모달 기본값으로 쓴다.
 function parseAmountFromBillingPart(billingPart, part) {
   if (!billingPart) return "";
@@ -393,7 +405,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         quoteRequestId: quote.id,
         materialRequestId: null,
         source: "quote",
-        title: `${quote.siteName}${quoteUnitLabel(data, quote, unitId) ? ` ${quoteUnitLabel(data, quote, unitId)}` : ""} ${quote.quoteTitle || quote.constructionType} 시공 확인 및 서류 제출`,
+        title: `${quote.siteName}${quoteUnitLabel(data, quote, unitId) ? ` ${quoteUnitLabel(data, quote, unitId)}` : ""} ${quote.quoteTitle || quote.constructionType}`,
         siteName: quote.siteName,
         elevatorNo: quote.elevatorNo,
         // 부품교체·공사내역 목록엔 공사구분(카테고리)보다 실제 작성한 견적명이 더 구체적이라 그걸 쓴다.
@@ -404,7 +416,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         done: false,
         unitId,
         assigneeId,
-        description: description || null,
+        description: quoteTodoDescription(quote, description),
         isOutsourced: !!isOutsourced,
         vendorName: finalVendorName,
       };
@@ -473,7 +485,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
       const { error: keepError } = await supabase
         .from("todos")
         .update({
-          due_date: dueDate, description: description || null,
+          due_date: dueDate, description: quoteTodoDescription(quote, description),
           ...(todoOutsourcedReady ? { is_outsourced: !!isOutsourced, vendor_name: finalVendorName } : {}),
         })
         .in("id", kept.map((t) => t.id));
@@ -489,7 +501,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         quoteRequestId: quote.id,
         materialRequestId: null,
         source: "quote",
-        title: `${quote.siteName}${quoteUnitLabel(data, quote, unitId) ? ` ${quoteUnitLabel(data, quote, unitId)}` : ""} ${quote.quoteTitle || quote.constructionType} 시공 확인 및 서류 제출`,
+        title: `${quote.siteName}${quoteUnitLabel(data, quote, unitId) ? ` ${quoteUnitLabel(data, quote, unitId)}` : ""} ${quote.quoteTitle || quote.constructionType}`,
         siteName: quote.siteName,
         elevatorNo: quote.elevatorNo,
         // 부품교체·공사내역 목록엔 공사구분(카테고리)보다 실제 작성한 견적명이 더 구체적이라 그걸 쓴다.
@@ -500,7 +512,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         done: false,
         unitId,
         assigneeId,
-        description: description || null,
+        description: quoteTodoDescription(quote, description),
         isOutsourced: !!isOutsourced,
         vendorName: finalVendorName,
       };
@@ -531,7 +543,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         ...newTodos,
         ...prev.todos
           .filter((t) => !toRemove.some((r) => r.id === t.id))
-          .map((t) => (kept.some((k) => k.id === t.id) ? { ...t, dueDate, description: description || null, isOutsourced: !!isOutsourced, vendorName: finalVendorName } : t)),
+          .map((t) => (kept.some((k) => k.id === t.id) ? { ...t, dueDate, description: quoteTodoDescription(quote, description), isOutsourced: !!isOutsourced, vendorName: finalVendorName } : t)),
       ],
     }));
   }
