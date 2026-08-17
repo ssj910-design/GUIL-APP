@@ -1828,7 +1828,8 @@ export default function App() {
       title: `${q.siteName}${formatUnitLabel(q.elevatorNo) ? ` ${formatUnitLabel(q.elevatorNo)}` : ""} ${q.constructionType} 시공 확인 및 서류 제출`,
       siteName: q.siteName,
       elevatorNo: q.elevatorNo,
-      part: q.constructionType,
+      // 부품교체·공사내역 목록엔 공사구분(카테고리)보다 실제 작성한 견적명이 더 구체적이라 그걸 쓴다.
+      part: q.quoteTitle || q.constructionType,
       assignee,
       assignedDate: TODAY_STR,
       dueDate: finalDueDate,
@@ -1925,7 +1926,8 @@ export default function App() {
       title: `${q.siteName}${formatUnitLabel(q.elevatorNo) ? ` ${formatUnitLabel(q.elevatorNo)}` : ""} ${q.constructionType} 시공 확인 및 서류 제출`,
       siteName: q.siteName,
       elevatorNo: q.elevatorNo,
-      part: q.constructionType,
+      // 부품교체·공사내역 목록엔 공사구분(카테고리)보다 실제 작성한 견적명이 더 구체적이라 그걸 쓴다.
+      part: q.quoteTitle || q.constructionType,
       assignee,
       assignedDate: TODAY_STR,
       dueDate: finalDueDate,

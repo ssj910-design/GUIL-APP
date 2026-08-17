@@ -384,7 +384,8 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         title: `${quote.siteName} ${quote.constructionType} 시공 확인 및 서류 제출`,
         siteName: quote.siteName,
         elevatorNo: quote.elevatorNo,
-        part: quote.constructionType,
+        // 부품교체·공사내역 목록엔 공사구분(카테고리)보다 실제 작성한 견적명이 더 구체적이라 그걸 쓴다.
+        part: quote.quoteTitle || quote.constructionType,
         assignee: engineer?.name ?? quote.engineer,
         assignedDate: TODAY_STR,
         dueDate,
@@ -479,7 +480,8 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         title: `${quote.siteName} ${quote.constructionType} 시공 확인 및 서류 제출`,
         siteName: quote.siteName,
         elevatorNo: quote.elevatorNo,
-        part: quote.constructionType,
+        // 부품교체·공사내역 목록엔 공사구분(카테고리)보다 실제 작성한 견적명이 더 구체적이라 그걸 쓴다.
+        part: quote.quoteTitle || quote.constructionType,
         assignee: engineer?.name ?? "",
         assignedDate: TODAY_STR,
         dueDate,
