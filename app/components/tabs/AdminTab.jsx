@@ -97,8 +97,11 @@ function AssigneeSelect({ value, options, onChange }) {
 
 // 견적 지급 시 실제 시공할 기사를 2명 이상 지정할 수 있게 하는 다중 선택 UI입니다.
 function MultiAssigneeSelect({ values, options, onChange }) {
-  const extras = values.filter((v) => !options.includes(v));
-  const allNames = [...options, ...extras];
+  // 이름 중복(같은 이름의 프로필이 2개 이상 등록된 경우)이 있으면 같은 칩이 여러 번 뜨고,
+  // 값에 빈 문자열/null이 섞여 있으면(예전 데이터) 빈 칩으로 보이니 둘 다 걸러낸다.
+  const uniqueOptions = [...new Set(options)];
+  const extras = values.filter((v) => v && !uniqueOptions.includes(v));
+  const allNames = [...uniqueOptions, ...extras];
   function toggle(name) {
     onChange(values.includes(name) ? values.filter((v) => v !== name) : [...values, name]);
   }
@@ -989,7 +992,7 @@ function SupplyHistoryScreen({ supplied, todos, engineerNames, onSupplyEdit, onA
 // 자재지급완료된 견적요청 한 건 수정 — 담당기사 구성·할 일 기한·내용을 기존 값으로 미리 채우고,
 // 저장 시 onQuoteSupplyEdit으로 담당자별 할 일만 갱신한다(상태·지급일·사진은 별도).
 function QuoteSupplyEditForm({ q, existingTodos, engineerNames, onSubmit, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto }) {
-  const [assignees, setAssignees] = useState(existingTodos.length ? existingTodos.map((t) => t.assignee) : [q.engineer]);
+  const [assignees, setAssignees] = useState(existingTodos.length ? existingTodos.map((t) => t.assignee).filter(Boolean) : [q.engineer]);
   const [dueDate, setDueDate] = useState(existingTodos[0]?.dueDate ?? addDays(TODAY_STR, 30));
   const [description, setDescription] = useState(existingTodos[0]?.description ?? "");
   const [outsourced, setOutsourced] = useState(!!existingTodos[0]?.isOutsourced);
@@ -1037,6 +1040,7 @@ function QuoteSupplyEditForm({ q, existingTodos, engineerNames, onSubmit, onAtta
         <div>
           <label className="text-[10px] font-bold text-slate-400 block mb-1">작업 업체명</label>
           <input className={inputCls} placeholder="예: OO엘리베이터설비" value={vendorName} onChange={(e) => setVendorName(e.target.value)} />
+          {!vendorName.trim() && <p className="text-[10px] text-red-500 mt-1">작업 업체명을 입력해주세요</p>}
         </div>
       )}
 
