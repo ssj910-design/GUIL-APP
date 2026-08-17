@@ -1154,6 +1154,12 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
   // 자재담당자에게도 배정할 수 있어야 한다. engineerNames(공용 기사 명단, GPS·근태 등에도 쓰임)는
   // 그대로 두고 이 화면들에서만 합친다.
   const engineerNames = [...ctxEngineerNames, ...(profiles ?? []).filter((p) => p.role === "admin" && p.admin_tier === "material" && p.is_active !== false).map((p) => p.name)];
+  // 견적(외주 처리 포함) 담당자 지정 화면에서만 대표(신석주) 계정도 선택할 수 있게 명단에 더한다
+  // — 외주 건은 실제 작업은 업체가 하고 청구 제출만 내부 계정이 대신하는데, 대표가 직접
+  // 처리하는 경우가 있어서다. 다른 화면(자재지급·재배정 등)의 engineerNames는 그대로 둔다.
+  const quoteEngineerNames = engineerNames.includes("신석주")
+    ? engineerNames
+    : [...engineerNames, ...(profiles ?? []).filter((p) => p.name === "신석주").map((p) => p.name)];
   // PC 관리자 콘솔(EngineersAdmin)과 동일한 대상 — 기사 전체 + 최고관리자를 뺀 관리자 계정.
   const resettableAccounts = (profiles ?? [])
     .filter((p) => (p.role === "engineer" || (p.role === "admin" && p.admin_tier !== "super")) && p.is_active !== false);
@@ -1201,7 +1207,7 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
       <QuoteSupplyHistoryScreen
         completed={completed}
         todos={todos}
-        engineerNames={engineerNames}
+        engineerNames={quoteEngineerNames}
         onQuoteSupplyEdit={onQuoteSupplyEdit}
         onAttachQuotePhoto={onAttachQuotePhoto}
         onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
@@ -1224,7 +1230,7 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
           <QuotesPanel
             active={quoteActive}
             completedCount={completed.length}
-            engineerNames={engineerNames}
+            engineerNames={quoteEngineerNames}
             onAdvanceQuote={onAdvanceQuote}
             onOpenWizard={(q) => { setWizardTarget(q); setPage("quoteWizard"); }}
             onSendQuote={onSendQuote}

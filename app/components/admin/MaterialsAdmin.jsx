@@ -949,7 +949,8 @@ function MaterialSupplyModal({ request, profiles, todos, onClose, onSubmit }) {
 function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
   const isEdit = quote.status === "자재지급완료";
   // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 관리자가 자재담당자에게도 배정할 수 있어야 한다.
-  const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
+  // 견적(외주 처리 포함) 건은 대표(신석주)가 직접 처리하는 경우가 있어 명단에 추가로 포함한다.
+  const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material" || p.name === "신석주") && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
   const existingTodosForQuote = todos.filter((t) => t.quoteRequestId === quote.id);
   const existingAssigneeIds = existingTodosForQuote.map((t) => t.assigneeId);
   const defaultId = quote.requesterId || engineers.find((p) => p.name === quote.engineer)?.id || "";
