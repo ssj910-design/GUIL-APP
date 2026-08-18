@@ -103,29 +103,51 @@ export async function POST(request) {
   }
   if (!keywords.length) return Response.json({ ok: true, answer: "질문을 조금 더 구체적으로 적어주세요.", sources: [] });
 
-  // 2) 키워드 전부를 포함하는 청크부터 찾고, 없으면 **앞에서부터** 버리며 재시도한다.
+  // 2) 검색 — 키워드(정확한 말)와 의미(임베딩)를 합쳐서 찾는다.
   //
-  // 앞에서 버리는 이유: AI가 만든 합성어("제출기한")는 원문에 없어서 항상 0건인데,
-  // 대개 앞쪽에 온다. 뒤에서 버리면(slice(0,n)) 그 나쁜 검색어가 끝까지 남아 전멸한다.
-  // 실제로 "자체점검 결과 제출 기한"이 ["제출기한","자체점검","결과"]로 뽑혀 3번 다 0건이었다.
+  // 둘 다 필요하다: 법령 질문엔 "제54조"·"10초"·"150N"처럼 정확히 맞아야 하는 말이 많아
+  // 벡터만으론 부족하고, 반대로 "도어대기타임"처럼 현장 말로 물으면 키워드만으론 0건이 된다.
+  // 합치는 방식(RRF)은 마이그 119 주석 참고.
   //
-  // ⚠️ 검색 실패(함수 없음·권한 없음)와 "자료에 정말 없음"을 반드시 구분해서 알린다.
-  //    예전엔 둘 다 "관련 규정을 찾지 못했습니다"로 나와서, 마이그 115를 안 돌린 상태인지
-  //    질문이 자료 밖인지 아무도 알 수 없었다(실제로 그 상태로 한참 헤맸다).
+  // 질문 임베딩이 실패하거나 하이브리드 함수가 아직 없으면 **키워드 검색으로 조용히 내려간다** —
+  // 검색이 통째로 죽는 것보다 낫고, 임베딩을 적재하는 중에도 앱은 계속 돌아야 한다.
+  let queryEmbedding = null;
+  try {
+    const emb = await client.embeddings.create({ model: "text-embedding-3-small", input: q });
+    queryEmbedding = emb.data[0].embedding;
+  } catch (e) {
+    console.error("[law-qa] 질문 임베딩 실패, 키워드만 사용:", e.message);
+  }
+
   let rows = [];
-  for (let start = 0; start < keywords.length && rows.length === 0; start++) {
-    const { data, error } = await supabaseAdmin.rpc("search_knowledge", {
-      keywords: keywords.slice(start),
-      match_count: 8,
+  if (queryEmbedding) {
+    const { data, error } = await supabaseAdmin.rpc("search_knowledge_hybrid", {
+      keywords, query_embedding: queryEmbedding, match_count: 8,
     });
-    if (error) {
-      console.error("[law-qa] search_knowledge 실패:", error.message);
-      return Response.json({
-        ok: false,
-        reason: "검사기준 검색이 아직 준비되지 않았습니다 (관리자: 마이그레이션 115 실행 + 청크 적재 필요)",
+    if (error) console.error("[law-qa] 하이브리드 검색 실패, 키워드로 대체:", error.message);
+    else rows = data ?? [];
+  }
+
+  // 키워드 전용 경로 — 하이브리드를 못 쓴 경우, 그리고 그마저 0건이면 **앞에서부터** 검색어를
+  // 버리며 재시도한다. 앞에서 버리는 이유: AI가 만든 합성어("제출기한")는 원문에 없어 항상
+  // 0건인데 대개 앞쪽에 온다. 뒤에서 버리면 그 나쁜 검색어가 끝까지 남아 전멸한다.
+  if (!rows.length) {
+    for (let start = 0; start < keywords.length && rows.length === 0; start++) {
+      const { data, error } = await supabaseAdmin.rpc("search_knowledge", {
+        keywords: keywords.slice(start),
+        match_count: 8,
       });
+      // ⚠️ 검색 실패(함수 없음·권한 없음)와 "자료에 정말 없음"은 반드시 구분해서 알린다.
+      //    둘 다 "찾지 못했습니다"로 나오면 마이그를 안 돌린 건지 자료 밖인지 알 수 없다.
+      if (error) {
+        console.error("[law-qa] search_knowledge 실패:", error.message);
+        return Response.json({
+          ok: false,
+          reason: "검사기준 검색이 아직 준비되지 않았습니다 (관리자: 마이그레이션 115 실행 + 청크 적재 필요)",
+        });
+      }
+      rows = data ?? [];
     }
-    rows = data ?? [];
   }
   if (!rows.length) {
     const logId = await log(q, entryPoint, keywords, 0);
