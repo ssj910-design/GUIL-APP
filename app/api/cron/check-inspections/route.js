@@ -30,18 +30,26 @@ async function handle(request) {
   const siteIds = [...new Set(units.map((u) => u.site_id))];
   const [{ data: sites }, { data: assignments }] = await Promise.all([
     db.from("sites").select("id,name").in("id", siteIds),
-    db.from("site_assignments").select("site_id,tech_id").eq("is_lead", true).in("site_id", siteIds),
+    // is_lead 필터 없이 담당 기사 전원을 받는다 — 이 알림도 담당기사 전원에게 팬아웃한다
+    // (고장 알림 팬아웃과 같은 방향, ElevatorFieldApp.jsx 참고).
+    db.from("site_assignments").select("site_id,tech_id").in("site_id", siteIds),
   ]);
   const siteById = new Map((sites ?? []).map((s) => [s.id, s]));
-  const techBySite = new Map((assignments ?? []).map((a) => [a.site_id, a.tech_id]));
+  const techBySite = new Map();
+  for (const a of assignments ?? []) {
+    if (!techBySite.has(a.site_id)) techBySite.set(a.site_id, []);
+    techBySite.get(a.site_id).push(a.tech_id);
+  }
 
   const byTech = new Map();
   for (const u of units) {
-    const techId = techBySite.get(u.site_id);
-    if (!techId) continue;
+    const techIds = techBySite.get(u.site_id);
+    if (!techIds?.length) continue;
     const label = `${siteById.get(u.site_id)?.name ?? "현장"}${u.seq ? ` ${u.seq}호기` : ""}`;
-    if (!byTech.has(techId)) byTech.set(techId, []);
-    byTech.get(techId).push(label);
+    for (const techId of techIds) {
+      if (!byTech.has(techId)) byTech.set(techId, []);
+      byTech.get(techId).push(label);
+    }
   }
 
   let sent = 0;

@@ -365,7 +365,7 @@ export default function FailuresAdmin({ data, setData, initialStatus }) {
     const q = search.trim().toLowerCase();
     if (!q) return true;
     const site = sites.find((s) => s.id === f.siteId);
-    const haystack = [f.reportedAt, f.siteName, site?.name, f.errorCode, site?.assignedEngineer, f.assignee]
+    const haystack = [f.reportedAt, f.siteName, site?.name, f.errorCode, ...(site?.assignedEngineers ?? []), f.assignee]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();

@@ -737,7 +737,7 @@ export default function VerifyImport({ data, setData, onClose }) {
       if (r.level !== "green" && !reviewed[r.idx]) continue;
       const siteId = matchedSiteIdOf(r);
       const site = siteId ? siteById.get(siteId) : null;
-      if (!site || site.assignedEngineer || out.has(siteId)) continue; // 이미 배정됐으면 건너뜀
+      if (!site || site.assignedEngineers?.length || out.has(siteId)) continue; // 이미 배정됐으면 건너뜀
       const tech = r.parsed.engineers.map((n) => engineersByName.get(nameKey(n))).find(Boolean);
       if (tech) out.set(siteId, { siteId, siteName: site.name, techId: tech.id, techName: tech.name });
     }

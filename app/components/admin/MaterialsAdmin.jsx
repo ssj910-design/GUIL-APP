@@ -1110,6 +1110,7 @@ function RequestDetailModal({ target, data, onClose }) {
     ? (data.siteManagers ?? []).filter((m) => m.siteId === r.siteId).find((m) => m.isPrimary)
       ?? (data.siteManagers ?? []).find((m) => m.siteId === r.siteId)
     : null;
+  const otherManagers = !isMaterial ? (data.siteManagers ?? []).filter((m) => m.siteId === r.siteId && m.id !== primaryManager?.id) : [];
   const displayStatus = isMaterial
     ? r.status === "지급완료"
       ? (billingCompleteFor(data.todos ?? [], "materialRequestId", r.id) ? "교체완료" : "지급완료")
@@ -1133,7 +1134,7 @@ function RequestDetailModal({ target, data, onClose }) {
           ) : (
             <div><p className="text-xs font-bold text-slate-400 mb-1">공사 내용</p><p className="font-semibold text-slate-800">{r.constructionType}</p></div>
           )}
-          <div><p className="text-xs font-bold text-slate-400 mb-1">{isMaterial ? "긴급도" : "현장 담당자 연락처"}</p><p className="font-semibold text-slate-800">{isMaterial ? r.urgency : (r.contactPhone || primaryManager?.phone || "-")}</p></div>
+          <div><p className="text-xs font-bold text-slate-400 mb-1">{isMaterial ? "긴급도" : "현장 담당자 연락처"}</p><p className="font-semibold text-slate-800">{isMaterial ? r.urgency : (r.contactPhone || (primaryManager?.phone ? `${primaryManager.phone}${otherManagers.length ? ` 외 ${otherManagers.length}명` : ""}` : "-"))}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">{isDraftedQuote ? "작성일" : "신청일"}</p><p className="font-semibold text-slate-800">{shortDate(isDraftedQuote ? r.quoteIssuedDate : r.requestedDate)}</p></div>
           {(isMaterial || hasRequester) && (
             <div><p className="text-xs font-bold text-slate-400 mb-1">신청 기사</p><p className="font-semibold text-slate-800">{personOf(data, r.requesterId, r.engineer)}</p></div>

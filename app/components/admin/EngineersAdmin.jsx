@@ -344,7 +344,7 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
   const setSub = onSub ?? setSubLocal;
 
   function unitCountOf(p) {
-    return units.filter((u) => u.isActive !== false && sites.some((s) => s.id === u.siteId && s.assignedEngineer === p.name)).length;
+    return units.filter((u) => u.isActive !== false && sites.some((s) => s.id === u.siteId && s.assignedEngineers?.includes(p.name))).length;
   }
 
   async function addEngineer() {

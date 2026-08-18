@@ -153,7 +153,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
 
   const infoRows = site ? [
     ["주소", site.address], ["현장 전화", site.phone], ["계약구분", site.contractType],
-    ["담당자", site.manager], ["담당 기사", site.assignedEngineer || "미배정"], ["접수일시", nowLabel],
+    ["담당자", site.manager], ["담당 기사", site.assignedEngineers?.length ? site.assignedEngineers.join(", ") : "미배정"], ["접수일시", nowLabel],
   ] : [];
 
   return (
@@ -470,7 +470,7 @@ export function FailureDetailSheet({ failure, failures = [], nested = false, onC
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">담당 기사</span>
-          <span className="font-semibold text-slate-700">{site?.assignedEngineer || "미배정"}</span>
+          <span className="font-semibold text-slate-700">{site?.assignedEngineers?.length ? site.assignedEngineers.join(", ") : "미배정"}</span>
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">배정자</span>

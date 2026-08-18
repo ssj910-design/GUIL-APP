@@ -123,13 +123,13 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
 
   // 디폴트는 내 담당현장만, "모든 현장보기" 체크 시 전체 현장. 계획 탭은 현장명·주소로 추가 검색.
   // 계약종료 현장은 자체점검 대상이 아니므로 뺀다.
-  const scopedSites = activeSites(sites).filter((s) => showAll || s.assignedEngineer === CURRENT_ENGINEER);
+  const scopedSites = activeSites(sites).filter((s) => showAll || s.assignedEngineers?.includes(CURRENT_ENGINEER));
   const visibleUnitIds = new Set(units.filter((u) => scopedSites.some((s) => s.id === u.siteId)).map((u) => u.id));
   const q = query.trim().toLowerCase();
   const checksThisMonth = selfChecks.filter((c) => c.ym === ym && visibleUnitIds.has(c.unitId));
 
   // 상단 진행률은 "모든 현장보기" 토글과 무관하게 항상 내 담당현장 기준으로만 본다.
-  const myUnitIds = new Set(units.filter((u) => sites.some((s) => s.id === u.siteId && s.assignedEngineer === CURRENT_ENGINEER)).map((u) => u.id));
+  const myUnitIds = new Set(units.filter((u) => sites.some((s) => s.id === u.siteId && s.assignedEngineers?.includes(CURRENT_ENGINEER))).map((u) => u.id));
   const myChecksThisMonth = selfChecks.filter((c) => c.ym === ym && myUnitIds.has(c.unitId));
   const myDoneChecks = myChecksThisMonth.filter((c) => c.status === "완료");
   const myGovSubmittedChecks = myChecksThisMonth.filter((c) => c.govResultCode === "000");

@@ -104,8 +104,19 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
     const current = todos.find((x) => x.id === id);
     if (!current) return;
     const done = !current.done;
-    await supabase.from("todos").update({ done }).eq("id", id);
-    setTodos((prev) => prev.map((x) => (x.id === id ? { ...x, done } : x)));
+    // 자체점검 지적사항(B/C)은 담당기사 전원에게 같은 selfCheckItemId로 할 일이 하나씩 생긴다.
+    // 청구 화면(BillingTab)은 이미 형제 할일을 함께 완료 처리하는데, 이 체크박스 경로(청구 없이
+    // 완료)는 그걸 안 해서 동료 할일이 영영 안 지워지는 문제가 있었다 — BillingTab의 idsToComplete와
+    // 같은 패턴으로 형제도 같이 완료한다. 자체점검이 아닌 일반 수동 할일은 형제가 없어 그대로 단건 토글.
+    const idsToComplete = (done && current.selfCheckItemId)
+      ? todos.filter((t) => !t.done && t.selfCheckItemId === current.selfCheckItemId).map((t) => t.id)
+      : [id];
+    const { error } = await supabase.from("todos").update({ done }).in("id", idsToComplete);
+    if (error) {
+      alert(`할 일 완료 처리에 실패했습니다.\n${error.message ?? ""}\n다시 시도해주세요.`);
+      return;
+    }
+    setTodos((prev) => prev.map((x) => (idsToComplete.includes(x.id) ? { ...x, done } : x)));
   }
 
   if (mine.length === 0 && role !== "admin") {

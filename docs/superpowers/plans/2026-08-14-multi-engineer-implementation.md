@@ -16,6 +16,25 @@
 - DB 스키마 변경 없음 — `site_assignments`가 이미 `sites.assigned_engineer`와 1:1로 백필돼 있음(760=759, 2026-08-14 확인).
 - 원본 스펙: [docs/superpowers/specs/2026-08-14-multi-engineer-design.md](../specs/2026-08-14-multi-engineer-design.md)
 
+## 구현 완료 후 남은 후속 작업 (2026-08-14, 최종 브랜치 리뷰에서 발견 — 병합 차단 아님)
+
+최종 전체 브랜치 리뷰(모든 Task + 리뷰에서 나온 Critical 2건·Important 4건 수정 완료 후 재검토)에서
+의도적으로 남겨둔 것 2건:
+
+1. **`app/api/cron/check-selfcheck/route.js`가 여전히 리드 기사에게만 알림을 보냄.** 다른 cron
+   (`check-inspections`)은 `site_assignments`를 직접 조회해 전원에게 팬아웃하도록 고쳤지만, 이
+   cron은 `self_checks.assignee_id`(레코드 생성 시점 스냅샷 컬럼)를 기준으로 삼고 있어 같은
+   방식으로 기계적으로 못 고친다 — `SelfChecksAdmin.jsx`가 이미 이 스냅샷을 안 믿고
+   `site_assignments`를 실시간으로 따르도록 바뀐 것과 방향이 갈린다. 스냅샷을 계속 쓸지,
+   `site_assignments` 실시간 조회로 바꿀지 설계 결정이 필요 — 별도 논의 후 처리.
+2. **관리자 쪽 할일완료 토글 2곳이 자체점검 형제 할일을 정리하지 않음.** `TodoTab.jsx`의
+   기사용 체크박스(`toggleManualTodo`)는 이번에 고쳤지만, `ElevatorFieldApp.jsx`의
+   `handleAdminToggleTodo`와 `TodosAdmin.jsx`(PC 관리자 콘솔 할일관리)의 `toggle`은 여전히
+   `.eq("id", t.id)`로 그 할일 하나만 완료 처리한다 — 관리자가 자체점검 지적사항 할일을
+   직접 완료 처리하면 동료 기사의 형제 할일이 계속 미완료로 남는다. 세 곳(기사앱 체크박스·
+   관리자 토글·PC 콘솔 토글)이 각자 `idsToComplete` 필터를 복붙하고 있는 셈이라, 고칠 때는
+   공용 헬퍼로 묶는 걸 권장.
+
 ---
 
 ## Task 1: 데이터 계층 — `site_assignments` 로딩 + `assignedEngineers` 파생

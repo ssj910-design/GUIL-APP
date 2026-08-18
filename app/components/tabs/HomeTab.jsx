@@ -608,7 +608,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
     return distanceKm(selfCoord, s?.lat != null ? { lat: s.lat, lng: s.lng } : null);
   };
   // 검사도래·조건부/불합격 위젯 대상 — 계약종료 현장은 대응 대상이 아니므로 뺀다.
-  const mySites = activeSites(role === "admin" ? sites : sites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER));
+  const mySites = activeSites(role === "admin" ? sites : sites.filter((s) => s.assignedEngineers?.includes(CURRENT_ENGINEER)));
   // 지원요청/운행정지가 걸린 현장 — 고장현황 카드 라벨(지원미배정)과 집중관리 카드의 배지 표시에 쓴다
   // (집중관리현장 편입 기준에서는 빠졌다 — 아래 criticalSites 참고).
   const openEscalations = failures.filter((f) => f.escalation && f.status !== "완료");

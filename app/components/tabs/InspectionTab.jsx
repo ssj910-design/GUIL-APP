@@ -92,7 +92,7 @@ export function InspectionTab({ inspections }) {
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   // 계약종료 현장은 검사도래·조건부/불합격 어느 쪽도 대응 대상이 아니므로 뺀다.
-  const mySites = activeSites(role === "admin" ? sites : sites.filter((s) => s.assignedEngineer === CURRENT_ENGINEER));
+  const mySites = activeSites(role === "admin" ? sites : sites.filter((s) => s.assignedEngineers?.includes(CURRENT_ENGINEER)));
   const mySiteIds = new Set(mySites.map((s) => s.id));
   const [subTab, setSubTab] = useState("검사도래현장");
   const [inspectionFailTarget, setInspectionFailTarget] = useState(null);

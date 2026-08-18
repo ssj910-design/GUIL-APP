@@ -64,10 +64,18 @@ function SiteBizRegModal({ site, onClose, onSave }) {
 function AddSiteModal({ engineers, onClose, onSave }) {
   const [form, setForm] = useState({
     name: "", address: "", contractType: CONTRACT_TYPES[0], maintenanceCost: "",
-    contractDate: "", contractEnd: "", assignedEngineer: "",
+    contractDate: "", contractEnd: "", assignedEngineers: [], leadEngineer: "",
     phone: "", fax: "", email: "", accessInfo: "", notes: "",
   });
   const set = (k) => (v) => setForm({ ...form, [k]: v });
+  function toggleEngineer(name) {
+    setForm((f) => {
+      const has = f.assignedEngineers.includes(name);
+      const nextList = has ? f.assignedEngineers.filter((n) => n !== name) : [...f.assignedEngineers, name];
+      const nextLead = has && f.leadEngineer === name ? (nextList[0] ?? "") : (f.leadEngineer || name);
+      return { ...f, assignedEngineers: nextList, leadEngineer: nextLead };
+    });
+  }
   return (
     <Modal title="새 현장 추가" onClose={onClose} wide>
       <div className="space-y-3">
@@ -88,11 +96,21 @@ function AddSiteModal({ engineers, onClose, onSave }) {
             <DateTextInput value={form.contractDate} onChange={set("contractDate")} /></div>
           <div><p className="text-xs font-bold text-slate-500 mb-1">계약종료일</p>
             <DateTextInput value={form.contractEnd} onChange={set("contractEnd")} /></div>
-          <div><p className="text-xs font-bold text-slate-500 mb-1">담당 기사</p>
-            <select className={inputCls} value={form.assignedEngineer} onChange={(e) => set("assignedEngineer")(e.target.value)}>
-              <option value="">미배정</option>
-              {engineers.map((p) => <option key={p.id}>{p.name}</option>)}
-            </select></div>
+          <div className="md:col-span-1">
+            <p className="text-xs font-bold text-slate-500 mb-1">담당 기사 (체크, ★ = 대표)</p>
+            <div className="border border-slate-200 rounded-lg max-h-32 overflow-y-auto p-1.5 space-y-0.5">
+              {engineers.map((p) => (
+                <label key={p.id} className="flex items-center gap-1.5 text-xs px-1 py-0.5">
+                  <input type="checkbox" checked={form.assignedEngineers.includes(p.name)} onChange={() => toggleEngineer(p.name)} />
+                  <span className="flex-1">{p.name}</span>
+                  {form.assignedEngineers.includes(p.name) && (
+                    <button type="button" onClick={() => set("leadEngineer")(p.name)}
+                      className={form.leadEngineer === p.name ? "text-amber-500" : "text-slate-300"}>★</button>
+                  )}
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div><p className="text-xs font-bold text-slate-500 mb-1">전화번호</p>
@@ -550,7 +568,7 @@ export default function SitesAdmin({ data, setData }) {
 
   const filtered = sites
     .filter((s) => siteMatchesQuery(s, search, { units, siteManagers }))
-    .filter((s) => !onlyUnassigned || !s.assignedEngineer)
+    .filter((s) => !onlyUnassigned || !s.assignedEngineers?.length)
     .filter((s) =>
       contractFilter === "ended" ? s.isActive === false :
       contractFilter === "expiring" ? s.isActive !== false && (in30(s.contractEnd) || isExpired(s.contractEnd)) :
@@ -577,32 +595,38 @@ export default function SitesAdmin({ data, setData }) {
     setRenew(null);
     setSiteForm({
       name: s.name, address: s.address ?? "",
-      notes: s.notes ?? "", officeNotes: s.officeNotes ?? "", assignedEngineer: s.assignedEngineer ?? "",
+      notes: s.notes ?? "", officeNotes: s.officeNotes ?? "",
+      assignedEngineers: s.assignedEngineers ?? [], leadEngineer: s.assignedEngineer ?? "",
       phone: s.phone ?? "", fax: s.fax ?? "", email: s.email ?? "", accessInfo: s.accessInfo ?? "",
       contractDate: s.contractDate ?? "", contractEnd: s.contractEnd ?? "",
     });
   }
 
   // 현장 단건 추가 — 현장정보 수정 화면과 동일한 칸을 전부 이 시점에 받아 저장한다.
-  // 담당 기사를 고르면 site_assignments도 같이 채운다 (changeLead와 동일한 듀얼라이트 이유).
+  // 담당 기사를 고르면 site_assignments도 같이 채운다 (changeAssignees와 동일한 듀얼라이트 이유).
   async function addSite(form) {
     const id = `site-${Date.now()}`;
     const { error } = await supabase.from("sites").insert({
       id, name: form.name, address: form.address || null, contract_type: form.contractType,
       maintenance_cost: form.maintenanceCost === "" ? null : Number(form.maintenanceCost),
       contract_date: form.contractDate || null, contract_end: form.contractEnd || null,
-      assigned_engineer: form.assignedEngineer || null,
+      assigned_engineer: form.leadEngineer || null,
       phone: form.phone || null, fax: form.fax || null, email: form.email || null, notes: form.notes || null,
       access_info: form.accessInfo || null,
     });
     if (error) { alert("현장 추가 실패: " + error.message); return; }
-    if (form.assignedEngineer) {
-      const p = engineers.find((x) => x.name === form.assignedEngineer);
-      if (p) await supabase.from("site_assignments").insert({ site_id: id, tech_id: p.id, is_lead: true });
+    if (form.assignedEngineers.length) {
+      const rows = form.assignedEngineers
+        .map((name) => engineers.find((x) => x.name === name))
+        .filter(Boolean)
+        .map((p) => ({ site_id: id, tech_id: p.id, is_lead: p.name === form.leadEngineer }));
+      if (rows.length) await supabase.from("site_assignments").insert(rows);
     }
     const { data: created, error: fetchErr } = await supabase.from("sites").select("*").eq("id", id).single();
     if (fetchErr || !created) { alert("추가는 됐지만 불러오기 실패: " + (fetchErr?.message ?? "")); return; }
-    const mapped = mapSite(created);
+    // mapSite만으론 assignedEngineers가 안 채워진다(전체 로드 시 mergeAssignedEngineers가 하는 일) —
+    // 방금 위에서 등록한 담당자 목록을 그대로 얹어서 "미배정"으로 잘못 보이는 걸 막는다.
+    const mapped = { ...mapSite(created), assignedEngineers: form.assignedEngineers };
     setData((prev) => ({ ...prev, sites: [...prev.sites, mapped] }));
     setAddingSite(false);
     setSearch("");
@@ -648,7 +672,7 @@ export default function SitesAdmin({ data, setData }) {
     }
     setData((prev) => ({
       ...prev,
-      sites: prev.sites.map((x) => (checkedIds.has(x.id) ? { ...x, assignedEngineer: bulkEngineer } : x)),
+      sites: prev.sites.map((x) => (checkedIds.has(x.id) ? { ...x, assignedEngineer: bulkEngineer, assignedEngineers: [bulkEngineer] } : x)),
     }));
     await syncInspectionTodoAssignee(ids, bulkEngineer);
     setBulkBusy(false);
@@ -790,8 +814,10 @@ export default function SitesAdmin({ data, setData }) {
   }
 
   async function saveSiteInfo() {
-    if (siteForm.assignedEngineer !== (site.assignedEngineer ?? "")) {
-      await changeLead(siteForm.assignedEngineer);
+    const namesChanged = JSON.stringify([...siteForm.assignedEngineers].sort()) !== JSON.stringify([...(site.assignedEngineers ?? [])].sort());
+    const leadChanged = siteForm.leadEngineer !== (site.assignedEngineer ?? "");
+    if (namesChanged || leadChanged) {
+      await changeAssignees(siteForm.assignedEngineers, siteForm.leadEngineer);
     }
     await supabase.from("sites").update({
       name: siteForm.name, address: siteForm.address, notes: siteForm.notes || null,
@@ -803,7 +829,7 @@ export default function SitesAdmin({ data, setData }) {
     }).eq("id", selectedId);
     setData((prev) => ({
       ...prev,
-      sites: prev.sites.map((s) => (s.id === selectedId ? { ...s, ...siteForm, assignedEngineer: siteForm.assignedEngineer } : s)),
+      sites: prev.sites.map((s) => (s.id === selectedId ? { ...s, ...siteForm, assignedEngineers: siteForm.assignedEngineers, assignedEngineer: siteForm.leadEngineer } : s)),
     }));
     setEditingInfo(false);
   }
@@ -818,13 +844,21 @@ export default function SitesAdmin({ data, setData }) {
     setData((prev) => ({ ...prev, sites: prev.sites.map((s) => (s.id === selectedId ? { ...s, emergencyPhone: value || null } : s)) }));
   }
 
-  async function changeLead(engineerName) {
-    const p = profiles.find((x) => x.name === engineerName);
+  // 담당 기사 배열 전체를 다시 쓴다 — site_assignments를 지우고 배열 수만큼 재삽입.
+  // is_lead는 leadName과 일치하는 것만 true. sites.assigned_engineer(레거시)는 대표 이름으로 듀얼라이트.
+  async function changeAssignees(names, leadName) {
     await supabase.from("site_assignments").delete().eq("site_id", selectedId);
-    if (p) await supabase.from("site_assignments").insert({ site_id: selectedId, tech_id: p.id, is_lead: true });
-    await supabase.from("sites").update({ assigned_engineer: engineerName || null }).eq("id", selectedId); // 듀얼라이트
-    setData((prev) => ({ ...prev, sites: prev.sites.map((s) => (s.id === selectedId ? { ...s, assignedEngineer: engineerName || null } : s)) }));
-    await syncInspectionTodoAssignee([selectedId], engineerName);
+    const rows = names
+      .map((name) => profiles.find((x) => x.name === name))
+      .filter(Boolean)
+      .map((p) => ({ site_id: selectedId, tech_id: p.id, is_lead: p.name === leadName }));
+    if (rows.length) await supabase.from("site_assignments").insert(rows);
+    await supabase.from("sites").update({ assigned_engineer: leadName || null }).eq("id", selectedId); // 듀얼라이트
+    setData((prev) => ({
+      ...prev,
+      sites: prev.sites.map((s) => (s.id === selectedId ? { ...s, assignedEngineers: names, assignedEngineer: leadName || null } : s)),
+    }));
+    await syncInspectionTodoAssignee([selectedId], leadName);
   }
 
   // 정기검사 보완조치 할일(source: inspection) 중 아직 안 끝난 건은 현장 담당자가 바뀌면 담당자도 같이 바꿔준다.
@@ -972,7 +1006,7 @@ export default function SitesAdmin({ data, setData }) {
             <div className="flex items-center justify-between gap-2">
               <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 cursor-pointer">
                 <input type="checkbox" checked={onlyUnassigned} onChange={(e) => setOnlyUnassigned(e.target.checked)} />
-                미배정만 ({sites.filter((x) => !x.assignedEngineer).length})
+                미배정만 ({sites.filter((x) => !x.assignedEngineers?.length).length})
               </label>
               <button
                 onClick={() => { setAssignMode(!assignMode); setCheckedIds(new Set()); }}
@@ -1040,7 +1074,7 @@ export default function SitesAdmin({ data, setData }) {
                       </p>
                       <span className="flex gap-1">
                         {s.assignedEngineer
-                          ? <span className="text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">{s.assignedEngineer}</span>
+                          ? <span className="text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">{s.assignedEngineer}{s.assignedEngineers?.length > 1 ? ` 외 ${s.assignedEngineers.length - 1}명` : ""}</span>
                           : <span className="text-[10px] font-bold text-amber-600 bg-amber-50 rounded-full px-2 py-0.5">미배정</span>}
                         {s.isActive === false && <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">계약종료</span>}
                         {open > 0 && <span className="text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-2 py-0.5">고장 {open}</span>}
@@ -1133,7 +1167,7 @@ export default function SitesAdmin({ data, setData }) {
                             )}
                           </p>
                         </div>
-                        <div><p className="text-xs font-bold text-slate-400 mb-1">담당 기사</p><p className="font-semibold text-slate-800">{site.assignedEngineer || "미배정"}</p></div>
+                        <div><p className="text-xs font-bold text-slate-400 mb-1">담당 기사</p><p className="font-semibold text-slate-800">{site.assignedEngineers?.length ? site.assignedEngineers.join(", ") : "미배정"}</p></div>
                       </div>
                     </div>
                     <div className="flex items-start justify-between mt-3">
@@ -1223,11 +1257,32 @@ export default function SitesAdmin({ data, setData }) {
                         <p className="text-xs font-bold text-slate-500 mb-1">계약종료일</p>
                         <DateTextInput key={siteForm.contractEnd} value={siteForm.contractEnd} onChange={(v) => setSiteForm({ ...siteForm, contractEnd: v })} />
                       </div>
-                      <div><p className="text-xs font-bold text-slate-500 mb-1">담당 기사</p>
-                        <select className={inputCls} value={siteForm.assignedEngineer} onChange={(e) => setSiteForm({ ...siteForm, assignedEngineer: e.target.value })}>
-                          <option value="">미배정</option>
-                          {engineers.map((p) => <option key={p.id}>{p.name}</option>)}
-                        </select></div>
+                      <div className="md:col-span-1">
+                        <p className="text-xs font-bold text-slate-500 mb-1">담당 기사 (체크, ★ = 대표)</p>
+                        <div className="border border-slate-200 rounded-lg max-h-32 overflow-y-auto p-1.5 space-y-0.5">
+                          {engineers.map((p) => {
+                            const checked = siteForm.assignedEngineers.includes(p.name);
+                            return (
+                              <label key={p.id} className="flex items-center gap-1.5 text-xs px-1 py-0.5">
+                                <input type="checkbox" checked={checked} onChange={() => {
+                                  const nextList = checked
+                                    ? siteForm.assignedEngineers.filter((n) => n !== p.name)
+                                    : [...siteForm.assignedEngineers, p.name];
+                                  const nextLead = checked && siteForm.leadEngineer === p.name
+                                    ? (nextList[0] ?? "")
+                                    : (siteForm.leadEngineer || p.name);
+                                  setSiteForm({ ...siteForm, assignedEngineers: nextList, leadEngineer: nextLead });
+                                }} />
+                                <span className="flex-1">{p.name}</span>
+                                {checked && (
+                                  <button type="button" onClick={() => setSiteForm({ ...siteForm, leadEngineer: p.name })}
+                                    className={siteForm.leadEngineer === p.name ? "text-amber-500" : "text-slate-300"}>★</button>
+                                )}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div><p className="text-xs font-bold text-slate-500 mb-1">전화번호</p><input className={inputCls} placeholder="관리사무소 대표번호" value={siteForm.phone} onChange={(e) => setSiteForm({ ...siteForm, phone: formatPhone(e.target.value) })} /></div>
