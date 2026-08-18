@@ -13,7 +13,10 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 // 추론 모델(o시리즈·gpt-5)이 아니라 mini를 쓰는 이유: 이 챗봇은 찾아준 조항을 정확히 옮기는
 // 일이라 추론이 필요 없고, 현장에서는 응답 속도가 정확도만큼 중요하다.
 const MODEL = "gpt-4.1-mini";
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// ⚠️ 클라이언트는 모듈 최상단이 아니라 요청 안에서 만든다. OpenAI SDK는 키가 없으면
+// **생성 시점에 throw**하는데(Anthropic SDK는 안 그랬다), 빌드 중 Next가 이 라우트를
+// 로드하면서 터져 배포가 통째로 실패한다. 키가 아직 안 꽂힌 환경에서도 빌드는 돼야 한다.
 
 const KEYWORD_SCHEMA = {
   type: "object",
@@ -53,6 +56,7 @@ export async function POST(request) {
   if (!process.env.OPENAI_API_KEY) {
     return Response.json({ ok: false, reason: "OPENAI_API_KEY 미설정" }, { status: 200 });
   }
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const { question, entryPoint } = await request.json().catch(() => ({}));
   const q = (question ?? "").trim();
   if (!q) return Response.json({ ok: false, reason: "질문을 입력해주세요" }, { status: 200 });
