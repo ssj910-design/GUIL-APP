@@ -90,12 +90,23 @@ export async function POST(request) {
   if (!keywords.length) return Response.json({ ok: true, answer: "질문을 조금 더 구체적으로 적어주세요.", sources: [] });
 
   // 2) 키워드 전부를 포함하는 청크부터 찾고, 없으면 키워드를 줄여가며 재시도한다.
+  //
+  // ⚠️ 검색 실패(함수 없음·권한 없음)와 "자료에 정말 없음"을 반드시 구분해서 알린다.
+  //    예전엔 둘 다 "관련 규정을 찾지 못했습니다"로 나와서, 마이그 115를 안 돌린 상태인지
+  //    질문이 자료 밖인지 아무도 알 수 없었다(실제로 그 상태로 한참 헤맸다).
   let rows = [];
   for (let n = keywords.length; n >= 1 && rows.length === 0; n--) {
-    const { data } = await supabaseAdmin.rpc("search_knowledge", {
+    const { data, error } = await supabaseAdmin.rpc("search_knowledge", {
       keywords: keywords.slice(0, n),
       match_count: 8,
     });
+    if (error) {
+      console.error("[law-qa] search_knowledge 실패:", error.message);
+      return Response.json({
+        ok: false,
+        reason: "검사기준 검색이 아직 준비되지 않았습니다 (관리자: 마이그레이션 115 실행 + 청크 적재 필요)",
+      });
+    }
     rows = data ?? [];
   }
   if (!rows.length) {
