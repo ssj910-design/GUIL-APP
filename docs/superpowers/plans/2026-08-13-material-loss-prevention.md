@@ -36,8 +36,9 @@
 |---|---|---|
 | `material_requests` | `part_rows`(jsonb) 추가 | 신청 폼(`PartsRowsInput`)이 이미 `{name, qty}` 행으로 입력받는데, 저장 시 `formatPartRows()`로 문자열로 합쳐지던 걸 구조 그대로 저장 |
 | `todos` | `billing_part_rows`(jsonb) 추가 | 관리자가 신청과 다르게 지급했을 때 그 확정값을 구조화해서 남김. 기존 `billing_part`(text, 024에서 이미 생성)는 있는데 화면 어디서도 실제로 안 쓰이고 있었다 |
-| `quote_items` (jsonb 배열, 기존) | `partId`, `returnRequired` 키 추가 | 마이그레이션 불필요(jsonb) — 고가부품 항목만 마스터 연결 + 폐자재 반납여부 |
-| `parts_master` | 신규 테이블 | 고가부품 카탈로그 (`name`, `category`, `default_price`, `default_return_required`) |
+| `quote_items` (jsonb 배열, 기존) | `partId`, `returnRequired`, `qtyTaken` 키 추가 | 마이그레이션 불필요(jsonb) — 고가부품 항목만 마스터 연결 + 폐자재 반납여부 + 실반출수량(2026-08-18 추가, 아래 "여유부품" 참고) |
+| `parts_master` | ~~신규 테이블~~ → **`inventory_products`로 대체** | 이 문서 작성 이후 재고관리 기능이 실제로 만들어짐(`inventory_products`/`inventory_stock_movements`, 마이그레이션 115/116) — `partId`는 이 테이블의 `id`를 가리키면 됨. `default_return_required`에 해당하는 컬럼은 없음(아래 미정 항목 참고). |
+| `todos` | `stock_confirmed_at`(nullable) 추가 | 기사가 반납사진 올려 `done=true` 되는 시점과 실제 재고 반영 시점을 분리하기 위함(아래 "여유부품" 참고) |
 
 ## 비용청구 프리필 원칙
 
@@ -64,35 +65,71 @@
 - 구현 시 새 쿼리보다는 기존 `overdueUnbilled` 로직에 필터 조건을 얹는 방식이
   자연스럽다.
 
-## 폐자재 반납 흐름
+## 폐자재·여유부품 반납 흐름 (2026-08-18 갱신 — 여유부품 개념 통합)
 
-1. 견적 작성 시 고가부품 항목(`partId` 연결된 것)마다 `returnRequired` 체크 —
-   `parts_master.default_return_required`로 초기값 자동 채움 가능(PCB·모터 등).
-2. 비용청구 제출(= 시공확인 완료) 시점에 `returnRequired: true`인 항목이 있으면
-   `todos.source = "waste_return"` 할일을 자동생성 (부품별로 1건씩, `quoteRequestId`
-   연결, 담당자 = 방금 청구한 기사).
-3. 완료 방식은 기존 "관리자 부여"(`source === "manual"`) 계열의 셀프완료 패턴을
-   재사용하되, **반납사진(`photoUrls`)이 없으면 "완료 처리" 버튼 비활성화** 조건만
-   추가.
-4. (선택) 대시보드 "30일 초과 미청구" 필터에 `waste_return`도 포함시키면 폐자재
-   미반납도 같은 화면에서 관리 가능.
+재고관리(`inventory_products`/`inventory_stock_movements`)가 실제로 생기면서, 불량 대비로
+여유 있게 가져가는 부품("여유부품")도 같이 추적해야 한다는 논의가 나왔다. 폐자재(교체하며
+나온 헌 부품)와 여유부품(안 쓰고 남은 새 부품)은 성격은 다르지만 **"창고에서 나갔는데 고객
+현장에 안 남은 것"**이라는 점에서 같다고 보고, 같은 반납 메커니즘 하나로 묶기로 했다.
+
+**여유부품**: 견적 항목의 수량은 지금 하나(`qty`, 견적서에 찍히는 설치확정수량=고객
+청구수량)뿐이라, 여기에 **실제 창고에서 반출한 수량**(`qtyTaken`)을 별도로 받는다. 안
+채우면 `qty`와 같다고 간주(대부분은 여유 없이 그대로 쓰니 기본값 재입력 부담 없게).
+여유분 = `qtyTaken - qty`.
+
+**흐름**:
+1. 견적 작성 시 고가부품 항목(`partId` 연결된 것)마다 `returnRequired` 체크 + `qtyTaken`
+   입력(여유 있으면 `qty`보다 크게).
+2. **자재지급완료**(`handleCompleteQuoteSupply`) 시점 — 실제로 부품이 창고에서 기사
+   손으로 넘어가는 순간 — `partId` 있는 항목마다 `qtyTaken`만큼 `inventory_stock_movements`에
+   'out' 기록.
+3. **비용청구 제출**(= 시공확인 완료) 시점에 `returnRequired: true`이거나
+   `qtyTaken > qty`인 항목이 있으면 `todos.source = "waste_return"` 할일을 자동생성
+   (부품별로 1건씩, `quoteRequestId` 연결, 담당자 = 방금 청구한 기사). 반납수량 =
+   폐자재개수(`returnRequired`면 보통 1) + 여유분(`qtyTaken - qty`).
+4. **기사 완료**: 기존 "관리자 부여"(`source === "manual"`) 계열 셀프완료 패턴 재사용,
+   **반납사진(`photoUrls`)이 없으면 "완료 처리" 버튼 비활성화**. 이 시점엔 재고에
+   아직 반영 안 됨 — `done=true`와 재고 반영은 분리된 이벤트(아래 참고).
+5. **관리자 확인 — 여기서만 재고에 실제 반영된다**: `TodosAdmin.jsx`에
+   `source==="waste_return" && done && !stockConfirmedAt` 필터 뷰를 추가. 관리자가
+   반납사진과 확인수량(기본값=요청수량, 실물과 다르면 수정 가능)을 검토 후 "확인"을
+   누르면:
+   - **수량이 맞으면**: 확인수량만큼 'in' 기록 + `stock_confirmed_at` 채우고 종료.
+   - **모자라면**: 확인된 만큼만 먼저 'in' 반영, 남은 수량(`요청수량 - 확인수량`)으로
+     할일 제목·필요수량을 갱신하고 `done=false`로 **재오픈** → 기사가 나머지를 재반납
+     → 4번부터 반복. 사진은 재오픈마다 지우지 않고 누적(1차/2차 제출 이력 남김).
+6. (선택) 대시보드 "30일 초과 미청구" 필터에 `waste_return`도 포함시키면 미반납도 같은
+   화면에서 관리 가능.
+
+기사 쪽 "완료"(사진 제출)와 재고 반영(관리자 확인)을 분리한 이유: 기사가 사진만 올리고
+실물을 안 보냈거나 개수가 다른 경우를, 재고에 잘못 반영되기 전에 관리자 확인 단계에서
+걸러내기 위함.
 
 ## 만들어둔 마이그레이션 초안 (미실행)
 
 - `supabase/migrations/112_material_billing_part_rows_DRAFT.sql`
   → `material_requests.part_rows`, `todos.billing_part_rows`
-- `supabase/migrations/114_parts_master_DRAFT.sql`
-  → `parts_master` 테이블 (+ RLS 정책, 106/111과 동일 패턴)
+- ~~`supabase/migrations/114_parts_master_DRAFT.sql` → `parts_master` 테이블~~
+  **(2026-08-18) 실행 안 함 — `inventory_products`/`inventory_stock_movements`(115/116)가
+  이미 실제로 만들어져서 이걸로 대체.** `quote_items.partId`는 `inventory_products.id`를
+  가리키면 됨.
 
 (번호 113은 다른 세션이 같은 날 `units_requires_self_check`용으로 먼저 씀 — 112도
 다른 세션의 `units_drop_unit_type`과 번호가 겹쳤지만 각자 독립 파일이라 문제는 없음.)
 
 ## 아직 정해지지 않은 것 / 논의 필요
 
-- `parts_master` 초기 데이터를 기존 재고관리프로그램에서 어떻게 가져올지
-  (엑셀 export? API 있는지?)
+- ~~`parts_master` 초기 데이터를 기존 재고관리프로그램에서 어떻게 가져올지~~ →
+  `inventory_products` 초기 적재는 재고관리 기능 쪽 작업 범위(이 문서 밖).
 - "기타/직접입력"으로 들어온 신규 고가부품을 누가/어떤 기준으로 마스터에
   승인·추가할지
+- `inventory_products`엔 옛 `parts_master` 계획에 있던 `default_return_required`
+  같은 컬럼이 없음 — 폐자재 회수 필요 여부를 부품마스터에서 기본값으로 끌어올지,
+  견적 작성할 때마다 매번 사람이 체크할지 결정 필요.
+- `inventory_stock_movements`에 `todo_id`/`quote_id` 같은 정식 연결 컬럼을 추가할지,
+  지금처럼 `note` 자유텍스트로 남길지 — 당장은 note로 충분해 보이지만, "이 할일로
+  재고가 얼마나 들어왔나" 조회가 잦아지면 마이그레이션 고려.
 - 화면 구현 우선순위: A(자재신청 구조화+프리필)가 스키마 변경이 작고 효과가
-  바로 체감되니 먼저, C(부품마스터·견적 연동·폐자재반납)는 별도 단계로 진행하는
-  게 자연스러워 보임 — 이건 제안일 뿐 팀 상의 필요.
+  바로 체감되니 먼저, C(부품마스터·견적 연동·폐자재/여유부품 반납)는 별도 단계로
+  진행하는 게 자연스러워 보임 — 이건 제안일 뿐 팀 상의 필요.
+- **설계 상세화(화면 배치, 정확한 필드명, 구현 순서 등)는 다음 세션에서 이어서.**
