@@ -31,6 +31,8 @@ export default function UsageStats() {
   const [rows, setRows] = useState(null);
   const [entries, setEntries] = useState([]);
   const [unanswered, setUnanswered] = useState([]);
+  const [bad, setBad] = useState([]);                       // 답은 했는데 "정확하지 않다"고 평가된 것
+  const [rating, setRating] = useState({ up: 0, down: 0 });
   const [err, setErr] = useState("");
 
   useEffect(() => {
@@ -41,7 +43,7 @@ export default function UsageStats() {
 
       const [ev, qa] = await Promise.all([
         supabase.from("ui_events").select("screen,role").gte("created_at", since).limit(20000),
-        supabase.from("law_qa_logs").select("entry_point,question,source_count").gte("created_at", since).limit(2000),
+        supabase.from("law_qa_logs").select("entry_point,question,source_count,rating").gte("created_at", since).limit(2000),
       ]);
       if (!alive) return;
       // 테이블이 아직 없으면(마이그 미실행) 그렇게 안내한다 — 빈 화면보다 낫다.
@@ -59,7 +61,11 @@ export default function UsageStats() {
       const byEntry = new Map();
       for (const q of qa.data ?? []) byEntry.set(q.entry_point ?? "(미상)", (byEntry.get(q.entry_point ?? "(미상)") ?? 0) + 1);
       setEntries([...byEntry.entries()].sort((a, b) => b[1] - a[1]));
+      // "답을 못 찾음"과 "답은 했는데 틀림"은 다른 문제다 — 전자는 문서 보강, 후자는 검색·프롬프트 개선.
       setUnanswered((qa.data ?? []).filter((q) => q.source_count === 0).map((q) => q.question).slice(0, 30));
+      setBad((qa.data ?? []).filter((q) => q.rating === -1 && q.source_count > 0).map((q) => q.question).slice(0, 30));
+      const rated = (qa.data ?? []).filter((q) => q.rating);
+      setRating({ up: rated.filter((q) => q.rating === 1).length, down: rated.filter((q) => q.rating === -1).length });
     })();
     return () => { alive = false; };
   }, [days]);
@@ -129,6 +135,41 @@ export default function UsageStats() {
                   <p className="text-xs font-bold text-slate-800 tabular-nums">{n}</p>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <p className="text-xs font-bold text-slate-500 mb-1">답변 만족도</p>
+          <p className="text-[10px] text-slate-400 mb-3">
+            근거 건수로는 품질을 못 본다(근거를 찾고도 엉뚱하게 답할 수 있다) — 사람이 눌러준 게 유일한 신호다
+          </p>
+          {rating.up + rating.down === 0 ? (
+            <p className="text-xs text-slate-400">아직 평가가 없습니다.</p>
+          ) : (
+            <>
+              <div className="flex items-center gap-3">
+                <p className="text-2xl font-extrabold text-slate-800 tabular-nums">
+                  {Math.round((rating.up / (rating.up + rating.down)) * 100)}%
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  도움됨 {rating.up} · 부정확 {rating.down}
+                </p>
+              </div>
+              <div className="flex h-2 rounded-full overflow-hidden bg-slate-100 mt-2">
+                <div className="bg-blue-500" style={{ width: `${(rating.up / (rating.up + rating.down)) * 100}%` }} />
+                <div className="bg-rose-400 flex-1" />
+              </div>
+            </>
+          )}
+          {bad.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-slate-100">
+              <p className="text-[11px] font-bold text-rose-500 mb-1.5">정확하지 않다고 평가된 질문</p>
+              <ul className="space-y-1 max-h-32 overflow-y-auto">
+                {bad.map((q, i) => (
+                  <li key={i} className="text-xs text-slate-600 border-l-2 border-rose-200 pl-2">{q}</li>
+                ))}
+              </ul>
             </div>
           )}
         </div>

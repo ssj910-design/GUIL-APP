@@ -10,21 +10,57 @@
 // 문장은 위험하다 — 기사가 잘못된 기준으로 검사하면 사고로 이어진다. 서버(app/api/law-qa)도
 // 검색된 조항 밖의 내용은 답하지 않도록 막아뒀다.
 import { useState, useRef, useEffect } from "react";
-import { Search, ExternalLink, Copy, Check } from "lucide-react";
+import { Search, ExternalLink, Copy, Check, ThumbsUp, ThumbsDown } from "lucide-react";
 
-const EXAMPLES = [
+// 추천 질문 — 지금은 **손으로 심은 씨앗**이다. 질문 로그가 쌓이면(law_qa_logs)
+// "자주 묻고 실제로 답을 찾은" 질문으로 갈아끼운다. 답 못 한 질문을 추천하면
+// 눌러도 실패하니 source_count > 0 조건이 필요하다 — docs/RAG.md 참고.
+const SUGGESTIONS = [
   "정기검사 주기는 몇 년인가요?",
+  "정밀안전검사는 언제 받나요?",
+  "설치검사와 완성검사 차이",
+  "검사 기간은 주기 앞뒤로 며칠인가요?",
+  "자체점검 주기는 어떻게 되나요?",
+  "자체점검 결과는 언제까지 입력하나요?",
+  "자체점검을 할 수 있는 사람 자격",
+  "자체점검 주기를 조정할 수 있나요?",
   "승강장문 이탈방지장치 설치 기준",
+  "문이 닫힐 때 힘은 몇 N까지인가요?",
+  "승강장문 잠금장치 확인 방법",
+  "문 닫힘 안전장치 점검 방법",
   "카 지붕 위 안전점검 방법",
-  "자체점검 결과 제출 기한",
+  "카 상부 점검 공간 높이 기준",
+  "피트 사다리 설치 기준",
+  "기계실 조도 기준",
+  "과부하 감지장치 기준",
+  "비상통화장치 기준",
+  "조속기 작동 속도 기준",
+  "완충기 설치 기준",
+  "주로프 교체 기준",
+  "브레이크 점검 방법",
+  "구출운전 방법",
+  "정전 시 비상전원 기준",
+  "중대사고 발생 시 신고 기한",
+  "중대한 고장의 범위",
+  "승강기 사고 배상책임보험 가입 기준",
+  "유지관리 하도급 비율 제한",
+  "안전관리자 선임 기준",
+  "관리주체의 의무는 무엇인가요?",
 ];
+const EXAMPLES = SUGGESTIONS.slice(0, 4);   // 처음 화면에 보여줄 4개
 
 export function LawQaPanel({ entryPoint = "tab" }) {
   const [q, setQ] = useState("");
   const [log, setLog] = useState([]); // { role: 'user'|'bot', text, sources?, keywords? }
   const [busy, setBusy] = useState(false);
   const [openSources, setOpenSources] = useState({}); // 답변 index → 근거 펼침 여부
+  const [ratings, setRatings] = useState({});         // 답변 index → 1 | -1
   const endRef = useRef(null);
+
+  // 입력 중 추천 — 두 글자만 쳐도 후보가 뜨게 한다(현장에서 긴 문장 타이핑은 부담).
+  const hints = q.trim().length >= 1
+    ? SUGGESTIONS.filter((s) => s.replace(/\s/g, "").includes(q.trim().replace(/\s/g, ""))).slice(0, 5)
+    : [];
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [log, busy]);
 
@@ -42,12 +78,25 @@ export function LawQaPanel({ entryPoint = "tab" }) {
       });
       const data = await res.json().catch(() => ({}));
       setLog((L) => [...L, data.ok
-        ? { role: "bot", text: data.answer, sources: data.sources ?? [], keywords: data.keywords ?? [] }
+        ? { role: "bot", text: data.answer, sources: data.sources ?? [], keywords: data.keywords ?? [], logId: data.logId ?? null }
         : { role: "bot", text: data.reason || "답변을 가져오지 못했습니다.", sources: [] }]);
     } catch (e) {
       setLog((L) => [...L, { role: "bot", text: `오류: ${e.message}`, sources: [] }]);
     }
     setBusy(false);
+  }
+
+  // 평가는 조용히 보낸다 — 실패해도 화면에는 눌린 것으로 남긴다(로그가 목적이라 재시도까지 할 일은 아니다).
+  async function rate(i, logId, value) {
+    setRatings((r) => ({ ...r, [i]: value }));
+    if (!logId) return;
+    try {
+      await fetch("/api/law-qa", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logId, rating: value }),
+      });
+    } catch { /* 무시 */ }
   }
 
   return (
@@ -81,7 +130,9 @@ export function LawQaPanel({ entryPoint = "tab" }) {
           <div key={i} className="space-y-2">
             <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-sm px-3.5 py-3">
               <AnswerText text={m.text} onCite={() => setOpenSources((o) => ({ ...o, [i]: true }))} />
-              <div className="flex justify-end mt-2 -mb-1">
+              <div className="flex items-center justify-end gap-0.5 mt-2 -mb-1">
+                <RateButtons value={ratings[i]} onRate={(v) => rate(i, m.logId, v)} />
+                <span className="w-px h-3 bg-slate-200 mx-1.5" />
                 <CopyButton text={m.text} />
               </div>
             </div>
@@ -125,6 +176,22 @@ export function LawQaPanel({ entryPoint = "tab" }) {
         <div ref={endRef} />
       </div>
 
+      {hints.length > 0 && (
+        <div className="shrink-0 border-t border-slate-100 bg-white px-3 pt-2 pb-1 space-y-0.5">
+          {hints.map((h) => (
+            <button
+              key={h}
+              type="button"
+              onClick={() => ask(h)}
+              className="w-full text-left text-xs text-slate-600 px-2 py-1.5 rounded-lg active:bg-slate-100 flex items-center gap-1.5"
+            >
+              <Search size={11} className="text-slate-300 shrink-0" />
+              <span className="truncate">{h}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="shrink-0 border-t border-slate-200 bg-white px-3 py-2.5 flex gap-2">
         <input
           value={q}
@@ -166,6 +233,32 @@ function AnswerText({ text, onCite }) {
         )
       )}
     </p>
+  );
+}
+
+// 답변 평가 — 법령 답변은 "근거를 몇 건 찾았나"로는 품질을 못 본다(근거 1건을 찾고도
+// 엉뚱하게 답한 적이 있다). 사람이 틀렸다고 눌러주는 게 유일하게 믿을 수 있는 신호다.
+// 한 번 누르면 바꾸지 못하게 둔다 — 되돌리기까지 만들 만큼 중요한 상호작용은 아니다.
+function RateButtons({ value, onRate }) {
+  if (value) {
+    return (
+      <span className={`text-[10px] font-bold flex items-center gap-1 px-1.5 py-1 ${value === 1 ? "text-blue-600" : "text-slate-400"}`}>
+        {value === 1 ? <ThumbsUp size={11} /> : <ThumbsDown size={11} />}
+        {value === 1 ? "도움됨" : "알려주셔서 감사합니다"}
+      </span>
+    );
+  }
+  return (
+    <>
+      <button type="button" onClick={() => onRate(1)} aria-label="도움이 됐어요"
+        className="text-slate-300 active:text-blue-600 px-1.5 py-1">
+        <ThumbsUp size={12} />
+      </button>
+      <button type="button" onClick={() => onRate(-1)} aria-label="정확하지 않아요"
+        className="text-slate-300 active:text-slate-600 px-1.5 py-1">
+        <ThumbsDown size={12} />
+      </button>
+    </>
   );
 }
 

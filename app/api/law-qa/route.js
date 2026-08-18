@@ -24,7 +24,7 @@ const KEYWORD_SCHEMA = {
     keywords: {
       type: "array",
       items: { type: "string" },
-      description: "법령 원문에 그대로 등장할 단일 용어 2~4개 (구체적인 것부터)",
+      description: "법령 원문에 그대로 등장할 단일 용어 2~4개",
     },
   },
   required: ["keywords"],
@@ -35,10 +35,11 @@ const KEYWORD_SCHEMA = {
 // (진입점 3곳 비교 + 자주 묻는 질문 파악 용도 — 마이그 123)
 async function log(question, entryPoint, keywords, sourceCount) {
   try {
-    await supabaseAdmin.from("law_qa_logs").insert({
-      question, entry_point: entryPoint ?? null, keywords, source_count: sourceCount,
-    });
-  } catch { /* 로그 실패는 무시 */ }
+    const { data } = await supabaseAdmin.from("law_qa_logs")
+      .insert({ question, entry_point: entryPoint ?? null, keywords, source_count: sourceCount })
+      .select("id").single();
+    return data?.id ?? null;   // 좋아요/싫어요를 이 id에 붙인다
+  } catch { return null; /* 로그 실패는 무시 — 답변에는 영향 없다 */ }
 }
 
 // 검색 결과를 프롬프트에 넣을 형태로 — 각 근거에 번호를 붙여 답변이 인용할 수 있게 한다.
@@ -74,11 +75,16 @@ export async function POST(request) {
 
 규칙:
 1) 각 항목은 띄어쓰기 없는 단일 용어. 구(句)를 넣으면 원문과 안 맞아 0건이 된다.
-2) 가장 구체적인 용어를 앞에 둔다 (뒤쪽부터 버리며 재검색한다).
-3) 구어체는 법령 용어로 바꾼다. 엘베 문 → 승강장문, 안 닫힘 → 닫힘
+2) **없는 말을 붙여 만들지 마라.** 원문이 "제출 기한"인데 "제출기한"으로 붙이면 0건이 된다.
+   붙여 쓰는 게 맞는지 확신이 없으면 "제출", "기한"처럼 짧게 쪼개라.
+3) 현장에서 쓰는 말·외래어를 **법령 한자어로 바꾼다.** 법령에는 외래어가 거의 없다.
+   도어 → 문 / 타임·타이머 → 시간 / 홀 → 승강장 / 로프 → 주로프 / 모터 → 전동기
+   엘베 문 → 승강장문 / 안 닫힘 → 닫힘 / 멈춤 → 정지
 4) 승강기·검사·기준·법령처럼 어디에나 나오는 말은 넣지 않는다.
 
 예) "정기검사 주기는 몇 년인가요" → ["정기검사", "주기"]
+예) "자체점검 결과 제출 기한" → ["자체점검", "제출", "기한"]   ← "제출기한"으로 붙이면 안 된다
+예) "장애인용 도어대기타임" → ["장애인", "문", "시간"]         ← 외래어를 그대로 두면 0건이 된다
 
 질문: "${q}"`,
       }],
@@ -89,15 +95,19 @@ export async function POST(request) {
   }
   if (!keywords.length) return Response.json({ ok: true, answer: "질문을 조금 더 구체적으로 적어주세요.", sources: [] });
 
-  // 2) 키워드 전부를 포함하는 청크부터 찾고, 없으면 키워드를 줄여가며 재시도한다.
+  // 2) 키워드 전부를 포함하는 청크부터 찾고, 없으면 **앞에서부터** 버리며 재시도한다.
+  //
+  // 앞에서 버리는 이유: AI가 만든 합성어("제출기한")는 원문에 없어서 항상 0건인데,
+  // 대개 앞쪽에 온다. 뒤에서 버리면(slice(0,n)) 그 나쁜 검색어가 끝까지 남아 전멸한다.
+  // 실제로 "자체점검 결과 제출 기한"이 ["제출기한","자체점검","결과"]로 뽑혀 3번 다 0건이었다.
   //
   // ⚠️ 검색 실패(함수 없음·권한 없음)와 "자료에 정말 없음"을 반드시 구분해서 알린다.
   //    예전엔 둘 다 "관련 규정을 찾지 못했습니다"로 나와서, 마이그 115를 안 돌린 상태인지
   //    질문이 자료 밖인지 아무도 알 수 없었다(실제로 그 상태로 한참 헤맸다).
   let rows = [];
-  for (let n = keywords.length; n >= 1 && rows.length === 0; n--) {
+  for (let start = 0; start < keywords.length && rows.length === 0; start++) {
     const { data, error } = await supabaseAdmin.rpc("search_knowledge", {
-      keywords: keywords.slice(0, n),
+      keywords: keywords.slice(start),
       match_count: 8,
     });
     if (error) {
@@ -110,11 +120,11 @@ export async function POST(request) {
     rows = data ?? [];
   }
   if (!rows.length) {
-    await log(q, entryPoint, keywords, 0);
+    const logId = await log(q, entryPoint, keywords, 0);
     return Response.json({
       ok: true,
       answer: "관련 규정을 찾지 못했습니다. 다른 표현으로 다시 물어보시거나, 공단 법령자료를 직접 확인해주세요.",
-      keywords, sources: [],
+      keywords, sources: [], logId,
     });
   }
 
@@ -138,11 +148,12 @@ export async function POST(request) {
   });
 
   const answer = answerRes.choices[0]?.message?.content ?? "";
-  await log(q, entryPoint, keywords, rows.length);
+  const logId = await log(q, entryPoint, keywords, rows.length);
   return Response.json({
     ok: true,
     answer,
     keywords,
+    logId,
     sources: rows.map((r, i) => ({
       n: i + 1,
       clause: r.metadata?.clause ?? null,
@@ -153,4 +164,23 @@ export async function POST(request) {
       excerpt: r.content.slice(0, 200),
     })),
   });
+}
+
+// 답변 평가 — 좋아요(1)/싫어요(-1). 새 라우트를 만들 것 없이 같은 경로의 PATCH로 받는다.
+//
+// 왜 서버를 거치나: 기사 앱이 로그인 상태가 아닐 수 있어(SKIP_LOGIN) 클라이언트에서
+// 바로 쓰면 RLS에 막힌다. 어차피 로그를 남긴 것도 서버라 여기서 마무리하는 게 맞다.
+export async function PATCH(request) {
+  const { logId, rating } = await request.json().catch(() => ({}));
+  if (!logId || ![1, -1].includes(rating)) {
+    return Response.json({ ok: false, reason: "잘못된 요청" }, { status: 400 });
+  }
+  const { error } = await supabaseAdmin.from("law_qa_logs")
+    .update({ rating, rated_at: new Date().toISOString() })
+    .eq("id", logId);
+  if (error) {
+    console.error("[law-qa] 평가 저장 실패:", error.message);
+    return Response.json({ ok: false, reason: error.message }, { status: 500 });
+  }
+  return Response.json({ ok: true });
 }
