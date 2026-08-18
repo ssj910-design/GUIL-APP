@@ -33,10 +33,15 @@ const KEYWORD_SCHEMA = {
 
 // 사용 로그 — 어디서 열었고 무엇을 물었고 답을 찾았는지. 실패해도 답변에는 영향 없게 조용히 넘긴다.
 // (진입점 3곳 비교 + 자주 묻는 질문 파악 용도 — 마이그 123)
-async function log(question, entryPoint, keywords, sourceCount) {
+async function log(question, entryPoint, keywords, sourceCount, answer = null, sources = null) {
   try {
     const { data } = await supabaseAdmin.from("law_qa_logs")
-      .insert({ question, entry_point: entryPoint ?? null, keywords, source_count: sourceCount })
+      .insert({
+        question, entry_point: entryPoint ?? null, keywords, source_count: sourceCount,
+        // 답변·근거까지 남긴다 — 싫어요가 붙었을 때 "검색이 틀렸나 답이 틀렸나"를 로그만 보고 가른다(마이그 118)
+        answer,
+        sources: sources?.map((r) => ({ clause: r.metadata?.clause ?? null, title: r.metadata?.title ?? "" })) ?? null,
+      })
       .select("id").single();
     return data?.id ?? null;   // 좋아요/싫어요를 이 id에 붙인다
   } catch { return null; /* 로그 실패는 무시 — 답변에는 영향 없다 */ }
@@ -151,7 +156,7 @@ export async function POST(request) {
   });
 
   const answer = answerRes.choices[0]?.message?.content ?? "";
-  const logId = await log(q, entryPoint, keywords, rows.length);
+  const logId = await log(q, entryPoint, keywords, rows.length, answer, rows);
   return Response.json({
     ok: true,
     answer,
