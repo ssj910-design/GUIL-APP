@@ -10,7 +10,7 @@
 // 문장은 위험하다 — 기사가 잘못된 기준으로 검사하면 사고로 이어진다. 서버(app/api/law-qa)도
 // 검색된 조항 밖의 내용은 답하지 않도록 막아뒀다.
 import { useState, useRef, useEffect } from "react";
-import { Search, ExternalLink } from "lucide-react";
+import { Search, ExternalLink, Copy, Check } from "lucide-react";
 
 const EXAMPLES = [
   "정기검사 주기는 몇 년인가요?",
@@ -23,6 +23,7 @@ export function LawQaPanel() {
   const [q, setQ] = useState("");
   const [log, setLog] = useState([]); // { role: 'user'|'bot', text, sources?, keywords? }
   const [busy, setBusy] = useState(false);
+  const [openSources, setOpenSources] = useState({}); // 답변 index → 근거 펼침 여부
   const endRef = useRef(null);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [log, busy]);
@@ -79,32 +80,43 @@ export function LawQaPanel() {
         ) : (
           <div key={i} className="space-y-2">
             <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-sm px-3.5 py-3">
-              <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">{m.text}</p>
+              <AnswerText text={m.text} onCite={() => setOpenSources((o) => ({ ...o, [i]: true }))} />
+              <div className="flex justify-end mt-2 -mb-1">
+                <CopyButton text={m.text} />
+              </div>
             </div>
             {m.sources?.length > 0 && (
-              <details className="bg-white border border-slate-200 rounded-xl px-3.5 py-2.5">
-                <summary className="text-[11px] font-bold text-slate-500 cursor-pointer">
-                  근거 {m.sources.length}건 보기
-                </summary>
-                <div className="mt-2 space-y-2.5">
-                  {m.sources.map((s) => (
-                    <div key={s.n} className="border-l-2 border-blue-200 pl-2.5">
-                      <p className="text-[11px] font-bold text-slate-700">
-                        [{s.n}] {s.clause ? `${s.clause} · ` : ""}{s.title}
-                      </p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">
-                        {s.docType}{s.effectiveDate ? ` · ${s.effectiveDate} 시행` : ""}
-                        {s.url && (
-                          <a href={s.url} target="_blank" rel="noreferrer" className="ml-1.5 text-blue-600 inline-flex items-center gap-0.5">
-                            원문 <ExternalLink size={9} />
-                          </a>
-                        )}
-                      </p>
-                      <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{s.excerpt}…</p>
-                    </div>
-                  ))}
-                </div>
-              </details>
+              // <details>는 React에서 onToggle 이벤트가 불안정해(currentTarget null) 직접 상태로 여닫는다.
+              <div className="bg-white border border-slate-200 rounded-xl px-3.5 py-2.5">
+                <button
+                  type="button"
+                  onClick={() => setOpenSources((o) => ({ ...o, [i]: !o[i] }))}
+                  className="w-full text-left text-[11px] font-bold text-slate-500 flex items-center gap-1"
+                >
+                  <span className={`transition-transform ${openSources[i] ? "rotate-90" : ""}`}>›</span>
+                  근거 {m.sources.length}건 {openSources[i] ? "접기" : "보기"}
+                </button>
+                {openSources[i] && (
+                  <div className="mt-2 space-y-2.5">
+                    {m.sources.map((s) => (
+                      <div key={s.n} className="border-l-2 border-blue-200 pl-2.5">
+                        <p className="text-[11px] font-bold text-slate-700">
+                          [{s.n}] {s.clause ? `${s.clause} · ` : ""}{s.title}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          {s.docType}{s.effectiveDate ? ` · ${s.effectiveDate} 시행` : ""}
+                          {s.url && (
+                            <a href={s.url} target="_blank" rel="noreferrer" className="ml-1.5 text-blue-600 inline-flex items-center gap-0.5">
+                              원문 <ExternalLink size={9} />
+                            </a>
+                          )}
+                        </p>
+                        <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{s.excerpt}…</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         ))}
@@ -131,5 +143,44 @@ export function LawQaPanel() {
         </button>
       </div>
     </div>
+  );
+}
+
+// 답변 속 [1] 인용을 눌러 근거를 펼치게 한다 — 근거를 못 찾으면 답변을 못 믿는다.
+function AnswerText({ text, onCite }) {
+  const parts = String(text).split(/(\[\d+\])/g);
+  return (
+    <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
+      {parts.map((p, i) =>
+        /^\[\d+\]$/.test(p) ? (
+          <button
+            key={i}
+            type="button"
+            onClick={onCite}
+            className="text-blue-700 font-bold align-baseline"
+          >
+            {p}
+          </button>
+        ) : (
+          p
+        )
+      )}
+    </p>
+  );
+}
+
+// 현장에서 답변을 게시판·카톡에 옮겨 적는 일이 잦다 → 복사 한 번으로.
+function CopyButton({ text }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try { await navigator.clipboard.writeText(text); setDone(true); setTimeout(() => setDone(false), 1500); } catch {}
+      }}
+      className="text-[10px] font-bold text-slate-400 flex items-center gap-1 px-1.5 py-1"
+    >
+      {done ? <><Check size={11} /> 복사됨</> : <><Copy size={11} /> 복사</>}
+    </button>
   );
 }

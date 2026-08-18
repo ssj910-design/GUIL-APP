@@ -108,6 +108,8 @@ export default function App() {
 
   const [tab, setTab] = useState("home");
   const [failureFocusTab, setFailureFocusTab] = useState(null); // 고장접수 탭 진입 시 열 서브탭 (홈 "모두 보기" 등)
+  // 하단에 입력창이 있는 화면(검사기준 Q&A)에서는 게시판 플로팅 버튼이 입력·전송 버튼을 가린다 → 숨김
+  const [hideFloatingFab, setHideFloatingFab] = useState(false);
   const [sites, setSites] = useState([]);
   const [units, setUnits] = useState([]); // v2: 호기 목록 (마이그레이션 전 DB에서는 빈 배열)
   const [errorCodes, setErrorCodes] = useState([]); // v2: 에러코드집 (마이그레이션 전 DB에서는 빈 배열)
@@ -2505,6 +2507,7 @@ export default function App() {
               onReassign={handleReassignFailure}
               focusSubTab={failureFocusTab}
               onFocusHandled={() => setFailureFocusTab(null)}
+              onChatOpenChange={setHideFloatingFab}
               toast={failureToast}
             />
           )}
@@ -2558,7 +2561,7 @@ export default function App() {
           </PullToRefresh>
 
           {/* 게시판 플로팅 버튼 — 어느 탭에서든 즉시 게시판으로 이동 (게시판 탭에서는 숨김) */}
-          {tab !== "room" && (
+          {tab !== "room" && !hideFloatingFab && (
           <button
             onClick={() => setTab("room")}
             aria-label="게시판 열기"
