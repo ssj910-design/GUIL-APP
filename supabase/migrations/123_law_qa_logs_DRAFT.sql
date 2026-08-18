@@ -18,6 +18,12 @@ create table if not exists law_qa_logs (
 
 create index if not exists law_qa_logs_created_idx on law_qa_logs (created_at desc);
 
+-- RLS — 105·106에서 전 테이블에 켠 것과 같은 기준. 안 켜면 새 테이블만 구멍이 된다.
+-- 기록은 서버(service_role)가 하고, 읽기는 콘솔 통계 화면(로그인 사용자)이 한다.
+alter table law_qa_logs enable row level security;
+drop policy if exists law_qa_logs_rw on law_qa_logs;
+create policy law_qa_logs_rw on law_qa_logs for all to authenticated using (true) with check (true);
+
 -- 통계 예시:
 --   진입점별  select entry_point, count(*) from law_qa_logs group by 1 order by 2 desc;
 --   못 답한 질문  select question from law_qa_logs where source_count = 0 order by created_at desc;
