@@ -44,3 +44,25 @@ metadata에 `{site_id, unit_id, kind, date}` 저장 → 벡터 검색 전에 SQL
 
 - 실시간 임베딩 (쓰기마다 API 호출) — 일 배치면 충분
 - 별도 벡터 DB (Pinecone 등) — Supabase pgvector로 충분, 규모 문제 없음
+
+
+## 검사기준 Q&A — 진입점 3곳 비교 실험 (2026-08-14 ~ )
+
+기술 Q&A 봇(위 3순위)의 첫 구현. 공단 법령자료 현행본 45개 → 청크 5,036개(조항 라벨 94%),
+키워드 검색(pg_trgm) + Haiku 답변, 근거(조항·시행일·원문링크) 필수 표시.
+
+**어디에 둘지 정하려고 3곳에 동시에 뒀다** — 클릭이 아니라 **질문까지 이어진 진입점**을 센다
+(`law_qa_logs.entry_point`, 마이그 123). 눌러만 보고 안 쓰면 의미가 없어서다.
+
+| 진입점 | 값 | 형태 |
+|---|---|---|
+| 헤더 아이콘(마이페이지 왼쪽) | `header` | 시트 — 하던 화면을 안 잃음 |
+| 플로팅(게시판 위, 관리자면 가운데) | `fab` | 시트 |
+| 하단 탭 "검사기준" | `tab` | 탭 전환 |
+
+**정리 시점**: 실사용 2~4주 뒤 로그를 보고 **1곳만 남긴다**(나머지 제거).
+```sql
+select entry_point, count(*) from law_qa_logs group by 1 order by 2 desc;
+select question from law_qa_logs where source_count = 0 order by created_at desc; -- 못 답한 질문
+```
+못 답한 질문 목록은 예시 질문·문서 보강의 재료로 쓴다.

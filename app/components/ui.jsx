@@ -417,10 +417,12 @@ export function PrimaryButton({ children, onClick, disabled, tone = "blue", clas
 }
 
 
-export function Sheet({ title, onClose, children, bg = "bg-slate-50", full = false }) {
+export function Sheet({ title, onClose, children, bg = "bg-slate-50", full = false, flush = false }) {
   // body Portal로 렌더 — 탭 콘텐츠(PullToRefresh)의 transform이 fixed를 가두는 걸 피해,
   // 플로팅 버튼(게시판 퀵) 등 다른 요소가 시트 위로 겹치지 않게 한다.
   // full=true면 하단 시트가 아니라 화면 전체를 덮는 모달로 렌더한다 (입력 항목이 많은 화면용).
+  // flush=true면 본문 패딩·자체 스크롤을 없애고 남은 높이를 그대로 자식에게 넘긴다 —
+  // 채팅처럼 "하단 고정 입력창 + 위쪽만 스크롤"을 자식이 직접 관리하는 화면용.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const content = (
@@ -436,7 +438,7 @@ export function Sheet({ title, onClose, children, bg = "bg-slate-50", full = fal
             <X size={20} />
           </button>
         </div>
-        <div className="overflow-y-auto px-5 py-5">{children}</div>
+        <div className={flush ? "flex-1 min-h-0 flex flex-col" : "overflow-y-auto px-5 py-5"}>{children}</div>
       </div>
     </div>
   );

@@ -24,6 +24,16 @@ const KEYWORD_SCHEMA = {
   additionalProperties: false,
 };
 
+// 사용 로그 — 어디서 열었고 무엇을 물었고 답을 찾았는지. 실패해도 답변에는 영향 없게 조용히 넘긴다.
+// (진입점 3곳 비교 + 자주 묻는 질문 파악 용도 — 마이그 123)
+async function log(question, entryPoint, keywords, sourceCount) {
+  try {
+    await supabaseAdmin.from("law_qa_logs").insert({
+      question, entry_point: entryPoint ?? null, keywords, source_count: sourceCount,
+    });
+  } catch { /* 로그 실패는 무시 */ }
+}
+
 // 검색 결과를 프롬프트에 넣을 형태로 — 각 근거에 번호를 붙여 답변이 인용할 수 있게 한다.
 function buildContext(rows) {
   return rows
@@ -39,7 +49,7 @@ export async function POST(request) {
   if (!process.env.ANTHROPIC_API_KEY) {
     return Response.json({ ok: false, reason: "ANTHROPIC_API_KEY 미설정" }, { status: 200 });
   }
-  const { question } = await request.json().catch(() => ({}));
+  const { question, entryPoint } = await request.json().catch(() => ({}));
   const q = (question ?? "").trim();
   if (!q) return Response.json({ ok: false, reason: "질문을 입력해주세요" }, { status: 200 });
 
@@ -72,6 +82,7 @@ export async function POST(request) {
     rows = data ?? [];
   }
   if (!rows.length) {
+    await log(q, entryPoint, keywords, 0);
     return Response.json({
       ok: true,
       answer: "관련 규정을 찾지 못했습니다. 다른 표현으로 다시 물어보시거나, 공단 법령자료를 직접 확인해주세요.",
@@ -93,6 +104,7 @@ export async function POST(request) {
   });
 
   const answer = answerRes.content.find((b) => b.type === "text")?.text ?? "";
+  await log(q, entryPoint, keywords, rows.length);
   return Response.json({
     ok: true,
     answer,

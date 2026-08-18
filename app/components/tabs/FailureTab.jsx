@@ -9,7 +9,6 @@ import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets
 import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
-import { LawQaPanel } from "@/app/components/tabs/LawQaPanel";
 
 
 /* ------------------------------------------------------------------ */
@@ -1655,25 +1654,20 @@ function ErrorCodeBook({ errorCodes, failures }) {
   );
 }
 
-export function FailureTab({ onChatOpenChange, failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [], errorCodes = [], onReported }) {
+export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [], errorCodes = [], onReported }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
   // 홈 "모두 보기" 등 외부에서 특정 서브탭으로 진입 (SiteTab focusSiteId와 같은 패턴)
   useEffect(() => {
     if (focusSubTab) { setSubTab(focusSubTab); onFocusHandled?.(); }
   }, [focusSubTab]); // eslint-disable-line react-hooks/exhaustive-deps
-  const subTabs = ["접수등록", "미배정", "처리등록", "처리현황", "에러코드집", "검사기준"];
+  const subTabs = ["접수등록", "미배정", "처리등록", "처리현황", "에러코드집"];
   const unassignedCount = failures.filter((f) => !f.assignee && f.status === "미처리").length;
   // 처리등록 배지는 그 탭에서 보여주는 "처리중인 고장"(active) 목록과 동일한 기준 —
   // 미처리(출동 전)뿐 아니라 진행중(도착 후 결과 미등록)도 아직 처리등록이 끝난 게 아니라서 포함한다.
   const waitingCount = failures.filter((f) => f.assignee === CURRENT_ENGINEER && f.status !== "완료").length;
   const badgeCount = { 미배정: unassignedCount, 처리등록: waitingCount };
   const swipe = useSwipeSubtab(subTabs, subTab, setSubTab);
-  // 검사기준(채팅) 탭은 하단에 입력창이 있어 게시판 플로팅 버튼과 겹친다 — 상위에 알려 숨기게 한다.
-  useEffect(() => {
-    onChatOpenChange?.(subTab === "검사기준");
-    return () => onChatOpenChange?.(false);
-  }, [subTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 접수등록/미배정/처리등록/처리현황/에러코드집 각 탭의 패널 — SwipeSubtabTrack이 드래그 중
   // 옆 탭을 함께 렌더링할 때 쓴다.
@@ -1681,7 +1675,6 @@ export function FailureTab({ onChatOpenChange, failures, setFailures, onDispatch
     if (tab === "접수등록") return <FailureRegisterForm onReported={onReported} onDispatch={onDispatch} failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />;
     if (tab === "미배정") return <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
     if (tab === "처리등록") return <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
-    if (tab === "검사기준") return <LawQaPanel />;
     if (tab === "처리현황") return <FailureStatusOverview failures={failures} onReassign={onReassign} attendances={attendances} todayLeaves={todayLeaves} />;
     return <ErrorCodeBook errorCodes={errorCodes} failures={failures} />;
   }

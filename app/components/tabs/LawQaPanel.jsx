@@ -19,7 +19,7 @@ const EXAMPLES = [
   "자체점검 결과 제출 기한",
 ];
 
-export function LawQaPanel() {
+export function LawQaPanel({ entryPoint = "tab" }) {
   const [q, setQ] = useState("");
   const [log, setLog] = useState([]); // { role: 'user'|'bot', text, sources?, keywords? }
   const [busy, setBusy] = useState(false);
@@ -38,7 +38,7 @@ export function LawQaPanel() {
       const res = await fetch("/api/law-qa", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: text }),
+        body: JSON.stringify({ question: text, entryPoint }),
       });
       const data = await res.json().catch(() => ({}));
       setLog((L) => [...L, data.ok
