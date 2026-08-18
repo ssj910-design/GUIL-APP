@@ -33,7 +33,7 @@ const KEYWORD_SCHEMA = {
 
 // 사용 로그 — 어디서 열었고 무엇을 물었고 답을 찾았는지. 실패해도 답변에는 영향 없게 조용히 넘긴다.
 // (진입점 3곳 비교 + 자주 묻는 질문 파악 용도 — 마이그 123)
-async function log(question, entryPoint, keywords, sourceCount, answer = null, sources = null) {
+async function log(question, entryPoint, keywords, sourceCount, answer = null, sources = null, tokens = null) {
   try {
     const { data } = await supabaseAdmin.from("law_qa_logs")
       .insert({
@@ -41,6 +41,7 @@ async function log(question, entryPoint, keywords, sourceCount, answer = null, s
         // 답변·근거까지 남긴다 — 싫어요가 붙었을 때 "검색이 틀렸나 답이 틀렸나"를 로그만 보고 가른다(마이그 118)
         answer,
         sources: sources?.map((r) => ({ clause: r.metadata?.clause ?? null, title: r.metadata?.title ?? "" })) ?? null,
+        tokens,   // 실제 사용량 — 단가는 화면에서 곱한다(마이그 120)
       })
       .select("id").single();
     return data?.id ?? null;   // 좋아요/싫어요를 이 id에 붙인다
@@ -66,6 +67,9 @@ export async function POST(request) {
   const { question, entryPoint } = await request.json().catch(() => ({}));
   const q = (question ?? "").trim();
   if (!q) return Response.json({ ok: false, reason: "질문을 입력해주세요" }, { status: 200 });
+
+  // 질문 1건에 API를 3번 부른다(검색어 추출 → 임베딩 → 답변). 비용을 콘솔에서 보려고 모아둔다.
+  const usage = { in: 0, out: 0, embed: 0 };
 
   // 1) 구어체 질문에서 법령 용어를 뽑는다 ("문이 안 닫혀요" → 승강장문, 닫힘)
   let keywords = [];
@@ -97,6 +101,8 @@ export async function POST(request) {
 질문: "${q}"`,
       }],
     });
+    usage.in += res.usage?.prompt_tokens ?? 0;
+    usage.out += res.usage?.completion_tokens ?? 0;
     keywords = JSON.parse(res.choices[0]?.message?.content ?? "{}").keywords ?? [];
   } catch {
     keywords = q.split(/\s+/).filter((w) => w.length > 1).slice(0, 3); // AI 실패 시 단순 분리
@@ -114,6 +120,7 @@ export async function POST(request) {
   let queryEmbedding = null;
   try {
     const emb = await client.embeddings.create({ model: "text-embedding-3-small", input: q });
+    usage.embed += emb.usage?.total_tokens ?? 0;
     queryEmbedding = emb.data[0].embedding;
   } catch (e) {
     console.error("[law-qa] 질문 임베딩 실패, 키워드만 사용:", e.message);
@@ -150,7 +157,7 @@ export async function POST(request) {
     }
   }
   if (!rows.length) {
-    const logId = await log(q, entryPoint, keywords, 0);
+    const logId = await log(q, entryPoint, keywords, 0, null, null, usage);
     return Response.json({
       ok: true,
       answer: "관련 규정을 찾지 못했습니다. 다른 표현으로 다시 물어보시거나, 공단 법령자료를 직접 확인해주세요.",
@@ -177,8 +184,11 @@ export async function POST(request) {
     }],
   });
 
+  usage.in += answerRes.usage?.prompt_tokens ?? 0;
+  usage.out += answerRes.usage?.completion_tokens ?? 0;
+
   const answer = answerRes.choices[0]?.message?.content ?? "";
-  const logId = await log(q, entryPoint, keywords, rows.length, answer, rows);
+  const logId = await log(q, entryPoint, keywords, rows.length, answer, rows, usage);
   return Response.json({
     ok: true,
     answer,

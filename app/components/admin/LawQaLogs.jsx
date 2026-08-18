@@ -16,6 +16,20 @@ import { supabase } from "@/lib/supabaseClient";
 import { ThumbsUp, ThumbsDown, Search, AlertCircle } from "lucide-react";
 
 const DAYS = [7, 14, 30, 90];
+
+// OpenAI 단가 (2026-08 기준, USD/1M토큰) — 바뀌면 여기만 고친다.
+// 토큰은 DB에 그대로 쌓고 곱셈은 화면에서 한다(마이그 120) — 단가가 바뀌어도 과거를 다시 계산할 수 있다.
+const PRICE = { in: 0.40, out: 1.60, embed: 0.02 };   // gpt-4.1-mini + text-embedding-3-small
+const USD_KRW = 1450;
+
+function costOf(rows) {
+  const t = rows.reduce((a, r) => {
+    const k = r.tokens ?? {};
+    return { in: a.in + (k.in ?? 0), out: a.out + (k.out ?? 0), embed: a.embed + (k.embed ?? 0) };
+  }, { in: 0, out: 0, embed: 0 });
+  const usd = (t.in * PRICE.in + t.out * PRICE.out + t.embed * PRICE.embed) / 1_000_000;
+  return { ...t, usd, krw: usd * USD_KRW, measured: rows.filter((r) => r.tokens).length };
+}
 const ENTRY_LABEL = { header: "헤더 아이콘", fab: "플로팅 버튼", tab: "하단 탭" };
 
 // 목록을 좁히는 기준. "왜 못 찾았나 / 뭐가 좋았나"를 바로 보려는 것이라 이 4개면 충분하다.
@@ -40,7 +54,7 @@ export default function LawQaLogs() {
       const since = new Date(Date.now() - days * 86400000).toISOString();
       const { data, error } = await supabase
         .from("law_qa_logs")
-        .select("id,question,keywords,source_count,rating,entry_point,answer,sources,created_at")
+        .select("id,question,keywords,source_count,rating,entry_point,answer,sources,tokens,created_at")
         .gte("created_at", since)
         .order("created_at", { ascending: false })
         .limit(500);
@@ -59,6 +73,9 @@ export default function LawQaLogs() {
     : true
   );
 
+  const cost = costOf(all);
+  // 하루 평균으로 한 달을 어림한다 — "지금 페이스면 월 얼마"가 실제로 궁금한 숫자다.
+  const perDay = cost.krw / days;
   const answered = all.filter((r) => r.source_count > 0).length;
   const rated = all.filter((r) => r.rating);
   const up = rated.filter((r) => r.rating === 1).length;
@@ -94,7 +111,7 @@ export default function LawQaLogs() {
         </p>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <Kpi label="질문" value={all.length.toLocaleString()} sub={`최근 ${days}일`} />
         <Kpi label="근거를 찾은 비율" value={all.length ? `${Math.round((answered / all.length) * 100)}%` : "—"}
              sub={`${answered} / ${all.length}건`}
@@ -102,6 +119,21 @@ export default function LawQaLogs() {
         <Kpi label="도움됐다는 평가" value={rated.length ? `${Math.round((up / rated.length) * 100)}%` : "—"}
              sub={rated.length ? `${up}↑ ${rated.length - up}↓` : "아직 평가 없음"}
              tone={rated.length && up / rated.length < 0.6 ? "text-rose-600" : "text-slate-800"} />
+        <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
+          <p className="text-[11px] font-bold text-slate-400">GPT 비용</p>
+          <p className="text-xl font-extrabold tabular-nums text-slate-800">
+            {cost.krw < 1 && cost.krw > 0 ? "1원 미만" : `${Math.round(cost.krw).toLocaleString()}원`}
+          </p>
+          <p className="text-[10px] text-slate-400">
+            질문당 {all.length ? (cost.krw / all.length).toFixed(1) : "0"}원 · 월 약 {Math.round(perDay * 30).toLocaleString()}원 예상
+          </p>
+          {cost.measured < all.length && (
+            <p className="text-[10px] text-amber-600 mt-0.5">
+              {all.length - cost.measured}건은 기록 전 질문(실제 비용은 조금 더 큼)
+            </p>
+          )}
+        </div>
+
         <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
           <p className="text-[11px] font-bold text-slate-400 mb-1.5">어디로 들어왔나</p>
           {entries.length === 0 ? (
@@ -188,6 +220,13 @@ function LogRow({ r, open, onToggle }) {
 
       {open && (
         <div className="px-4 pb-3.5 pt-1 space-y-2.5 bg-slate-50/60">
+          {r.tokens && (
+            <p className="text-[10px] text-slate-400">
+              토큰 입력 {r.tokens.in ?? 0} · 출력 {r.tokens.out ?? 0} · 임베딩 {r.tokens.embed ?? 0}
+              {" · "}
+              {(((r.tokens.in ?? 0) * PRICE.in + (r.tokens.out ?? 0) * PRICE.out + (r.tokens.embed ?? 0) * PRICE.embed) / 1_000_000 * USD_KRW).toFixed(2)}원
+            </p>
+          )}
           <Field label="검색어">
             {r.keywords?.length ? (
               <span className="flex flex-wrap gap-1">
