@@ -3,6 +3,7 @@
 // 통계 — 자산(승강기) 통계는 즉시, 운영(고장·부품·기사·비용) 통계는 기록이 쌓이며 채워진다.
 // 별도 차트 라이브러리 없이 앱 팔레트 기반의 수평 막대(보조 표현)로 표시한다.
 import { useState } from "react";
+import UsageStats from "@/app/components/admin/UsageStats";
 import { TODAY_STR } from "@/lib/constants";
 import { addDays } from "@/lib/utils";
 import { locOf, personOf } from "@/app/components/admin/adminShared";
@@ -108,7 +109,7 @@ export default function StatsAdmin({ data }) {
     <div className="max-w-[100rem] mx-auto">
       <h1 className="text-xl font-extrabold mb-3">통계</h1>
       <div className="flex gap-1 mb-4 border-b border-slate-200">
-        {["현황", "자산 분석", "계약 만료"].map((t) => (
+        {["현황", "자산 분석", "계약 만료", "사용 현황"].map((t) => (
           <button key={t} onClick={() => setSub(t)}
             className={`text-sm font-bold px-4 py-2.5 -mb-px border-b-2 ${
               sub === t ? "text-blue-700 border-blue-700" : "text-slate-400 border-transparent"
@@ -119,6 +120,7 @@ export default function StatsAdmin({ data }) {
       </div>
       {sub === "자산 분석" && <AssetAnalysis data={data} />}
       {sub === "계약 만료" && <ContractDashboard data={data} />}
+      {sub === "사용 현황" && <UsageStats />}
       {sub !== "현황" ? null : (<>
       <p className="text-xs text-slate-500 mb-4">자산 통계는 현재 등록 기준 · 고장/부품/기사/비용 통계는 기록이 쌓일수록 정확해집니다</p>
 

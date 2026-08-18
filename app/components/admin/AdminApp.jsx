@@ -31,6 +31,7 @@ import { LoginScreen } from "@/app/components/LoginScreen";
 import { PasswordChangeForm } from "@/app/components/PasswordChangeForm";
 import { AdminAuthContext, useBackdropClose } from "@/app/components/admin/adminShared";
 import { BrandSplash } from "@/app/components/ui";
+import { trackEvent } from "@/lib/uiEvents";
 import { pushSupported, pushPermission, enablePush, disablePush, isSubscribed } from "@/lib/push";
 
 // 로그인 강제 스위치 — 모바일 앱과 동일. 기본 꺼짐(배포본은 지금처럼 열림), 로컬 .env.local에서 켠다.
@@ -78,6 +79,9 @@ export default function AdminApp() {
   const [pwOpen, setPwOpen] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+
+  // 화면 사용 로그 — 콘솔 메뉴 이동도 같은 기준으로 남긴다(개인 아닌 역할만, lib/uiEvents.js).
+  useEffect(() => { trackEvent(`admin:${menu}`, { role: "admin" }); }, [menu]);
 
   // layout.js가 JS 뜨기 전 흰 화면 방지용으로 그려둔 정적 로고 스플래시를, 이 앱이 마운트되는
   // 즉시 치운다 — 아래 BrandSplash 로딩화면이 같은 로고를 이어서 보여주므로 깜빡임이 없다.

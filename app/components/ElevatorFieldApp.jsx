@@ -18,6 +18,7 @@ import { ScreenHeader, BrandSplash, Sheet } from "@/app/components/ui";
 import { ConfirmHost, confirmAsync } from "@/app/components/ConfirmHost";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { LOCATION_TRACKING } from "@/lib/features";
+import { trackEvent } from "@/lib/uiEvents";
 import { LawQaPanel } from "@/app/components/tabs/LawQaPanel";
 import { LoginScreen } from "@/app/components/LoginScreen";
 import { PasswordChangeForm } from "@/app/components/PasswordChangeForm";
@@ -110,6 +111,11 @@ export default function App() {
 
   const [tab, setTab] = useState("home");
   const [failureFocusTab, setFailureFocusTab] = useState(null); // 고장접수 탭 진입 시 열 서브탭 (홈 "모두 보기" 등)
+  // 화면 사용 로그 — 탭이 바뀔 때만 1건. 개인은 안 남기고 역할만 남긴다(lib/uiEvents.js).
+  useEffect(() => {
+    if (profile) trackEvent(tab, { role: profile.role });
+  }, [tab, profile?.role]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 검사기준 Q&A — 어느 진입점으로 열었는지까지 담는다(3곳 비교 실험, 마이그 123).
   // null이면 닫힘, 'header' | 'fab' 이면 그 진입점으로 시트가 열린 상태.
   const [lawQaFrom, setLawQaFrom] = useState(null);

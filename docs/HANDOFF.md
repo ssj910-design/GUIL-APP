@@ -12,9 +12,13 @@
 > **조항 근거와 함께** 답하는 챗봇. 코드·데이터는 다 만들어 뒀고(커밋 5cad729), 아래 3개만 하면 켜진다.
 > 위치: 모바일 고장접수 탭 > **검사기준** (에러코드집 옆)
 
-**1) 마이그레이션 115 실행** — Supabase SQL Editor에
-`supabase/migrations/115_knowledge_search_DRAFT.sql` 붙여넣기
-(pg_trgm 확장 + 인덱스 2개 + `search_knowledge()` 함수. 기존 데이터 안 건드림)
+**1) 마이그레이션 3개 실행** — Supabase SQL Editor에 순서대로 붙여넣기 (전부 새 테이블/인덱스, 기존 데이터 안 건드림)
+- `115_knowledge_search_DRAFT.sql` — 검사기준 검색(pg_trgm + search_knowledge 함수)
+- `123_law_qa_logs_DRAFT.sql` — 챗봇 질문 로그(진입점 비교 + 못 답한 질문)
+- `124_ui_events_DRAFT.sql` — 화면 사용 로그 (**개인 식별 없음** — profile_id 컬럼 자체를 안 뒀다)
+
+※ 123·124는 키 없이도 바로 효과가 있다(로그인 기반). 실행하면 콘솔 **통계 > 사용 현황**에서
+   어느 화면을 실제로 쓰는지 볼 수 있다 — 탭이 11개까지 늘어서 뭘 줄일지 판단할 근거가 된다.
 
 **2) `SUPABASE_SERVICE_ROLE_KEY`를 차호근에게 전달**
 (Supabase → Project Settings → API → service_role)
