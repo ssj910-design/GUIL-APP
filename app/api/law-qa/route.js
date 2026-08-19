@@ -8,6 +8,7 @@
 // 답할 때는 반드시 조항·문서명·시행일을 함께 준다. 기사가 잘못된 기준으로 검사하면 사고가 난다.
 import OpenAI from "openai";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { SUGGESTIONS } from "@/lib/lawQaSuggestions";
 
 // 답변 생성은 GPT를 쓴다 (텔레그램 견적봇은 Claude — 벤더가 둘이니 키도 둘이다).
 // 추론 모델(o시리즈·gpt-5)이 아니라 mini를 쓰는 이유: 이 챗봇은 찾아준 조항을 정확히 옮기는
@@ -80,6 +81,28 @@ async function log(question, entryPoint, keywords, sourceCount, answer = null, s
       .select("id").single();
     return data?.id ?? null;   // 좋아요/싫어요를 이 id에 붙인다
   } catch { return null; /* 로그 실패는 무시 — 답변에는 영향 없다 */ }
+}
+
+// 연관 질문 — **전수 검증된 추천 목록(345개)에서만 고른다.**
+// AI에게 새로 만들게 하면 자료에 없는 걸 제안해 눌렀다 실패한다. 목록에서 고르면 반드시 답이 나온다.
+// 고르는 기준: 방금 쓴 검색어나 근거 조항의 낱말이 겹치는 것 → 겹치는 낱말이 많은 순.
+function relatedQuestions(question, keywords, rows, limit = 3) {
+  const asked = question.replace(/\s/g, "");
+  // "승강기"처럼 어디에나 있는 말로 이으면 엉뚱한 질문이 붙는다(검색어 규칙과 같은 이유).
+  const COMMON = new Set(["승강기", "검사", "기준", "설치", "안전", "관리", "확인", "경우", "대상", "방법"]);
+  const terms = [
+    ...keywords,
+    ...rows.flatMap((r) => (r.metadata?.clause ?? "").match(/[가-힣]{2,}/g) ?? []),
+  ].filter((t) => t.length >= 2 && !COMMON.has(t));
+  if (!terms.length) return [];
+
+  return SUGGESTIONS
+    .filter((s) => s.replace(/\s/g, "") !== asked)
+    .map((s) => ({ s, hit: terms.filter((t) => s.includes(t)).length }))
+    .filter((x) => x.hit > 0)
+    .sort((a, b) => b.hit - a.hit || a.s.length - b.s.length)   // 동점이면 짧은 것 — 현장에서 읽기 편하다
+    .slice(0, limit)
+    .map((x) => x.s);
 }
 
 // 검색 결과를 프롬프트에 넣을 형태로 — 각 근거에 번호를 붙여 답변이 인용할 수 있게 한다.
@@ -222,6 +245,7 @@ export async function POST(request) {
     answer,
     keywords,
     logId,
+    related: relatedQuestions(q, keywords, rows),
     sources: rows.map((r, i) => ({
       n: i + 1,
       clause: r.metadata?.clause ?? null,

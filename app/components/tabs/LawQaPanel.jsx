@@ -10,9 +10,10 @@
 // 문장은 위험하다 — 기사가 잘못된 기준으로 검사하면 사고로 이어진다. 서버(app/api/law-qa)도
 // 검색된 조항 밖의 내용은 답하지 않도록 막아뒀다.
 import { useState, useRef, useEffect } from "react";
-import { Search, ExternalLink, Copy, Check, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Search, ExternalLink, Copy, Check, ThumbsUp, ThumbsDown, History, X, Trash2, CornerDownRight } from "lucide-react";
 import { SUGGESTIONS, EXAMPLES } from "@/lib/lawQaSuggestions";
 import { AnswerMarkdown } from "@/lib/answerMarkdown";
+import { addHistory, getHistory, clearHistory } from "@/lib/lawQaHistory";
 
 // 추천 질문 351개는 법령 자료에서 생성했다 — lib/lawQaSuggestions.js 주석 참고.
 
@@ -22,6 +23,7 @@ export function LawQaPanel({ entryPoint = "tab" }) {
   const [busy, setBusy] = useState(false);
   const [openSources, setOpenSources] = useState({}); // 답변 index → 근거 펼침 여부
   const [ratings, setRatings] = useState({});         // 답변 index → 1 | -1
+  const [history, setHistory] = useState(null);       // null이면 기록 화면을 닫은 상태
   const endRef = useRef(null);
 
   // 입력 중 추천 — 두 글자만 쳐도 후보가 뜨게 한다(현장에서 긴 문장 타이핑은 부담).
@@ -46,8 +48,10 @@ export function LawQaPanel({ entryPoint = "tab" }) {
         body: JSON.stringify({ question: text, entryPoint }),
       });
       const data = await res.json().catch(() => ({}));
+      // 기록은 기기에만 남긴다 (서버는 익명) — lib/lawQaHistory.js
+      if (data.ok) addHistory({ question: text, answer: data.answer, sources: data.sources });
       setLog((L) => [...L, data.ok
-        ? { role: "bot", text: data.answer, sources: data.sources ?? [], keywords: data.keywords ?? [], logId: data.logId ?? null }
+        ? { role: "bot", text: data.answer, sources: data.sources ?? [], keywords: data.keywords ?? [], logId: data.logId ?? null, related: data.related ?? [] }
         : { role: "bot", text: data.reason || "답변을 가져오지 못했습니다.", sources: [] }]);
     } catch (e) {
       setLog((L) => [...L, { role: "bot", text: `오류: ${e.message}`, sources: [] }]);
@@ -69,7 +73,23 @@ export function LawQaPanel({ entryPoint = "tab" }) {
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
+    <div className="relative flex-1 flex flex-col overflow-hidden bg-slate-50">
+      <div className="shrink-0 flex justify-end px-3 pt-2">
+        <button type="button" onClick={() => setHistory(getHistory())}
+          className="text-[11px] font-bold text-slate-400 flex items-center gap-1 px-2 py-1 active:text-slate-600">
+          <History size={12} /> 지난 질문
+        </button>
+      </div>
+
+      {history && (
+        <HistoryPanel
+          days={history}
+          onClose={() => setHistory(null)}
+          onPick={(q) => { setHistory(null); ask(q); }}
+          onClear={() => { clearHistory(); setHistory([]); }}
+        />
+      )}
+
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {log.length === 0 && (
           <div className="pt-6">
@@ -105,6 +125,19 @@ export function LawQaPanel({ entryPoint = "tab" }) {
                 <CopyButton text={m.text} />
               </div>
             </div>
+            {m.related?.length > 0 && (
+              // 검증된 추천 목록에서 고른 것이라 눌러도 반드시 답이 나온다 (route.js relatedQuestions)
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-slate-400 px-1">이어서 물어보기</p>
+                {m.related.map((r) => (
+                  <button key={r} type="button" onClick={() => ask(r)}
+                    className="w-full text-left text-xs text-slate-600 bg-white border border-slate-200 rounded-xl px-3 py-2 active:bg-slate-50 flex items-center gap-1.5">
+                    <CornerDownRight size={11} className="text-slate-300 shrink-0" />
+                    <span className="truncate">{r}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             {m.sources?.length > 0 && (
               // <details>는 React에서 onToggle 이벤트가 불안정해(currentTarget null) 직접 상태로 여닫는다.
               <div className="bg-white border border-slate-200 rounded-xl px-3.5 py-2.5">
@@ -177,6 +210,63 @@ export function LawQaPanel({ entryPoint = "tab" }) {
         >
           <Search size={16} />
         </button>
+      </div>
+    </div>
+  );
+}
+
+// 지난 질문 — 날짜별로 묶어 보여준다. **기기에만 저장**된 것이라 다른 사람 것은 보이지 않는다.
+// 세션이 아니라 날짜로 묶는 이유는 lib/lawQaHistory.js 주석 참고.
+function HistoryPanel({ days, onClose, onPick, onClear }) {
+  const total = days.reduce((n, d) => n + d.items.length, 0);
+  const label = (date) => {
+    const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
+    const yest = new Date(Date.now() - 86400000).toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
+    if (date === today) return "오늘";
+    if (date === yest) return "어제";
+    const [, m, d] = date.split("-");
+    return `${Number(m)}월 ${Number(d)}일`;
+  };
+
+  return (
+    <div className="absolute inset-0 z-10 bg-white flex flex-col">
+      <div className="shrink-0 flex items-center justify-between border-b border-slate-200 px-4 py-3">
+        <p className="text-sm font-extrabold text-slate-800">지난 질문 <span className="text-slate-400 font-bold">{total}</span></p>
+        <div className="flex items-center gap-1">
+          {total > 0 && (
+            <button type="button" onClick={onClear} className="text-[11px] font-bold text-slate-400 flex items-center gap-1 px-2 py-1">
+              <Trash2 size={12} /> 전체 삭제
+            </button>
+          )}
+          <button type="button" onClick={onClose} aria-label="닫기" className="p-1.5 text-slate-400"><X size={16} /></button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+        {total === 0 ? (
+          <p className="text-xs text-slate-400 text-center pt-10 leading-relaxed">
+            아직 기록이 없습니다.<br />
+            <span className="text-[11px] text-slate-300">질문은 이 기기에만 저장되고 30일 뒤 자동으로 지워집니다</span>
+          </p>
+        ) : days.map((d) => (
+          <div key={d.date}>
+            <p className="text-[11px] font-bold text-slate-400 mb-1.5">{label(d.date)}</p>
+            <div className="space-y-1.5">
+              {d.items.map((it, i) => (
+                <button key={i} type="button" onClick={() => onPick(it.q)}
+                  className="w-full text-left bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 active:bg-slate-100">
+                  <p className="text-xs font-bold text-slate-700 truncate">{it.q}</p>
+                  {it.a && <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">{it.a.replace(/[#*|]/g, "").trim()}</p>}
+                  {it.s?.[0] && (
+                    <p className="text-[10px] text-slate-300 mt-1 truncate">
+                      {it.s[0].clause ? `${it.s[0].clause} · ` : ""}{it.s[0].title}
+                    </p>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
