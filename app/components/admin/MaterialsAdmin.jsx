@@ -806,6 +806,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
           site={(data.sites ?? []).find((s) => s.id === itemsTarget.siteId)}
           siteManagers={(data.siteManagers ?? []).filter((m) => m.siteId === itemsTarget.siteId)}
           profiles={data.profiles ?? []}
+          inventoryProducts={data.inventoryProducts ?? []}
           onClose={async () => {
             // 관리자가 새 견적 발행에서 현장만 고르고 품목편집을 취소하면, 기사 요청도 없이
             // 만들어진 빈 초안(요청접수 상태, 담당 기사 없음)만 남는다 — 그건 내역에 남기지 않고
