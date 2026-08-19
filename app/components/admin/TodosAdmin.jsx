@@ -290,12 +290,16 @@ function WasteReturnConfirmModal({ todo, onClose, onConfirm }) {
     () => Object.fromEntries(rows.map((r) => [r.productId, r.qtyRequired - r.qtyConfirmed]))
   );
   const [saving, setSaving] = useState(false);
+  // 재고입고(insert)가 이미 성공했으면 "확인" 재클릭(할일 갱신 실패 후 재시도) 때 중복 입고를
+  // 막는다 — 모달이 닫혔다 다시 열리면(부모가 언마운트) 새 useState라 자연히 초기화된다.
+  const [movementsInserted, setMovementsInserted] = useState(false);
 
   async function submit() {
     setSaving(true);
-    const ok = await onConfirm(confirmedQty);
+    const result = await onConfirm(confirmedQty, movementsInserted);
     setSaving(false);
-    if (ok) onClose();
+    if (result?.movementsInserted) setMovementsInserted(true);
+    if (result?.ok) onClose();
   }
 
   return (
@@ -311,7 +315,11 @@ function WasteReturnConfirmModal({ todo, onClose, onConfirm }) {
               max={r.qtyRequired - r.qtyConfirmed}
               className={inputCls + " w-20"}
               value={confirmedQty[r.productId] ?? 0}
-              onChange={(e) => setConfirmedQty((prev) => ({ ...prev, [r.productId]: Number(e.target.value) }))}
+              onChange={(e) => {
+                const outstanding = r.qtyRequired - r.qtyConfirmed;
+                const n = Math.max(0, Math.min(outstanding, Math.floor(Number(e.target.value) || 0)));
+                setConfirmedQty((prev) => ({ ...prev, [r.productId]: n }));
+              }}
             />
           </div>
         ))}
@@ -402,7 +410,9 @@ export default function TodosAdmin({ data, setData, initialView }) {
   // - 전부 확인됐으면(stock_confirmed_at 채워 큐에서 빠짐) 기록용으로 rows를 누적 확인수량 그대로 남긴다.
   // - 일부만 확인됐으면 done=false로 재오픈하고, waste_return_rows를 "남은 수량"만 담은 새 행으로
   //   다시 세팅한다(다음 회차엔 이게 새 요청량) — 사진도 비워 Task 5 잠금이 다시 걸리게 한다.
-  async function confirmWasteReturn(t, confirmedQty) {
+  // movementsAlreadyInserted: 이전 호출에서 재고입고까지는 성공했는데 할일 갱신이 실패해
+  // 모달이 같은 확인수량으로 재시도하는 경우 — 입고를 또 하지 않고 할일 갱신만 재시도한다.
+  async function confirmWasteReturn(t, confirmedQty, movementsAlreadyInserted) {
     const rows = t.wasteReturnRows ?? [];
     const movementRows = rows
       .filter((r) => (confirmedQty[r.productId] ?? 0) > 0)
@@ -410,9 +420,9 @@ export default function TodosAdmin({ data, setData, initialView }) {
         product_id: r.productId, type: "in", qty_delta: confirmedQty[r.productId],
         note: `할일 ${t.id} 반납확인`, todo_id: t.id, created_by: adminId ?? null,
       }));
-    if (movementRows.length) {
+    if (movementRows.length && !movementsAlreadyInserted) {
       const { data: inserted, error } = await supabase.from("inventory_stock_movements").insert(movementRows).select();
-      if (error) { alert("재고 반영 실패: " + error.message); return false; }
+      if (error) { alert("재고 반영 실패: " + error.message); return { ok: false, movementsInserted: false }; }
       setData((prev) => ({ ...prev, inventoryStockMovements: [...prev.inventoryStockMovements, ...(inserted ?? []).map(mapInventoryStockMovement)] }));
     }
 
@@ -429,7 +439,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
         };
 
     const { error: todoError } = await supabase.from("todos").update(patch).eq("id", t.id);
-    if (todoError) { alert("할일 갱신 실패: " + todoError.message); return false; }
+    if (todoError) { alert("할일 갱신 실패: " + todoError.message); return { ok: false, movementsInserted: true }; }
 
     setData((prev) => ({
       ...prev,
@@ -443,7 +453,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
         title: allDone ? x.title : patch.title,
       } : x)),
     }));
-    return true;
+    return { ok: true, movementsInserted: true };
   }
 
   async function toggle(t) {
@@ -587,7 +597,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
         <WasteReturnConfirmModal
           todo={confirmTarget}
           onClose={() => setConfirmTarget(null)}
-          onConfirm={(qty) => confirmWasteReturn(confirmTarget, qty)}
+          onConfirm={(qty, movementsAlreadyInserted) => confirmWasteReturn(confirmTarget, qty, movementsAlreadyInserted)}
         />
       )}
     </div>
