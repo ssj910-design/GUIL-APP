@@ -155,6 +155,9 @@ export default function App() {
   // billings.part_photos 컬럼 존재 여부 — 마이그레이션 120 실행 전엔 컬럼이 없어, 있을 때만
   // 부품별 전/후 사진 묶음을 같이 쓴다.
   const billingPartPhotosReady = billings.some((b) => b.partPhotos !== undefined);
+  // billings.quote_request_id 컬럼 존재 여부 — 마이그레이션 126 실행 전엔 컬럼이 없어, 있을 때만
+  // 같이 써서 DB 트리거(create_waste_return_todo)가 반납 할일을 만들 수 있게 한다.
+  const billingQuoteRequestIdReady = billings.some((b) => b.quoteRequestId !== undefined);
   // todos.billing_part_rows 컬럼 존재 여부 — 마이그레이션 112 실행 전엔 컬럼이 없어, 있을 때만
   // 관리자가 지급 확정한 부품별 구조화 행(이름·수량·금액)을 같이 쓴다.
   const billingPartRowsReady = todos.some((t) => t.billingPartRows !== undefined);
@@ -1264,6 +1267,7 @@ export default function App() {
       } : {}),
       ...(billingPartPhotosReady ? { part_photos: newBilling.partPhotos } : {}),
       ...(billingOutsourcedReady ? { is_outsourced: newBilling.isOutsourced, vendor_name: newBilling.vendorName } : {}),
+      ...(billingQuoteRequestIdReady ? { quote_request_id: quoteRequestId ?? null } : {}),
       ...(v2Ready ? {
         unit_id: billUnitId,
         engineer_id: profileIdByName(profilesAll, profile.name),
@@ -1276,49 +1280,15 @@ export default function App() {
       return false;
     }
     // 이 청구가 견적건이고, 그 견적의 부품마스터 연동 항목 중 폐자재 회수 필요이거나
-    // 여유분(실반출 > 견적수량)이 있는 게 있으면 반납 할일을 견적 1건당 1개로 만든다.
-    // quote_items는 로컬 state(quoteRequests)가 아니라 DB에서 새로 조회한다 — 견적 품목편집은
-    // PC 관리자 콘솔(별도 세션)에서 이뤄지는 경우가 많아, 기사 모바일 세션이 그 편집 이후
-    // 새로고침을 안 했으면 로컬 state가 옛 품목(partId·returnRequired 없음)을 들고 있어
-    // 반납 할일이 조용히 안 만들어지는 문제가 있었다.
-    if (quoteRequestId) {
-      const { data: freshQuote, error: quoteFetchError } = await supabase
-        .from("quote_requests")
-        .select("quote_items")
-        .eq("id", quoteRequestId)
-        .maybeSingle();
-      if (quoteFetchError) console.error("반납 대상 확인 실패:", quoteFetchError.message);
-      const rows = (freshQuote?.quote_items ?? [])
-        .filter((it) => it.partId && (it.returnRequired || (it.qtyTaken ?? it.qty) > it.qty))
-        .map((it) => ({
-          productId: it.partId,
-          name: it.name,
-          qtyRequired: (it.returnRequired ? 1 : 0) + Math.max(0, (it.qtyTaken ?? it.qty) - it.qty),
-          qtyConfirmed: 0,
-        }));
-      if (rows.length) {
-        const title = `폐자재/여유부품 반납 — ${rows.map((r) => `${r.name} ${r.qtyRequired}EA`).join(", ")}`;
-        const { error: wrError } = await supabase.from("todos").insert({
-          id: `todo-wastereturn-${newBilling.id}`,
-          source: "waste_return",
-          title,
-          site_name: siteName,
-          elevator_no: elevatorNo || null,
-          part: "폐자재/여유부품 반납",
-          assignee: profile.name,
-          assignee_id: profileIdByName(profilesAll, profile.name),
-          assigned_date: TODAY_STR,
-          due_date: addDays(TODAY_STR, 14),
-          done: false,
-          quote_request_id: quoteRequestId,
-          waste_return_rows: rows,
-        });
-        if (wrError) console.error("반납 할일 생성 실패:", wrError.message);
-        else {
-          const { data: fresh } = await supabase.from("todos").select("*").eq("id", `todo-wastereturn-${newBilling.id}`).maybeSingle();
-          if (fresh) setTodos((prev) => [mapTodo(fresh), ...prev]);
-        }
-      }
+    // 여유분(실반출 > 견적수량)이 있으면 반납 할일이 자동으로 생긴다 — 판단·생성 모두
+    // DB 트리거(create_waste_return_todo, 마이그레이션 126)가 위 insert에 맞춰 서버에서
+    // 직접 한다. 예전엔 이 판단을 기사 앱(JS)이 했는데, PWA 특성상 기사가 탭을 하루 종일
+    // 켜둔 채로 쓰는 경우가 많아 배포해도 이미 열려 있던 탭은 새로고침 전까진 계속 옛
+    // 코드를 실행해 반납 할일이 조용히 안 만들어지는 문제가 있었다(2026-08-19). 여기서는
+    // 트리거가 만들었을 수도 있는 할일을 화면에 바로 반영하기 위해 조회만 한다.
+    if (billingQuoteRequestIdReady && quoteRequestId) {
+      const { data: fresh } = await supabase.from("todos").select("*").eq("id", `todo-wastereturn-${newBilling.id}`).maybeSingle();
+      if (fresh) setTodos((prev) => [mapTodo(fresh), ...prev]);
     }
     setBillings((prev) => [newBilling, ...prev]);
     return true;
