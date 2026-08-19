@@ -1910,6 +1910,25 @@ export default function App() {
     );
     if (!statusSaved) return;
 
+    // 부품마스터 연동된 항목(partId 있는 것)마다 실반출수량만큼 재고 'out' 반영 —
+    // 자재지급완료가 실제로 부품이 창고에서 나가는 시점이라 여기서 기록한다.
+    const partItems = (q.quoteItems ?? []).filter((it) => it.partId);
+    if (partItems.length) {
+      const movementRows = partItems.map((it) => ({
+        product_id: it.partId,
+        type: "out",
+        qty_delta: -(it.qtyTaken ?? it.qty),
+        note: `견적 ${quoteId} 지급`,
+        site_text: q.siteName,
+        created_by: profileIdByName(profilesAll, profile.name),
+      }));
+      const { error: moveError } = await supabase.from("inventory_stock_movements").insert(movementRows);
+      if (moveError) {
+        // 재고 반영 실패는 지급완료 자체를 막지 않는다(할일·상태 변경은 이미 성공) — 콘솔에만 남긴다.
+        console.error("재고 반영 실패:", moveError.message);
+      }
+    }
+
     setQuoteRequests((prev) =>
       prev.map((x) => (x.id === quoteId ? { ...x, status: "자재지급완료", suppliedDate: TODAY_STR } : x))
     );
