@@ -1201,7 +1201,7 @@ export default function App() {
     }
   }
 
-  async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId, signatureUrl, approvalMethod, approverName, approverPhone, approvedAt, partPhotos, isOutsourced, vendorName }) {
+  async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId, quoteRequestId, signatureUrl, approvalMethod, approverName, approverPhone, approvedAt, partPhotos, isOutsourced, vendorName }) {
     // 같은 자재신청 건에 이미 청구기록이 있으면 막는다 — 할 일 완료 처리가 실패해 재시도하는
     // 과정에서 청구 자체는 또 저장돼버리는(중복청구) 경로를 막기 위함.
     if (materialRequestId) {
@@ -1275,6 +1275,42 @@ export default function App() {
     if (error) {
       alert("비용청구 저장에 실패했습니다. 네트워크 상태를 확인하고 다시 시도해주세요.");
       return false;
+    }
+    // 이 청구가 견적건이고, 그 견적의 부품마스터 연동 항목 중 폐자재 회수 필요이거나
+    // 여유분(실반출 > 견적수량)이 있는 게 있으면 반납 할일을 견적 1건당 1개로 만든다.
+    if (quoteRequestId) {
+      const q = quoteRequests.find((x) => x.id === quoteRequestId);
+      const rows = (q?.quoteItems ?? [])
+        .filter((it) => it.partId && (it.returnRequired || (it.qtyTaken ?? it.qty) > it.qty))
+        .map((it) => ({
+          productId: it.partId,
+          name: it.name,
+          qtyRequired: (it.returnRequired ? 1 : 0) + Math.max(0, (it.qtyTaken ?? it.qty) - it.qty),
+          qtyConfirmed: 0,
+        }));
+      if (rows.length) {
+        const title = `폐자재/여유부품 반납 — ${rows.map((r) => `${r.name} ${r.qtyRequired}EA`).join(", ")}`;
+        const { error: wrError } = await supabase.from("todos").insert({
+          id: `todo-wastereturn-${newBilling.id}`,
+          source: "waste_return",
+          title,
+          site_name: siteName,
+          elevator_no: elevatorNo || null,
+          part: "폐자재/여유부품 반납",
+          assignee: profile.name,
+          assignee_id: profileIdByName(profilesAll, profile.name),
+          assigned_date: TODAY_STR,
+          due_date: addDays(TODAY_STR, 14),
+          done: false,
+          quote_request_id: quoteRequestId,
+          waste_return_rows: rows,
+        });
+        if (wrError) console.error("반납 할일 생성 실패:", wrError.message);
+        else {
+          const { data: fresh } = await supabase.from("todos").select("*").eq("id", `todo-wastereturn-${newBilling.id}`).maybeSingle();
+          if (fresh) setTodos((prev) => [mapTodo(fresh), ...prev]);
+        }
+      }
     }
     setBillings((prev) => [newBilling, ...prev]);
     return true;

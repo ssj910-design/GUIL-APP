@@ -250,6 +250,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       elevatorNo: selected.elevatorNo,
       unitId: selected.unitId ?? null,
       materialRequestId: selected.materialRequestId ?? null,
+      quoteRequestId: selected.quoteRequestId ?? null,
       part: selected.part,
       // billings.cost는 숫자 컬럼이라 "견적서 참조" 같은 문자열은 넣을 수 없습니다(넣으면 insert가
       // 조용히 실패합니다). 견적 연동 건은 실제 비용을 이 시스템에 남기지 않는다는 의미로 null 처리합니다.
