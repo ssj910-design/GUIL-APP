@@ -18,6 +18,40 @@ const MODEL = "gpt-4.1-mini";
 // **생성 시점에 throw**하는데(Anthropic SDK는 안 그랬다), 빌드 중 Next가 이 라우트를
 // 로드하면서 터져 배포가 통째로 실패한다. 키가 아직 안 꽂힌 환경에서도 빌드는 돼야 한다.
 
+// 답변 형식 — 화면(LawQaPanel)이 마크다운을 렌더링하므로 구조를 갖춰 쓰게 한다.
+// 예전엔 "짧고 실무적으로"만 지시해서 3~5문장 평문으로 끝났고, "답이 빈약하다"는 피드백을 받았다.
+// 기사가 실제로 필요한 건 **결론 한 줄 + 근거 수치 + 현장 유의점**이라, 그 뼈대를 강제한다.
+const SYSTEM_PROMPT = `너는 승강기 유지보수 기사를 돕는 검사기준 안내자다.
+아래 '근거 자료'에 있는 내용만으로 답한다.
+
+## 지켜야 할 것 (어기면 사고로 이어진다)
+- 근거에 없는 내용은 절대 추측하지 마라. 모르면 그 항목에 "자료에서 확인되지 않습니다"라고 쓴다.
+- 수치(주기·치수·기한·힘·각도)와 조항 번호는 **원문 그대로** 옮긴다. 반올림·의역 금지.
+- 근거 자료가 질문과 동떨어져 있으면 억지로 답하지 말고 "질문과 관련된 규정을 찾지 못했습니다"라고만 답한다.
+- 인용은 문장 끝에 [1] [3] 형태로 붙인다. 근거 번호는 자료에 붙은 번호를 그대로 쓴다.
+
+## 형식 (마크다운)
+**첫 줄은 결론 한 문장.** 굵게 쓰고, 질문에 대한 답을 바로 준다. 서론 금지.
+
+그다음 필요한 만큼만 아래 절을 쓴다 (없으면 그 절을 통째로 생략):
+
+### 기준
+근거 조항과 수치를 불릿으로. 각 줄은 "조항번호 — 내용 [n]" 꼴.
+
+### 구분이 나뉘는 경우
+주기·종류·조건에 따라 값이 다르면 **표**로 준다. 예:
+| 구분 | 기준 |
+|---|---|
+| 일반 | 1년 [1] |
+| 25년 경과 | 6개월 [1] |
+
+### 현장 확인
+점검·검사할 때 실제로 봐야 할 것이 자료에 있으면 불릿으로. 없으면 이 절을 쓰지 마라.
+
+## 말투
+현장 기사가 읽는 글이다. 짧은 문장, 군더더기 없이. 존댓말.
+"최종 판단은 관할 검사기관 확인이 필요합니다" 같은 과한 면책은 붙이지 마라 — 대신 근거를 정확히 제시한다.`;
+
 const KEYWORD_SCHEMA = {
   type: "object",
   properties: {
@@ -129,7 +163,7 @@ export async function POST(request) {
   let rows = [];
   if (queryEmbedding) {
     const { data, error } = await supabaseAdmin.rpc("search_knowledge_hybrid", {
-      keywords, query_embedding: queryEmbedding, match_count: 8,
+      keywords, query_embedding: queryEmbedding, match_count: 12,
     });
     if (error) console.error("[law-qa] 하이브리드 검색 실패, 키워드로 대체:", error.message);
     else rows = data ?? [];
@@ -142,7 +176,7 @@ export async function POST(request) {
     for (let start = 0; start < keywords.length && rows.length === 0; start++) {
       const { data, error } = await supabaseAdmin.rpc("search_knowledge", {
         keywords: keywords.slice(start),
-        match_count: 8,
+        match_count: 12,
       });
       // ⚠️ 검색 실패(함수 없음·권한 없음)와 "자료에 정말 없음"은 반드시 구분해서 알린다.
       //    둘 다 "찾지 못했습니다"로 나오면 마이그를 안 돌린 건지 자료 밖인지 알 수 없다.
@@ -168,16 +202,10 @@ export async function POST(request) {
   // 3) 찾은 조항만 근거로 답한다 — 모르면 모른다고 하게 못박는다.
   const answerRes = await client.chat.completions.create({
     model: MODEL,
-    max_completion_tokens: 1200,
+    max_completion_tokens: 2200,
     messages: [{
       role: "system",
-      content:
-      "너는 승강기 유지보수 기사를 돕는 검사기준 안내자다. 아래 '근거 자료'에 있는 내용만으로 답한다.\n" +
-      "- 근거에 없는 내용은 절대 추측하지 말고 '자료에서 확인되지 않습니다'라고 말한다.\n" +
-      "- 답변 문장 뒤에 근거 번호를 [1] 형태로 붙인다.\n" +
-      "- 근거 자료가 질문과 동떨어져 있으면(검색이 엉뚱한 조항을 물어온 경우) 억지로 답하지 말고 '질문과 관련된 규정을 찾지 못했습니다'라고만 답한다. 어설픈 답이 답 없음보다 위험하다.\n" +
-      "- 현장 기사가 읽는 글이다. 짧고 실무적으로, 조항 번호와 수치(주기·치수·기한)를 정확히 옮긴다.\n" +
-      "- 마지막에 '⚠️ 최종 판단은 관할 검사기관 확인이 필요합니다' 같은 과한 면책은 붙이지 않는다. 대신 근거를 정확히 제시한다.",
+      content: SYSTEM_PROMPT,
     }, {
       role: "user",
       content: `질문: ${q}\n\n근거 자료:\n\n${buildContext(rows)}`,

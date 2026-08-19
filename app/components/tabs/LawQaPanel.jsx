@@ -12,6 +12,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Search, ExternalLink, Copy, Check, ThumbsUp, ThumbsDown } from "lucide-react";
 import { SUGGESTIONS, EXAMPLES } from "@/lib/lawQaSuggestions";
+import { AnswerMarkdown } from "@/lib/answerMarkdown";
 
 // 추천 질문 351개는 법령 자료에서 생성했다 — lib/lawQaSuggestions.js 주석 참고.
 
@@ -97,7 +98,7 @@ export function LawQaPanel({ entryPoint = "tab" }) {
         ) : (
           <div key={i} className="space-y-2">
             <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-sm px-3.5 py-3">
-              <AnswerText text={m.text} onCite={() => setOpenSources((o) => ({ ...o, [i]: true }))} />
+              <AnswerMarkdown text={m.text} onCite={() => setOpenSources((o) => ({ ...o, [i]: true }))} />
               <div className="flex items-center justify-end gap-0.5 mt-2 -mb-1">
                 <RateButtons value={ratings[i]} onRate={(v) => rate(i, m.logId, v)} />
                 <span className="w-px h-3 bg-slate-200 mx-1.5" />
@@ -178,29 +179,6 @@ export function LawQaPanel({ entryPoint = "tab" }) {
         </button>
       </div>
     </div>
-  );
-}
-
-// 답변 속 [1] 인용을 눌러 근거를 펼치게 한다 — 근거를 못 찾으면 답변을 못 믿는다.
-function AnswerText({ text, onCite }) {
-  const parts = String(text).split(/(\[\d+\])/g);
-  return (
-    <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
-      {parts.map((p, i) =>
-        /^\[\d+\]$/.test(p) ? (
-          <button
-            key={i}
-            type="button"
-            onClick={onCite}
-            className="text-blue-700 font-bold align-baseline"
-          >
-            {p}
-          </button>
-        ) : (
-          p
-        )
-      )}
-    </p>
   );
 }
 
