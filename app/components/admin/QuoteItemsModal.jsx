@@ -41,7 +41,7 @@ function rowCalc(qty, unitPrice) {
 
 export default function QuoteItemsModal({ quote, site, siteManagers, profiles, inventoryProducts, onClose, onSaved }) {
   const [items, setItems] = useState(() => {
-    if (quote.quoteItems?.length) return quote.quoteItems;
+    if (quote.quoteItems?.length) return quote.quoteItems.map((it) => ({ ...emptyItem(it.category), ...it }));
     // 처음 여는 경우 기사 원본(부품명+수량)을 자재비 1행에 프리필
     return quote.part ? [{ ...emptyItem("자재비"), name: quote.part, qty: quote.quantity || 1 }] : [];
   });
