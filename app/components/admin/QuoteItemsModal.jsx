@@ -89,7 +89,7 @@ function InventoryPickerModal({ products, movements, onClose, onSelect }) {
 }
 
 export default function QuoteItemsModal({ quote, site, siteManagers, profiles, inventoryProducts, inventoryStockMovements, onClose, onSaved }) {
-  const [pickerForIdx, setPickerForIdx] = useState(null); // 재고에서 선택 모달을 연 품목 행 idx
+  const [inventoryPickerOpen, setInventoryPickerOpen] = useState(false); // 재고 연동 모달 — 고르면 자재비 품목을 새로 하나 추가
   const [items, setItems] = useState(() => {
     if (quote.quoteItems?.length) return quote.quoteItems.map((it) => ({ ...emptyItem(it.category), ...it }));
     // 처음 여는 경우 기사 원본(부품명+수량)을 자재비 1행에 프리필
@@ -313,9 +313,16 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
             <div key={category} className="mb-4">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-bold text-slate-600">{category === "자재비" ? "1.자재비" : "2.인건비"}</p>
-                <button onClick={() => addItem(category)} className="flex items-center gap-1 text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-2.5 py-1">
-                  <Plus size={12} /> 품목 추가
-                </button>
+                <div className="flex items-center gap-1.5">
+                  {category === "자재비" && (
+                    <button onClick={() => setInventoryPickerOpen(true)} className="flex items-center gap-1 text-xs font-bold text-emerald-700 border border-emerald-200 rounded-lg px-2.5 py-1">
+                      <Search size={12} /> 재고 연동
+                    </button>
+                  )}
+                  <button onClick={() => addItem(category)} className="flex items-center gap-1 text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-2.5 py-1">
+                    <Plus size={12} /> 직접 입력
+                  </button>
+                </div>
               </div>
               <div className="space-y-2">
                 {items.map((it, idx) => {
@@ -335,15 +342,6 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
                           </button>
                         </div>
                         <div className="flex-[11] min-w-0">
-                          {category === "자재비" && (
-                            <button
-                              type="button"
-                              onClick={() => setPickerForIdx(idx)}
-                              className="mb-1 w-full flex items-center gap-1 text-[11px] font-bold text-blue-700 border border-blue-200 rounded px-2 py-1"
-                            >
-                              <Search size={11} /> 재고에서 선택{it.partId ? " (연동됨)" : ""}
-                            </button>
-                          )}
                           <input className={inputCls} placeholder="품명" value={it.name} onChange={(e) => updateItem(idx, { name: e.target.value })} />
                         </div>
                         <div className="flex-[5] min-w-0">
@@ -490,14 +488,14 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
         </button>
       </div>
     </Modal>
-    {pickerForIdx !== null && (
+    {inventoryPickerOpen && (
       <InventoryPickerModal
         products={inventoryProducts}
         movements={inventoryStockMovements ?? []}
-        onClose={() => setPickerForIdx(null)}
+        onClose={() => setInventoryPickerOpen(false)}
         onSelect={(p) => {
-          updateItem(pickerForIdx, { partId: p.id, name: p.name, spec: p.spec ?? "", unitPrice: p.salePrice ?? 0 });
-          setPickerForIdx(null);
+          setItems((prev) => [...prev, { ...emptyItem("자재비"), partId: p.id, name: p.name, spec: p.spec ?? "", unitPrice: p.salePrice ?? 0 }]);
+          setInventoryPickerOpen(false);
         }}
       />
     )}

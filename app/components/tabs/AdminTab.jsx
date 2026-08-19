@@ -1212,7 +1212,7 @@ function DashStat({ label, n, tone }) {
 }
 
 
-export function AdminTab({ materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onClearReassignRequest, onResetEngineerPassword, materialFocusId, onMaterialFocusHandled, quoteFocusId, onQuoteFocusHandled, onQuoteDraftCreated, onQuoteDiscarded, onQuoteWizardSaved, onSendQuote }) {
+export function AdminTab({ materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onClearReassignRequest, onResetEngineerPassword, materialFocusId, onMaterialFocusHandled, quoteFocusId, onQuoteFocusHandled, onQuoteDraftCreated, onQuoteDiscarded, onQuoteWizardSaved, onSendQuote, inventoryProducts, inventoryStockMovements }) {
   const { engineerNames: ctxEngineerNames, adminTier, profiles } = useContext(AuthContext);
   // 자재담당관리자는 자재출하관리·상비부품보충만 본다 (견적·재배정·비용청구·계정관리는 다른 관리자 담당).
   const isMaterialTier = adminTier === "material";
@@ -1315,6 +1315,8 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
     return (
       <QuoteWizard
         existingQuote={wizardTarget}
+        inventoryProducts={inventoryProducts}
+        inventoryStockMovements={inventoryStockMovements}
         onDraftCreated={onQuoteDraftCreated}
         onDiscarded={onQuoteDiscarded}
         onSaved={(patch) => { onQuoteWizardSaved(patch); setPage("quoteManagement"); setWizardTarget(null); }}

@@ -5,19 +5,73 @@
 // 정해져 있고 견적명은 아직 없으므로 여기서 입력받아야 한다. 새 초안을 만들지 않고 그 요청 행을
 // 그대로 쓴다.
 import { useState, useContext, useEffect } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Search } from "lucide-react";
 import { SitesContext, UnitsContext } from "@/app/components/context";
 import { SiteSearchSelect } from "@/app/components/formWidgets";
-import { inputCls } from "@/app/components/ui";
+import { inputCls, Sheet } from "@/app/components/ui";
 import { supabase } from "@/lib/supabaseClient";
 import { mapQuoteRequest, mapSiteManager } from "@/lib/mappers";
 import { siteUnitList } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
+import { currentStock } from "@/lib/inventoryStock";
 
 const STEP_TITLES = ["현장·담당자", "품목 입력", "부대비용", "확인·작성"];
 const draftKey = (id) => `guilQuoteWizardDraftV1:${id}`;
 
-export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, onDiscarded, onSaved }) {
+// QuoteItemsModal.jsx(관리자 콘솔)의 emptyItem과 같은 모양 — 재고 연동 필드까지 항상 포함.
+function emptyItem(category) {
+  return { category, name: "", spec: "", unit: "EA", qty: 1, unitPrice: 0, unitNo: "1호기", partId: null, returnRequired: false, qtyTaken: null };
+}
+
+// 재고관리(부품마스터)에서 검색해 골라 품목으로 추가한다 — 관리자 콘솔
+// QuoteItemsModal.jsx의 InventoryPickerModal과 같은 목적, 기사앱 스타일(Sheet)로.
+function InventoryPickerSheet({ products, movements, onClose, onSelect }) {
+  const [search, setSearch] = useState("");
+  const active = products.filter((p) => p.active !== false);
+  const q = search.trim().toLowerCase();
+  const rows = active.filter((p) => !q || `${p.materialNo} ${p.name}`.toLowerCase().includes(q));
+  return (
+    <Sheet title="재고에서 선택" onClose={onClose} full>
+      <input
+        className={inputCls + " mb-3"}
+        placeholder="자재번호, 품명 검색"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        autoFocus
+      />
+      <div className="space-y-1.5">
+        {rows.length === 0 && <p className="text-xs text-slate-400 text-center py-8">검색 결과가 없습니다</p>}
+        {rows.map((p) => {
+          const stock = currentStock(movements, p.id);
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => onSelect(p)}
+              className="w-full flex items-center gap-3 p-2.5 rounded-lg border border-slate-200 active:bg-blue-50 text-left"
+            >
+              {p.photoUrls?.[0] ? (
+                <img src={p.photoUrls[0]} alt="" className="w-11 h-11 rounded-lg object-cover shrink-0" />
+              ) : (
+                <div className="w-11 h-11 rounded-lg bg-slate-100 shrink-0" />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-800 truncate">{p.name}</p>
+                <p className="text-[11px] text-slate-400 truncate">{p.materialNo}{p.spec ? ` · ${p.spec}` : ""}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className={`text-xs font-bold ${stock > 0 ? "text-emerald-600" : "text-red-500"}`}>재고 {stock}</p>
+                {p.salePrice != null && <p className="text-[11px] text-slate-400">{Number(p.salePrice).toLocaleString()}원</p>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </Sheet>
+  );
+}
+
+export default function QuoteWizard({ existingQuote, inventoryProducts = [], inventoryStockMovements = [], onClose, onDraftCreated, onDiscarded, onSaved }) {
   const sites = useContext(SitesContext);
   const allUnits = useContext(UnitsContext);
   const [step, setStep] = useState(0);
@@ -33,16 +87,17 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
 
-  // "수정하기"로 이미 작성된 견적을 다시 열면 실제 저장된 품목(quoteItems)을 그대로 불러오고,
-  // 기사 요청에서 막 넘어온 경우(아직 작성 전, constructionType만 있음)엔 그 값으로 품목 1개를
-  // 미리 채워둔다 — 호기는 대부분 1호기라 기본값으로 넣어두고 필요하면 바꾸게 한다.
+  // "수정하기"로 이미 작성된 견적을 다시 열면 실제 저장된 품목(quoteItems)을 그대로 불러온다
+  // (emptyItem 기본값과 병합 — 재고 연동 필드가 없는 옛 데이터도 안전하게 채워짐).
+  // 기사 요청에서 막 넘어온 경우(아직 작성 전, constructionType만 있음)엔 품목을 자동으로
+  // 만들지 않는다 — "재고 연동"/"직접 입력" 버튼으로 사용자가 직접 추가해야 함(원본 텍스트는
+  // 참고용으로 위에 그대로 보여줌).
   const [items, setItems] = useState(() => {
-    if (existingQuote?.quoteItems?.length) return existingQuote.quoteItems;
-    return existingQuote?.constructionType
-      ? [{ category: "자재비", name: existingQuote.constructionType, spec: "", unit: "EA", qty: 1, unitPrice: 0, unitNo: "1호기" }]
-      : [];
+    if (existingQuote?.quoteItems?.length) return existingQuote.quoteItems.map((it) => ({ ...emptyItem(it.category), ...it }));
+    return [];
   });
-  const [expandedIdx, setExpandedIdx] = useState(0);
+  const [expandedIdx, setExpandedIdx] = useState(-1);
+  const [inventoryPickerOpen, setInventoryPickerOpen] = useState(false);
 
   const [transportCost, setTransportCost] = useState(existingQuote?.transportCost || 0);
   const [safetyCost, setSafetyCost] = useState(existingQuote?.safetyCost || 0);
@@ -50,10 +105,18 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
 
   function addItem() {
     setItems((prev) => {
-      const next = [...prev, { category: "자재비", name: "", spec: "", unit: "EA", qty: 1, unitPrice: 0, unitNo: "1호기" }];
+      const next = [...prev, emptyItem("자재비")];
       setExpandedIdx(next.length - 1);
       return next;
     });
+  }
+  function addItemFromInventory(p) {
+    setItems((prev) => {
+      const next = [...prev, { ...emptyItem("자재비"), partId: p.id, name: p.name, spec: p.spec ?? "", unitPrice: p.salePrice ?? 0 }];
+      setExpandedIdx(next.length - 1);
+      return next;
+    });
+    setInventoryPickerOpen(false);
   }
   function updateItem(idx, patch) {
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
@@ -307,6 +370,12 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
 
         {step === 1 && (
           <>
+            {existingQuote?.constructionType && !existingQuote?.quoteItems?.length && (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-1 text-sm">
+                <p className="text-[11px] font-bold text-slate-500 mb-1">기사 요청 원본 (참고용)</p>
+                <p className="font-semibold text-slate-700">{existingQuote.constructionType} · {existingQuote.quantity ?? "-"}개</p>
+              </div>
+            )}
             {items.map((it, idx) => {
               const expanded = idx === expandedIdx;
               const lineTotal = Number(it.qty || 0) * Number(it.unitPrice || 0);
@@ -371,6 +440,18 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
                           <input type="number" className={inputCls} value={it.unitPrice} onChange={(e) => updateItem(idx, { unitPrice: e.target.value })} />
                         </div>
                       </div>
+                      {it.partId && (
+                        <div className="flex items-center gap-3 text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+                          <label className="flex items-center gap-1">
+                            <input type="checkbox" checked={it.returnRequired} onChange={(e) => updateItem(idx, { returnRequired: e.target.checked })} />
+                            폐자재 회수 필요
+                          </label>
+                          <label className="flex items-center gap-1">
+                            실반출수량
+                            <input type="number" min={it.qty} className="w-14 border border-slate-200 rounded px-1 py-0.5" placeholder={String(it.qty)} value={it.qtyTaken ?? ""} onChange={(e) => updateItem(idx, { qtyTaken: e.target.value === "" ? null : Number(e.target.value) })} />
+                          </label>
+                        </div>
+                      )}
                       <div className="flex items-center justify-between pt-1">
                         <span className="text-xs font-bold text-slate-500">소계 {lineTotal.toLocaleString()}원</span>
                         <button onClick={() => removeItem(idx)} className="text-xs font-bold text-red-500">이 품목 삭제</button>
@@ -380,10 +461,23 @@ export default function QuoteWizard({ existingQuote, onClose, onDraftCreated, on
                 </div>
               );
             })}
-            <button onClick={addItem} className="w-full py-3 rounded-xl border-2 border-dashed border-blue-300 text-blue-700 text-sm font-bold">
-              + 품목 추가
-            </button>
+            <div className="flex gap-2">
+              <button onClick={() => setInventoryPickerOpen(true)} className="flex-1 flex items-center justify-center gap-1 py-3 rounded-xl border-2 border-dashed border-emerald-300 text-emerald-700 text-sm font-bold">
+                <Search size={14} /> 재고 연동
+              </button>
+              <button onClick={addItem} className="flex-1 py-3 rounded-xl border-2 border-dashed border-blue-300 text-blue-700 text-sm font-bold">
+                직접 입력
+              </button>
+            </div>
             {items.length === 0 && <p className="text-xs text-slate-400 text-center py-2">품목을 1개 이상 추가해주세요</p>}
+            {inventoryPickerOpen && (
+              <InventoryPickerSheet
+                products={inventoryProducts}
+                movements={inventoryStockMovements}
+                onClose={() => setInventoryPickerOpen(false)}
+                onSelect={addItemFromInventory}
+              />
+            )}
           </>
         )}
 
