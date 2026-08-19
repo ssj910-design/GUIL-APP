@@ -17,10 +17,11 @@
 // 오른쪽 미리보기 카드는 실제 PDF 서식을 재현하지 않는 간단한 요약이다 — 새 계산 없이
 // 이미 있는 값을 다시 보여줄 뿐이다.
 import { useState, useEffect } from "react";
-import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Trash2, ChevronUp, ChevronDown, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { quoteGrandTotal } from "@/lib/utils";
+import { currentStock } from "@/lib/inventoryStock";
 import { Modal, inputCls, PhotoGrid } from "@/app/components/admin/adminShared";
 import { COMPANY } from "@/lib/company";
 import { useQuoteRecipientFields, QuoteRecipientInfo, QuoteRecipientExtras } from "@/app/components/admin/QuoteRecipientFields";
@@ -39,7 +40,56 @@ function rowCalc(qty, unitPrice) {
   return { supply, vat, total: supply + vat };
 }
 
-export default function QuoteItemsModal({ quote, site, siteManagers, profiles, inventoryProducts, onClose, onSaved }) {
+// 재고관리(부품마스터)에서 검색해 골라 견적 품목에 연동한다 — 재고관리 화면(InventoryAdmin.jsx)의
+// 검색+목록 패턴을 재사용, 재고 수량은 currentStock()으로 그 자리에서 같이 보여준다.
+function InventoryPickerModal({ products, movements, onClose, onSelect }) {
+  const [search, setSearch] = useState("");
+  const active = products.filter((p) => p.active !== false);
+  const q = search.trim().toLowerCase();
+  const rows = active.filter((p) => !q || `${p.materialNo} ${p.name}`.toLowerCase().includes(q));
+  return (
+    <Modal title="재고에서 선택" onClose={onClose}>
+      <input
+        className={inputCls + " mb-3"}
+        placeholder="자재번호, 품명 검색"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        autoFocus
+      />
+      <div className="space-y-1.5 max-h-96 overflow-y-auto">
+        {rows.length === 0 && <p className="text-xs text-slate-400 text-center py-8">검색 결과가 없습니다</p>}
+        {rows.map((p) => {
+          const stock = currentStock(movements, p.id);
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => onSelect(p)}
+              className="w-full flex items-center gap-3 p-2.5 rounded-lg border border-slate-200 hover:bg-blue-50 hover:border-blue-300 text-left"
+            >
+              {p.photoUrls?.[0] ? (
+                <img src={p.photoUrls[0]} alt="" className="w-11 h-11 rounded-lg object-cover shrink-0" />
+              ) : (
+                <div className="w-11 h-11 rounded-lg bg-slate-100 shrink-0" />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-800 truncate">{p.name}</p>
+                <p className="text-[11px] text-slate-400 truncate">{p.materialNo}{p.spec ? ` · ${p.spec}` : ""}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className={`text-xs font-bold ${stock > 0 ? "text-emerald-600" : "text-red-500"}`}>재고 {stock}</p>
+                {p.salePrice != null && <p className="text-[11px] text-slate-400">{Number(p.salePrice).toLocaleString()}원</p>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </Modal>
+  );
+}
+
+export default function QuoteItemsModal({ quote, site, siteManagers, profiles, inventoryProducts, inventoryStockMovements, onClose, onSaved }) {
+  const [pickerForIdx, setPickerForIdx] = useState(null); // 재고에서 선택 모달을 연 품목 행 idx
   const [items, setItems] = useState(() => {
     if (quote.quoteItems?.length) return quote.quoteItems.map((it) => ({ ...emptyItem(it.category), ...it }));
     // 처음 여는 경우 기사 원본(부품명+수량)을 자재비 1행에 프리필
@@ -221,6 +271,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
   const saveDisabled = items.length === 0 || saving;
 
   return (
+    <>
     <Modal title={`${site?.name ?? quote.siteName} 견적 품목편집`} onClose={saving ? () => {} : onClose} wide="2xl">
       <QuoteRecipientInfo rf={rf} siteManagers={siteManagers} />
 
@@ -285,20 +336,13 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
                         </div>
                         <div className="flex-[11] min-w-0">
                           {category === "자재비" && (
-                            <select
-                              className={inputCls + " mb-1 text-[11px]"}
-                              value=""
-                              onChange={(e) => {
-                                const p = inventoryProducts.find((x) => x.id === e.target.value);
-                                if (!p) return;
-                                updateItem(idx, { partId: p.id, name: p.name, spec: p.spec ?? "", unitPrice: p.salePrice ?? 0 });
-                              }}
+                            <button
+                              type="button"
+                              onClick={() => setPickerForIdx(idx)}
+                              className="mb-1 w-full flex items-center gap-1 text-[11px] font-bold text-blue-700 border border-blue-200 rounded px-2 py-1"
                             >
-                              <option value="">부품마스터에서 선택...</option>
-                              {inventoryProducts.filter((p) => p.active !== false).map((p) => (
-                                <option key={p.id} value={p.id}>{p.materialNo} · {p.name}</option>
-                              ))}
-                            </select>
+                              <Search size={11} /> 재고에서 선택{it.partId ? " (연동됨)" : ""}
+                            </button>
                           )}
                           <input className={inputCls} placeholder="품명" value={it.name} onChange={(e) => updateItem(idx, { name: e.target.value })} />
                         </div>
@@ -446,5 +490,17 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
         </button>
       </div>
     </Modal>
+    {pickerForIdx !== null && (
+      <InventoryPickerModal
+        products={inventoryProducts}
+        movements={inventoryStockMovements ?? []}
+        onClose={() => setPickerForIdx(null)}
+        onSelect={(p) => {
+          updateItem(pickerForIdx, { partId: p.id, name: p.name, spec: p.spec ?? "", unitPrice: p.salePrice ?? 0 });
+          setPickerForIdx(null);
+        }}
+      />
+    )}
+    </>
   );
 }
