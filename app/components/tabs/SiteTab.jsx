@@ -241,7 +241,7 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
                 {unitQuotes.map((q) => {
                   // 어플 "나의 견적 요청 전체보기"(MaterialTab.jsx QuoteHistoryScreen)와 동일한
                   // 4단계(QUOTE_STAGES) + 비용청구완료 오버레이 배지를 그대로 재사용한다.
-                  const isBilled = (todos ?? []).some((t) => t.quoteRequestId === q.id && t.done === true);
+                  const isBilled = (todos ?? []).some((t) => t.quoteRequestId === q.id && t.source !== "waste_return" && t.done === true);
                   const displayStage = isBilled ? "비용청구완료" : q.status;
                   const dateMap = { 요청접수: q.requestedDate, 작성: q.quoteIssuedDate, 승인: q.approvedDate, 자재지급완료: q.suppliedDate, 비용청구완료: q.suppliedDate };
                   const stageDate = dateMap[displayStage];

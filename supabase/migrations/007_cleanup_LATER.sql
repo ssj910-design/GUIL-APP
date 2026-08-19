@@ -43,7 +43,8 @@ alter table public.quote_requests drop column if exists has_supply_photo;
 alter table public.todos drop column if exists site_name;
 alter table public.todos drop column if exists elevator_no;
 alter table public.todos drop column if exists assignee;
-alter table public.todos drop column if exists photo_count;
+-- todos.photo_count는 자재손실방지(폐자재 회수) 재오픈 잠금의 baseline으로 쓰이는 중이라
+-- 지금 지우면 안 된다 (baseline이 null이 되면 잠금이 항상 풀림). 드롭하지 말 것.
 
 alter table public.billings drop column if exists site_name;
 alter table public.billings drop column if exists elevator_no;

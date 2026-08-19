@@ -29,7 +29,7 @@ const CATEGORIES = ["자재비", "인건비"];
 const VAT_RATE = 0.1;
 
 function emptyItem(category) {
-  return { category, name: "", unitNo: "", spec: "", unit: "", qty: 1, unitPrice: 0 };
+  return { category, name: "", unitNo: "", spec: "", unit: "", qty: 1, unitPrice: 0, partId: null, returnRequired: false, qtyTaken: null };
 }
 
 // 공급가액/세액/합계 — 품목 행과 운반비/안전관리비/이윤 고정행이 공유하는 계산식.
@@ -39,9 +39,9 @@ function rowCalc(qty, unitPrice) {
   return { supply, vat, total: supply + vat };
 }
 
-export default function QuoteItemsModal({ quote, site, siteManagers, profiles, onClose, onSaved }) {
+export default function QuoteItemsModal({ quote, site, siteManagers, profiles, inventoryProducts, onClose, onSaved }) {
   const [items, setItems] = useState(() => {
-    if (quote.quoteItems?.length) return quote.quoteItems;
+    if (quote.quoteItems?.length) return quote.quoteItems.map((it) => ({ ...emptyItem(it.category), ...it }));
     // 처음 여는 경우 기사 원본(부품명+수량)을 자재비 1행에 프리필
     return quote.part ? [{ ...emptyItem("자재비"), name: quote.part, qty: quote.quantity || 1 }] : [];
   });
@@ -284,6 +284,22 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
                           </button>
                         </div>
                         <div className="flex-[11] min-w-0">
+                          {category === "자재비" && (
+                            <select
+                              className={inputCls + " mb-1 text-[11px]"}
+                              value=""
+                              onChange={(e) => {
+                                const p = inventoryProducts.find((x) => x.id === e.target.value);
+                                if (!p) return;
+                                updateItem(idx, { partId: p.id, name: p.name, spec: p.spec ?? "", unitPrice: p.salePrice ?? 0 });
+                              }}
+                            >
+                              <option value="">부품마스터에서 선택...</option>
+                              {inventoryProducts.filter((p) => p.active !== false).map((p) => (
+                                <option key={p.id} value={p.id}>{p.materialNo} · {p.name}</option>
+                              ))}
+                            </select>
+                          )}
                           <input className={inputCls} placeholder="품명" value={it.name} onChange={(e) => updateItem(idx, { name: e.target.value })} />
                         </div>
                         <div className="flex-[5] min-w-0">
@@ -308,6 +324,19 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, o
                         </div>
                         <button type="button" onClick={() => removeItem(idx)} className="w-3.5 shrink-0 text-red-400 hover:text-red-600 flex justify-center"><Trash2 size={14} /></button>
                       </div>
+                      {it.partId && (
+                        <div className="flex items-center gap-3 pl-5 text-[11px] text-slate-500">
+                          <label className="flex items-center gap-1">
+                            <input type="checkbox" checked={it.returnRequired} onChange={(e) => updateItem(idx, { returnRequired: e.target.checked })} />
+                            폐자재 회수 필요
+                          </label>
+                          <label className="flex items-center gap-1">
+                            실반출수량
+                            <input type="number" min={it.qty} className="w-14 border border-slate-200 rounded px-1 py-0.5" placeholder={String(it.qty)} value={it.qtyTaken ?? ""} onChange={(e) => updateItem(idx, { qtyTaken: e.target.value === "" ? null : Number(e.target.value) })} />
+                            (여유분 있으면 견적수량보다 크게)
+                          </label>
+                        </div>
+                      )}
                       <div className="flex justify-end items-center gap-3 text-xs text-slate-500">
                         <span className="font-bold text-slate-400">소계</span>
                         <span>공급가액 <b className="text-slate-700 font-semibold">{supply.toLocaleString()}</b></span>

@@ -7,14 +7,21 @@ import { useContext, useState } from "react";
 import { Plus, Search, Repeat } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto } from "@/lib/photos";
+import { mapInventoryStockMovement } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
 import { addDays, shortDate, formatUnitLabel } from "@/lib/utils";
 import {
   locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills,
-  Modal, SortableTh, sortRows, inputCls, DateTextInput, AdminAuthContext,
+  Modal, SortableTh, sortRows, inputCls, DateTextInput, AdminAuthContext, PhotoGrid,
 } from "@/app/components/admin/adminShared";
 
-const SOURCE_LABEL = { material: "자재", quote: "견적", manual: "수동", inspection: "검사보완", selfcheck: "자체점검지적" };
+const SOURCE_LABEL = { material: "자재", quote: "견적", manual: "수동", inspection: "검사보완", selfcheck: "자체점검지적", waste_return: "반납확인" };
+
+// 폐자재/여유부품 반납 할일이 "반납확인대기" 큐에 뜨는 조건: 기사가 사진 올려 완료 처리했지만
+// (Task 5의 사진 잠금) 관리자가 아직 확인수량을 입력해 재고에 반영하지 않은 상태.
+function wasteReturnPending(t) {
+  return t.source === "waste_return" && t.done && !t.stockConfirmedAt;
+}
 
 // 자재/견적 연동 할일은 title이 "현장명[ 호기] ..." 형태로 저장되는데, 목록에는 이미
 // "현장·호기" 열이 있으니 중복을 피하려고 그 앞부분을 잘라서 보여준다.
@@ -274,6 +281,68 @@ function AssignTodoModal({ data, onClose, onCreate }) {
   );
 }
 
+// "행마다 확인수량 입력칸" — QuoteItemsModal의 편집행 패턴 재사용. 실제 재고 반영·할일 갱신은
+// 부모(confirmWasteReturn)가 맡는다 — 이 파일의 다른 모달들(TodoDetailModal→onSave,
+// AssignTodoModal→onCreate)과 같은 관례: supabase 호출·setData는 항상 TodosAdmin 쪽에서.
+function WasteReturnConfirmModal({ todo, onClose, onConfirm }) {
+  const rows = todo.wasteReturnRows ?? [];
+  const [confirmedQty, setConfirmedQty] = useState(
+    () => Object.fromEntries(rows.map((r) => [r.productId, r.qtyRequired - r.qtyConfirmed]))
+  );
+  const [saving, setSaving] = useState(false);
+  // 재고입고(insert)가 이미 성공했으면 "확인" 재클릭(할일 갱신 실패 후 재시도) 때 중복 입고를
+  // 막는다 — 모달이 닫혔다 다시 열리면(부모가 언마운트) 새 useState라 자연히 초기화된다.
+  const [movementsInserted, setMovementsInserted] = useState(false);
+  // 입고가 실제로 반영된 수량의 스냅샷 — 재시도 때는 입력칸(live confirmedQty)이 그 사이 수정됐을 수
+  // 있으므로, 할일 갱신도 반드시 이 값(=원장에 실제로 쌓인 수량)을 기준으로 재시도해야 한다.
+  const [insertedQty, setInsertedQty] = useState(null);
+
+  async function submit() {
+    setSaving(true);
+    const qtyForConfirm = movementsInserted ? insertedQty : confirmedQty;
+    const result = await onConfirm(qtyForConfirm, movementsInserted);
+    setSaving(false);
+    if (result?.movementsInserted) {
+      if (!movementsInserted) setInsertedQty(confirmedQty);
+      setMovementsInserted(true);
+    }
+    if (result?.ok) onClose();
+  }
+
+  return (
+    <Modal title="반납 확인" onClose={onClose}>
+      <div className="space-y-3">
+        {(todo.photoUrls ?? []).length > 0 && <PhotoGrid urls={todo.photoUrls} cols={4} />}
+        {rows.map((r) => (
+          <div key={r.productId} className="flex items-center justify-between gap-2 text-sm">
+            <span>{r.name} (요청 {r.qtyRequired - r.qtyConfirmed}EA{r.qtyConfirmed > 0 ? `, 기확인 ${r.qtyConfirmed}EA` : ""})</span>
+            <input
+              type="number"
+              min={0}
+              max={r.qtyRequired - r.qtyConfirmed}
+              disabled={movementsInserted}
+              className={inputCls + " w-20 disabled:bg-slate-100 disabled:text-slate-400"}
+              value={(movementsInserted ? insertedQty : confirmedQty)[r.productId] ?? 0}
+              onChange={(e) => {
+                const outstanding = r.qtyRequired - r.qtyConfirmed;
+                const n = Math.max(0, Math.min(outstanding, Math.floor(Number(e.target.value) || 0)));
+                setConfirmedQty((prev) => ({ ...prev, [r.productId]: n }));
+              }}
+            />
+          </div>
+        ))}
+        {rows.length === 0 && <p className="text-xs text-slate-300 text-center py-2">반납 항목 없음</p>}
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2">취소</button>
+          <button onClick={submit} disabled={saving} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2">
+            {saving ? "처리 중..." : "확인"}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export default function TodosAdmin({ data, setData, initialView }) {
   const { name: adminName, id: adminId } = useContext(AdminAuthContext);
   const { todos, sites, units, profiles } = data;
@@ -283,12 +352,21 @@ export default function TodosAdmin({ data, setData, initialView }) {
   const [sort, setSort] = useState(null);
   const [detail, setDetail] = useState(null);
   const [assigning, setAssigning] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState(null);
 
   const viewFiltered = todos.filter((t) => (view === "open" ? !t.done : view === "reassign" ? (t.reassignRequested && !t.done) : true));
   const q = search.trim().toLowerCase();
-  const rows = viewFiltered
-    .filter((t) => sourceFilter === "all" || t.source === sourceFilter)
+  // "반납확인대기"는 완료된(done=true) 할일을 보여주는 큐라, 위 상태(진행/완료) 필터를 그대로
+  // 태우면 기본값인 "미완료" 뷰에서 항상 0건으로 보인다 — 이 필터만 view를 건너뛰고 todos 전체에서 뽑는다.
+  const rows = (sourceFilter === "waste_return" ? todos.filter(wasteReturnPending) : viewFiltered.filter((t) => sourceFilter === "all" || t.source === sourceFilter))
     .filter((t) => !q || (t.description ?? "").toLowerCase().includes(q) || (t.title ?? "").toLowerCase().includes(q) || locOf(data, t.unitId, t.siteName, t.elevatorNo).toLowerCase().includes(q) || personOf(data, t.assigneeId, t.assignee).toLowerCase().includes(q));
+
+  // "반납확인대기" 필터를 고르면 "상태" 필터도 전체로 맞춰준다 — 안 그러면 기본값 "미완료"가
+  // 계속 선택된 채로 보여, 완료된 항목들이 나오는 게 시각적으로 앞뒤가 안 맞아 보인다.
+  function handleSourceFilterChange(value) {
+    setSourceFilter(value);
+    if (value === "waste_return") setView("all");
+  }
 
   const getVal = (t, key) => {
     switch (key) {
@@ -333,6 +411,61 @@ export default function TodosAdmin({ data, setData, initialView }) {
         ...(reassigned ? { reassignRequested: false, reassignReason: null, reassignTo: null } : {}),
       } : x)),
     }));
+  }
+
+  // 관리자가 반납확인 모달에서 입력한 확인수량(confirmedQty: { productId: qty })을 반영한다.
+  // - 확인된 만큼만 재고 입고(inventory_stock_movements, todo_id로 이 할일과 연결)로 기록.
+  // - 전부 확인됐으면(stock_confirmed_at 채워 큐에서 빠짐) 기록용으로 rows를 누적 확인수량 그대로 남긴다.
+  // - 일부만 확인됐으면 done=false로 재오픈하고, waste_return_rows를 "남은 수량"만 담은 새 행으로
+  //   다시 세팅한다(다음 회차엔 이게 새 요청량) — 사진은 지우지 않고, photo_count에 기준선을
+  //   남겨 새 사진이 추가될 때까지 잠금이 다시 걸리게 한다.
+  // movementsAlreadyInserted: 이전 호출에서 재고입고까지는 성공했는데 할일 갱신이 실패해
+  // 모달이 같은 확인수량으로 재시도하는 경우 — 입고를 또 하지 않고 할일 갱신만 재시도한다.
+  async function confirmWasteReturn(t, confirmedQty, movementsAlreadyInserted) {
+    const rows = t.wasteReturnRows ?? [];
+    const movementRows = rows
+      .filter((r) => (confirmedQty[r.productId] ?? 0) > 0)
+      .map((r) => ({
+        product_id: r.productId, type: "in", qty_delta: confirmedQty[r.productId],
+        note: `할일 ${t.id} 반납확인`, todo_id: t.id, created_by: adminId ?? null,
+      }));
+    if (movementRows.length && !movementsAlreadyInserted) {
+      const { data: inserted, error } = await supabase.from("inventory_stock_movements").insert(movementRows).select();
+      if (error) { alert("재고 반영 실패: " + error.message); return { ok: false, movementsInserted: false }; }
+      setData((prev) => ({ ...prev, inventoryStockMovements: [...prev.inventoryStockMovements, ...(inserted ?? []).map(mapInventoryStockMovement)] }));
+    }
+
+    const outstanding = rows.map((r) => ({ ...r, left: r.qtyRequired - r.qtyConfirmed - (confirmedQty[r.productId] ?? 0) }));
+    const allDone = outstanding.every((r) => r.left <= 0);
+    const stillOwed = outstanding.filter((r) => r.left > 0).map((r) => ({ productId: r.productId, name: r.name, qtyRequired: r.left, qtyConfirmed: 0 }));
+    const finalRows = outstanding.map((r) => ({ productId: r.productId, name: r.name, qtyRequired: r.qtyRequired, qtyConfirmed: r.qtyConfirmed + (confirmedQty[r.productId] ?? 0) }));
+
+    // 사진은 재오픈마다 지우지 않고 누적한다(1차/2차 제출 이력 보존, 설계서 참고).
+    // 대신 photo_count에 "재오픈 시점까지의 사진 수"를 기준선으로 남겨, 기사 화면(TodoTab)의
+    // 잠금 조건을 "사진이 1장이라도 있으면"에서 "기준선보다 사진이 늘었으면(=재오픈 후 새로 추가)"으로 바꾼다.
+    const currentPhotoCount = t.photoUrls?.length ?? 0;
+    const patch = allDone
+      ? { waste_return_rows: finalRows, stock_confirmed_at: new Date().toISOString() }
+      : {
+          waste_return_rows: stillOwed, done: false, photo_count: currentPhotoCount,
+          title: `폐자재/여유부품 반납 — ${stillOwed.map((r) => `${r.name} ${r.qtyRequired}EA`).join(", ")}`,
+        };
+
+    const { error: todoError } = await supabase.from("todos").update(patch).eq("id", t.id);
+    if (todoError) { alert("할일 갱신 실패: " + todoError.message); return { ok: false, movementsInserted: true }; }
+
+    setData((prev) => ({
+      ...prev,
+      todos: prev.todos.map((x) => (x.id === t.id ? {
+        ...x,
+        wasteReturnRows: allDone ? finalRows : stillOwed,
+        stockConfirmedAt: allDone ? patch.stock_confirmed_at : null,
+        done: allDone ? x.done : false,
+        photoCount: allDone ? x.photoCount : currentPhotoCount,
+        title: allDone ? x.title : patch.title,
+      } : x)),
+    }));
+    return { ok: true, movementsInserted: true };
   }
 
   async function toggle(t) {
@@ -404,7 +537,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
             <span className="text-xs font-bold text-slate-400">구분</span>
             <FilterPills
               value={sourceFilter}
-              onChange={setSourceFilter}
+              onChange={handleSourceFilterChange}
               options={[
                 { value: "all", label: "전체", count: viewFiltered.length },
                 { value: "material", label: "자재", count: viewFiltered.filter((t) => t.source === "material").length },
@@ -412,6 +545,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
                 { value: "manual", label: "수동", count: viewFiltered.filter((t) => t.source === "manual").length },
                 { value: "inspection", label: "검사보완", count: viewFiltered.filter((t) => t.source === "inspection").length },
                 { value: "selfcheck", label: "자체점검지적", count: viewFiltered.filter((t) => t.source === "selfcheck").length },
+                { value: "waste_return", label: "반납확인대기", count: todos.filter(wasteReturnPending).length },
               ]}
             />
           </div>
@@ -453,7 +587,15 @@ export default function TodosAdmin({ data, setData, initialView }) {
                 <td className="px-3 py-2.5 whitespace-nowrap">{personOf(data, t.assigneeId, t.assignee)}</td>
                 <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(t.assignedDate)}</td>
                 <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(t.dueDate)}</td>
-                <td className="px-3 py-2.5">{t.done ? <StatusBadge tone="green">완료</StatusBadge> : <StatusBadge tone="amber">진행</StatusBadge>}</td>
+                <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                  {wasteReturnPending(t) ? (
+                    <button onClick={() => setConfirmTarget(t)} className="text-xs font-bold text-white bg-blue-700 rounded-lg px-2.5 py-1">반납확인</button>
+                  ) : t.done ? (
+                    <StatusBadge tone="green">완료</StatusBadge>
+                  ) : (
+                    <StatusBadge tone="amber">진행</StatusBadge>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -463,6 +605,13 @@ export default function TodosAdmin({ data, setData, initialView }) {
 
       {detail && <TodoDetailModal t={detail} data={data} onClose={() => setDetail(null)} onSave={saveTodoDetail} />}
       {assigning && <AssignTodoModal data={data} onClose={() => setAssigning(false)} onCreate={createTodo} />}
+      {confirmTarget && (
+        <WasteReturnConfirmModal
+          todo={confirmTarget}
+          onClose={() => setConfirmTarget(null)}
+          onConfirm={(qty, movementsAlreadyInserted) => confirmWasteReturn(confirmTarget, qty, movementsAlreadyInserted)}
+        />
+      )}
     </div>
   );
 }

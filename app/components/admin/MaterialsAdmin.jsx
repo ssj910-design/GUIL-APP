@@ -4,7 +4,7 @@
 // 입력이 필요 없는 전환(작성·승인)은 행에서 바로 처리하고, 사진·담당기사·금액처럼
 // 입력이 필요한 전환(자재 지급완료, 견적 자재지급완료)만 모달을 쓴다 (하이브리드 설계 —
 // docs/superpowers/specs/2026-07-21-materials-admin-actions-design.md).
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
@@ -12,7 +12,8 @@ import { mapQuoteRequest } from "@/lib/mappers";
 import { uploadPhoto } from "@/lib/photos";
 import { unitIdFor, addDays, shortDate, parsePartQty, formatUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
-import { locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid, DateTextInput, lastSentDate, sentHistory } from "@/app/components/admin/adminShared";
+import { recordQuoteSupplyStockOut } from "@/lib/inventoryStock";
+import { locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid, DateTextInput, lastSentDate, sentHistory, AdminAuthContext } from "@/app/components/admin/adminShared";
 import QuoteItemsModal from "@/app/components/admin/QuoteItemsModal";
 import QuoteSendModal from "@/app/components/admin/QuoteSendModal";
 import QuotePdfPreview from "@/app/components/admin/QuotePdfPreview";
@@ -56,7 +57,7 @@ function parseAmountFromBillingPart(billingPart, part) {
 // 연결된 할 일(todos)의 done이 true가 된다(TodosAdmin.jsx 참고). 담당자가 여러 명인
 // 견적은 전원이 청구를 마쳐야 교체완료로 본다.
 function billingCompleteFor(todos, key, requestId) {
-  const linked = todos.filter((t) => t[key] === requestId);
+  const linked = todos.filter((t) => t[key] === requestId && t.source !== "waste_return");
   return linked.length > 0 && linked.every((t) => t.done);
 }
 
@@ -92,7 +93,7 @@ function quoteStageInfo(q, todos) {
 // 지급완료 처리 시 만들어지는 연결 할 일(todos)의 담당자 — 요청 자체엔 담당기사 컬럼이 없고
 // todos.assignee(_id)에만 있어서(견적은 담당 기사 여러 명 가능) 여기서 조인해 이름을 뽑는다.
 function assigneeNames(data, key, requestId) {
-  const linked = (data.todos ?? []).filter((t) => t[key] === requestId);
+  const linked = (data.todos ?? []).filter((t) => t[key] === requestId && t.source !== "waste_return");
   if (!linked.length) return null;
   return linked.map((t) => personOf(data, t.assigneeId, t.assignee)).join(", ");
 }
@@ -245,6 +246,7 @@ function SendCalendarModal({ byDay, initialDay, onOpen, onClose }) {
 }
 
 export default function MaterialsAdmin({ data, setData, initialTab }) {
+  const { id: meId } = useContext(AdminAuthContext);
   const { materialRequests: allMaterialRequests, quoteRequests: allQuoteRequests } = data;
   const [tab, setTab] = useState(initialTab ?? "all");
   const [search, setSearch] = useState("");
@@ -442,6 +444,14 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
     };
     const { error } = await supabase.from("quote_requests").update(patch).eq("id", quote.id);
     if (error) { alert("자재지급완료 처리 실패: " + error.message); return; }
+    // 자재지급완료가 실제로 부품이 창고에서 나가는 시점이라 여기서 재고 'out' 반영
+    // (모바일 앱의 handleCompleteQuoteSupply와 동일 로직 공유 — lib/inventoryStock.js).
+    await recordQuoteSupplyStockOut(supabase, {
+      quoteItems: quote.quoteItems,
+      quoteId: quote.id,
+      siteName: quote.siteName,
+      createdBy: meId,
+    });
     // 각자 다른 할일 id를 받으므로(assignees 수만큼 별도 행), 딥링크 url이 정확하도록 한 명씩 보낸다.
     for (const t of newTodos) {
       if (!t.assigneeId) continue;
@@ -471,7 +481,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
     const { error } = await supabase.from("quote_requests").update(patch).eq("id", quote.id);
     if (error) { alert("수정 실패: " + error.message); return; }
 
-    const existingTodos = (data.todos ?? []).filter((t) => t.quoteRequestId === quote.id);
+    const existingTodos = (data.todos ?? []).filter((t) => t.quoteRequestId === quote.id && t.source === "quote");
     const kept = existingTodos.filter((t) => assigneeIds.includes(t.assigneeId));
     const toRemove = existingTodos.filter((t) => !assigneeIds.includes(t.assigneeId));
     const toAddIds = assigneeIds.filter((id) => !existingTodos.some((t) => t.assigneeId === id));
@@ -806,6 +816,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
           site={(data.sites ?? []).find((s) => s.id === itemsTarget.siteId)}
           siteManagers={(data.siteManagers ?? []).filter((m) => m.siteId === itemsTarget.siteId)}
           profiles={data.profiles ?? []}
+          inventoryProducts={data.inventoryProducts ?? []}
           onClose={async () => {
             // 관리자가 새 견적 발행에서 현장만 고르고 품목편집을 취소하면, 기사 요청도 없이
             // 만들어진 빈 초안(요청접수 상태, 담당 기사 없음)만 남는다 — 그건 내역에 남기지 않고
@@ -977,7 +988,7 @@ function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
   // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 관리자가 자재담당자에게도 배정할 수 있어야 한다.
   // 견적(외주 처리 포함) 건은 대표(신석주)가 직접 처리하는 경우가 있어 명단에 추가로 포함한다.
   const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material" || p.name === "신석주") && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
-  const existingTodosForQuote = todos.filter((t) => t.quoteRequestId === quote.id);
+  const existingTodosForQuote = todos.filter((t) => t.quoteRequestId === quote.id && t.source === "quote");
   const existingAssigneeIds = existingTodosForQuote.map((t) => t.assigneeId);
   const defaultId = quote.requesterId || engineers.find((p) => p.name === quote.engineer)?.id || "";
   const [assigneeIds, setAssigneeIds] = useState(existingAssigneeIds.length ? existingAssigneeIds : (defaultId ? [defaultId] : []));

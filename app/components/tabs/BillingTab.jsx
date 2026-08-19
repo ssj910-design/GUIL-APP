@@ -34,7 +34,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
   const billingSubTabs = ["material", "manual"];
   const swipe = useSwipeSubtab(billingSubTabs, mode, setMode);
   // 자재지급건 청구는 기사가 자재신청/견적요청으로 만든 할일만 대상 — 관리자가 직접 부여한 할일(source: manual)은 제외.
-  const openTodos = todos.filter((t) => !t.done && t.assignee === CURRENT_ENGINEER && t.source !== "manual");
+  const openTodos = todos.filter((t) => !t.done && t.assignee === CURRENT_ENGINEER && t.source !== "manual" && t.source !== "waste_return");
   const [selectedId, setSelectedId] = useState(openTodos[0]?.id ?? "");
   // todos가 마운트 이후 늦게 도착하면 초기 selectedId가 ""로 굳어 제출 불가 → 유효한 첫 건으로 동기화 (P2-8)
   const openIdsKey = openTodos.map((t) => t.id).join(",");
@@ -221,6 +221,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
           .filter(
             (t) =>
               !t.done &&
+              t.source !== "waste_return" &&
               ((selected.quoteRequestId && t.quoteRequestId === selected.quoteRequestId) ||
                 (selected.materialRequestId && t.materialRequestId === selected.materialRequestId) ||
                 (selected.selfCheckItemId && t.selfCheckItemId === selected.selfCheckItemId))
@@ -250,6 +251,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       elevatorNo: selected.elevatorNo,
       unitId: selected.unitId ?? null,
       materialRequestId: selected.materialRequestId ?? null,
+      quoteRequestId: selected.quoteRequestId ?? null,
       part: selected.part,
       // billings.cost는 숫자 컬럼이라 "견적서 참조" 같은 문자열은 넣을 수 없습니다(넣으면 insert가
       // 조용히 실패합니다). 견적 연동 건은 실제 비용을 이 시스템에 남기지 않는다는 의미로 null 처리합니다.

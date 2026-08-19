@@ -771,7 +771,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
   }
 
   function isQuoteBilled(quoteId) {
-    const t = todos.find((x) => x.quoteRequestId === quoteId);
+    const t = todos.find((x) => x.quoteRequestId === quoteId && x.source === "quote");
     return t?.done === true;
   }
 
