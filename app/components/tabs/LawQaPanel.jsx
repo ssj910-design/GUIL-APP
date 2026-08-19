@@ -11,43 +11,9 @@
 // 검색된 조항 밖의 내용은 답하지 않도록 막아뒀다.
 import { useState, useRef, useEffect } from "react";
 import { Search, ExternalLink, Copy, Check, ThumbsUp, ThumbsDown } from "lucide-react";
+import { SUGGESTIONS, EXAMPLES } from "@/lib/lawQaSuggestions";
 
-// 추천 질문 — 지금은 **손으로 심은 씨앗**이다. 질문 로그가 쌓이면(law_qa_logs)
-// "자주 묻고 실제로 답을 찾은" 질문으로 갈아끼운다. 답 못 한 질문을 추천하면
-// 눌러도 실패하니 source_count > 0 조건이 필요하다 — docs/RAG.md 참고.
-const SUGGESTIONS = [
-  "정기검사 주기는 몇 년인가요?",
-  "정밀안전검사는 언제 받나요?",
-  "설치검사와 완성검사 차이",
-  "검사 기간은 주기 앞뒤로 며칠인가요?",
-  "자체점검 주기는 어떻게 되나요?",
-  "자체점검 결과는 언제까지 입력하나요?",
-  "자체점검을 할 수 있는 사람 자격",
-  "자체점검 주기를 조정할 수 있나요?",
-  "승강장문 이탈방지장치 설치 기준",
-  "문이 닫힐 때 힘은 몇 N까지인가요?",
-  "승강장문 잠금장치 확인 방법",
-  "문 닫힘 안전장치 점검 방법",
-  "카 지붕 위 안전점검 방법",
-  "카 상부 점검 공간 높이 기준",
-  "피트 사다리 설치 기준",
-  "기계실 조도 기준",
-  "과부하 감지장치 기준",
-  "비상통화장치 기준",
-  "조속기 작동 속도 기준",
-  "완충기 설치 기준",
-  "주로프 교체 기준",
-  "브레이크 점검 방법",
-  "구출운전 방법",
-  "정전 시 비상전원 기준",
-  "중대사고 발생 시 신고 기한",
-  "중대한 고장의 범위",
-  "승강기 사고 배상책임보험 가입 기준",
-  "유지관리 하도급 비율 제한",
-  "안전관리자 선임 기준",
-  "관리주체의 의무는 무엇인가요?",
-];
-const EXAMPLES = SUGGESTIONS.slice(0, 4);   // 처음 화면에 보여줄 4개
+// 추천 질문 351개는 법령 자료에서 생성했다 — lib/lawQaSuggestions.js 주석 참고.
 
 export function LawQaPanel({ entryPoint = "tab" }) {
   const [q, setQ] = useState("");
@@ -59,7 +25,9 @@ export function LawQaPanel({ entryPoint = "tab" }) {
 
   // 입력 중 추천 — 두 글자만 쳐도 후보가 뜨게 한다(현장에서 긴 문장 타이핑은 부담).
   const hints = q.trim().length >= 1
-    ? SUGGESTIONS.filter((s) => s.replace(/\s/g, "").includes(q.trim().replace(/\s/g, ""))).slice(0, 5)
+    ? SUGGESTIONS.filter((s) => s.replace(/\s/g, "").includes(q.trim().replace(/\s/g, "")))
+        .sort((a, b) => a.length - b.length)   // 목록이 351개라 앞 5개만 자르면 늘 같은 것만 뜬다 — 짧고 명확한 것 우선
+        .slice(0, 5)
     : [];
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [log, busy]);
