@@ -576,10 +576,14 @@ export default function TodosAdmin({ data, setData, initialView }) {
             </tr>
           </thead>
           <tbody>
-            {sortedRows.map((t) => (
-              <tr key={t.id} className={`border-b border-slate-50 ${t.done ? "opacity-50" : ""} cursor-pointer hover:bg-slate-50`} onClick={() => setDetail(t)}>
+            {sortedRows.map((t) => {
+              // 반납확인 할일은 기사가 완료 처리해도(t.done) 관리자가 수량을 확인하기 전까진
+              // 관리자 입장에선 "미완료"다 — 체크박스·행 흐림 표시는 실제 확인 여부(stockConfirmedAt)를 본다.
+              const effectiveDone = wasteReturnPending(t) ? false : t.done;
+              return (
+              <tr key={t.id} className={`border-b border-slate-50 ${effectiveDone ? "opacity-50" : ""} cursor-pointer hover:bg-slate-50`} onClick={() => setDetail(t)}>
                 <td className="pl-5 pr-2 py-2.5" onClick={(e) => e.stopPropagation()}>
-                  <input type="checkbox" checked={t.done} onChange={() => toggle(t)} className="w-4 h-4 rounded border-slate-300 cursor-pointer accent-blue-700" />
+                  <input type="checkbox" checked={effectiveDone} onChange={() => toggle(t)} className="w-4 h-4 rounded border-slate-300 cursor-pointer accent-blue-700" />
                 </td>
                 <td className="px-3 py-2.5"><StatusBadge tone={t.source === "manual" ? "slate" : "blue"}>{SOURCE_LABEL[t.source] ?? t.source}</StatusBadge></td>
                 <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{locOf(data, t.unitId, t.siteName, t.elevatorNo)}</td>
@@ -597,7 +601,8 @@ export default function TodosAdmin({ data, setData, initialView }) {
                   )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
