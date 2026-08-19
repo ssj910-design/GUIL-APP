@@ -119,6 +119,13 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
     setTodos((prev) => prev.map((x) => (idsToComplete.includes(x.id) ? { ...x, done } : x)));
   }
 
+  // 폐자재/여유부품 반납 할일의 반납사진 등록/삭제. 완료 조건(사진 1장 이상)은
+  // TodoCheckbox·TodoDetailBody의 locked 계산에서 t.photoUrls로 판정한다.
+  async function updateTodoPhotos(id, urls) {
+    await supabase.from("todos").update({ photo_urls: urls }).eq("id", id);
+    setTodos((prev) => prev.map((x) => (x.id === id ? { ...x, photoUrls: urls } : x)));
+  }
+
   if (mine.length === 0 && role !== "admin") {
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
@@ -170,7 +177,9 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
         {visible.map((t, i) => {
           // 자재/견적 연동 할 일은 비용청구가 완료되어야 자동으로 끝나지만, 관리자가 직접 부여한
           // 할 일과 정기검사 보완조치·자체점검 지적사항 할 일은 그런 연결고리가 없어 본인이 직접 완료 처리해야 한다.
-          const isManual = t.source === "manual" || t.source === "inspection" || t.source === "selfcheck";
+          const isManual = t.source === "manual" || t.source === "inspection" || t.source === "selfcheck" || t.source === "waste_return";
+          // 반납 할일은 기사가 직접 완료 처리하되(=isManual), 반납사진을 최소 1장 올려야만 잠금이 풀린다.
+          const wasteReturnLocked = t.source === "waste_return" && !(t.photoUrls?.length > 0);
           const overdue = !t.done && new Date(t.dueDate) < new Date(TODAY_STR);
           const requester = getRequesterName(t, materialRequests, quoteRequests);
           const expanded = shownExpandedId === t.id;
@@ -181,11 +190,11 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
                 <div className="pt-0.5">
                   <TodoCheckbox
                     done={t.done}
-                    locked={!isManual && role !== "admin"}
+                    locked={role !== "admin" && (!isManual || wasteReturnLocked)}
                     onClick={
                       role === "admin"
                         ? () => onAdminToggle(t.id)
-                        : isManual
+                        : isManual && !wasteReturnLocked
                           ? () => toggleManualTodo(t.id)
                           : undefined
                     }
@@ -216,6 +225,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
                     supplyPhotoUrls={getSupplyPhotos(t, materialRequests, quoteRequests)}
                     siteAddress={getTodoSiteAddress(t, materialRequests, quoteRequests, sites)}
                     onToggle={role === "admin" ? onAdminToggle : isManual ? toggleManualTodo : null}
+                    onUpdatePhotos={updateTodoPhotos}
                     onReassign={role === "admin" ? onReassignTodo : null}
                     engineerNames={engineerNames}
                     onUpdateDescription={role === "admin" ? onUpdateTodoDescription : null}
@@ -243,7 +253,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
 
 
 // 할 일 상세 본문 (시트/아코디언 공용). role: 'admin'이면 편집·재배정, 기사면 기한연장·재배정 요청.
-export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoUrls = [], siteAddress, onToggle, onReassign, engineerNames, onUpdateDescription, onUpdateDueDate, onExtendDueDate, onRequestReassign, onClearReassignRequest, role, onClose, hideTitleBlock = false }) {
+export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoUrls = [], siteAddress, onToggle, onUpdatePhotos, onReassign, engineerNames, onUpdateDescription, onUpdateDueDate, onExtendDueDate, onRequestReassign, onClearReassignRequest, role, onClose, hideTitleBlock = false }) {
   const [descDraft, setDescDraft] = useState(todo.description ?? "");
   const [editingDesc, setEditingDesc] = useState(false);
   const [reassignOpen, setReassignOpen] = useState(false);
@@ -252,8 +262,10 @@ export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoU
   const [extending, setExtending] = useState(false);
   const [extendDate, setExtendDate] = useState(todo.dueDate ?? "");
   const [extendReason, setExtendReason] = useState("");
-  const sourceLabel = todo.source === "manual" ? "관리자 부여" : todo.source === "quote" ? "견적 연동" : todo.source === "inspection" ? "검사 보완" : todo.source === "selfcheck" ? "자체점검 지적" : "자재 연동";
+  const sourceLabel = todo.source === "manual" ? "관리자 부여" : todo.source === "quote" ? "견적 연동" : todo.source === "inspection" ? "검사 보완" : todo.source === "selfcheck" ? "자체점검 지적" : todo.source === "waste_return" ? "폐자재·여유부품 반납" : "자재 연동";
   const allAssignees = [todo.assignee, ...coAssignees];
+  // 반납 할일은 기사가 반납사진을 최소 1장 올리기 전까지 완료 처리 버튼을 잠근다 (관리자는 예외).
+  const photoLockedForEngineer = role !== "admin" && todo.source === "waste_return" && !(todo.photoUrls?.length > 0);
 
   return (
     <>
@@ -407,7 +419,7 @@ export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoU
             </div>
           </div>
         )}
-        {todo.source !== "manual" && (
+        {todo.source !== "manual" && todo.source !== "waste_return" && (
           <div className="flex items-center justify-between text-sm">
             <span className="text-slate-400">완료 조건</span>
             <span className="font-semibold text-slate-700">
@@ -470,19 +482,39 @@ export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoU
           <PhotoGrid urls={supplyPhotoUrls} cols={3} />
         </div>
       )}
-      {todo.photoUrls?.length > 0 && (
+      {todo.source !== "waste_return" && todo.photoUrls?.length > 0 && (
         <div className="mb-4">
           <p className="text-xs font-bold text-slate-500 mb-2">첨부파일 ({todo.photoUrls.length})</p>
           <PhotoGrid urls={todo.photoUrls} cols={3} />
         </div>
       )}
-      {onToggle ? (
+      {todo.source === "waste_return" && (
+        <div className="mb-4">
+          {todo.wasteReturnRows?.length > 0 && (
+            <p className="text-[11px] font-bold text-slate-500 mb-1">
+              반납 항목: {todo.wasteReturnRows.map((r) => `${r.name} ${r.qtyRequired}EA`).join(", ")}
+            </p>
+          )}
+          <MultiPhotoUpload
+            photos={(todo.photoUrls ?? []).map((url) => ({ url }))}
+            onUploaded={(url) => onUpdatePhotos(todo.id, [...(todo.photoUrls ?? []), url])}
+            onRemove={(idx) => onUpdatePhotos(todo.id, (todo.photoUrls ?? []).filter((_, i) => i !== idx))}
+            label="반납 사진"
+            uploadFolder={`todos/${todo.id}`}
+          />
+        </div>
+      )}
+      {onToggle && !photoLockedForEngineer ? (
         <PrimaryButton onClick={() => { onToggle(todo.id); onClose(); }}>
           {todo.done ? "완료 취소" : "완료 처리"}
         </PrimaryButton>
       ) : todo.done ? (
         <div className="text-xs font-bold px-3 py-2.5 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center gap-1">
           <Check size={14} /> 완료됨
+        </div>
+      ) : photoLockedForEngineer ? (
+        <div className="text-[11px] font-bold px-3 py-2.5 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center gap-1">
+          <Lock size={12} /> 반납 사진 업로드 후 완료 가능
         </div>
       ) : (
         <div className="text-[11px] font-bold px-3 py-2.5 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center gap-1">
