@@ -293,12 +293,19 @@ function WasteReturnConfirmModal({ todo, onClose, onConfirm }) {
   // 재고입고(insert)가 이미 성공했으면 "확인" 재클릭(할일 갱신 실패 후 재시도) 때 중복 입고를
   // 막는다 — 모달이 닫혔다 다시 열리면(부모가 언마운트) 새 useState라 자연히 초기화된다.
   const [movementsInserted, setMovementsInserted] = useState(false);
+  // 입고가 실제로 반영된 수량의 스냅샷 — 재시도 때는 입력칸(live confirmedQty)이 그 사이 수정됐을 수
+  // 있으므로, 할일 갱신도 반드시 이 값(=원장에 실제로 쌓인 수량)을 기준으로 재시도해야 한다.
+  const [insertedQty, setInsertedQty] = useState(null);
 
   async function submit() {
     setSaving(true);
-    const result = await onConfirm(confirmedQty, movementsInserted);
+    const qtyForConfirm = movementsInserted ? insertedQty : confirmedQty;
+    const result = await onConfirm(qtyForConfirm, movementsInserted);
     setSaving(false);
-    if (result?.movementsInserted) setMovementsInserted(true);
+    if (result?.movementsInserted) {
+      if (!movementsInserted) setInsertedQty(confirmedQty);
+      setMovementsInserted(true);
+    }
     if (result?.ok) onClose();
   }
 
@@ -313,8 +320,9 @@ function WasteReturnConfirmModal({ todo, onClose, onConfirm }) {
               type="number"
               min={0}
               max={r.qtyRequired - r.qtyConfirmed}
-              className={inputCls + " w-20"}
-              value={confirmedQty[r.productId] ?? 0}
+              disabled={movementsInserted}
+              className={inputCls + " w-20 disabled:bg-slate-100 disabled:text-slate-400"}
+              value={(movementsInserted ? insertedQty : confirmedQty)[r.productId] ?? 0}
               onChange={(e) => {
                 const outstanding = r.qtyRequired - r.qtyConfirmed;
                 const n = Math.max(0, Math.min(outstanding, Math.floor(Number(e.target.value) || 0)));
