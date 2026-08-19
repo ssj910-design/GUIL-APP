@@ -1277,9 +1277,18 @@ export default function App() {
     }
     // 이 청구가 견적건이고, 그 견적의 부품마스터 연동 항목 중 폐자재 회수 필요이거나
     // 여유분(실반출 > 견적수량)이 있는 게 있으면 반납 할일을 견적 1건당 1개로 만든다.
+    // quote_items는 로컬 state(quoteRequests)가 아니라 DB에서 새로 조회한다 — 견적 품목편집은
+    // PC 관리자 콘솔(별도 세션)에서 이뤄지는 경우가 많아, 기사 모바일 세션이 그 편집 이후
+    // 새로고침을 안 했으면 로컬 state가 옛 품목(partId·returnRequired 없음)을 들고 있어
+    // 반납 할일이 조용히 안 만들어지는 문제가 있었다.
     if (quoteRequestId) {
-      const q = quoteRequests.find((x) => x.id === quoteRequestId);
-      const rows = (q?.quoteItems ?? [])
+      const { data: freshQuote, error: quoteFetchError } = await supabase
+        .from("quote_requests")
+        .select("quote_items")
+        .eq("id", quoteRequestId)
+        .maybeSingle();
+      if (quoteFetchError) console.error("반납 대상 확인 실패:", quoteFetchError.message);
+      const rows = (freshQuote?.quote_items ?? [])
         .filter((it) => it.partId && (it.returnRequired || (it.qtyTaken ?? it.qty) > it.qty))
         .map((it) => ({
           productId: it.partId,
