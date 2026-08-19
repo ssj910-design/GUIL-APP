@@ -76,8 +76,11 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
   // 다만 외주 처리된 견적건은 관리자가 대신 청구를 제출하는 것이라 실제 금액을 이 시스템에도
   // 남겨야 해서(부품교체·공사내역에 반영) 일반 견적 청구와 다르게 취급합니다.
   const isQuoteBilling = selected?.source === "quote" && !selected?.isOutsourced;
-  // 외주 견적건은 승인된 견적서 품목(자재·수량·금액)을 그대로 청구 화면에 프리필합니다.
-  const quoteBillingItems = selected?.source === "quote" && selected?.isOutsourced
+  // 견적 연동 건(자체처리·외주 모두)은 관리자가 견적서에 작성한 품목을 그대로 청구 화면에
+  // 프리필합니다 — 품목별 전/후 사진을 받고, 완료보고서(교체확인서)도 품목별로 나옵니다.
+  // 자체처리 건은 금액을 기사 화면에 노출하지 않지만(위 isQuoteBilling), 이 금액은 그대로
+  // partPhotos에 실려 billings에 저장되고, 완료보고서는 이 실제 견적금액을 보여줍니다.
+  const quoteBillingItems = selected?.source === "quote"
     ? (quoteRequests.find((q) => q.id === selected.quoteRequestId)?.quoteItems ?? [])
         .filter((it) => it.name?.trim())
         .map((it) => ({ name: it.name, qty: it.qty || null, amount: Math.round(Number(it.qty || 0) * Number(it.unitPrice || 0)) }))
@@ -503,7 +506,9 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                           <div key={i}>
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-sm font-bold text-slate-800">{part.name}{part.qty ? ` ${part.qty}` : ""}</p>
-                              <p className="text-sm font-extrabold text-blue-700 shrink-0">₩{Number(part.amount || 0).toLocaleString()}</p>
+                              {!isQuoteBilling && (
+                                <p className="text-sm font-extrabold text-blue-700 shrink-0">₩{Number(part.amount || 0).toLocaleString()}</p>
+                              )}
                             </div>
                             <div className="flex gap-1.5 mt-1">
                               {partPhotos[i]?.before?.[0] && (

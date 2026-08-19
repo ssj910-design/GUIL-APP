@@ -29,6 +29,10 @@ function buildCertificateData(b, data) {
     beforeUrls: b.beforePhotoUrls ?? [],
     afterUrls: b.afterPhotoUrls ?? [],
   }];
+  // 자체처리 견적건은 기사 화면엔 금액을 숨기지만(billings.cost가 null로 저장됨), 완료보고서는
+  // 관리자가 견적서에 적은 실제 금액을 보여줘야 한다 — 품목별 금액(견적서 단가×수량)이 다 있으면
+  // 그 합계를 대신 쓴다.
+  const itemsTotal = items.length && items.every((it) => it.amount != null) ? items.reduce((sum, it) => sum + it.amount, 0) : null;
 
   return {
     billingId: b.id,
@@ -40,7 +44,7 @@ function buildCertificateData(b, data) {
     engineerName: personOf(data, b.engineerId, b.engineer),
     replaceDate: shortDate(b.replaceDate),
     items,
-    totalCost: b.cost,
+    totalCost: b.cost ?? itemsTotal,
     isFree: b.isFree,
     approval: b.approvalMethod
       ? {
