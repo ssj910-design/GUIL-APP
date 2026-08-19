@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { BRAND } from "@/lib/company";
-import { Home, AlertTriangle, CalendarCheck, CalendarClock, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound, Boxes, BookOpen } from "lucide-react";
+import { Home, AlertTriangle, CalendarCheck, CalendarClock, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound, Boxes, Bot } from "lucide-react";
 import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken } from "@/lib/supabaseClient";
 import { authFetch } from "@/lib/apiFetch";
@@ -47,7 +47,7 @@ const TABS = [
   { id: "billing", label: "청구", icon: Receipt },
   { id: "todo", label: "할일관리", icon: ListTodo },
   { id: "workcalendar", label: "워크캘린더", icon: CalendarClock },
-  { id: "lawqa", label: "검사기준", icon: BookOpen },
+  { id: "lawqa", label: "검사기준", icon: Bot },
   // 관리자 모드는 하단 탭에서 제외 — 관리자 전용 퀵버튼(게시판 FAB 위)으로만 진입
 ];
 
@@ -119,9 +119,7 @@ export default function App() {
 
   // 검사기준 Q&A — 어느 진입점으로 열었는지까지 담는다(3곳 비교 실험, 마이그 123).
   // null이면 닫힘, 'header' | 'fab' 이면 그 진입점으로 시트가 열린 상태.
-  const [lawQaFrom, setLawQaFrom] = useState(null);
   // 하단에 입력창이 있는 화면(검사기준 Q&A)에서는 플로팅 버튼이 입력·전송을 가린다 → 숨김
-  const hideFloatingFab = tab === "lawqa" || !!lawQaFrom;
   const [sites, setSites] = useState([]);
   const [units, setUnits] = useState([]); // v2: 호기 목록 (마이그레이션 전 DB에서는 빈 배열)
   const [errorCodes, setErrorCodes] = useState([]); // v2: 에러코드집 (마이그레이션 전 DB에서는 빈 배열)
@@ -2354,10 +2352,6 @@ export default function App() {
             title={tab === "home" ? BRAND.name : tabTitle}
             right={
               <div className="relative flex items-center gap-1.5">
-                {/* 검사기준 Q&A — 하던 화면을 잃지 않게 시트로 연다 (3개 진입점 비교 중) */}
-                <button onClick={() => setLawQaFrom("header")} className="p-1.5 bg-blue-900 rounded-full" aria-label="검사기준 묻기">
-                  <BookOpen size={16} />
-                </button>
                 <button onClick={() => setMyPageOpen(true)} className="p-1.5 bg-blue-900 rounded-full" aria-label="마이페이지">
                   <UserRound size={16} />
                 </button>
@@ -2617,12 +2611,13 @@ export default function App() {
               initialSubTab={workCalendarSubTab}
             />
           )}
-          {tab === "lawqa" && <LawQaPanel entryPoint="tab" />}
+          {tab === "lawqa" && <LawQaPanel />}
           {tab === "admin" && profile.role === "admin" && <AdminTab materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAdvanceQuote={handleAdvanceQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onClearReassignRequest={handleClearReassignRequest} onAssignTodo={handleAssignTodo} onResetEngineerPassword={handleResetEngineerPassword} materialFocusId={materialFocusId} onMaterialFocusHandled={() => setMaterialFocusId(null)} quoteFocusId={quoteFocusId} onQuoteFocusHandled={() => setQuoteFocusId(null)} onQuoteDraftCreated={handleQuoteDraftCreated} onQuoteDiscarded={handleQuoteDiscarded} onQuoteWizardSaved={handleQuoteWizardSaved} onSendQuote={handleSendQuote} inventoryProducts={inventoryProducts} inventoryStockMovements={inventoryStockMovements} />}
           </PullToRefresh>
 
-          {/* 게시판 플로팅 버튼 — 어느 탭에서든 즉시 게시판으로 이동 (게시판 탭에서는 숨김) */}
-          {tab !== "room" && !hideFloatingFab && (
+          {/* 게시판 플로팅 버튼 — 어느 탭에서든 즉시 게시판으로 이동
+              (게시판 탭, 그리고 채팅 입력창이 바닥을 쓰는 검사기준 탭에서는 숨김) */}
+          {tab !== "room" && tab !== "lawqa" && (
           <button
             onClick={() => setTab("room")}
             aria-label="게시판 열기"
@@ -2642,18 +2637,6 @@ export default function App() {
           </button>
           )}
 
-          {/* 검사기준 Q&A 퀵버튼 — 게시판 FAB 위(관리자면 관리자버튼과 게시판 사이).
-              하단탭·헤더에도 같은 기능을 두고 어디서 실제로 쓰는지 로그로 비교하는 중(마이그 123). */}
-          {tab !== "lawqa" && !hideFloatingFab && (
-          <button
-            onClick={() => setLawQaFrom("fab")}
-            aria-label="검사기준 묻기"
-            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-white border border-slate-200 text-blue-700 shadow-lg flex items-center justify-center active:scale-95 ${profile.role === "admin" ? "bottom-[6.5rem]" : "bottom-36"}`}
-          >
-            <BookOpen size={20} />
-          </button>
-          )}
-
           {/* 관리자 퀵버튼 — 관리자는 어느 탭에서든 관리자 모드로 바로 이동 (관리자 모드 탭에서는 숨김) */}
           {profile.role === "admin" && tab !== "admin" && (
           <button
@@ -2663,13 +2646,6 @@ export default function App() {
           >
             <Settings size={22} />
           </button>
-          )}
-
-          {/* 검사기준 Q&A 시트 — 헤더·플로팅으로 열면 하던 화면을 잃지 않게 위에 덮는다 */}
-          {lawQaFrom && (
-            <Sheet title="검사기준 묻기" onClose={() => setLawQaFrom(null)} full flush>
-              <LawQaPanel entryPoint={lawQaFrom} />
-            </Sheet>
           )}
 
           {/* 알림(종)에서 특정 건을 눌렀을 때 — 탭 이동 없이 지금 화면 위에 상세만 띄운다 */}

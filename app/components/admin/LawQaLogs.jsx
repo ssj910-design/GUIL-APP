@@ -30,7 +30,6 @@ function costOf(rows) {
   const usd = (t.in * PRICE.in + t.out * PRICE.out + t.embed * PRICE.embed) / 1_000_000;
   return { ...t, usd, krw: usd * USD_KRW, measured: rows.filter((r) => r.tokens).length };
 }
-const ENTRY_LABEL = { header: "헤더 아이콘", fab: "플로팅 버튼", tab: "하단 탭" };
 
 // 목록을 좁히는 기준. "왜 못 찾았나 / 뭐가 좋았나"를 바로 보려는 것이라 이 4개면 충분하다.
 const FILTERS = [
@@ -80,11 +79,6 @@ export default function LawQaLogs() {
   const rated = all.filter((r) => r.rating);
   const up = rated.filter((r) => r.rating === 1).length;
 
-  // 진입점 3곳 중 어디로 들어와 실제 질문까지 이어졌나 — 1곳만 남기려고 비교 중이다.
-  const entries = [...all.reduce((m, r) => {
-    const k = r.entry_point ?? "(미상)";
-    return m.set(k, (m.get(k) ?? 0) + 1);
-  }, new Map())].sort((a, b) => b[1] - a[1]);
 
   return (
     <div className="space-y-4">
@@ -111,7 +105,7 @@ export default function LawQaLogs() {
         </p>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi label="질문" value={all.length.toLocaleString()} sub={`최근 ${days}일`} />
         <Kpi label="근거를 찾은 비율" value={all.length ? `${Math.round((answered / all.length) * 100)}%` : "—"}
              sub={`${answered} / ${all.length}건`}
@@ -134,17 +128,6 @@ export default function LawQaLogs() {
           )}
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
-          <p className="text-[11px] font-bold text-slate-400 mb-1.5">어디로 들어왔나</p>
-          {entries.length === 0 ? (
-            <p className="text-xs text-slate-300">—</p>
-          ) : entries.slice(0, 3).map(([k, n]) => (
-            <div key={k} className="flex items-center justify-between">
-              <p className="text-[11px] text-slate-600">{ENTRY_LABEL[k] ?? k}</p>
-              <p className="text-[11px] font-bold text-slate-800 tabular-nums">{n}</p>
-            </div>
-          ))}
-        </div>
       </div>
 
       <div className="flex gap-1.5 flex-wrap">
