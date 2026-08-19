@@ -439,10 +439,14 @@ export default function TodosAdmin({ data, setData, initialView }) {
     const stillOwed = outstanding.filter((r) => r.left > 0).map((r) => ({ productId: r.productId, name: r.name, qtyRequired: r.left, qtyConfirmed: 0 }));
     const finalRows = outstanding.map((r) => ({ productId: r.productId, name: r.name, qtyRequired: r.qtyRequired, qtyConfirmed: r.qtyConfirmed + (confirmedQty[r.productId] ?? 0) }));
 
+    // 사진은 재오픈마다 지우지 않고 누적한다(1차/2차 제출 이력 보존, 설계서 참고).
+    // 대신 photo_count에 "재오픈 시점까지의 사진 수"를 기준선으로 남겨, 기사 화면(TodoTab)의
+    // 잠금 조건을 "사진이 1장이라도 있으면"에서 "기준선보다 사진이 늘었으면(=재오픈 후 새로 추가)"으로 바꾼다.
+    const currentPhotoCount = t.photoUrls?.length ?? 0;
     const patch = allDone
       ? { waste_return_rows: finalRows, stock_confirmed_at: new Date().toISOString() }
       : {
-          waste_return_rows: stillOwed, done: false, photo_urls: null, photo_count: 0,
+          waste_return_rows: stillOwed, done: false, photo_count: currentPhotoCount,
           title: `폐자재/여유부품 반납 — ${stillOwed.map((r) => `${r.name} ${r.qtyRequired}EA`).join(", ")}`,
         };
 
@@ -456,8 +460,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
         wasteReturnRows: allDone ? finalRows : stillOwed,
         stockConfirmedAt: allDone ? patch.stock_confirmed_at : null,
         done: allDone ? x.done : false,
-        photoUrls: allDone ? x.photoUrls : [],
-        photoCount: allDone ? x.photoCount : 0,
+        photoCount: allDone ? x.photoCount : currentPhotoCount,
         title: allDone ? x.title : patch.title,
       } : x)),
     }));

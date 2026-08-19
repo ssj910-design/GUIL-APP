@@ -34,7 +34,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
   const billingSubTabs = ["material", "manual"];
   const swipe = useSwipeSubtab(billingSubTabs, mode, setMode);
   // 자재지급건 청구는 기사가 자재신청/견적요청으로 만든 할일만 대상 — 관리자가 직접 부여한 할일(source: manual)은 제외.
-  const openTodos = todos.filter((t) => !t.done && t.assignee === CURRENT_ENGINEER && t.source !== "manual");
+  const openTodos = todos.filter((t) => !t.done && t.assignee === CURRENT_ENGINEER && t.source !== "manual" && t.source !== "waste_return");
   const [selectedId, setSelectedId] = useState(openTodos[0]?.id ?? "");
   // todos가 마운트 이후 늦게 도착하면 초기 selectedId가 ""로 굳어 제출 불가 → 유효한 첫 건으로 동기화 (P2-8)
   const openIdsKey = openTodos.map((t) => t.id).join(",");

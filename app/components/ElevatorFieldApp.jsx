@@ -9,6 +9,7 @@ import { authFetch } from "@/lib/apiFetch";
 import { mapSite, mergeAssignedEngineers, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode, mapUnitPartPhoto, mapInventoryProduct, mapInventoryStockMovement } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent, quoteGrandTotal } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
+import { recordQuoteSupplyStockOut } from "@/lib/inventoryStock";
 import { DutySwapNotice } from "@/app/components/DutyRoster";
 import { WorkCalendarSheet } from "@/app/components/WorkCalendarSheet";
 import { MyPage } from "@/app/components/MyPage";
@@ -1946,24 +1947,14 @@ export default function App() {
     );
     if (!statusSaved) return;
 
-    // 부품마스터 연동된 항목(partId 있는 것)마다 실반출수량만큼 재고 'out' 반영 —
-    // 자재지급완료가 실제로 부품이 창고에서 나가는 시점이라 여기서 기록한다.
-    const partItems = (q.quoteItems ?? []).filter((it) => it.partId);
-    if (partItems.length) {
-      const movementRows = partItems.map((it) => ({
-        product_id: it.partId,
-        type: "out",
-        qty_delta: -(it.qtyTaken ?? it.qty),
-        note: `견적 ${quoteId} 지급`,
-        site_text: q.siteName,
-        created_by: profileIdByName(profilesAll, profile.name),
-      }));
-      const { error: moveError } = await supabase.from("inventory_stock_movements").insert(movementRows);
-      if (moveError) {
-        // 재고 반영 실패는 지급완료 자체를 막지 않는다(할일·상태 변경은 이미 성공) — 콘솔에만 남긴다.
-        console.error("재고 반영 실패:", moveError.message);
-      }
-    }
+    // 자재지급완료가 실제로 부품이 창고에서 나가는 시점이라 여기서 재고 'out' 반영
+    // (PC 관리자 콘솔의 handleQuoteSupplyComplete와 동일 로직 공유 — lib/inventoryStock.js).
+    await recordQuoteSupplyStockOut(supabase, {
+      quoteItems: q.quoteItems,
+      quoteId,
+      siteName: q.siteName,
+      createdBy: profileIdByName(profilesAll, profile.name),
+    });
 
     setQuoteRequests((prev) =>
       prev.map((x) => (x.id === quoteId ? { ...x, status: "자재지급완료", suppliedDate: TODAY_STR } : x))
@@ -1992,7 +1983,7 @@ export default function App() {
     const finalDueDate = dueDate || addDays(TODAY_STR, 30);
     const finalVendorName = isOutsourced ? (vendorName || null) : null;
 
-    const existingTodos = todos.filter((t) => t.quoteRequestId === quoteId);
+    const existingTodos = todos.filter((t) => t.quoteRequestId === quoteId && t.source === "quote");
     const kept = existingTodos.filter((t) => finalAssignees.includes(t.assignee));
     const toRemove = existingTodos.filter((t) => !finalAssignees.includes(t.assignee));
     const toAddNames = finalAssignees.filter((name) => !existingTodos.some((t) => t.assignee === name));

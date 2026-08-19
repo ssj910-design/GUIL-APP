@@ -2,7 +2,7 @@
 -- 1) 재고 이동 기록을 반납 할일(todos)과 정식으로 연결 — note 자유텍스트 대신 FK로,
 --    로스리포트 등 집계 쿼리를 안정적으로 조인할 수 있게 한다. 일반 수동 입출고는 계속 null.
 alter table public.inventory_stock_movements
-  add column if not exists todo_id uuid references public.todos(id);
+  add column if not exists todo_id text references public.todos(id);
 
 create index if not exists inventory_stock_movements_todo_id_idx
   on public.inventory_stock_movements (todo_id);

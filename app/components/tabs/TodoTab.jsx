@@ -1,4 +1,4 @@
-import { useState, useContext, useEffect } from "react";
+import { useState, useContext, useEffect, useRef } from "react";
 import { ListTodo, Check, CheckCircle2, Search, Lock, Plus, Repeat, ChevronDown } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { addDays, formatShortDate, formatYyMmDd } from "@/lib/utils";
@@ -86,6 +86,10 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
   const [expandedId, setExpandedId] = useState(null);
   const [search, setSearch] = useState("");
   const [assignOpen, setAssignOpen] = useState(false);
+  // 반납사진을 여러 장 연달아 올릴 때 setTodos만으로는 React 렌더 타이밍상 아직 반영 안 된
+  // todo.photoUrls를 기준으로 계산될 수 있어(경쟁 상태 — 마지막 한 장만 저장되는 버그) —
+  // ElevatorFieldApp의 supplyPhotoUrlsRef와 동일한 패턴으로 ref에 최신 배열을 동기적으로 보관한다.
+  const photoUrlsRef = useRef({});
   // 알림/푸시로 특정 할일을 지목해 열 때 쓴다 — 사용자가 아코디언을 직접 조작하면(펼치기/접기)
   // 그 시점부터는 로컬 expandedId가 우선하고 focusTodoId는 해제한다(RoomTab의 focusPostId와 동일 패턴).
   const shownExpandedId = expandedId ?? focusTodoId;
@@ -119,11 +123,20 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
     setTodos((prev) => prev.map((x) => (idsToComplete.includes(x.id) ? { ...x, done } : x)));
   }
 
-  // 폐자재/여유부품 반납 할일의 반납사진 등록/삭제. 완료 조건(사진 1장 이상)은
-  // TodoCheckbox·TodoDetailBody의 locked 계산에서 t.photoUrls로 판정한다.
-  async function updateTodoPhotos(id, urls) {
+  // 폐자재/여유부품 반납 할일의 반납사진 등록/삭제. 완료 조건(사진 1장 이상, 재오픈 후엔 기준선보다
+  // 증가)은 TodoCheckbox·TodoDetailBody의 locked 계산에서 t.photoUrls/t.photoCount로 판정한다.
+  async function writeTodoPhotos(id, urls) {
+    photoUrlsRef.current[id] = urls;
     await supabase.from("todos").update({ photo_urls: urls }).eq("id", id);
     setTodos((prev) => prev.map((x) => (x.id === id ? { ...x, photoUrls: urls } : x)));
+  }
+  async function addTodoPhoto(id, url) {
+    const base = photoUrlsRef.current[id] ?? todos.find((x) => x.id === id)?.photoUrls ?? [];
+    await writeTodoPhotos(id, [...base, url]);
+  }
+  async function removeTodoPhoto(id, idx) {
+    const base = photoUrlsRef.current[id] ?? todos.find((x) => x.id === id)?.photoUrls ?? [];
+    await writeTodoPhotos(id, base.filter((_, i) => i !== idx));
   }
 
   if (mine.length === 0 && role !== "admin") {
@@ -179,7 +192,9 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
           // 할 일과 정기검사 보완조치·자체점검 지적사항 할 일은 그런 연결고리가 없어 본인이 직접 완료 처리해야 한다.
           const isManual = t.source === "manual" || t.source === "inspection" || t.source === "selfcheck" || t.source === "waste_return";
           // 반납 할일은 기사가 직접 완료 처리하되(=isManual), 반납사진을 최소 1장 올려야만 잠금이 풀린다.
-          const wasteReturnLocked = t.source === "waste_return" && !(t.photoUrls?.length > 0);
+          // 재오픈 후에는 기존 사진이 누적 보존되므로(관리자 화면 감사이력용), "사진이 있으면"이 아니라
+          // "재오픈 시점 기준선(photoCount)보다 사진이 늘었으면"으로 판정 — 새 사진을 추가해야 잠금이 풀린다.
+          const wasteReturnLocked = t.source === "waste_return" && !((t.photoUrls?.length ?? 0) > (t.photoCount ?? 0));
           const overdue = !t.done && new Date(t.dueDate) < new Date(TODAY_STR);
           const requester = getRequesterName(t, materialRequests, quoteRequests);
           const expanded = shownExpandedId === t.id;
@@ -225,7 +240,8 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
                     supplyPhotoUrls={getSupplyPhotos(t, materialRequests, quoteRequests)}
                     siteAddress={getTodoSiteAddress(t, materialRequests, quoteRequests, sites)}
                     onToggle={role === "admin" ? onAdminToggle : isManual ? toggleManualTodo : null}
-                    onUpdatePhotos={updateTodoPhotos}
+                    onAddPhoto={addTodoPhoto}
+                    onRemovePhoto={removeTodoPhoto}
                     onReassign={role === "admin" ? onReassignTodo : null}
                     engineerNames={engineerNames}
                     onUpdateDescription={role === "admin" ? onUpdateTodoDescription : null}
@@ -253,7 +269,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
 
 
 // 할 일 상세 본문 (시트/아코디언 공용). role: 'admin'이면 편집·재배정, 기사면 기한연장·재배정 요청.
-export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoUrls = [], siteAddress, onToggle, onUpdatePhotos, onReassign, engineerNames, onUpdateDescription, onUpdateDueDate, onExtendDueDate, onRequestReassign, onClearReassignRequest, role, onClose, hideTitleBlock = false }) {
+export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoUrls = [], siteAddress, onToggle, onAddPhoto, onRemovePhoto, onReassign, engineerNames, onUpdateDescription, onUpdateDueDate, onExtendDueDate, onRequestReassign, onClearReassignRequest, role, onClose, hideTitleBlock = false }) {
   const [descDraft, setDescDraft] = useState(todo.description ?? "");
   const [editingDesc, setEditingDesc] = useState(false);
   const [reassignOpen, setReassignOpen] = useState(false);
@@ -265,7 +281,8 @@ export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoU
   const sourceLabel = todo.source === "manual" ? "관리자 부여" : todo.source === "quote" ? "견적 연동" : todo.source === "inspection" ? "검사 보완" : todo.source === "selfcheck" ? "자체점검 지적" : todo.source === "waste_return" ? "폐자재·여유부품 반납" : "자재 연동";
   const allAssignees = [todo.assignee, ...coAssignees];
   // 반납 할일은 기사가 반납사진을 최소 1장 올리기 전까지 완료 처리 버튼을 잠근다 (관리자는 예외).
-  const photoLockedForEngineer = role !== "admin" && todo.source === "waste_return" && !(todo.photoUrls?.length > 0);
+  // 재오픈 시 사진은 누적 보존되므로, 재오픈 시점 기준선(photoCount)보다 늘어난 경우에만 잠금 해제.
+  const photoLockedForEngineer = role !== "admin" && todo.source === "waste_return" && !((todo.photoUrls?.length ?? 0) > (todo.photoCount ?? 0));
 
   return (
     <>
@@ -497,8 +514,8 @@ export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoU
           )}
           <MultiPhotoUpload
             photos={(todo.photoUrls ?? []).map((url) => ({ url }))}
-            onUploaded={(url) => onUpdatePhotos(todo.id, [...(todo.photoUrls ?? []), url])}
-            onRemove={(idx) => onUpdatePhotos(todo.id, (todo.photoUrls ?? []).filter((_, i) => i !== idx))}
+            onUploaded={(url) => onAddPhoto(todo.id, url)}
+            onRemove={(idx) => onRemovePhoto(todo.id, idx)}
             label="반납 사진"
             uploadFolder={`todos/${todo.id}`}
           />
