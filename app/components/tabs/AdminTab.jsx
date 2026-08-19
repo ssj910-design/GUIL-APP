@@ -1185,7 +1185,7 @@ function QuoteSupplyHistoryScreen({ completed, todos, engineerNames, onQuoteSupp
         <Sheet title={`${editTarget.siteName ?? "-"} · 지급 내역 수정`} onClose={() => setEditTarget(null)}>
           <QuoteSupplyEditForm
             q={editTarget}
-            existingTodos={todos.filter((t) => t.quoteRequestId === editTarget.id)}
+            existingTodos={todos.filter((t) => t.quoteRequestId === editTarget.id && t.source === "quote")}
             engineerNames={engineerNames}
             onAttachQuotePhoto={onAttachQuotePhoto}
             onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}

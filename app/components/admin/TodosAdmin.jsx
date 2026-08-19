@@ -417,7 +417,8 @@ export default function TodosAdmin({ data, setData, initialView }) {
   // - 확인된 만큼만 재고 입고(inventory_stock_movements, todo_id로 이 할일과 연결)로 기록.
   // - 전부 확인됐으면(stock_confirmed_at 채워 큐에서 빠짐) 기록용으로 rows를 누적 확인수량 그대로 남긴다.
   // - 일부만 확인됐으면 done=false로 재오픈하고, waste_return_rows를 "남은 수량"만 담은 새 행으로
-  //   다시 세팅한다(다음 회차엔 이게 새 요청량) — 사진도 비워 Task 5 잠금이 다시 걸리게 한다.
+  //   다시 세팅한다(다음 회차엔 이게 새 요청량) — 사진은 지우지 않고, photo_count에 기준선을
+  //   남겨 새 사진이 추가될 때까지 잠금이 다시 걸리게 한다.
   // movementsAlreadyInserted: 이전 호출에서 재고입고까지는 성공했는데 할일 갱신이 실패해
   // 모달이 같은 확인수량으로 재시도하는 경우 — 입고를 또 하지 않고 할일 갱신만 재시도한다.
   async function confirmWasteReturn(t, confirmedQty, movementsAlreadyInserted) {

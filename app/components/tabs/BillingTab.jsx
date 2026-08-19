@@ -221,6 +221,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
           .filter(
             (t) =>
               !t.done &&
+              t.source !== "waste_return" &&
               ((selected.quoteRequestId && t.quoteRequestId === selected.quoteRequestId) ||
                 (selected.materialRequestId && t.materialRequestId === selected.materialRequestId) ||
                 (selected.selfCheckItemId && t.selfCheckItemId === selected.selfCheckItemId))
