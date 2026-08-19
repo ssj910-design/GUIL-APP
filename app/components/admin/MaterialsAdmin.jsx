@@ -57,7 +57,7 @@ function parseAmountFromBillingPart(billingPart, part) {
 // 연결된 할 일(todos)의 done이 true가 된다(TodosAdmin.jsx 참고). 담당자가 여러 명인
 // 견적은 전원이 청구를 마쳐야 교체완료로 본다.
 function billingCompleteFor(todos, key, requestId) {
-  const linked = todos.filter((t) => t[key] === requestId);
+  const linked = todos.filter((t) => t[key] === requestId && t.source !== "waste_return");
   return linked.length > 0 && linked.every((t) => t.done);
 }
 
@@ -93,7 +93,7 @@ function quoteStageInfo(q, todos) {
 // 지급완료 처리 시 만들어지는 연결 할 일(todos)의 담당자 — 요청 자체엔 담당기사 컬럼이 없고
 // todos.assignee(_id)에만 있어서(견적은 담당 기사 여러 명 가능) 여기서 조인해 이름을 뽑는다.
 function assigneeNames(data, key, requestId) {
-  const linked = (data.todos ?? []).filter((t) => t[key] === requestId);
+  const linked = (data.todos ?? []).filter((t) => t[key] === requestId && t.source !== "waste_return");
   if (!linked.length) return null;
   return linked.map((t) => personOf(data, t.assigneeId, t.assignee)).join(", ");
 }
