@@ -613,3 +613,34 @@ Task 1의 마이그레이션이 실제로 Supabase에서 실행됐는지 재확�
 `curl`로 `inventory_stock_movements?select=todo_id&limit=1`이 에러 없이 도는지 등으로
 검증 가능). 전체 흐름(견적 작성 → 지급 → 청구 → 기사 완료 → 관리자 확인 → 재오픈까지)을
 실제 견적 1건으로 끝까지 따라가며 확인할 것을 권장.
+
+## 최종 브랜치 리뷰에서 남은 후속 작업 (2026-08-19, 병합 차단 아님)
+
+최종 전체 브랜치 리뷰가 4라운드 걸렸다 — 매 라운드 실제 Critical/Important 버그를
+찾아 즉시 고쳤고(대부분 "waste_return 할일이 quoteRequestId로 묶이는 기존 로직에
+끼어들어 오작동"하는 같은 패턴이 `ElevatorFieldApp.jsx`/`AdminTab.jsx`(기사앱)/
+`MaterialsAdmin.jsx`(PC 콘솔) 3곳에 중복 구현된 탓에 반복 발견됨), 4라운드째에
+"병합 가능"으로 수렴했다. 의도적으로 남겨둔 것 2건:
+
+1. **Task 6의 취소 후 재진입 이중반영 가능성.** 반납확인 모달에서 재고 insert는
+   성공했는데 할일 update가 실패한 상태에서, 관리자가 "재시도" 대신 "취소"를 누르고
+   같은 할일을 다시 열면 — 이미 반영된 수량을 모르는 채로 새 확인을 제출해 재고가
+   중복 반영될 수 있다. 같은 모달 세션 안에서의 재시도는 (`insertedQty` 스냅샷으로)
+   막혀 있지만, 모달을 껐다 다시 여는 경로까지 막으려면 `inventory_stock_movements`를
+   `todo_id`로 먼저 조회해서 이미 반영된 걸 확인하거나(서버 측 idempotency), 두 쓰기를
+   하나의 Supabase RPC/트랜잭션으로 묶어야 한다 — 이번 라운드들의 범위보다 큰 작업이라
+   후속으로 미룸.
+2. **`lib/inventoryStock.js`의 출고('out') 기록에 idempotency 키가 없음.** 반납('in')
+   쪽은 `movementsAlreadyInserted` 가드가 있는데 출고 쪽은 없다 — 지금은 자재지급완료
+   버튼이 상태 가드로 한 번만 눌리게 돼 있어 실사용에서 이중기록 위험은 낮지만, 대칭을
+   맞추려면 나중에 같이 정리.
+
+가벼운 것 2건(코드는 그대로 둬도 안전, 참고용):
+- `MaterialTab.jsx`의 `isQuoteBilled`만 `source === "quote"`(허용목록) 방식이고 나머지
+  3곳(`billingCompleteFor`/`assigneeNames`/`SiteTab.isBilled`)은 `source !== "waste_return"`
+  (차단목록) 방식 — 지금은 동작이 같지만(모든 견적 할일 생성 경로가 `source: "quote"`를
+  하드코딩함), 나중에 `todos.source`가 비어있는 레거시 행이 생기면 이 한 곳만 다르게
+  반응할 수 있음.
+- `TodosAdmin.jsx`의 범용 `TodoDetailModal`(할일 종류 구분 없이 아무 할일이나 열림)이
+  저장할 때 `photo_count`를 덮어써서 반납 재오픈 기준선을 건드릴 수 있음 — 방향이
+  항상 "더 잠그는 쪽"이라(기사가 사진을 한 장 더 올려야 하는 정도) 데이터 훼손은 없음.
