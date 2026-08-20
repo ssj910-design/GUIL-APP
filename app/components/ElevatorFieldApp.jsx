@@ -130,6 +130,23 @@ export default function App() {
   const [dutySwaps, setDutySwaps] = useState([]);
   const [todayLeaves, setTodayLeaves] = useState([]); // 오늘 휴가 중인 사람 (배정 차단용)
   const [myPageOpen, setMyPageOpen] = useState(false);
+
+  // 플로팅 버튼은 본문 위에 떠 있어서 글자를 가린다. **스크롤하는 동안에는 비켜준다.**
+  // scroll 이벤트는 버블링되지 않으므로 캡처 단계로 받아야 한다 — 탭마다 자기 스크롤 컨테이너를
+  // 따로 갖고 있어서(PullToRefresh 주석 참고) 어느 하나에 붙일 수가 없다.
+  const [scrolling, setScrolling] = useState(false);
+  useEffect(() => {
+    let timer;
+    const onScroll = () => {
+      setScrolling(true);
+      clearTimeout(timer);
+      timer = setTimeout(() => setScrolling(false), 400);   // 손을 멈추면 곧 돌아온다
+    };
+    document.addEventListener("scroll", onScroll, true);
+    return () => { document.removeEventListener("scroll", onScroll, true); clearTimeout(timer); };
+  }, []);
+  // 숨길 때 없애지 않고 투명하게만 만든다 — 사라졌다 나타나면 위치를 다시 찾아야 한다.
+  const fabHide = scrolling ? "opacity-0 translate-x-4 pointer-events-none" : "opacity-100 translate-x-0";
   const [siteManagers, setSiteManagers] = useState([]);
   const [failures, setFailures] = useState([]);
   const [inspections, setInspections] = useState([]);
@@ -2600,7 +2617,7 @@ export default function App() {
           <button
             onClick={() => setTab("room")}
             aria-label="게시판 열기"
-            className="absolute right-4 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95 bottom-20"
+            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95 bottom-20 transition-all duration-200 ${fabHide}`}
           >
             <MessagesSquare size={22} />
             {unreadPosts.length > 0 && (
@@ -2621,7 +2638,7 @@ export default function App() {
           <button
             onClick={() => setTab("admin")}
             aria-label="관리자 모드 열기"
-            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-slate-800 text-white shadow-lg flex items-center justify-center active:scale-95 ${tab === "room" ? "bottom-40" : "bottom-36"}`}
+            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-slate-800 text-white shadow-lg flex items-center justify-center active:scale-95 transition-all duration-200 ${tab === "room" ? "bottom-40" : "bottom-36"} ${fabHide}`}
           >
             <Settings size={22} />
           </button>
