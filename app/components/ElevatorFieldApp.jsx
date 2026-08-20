@@ -154,11 +154,13 @@ export default function App() {
     document.addEventListener("scroll", onScroll, true);
     return () => { document.removeEventListener("scroll", onScroll, true); clearTimeout(timer); };
   }, []);
-  // 투명도만 바꾼다 — 없애면 위치를 다시 찾아야 하고, 좌우로 움직이면 그 자체가 흔들림으로 보인다.
-  // 돌아올 때(300ms)를 사라질 때(150ms)보다 느리게 해서, 혹시 깜빡여도 눈에 덜 띄게 한다.
+  // **완전히 숨기지 않고 흐리게만 만든다.** 0으로 지웠더니 폰의 관성·바운스 스크롤에서
+  // 나타났다 사라지는 깜빡임이 남았다(이벤트가 불규칙하게 오는 걸 타이머로 완전히 막을 수는 없다).
+  // 흐린 상태로 두면 깜빡여도 눈에 띄지 않으면서, 가려진 글자도 비쳐 보인다.
+  // 돌아올 때(400ms)를 흐려질 때(150ms)보다 느리게 해서 변화를 더 부드럽게 만든다.
   const fabHide = scrolling
-    ? "opacity-0 pointer-events-none duration-150"
-    : "opacity-100 duration-300";
+    ? "opacity-25 pointer-events-none duration-150"
+    : "opacity-100 duration-[400ms]";
   // 고장접수 접수등록에는 하단 고정 [이전/다음] 바가 있어 플로팅이 그 버튼을 덮었다.
   // 그 탭에서는 바 높이만큼 위로 올린다 — 탭 전체에서 숨기면 게시판으로 갈 방법이 없어진다.
   const overCta = tab === "failure";

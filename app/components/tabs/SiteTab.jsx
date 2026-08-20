@@ -746,7 +746,7 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
       </div>
 
       <div className="flex-1 relative overflow-hidden">
-      <div className={`h-full overflow-y-auto pl-5 pb-4 space-y-2.5 ${showIndex ? "pr-9" : "pr-5"}`}>
+      <div className={`h-full overflow-y-auto pr-5 pb-4 space-y-2.5 ${showIndex ? "pl-9" : "pl-5"}`}>
         {list.map((s) => {
           const insp = latestInspection(s.id);
           const openF = openFailures(s.id);
@@ -795,11 +795,12 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
       {/* 자음 인덱스 — 761개를 훑어 찾을 수단. 검색은 이름을 알 때 쓰고, 이건 모를 때 쓴다.
           해당 자음의 현장이 없으면 흐리게 두고 눌러도 반응하지 않는다(빈 곳으로 튀면 더 혼란스럽다). */}
       {showIndex && (
+        // **왼쪽**에 세운다 — 오른쪽은 카드마다 지도(티맵·카카오맵) 버튼이 있어서 인덱스가 그걸 덮는다.
         // 아래쪽은 플로팅 버튼(게시판·관리자)이 차지하므로 그 위까지만 세운다 — 겹치면 ㅌㅍㅎ#을 못 누른다.
         // touch-none: 막대 위에서는 브라우저 기본 스크롤을 막아야 드래그가 목록 스크롤로 새지 않는다.
         <div
           ref={indexBarRef}
-          className="absolute right-0.5 top-2 bottom-28 w-7 flex flex-col justify-center gap-px z-10 touch-none select-none"
+          className="absolute left-0.5 top-2 bottom-28 w-7 flex flex-col justify-center gap-px z-10 touch-none select-none"
           onTouchStart={(e) => pickAt(e.touches[0].clientY)}
           onTouchMove={(e) => pickAt(e.touches[0].clientY)}
           onTouchEnd={() => setActiveInitial(null)}
@@ -829,7 +830,7 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
 
       {/* 드래그 중 지금 어느 자음인지 크게 보여준다 — 막대가 얇아 손가락에 가려서 안 보인다. */}
       {activeInitial && (
-        <div className="absolute right-10 top-1/2 -translate-y-1/2 z-20 w-14 h-14 rounded-2xl bg-slate-900/85 text-white flex items-center justify-center text-2xl font-extrabold pointer-events-none">
+        <div className="absolute left-10 top-1/2 -translate-y-1/2 z-20 w-14 h-14 rounded-2xl bg-slate-900/85 text-white flex items-center justify-center text-2xl font-extrabold pointer-events-none">
           {activeInitial}
         </div>
       )}
