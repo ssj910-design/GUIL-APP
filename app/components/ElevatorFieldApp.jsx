@@ -36,18 +36,24 @@ import { AdminTab } from "@/app/components/tabs/AdminTab";
 import { RoomTab } from "@/app/components/tabs/RoomTab";
 
 
+// 폰(390px)에서 스크롤 없이 보이는 건 앞 6개뿐이다. 그래서 순서가 곧 접근성이다.
+// 2026-08-20 재배치 — 근거: ui_events 열람 수(할일관리 30 · 청구 21 · 자재 12로 상위인데
+// 8~9번째라 매번 스크롤해야 했다) + 업무 흐름(자재→청구→할일이 한 체인).
+// 고장접수는 열람 수가 낮게 나왔지만 시연 데이터에 고장 건이 없어서라, 업무 비중대로 앞에 둔다.
+// 검사기준(챗봇)은 진입점을 이 탭 하나로 확정했으므로 반드시 앞 6개 안에 있어야 한다.
 const TABS = [
   { id: "home", label: "홈", icon: Home },
-  { id: "sites", label: "현장정보", icon: Building2 },
   { id: "failure", label: "고장접수", icon: AlertTriangle },
+  { id: "todo", label: "할일관리", icon: ListTodo },
+  { id: "material", label: "자재·견적", icon: Package },
+  { id: "billing", label: "청구", icon: Receipt },
+  { id: "lawqa", label: "검사기준", icon: Bot },
+  // ── 여기부터는 스크롤해야 보인다 (주기적으로만 쓰는 것) ──
+  { id: "sites", label: "현장정보", icon: Building2 },
   { id: "checkup", label: "자체점검", icon: CalendarCheck },
   { id: "inspection", label: "검사관리", icon: ShieldCheck },
-  { id: "material", label: "자재·견적", icon: Package },
   { id: "inventory", label: "재고관리", icon: Boxes },
-  { id: "billing", label: "청구", icon: Receipt },
-  { id: "todo", label: "할일관리", icon: ListTodo },
   { id: "workcalendar", label: "워크캘린더", icon: CalendarClock },
-  { id: "lawqa", label: "검사기준", icon: Bot },
   // 관리자 모드는 하단 탭에서 제외 — 관리자 전용 퀵버튼(게시판 FAB 위)으로만 진입
 ];
 
@@ -147,6 +153,9 @@ export default function App() {
   }, []);
   // 숨길 때 없애지 않고 투명하게만 만든다 — 사라졌다 나타나면 위치를 다시 찾아야 한다.
   const fabHide = scrolling ? "opacity-0 translate-x-4 pointer-events-none" : "opacity-100 translate-x-0";
+  // 고장접수 접수등록에는 하단 고정 [이전/다음] 바가 있어 플로팅이 그 버튼을 덮었다.
+  // 그 탭에서는 바 높이만큼 위로 올린다 — 탭 전체에서 숨기면 게시판으로 갈 방법이 없어진다.
+  const overCta = tab === "failure";
   const [siteManagers, setSiteManagers] = useState([]);
   const [failures, setFailures] = useState([]);
   const [inspections, setInspections] = useState([]);
@@ -2617,7 +2626,7 @@ export default function App() {
           <button
             onClick={() => setTab("room")}
             aria-label="게시판 열기"
-            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95 bottom-20 transition-all duration-200 ${fabHide}`}
+            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95 transition-all duration-200 ${overCta ? "bottom-36" : "bottom-20"} ${fabHide}`}
           >
             <MessagesSquare size={22} />
             {unreadPosts.length > 0 && (
@@ -2638,7 +2647,7 @@ export default function App() {
           <button
             onClick={() => setTab("admin")}
             aria-label="관리자 모드 열기"
-            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-slate-800 text-white shadow-lg flex items-center justify-center active:scale-95 transition-all duration-200 ${tab === "room" ? "bottom-40" : "bottom-36"} ${fabHide}`}
+            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-slate-800 text-white shadow-lg flex items-center justify-center active:scale-95 transition-all duration-200 ${overCta ? "bottom-52" : tab === "room" ? "bottom-40" : "bottom-36"} ${fabHide}`}
           >
             <Settings size={22} />
           </button>
