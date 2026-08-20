@@ -12,6 +12,7 @@ import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls, ReassignModa
 import { FailureDetailContent } from "@/app/components/admin/Dashboard";
 import { EngineerLocationMap } from "@/app/components/admin/EngineerLocationMap";
 import { LOCATION_TRACKING } from "@/lib/features";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 import { useHolidays } from "@/app/hooks/useHolidays";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
@@ -225,8 +226,16 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
     setForm((f) => ({ ...f, unitIds: f.unitIds.includes(id) ? f.unitIds.filter((x) => x !== id) : [...f.unitIds, id] }));
   }
 
+  // 모바일 접수(FailureTab.jsx)와 동일한 방식 — 시스템이 자동으로 막지 않고, 선택한 호기에
+  // 이미 처리 중(미처리·진행중)인 고장이 있으면 목록을 보여주고 관리자가 직접 판단해 접수한다.
   async function submit() {
     if (!valid) return;
+    const targetUnitNos = form.unitIds.map((id) => siteUnits.find((u) => u.id === id)?.unitNo).filter(Boolean);
+    const openExisting = failures.filter((f) => f.siteId === site.id && targetUnitNos.includes(f.elevatorNo) && f.status !== "완료");
+    if (openExisting.length > 0) {
+      const lines = openExisting.map((f) => `${f.elevatorNo ?? "호기 미상"} · ${f.errorCode} (${f.status}${f.assignee ? " · " + f.assignee : ""})`).join("\n");
+      if (!(await confirmAsync(`선택한 호기에 이미 처리 중인 고장 신고가 있습니다. 중복 접수가 아닌지 확인해주세요.\n\n${lines}\n\n그래도 접수할까요?`))) return;
+    }
     setSaving(true);
     await onCreate(form);
     setSaving(false);

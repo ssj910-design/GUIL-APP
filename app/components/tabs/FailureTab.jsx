@@ -37,6 +37,32 @@ function useAssignableEngineers() {
   };
 }
 
+// 중복 접수 경고 — 자재신청의 DuplicateWarningSheet(MaterialTab.jsx)와 같은 방식: 시스템이
+// 자동으로 막지 않고, 그 호기에 이미 처리 중(미처리·진행중)인 고장이 있으면 보여줘서
+// 신고자가 직접 보고 판단·접수하게 한다.
+function DuplicateFailureWarningSheet({ items, onCancel, onConfirm }) {
+  return (
+    <Sheet title="중복 접수 확인" onClose={onCancel}>
+      <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5 mb-3">
+        선택한 호기에 이미 처리 중인 고장 신고가 있습니다. 중복 접수가 아닌지 확인 후 접수해주세요.
+      </p>
+      <div className="space-y-2 mb-4 max-h-[50vh] overflow-y-auto">
+        {items.map((f) => (
+          <div key={f.id} className="border border-slate-200 rounded-xl px-3 py-2.5">
+            <p className="text-sm font-bold text-slate-800">{formatUnitLabel(f.elevatorNo) || "호기 미상"} · {f.errorCode}</p>
+            <p className="text-[11px] text-amber-600 font-semibold mt-0.5">{f.status}{f.assignee ? ` · ${f.assignee}` : " · 미배정"}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">{f.reportedAt} 접수</p>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <button onClick={onCancel} className="flex-1 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl py-3">취소</button>
+        <button onClick={onConfirm} className="flex-1 text-sm font-bold text-white bg-blue-700 rounded-xl py-3">그래도 접수</button>
+      </div>
+    </Sheet>
+  );
+}
+
 function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported, onDispatch }) {
   const sites = useContext(SitesContext);
   const units = useContext(UnitsContext);
@@ -49,6 +75,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
   const [form, setForm] = useState({
     siteId: "", units: [], faultType: "", faultDetail: "", details: {}, notFault: false, assignee: defaultAssignee(), eta: "", reporterPhone: "", sendSms: false, reportNote: "",
   });
+  const [dupWarning, setDupWarning] = useState(null); // { items } — 중복 접수 경고
   const [step, setStep] = useState(0); // 스텝형 접수 (0~3)
   const [driveMin, setDriveMin] = useState(null); // T맵 예상 소요시간(분) — 출동응답과 동일하게 여기서도 보여준다
   const [driveLoading, setDriveLoading] = useState(false);
@@ -81,8 +108,19 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
     return () => { cancelled = true; };
   }, [selfDispatching, selfLoc?.last_lat, selfLoc?.last_lng, site?.lat, site?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 접수 버튼 — 선택한 호기 중 이미 처리 중(미처리·진행중)인 고장이 있으면 먼저 경고를
+  // 보여주고, 그래도 접수를 누르거나 해당 없으면 바로 submit()으로 진행한다.
+  function handleSubmitClick() {
+    if (!canSubmit) return;
+    const targets = form.units.length ? form.units : [site.elevatorNo];
+    const openExisting = failures.filter((f) => f.siteId === site.id && targets.includes(f.elevatorNo) && f.status !== "완료");
+    if (openExisting.length > 0) { setDupWarning({ items: openExisting }); return; }
+    submit();
+  }
+
   async function submit() {
     if (!canSubmit) return;
+    setDupWarning(null);
     // 선택한 호기마다 접수 1건씩 생성 (처리·배정이 호기 단위라 데이터도 호기별로 쪼갠다)
     const targets = form.units.length ? form.units : [site.elevatorNo];
     const stamp = Date.now();
@@ -417,9 +455,17 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
             다음
           </button>
         ) : (
-          <div className="flex-1"><PrimaryButton onClick={submit} disabled={!canSubmit}>접수완료{form.units.length > 1 ? ` (${form.units.length}건 등록)` : ""}</PrimaryButton></div>
+          <div className="flex-1"><PrimaryButton onClick={handleSubmitClick} disabled={!canSubmit}>접수완료{form.units.length > 1 ? ` (${form.units.length}건 등록)` : ""}</PrimaryButton></div>
         )}
       </div>
+
+      {dupWarning && (
+        <DuplicateFailureWarningSheet
+          items={dupWarning.items}
+          onCancel={() => setDupWarning(null)}
+          onConfirm={submit}
+        />
+      )}
     </div>
   );
 }
