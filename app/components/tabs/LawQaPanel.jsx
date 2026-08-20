@@ -10,7 +10,7 @@
 // 문장은 위험하다 — 기사가 잘못된 기준으로 검사하면 사고로 이어진다. 서버(app/api/law-qa)도
 // 검색된 조항 밖의 내용은 답하지 않도록 막아뒀다.
 import { useState, useRef, useEffect } from "react";
-import { Search, ExternalLink, Copy, Check, ThumbsUp, ThumbsDown, History, X, Trash2, CornerDownRight } from "lucide-react";
+import { Search, ExternalLink, Copy, Check, ThumbsUp, ThumbsDown, History, X, Trash2, CornerDownRight, RotateCcw } from "lucide-react";
 import { SUGGESTIONS, EXAMPLES } from "@/lib/lawQaSuggestions";
 import { AnswerMarkdown } from "@/lib/answerMarkdown";
 import { addHistory, getHistory, clearHistory } from "@/lib/lawQaHistory";
@@ -45,7 +45,9 @@ export function LawQaPanel({ entryPoint = "tab" }) {
       const res = await fetch("/api/law-qa", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: text, entryPoint }),
+        // 앞선 문답을 같이 보낸다 — "그럼 18년 이전은?" 같은 꼬리 질문은 이게 없으면 무슨 말인지 알 수 없다.
+        // 서버가 뒤 2턴만 쓴다(더 넣으면 지나간 주제에 끌려간다).
+        body: JSON.stringify({ question: text, entryPoint, history: historyPairs(log) }),
       });
       const data = await res.json().catch(() => ({}));
       // 기록은 기기에만 남긴다 (서버는 익명) — lib/lawQaHistory.js
@@ -57,6 +59,17 @@ export function LawQaPanel({ entryPoint = "tab" }) {
       setLog((L) => [...L, { role: "bot", text: `오류: ${e.message}`, sources: [] }]);
     }
     setBusy(false);
+  }
+
+  // 화면 로그(user/bot 번갈아)를 {q, a} 쌍으로 — 서버가 맥락을 읽는 데 쓴다.
+  function historyPairs(entries) {
+    const out = [];
+    for (let i = 0; i < entries.length - 1; i++) {
+      if (entries[i].role === "user" && entries[i + 1]?.role === "bot") {
+        out.push({ q: entries[i].text, a: entries[i + 1].text });
+      }
+    }
+    return out.slice(-2);
   }
 
   // 평가는 조용히 보낸다 — 실패해도 화면에는 눌린 것으로 남긴다(로그가 목적이라 재시도까지 할 일은 아니다).
@@ -74,7 +87,14 @@ export function LawQaPanel({ entryPoint = "tab" }) {
 
   return (
     <div className="relative flex-1 flex flex-col overflow-hidden bg-slate-50">
-      <div className="shrink-0 flex justify-end px-3 pt-2">
+      <div className="shrink-0 flex justify-end items-center gap-1 px-3 pt-2">
+        {log.length > 0 && (
+          // 주제를 바꿀 때 쓴다 — 앞 대화를 물고 가면 엉뚱한 조항을 찾는다.
+          <button type="button" onClick={() => { setLog([]); setRatings({}); setOpenSources({}); }}
+            className="text-[11px] font-bold text-slate-400 flex items-center gap-1 px-2 py-1 active:text-slate-600">
+            <RotateCcw size={12} /> 새 질문
+          </button>
+        )}
         <button type="button" onClick={() => setHistory(getHistory())}
           className="text-[11px] font-bold text-slate-400 flex items-center gap-1 px-2 py-1 active:text-slate-600">
           <History size={12} /> 지난 질문

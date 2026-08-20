@@ -56,13 +56,17 @@ const SYSTEM_PROMPT = `너는 승강기 유지보수 기사를 돕는 검사기�
 const KEYWORD_SCHEMA = {
   type: "object",
   properties: {
+    // 꼬리 질문("그럼 18년 이전은?")을 혼자서도 뜻이 통하는 문장으로 바꾼 것.
+    // 키워드 검색뿐 아니라 **임베딩 검색에도 이걸 쓴다** — 원래 질문 그대로 임베딩하면
+    // 맥락이 빠져 엉뚱한 조항이 가까워진다.
+    rewritten: { type: "string", description: "앞 대화를 합쳐 혼자서도 뜻이 통하게 고친 질문. 고칠 게 없으면 원문 그대로" },
     keywords: {
       type: "array",
       items: { type: "string" },
       description: "법령 원문에 그대로 등장할 단일 용어 2~4개",
     },
   },
-  required: ["keywords"],
+  required: ["rewritten", "keywords"],
   additionalProperties: false,
 };
 
@@ -121,7 +125,9 @@ export async function POST(request) {
     return Response.json({ ok: false, reason: "OPENAI_API_KEY 미설정" }, { status: 200 });
   }
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const { question, entryPoint } = await request.json().catch(() => ({}));
+  // history: 직전 문답 몇 개 [{q, a}] — 꼬리 무는 질문("그럼 18년 이전은?")을 이해하는 데 쓴다.
+  const { question, entryPoint, history } = await request.json().catch(() => ({}));
+  const prev = Array.isArray(history) ? history.slice(-2) : [];   // 2턴이면 충분하고, 더 넣으면 옛 주제에 끌려간다
   const q = (question ?? "").trim();
   if (!q) return Response.json({ ok: false, reason: "질문을 입력해주세요" }, { status: 200 });
 
@@ -129,15 +135,39 @@ export async function POST(request) {
   const usage = { in: 0, out: 0, embed: 0 };
 
   // 1) 구어체 질문에서 법령 용어를 뽑는다 ("문이 안 닫혀요" → 승강장문, 닫힘)
+  //    꼬리 질문이면 앞 대화를 합쳐 질문 자체도 다시 쓴다(searchQuery).
   let keywords = [];
+  let searchQuery = q;
   try {
     const res = await client.chat.completions.create({
       model: MODEL,
-      max_completion_tokens: 200,
+      max_completion_tokens: 300,
+      // 검색어 추출은 **매번 같은 답이 나와야 하는 작업**이다. 기본 온도로 뒀더니 같은 꼬리 질문에
+      // 앞 주제를 넣었다 뺐다 해서 검색 결과가 들쭉날쭉했다.
+      temperature: 0,
       response_format: { type: "json_schema", json_schema: { name: "keywords", schema: KEYWORD_SCHEMA, strict: true } },
       messages: [{
         role: "user",
-        content: `승강기 법령·안전기준 원문을 검색하려 한다. 아래 질문에서 검색어를 뽑아줘.
+        content: `${prev.length ? `[앞선 대화]
+${prev.map((h, i) => `Q${i + 1}. ${h.q}\nA${i + 1}. ${String(h.a ?? "").replace(/\s+/g, " ").slice(0, 160)}…`).join("\n")}
+
+` : ""}[이번 질문]
+"${q}"
+
+승강기 법령·안전기준 원문을 검색하려 한다. 두 가지를 순서대로 해라.
+
+## 작업 1 — rewritten: 혼자서도 뜻이 통하는 질문으로 고친다
+${prev.length ? `판단 기준은 하나다 — **"무엇의" 기준·주기·방법인지가 이번 질문에 적혀 있는가?**
+- 빠져 있으면 앞 대화의 주제를 합쳐 채워라. (이어받는 질문이다)
+- 적혀 있으면 원문 그대로 둬라. (주제가 바뀐 것이다)
+
+예) 앞: "승강장문 이탈방지장치 설치 기준" / 이번: "18년도 이전 설치 승강기 기준은?"
+    → 무엇의 기준인지 빠졌다 → "2018년 이전 설치 승강기의 승강장문 이탈방지장치 기준"
+예) 앞: "승강장문 이탈방지장치 설치 기준" / 이번: "정기검사 주기는?"
+    → 그 자체로 완결이다 → "정기검사 주기는?" (그대로)` : "앞선 대화가 없으므로 원문 그대로 둔다."}
+
+## 작업 2 — keywords: **rewritten에서** 검색어를 뽑는다
+반드시 작업 1의 결과를 기준으로 뽑아라. 이번 질문 원문이 아니다.
 
 규칙:
 1) 각 항목은 띄어쓰기 없는 단일 용어. 구(句)를 넣으면 원문과 안 맞아 0건이 된다.
@@ -153,14 +183,16 @@ export async function POST(request) {
 예) "정기검사 주기는 몇 년인가요" → ["정기검사", "주기"]
 예) "자체점검 결과 제출 기한" → ["자체점검", "제출", "기한"]   ← "제출기한"으로 붙이면 안 된다
 예) "장애인용 도어대기타임" → ["장애인", "대기"]
-    ← 외래어를 법령어로(도어대기타임 → 대기), 흔한 말(문·시간)은 뺀다. 핵심은 "장애인"과 "대기"다.
-
-질문: "${q}"`,
+    ← 외래어를 법령어로(도어대기타임 → 대기), 흔한 말(문·시간)은 뺀다
+예) "2018년 이전 설치 승강기의 승강장문 이탈방지장치 기준" → ["승강장문", "이탈방지", "2018"]
+    ← 연도는 그대로 쓴다. "설치"는 규칙 4에 걸리므로 뺀다`,
       }],
     });
     usage.in += res.usage?.prompt_tokens ?? 0;
     usage.out += res.usage?.completion_tokens ?? 0;
-    keywords = JSON.parse(res.choices[0]?.message?.content ?? "{}").keywords ?? [];
+    const parsed = JSON.parse(res.choices[0]?.message?.content ?? "{}");
+    keywords = parsed.keywords ?? [];
+    if (parsed.rewritten?.trim()) searchQuery = parsed.rewritten.trim();
   } catch {
     keywords = q.split(/\s+/).filter((w) => w.length > 1).slice(0, 3); // AI 실패 시 단순 분리
   }
@@ -176,7 +208,8 @@ export async function POST(request) {
   // 검색이 통째로 죽는 것보다 낫고, 임베딩을 적재하는 중에도 앱은 계속 돌아야 한다.
   let queryEmbedding = null;
   try {
-    const emb = await client.embeddings.create({ model: "text-embedding-3-small", input: q });
+    // 원문(q)이 아니라 다시 쓴 질문으로 임베딩한다 — 꼬리 질문은 원문만으로는 맥락이 없다.
+    const emb = await client.embeddings.create({ model: "text-embedding-3-small", input: searchQuery });
     usage.embed += emb.usage?.total_tokens ?? 0;
     queryEmbedding = emb.data[0].embedding;
   } catch (e) {
@@ -231,7 +264,7 @@ export async function POST(request) {
       content: SYSTEM_PROMPT,
     }, {
       role: "user",
-      content: `질문: ${q}\n\n근거 자료:\n\n${buildContext(rows)}`,
+      content: `${prev.length ? `[앞선 대화]\n${prev.map((h) => `- ${h.q}`).join("\n")}\n\n` : ""}질문: ${q}\n\n근거 자료:\n\n${buildContext(rows)}`,
     }],
   });
 
