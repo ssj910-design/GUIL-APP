@@ -809,7 +809,6 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
               <span className="text-[10px] font-extrabold text-emerald-300 tracking-wide">LIVE</span>
             </div>
           </div>
-          <p className="px-4 pt-2.5 text-[10px] text-slate-400">국가승강기정보센터(행정안전부) Open API 연동 · 담당 현장 승강기 고유번호 기준 실시간 조회</p>
 
           <div className="px-4 pt-3 pb-3.5">
             <p className="text-xs font-bold text-blue-700 mb-2 flex items-center gap-1.5">
@@ -885,11 +884,11 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
             )}
           </div>
 
-          <p className="px-4 pb-3 text-[9.5px] text-slate-300">
-            {liveInspections.length > 0
-              ? "* 승강기고유번호가 등록된 현장은 국가승강기정보센터 실시간 데이터, 나머지는 수기입력 데이터입니다"
-              : "* 프로토타입 시연용 시뮬레이션 데이터입니다 (현장정보에서 승강기고유번호를 등록하면 실시간 데이터로 전환됩니다)"}
-          </p>
+          {liveInspections.length > 0 && (
+            <p className="px-4 pb-3 text-[9.5px] text-slate-300">
+              * 승강기고유번호가 등록된 현장은 국가승강기정보센터 실시간 데이터, 나머지는 수기입력 데이터입니다
+            </p>
+          )}
         </div>
       </div>
 
