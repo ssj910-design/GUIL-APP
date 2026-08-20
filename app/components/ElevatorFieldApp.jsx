@@ -146,13 +146,19 @@ export default function App() {
     const onScroll = () => {
       setScrolling(true);
       clearTimeout(timer);
-      timer = setTimeout(() => setScrolling(false), 400);   // 손을 멈추면 곧 돌아온다
+      // 800ms를 기다린다. 400ms로 뒀더니 **관성 스크롤 중에 깜빡였다** — 손을 뗀 뒤에도
+      // 스크롤 이벤트가 띄엄띄엄 오는데, 그 간격이 임계값을 넘나들면 버튼이 나타나다
+      // 다시 숨기를 반복한다(특히 바닥 바운스). 관성이 끝날 때까지 기다리는 편이 낫다.
+      timer = setTimeout(() => setScrolling(false), 800);
     };
     document.addEventListener("scroll", onScroll, true);
     return () => { document.removeEventListener("scroll", onScroll, true); clearTimeout(timer); };
   }, []);
-  // 숨길 때 없애지 않고 투명하게만 만든다 — 사라졌다 나타나면 위치를 다시 찾아야 한다.
-  const fabHide = scrolling ? "opacity-0 translate-x-4 pointer-events-none" : "opacity-100 translate-x-0";
+  // 투명도만 바꾼다 — 없애면 위치를 다시 찾아야 하고, 좌우로 움직이면 그 자체가 흔들림으로 보인다.
+  // 돌아올 때(300ms)를 사라질 때(150ms)보다 느리게 해서, 혹시 깜빡여도 눈에 덜 띄게 한다.
+  const fabHide = scrolling
+    ? "opacity-0 pointer-events-none duration-150"
+    : "opacity-100 duration-300";
   // 고장접수 접수등록에는 하단 고정 [이전/다음] 바가 있어 플로팅이 그 버튼을 덮었다.
   // 그 탭에서는 바 높이만큼 위로 올린다 — 탭 전체에서 숨기면 게시판으로 갈 방법이 없어진다.
   const overCta = tab === "failure";
@@ -2626,7 +2632,7 @@ export default function App() {
           <button
             onClick={() => setTab("room")}
             aria-label="게시판 열기"
-            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95 transition-all duration-200 ${overCta ? "bottom-36" : "bottom-20"} ${fabHide}`}
+            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95 transition-opacity ${overCta ? "bottom-36" : "bottom-20"} ${fabHide}`}
           >
             <MessagesSquare size={22} />
             {unreadPosts.length > 0 && (
@@ -2647,7 +2653,7 @@ export default function App() {
           <button
             onClick={() => setTab("admin")}
             aria-label="관리자 모드 열기"
-            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-slate-800 text-white shadow-lg flex items-center justify-center active:scale-95 transition-all duration-200 ${overCta ? "bottom-52" : tab === "room" ? "bottom-40" : "bottom-36"} ${fabHide}`}
+            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-slate-800 text-white shadow-lg flex items-center justify-center active:scale-95 transition-opacity ${overCta ? "bottom-52" : tab === "room" ? "bottom-40" : "bottom-36"} ${fabHide}`}
           >
             <Settings size={22} />
           </button>
