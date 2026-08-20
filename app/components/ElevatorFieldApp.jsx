@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { BRAND } from "@/lib/company";
 import { Home, AlertTriangle, CalendarCheck, CalendarClock, ShieldCheck, Package, Receipt, ListTodo, MessagesSquare, Settings, Bell, Building2, X, UserRound, Boxes, Bot } from "lucide-react";
 import { PullToRefresh } from "@/app/components/PullToRefresh";
-import { supabase, writeOk, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken } from "@/lib/supabaseClient";
+import { supabase, writeOk, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken, onSessionExpired } from "@/lib/supabaseClient";
 import { authFetch } from "@/lib/apiFetch";
 import { mapSite, mergeAssignedEngineers, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode, mapUnitPartPhoto, mapInventoryProduct, mapInventoryStockMovement } from "@/lib/mappers";
 import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent, quoteGrandTotal } from "@/lib/utils";
@@ -776,6 +776,18 @@ export default function App() {
     setSession(null);
     setProfile(null);
   }
+
+  // 로그인 토큰(24시간 만료)이 끊긴 채로 쓰다가 저장을 시도하면 "exp claim..." 같은 알 수 없는
+  // alert만 뜨던 문제(docs/HANDOFF.md) — supabaseClient.js가 만료를 감지해 여기로 알려주면
+  // 바로 로그아웃시키고 이유를 안내한다. skipLogin(로그인 생략) 모드는 토큰 자체가 없어
+  // 해당 없음.
+  useEffect(() => {
+    onSessionExpired(() => {
+      if (skipLogin || !getAuthToken()) return;
+      handleLogout();
+      alert("로그인이 만료되어 자동으로 로그아웃되었습니다. 다시 로그인해주세요.");
+    });
+  }, [skipLogin]);
 
   // 로그인이 완료된 뒤에만 Supabase에서 실제 데이터를 불러옵니다.
   // (예전에는 INITIAL_FAILURES 같은 가짜 배열로 시작했지만, 이제는 DB가 기준입니다)

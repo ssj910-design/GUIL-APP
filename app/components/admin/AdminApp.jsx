@@ -6,7 +6,7 @@
 import { useState, useEffect } from "react";
 import { BRAND } from "@/lib/company";
 import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, CalendarCheck, Users, LayoutDashboard, BarChart3, Menu , Bell, MessageSquare, BookOpen, Boxes } from "lucide-react";
-import { supabase, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken } from "@/lib/supabaseClient";
+import { supabase, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken, onSessionExpired } from "@/lib/supabaseClient";
 import {
   mapSite, mergeAssignedEngineers, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest,
   mapTodo, mapQuoteRequest, mapBilling, mapUnit, mapSelfCheck, mapSelfCheckItem, mapFeedPost, mapRestockRequest, mapErrorCode, mapUnitPartPhoto,
@@ -143,6 +143,17 @@ export default function AdminApp() {
   }
 
   function adminLogout() { localStorage.removeItem("guilAuthV1"); clearAuthToken(); setMe(null); }
+
+  // 로그인 토큰(24시간 만료)이 끊긴 채로 쓰다가 저장을 시도하면 "exp claim..." 같은 알 수 없는
+  // alert만 뜨던 문제(docs/HANDOFF.md) — supabaseClient.js가 만료를 감지해 여기로 알려주면
+  // 바로 로그아웃시키고 이유를 안내한다. SKIP_LOGIN(로그인 생략) 모드는 토큰 자체가 없어 해당 없음.
+  useEffect(() => {
+    onSessionExpired(() => {
+      if (SKIP_LOGIN || !getAuthToken()) return;
+      adminLogout();
+      alert("로그인이 만료되어 자동으로 로그아웃되었습니다. 다시 로그인해주세요.");
+    });
+  }, []);
 
   // 관리자 알림(연차 신청·계약 만료·출근 미체크 요약) 푸시 딥링크 — 모바일 App 셸의
   // checkOpenParams와 같은 패턴. 알림이 이미 떠 있는 창을 재사용(navigate)할 수도 있어
