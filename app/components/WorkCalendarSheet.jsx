@@ -2,7 +2,7 @@
 
 // 워크캘린더 — 홈 탭 "워크캘린더" 버튼 진입점. 정기점검 탭과 같은 구조로 위에 큰 제목,
 // 아래 서브탭(당직·숙직/연차)을 둔다(계획/처리/달력 서브탭과 동일한 패턴).
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext, useMemo } from "react";
 import { ChevronLeft, ChevronRight, Plus, Plane } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { AuthContext } from "@/app/components/context";
@@ -458,12 +458,18 @@ export function WorkCalendarSheet({ schedules, swaps, onSetPerson, onRequestSwap
   // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 자재담당자도 기사와 동일하게 근무표에
   // 들어간다. 공용 engineers/engineerNames(GPS·근태 등에도 쓰임)는 그대로 두고 여기서만 합쳐 내려준다.
   const outerAuth = useContext(AuthContext);
-  const materialStaff = (outerAuth.profiles ?? []).filter((p) => p.role === "admin" && p.admin_tier === "material" && p.is_active !== false);
-  const authWithMaterial = {
-    ...outerAuth,
-    engineers: [...outerAuth.engineers, ...materialStaff],
-    engineerNames: [...outerAuth.engineerNames, ...materialStaff.map((p) => p.name)],
-  };
+  // useMemo가 필요하다 — 이 객체를 Context value로 내려주는데, 매 렌더마다 새로 만들면 참조가
+  // 바뀌어 아래 트리 전체가 다시 그려진다. 스크롤 중 화면이 튀던 원인 중 하나였다.
+  const authWithMaterial = useMemo(() => {
+    const materialStaff = (outerAuth.profiles ?? []).filter(
+      (p) => p.role === "admin" && p.admin_tier === "material" && p.is_active !== false
+    );
+    return {
+      ...outerAuth,
+      engineers: [...outerAuth.engineers, ...materialStaff],
+      engineerNames: [...outerAuth.engineerNames, ...materialStaff.map((p) => p.name)],
+    };
+  }, [outerAuth]);
   const subTabs = ["당직·숙직", "연차"];
   const swipe = useSwipeSubtab(subTabs, subTab, setSubTab);
 

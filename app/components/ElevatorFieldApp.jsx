@@ -137,30 +137,32 @@ export default function App() {
   const [todayLeaves, setTodayLeaves] = useState([]); // 오늘 휴가 중인 사람 (배정 차단용)
   const [myPageOpen, setMyPageOpen] = useState(false);
 
-  // 플로팅 버튼은 본문 위에 떠 있어서 글자를 가린다. **스크롤하는 동안에는 비켜준다.**
-  // scroll 이벤트는 버블링되지 않으므로 캡처 단계로 받아야 한다 — 탭마다 자기 스크롤 컨테이너를
+  // 플로팅 버튼은 본문 위에 떠 있어서 글자를 가린다. 스크롤하는 동안에는 흐리게 비켜준다.
+  //
+  // ⚠️ **state를 쓰지 않고 DOM을 직접 만진다.** 여기서 setState를 하면 스크롤할 때마다 앱 전체가
+  // 다시 그려지는데, 워크캘린더처럼 무거운 화면에서는 그게 "스크롤 중 화면이 튀는" 증상으로
+  // 나타났다(실제 제보). 버튼 두 개의 투명도를 바꾸자고 트리 전체를 리렌더할 이유가 없다.
+  //
+  // scroll 이벤트는 버블링되지 않으므로 캡처 단계로 받는다 — 탭마다 자기 스크롤 컨테이너를
   // 따로 갖고 있어서(PullToRefresh 주석 참고) 어느 하나에 붙일 수가 없다.
-  const [scrolling, setScrolling] = useState(false);
   useEffect(() => {
     let timer;
+    const setDim = (dim) => {
+      for (const el of document.querySelectorAll("[data-fab]")) {
+        el.style.opacity = dim ? "0.25" : "1";
+        el.style.pointerEvents = dim ? "none" : "";
+        el.style.transitionDuration = dim ? "150ms" : "400ms";   // 돌아올 때를 느리게 — 깜빡여도 덜 띈다
+      }
+    };
     const onScroll = () => {
-      setScrolling(true);
+      setDim(true);
       clearTimeout(timer);
-      // 800ms를 기다린다. 400ms로 뒀더니 **관성 스크롤 중에 깜빡였다** — 손을 뗀 뒤에도
-      // 스크롤 이벤트가 띄엄띄엄 오는데, 그 간격이 임계값을 넘나들면 버튼이 나타나다
-      // 다시 숨기를 반복한다(특히 바닥 바운스). 관성이 끝날 때까지 기다리는 편이 낫다.
-      timer = setTimeout(() => setScrolling(false), 800);
+      // 800ms를 기다린다. 짧게 두면 관성 스크롤 중 이벤트 간격이 임계값을 넘나들며 깜빡인다.
+      timer = setTimeout(() => setDim(false), 800);
     };
     document.addEventListener("scroll", onScroll, true);
     return () => { document.removeEventListener("scroll", onScroll, true); clearTimeout(timer); };
   }, []);
-  // **완전히 숨기지 않고 흐리게만 만든다.** 0으로 지웠더니 폰의 관성·바운스 스크롤에서
-  // 나타났다 사라지는 깜빡임이 남았다(이벤트가 불규칙하게 오는 걸 타이머로 완전히 막을 수는 없다).
-  // 흐린 상태로 두면 깜빡여도 눈에 띄지 않으면서, 가려진 글자도 비쳐 보인다.
-  // 돌아올 때(400ms)를 흐려질 때(150ms)보다 느리게 해서 변화를 더 부드럽게 만든다.
-  const fabHide = scrolling
-    ? "opacity-25 pointer-events-none duration-150"
-    : "opacity-100 duration-[400ms]";
   // 고장접수 접수등록에는 하단 고정 [이전/다음] 바가 있어 플로팅이 그 버튼을 덮었다.
   // 그 탭에서는 바 높이만큼 위로 올린다 — 탭 전체에서 숨기면 게시판으로 갈 방법이 없어진다.
   const overCta = tab === "failure";
@@ -2634,7 +2636,8 @@ export default function App() {
           <button
             onClick={() => setTab("room")}
             aria-label="게시판 열기"
-            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95 transition-opacity ${overCta ? "bottom-36" : "bottom-20"} ${fabHide}`}
+            data-fab
+            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95 transition-opacity ${overCta ? "bottom-36" : "bottom-20"}`}
           >
             <MessagesSquare size={22} />
             {unreadPosts.length > 0 && (
@@ -2655,7 +2658,8 @@ export default function App() {
           <button
             onClick={() => setTab("admin")}
             aria-label="관리자 모드 열기"
-            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-slate-800 text-white shadow-lg flex items-center justify-center active:scale-95 transition-opacity ${overCta ? "bottom-52" : tab === "room" ? "bottom-40" : "bottom-36"} ${fabHide}`}
+            data-fab
+            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-slate-800 text-white shadow-lg flex items-center justify-center active:scale-95 transition-opacity ${overCta ? "bottom-52" : tab === "room" ? "bottom-40" : "bottom-36"}`}
           >
             <Settings size={22} />
           </button>
