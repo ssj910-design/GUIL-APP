@@ -180,12 +180,13 @@ export default function InspectionsAdmin({ data, setData }) {
       .map((i) => ({ ...i, isLive: false, manualId: i.id, apiDueDate: null })),
   ];
 
-  // "현장 · 호기(승강기고유번호)" — 예: "스카이빌 · 1호기(0059631)". 승강기고유번호는
-  // units 테이블(v2 FK)을 우선 쓰고, 없으면 실시간 연동 행이 이미 들고 있는 govElevatorNo로 폴백.
+  // "현장 · 호기(승강기고유번호) · 승강기종류" — 예: "스카이빌 · 1호기(0059631) · 승객용".
+  // 승강기고유번호는 units 테이블(v2 FK)을 우선 쓰고, 없으면 실시간 연동 행이 이미 들고 있는
+  // govElevatorNo로 폴백. 승강기종류(kind)는 units에만 있어 매칭되는 호기가 있을 때만 붙는다.
   const withUnitLabel = combined.map((i) => {
     const u = units.find((x) => x.id === i.unitId);
     const govNo = u?.govNo ?? i.govElevatorNo ?? null;
-    const unitLabel = (u?.unitNo ?? i.elevatorNo ?? "-") + (govNo ? `(${govNo})` : "");
+    const unitLabel = (u?.unitNo ?? i.elevatorNo ?? "-") + (govNo ? `(${govNo})` : "") + (u?.kind ? ` · ${u.kind}` : "");
     return { ...i, unitLabel, daysLeft: daysLeftOf(i.dueDate, TODAY_STR) };
   });
 
