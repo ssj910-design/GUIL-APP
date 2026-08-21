@@ -180,9 +180,13 @@ export default function InspectionsAdmin({ data, setData }) {
       .map((i) => ({ ...i, isLive: false, manualId: i.id, apiDueDate: null })),
   ];
 
+  // "현장 · 호기(승강기고유번호)" — 예: "스카이빌 · 1호기(0059631)". 승강기고유번호는
+  // units 테이블(v2 FK)을 우선 쓰고, 없으면 실시간 연동 행이 이미 들고 있는 govElevatorNo로 폴백.
   const withUnitLabel = combined.map((i) => {
     const u = units.find((x) => x.id === i.unitId);
-    return { ...i, unitLabel: u?.unitNo ?? i.elevatorNo ?? "-", daysLeft: daysLeftOf(i.dueDate, TODAY_STR) };
+    const govNo = u?.govNo ?? i.govElevatorNo ?? null;
+    const unitLabel = (u?.unitNo ?? i.elevatorNo ?? "-") + (govNo ? `(${govNo})` : "");
+    return { ...i, unitLabel, daysLeft: daysLeftOf(i.dueDate, TODAY_STR) };
   });
 
   const flagged = withUnitLabel.filter((i) => i.result === "conditional" || i.result === "fail");
@@ -272,7 +276,7 @@ export default function InspectionsAdmin({ data, setData }) {
           <table className="w-full min-w-[54rem] text-sm">
             <thead>
               <tr className="text-xs text-slate-400 border-b border-slate-100">
-                <SortableTh label="현장 · 호기" sortKey="loc" sort={sort} setSort={setSort} className="pl-5" />
+                <SortableTh label="현장 · 호기(승강기번호)" sortKey="loc" sort={sort} setSort={setSort} className="pl-5" />
                 <th className="px-3 py-2.5 font-semibold text-left">주소</th>
                 <SortableTh label="담당자" sortKey="person" sort={sort} setSort={setSort} />
                 <th className="px-3 py-2.5 font-semibold text-left">검사종류</th>
@@ -289,7 +293,7 @@ export default function InspectionsAdmin({ data, setData }) {
           </table>
         </div>
       ) : (
-        <AdminTable head={["현장 · 호기", "종류", "기한(수기입력)", "D-day", "결과", "비고", ""]}>
+        <AdminTable head={["현장 · 호기(승강기번호)", "종류", "기한(수기입력)", "D-day", "결과", "비고", ""]}>
           {rows.map((i) => {
             const clickable = i.isLive && (i.result === "conditional" || i.result === "fail");
             return <InspectionRow key={i.id} i={i} onSaveDueDate={saveDueDate} onOpenFail={setFailTarget} clickable={clickable} />;
