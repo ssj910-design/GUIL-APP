@@ -77,6 +77,34 @@ export function lastSentDate(q) {
   return shortDate(latest.sentAt.slice(0, 10));
 }
 
+// 발송 이력을 화면이 쓰기 좋은 데이터로 — 같은 시각(=한 번의 발송 동작)끼리 묶는다.
+// 상태 판정은 발송 현황 패널과 같은 기준이다: 10분 넘게 결과가 없으면 정상이 아니다.
+export function sentGroups(q) {
+  const log = q?.sendLog ?? q?.send_log ?? [];
+  const groups = new Map();
+  for (const e of log) {
+    if (!groups.has(e.sentAt)) groups.set(e.sentAt, []);
+    groups.get(e.sentAt).push(e);
+  }
+  return Array.from(groups.entries())
+    .sort((a, b) => new Date(b[0]) - new Date(a[0]))
+    .map(([sentAt, entries]) => ({
+      date: shortDate(sentAt.slice(0, 10)),
+      entries: entries.map((e) => {
+        const stale = e.channel === "kakao"
+          && e.status !== "delivered" && e.status !== "failed"
+          && Date.now() - new Date(e.sentAt).getTime() >= 600000;
+        return {
+          ...e,
+          tone: e.status === "delivered" ? "green" : e.status === "failed" || stale ? "red" : "amber",
+          label: e.status === "delivered" ? "발송 완료"
+            : e.status === "failed" ? `발송 거부${e.statusMessage ? ` · ${e.statusMessage}` : ""}`
+            : stale ? "결과 없음" : "확인 중",
+        };
+      }),
+    }));
+}
+
 // 발송 이력(sendLog) 전체를 같은 시각(=같은 발송 동작)끼리 묶어 한 줄씩 —
 // "26.07.28 이메일(a@b.com), 알림톡(010-0000-0000)" 형식. 여러 번 발송했으면 여러 줄.
 export function sentHistory(q) {
@@ -94,10 +122,12 @@ export function sentHistory(q) {
       // status를 함께 보여줘야 미가입·차단으로 못 받은 건을 알아챌 수 있다.
       const parts = entries.map((e) => {
         const name = e.channel === "email" ? "이메일" : "알림톡";
+        // 기호(✓·✗)를 섞으면 작게 보일 때 뭘 뜻하는지 알기 어렵다 — 말로 쓴다.
+        // 배지로 보여줄 수 있는 자리(상세)는 SentHistory 컴포넌트를 쓰고, 여기는 한 줄 요약용이다.
         const mark = e.channel !== "kakao" || !e.status ? ""
-          : e.status === "delivered" ? " ✓수신"
-          : e.status === "failed" ? ` ✗실패(${e.statusMessage ?? "사유미상"})`
-          : " …확인중";
+          : e.status === "delivered" ? " · 발송완료"
+          : e.status === "failed" ? ` · 발송거부(${e.statusMessage ?? "사유미상"})`
+          : " · 확인중";
         return `${name}(${e.target})${mark}`;
       });
       return `${shortDate(sentAt.slice(0, 10))} ${parts.join(", ")}`;
@@ -117,6 +147,34 @@ const TONES = {
 
 export function StatusBadge({ tone = "slate", children }) {
   return <span className={`text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap ${TONES[tone]}`}>{children}</span>;
+}
+
+// 발송 이력 — 날짜별로 한 줄, 채널마다 배지.
+// 예전엔 "알림톡(010-…) ✓수신" 처럼 글자에 기호를 섞어 썼는데, 한 줄에 다 밀어넣으니
+// 성공·실패가 눈에 안 들어왔다. 상태는 색으로, 수단·번호는 글자로 나눈다.
+export function SentHistory({ log }) {
+  const groups = sentGroups(log);
+  if (!groups.length) return <p className="font-semibold text-slate-800">-</p>;
+  return (
+    <div className="space-y-1.5">
+      {groups.map((g, i) => (
+        <div key={i} className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-slate-400 tabular-nums">{g.date}</span>
+          {g.entries.map((e, j) => (
+            <span key={j} className="inline-flex items-center gap-1">
+              <span className="text-xs font-semibold text-slate-700">
+                {e.channel === "email" ? "이메일" : "알림톡"}
+                <span className="ml-1 font-normal text-slate-400">{e.target}</span>
+              </span>
+              {e.channel === "kakao" && (
+                <StatusBadge tone={e.tone}>{e.label}</StatusBadge>
+              )}
+            </span>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function AdminTable({ head, children, minWidth = "48rem" }) {

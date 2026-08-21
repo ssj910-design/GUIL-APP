@@ -13,7 +13,7 @@ import { uploadPhoto } from "@/lib/photos";
 import { unitIdFor, addDays, shortDate, parsePartQty, formatUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { recordQuoteSupplyStockOut } from "@/lib/inventoryStock";
-import { locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid, DateTextInput, lastSentDate, sentHistory, AdminAuthContext } from "@/app/components/admin/adminShared";
+import { locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid, DateTextInput, lastSentDate, SentHistory, AdminAuthContext } from "@/app/components/admin/adminShared";
 import QuoteItemsModal from "@/app/components/admin/QuoteItemsModal";
 import QuoteSendModal from "@/app/components/admin/QuoteSendModal";
 import QuotePdfPreview from "@/app/components/admin/QuotePdfPreview";
@@ -67,7 +67,9 @@ function billingCompleteFor(todos, key, requestId) {
 // 으로 보여준다. 각 단계 밑에는 그 단계에 실제로 도달했을 때의 날짜를 표시한다(교체는 별도
 // 완료일 컬럼이 없어 자재지급일을 그대로 재사용).
 const QUOTE_STAGES = ["요청", "작성", "발송", "승인", "출하", "교체"];
-const QUOTE_STAGE_TONES = { 요청: "red", 작성: "amber", 발송: "purple", 승인: "indigo", 출하: "cyan", 교체: "green" };
+// 단계 색은 **진행 흐름대로** 간다: 빨강(할 일) → 주황(진행) → 파랑(나감) → 남색(확정) → 청록(출하) → 초록(끝).
+// 발송이 보라였는데 흐름에서 혼자 튀어 보였다 — 앞뒤 색과 이어지는 파랑으로 바꿨다.
+const QUOTE_STAGE_TONES = { 요청: "red", 작성: "amber", 발송: "blue", 승인: "indigo", 출하: "cyan", 교체: "green" };
 function quoteStageInfo(q, todos) {
   const billingDone = q.status === "자재지급완료" && billingCompleteFor(todos, "quoteRequestId", q.id);
   const sent = !!(q.emailSentAt || q.kakaoSentAt);
@@ -1202,11 +1204,7 @@ function RequestDetailModal({ target, data, onClose }) {
           <>
             <div>
               <p className="text-xs font-bold text-slate-400 mb-1">발송일</p>
-              {sentHistory(r).length === 0 ? (
-                <p className="font-semibold text-slate-800">-</p>
-              ) : (
-                sentHistory(r).map((line, i) => <p key={i} className="font-semibold text-slate-800">{line}</p>)
-              )}
+              <SentHistory log={r} />
             </div>
             <div>
               <p className="text-xs font-bold text-slate-400 mb-1">진행상태</p>
