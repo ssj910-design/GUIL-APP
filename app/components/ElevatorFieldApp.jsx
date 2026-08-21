@@ -36,24 +36,21 @@ import { AdminTab } from "@/app/components/tabs/AdminTab";
 import { RoomTab } from "@/app/components/tabs/RoomTab";
 
 
-// 폰(390px)에서 스크롤 없이 보이는 건 앞 6개뿐이다. 그래서 순서가 곧 접근성이다.
-// 2026-08-20 재배치 — 근거: ui_events 열람 수(할일관리 30 · 청구 21 · 자재 12로 상위인데
-// 8~9번째라 매번 스크롤해야 했다) + 업무 흐름(자재→청구→할일이 한 체인).
-// 고장접수는 열람 수가 낮게 나왔지만 시연 데이터에 고장 건이 없어서라, 업무 비중대로 앞에 둔다.
-// 검사기준(챗봇)은 진입점을 이 탭 하나로 확정했으므로 반드시 앞 6개 안에 있어야 한다.
+// 원래 순서를 유지한다 — 기사들이 익숙한 자리다. 2026-08-20에 열람 로그를 근거로 재배치했다가
+// "순서가 바뀌었다"는 지적을 받고 되돌렸다. **데이터가 가리키는 최적 배치보다 몸에 익은 자리가
+// 우선**이라는 판단(할일관리·청구가 뒤에 있어도 기사들은 이미 그 위치를 외우고 있다).
+// 챗봇만 새로 끼워 넣었다 — 재고관리 우측, 성격이 달라 배경색으로 구분한다(accent).
 const TABS = [
   { id: "home", label: "홈", icon: Home },
-  { id: "failure", label: "고장접수", icon: AlertTriangle },
-  { id: "todo", label: "할일관리", icon: ListTodo },
-  { id: "material", label: "자재·견적", icon: Package },
-  { id: "billing", label: "청구", icon: Receipt },
-  // ── 여기부터는 스크롤해야 보인다 (주기적으로만 쓰는 것) ──
   { id: "sites", label: "현장정보", icon: Building2 },
+  { id: "failure", label: "고장접수", icon: AlertTriangle },
   { id: "checkup", label: "자체점검", icon: CalendarCheck },
   { id: "inspection", label: "검사관리", icon: ShieldCheck },
+  { id: "material", label: "자재·견적", icon: Package },
   { id: "inventory", label: "재고관리", icon: Boxes },
-  // 챗봇은 성격이 다르다(자료를 다루는 게 아니라 물어보는 곳) — 배경색으로 구분한다(accent).
   { id: "lawqa", label: "챗봇", icon: Bot, accent: true },
+  { id: "billing", label: "청구", icon: Receipt },
+  { id: "todo", label: "할일관리", icon: ListTodo },
   { id: "workcalendar", label: "워크캘린더", icon: CalendarClock },
   // 관리자 모드는 하단 탭에서 제외 — 관리자 전용 퀵버튼(게시판 FAB 위)으로만 진입
 ];
