@@ -38,8 +38,7 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
 
   return (
     <tr className={`border-b border-slate-50 ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`} onClick={clickable ? () => onOpenFail(i) : undefined}>
-      <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{i.siteName} · {i.unitLabel}</td>
-      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{i.govNo || "-"}</td>
+      <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{i.siteName} · {i.unitLabel}{i.govNo ? `(${i.govNo})` : ""}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{i.unitKind || "-"}</td>
       <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
         <select className={`${mobileInputCls} w-24`} value={type} onChange={(e) => setType(e.target.value)}>
@@ -92,8 +91,7 @@ function FlaggedRow({ i, site, isLive }) {
   const reason = hasCached ? i.failReason : live.reason;
   return (
     <tr className="border-b border-slate-50">
-      <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap align-top">{i.siteName} · {i.unitLabel}</td>
-      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap align-top">{i.govNo || "-"}</td>
+      <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap align-top">{i.siteName} · {i.unitLabel}{i.govNo ? `(${i.govNo})` : ""}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap align-top">{i.unitKind || "-"}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap align-top">{addressWithoutSido(site?.address)}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap align-top">{site?.assignedEngineers?.length ? site.assignedEngineers.join(", ") : "미배정"}</td>
@@ -285,8 +283,7 @@ export default function InspectionsAdmin({ data, setData }) {
           <table className="w-full min-w-[54rem] text-sm">
             <thead>
               <tr className="text-xs text-slate-400 border-b border-slate-100">
-                <SortableTh label="현장 · 호기" sortKey="loc" sort={sort} setSort={setSort} className="pl-5" />
-                <th className="px-3 py-2.5 font-semibold text-left">승강기번호</th>
+                <SortableTh label="현장 · 호기(승강기번호)" sortKey="loc" sort={sort} setSort={setSort} className="pl-5" />
                 <th className="px-3 py-2.5 font-semibold text-left">종류</th>
                 <th className="px-3 py-2.5 font-semibold text-left">주소</th>
                 <SortableTh label="담당자" sortKey="person" sort={sort} setSort={setSort} />
@@ -304,7 +301,7 @@ export default function InspectionsAdmin({ data, setData }) {
           </table>
         </div>
       ) : (
-        <AdminTable head={["현장 · 호기", "승강기번호", "종류", "검사종류", "기한(수기입력)", "D-day", "결과", "비고", ""]}>
+        <AdminTable head={["현장 · 호기(승강기번호)", "종류", "검사종류", "기한(수기입력)", "D-day", "결과", "비고", ""]}>
           {rows.map((i) => {
             const clickable = i.isLive && (i.result === "conditional" || i.result === "fail");
             return <InspectionRow key={i.id} i={i} onSaveDueDate={saveDueDate} onOpenFail={setFailTarget} clickable={clickable} />;
