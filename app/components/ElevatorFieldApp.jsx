@@ -47,12 +47,13 @@ const TABS = [
   { id: "todo", label: "할일관리", icon: ListTodo },
   { id: "material", label: "자재·견적", icon: Package },
   { id: "billing", label: "청구", icon: Receipt },
-  { id: "lawqa", label: "검사기준", icon: Bot },
   // ── 여기부터는 스크롤해야 보인다 (주기적으로만 쓰는 것) ──
   { id: "sites", label: "현장정보", icon: Building2 },
   { id: "checkup", label: "자체점검", icon: CalendarCheck },
   { id: "inspection", label: "검사관리", icon: ShieldCheck },
   { id: "inventory", label: "재고관리", icon: Boxes },
+  // 챗봇은 성격이 다르다(자료를 다루는 게 아니라 물어보는 곳) — 배경색으로 구분한다(accent).
+  { id: "lawqa", label: "챗봇", icon: Bot, accent: true },
   { id: "workcalendar", label: "워크캘린더", icon: CalendarClock },
   // 관리자 모드는 하단 탭에서 제외 — 관리자 전용 퀵버튼(게시판 FAB 위)으로만 진입
 ];
@@ -2719,11 +2720,15 @@ export default function App() {
                 <button
                   key={t.id}
                   onClick={() => setTab(t.id)}
-                  className={`flex flex-col items-center justify-center gap-1 py-3 px-2 shrink-0 border-r border-slate-200 last:border-r-0 ${active ? "bg-blue-900" : "bg-transparent"}`}
+                  className={`flex flex-col items-center justify-center gap-1 py-3 px-2 shrink-0 border-r border-slate-200 last:border-r-0 ${
+                    active ? (t.accent ? "bg-indigo-600" : "bg-blue-900") : t.accent ? "bg-indigo-50" : "bg-transparent"
+                  }`}
                   style={{ minWidth: "68px" }}
                 >
-                  <Icon size={19} className={active ? "text-white" : "text-slate-400"} strokeWidth={active ? 2.75 : 2} />
-                  <span className={`text-[10px] leading-tight text-center font-bold ${active ? "text-white" : "text-slate-500"}`}>{t.label}</span>
+                  <Icon size={19} className={active ? "text-white" : t.accent ? "text-indigo-500" : "text-slate-400"} strokeWidth={active ? 2.75 : 2} />
+                  <span className={`text-[10px] leading-tight text-center font-bold ${
+                    active ? "text-white" : t.accent ? "text-indigo-600" : "text-slate-500"
+                  }`}>{t.label}</span>
                 </button>
               );
             })}
