@@ -32,11 +32,11 @@ async function handle(request) {
   const isLastDay = nowKst.getDate() === lastDayOfMonth;
 
   const [{ data: missed }, { data: govFailed }, { data: dueToday }] = await Promise.all([
-    db.from("self_checks").select("id,unit_id,assignee_id").eq("status", "누락").not("assignee_id", "is", null),
-    db.from("self_checks").select("id,unit_id,assignee_id")
-      .eq("status", "완료").not("gov_submitted_at", "is", null).neq("gov_result_code", "000").not("assignee_id", "is", null),
+    db.from("self_checks").select("id,unit_id").eq("status", "누락"),
+    db.from("self_checks").select("id,unit_id")
+      .eq("status", "완료").not("gov_submitted_at", "is", null).neq("gov_result_code", "000"),
     isLastDay
-      ? db.from("self_checks").select("id,unit_id,assignee_id").eq("status", "예정").eq("ym", currentYm).not("assignee_id", "is", null)
+      ? db.from("self_checks").select("id,unit_id").eq("status", "예정").eq("ym", currentYm)
       : Promise.resolve({ data: [] }),
   ]);
   const targets = [...(missed ?? []), ...(govFailed ?? []), ...(dueToday ?? [])];
@@ -45,26 +45,42 @@ async function handle(request) {
   const unitIds = [...new Set(targets.map((r) => r.unit_id))];
   const { data: units } = await db.from("units").select("id,site_id,seq").in("id", unitIds);
   const siteIds = [...new Set((units ?? []).map((u) => u.site_id))];
-  const { data: sites } = await db.from("sites").select("id,name").in("id", siteIds);
+  const [{ data: sites }, { data: assignments }] = await Promise.all([
+    db.from("sites").select("id,name").in("id", siteIds),
+    // 자체점검(self_checks)의 assignee_id는 생성 시점에 리드 담당자 1명으로만 고정돼(생성
+    // 함수 generate_self_checks 참고), 복수담당 현장의 비리드 담당자는 알림을 못 받았다.
+    // is_lead 필터 없이 담당 기사 전원에게 팬아웃한다 (check-inspections와 동일한 방향).
+    db.from("site_assignments").select("site_id,tech_id").in("site_id", siteIds),
+  ]);
   const siteById = new Map((sites ?? []).map((s) => [s.id, s]));
   const unitById = new Map((units ?? []).map((u) => [u.id, u]));
+  const techBySite = new Map();
+  for (const a of assignments ?? []) {
+    if (!techBySite.has(a.site_id)) techBySite.set(a.site_id, []);
+    techBySite.get(a.site_id).push(a.tech_id);
+  }
   const label = (r) => {
     const u = unitById.get(r.unit_id);
     const s = u ? siteById.get(u.site_id) : null;
     return `${s?.name ?? "현장"}${u?.seq ? ` ${u.seq}호기` : ""}`;
   };
 
-  const byAssignee = new Map();
+  const byTech = new Map();
   for (const r of targets) {
-    if (!byAssignee.has(r.assignee_id)) byAssignee.set(r.assignee_id, []);
-    byAssignee.get(r.assignee_id).push(r);
+    const u = unitById.get(r.unit_id);
+    const techIds = u ? techBySite.get(u.site_id) : null;
+    if (!techIds?.length) continue;
+    for (const techId of techIds) {
+      if (!byTech.has(techId)) byTech.set(techId, []);
+      byTech.get(techId).push(r);
+    }
   }
 
   let sent = 0;
-  for (const [assigneeId, list] of byAssignee) {
+  for (const [techId, list] of byTech) {
     const ok = await send({
       key: "selfcheck_pending",
-      profileIds: [assigneeId],
+      profileIds: [techId],
       title: "이번 달 자체점검 미완료",
       body: list.map(label).join(", "),
       url: "/?openCheckup=1",
