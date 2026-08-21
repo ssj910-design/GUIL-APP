@@ -4,7 +4,7 @@
 // 입력이 필요 없는 전환(작성·승인)은 행에서 바로 처리하고, 사진·담당기사·금액처럼
 // 입력이 필요한 전환(자재 지급완료, 견적 자재지급완료)만 모달을 쓴다 (하이브리드 설계 —
 // docs/superpowers/specs/2026-07-21-materials-admin-actions-design.md).
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
@@ -117,8 +117,19 @@ function dayLabel(day) {
 // 발송 한 건 = 한 줄. 패널과 달력 모달이 같은 줄을 쓴다.
 function SendLogRow({ e, onOpen }) {
   const isKakao = e.channel === "kakao";
-  const tone = !isKakao ? "slate" : e.status === "delivered" ? "green" : e.status === "failed" ? "red" : "amber";
-  const label = !isKakao ? "발송됨" : e.status === "delivered" ? "수신 완료" : e.status === "failed" ? "실패" : "확인 중";
+  // "확인 중"이 계속 남아 있으면 이 화면을 만든 이유가 없다. 결과가 나온 건 또렷하게,
+  // 아직 안 나온 건 **얼마나 지났는지**까지 보여줘서 "언제까지 기다려야 하나"를 알 수 있게 한다.
+  // 알림톡은 보통 몇 초~1분이면 결과가 오므로, 10분이 넘으면 정상이 아니다.
+  const mins = Math.floor((Date.now() - new Date(e.sentAt).getTime()) / 60000);
+  const stale = !isKakao ? false : mins >= 10 && e.status !== "delivered" && e.status !== "failed";
+  const tone = !isKakao ? "slate"
+    : e.status === "delivered" ? "green"
+    : e.status === "failed" ? "red"
+    : stale ? "red" : "amber";
+  const label = !isKakao ? "발송됨"
+    : e.status === "delivered" ? "발송 완료"
+    : e.status === "failed" ? "발송 거부"
+    : stale ? "결과 없음" : "확인 중";
   return (
     <button onClick={() => onOpen(e.quote)} className="w-full flex items-center gap-3 px-5 py-2.5 hover:bg-slate-50 text-left">
       <span className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${isKakao ? "bg-yellow-50 text-yellow-700" : "bg-slate-100 text-slate-500"}`}>
@@ -134,6 +145,10 @@ function SendLogRow({ e, onOpen }) {
       {e.status === "failed" && e.statusMessage && (
         <span className="text-[11px] text-red-500 shrink-0 max-w-40 truncate">{e.statusMessage}</span>
       )}
+      {stale && (
+        // 카카오에서 결과가 안 오는 경우다 — 보통 웹훅/조회 설정 문제라 사람이 알아야 한다.
+        <span className="text-[11px] text-red-500 shrink-0">{mins}분째</span>
+      )}
     </button>
   );
 }
@@ -141,8 +156,27 @@ function SendLogRow({ e, onOpen }) {
 function SendStatusPanel({ quotes, onOpen }) {
   const [dayIdx, setDayIdx] = useState(0); // 0 = 오늘, 1 = 어제 — 그 이전은 달력에서만
   const [calOpen, setCalOpen] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [fresh, setFresh] = useState({});   // { quoteId: send_log } — 방금 조회로 갱신된 것
+
+  // 결과가 아직 안 온 건이 있으면 **솔라피에 직접 물어본다**(웹훅을 기다리지 않는다).
+  // 웹훅은 콘솔 설정·토큰에 의존해 조용히 안 올 수 있고, 그러면 "확인 중"만 남아
+  // 이 화면을 만든 이유가 사라진다. 조회는 API 키만 있으면 되니 발송이 되면 조회도 된다.
+  async function refreshStatus() {
+    if (checking) return;
+    setChecking(true);
+    try {
+      const res = await fetch("/api/alimtalk-status", { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (d.updated > 0) setFresh((prev) => ({ ...prev, ...d.changedRows }));
+    } catch { /* 조회 실패는 조용히 — 기존 표시가 남는다 */ }
+    setChecking(false);
+  }
+
+  // 화면에 들어올 때 한 번. 미결 건이 없으면 서버가 바로 0을 돌려주므로 부담이 없다.
+  useEffect(() => { refreshStatus(); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
   const entries = quotes
-    .flatMap((q) => (q.sendLog ?? []).map((e) => ({ ...e, quote: q })))
+    .flatMap((q) => (fresh[q.id] ?? q.sendLog ?? []).map((e) => ({ ...e, quote: q })))
     .sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt));
   if (!entries.length) return null;
 
@@ -176,7 +210,12 @@ function SendStatusPanel({ quotes, onOpen }) {
           <button onClick={() => setDayIdx(Math.max(idx - 1, 0))} disabled={idx <= 0}
             className="w-6 h-6 rounded-lg border border-slate-200 text-slate-500 disabled:opacity-30 flex items-center justify-center">›</button>
         </div>
-        <button onClick={() => setCalOpen(true)} className="text-[11px] font-bold text-blue-700">달력으로 보기</button>
+        <div className="flex items-center gap-2.5">
+          <button onClick={refreshStatus} disabled={checking} className="text-[11px] font-bold text-slate-400 disabled:opacity-50 hover:text-blue-700">
+            {checking ? "확인 중…" : "결과 새로고침"}
+          </button>
+          <button onClick={() => setCalOpen(true)} className="text-[11px] font-bold text-blue-700">달력으로 보기</button>
+        </div>
       </div>
       <div className="divide-y divide-slate-50">
         {list.length === 0
