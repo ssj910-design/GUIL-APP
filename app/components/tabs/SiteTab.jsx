@@ -1,7 +1,7 @@
-import React, { useState, useContext, useRef } from "react";
+import React, { useState, useContext } from "react";
 import { createPortal } from "react-dom";
 import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Download, KeyRound, ChevronDown, ChevronLeft, ChevronRight, Receipt } from "lucide-react";
-import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, shortDate, recentFailuresBySite, siteMatchesQuery, unitContractBadges, unitBadgeLabel, initialOf, INITIALS } from "@/lib/utils";
+import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, shortDate, recentFailuresBySite, siteMatchesQuery, unitContractBadges, unitBadgeLabel, initialOf } from "@/lib/utils";
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
@@ -623,9 +623,6 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
   const [selectedSite, setSelectedSite] = useState(null);
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [elevatorSubTab, setElevatorSubTab] = useState("정보");
-  const indexBarRef = useRef(null);
-  const [activeInitial, setActiveInitial] = useState(null);   // 드래그 중인 자음 (놓으면 null)
-  const [dragging, setDragging] = useState(false);            // 마우스용 — 터치는 touchend로 끝난다
 
   // 계약종료 현장은 기본 목록에는 안 보이고, 검색어로 직접 찾을 때만 나온다.
   // 761개짜리 목록이라 **가나다순으로 세운다** — 정렬이 없으면 자음 인덱스가 뜻이 없고,
@@ -643,35 +640,7 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
       return (a.name ?? "").localeCompare(b.name ?? "", "ko");
     });
 
-  // 각 초성이 처음 나오는 현장 id — 인덱스를 누르면 그 카드로 보낸다.
-  const firstOfInitial = new Map();
-  for (const s of list) {
-    const k = initialOf(s.name);
-    if (!firstOfInitial.has(k)) firstOfInitial.set(k, s.id);
-  }
-  // 검색 중이거나 목록이 짧으면 인덱스는 방해만 된다.
-  const showIndex = !query.trim() && list.length >= 30;
 
-  // 인덱스는 **쓸어내리면 따라 움직인다**(iOS 연락처 방식). 톡톡 눌러 찾는 것보다 훨씬 빠르다.
-  // 드래그 중에는 smooth 스크롤을 쓰지 않는다 — 애니메이션이 손가락을 못 따라와 밀린다.
-  function jumpTo(initial, smooth = true) {
-    const id = firstOfInitial.get(initial);
-    if (!id) return false;   // 그 자음으로 시작하는 현장이 없으면 아무 일도 하지 않는다
-    document.getElementById(`site-${id}`)?.scrollIntoView({ block: "start", behavior: smooth ? "smooth" : "auto" });
-    return true;
-  }
-
-  // 손가락 y좌표 → 자음. 버튼 하나하나에 이벤트를 다는 대신 막대 전체에서 비율로 계산한다
-  // (드래그 중에는 손가락 아래 요소가 계속 바뀌어서 개별 버튼 이벤트로는 못 따라간다).
-  function pickAt(clientY) {
-    const el = indexBarRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const i = Math.floor(((clientY - r.top) / r.height) * INITIALS.length);
-    const c = INITIALS[Math.min(INITIALS.length - 1, Math.max(0, i))];
-    if (c === activeInitial) return;       // 같은 칸 안에서 움직일 때는 아무것도 안 한다
-    if (jumpTo(c, false)) setActiveInitial(c);
-  }
 
   function latestInspection(siteId) {
     return inspections.find((i) => i.siteId === siteId) ?? null;
@@ -753,8 +722,7 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
         </div>
       </div>
 
-      <div className="flex-1 relative overflow-hidden">
-      <div className={`h-full overflow-y-auto pr-5 pb-4 space-y-2.5 ${showIndex ? "pl-9" : "pl-5"}`}>
+      <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-2.5">
         {list.map((s) => {
           const insp = latestInspection(s.id);
           const openF = openFailures(s.id);
@@ -762,7 +730,6 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
           return (
             <div
               key={s.id}
-              id={`site-${s.id}`}
               onClick={() => { setSelectedSite(s); setView("site"); }}
               className="w-full text-left bg-white rounded-xl border border-slate-200 p-3.5 active:bg-slate-50 cursor-pointer"
             >
@@ -798,50 +765,6 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
           );
         })}
         {list.length === 0 && <p className="text-xs text-slate-400 text-center py-8">검색 결과가 없습니다</p>}
-      </div>
-
-      {/* 자음 인덱스 — 761개를 훑어 찾을 수단. 검색은 이름을 알 때 쓰고, 이건 모를 때 쓴다.
-          해당 자음의 현장이 없으면 흐리게 두고 눌러도 반응하지 않는다(빈 곳으로 튀면 더 혼란스럽다). */}
-      {showIndex && (
-        // **왼쪽**에 세운다 — 오른쪽은 카드마다 지도(티맵·카카오맵) 버튼이 있어서 인덱스가 그걸 덮는다.
-        // 아래쪽은 플로팅 버튼(게시판·관리자)이 차지하므로 그 위까지만 세운다 — 겹치면 ㅌㅍㅎ#을 못 누른다.
-        // touch-none: 막대 위에서는 브라우저 기본 스크롤을 막아야 드래그가 목록 스크롤로 새지 않는다.
-        <div
-          ref={indexBarRef}
-          className="absolute left-0.5 top-2 bottom-28 w-7 flex flex-col justify-center gap-px z-10 touch-none select-none"
-          onTouchStart={(e) => pickAt(e.touches[0].clientY)}
-          onTouchMove={(e) => pickAt(e.touches[0].clientY)}
-          onTouchEnd={() => setActiveInitial(null)}
-          onTouchCancel={() => setActiveInitial(null)}
-          onMouseDown={(e) => { setDragging(true); pickAt(e.clientY); }}
-          onMouseMove={(e) => { if (dragging) pickAt(e.clientY); }}
-          onMouseUp={() => { setDragging(false); setActiveInitial(null); }}
-          onMouseLeave={() => { setDragging(false); setActiveInitial(null); }}
-        >
-          {INITIALS.map((c) => {
-            const has = firstOfInitial.has(c);
-            const on = activeInitial === c;
-            return (
-              // 개별 버튼이 아니라 표시용 — 실제 선택은 막대 전체에서 좌표로 판단한다.
-              <span
-                key={c}
-                className={`text-[10px] font-bold leading-none py-[3px] text-center rounded pointer-events-none transition-colors ${
-                  on ? "bg-blue-700 text-white" : has ? "text-blue-700" : "text-slate-200"
-                }`}
-              >
-                {c}
-              </span>
-            );
-          })}
-        </div>
-      )}
-
-      {/* 드래그 중 지금 어느 자음인지 크게 보여준다 — 막대가 얇아 손가락에 가려서 안 보인다. */}
-      {activeInitial && (
-        <div className="absolute left-10 top-1/2 -translate-y-1/2 z-20 w-14 h-14 rounded-2xl bg-slate-900/85 text-white flex items-center justify-center text-2xl font-extrabold pointer-events-none">
-          {activeInitial}
-        </div>
-      )}
       </div>
     </div>
   );
