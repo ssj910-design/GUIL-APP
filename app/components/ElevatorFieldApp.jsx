@@ -1837,6 +1837,9 @@ export default function App() {
     const recipientName = override?.recipientName ?? q.recipientName;
     const recipientEmail = override?.recipientEmail ?? q.recipientEmail;
     const recipientPhone = override?.recipientPhone ?? q.recipientPhone;
+    // 참조인·안내메시지·첨부파일 등은 모바일 발송 확인 모달엔 입력칸이 없다 — PC 콘솔
+    // (QuoteItemsModal/QuoteSendModal)에서 저장해둔 값을 그대로 실어 보낸다. 이걸 빼먹으면
+    // 참조인 전화번호가 있어도 모바일에서 보낼 땐 참조인 카카오·이메일 참조가 조용히 빠진다.
     const res = await authFetch("/api/send-quote", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1844,6 +1847,11 @@ export default function App() {
         quoteRequestId: q.id,
         channels: { email: !!recipientEmail, kakao: !!recipientPhone },
         recipientName, recipientEmail, recipientPhone,
+        senderCcEmail: q.senderCcEmail,
+        referenceEmail: q.referenceEmail,
+        referencePhone: q.referencePhone,
+        noticeMessage: q.noticeMessage,
+        attachmentUrls: q.attachmentUrls,
         quote: {
           siteName: q.siteName, quoteTitle: q.quoteTitle, quoteDate: q.quoteIssuedDate, pdfUrl: q.quotePdfUrl,
           totalAmount: quoteGrandTotal(q.quoteItems, q.transportCost, q.safetyCost, q.profit, q.discountAmount),
