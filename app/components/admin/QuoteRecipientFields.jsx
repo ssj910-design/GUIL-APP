@@ -17,7 +17,6 @@ export function useQuoteRecipientFields(quote, siteManagers, profiles) {
   const primaryManager = (siteManagers ?? []).find((m) => m.isPrimary) ?? (siteManagers ?? [])[0];
   const [email, setEmail] = useState(quote.recipientEmail || primaryManager?.email || "");
   const [phone, setPhone] = useState(quote.recipientPhone || primaryManager?.phone || "");
-  const [senderCcEmail, setSenderCcEmail] = useState(quote.senderCcEmail || "");
   const [referenceEmail, setReferenceEmail] = useState(quote.referenceEmail || "");
   const [referencePhone, setReferencePhone] = useState(quote.referencePhone || "");
   const [sendEmail, setSendEmail] = useState(true);
@@ -34,8 +33,12 @@ export function useQuoteRecipientFields(quote, siteManagers, profiles) {
   // 드롭다운 표시와 실제 서명이 어긋난다 — 그 상황 자체를 만들지 않도록 후보를 좁힌다.
   const staffWithPhone = staffByName.filter((p) => p.phone || p.tel);
   const defaultSupplier = staffByName.find((p) => p.name === "신석주" && p.phone) ?? null;
+  const defaultSupplierCc = staffWithEmail.find((p) => p.name === "신민호") ?? null;
 
   const [supplierId, setSupplierId] = useState(defaultSupplier?.id ?? "");
+  // 공급자쪽 참조는 직원 목록에서만 고른다(직접입력 없음) — 초기값도 항상 그 직원의
+  // 실제 이메일이어야 드롭다운과 아래 읽기전용 이메일 표시가 어긋나지 않는다.
+  const [senderCcEmail, setSenderCcEmail] = useState(quote.senderCcEmail || defaultSupplierCc?.email || "");
   // 이미 저장된 수신자·참조인 정보(recipientEmail/Phone, referenceEmail/Phone, senderCcEmail)가
   // 있으면 그 값과 일치하는 담당자를 찾아 드롭다운도 실제 저장값과 맞춘다 — 안 그러면 이미
   // 저장돼 있는 담당자를 다시 열었을 때 드롭다운이 대표 담당자로 되돌아가 보인다.
@@ -46,7 +49,7 @@ export function useQuoteRecipientFields(quote, siteManagers, profiles) {
     (m) => (quote.referenceEmail && m.email === quote.referenceEmail) || (quote.referencePhone && m.phone === quote.referencePhone)
   );
   const matchedSupplierCc = staffWithEmail.find((p) => quote.senderCcEmail && p.email === quote.senderCcEmail);
-  const [supplierCcId, setSupplierCcId] = useState(matchedSupplierCc?.id ?? "");
+  const [supplierCcId, setSupplierCcId] = useState(matchedSupplierCc?.id ?? defaultSupplierCc?.id ?? "");
   const [customerManagerId, setCustomerManagerId] = useState(
     (quote.recipientEmail || quote.recipientPhone) ? (matchedManager?.id ?? "") : (primaryManager?.id ?? "")
   );
@@ -138,12 +141,12 @@ export function QuoteRecipientInfo({ rf, siteManagers }) {
           </select>
         </div>
         <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">참조(CC) 이메일 (선택)</p>
+          <p className="text-xs font-bold text-slate-500 mb-1">참조</p>
           <select className={`${inputCls} mb-1.5`} value={rf.supplierCcId} onChange={(e) => rf.selectSupplierCc(e.target.value)}>
-            <option value="">직원 목록에서 선택</option>
-            {rf.staffWithEmail.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.email})</option>)}
+            <option value="">선택 안 함</option>
+            {rf.staffWithEmail.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <input className={inputCls} value={rf.senderCcEmail} onChange={(e) => rf.setSenderCcEmail(e.target.value)} placeholder="직접 입력도 가능" />
+          <input className={`${inputCls} bg-slate-100 text-slate-500`} value={rf.senderCcEmail} readOnly disabled />
         </div>
       </div>
 
@@ -167,7 +170,7 @@ export function QuoteRecipientInfo({ rf, siteManagers }) {
           </div>
         </div>
         <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">참조인 (선택)</p>
+          <p className="text-xs font-bold text-slate-500 mb-1">참조</p>
           <select className={`${inputCls} mb-1.5`} value={rf.customerCcId} onChange={(e) => rf.selectCustomerCc(e.target.value)}>
             <option value="">현장담당자 목록에서 선택</option>
             {rf.otherManagers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
