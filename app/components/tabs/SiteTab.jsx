@@ -1,6 +1,6 @@
 import React, { useState, useContext, useRef } from "react";
 import { createPortal } from "react-dom";
-import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Download, KeyRound, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Download, KeyRound, ChevronDown, ChevronLeft, ChevronRight, Receipt } from "lucide-react";
 import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, shortDate, recentFailuresBySite, siteMatchesQuery, unitContractBadges, unitBadgeLabel, initialOf, INITIALS } from "@/lib/utils";
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
@@ -429,7 +429,7 @@ export function PhotoViewerSheet({ urls, index, siteName, date, onClose }) {
 function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUpdateSiteNotes, onUpdateSiteAccessInfo }) {
   const allUnits = useContext(UnitsContext);
   const units = siteUnitList(site, allUnits); // 실제 호기(개수로 1..N 합성 금지)
-  const { engineers } = useContext(AuthContext);
+  const { engineers, role } = useContext(AuthContext);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState(site.notes ?? "");
   const [editingAccessInfo, setEditingAccessInfo] = useState(false);
@@ -454,6 +454,14 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
             valueColor="text-blue-600"
             value={site.address}
           />
+          {/* 호기별 보수료 합계(관리자웹 SitesAdmin.jsx가 항상 최신으로 동기화) — 관리자 계정에만 노출 */}
+          {role === "admin" && (
+            <TimelineRow
+              icon={Receipt}
+              label="보수료(VAT별도)"
+              value={site.maintenanceCost != null ? `${Number(site.maintenanceCost).toLocaleString()}원` : "-"}
+            />
+          )}
           {primaryManager && (
             <>
               <TimelineRow icon={User} label={primaryManager.role || "담당자"} value={primaryManager.name || "-"} />
