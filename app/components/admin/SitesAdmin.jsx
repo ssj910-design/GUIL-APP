@@ -724,7 +724,10 @@ export default function SitesAdmin({ data, setData }) {
     const numOrNull = (v) => (v === "" || v == null ? null : Number(v));
     const fieldMap = {
       installPlace: ["install_place", form.installPlace?.trim() || null, unit.installPlace ?? null],
-      govNo: ["gov_no", form.govNo || null, unit.govNo ?? null],
+      // 숫자만 남긴다(엑셀 일괄등록 ImportSites.jsx와 동일한 정제) — 정부 API 국가승강기정보센터
+      // 조회가 정확히 일치하는 문자열만 인정해서, 복붙 과정에서 섞여 들어간 탭·공백 하나만 있어도
+      // 검사이력 조회가 조용히 0건으로 실패한다(남영빌딩 1호기에서 실측 확인).
+      govNo: ["gov_no", form.govNo?.replace(/\D/g, "") || null, unit.govNo ?? null],
       kind: ["kind", form.kind || null, unit.kind ?? null],
       form: ["form", form.form || null, unit.form ?? null],
       model: ["model", form.model || null, unit.model ?? null],
