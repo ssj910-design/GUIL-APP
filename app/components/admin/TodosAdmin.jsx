@@ -12,7 +12,7 @@ import { TODAY_STR } from "@/lib/constants";
 import { addDays, shortDate, formatUnitLabel } from "@/lib/utils";
 import {
   locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills,
-  Modal, SortableTh, sortRows, inputCls, DateTextInput, AdminAuthContext, PhotoGrid,
+  Modal, SortableTh, sortRows, inputCls, DateTextInput, AdminAuthContext, PhotoGrid, SiteAutocomplete,
 } from "@/app/components/admin/adminShared";
 
 const SOURCE_LABEL = { material: "자재", quote: "견적", manual: "수동", inspection: "검사보완", selfcheck: "자체점검지적", waste_return: "반납확인" };
@@ -184,12 +184,16 @@ function AssignTodoModal({ data, onClose, onCreate }) {
   const { sites, units, profiles } = data;
   // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 관리자가 자재담당자에게도 배정할 수 있어야 한다.
   const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
-  const [form, setForm] = useState({ siteId: "", unitId: "", title: "", description: "", assigneeId: "", dueDate: addDays(TODAY_STR, 7) });
+  const [form, setForm] = useState({ siteId: "", unitId: "", title: "", description: "", assigneeIds: [], dueDate: addDays(TODAY_STR, 7) });
   const [photos, setPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [folderToken] = useState(() => Date.now());
   const siteUnits = units.filter((u) => u.siteId === form.siteId);
-  const valid = form.siteId && form.title.trim() && form.assigneeId;
+  const valid = form.siteId && form.title.trim() && form.assigneeIds.length > 0;
+
+  function toggleAssignee(id) {
+    setForm((f) => ({ ...f, assigneeIds: f.assigneeIds.includes(id) ? f.assigneeIds.filter((x) => x !== id) : [...f.assigneeIds, id] }));
+  }
 
   async function handleFiles(e) {
     const files = Array.from(e.target.files ?? []);
@@ -217,10 +221,7 @@ function AssignTodoModal({ data, onClose, onCreate }) {
       <div className="space-y-3">
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">현장</p>
-          <select className={inputCls} value={form.siteId} onChange={(e) => setForm({ ...form, siteId: e.target.value, unitId: "" })}>
-            <option value="">현장을 선택하세요</option>
-            {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+          <SiteAutocomplete sites={sites} value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitId: "" })} />
         </div>
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">호기</p>
@@ -237,18 +238,20 @@ function AssignTodoModal({ data, onClose, onCreate }) {
           <p className="text-xs font-bold text-slate-500 mb-1">내용</p>
           <textarea className={inputCls} rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">담당자</p>
-            <select className={inputCls} value={form.assigneeId} onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}>
-              <option value="">담당자를 선택하세요</option>
-              {engineers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">담당자 (2명 이상 선택 가능 — 선택한 인원 각각에게 별도로 배정됩니다)</p>
+          <div className="border border-slate-200 rounded-lg max-h-40 overflow-y-auto p-1.5 grid grid-cols-2 gap-x-2">
+            {engineers.map((p) => (
+              <label key={p.id} className="flex items-center gap-1.5 text-sm px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
+                <input type="checkbox" checked={form.assigneeIds.includes(p.id)} onChange={() => toggleAssignee(p.id)} />
+                {p.name}
+              </label>
+            ))}
           </div>
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">기한</p>
-            <DateTextInput key={form.dueDate} value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
-          </div>
+        </div>
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">기한</p>
+          <DateTextInput key={form.dueDate} value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
         </div>
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">사진 (선택)</p>
@@ -473,44 +476,51 @@ export default function TodosAdmin({ data, setData, initialView }) {
     setData((prev) => ({ ...prev, todos: prev.todos.map((x) => (x.id === t.id ? { ...x, done: !x.done } : x)) }));
   }
 
+  // 담당자를 2명 이상 고르면(AssignTodoModal), DB에 담당자 배열 컬럼이 없어(단일 assignee_id)
+  // 각자에게 같은 내용으로 할일을 하나씩 따로 만든다 — 재배정·완료 처리도 사람별로 독립적이어야 하므로
+  // 오히려 이 편이 자연스럽다.
   async function createTodo(form) {
     const unit = units.find((u) => u.id === form.unitId);
     const site = sites.find((s) => s.id === form.siteId);
-    const engineer = profiles.find((p) => p.id === form.assigneeId);
-    const id = "todo-manual-" + Date.now();
     const photoUrls = form.photoUrls ?? [];
-    const row = {
-      id, source: "manual", title: form.title.trim(), description: form.description || null,
-      site_name: site?.name ?? null, elevator_no: unit?.unitNo ?? null, unit_id: form.unitId || null,
-      assignee: engineer?.name ?? null, assignee_id: form.assigneeId || null,
-      assigned_date: TODAY_STR, due_date: form.dueDate || null, done: false,
-      photo_count: photoUrls.length, photo_urls: photoUrls.length ? photoUrls : null,
-      requested_by_id: adminId ?? null, requested_by_name: adminName,
-    };
-    const { error } = await supabase.from("todos").insert(row);
+    const rows = form.assigneeIds.map((assigneeId, i) => {
+      const engineer = profiles.find((p) => p.id === assigneeId);
+      return {
+        id: `todo-manual-${Date.now()}-${i}`, source: "manual", title: form.title.trim(), description: form.description || null,
+        site_name: site?.name ?? null, elevator_no: unit?.unitNo ?? null, unit_id: form.unitId || null,
+        assignee: engineer?.name ?? null, assignee_id: assigneeId,
+        assigned_date: TODAY_STR, due_date: form.dueDate || null, done: false,
+        photo_count: photoUrls.length, photo_urls: photoUrls.length ? photoUrls : null,
+        requested_by_id: adminId ?? null, requested_by_name: adminName,
+      };
+    });
+    const { error } = await supabase.from("todos").insert(rows);
     if (error) { alert("배정 실패: " + error.message); return; }
     setData((prev) => ({
       ...prev,
-      todos: [{
-        id, source: "manual", title: row.title, description: row.description ?? "",
-        siteName: row.site_name, elevatorNo: row.elevator_no, unitId: row.unit_id,
-        assignee: row.assignee, assigneeId: row.assignee_id,
-        assignedDate: row.assigned_date, dueDate: row.due_date, done: false,
-        photoCount: photoUrls.length, photoUrls, part: null, materialRequestId: null, quoteRequestId: null,
-        requestedById: row.requested_by_id, requestedByName: row.requested_by_name,
-      }, ...prev.todos],
+      todos: [
+        ...rows.map((row) => ({
+          id: row.id, source: "manual", title: row.title, description: row.description ?? "",
+          siteName: row.site_name, elevatorNo: row.elevator_no, unitId: row.unit_id,
+          assignee: row.assignee, assigneeId: row.assignee_id,
+          assignedDate: row.assigned_date, dueDate: row.due_date, done: false,
+          photoCount: photoUrls.length, photoUrls, part: null, materialRequestId: null, quoteRequestId: null,
+          requestedById: row.requested_by_id, requestedByName: row.requested_by_name,
+        })),
+        ...prev.todos,
+      ],
     }));
-    // 배정된 기사에게 푸시 — 실패해도 등록 자체는 이미 끝났으니 조용히 넘어간다.
-    if (form.assigneeId) {
+    // 배정된 기사들에게 각각 푸시 — 실패해도 등록 자체는 이미 끝났으니 조용히 넘어간다.
+    for (const row of rows) {
       fetch("/api/push/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           key: "todo_assigned",
-          profileIds: [form.assigneeId],
+          profileIds: [row.assignee_id],
           title: "할 일이 배정되었습니다",
           body: `${site?.name ? `${site.name} · ` : ""}${row.title}`,
-          url: `/?openTodo=${id}`,
+          url: `/?openTodo=${row.id}`,
         }),
       }).catch(() => {});
     }

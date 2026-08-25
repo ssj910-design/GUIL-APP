@@ -3,7 +3,7 @@
 // 관리자 콘솔 공용 헬퍼 — 표기(호기·담당자)는 v2 FK 우선, 옛 라벨 fallback.
 import { useState, useRef, createContext } from "react";
 import { createPortal } from "react-dom";
-import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil, Paperclip, Camera, Image as ImageIcon, Download, Trash2 } from "lucide-react";
+import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil, Paperclip, Camera, Image as ImageIcon, Download, Trash2, Search } from "lucide-react";
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
 import { shortDate, parseShortDate, autoFormatShortDate, formatUnitLabel, sortEngineersByDistance, busyStatusOf } from "@/lib/utils";
 import { confirmAsync } from "@/app/components/ConfirmHost";
@@ -205,6 +205,48 @@ export function FilterPills({ options, value, onChange }) {
           {o.label}{o.count != null ? ` ${o.count}` : ""}
         </button>
       ))}
+    </div>
+  );
+}
+
+// 현장 선택 자동완성 — 드롭다운 대신 이름·주소로 검색해서 고르는 입력창. 고장접수(FailuresAdmin)
+// 현장 선택에서 처음 만들었고, 할일배정 등 현장 select를 쓰는 다른 폼에서도 재사용한다.
+export function SiteAutocomplete({ sites, value, onChange }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const selected = sites.find((s) => s.id === value);
+  const q = query.trim().toLowerCase();
+  const filtered = sites.filter((s) => (s.name ?? "").toLowerCase().includes(q) || (s.address ?? "").toLowerCase().includes(q));
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          className={`${inputCls} pl-8`}
+          placeholder="현장명·주소 검색"
+          value={open ? query : selected?.name ?? ""}
+          onFocus={() => { setOpen(true); setQuery(""); }}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
+      {open && (
+        <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+          {filtered.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onMouseDown={() => { onChange(s.id); setOpen(false); }}
+              className="w-full text-left px-3 py-2.5 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0"
+            >
+              <span className="font-semibold text-slate-700">{s.name}</span>
+              <span className="text-slate-400 text-xs ml-1.5">{s.address}</span>
+            </button>
+          ))}
+          {filtered.length === 0 && <p className="text-xs text-slate-400 text-center py-3">검색 결과가 없습니다</p>}
+        </div>
+      )}
     </div>
   );
 }

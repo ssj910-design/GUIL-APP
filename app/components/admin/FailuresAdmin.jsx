@@ -3,12 +3,12 @@
 // 고장관리 — 전체 고장 테이블 + 기사 배정(듀얼라이트) + 고장접수(신규 등록).
 // 출동/도착/처리결과 입력은 현장 기사의 모바일 앱 몫이므로 여기서는 하지 않는다.
 import { useState, useMemo } from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
 import { TODAY_STR, FAULT_TYPES } from "@/lib/constants";
 import { formatPhone, sortEngineersByDistance, engineerJobsByName } from "@/lib/utils";
-import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls, ReassignModal } from "@/app/components/admin/adminShared";
+import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls, ReassignModal, SiteAutocomplete } from "@/app/components/admin/adminShared";
 import { FailureDetailContent } from "@/app/components/admin/Dashboard";
 import { EngineerLocationMap } from "@/app/components/admin/EngineerLocationMap";
 import { LOCATION_TRACKING } from "@/lib/features";
@@ -149,46 +149,6 @@ function FailureTrendChart({ failures }) {
   );
 }
 
-// 현장 검색·자동완성 — 드롭다운 대신 이름/주소로 찾아서 고른다.
-function SiteAutocomplete({ sites, value, onChange }) {
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const selected = sites.find((s) => s.id === value);
-  const q = query.trim().toLowerCase();
-  const filtered = sites.filter((s) => (s.name ?? "").toLowerCase().includes(q) || (s.address ?? "").toLowerCase().includes(q));
-
-  return (
-    <div className="relative">
-      <div className="relative">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input
-          className={`${inputCls} pl-8`}
-          placeholder="현장명·주소 검색"
-          value={open ? query : selected?.name ?? ""}
-          onFocus={() => { setOpen(true); setQuery(""); }}
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </div>
-      {open && (
-        <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
-          {filtered.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onMouseDown={() => { onChange(s.id); setOpen(false); }}
-              className="w-full text-left px-3 py-2.5 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0"
-            >
-              <span className="font-semibold text-slate-700">{s.name}</span>
-              <span className="text-slate-400 text-xs ml-1.5">{s.address}</span>
-            </button>
-          ))}
-          {filtered.length === 0 && <p className="text-xs text-slate-400 text-center py-3">검색 결과가 없습니다</p>}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // 배정 기사 <select> 공통 옵션 — 현장과 가까운 순으로 정렬하고 거리를 함께 표시한다.
 // engineerJobs가 있으면 이름(거리) 우측에 "현재 현장 · 상태"도 함께 보여준다.
