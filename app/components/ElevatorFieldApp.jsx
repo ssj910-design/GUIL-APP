@@ -135,32 +135,6 @@ export default function App() {
   const [todayLeaves, setTodayLeaves] = useState([]); // 오늘 휴가 중인 사람 (배정 차단용)
   const [myPageOpen, setMyPageOpen] = useState(false);
 
-  // 플로팅 버튼은 본문 위에 떠 있어서 글자를 가린다. 스크롤하는 동안에는 흐리게 비켜준다.
-  //
-  // ⚠️ **state를 쓰지 않고 DOM을 직접 만진다.** 여기서 setState를 하면 스크롤할 때마다 앱 전체가
-  // 다시 그려지는데, 워크캘린더처럼 무거운 화면에서는 그게 "스크롤 중 화면이 튀는" 증상으로
-  // 나타났다(실제 제보). 버튼 두 개의 투명도를 바꾸자고 트리 전체를 리렌더할 이유가 없다.
-  //
-  // scroll 이벤트는 버블링되지 않으므로 캡처 단계로 받는다 — 탭마다 자기 스크롤 컨테이너를
-  // 따로 갖고 있어서(PullToRefresh 주석 참고) 어느 하나에 붙일 수가 없다.
-  useEffect(() => {
-    let timer;
-    const setDim = (dim) => {
-      for (const el of document.querySelectorAll("[data-fab]")) {
-        el.style.opacity = dim ? "0.25" : "1";
-        el.style.pointerEvents = dim ? "none" : "";
-        el.style.transitionDuration = dim ? "150ms" : "400ms";   // 돌아올 때를 느리게 — 깜빡여도 덜 띈다
-      }
-    };
-    const onScroll = () => {
-      setDim(true);
-      clearTimeout(timer);
-      // 800ms를 기다린다. 짧게 두면 관성 스크롤 중 이벤트 간격이 임계값을 넘나들며 깜빡인다.
-      timer = setTimeout(() => setDim(false), 800);
-    };
-    document.addEventListener("scroll", onScroll, true);
-    return () => { document.removeEventListener("scroll", onScroll, true); clearTimeout(timer); };
-  }, []);
   // 고장접수 접수등록에는 하단 고정 [이전/다음] 바가 있어 플로팅이 그 버튼을 덮었다.
   // 그 탭에서는 바 높이만큼 위로 올린다 — 탭 전체에서 숨기면 게시판으로 갈 방법이 없어진다.
   const overCta = tab === "failure";
@@ -2654,8 +2628,7 @@ export default function App() {
           <button
             onClick={() => setTab("room")}
             aria-label="게시판 열기"
-            data-fab
-            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95 transition-opacity ${overCta ? "bottom-36" : "bottom-20"}`}
+            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95 ${overCta ? "bottom-36" : "bottom-20"}`}
           >
             <MessagesSquare size={22} />
             {unreadPosts.length > 0 && (
@@ -2676,8 +2649,7 @@ export default function App() {
           <button
             onClick={() => setTab("admin")}
             aria-label="관리자 모드 열기"
-            data-fab
-            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-slate-800 text-white shadow-lg flex items-center justify-center active:scale-95 transition-opacity ${overCta ? "bottom-52" : tab === "room" ? "bottom-40" : "bottom-36"}`}
+            className={`absolute right-4 z-20 w-12 h-12 rounded-full bg-slate-800 text-white shadow-lg flex items-center justify-center active:scale-95 ${overCta ? "bottom-52" : tab === "room" ? "bottom-40" : "bottom-36"}`}
           >
             <Settings size={22} />
           </button>
