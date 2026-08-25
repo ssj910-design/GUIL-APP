@@ -2108,6 +2108,12 @@ export default function App() {
     setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, done: !t.done } : t)));
   }
 
+  // ★ 관리자 권한: 할 일을 완전히 삭제한다. 확인 대화상자는 호출 쪽(TodoTab)에서 이미 거쳤다.
+  async function handleDeleteTodo(todoId) {
+    if (!(await writeOk(supabase.from("todos").delete().eq("id", todoId), "삭제 실패"))) return;
+    setTodos((prev) => prev.filter((t) => t.id !== todoId));
+  }
+
   // ★ 할 일 담당자 재지정 — 신청자와 실제 교체 기사가 지급 시점엔 다르게 정해졌거나
   // 나중에 배차가 바뀐 경우의 안전망입니다. 관리자 화면과 기사 본인 화면 양쪽에서 호출됩니다.
   async function handleReassignTodo(todoId, newAssignee) {
@@ -2589,6 +2595,7 @@ export default function App() {
               onClearReassignRequest={handleClearReassignRequest}
               onAssignTodo={handleAssignTodo}
               onAdminToggle={handleAdminToggleTodo}
+              onDeleteTodo={handleDeleteTodo}
               materialRequests={materialRequests}
               quoteRequests={quoteRequests}
               focusTodoId={openTodoId}

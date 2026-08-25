@@ -7,6 +7,7 @@ import { useContext, useState } from "react";
 import { Plus, Search, Repeat } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto } from "@/lib/photos";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 import { mapInventoryStockMovement } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
 import { addDays, shortDate, formatUnitLabel } from "@/lib/utils";
@@ -36,7 +37,7 @@ function displayTitle(t) {
   return t.title;
 }
 
-function TodoDetailModal({ t, data, onClose, onSave }) {
+function TodoDetailModal({ t, data, onClose, onSave, onDelete }) {
   const { sites, units, profiles } = data;
   // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 관리자가 자재담당자에게도 배정할 수 있어야 한다.
   const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
@@ -53,6 +54,7 @@ function TodoDetailModal({ t, data, onClose, onSave }) {
     done: t.done,
   });
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [photos, setPhotos] = useState(t.photoUrls ?? []);
   const [uploading, setUploading] = useState(false);
   const siteUnits = units.filter((u) => u.siteId === form.siteId);
@@ -77,6 +79,14 @@ function TodoDetailModal({ t, data, onClose, onSave }) {
     setSaving(true);
     await onSave(t, { ...form, photoUrls: photos });
     setSaving(false);
+    onClose();
+  }
+
+  async function handleDelete() {
+    if (!(await confirmAsync("이 할 일을 삭제하시겠습니까?"))) return;
+    setDeleting(true);
+    await onDelete(t);
+    setDeleting(false);
     onClose();
   }
 
@@ -171,7 +181,10 @@ function TodoDetailModal({ t, data, onClose, onSave }) {
           <input type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} disabled={uploading} />
         </label>
       </div>
-      <div className="flex justify-end mt-4">
+      <div className="flex justify-between mt-4">
+        <button disabled={deleting} onClick={handleDelete} className="text-sm font-bold text-red-600 border border-red-200 disabled:opacity-50 rounded-xl px-5 py-2.5">
+          {deleting ? "삭제 중..." : "삭제"}
+        </button>
         <button disabled={saving || !form.title.trim()} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
           저장
         </button>
@@ -420,6 +433,13 @@ export default function TodosAdmin({ data, setData, initialView }) {
     }));
   }
 
+  // 할 일 삭제 — 확인 대화상자는 TodoDetailModal에서 이미 거쳤다.
+  async function deleteTodo(t) {
+    const { error } = await supabase.from("todos").delete().eq("id", t.id);
+    if (error) { alert("삭제 실패: " + error.message); return; }
+    setData((prev) => ({ ...prev, todos: prev.todos.filter((x) => x.id !== t.id) }));
+  }
+
   // 관리자가 반납확인 모달에서 입력한 확인수량(confirmedQty: { productId: qty })을 반영한다.
   // - 확인된 만큼만 재고 입고(inventory_stock_movements, todo_id로 이 할일과 연결)로 기록.
   // - 전부 확인됐으면(stock_confirmed_at 채워 큐에서 빠짐) 기록용으로 rows를 누적 확인수량 그대로 남긴다.
@@ -622,7 +642,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
       </div>
       <p className="text-[10px] text-slate-400 mt-2">* 자재·견적 할일의 정상 완료 경로는 기사 비용청구입니다. 체크박스는 관리자 예외 처리용.</p>
 
-      {detail && <TodoDetailModal t={detail} data={data} onClose={() => setDetail(null)} onSave={saveTodoDetail} />}
+      {detail && <TodoDetailModal t={detail} data={data} onClose={() => setDetail(null)} onSave={saveTodoDetail} onDelete={deleteTodo} />}
       {assigning && <AssignTodoModal data={data} onClose={() => setAssigning(false)} onCreate={createTodo} />}
       {confirmTarget && (
         <WasteReturnConfirmModal

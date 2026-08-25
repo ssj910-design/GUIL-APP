@@ -79,7 +79,7 @@ function TodoCheckbox({ done, locked, onClick }) {
   return <button type="button" onClick={onClick} className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />;
 }
 
-export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescription, onUpdateTodoDueDate, onExtendTodoDueDate, onRequestReassignTodo, onClearReassignRequest, onAssignTodo, onAdminToggle, materialRequests, quoteRequests, focusTodoId, onFocusHandled }) {
+export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescription, onUpdateTodoDueDate, onExtendTodoDueDate, onRequestReassignTodo, onClearReassignRequest, onAssignTodo, onAdminToggle, onDeleteTodo, materialRequests, quoteRequests, focusTodoId, onFocusHandled }) {
   const { name: CURRENT_ENGINEER, engineerNames, role } = useContext(AuthContext);
   const sites = useContext(SitesContext);
   const [showDone, setShowDone] = useState(false);
@@ -246,6 +246,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
                     engineerNames={engineerNames}
                     onUpdateDescription={role === "admin" ? onUpdateTodoDescription : null}
                     onUpdateDueDate={role === "admin" ? onUpdateTodoDueDate : null}
+                    onDelete={role === "admin" ? onDeleteTodo : null}
                     onExtendDueDate={role !== "admin" ? onExtendTodoDueDate : null}
                     onRequestReassign={role !== "admin" ? onRequestReassignTodo : null}
                     onClearReassignRequest={onClearReassignRequest}
@@ -269,7 +270,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
 
 
 // 할 일 상세 본문 (시트/아코디언 공용). role: 'admin'이면 편집·재배정, 기사면 기한연장·재배정 요청.
-export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoUrls = [], siteAddress, onToggle, onAddPhoto, onRemovePhoto, onReassign, engineerNames, onUpdateDescription, onUpdateDueDate, onExtendDueDate, onRequestReassign, onClearReassignRequest, role, onClose, hideTitleBlock = false }) {
+export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoUrls = [], siteAddress, onToggle, onAddPhoto, onRemovePhoto, onReassign, engineerNames, onUpdateDescription, onUpdateDueDate, onDelete, onExtendDueDate, onRequestReassign, onClearReassignRequest, role, onClose, hideTitleBlock = false }) {
   const [descDraft, setDescDraft] = useState(todo.description ?? "");
   const [editingDesc, setEditingDesc] = useState(false);
   const [reassignOpen, setReassignOpen] = useState(false);
@@ -278,6 +279,15 @@ export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoU
   const [extending, setExtending] = useState(false);
   const [extendDate, setExtendDate] = useState(todo.dueDate ?? "");
   const [extendReason, setExtendReason] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDeleteClick() {
+    if (!(await confirmAsync("이 할 일을 삭제하시겠습니까?"))) return;
+    setDeleting(true);
+    await onDelete(todo.id);
+    setDeleting(false);
+    onClose();
+  }
   const sourceLabel = todo.source === "manual" ? "관리자 부여" : todo.source === "quote" ? "견적 연동" : todo.source === "inspection" ? "검사 보완" : todo.source === "selfcheck" ? "자체점검 지적" : todo.source === "waste_return" ? "폐자재·여유부품 반납" : "자재 연동";
   const allAssignees = [todo.assignee, ...coAssignees];
   // 반납 할일은 기사가 반납사진을 최소 1장 올리기 전까지 완료 처리 버튼을 잠근다 (관리자는 예외).
@@ -537,6 +547,16 @@ export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoU
         <div className="text-[11px] font-bold px-3 py-2.5 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center gap-1">
           <Lock size={12} /> 비용청구 시 자동완료
         </div>
+      )}
+      {onDelete && (
+        <button
+          type="button"
+          disabled={deleting}
+          onClick={handleDeleteClick}
+          className="w-full mt-2 text-xs font-bold text-red-600 border border-red-200 rounded-xl py-2.5 active:bg-red-50 disabled:opacity-50"
+        >
+          {deleting ? "삭제 중..." : "할 일 삭제"}
+        </button>
       )}
       {extending && (
         <div className="fixed inset-0 z-[80] bg-black/40 flex items-center justify-center px-8" onClick={() => setExtending(false)}>
