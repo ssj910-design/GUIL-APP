@@ -1345,7 +1345,14 @@ export default function App() {
       ? profilesAll.filter((p) => p.is_active !== false && p.id !== myId).map((p) => p.id)
       : profilesAll.filter((p) => tags.includes(p.name) && p.id !== myId).map((p) => p.id);
     if (mentionIds.length) sendPush("room_mention", mentionIds, { title: `${profile.name}님이 회원님을 언급했어요`, body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
-    if (newPost.isNotice) notify("room_notice", { title: "새 공지가 등록됐어요", body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
+    if (newPost.isNotice) {
+      notify("room_notice", { title: "새 공지가 등록됐어요", body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
+    } else if (!newPost.replyToId) {
+      // 새 글(댓글 제외) 전체 알림 — 이 글로 이미 멘션 알림을 받은 사람은 중복으로 안 보낸다(최우선 알림 하나만).
+      const mentionSet = new Set(mentionIds);
+      const newPostIds = profilesAll.filter((p) => p.is_active !== false && p.id !== myId && !mentionSet.has(p.id)).map((p) => p.id);
+      if (newPostIds.length) sendPush("room_new_post", newPostIds, { title: `${profile.name}님이 새 글을 올렸어요`, body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
+    }
     // 댓글이면(replyToId 있음) 원글 작성자에게 알림 — 멘션 대상엔 이미 위에서 갔으니 중복은 허용(드묾).
     if (newPost.replyToId) {
       const parentPost = feed.find((p) => p.id === newPost.replyToId);
