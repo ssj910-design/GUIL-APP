@@ -217,18 +217,20 @@ function AssignTodoModal({ data, onClose, onCreate }) {
   }
 
   return (
-    <Modal title="할 일 배정" onClose={onClose}>
-      <div className="space-y-3">
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">현장</p>
-          <SiteAutocomplete sites={sites} value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitId: "" })} />
-        </div>
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">호기</p>
-          <select className={inputCls} value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })} disabled={!form.siteId}>
-            <option value="">전체(현장 공통)</option>
-            {siteUnits.map((u) => <option key={u.id} value={u.id}>{u.unitNo}</option>)}
-          </select>
+    <Modal title="할 일 배정" onClose={onClose} wide="xl">
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">현장</p>
+            <SiteAutocomplete sites={sites} value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitId: "" })} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">호기</p>
+            <select className={inputCls} value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })} disabled={!form.siteId}>
+              <option value="">전체(현장 공통)</option>
+              {siteUnits.map((u) => <option key={u.id} value={u.id}>{u.unitNo}</option>)}
+            </select>
+          </div>
         </div>
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">할일 제목</p>
@@ -240,7 +242,7 @@ function AssignTodoModal({ data, onClose, onCreate }) {
         </div>
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">담당자 (2명 이상 선택 가능 — 선택한 인원 각각에게 별도로 배정됩니다)</p>
-          <div className="border border-slate-200 rounded-lg max-h-40 overflow-y-auto p-1.5 grid grid-cols-2 gap-x-2">
+          <div className="border border-slate-200 rounded-lg max-h-48 overflow-y-auto p-2 grid grid-cols-4 gap-x-3">
             {engineers.map((p) => (
               <label key={p.id} className="flex items-center gap-1.5 text-sm px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
                 <input type="checkbox" checked={form.assigneeIds.includes(p.id)} onChange={() => toggleAssignee(p.id)} />
@@ -249,30 +251,32 @@ function AssignTodoModal({ data, onClose, onCreate }) {
             ))}
           </div>
         </div>
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">기한</p>
-          <DateTextInput key={form.dueDate} value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
-        </div>
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">사진 (선택)</p>
-          <div className="flex flex-wrap gap-1.5 mb-1.5">
-            {photos.map((url, i) => (
-              <div key={i} className="relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
-                <button
-                  onClick={() => setPhotos((p) => p.filter((_, idx) => idx !== i))}
-                  className="absolute -top-1.5 -right-1.5 bg-slate-800 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">기한</p>
+            <DateTextInput key={form.dueDate} value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
           </div>
-          <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 cursor-pointer">
-            사진 추가
-            <input type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} disabled={uploading} />
-          </label>
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">사진 (선택)</p>
+            <div className="flex flex-wrap gap-1.5 mb-1.5">
+              {photos.map((url, i) => (
+                <div key={i} className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+                  <button
+                    onClick={() => setPhotos((p) => p.filter((_, idx) => idx !== i))}
+                    className="absolute -top-1.5 -right-1.5 bg-slate-800 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+            <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 cursor-pointer">
+              사진 추가
+              <input type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} disabled={uploading} />
+            </label>
+          </div>
         </div>
         <div className="flex justify-end pt-2">
           <button disabled={!valid || uploading} onClick={submit} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
