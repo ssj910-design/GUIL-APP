@@ -220,6 +220,8 @@ export default function RoomAdmin({ data, setData }) {
   const [detailId, setDetailId] = useState(null);
   const [photoViewer, setPhotoViewer] = useState(null); // { urls, index }
   const [menuFor, setMenuFor] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState("");
 
   const feed = data.feed ?? [];
   const commentsOf = (id) =>
@@ -307,6 +309,20 @@ export default function RoomAdmin({ data, setData }) {
     if (detailId === postId) setDetailId(null);
   }
 
+  function startEdit(p) {
+    setEditingId(p.id);
+    setEditText(p.text ?? "");
+    setMenuFor(null);
+  }
+  async function saveEdit() {
+    const text = editText.trim();
+    if (!text) return;
+    const id = editingId;
+    setEditingId(null);
+    setData((prev) => ({ ...prev, feed: prev.feed.map((p) => (p.id === id ? { ...p, text } : p)) }));
+    await supabase.from("feed_posts").update({ body: text }).eq("id", id);
+  }
+
   async function setNotice(postId, isNotice) {
     setData((prev) => ({ ...prev, feed: prev.feed.map((p) => (p.id === postId ? { ...p, isNotice } : p)) }));
     await supabase.from("feed_posts").update({ is_notice: isNotice }).eq("id", postId);
@@ -368,6 +384,9 @@ export default function RoomAdmin({ data, setData }) {
                         </button>
                         {menuFor === p.id && (
                           <div className="absolute right-0 top-7 z-10 bg-white rounded-xl border border-slate-200 shadow-lg py-1 w-36">
+                            <button onClick={() => startEdit(p)} className="w-full text-left px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                              수정하기
+                            </button>
                             <button onClick={() => { setNotice(p.id, !p.isNotice); setMenuFor(null); }} className="w-full text-left px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
                               {p.isNotice ? "공지 해제" : "공지로 등록"}
                             </button>
@@ -378,9 +397,25 @@ export default function RoomAdmin({ data, setData }) {
                         )}
                       </div>
                     </div>
-                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap mt-1.5">
-                      {p.text}
-                    </p>
+                    {editingId === p.id ? (
+                      <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+                        <textarea
+                          className={`${inputCls} resize-none`}
+                          rows={3}
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          autoFocus
+                        />
+                        <div className="flex gap-2 mt-1.5">
+                          <button onClick={saveEdit} className="text-xs font-bold text-white bg-blue-700 rounded-lg px-3.5 py-1.5">저장</button>
+                          <button onClick={() => setEditingId(null)} className="text-xs font-bold text-slate-400 px-2.5 py-1.5">취소</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap mt-1.5">
+                        {p.text}
+                      </p>
+                    )}
                     {p.photoUrls?.length > 0 && (
                       <div className="mt-2">
                         <PhotoGrid urls={p.photoUrls} onOpen={(urls, index) => setPhotoViewer({ urls, index })} compact />
@@ -408,9 +443,45 @@ export default function RoomAdmin({ data, setData }) {
             <div className="flex items-start gap-3">
               <Avatar name={detailPost.author} />
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-slate-800 text-sm">{detailPost.author}</p>
+                <div className="flex items-center justify-between">
+                  <p className="font-bold text-slate-800 text-sm">{detailPost.author}</p>
+                  <div className="relative shrink-0">
+                    <button onClick={() => setMenuFor(menuFor === detailPost.id ? null : detailPost.id)} className="p-1 text-slate-300 hover:text-slate-500" aria-label="더보기">
+                      <MoreVertical size={16} />
+                    </button>
+                    {menuFor === detailPost.id && (
+                      <div className="absolute right-0 top-7 z-10 bg-white rounded-xl border border-slate-200 shadow-lg py-1 w-36">
+                        <button onClick={() => startEdit(detailPost)} className="w-full text-left px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                          수정하기
+                        </button>
+                        <button onClick={() => { setNotice(detailPost.id, !detailPost.isNotice); setMenuFor(null); }} className="w-full text-left px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                          {detailPost.isNotice ? "공지 해제" : "공지로 등록"}
+                        </button>
+                        <button onClick={() => { setMenuFor(null); deletePost(detailPost.id); }} className="w-full text-left px-3.5 py-2 text-xs font-bold text-red-600 hover:bg-red-50">
+                          삭제하기
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <p className="text-[11px] text-slate-400 mb-1">{timeOf(detailPost.createdAt)}</p>
-                <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">{detailPost.text}</p>
+                {editingId === detailPost.id ? (
+                  <div>
+                    <textarea
+                      className={`${inputCls} resize-none`}
+                      rows={3}
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      autoFocus
+                    />
+                    <div className="flex gap-2 mt-1.5">
+                      <button onClick={saveEdit} className="text-xs font-bold text-white bg-blue-700 rounded-lg px-3.5 py-1.5">저장</button>
+                      <button onClick={() => setEditingId(null)} className="text-xs font-bold text-slate-400 px-2.5 py-1.5">취소</button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">{detailPost.text}</p>
+                )}
                 <PhotoGrid urls={detailPost.photoUrls} onOpen={(urls, index) => setPhotoViewer({ urls, index })} />
               </div>
             </div>
