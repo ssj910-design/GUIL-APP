@@ -135,15 +135,19 @@ export function useInspectionFailItems(govElevatorNo, startDate) {
         const res = await authFetch(url);
         const data = await res.json();
         if (cancelled) return;
+        // route.js가 상위 API(getInspectsafeList) 자체가 실패했을 때 top-level error만 주고
+        // reason은 안 채워주는 경우가 있다 — reason 없는 채로 두면 "검사이력 없음"으로 잘못
+        // 표시된다(실제론 조회 자체가 안 된 것). fetch_failed로 통일한다.
+        const reasonOf = (d) => d.reason ?? (d.error ? "fetch_failed" : null);
         if (hasAnchor) {
-          setState({ loading: false, items: data.items ?? [], reason: data.reason ?? null, record: data.record ?? null });
+          setState({ loading: false, items: data.items ?? [], reason: reasonOf(data), record: data.record ?? null });
           return;
         }
         const latest = (data.history ?? [])[0];
         if (!latest) {
-          setState({ loading: false, items: [], reason: "no_record", record: null });
+          setState({ loading: false, items: [], reason: reasonOf(data) ?? "no_record", record: null });
         } else if (latest.items !== undefined) {
-          setState({ loading: false, items: latest.items ?? [], reason: latest.reason ?? null, record: latest.record ?? null });
+          setState({ loading: false, items: latest.items ?? [], reason: reasonOf(latest), record: latest.record ?? null });
         } else {
           const latestAnchor = govDateToDashed(latest.record?.inspctDe);
           if (!latestAnchor || Number.isNaN(new Date(latestAnchor).getTime())) {
@@ -152,7 +156,7 @@ export function useInspectionFailItems(govElevatorNo, startDate) {
             const res2 = await authFetch(`/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(govElevatorNo)}&anchorDate=${encodeURIComponent(latestAnchor)}`);
             const data2 = await res2.json();
             if (cancelled) return;
-            setState({ loading: false, items: data2.items ?? [], reason: data2.reason ?? null, record: data2.record ?? null });
+            setState({ loading: false, items: data2.items ?? [], reason: reasonOf(data2), record: data2.record ?? null });
           }
         }
       } catch {

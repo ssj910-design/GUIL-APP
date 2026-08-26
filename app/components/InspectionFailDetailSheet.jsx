@@ -22,8 +22,8 @@ export function InspectionFailDetailSheet({ inspection, preloaded, onClose, Cont
   const preloadedReady = preloaded && preloaded.items !== undefined;
   const [state, setState] = useState(
     preloadedReady
-      ? { loading: false, items: preloaded.items ?? [], error: null, reason: preloaded.reason ?? null, record: preloaded.record ?? null }
-      : { loading: true, items: [], error: null, reason: null, record: preloaded?.record ?? null }
+      ? { loading: false, items: preloaded.items ?? [], reason: preloaded.reason ?? null, record: preloaded.record ?? null }
+      : { loading: true, items: [], reason: null, record: preloaded?.record ?? null }
   );
 
   // preloaded인 경우, 회차 고유 날짜(record.inspctDe)를 anchorDate로 넘겨 같은 회차를 다시 조회한다.
@@ -43,31 +43,37 @@ export function InspectionFailDetailSheet({ inspection, preloaded, onClose, Cont
         const res = await authFetch(url);
         const data = await res.json();
         if (cancelled) return;
+        // route.js가 상위 API(getInspectsafeList) 자체가 실패했을 때 top-level error만 주고
+        // reason은 안 채워주는 경우가 있다 — 그걸 reason 없는 채로 두면 아래 "no_record"로
+        // 잘못 표시되고(실제론 조회 자체가 안 된 것) 재시도 버튼도 안 뜨는 막다른 상태가 된다
+        // (실사고: 조건부합격처럼 검사일자가 비어 anchorDate 없이 부르는 건에서 발견).
+        // fetch_failed로 통일해 항상 "재시도" 버튼이 뜨는 경로를 타게 한다.
+        const reasonOf = (d) => d.reason ?? (d.error ? "fetch_failed" : null);
         if (hasValidAnchor) {
-          setState({ loading: false, items: data.items ?? [], error: data.error ?? null, reason: data.reason ?? null, record: data.record ?? null });
+          setState({ loading: false, items: data.items ?? [], reason: reasonOf(data), record: data.record ?? null });
         } else {
           // anchorDate 없이 부르면 전체 이력을 최신순으로 받는다 — 첫 번째(최신) 회차가 지금 보고 있는 결과다.
           // 단, 이제 회차 목록은 items를 바로 안 채워주므로(지연 조회), items가 비어있으면
           // 그 회차 자신의 검사일자를 anchorDate 삼아 한 번 더 조회해야 실제 부적합 항목을 얻는다.
           const latest = (data.history ?? [])[0];
           if (!latest) {
-            setState({ loading: false, items: [], error: data.error ?? null, reason: "no_record", record: null });
+            setState({ loading: false, items: [], reason: reasonOf(data) ?? "no_record", record: null });
           } else if (latest.items !== undefined) {
-            setState({ loading: false, items: latest.items ?? [], error: data.error ?? null, reason: latest.reason ?? null, record: latest.record ?? null });
+            setState({ loading: false, items: latest.items ?? [], reason: reasonOf(latest), record: latest.record ?? null });
           } else {
             const latestAnchor = govDateToDashed(latest.record?.inspctDe);
             if (!isValidDateStr(latestAnchor)) {
-              setState({ loading: false, items: [], error: null, reason: "no_record", record: latest.record ?? null });
+              setState({ loading: false, items: [], reason: "no_record", record: latest.record ?? null });
             } else {
               const res2 = await authFetch(`/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(inspection.govElevatorNo)}&anchorDate=${encodeURIComponent(latestAnchor)}`);
               const data2 = await res2.json();
               if (cancelled) return;
-              setState({ loading: false, items: data2.items ?? [], error: data2.error ?? null, reason: data2.reason ?? null, record: data2.record ?? null });
+              setState({ loading: false, items: data2.items ?? [], reason: reasonOf(data2), record: data2.record ?? null });
             }
           }
         }
       } catch {
-        if (!cancelled) setState({ loading: false, items: [], error: "조회에 실패했습니다", reason: null, record: null });
+        if (!cancelled) setState({ loading: false, items: [], reason: "fetch_failed", record: null });
       }
     }
     load();
@@ -89,8 +95,6 @@ export function InspectionFailDetailSheet({ inspection, preloaded, onClose, Cont
       </div>
       {state.loading ? (
         <p className="text-xs text-slate-400 text-center py-8">국가승강기정보센터에서 부적합 항목을 조회하는 중...</p>
-      ) : state.error ? (
-        <p className="text-xs text-red-500 text-center py-8">{state.error}</p>
       ) : state.items.length === 0 ? (
         <div className="text-center py-8">
           <p className="text-xs text-slate-400">
