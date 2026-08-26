@@ -683,7 +683,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
   const materialSubTabs = ["material", "quote"];
   const swipe = useSwipeSubtab(materialSubTabs, sub, setSub);
   const [form, setForm] = useState({ siteId: "", units: [], parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
-  const [quoteForm, setQuoteForm] = useState({ siteId: "", units: [], parts: [emptyPartRow(), emptyPartRow(), emptyPartRow()], contactPhone: "", photos: [], note: "" });
+  const [quoteForm, setQuoteForm] = useState({ siteId: "", units: [], parts: [emptyPartRow(), emptyPartRow(), emptyPartRow()], partsByUnit: {}, contactPhone: "", photos: [], note: "" });
   const [matStep, setMatStep] = useState(0);
   const [quoteStep, setQuoteStep] = useState(0);
   const [formToast, setFormToast] = useState(null); // { msg, ok } — 경고(기본)/성공(ok)
@@ -782,8 +782,17 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
   }
 
   const myRequests = requests.filter((r) => r.engineer === CURRENT_ENGINEER && !isBilled(r.id));
-  const quoteFormText = formatPartRows(quoteForm.parts);
-  const quoteValid = quoteForm.siteId && quoteFormText && quoteForm.contactPhone && quoteForm.photos.length > 0;
+  // 호기를 2개 이상 고르면(현장 1건으로 합쳐 접수) 부품도 호기별로 따로 받아, 내용에
+  // "1호기 신청부품 / 2호기 신청부품"으로 나눠 보이게 한다. 1개(또는 미선택)면 기존처럼
+  // 공용 목록 하나만 쓴다.
+  function quoteUnitPartsText(u) {
+    return formatPartRows(quoteForm.partsByUnit[u] ?? []);
+  }
+  const quoteFormText = quoteForm.units.length > 1
+    ? quoteForm.units.map((u) => (quoteUnitPartsText(u) ? `${u} 신청부품\n${quoteUnitPartsText(u)}` : "")).filter(Boolean).join("\n\n")
+    : formatPartRows(quoteForm.parts);
+  const quoteValid = quoteForm.siteId && quoteFormText && quoteForm.contactPhone && quoteForm.photos.length > 0
+    && (quoteForm.units.length <= 1 || quoteForm.units.every((u) => quoteUnitPartsText(u)));
 
   // 스텝별 필수 검증 — 미입력이면 안내 문구 반환(다음/제출 막힘), 없으면 null.
   function matStepError(step) {
@@ -804,7 +813,12 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
       if (!quoteForm.contactPhone.trim()) return "현장 견적 담당자 전화번호를 입력해주세요";
     }
     if (step === 1) {
-      if (!quoteFormText) return "견적 내역을 1개 이상 입력해주세요";
+      if (quoteForm.units.length > 1) {
+        const missing = quoteForm.units.filter((u) => !quoteUnitPartsText(u));
+        if (missing.length) return `${missing.join(", ")} 견적 내역을 입력해주세요`;
+      } else if (!quoteFormText) {
+        return "견적 내역을 1개 이상 입력해주세요";
+      }
       if (quoteForm.photos.length === 0) return "현장 상태 사진을 최소 1장 등록해주세요";
     }
     return null;
@@ -868,7 +882,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
       } : {}),
     };
     if (!(await onAddQuoteRequest([newQuote], [dbRow]))) return;
-    setQuoteForm({ siteId: "", units: [], parts: [emptyPartRow(), emptyPartRow(), emptyPartRow()], contactPhone: "", photos: [], note: "" });
+    setQuoteForm({ siteId: "", units: [], parts: [emptyPartRow(), emptyPartRow(), emptyPartRow()], partsByUnit: {}, contactPhone: "", photos: [], note: "" });
     setQuoteStep(0);
     toastForm("견적 요청이 접수되었습니다", true);
   }
@@ -1195,14 +1209,27 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
 
             {quoteStep === 1 && (
               <>
-                <Field label="견적 내역">
-                  <PartsRowsInput
-                    rows={quoteForm.parts}
-                    setRows={(rows) => setQuoteForm({ ...quoteForm, parts: rows })}
-                    namePlaceholder="예: 1층 승장도어 스위치"
-                    nameLabel="부품명 (해당 층까지 기재)"
-                  />
-                </Field>
+                {quoteForm.units.length > 1 ? (
+                  quoteForm.units.map((u) => (
+                    <Field key={u} label={`${u} 신청부품`}>
+                      <PartsRowsInput
+                        rows={quoteForm.partsByUnit[u] ?? [emptyPartRow()]}
+                        setRows={(rows) => setQuoteForm({ ...quoteForm, partsByUnit: { ...quoteForm.partsByUnit, [u]: rows } })}
+                        namePlaceholder="예: 1층 승장도어 스위치"
+                        nameLabel="부품명 (해당 층까지 기재)"
+                      />
+                    </Field>
+                  ))
+                ) : (
+                  <Field label="견적 내역">
+                    <PartsRowsInput
+                      rows={quoteForm.parts}
+                      setRows={(rows) => setQuoteForm({ ...quoteForm, parts: rows })}
+                      namePlaceholder="예: 1층 승장도어 스위치"
+                      nameLabel="부품명 (해당 층까지 기재)"
+                    />
+                  </Field>
+                )}
                 <Field label="현장 상태 사진">
                   <MultiPhotoUpload
                     photos={quoteForm.photos}
@@ -1231,7 +1258,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
               {quoteStep < 1 ? (
                 <button type="button" onClick={() => { const err = quoteStepError(0); if (err) { toastForm(err); return; } setQuoteStep(1); }} className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 active:bg-blue-800">다음</button>
               ) : (
-                <div className="flex-1"><PrimaryButton onClick={() => { const err = quoteStepError(1); if (err) { toastForm(err); return; } submitQuote(); }}>견적 요청하기{quoteForm.units.length > 1 ? ` (${quoteForm.units.length}건)` : ""}</PrimaryButton></div>
+                <div className="flex-1"><PrimaryButton onClick={() => { const err = quoteStepError(1); if (err) { toastForm(err); return; } submitQuote(); }}>견적 요청하기</PrimaryButton></div>
               )}
             </div>
           </div>
