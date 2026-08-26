@@ -18,7 +18,7 @@ const BILL_STEP_TITLES = ["청구 정보", "증빙 사진", "완료 서명"]; //
 const draftKey = (todoId) => `guilBillingDraftV1:${todoId}`;
 const MAN_BILL_TITLES = ["현장·호기", "교체 내역·비용", "증빙 사진", "완료 서명"]; // 직접 입력(4-step)
 // FM 계약은 부품이 무상이라 수리비 0원 청구가 있다 — 0원이면 이 중 하나를 사유로 반드시 고르게 한다.
-const FREE_REASONS = ["FM", "하자", "서비스"];
+const FREE_REASONS = ["FM", "하자", "서비스", "견적서 참조"];
 
 // 자릿수(9~11)만 보면 "191-494-949"처럼 0으로 시작하지 않는 엉뚱한 숫자도 통과한다 —
 // 국내 전화번호는 항상 0으로 시작하므로 그것까지 같이 확인한다.
@@ -144,7 +144,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       if (!isQuoteBilling) {
         const raw = String(materialCost ?? "").trim();
         if (raw === "" || Number(raw) < 0) return "수리비를 입력해주세요";
-        if (Number(raw) === 0 && !freeReason) return "무상 사유를 선택해주세요";
+        if (Number(raw) === 0 && !freeReason) return "사유를 선택해주세요";
       }
       if (selected?.isOutsourced && !vendorNameInput.trim()) return "작업 업체명을 입력해주세요";
     }
@@ -182,7 +182,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       if (!formatPartRows(manualForm.parts)) return "교체내역을 1개 이상 입력해주세요";
       if (!manualForm.contactPhone.trim()) return "현장담당자 연락처를 입력해주세요";
       if (manualCostRaw === "" || Number(manualCostRaw) < 0) return "수리비를 입력해주세요";
-      if (Number(manualCostRaw) === 0 && !manualFreeReason) return "무상 사유를 선택해주세요";
+      if (Number(manualCostRaw) === 0 && !manualFreeReason) return "사유를 선택해주세요";
     }
     if (step === 2) {
       if (manualPhotos.before.length === 0) return "교체 전 사진을 등록해주세요";
@@ -451,20 +451,20 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                           <p className="text-[11px] text-red-500 mt-1">수리비를 입력해주세요</p>
                         ) : Number(materialCost) === 0 ? (
                           <div className="mt-1.5">
-                            <p className="text-[11px] font-bold text-slate-500 mb-1">무상 사유 (필수)</p>
-                            <div className="flex gap-1.5">
+                            <p className="text-[11px] font-bold text-slate-500 mb-1">사유 (필수)</p>
+                            <div className="grid grid-cols-2 gap-1.5">
                               {FREE_REASONS.map((r) => (
                                 <button
                                   key={r}
                                   type="button"
                                   onClick={() => setFreeReason(r)}
-                                  className={`flex-1 py-2 rounded-lg text-xs font-bold ${freeReason === r ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}
+                                  className={`py-2 rounded-lg text-xs font-bold ${freeReason === r ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}
                                 >
                                   {r}
                                 </button>
                               ))}
                             </div>
-                            {!freeReason && <p className="text-[11px] text-red-500 mt-1">무상 사유를 선택해주세요</p>}
+                            {!freeReason && <p className="text-[11px] text-red-500 mt-1">사유를 선택해주세요</p>}
                           </div>
                         ) : (
                           selected?.billingAmount != null && Number(materialCost) !== Number(selected.billingAmount) && (
@@ -739,20 +739,20 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                     <p className="text-[11px] text-red-500 mt-1">수리비를 입력해주세요</p>
                   ) : Number(manualCostRaw) === 0 && (
                     <div className="mt-1.5">
-                      <p className="text-[11px] font-bold text-slate-500 mb-1">무상 사유 (필수)</p>
-                      <div className="flex gap-1.5">
+                      <p className="text-[11px] font-bold text-slate-500 mb-1">사유 (필수)</p>
+                      <div className="grid grid-cols-2 gap-1.5">
                         {FREE_REASONS.map((r) => (
                           <button
                             key={r}
                             type="button"
                             onClick={() => setManualFreeReason(r)}
-                            className={`flex-1 py-2 rounded-lg text-xs font-bold ${manualFreeReason === r ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}
+                            className={`py-2 rounded-lg text-xs font-bold ${manualFreeReason === r ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}
                           >
                             {r}
                           </button>
                         ))}
                       </div>
-                      {!manualFreeReason && <p className="text-[11px] text-red-500 mt-1">무상 사유를 선택해주세요</p>}
+                      {!manualFreeReason && <p className="text-[11px] text-red-500 mt-1">사유를 선택해주세요</p>}
                     </div>
                   )}
                 </Field>
