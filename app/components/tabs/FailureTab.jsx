@@ -1551,33 +1551,53 @@ function FailureStatusCard({ f, onOpenDetail, onReassign, canReassign }) {
   );
 }
 
+// 기간 필터 — 처리현황이 계속 쌓이는 걸 감안해 기본은 최근 7일만 본다.
+const DATE_RANGES = [
+  { key: "7d", label: "7일", days: 7 },
+  { key: "1m", label: "1개월", days: 30 },
+  { key: "3m", label: "3개월", days: 90 },
+];
+
 function FailureStatusOverview({ failures, onReassign, attendances = [], todayLeaves = [] }) {
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
   const [reassignTarget, setReassignTarget] = useState(null);
   const [filter, setFilter] = useState("all"); // all · 미처리(미배정) · 진행중 · 완료
+  const [dateRange, setDateRange] = useState("7d");
+  const [search, setSearch] = useState("");
+  // 기사는 기본 본인 배정 건만 — "모든 현장 보기"를 켜면 관리자처럼 전사를 본다(P2-1 취지는
+  // 유지하되, 다른 현장 처리 이력을 참고하고 싶을 때 직접 켤 수 있게).
+  const [showAll, setShowAll] = useState(false);
   const mine = failures.filter((f) => f.assignee === CURRENT_ENGINEER);
   const myDone = mine.filter((f) => f.status === "완료").length;
   const myUndone = mine.filter((f) => f.status !== "완료").length;
-  // 기사는 본인 배정 건만, 관리자만 전사 — 처리현황이 역할 무관 전체를 보여주던 누수 차단 (P2-1)
-  const base = role === "admin" ? failures : mine;
-  const allDone = base.filter((f) => f.status === "완료").length;
-  const allProcessing = base.filter((f) => f.status === "진행중").length;
-  const allUndone = base.filter((f) => f.status === "미처리").length;
+  const base = role === "admin" || showAll ? failures : mine;
+
+  const rangeMs = (DATE_RANGES.find((r) => r.key === dateRange)?.days ?? 7) * 86400000;
+  const inRange = base.filter((f) => !f.createdAt || Date.now() - new Date(f.createdAt).getTime() <= rangeMs);
+
+  const allDone = inRange.filter((f) => f.status === "완료").length;
+  const allProcessing = inRange.filter((f) => f.status === "진행중").length;
+  const allUndone = inRange.filter((f) => f.status === "미처리").length;
   // 필터 칩 = 상태별. '미배정' 칩은 status 미처리(미배정·지원미배정·운행정지·응답대기 포함).
   const FILTERS = [
-    { key: "all", label: "전체", count: base.length },
+    { key: "all", label: "전체", count: inRange.length },
     { key: "미처리", label: "미배정", count: allUndone },
     { key: "진행중", label: "진행중", count: allProcessing },
     { key: "완료", label: "완료", count: allDone },
   ];
-  const shown = filter === "all" ? base : base.filter((f) => f.status === filter);
+  const byStatus = filter === "all" ? inRange : inRange.filter((f) => f.status === filter);
+  const q = search.trim().toLowerCase();
+  const shown = !q ? byStatus : byStatus.filter((f) => {
+    const { faultType, faultDetail } = parseErrorCode(f.errorCode);
+    return [f.siteName, faultType, faultDetail, f.processContent, f.faultCause].filter(Boolean).join(" ").toLowerCase().includes(q);
+  });
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="px-5 py-4 shrink-0">
+      <div className="px-5 py-4 shrink-0 space-y-2.5">
         {mine.length > 0 && (
-          <div className="flex items-center gap-3 text-xs text-slate-500 mb-3">
+          <div className="flex items-center gap-3 text-xs text-slate-500">
             <span className="text-[13px] font-bold text-blue-700">내 진행</span>
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> 처리 {myDone}</span>
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> 미처리 {myUndone}</span>
@@ -1596,10 +1616,39 @@ function FailureStatusOverview({ failures, onReassign, attendances = [], todayLe
             </button>
           ))}
         </div>
+        <div className="flex gap-1.5">
+          {DATE_RANGES.map((r) => (
+            <button
+              key={r.key}
+              onClick={() => setDateRange(r.key)}
+              className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
+                dateRange === r.key ? "bg-blue-700 text-white border-blue-700" : "bg-white text-slate-600 border-slate-200 active:bg-slate-50"
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            className={`${inputCls} pl-8`}
+            placeholder="현장명, 증상으로 검색"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        {role !== "admin" && (
+          <label className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2.5">
+            <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
+            <span className="text-[13px] font-bold text-slate-700">모든 현장 보기</span>
+            <span className="ml-auto text-[11px] text-slate-400">기본은 내 배정 건만</span>
+          </label>
+        )}
       </div>
       <div className="flex-1 overflow-y-auto px-5 pt-4 pb-24 space-y-2.5">
         {shown.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-10">{filter === "all" ? "고장 접수 이력이 없습니다" : "해당 상태의 고장이 없습니다"}</p>
+          <p className="text-xs text-slate-400 text-center py-10">{q ? "검색 결과가 없습니다" : filter === "all" ? "해당 기간에 고장 접수 이력이 없습니다" : "해당 상태의 고장이 없습니다"}</p>
         ) : (
           shown.map((f) => (
             <FailureStatusCard key={f.id} f={f} onOpenDetail={setDetailTarget} onReassign={setReassignTarget}
