@@ -650,7 +650,14 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
       .filter((i) => mySiteIds.has(i.siteId) && i.dueDate && !i.result)
       .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) }))
       .filter((i) => i.daysLeft >= 0)
-      .sort((a, b) => a.daysLeft - b.daysLeft)
+      // 같은 날이면 방문 예정 시각순(시간 미지정 건은 뒤로) — 검사관리 탭(InspectionTab.jsx)의
+      // 검사도래현장 정렬과 동일 기준.
+      .sort((a, b) => {
+        const diff = a.daysLeft - b.daysLeft;
+        if (diff !== 0) return diff;
+        if (a.dueTime && b.dueTime) return a.dueTime.localeCompare(b.dueTime);
+        return a.dueTime ? -1 : b.dueTime ? 1 : 0;
+      })
   );
 
   // 조건부/불합격 카드의 "검사일정"은 관리자가 InspectionsAdmin에서 수기입력한 방문 예정 일시(inspections.due_date/due_time)다

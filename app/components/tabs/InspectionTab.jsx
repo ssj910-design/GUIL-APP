@@ -132,7 +132,14 @@ export function InspectionTab({ inspections }) {
         .filter((i) => !search || (i.siteName ?? "").toLowerCase().includes(search.toLowerCase()))
         .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) }))
         .filter((i) => i.daysLeft >= 0)
-        .sort((a, b) => a.daysLeft - b.daysLeft)
+        // 같은 날이면 방문 예정 시각순(시간 미지정 건은 뒤로) — 실사고: 날짜만 보고 정렬해
+        // 같은 날 여러 현장이 원래 순서(등록순 등) 그대로 뒤섞여 나왔었다.
+        .sort((a, b) => {
+          const diff = a.daysLeft - b.daysLeft;
+          if (diff !== 0) return diff;
+          if (a.dueTime && b.dueTime) return a.dueTime.localeCompare(b.dueTime);
+          return a.dueTime ? -1 : b.dueTime ? 1 : 0;
+        })
     );
     // groupBySite는 "이미 정렬된 목록"을 받아 그 순서를 유지한 채로만 같은 현장끼리
     // 묶는다 — 정렬(.sort)을 groupBySite보다 먼저 해야 한다. 원래 여기 순서가

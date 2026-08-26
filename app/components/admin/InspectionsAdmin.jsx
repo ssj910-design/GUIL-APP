@@ -226,7 +226,14 @@ export default function InspectionsAdmin({ data, setData }) {
         const conditionals = groupBySite(sorted.filter((i) => i.result !== "fail"));
         return [...fails, ...conditionals];
       })()
-    : filteredRows.sort((a, b) => (a.dueDate ? a.daysLeft : Infinity) - (b.dueDate ? b.daysLeft : Infinity));
+    // 같은 날이면 방문 예정 시각순(시간 미지정 건은 뒤로) — 기사어플 InspectionTab의
+    // 검사도래현장 정렬과 동일 기준.
+    : filteredRows.sort((a, b) => {
+        const diff = (a.dueDate ? a.daysLeft : Infinity) - (b.dueDate ? b.daysLeft : Infinity);
+        if (diff !== 0) return diff;
+        if (a.dueTime && b.dueTime) return a.dueTime.localeCompare(b.dueTime);
+        return a.dueTime ? -1 : b.dueTime ? 1 : 0;
+      });
 
   // manualId가 있으면 기존 수기입력 행을 갱신하고, 없으면(실시간 연동 현장에 수기입력 기한이 처음 등록되는 경우) 새로 만든다.
   async function saveDueDate(i, newDate, newTime, newType) {
