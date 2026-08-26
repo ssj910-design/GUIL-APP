@@ -292,7 +292,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   // 사진·영상은 바로 게시하지 않고 미리보기로 모아뒀다가 "게시" 버튼을 눌러야 올라간다.
   // + 버튼을 여러 번 눌러 계속 추가할 수 있다.
   async function pickFiles(e) {
-    const files = [...(e.target.files ?? [])].slice(0, 5);
+    const files = [...(e.target.files ?? [])];
     e.target.value = "";
     if (!files.length) return;
     if (files.some((f) => f.size > 50 * 1024 * 1024)) return alert("파일당 50MB까지 보낼 수 있어요");
