@@ -2,7 +2,7 @@ import { useState, useContext, useEffect, useRef } from "react";
 import { Capacitor } from "@capacitor/core";
 import { ShieldCheck, AlertOctagon, X, Map as MapIcon } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { TODAY_STR } from "@/lib/constants";
+import { TODAY_STR, DUTY_KINDS } from "@/lib/constants";
 import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, distanceKm, activeSites } from "@/lib/utils";
 import { Badge, DDay, SmsToast, Sheet } from "@/app/components/ui";
 import { LOCATION_TRACKING } from "@/lib/features";
@@ -464,7 +464,11 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
       <div ref={scrollRef} className="flex gap-1.5 overflow-x-auto">
         {days.map((d) => {
           const dow = new Date(`${d}T00:00:00`).getDay();
-          const dutyDay = duties.filter((x) => x.duty_date === d && (x.kind === "당직" || x.kind === "숙직"));
+          // DB에서 온 순서 그대로 쓰면 요청/수정 이력에 따라 날짜마다 숙직·당직 순서가 들쭉날쭉해진다
+          // (오늘 날짜만 뒤바뀌어 보이던 원인) — 근무표·근무조정과 같은 순서(DUTY_KINDS)로 강제 정렬한다.
+          const dutyDay = duties
+            .filter((x) => x.duty_date === d && (x.kind === "당직" || x.kind === "숙직"))
+            .sort((a, b) => DUTY_KINDS.indexOf(a.kind) - DUTY_KINDS.indexOf(b.kind));
           const leaveDay = leaves.filter((l) => l.start_date <= d && d <= l.end_date);
           // 카드 폭이 좁아 이름을 3명까지만 보여주고, 나머지는 "+N"으로 요약한다 (자세히는 카드 클릭 시 팝업).
           const dayPeople = [
@@ -510,7 +514,7 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
               <button onClick={() => setDayDetail(null)} className="p-1 text-slate-400" aria-label="닫기"><X size={16} /></button>
             </div>
             <div className="space-y-2.5">
-              {["당직", "숙직"].map((kind) => {
+              {DUTY_KINDS.filter((k) => k !== "정상근무").map((kind) => {
                 const person = duties.find((x) => x.duty_date === dayDetail && x.kind === kind);
                 return (
                   <div key={kind} className="flex items-start justify-between gap-3 text-sm border-b border-slate-50 pb-2 last:border-0 last:pb-0">
