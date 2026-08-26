@@ -159,6 +159,9 @@ export default function App() {
   const feedNoticeReady = feed.some((p) => p.isNotice !== undefined);
   // failures.assigned_at 컬럼 존재 여부 — 마이그레이션 074 전엔 컬럼이 없어, 있을 때만 배정 시각을 쓴다(미구현 시 배정이 깨지지 않게).
   const assignedAtReady = failures.some((f) => f.assignedAt !== undefined);
+  // failures.fault_model 컬럼 존재 여부 — 마이그레이션 131 전엔 컬럼이 없어, 있을 때만 처리등록 시
+  // 고른 기종을 저장한다(에러코드집 과거처리이력이 호기의 실제 기종이 아니라 이 값 기준으로 찾게 하기 위함).
+  const faultModelReady = failures.some((f) => f.faultModel !== undefined);
   // billings.signature_url 등 컬럼 존재 여부 — 마이그레이션 119 실행 전엔 컬럼이 없어, 있을 때만
   // 서명/전화승인 정보를 같이 쓴다(미실행 시에도 청구 저장 자체는 깨지지 않게).
   const billingApprovalReady = billings.some((b) => b.signatureUrl !== undefined);
@@ -1144,7 +1147,7 @@ export default function App() {
   }
 
   async function handleFailureResult(failure, payload) {
-    const { result, symptom, cause, processContent, note, photoCount, photoUrls } = payload;
+    const { result, symptom, cause, processContent, note, photoCount, photoUrls, model } = payload;
     const errorCode = (payload.errorCode || "").trim();
     const isClosed = result === "처리완료" || result === "오신고";
     // 지원요청·운행정지 = 혼자 못 끝냄 → 미배정(미처리)으로 되돌려 지원 갈 기사가 이어받게 한다.
@@ -1188,6 +1191,7 @@ export default function App() {
         process_note: note || null,
         photo_count: photoCount || 0,
         photo_urls: photoUrls?.length ? photoUrls : null,
+        ...(faultModelReady ? { fault_model: model || null } : {}),
       })
       .eq("id", failure.id).eq("status", "진행중").eq("assignee", failure.assignee)
       .select();
@@ -1215,6 +1219,7 @@ export default function App() {
               processNote: note || null,
               photoCount: photoCount || 0,
               photoUrls: photoUrls ?? [],
+              ...(faultModelReady ? { faultModel: model || null } : {}),
             }
           : x
       )
