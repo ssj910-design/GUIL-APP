@@ -10,6 +10,21 @@ import { pushSupported, pushPermission, enablePush, disablePush, isSubscribed, n
 
 const KIND_TONE = { 당직: "bg-emerald-50 text-emerald-700", 숙직: "bg-blue-50 text-blue-700", 정상근무: "bg-violet-50 text-violet-500" };
 
+// 컴포넌트 안에서 정의하면 매 렌더마다 새 함수가 되어 React가 자식(예: 건의하기 textarea)을
+// 매번 새로 마운트한다 — 입력 중 포커스가 끊겨 모바일에서 한 글자만 치면 키보드가 닫히는
+// 원인이었다. 모듈 스코프로 빼서 항상 같은 컴포넌트 정체성을 유지한다.
+function Card({ icon, title, children, extra }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-4">
+      <div className="flex items-center justify-between mb-2.5">
+        <p className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5">{icon}{title}</p>
+        {extra}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 /** 마이페이지 — 내 근무·내 출퇴근을 한 곳에서. 조회 중심이고 수정은 연락처만.
  *  연차 신청/잔여/신청내역은 워크캘린더 "연차" 탭으로 이동함(WorkCalendarSheet.jsx). */
 export function MyPage({ attendances, dutySchedules, onClose }) {
@@ -120,16 +135,6 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
     .filter((d) => d.profileId === selfId && d.dutyDate >= TODAY_STR)
     .sort((a, b) => a.dutyDate.localeCompare(b.dutyDate))
     .slice(0, 5);
-
-  const Card = ({ icon, title, children, extra }) => (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <div className="flex items-center justify-between mb-2.5">
-        <p className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5">{icon}{title}</p>
-        {extra}
-      </div>
-      {children}
-    </div>
-  );
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-50 flex flex-col">
