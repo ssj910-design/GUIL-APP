@@ -1,5 +1,5 @@
 // 출근체크 리마인드 + 관리자 요약 — pg_cron이 매분 이 주소를 호출한다.
-//  1) 09:01~09:30(KST, 평일) 매분: 아직 출근체크 안 한 기사에게 리마인드 (체크하면 다음 스윕부터 빠짐 — 자동 종료)
+//  1) 09:01~10:00(KST, 평일) 매분: 아직 출근체크 안 한 기사에게 리마인드 (체크하면 다음 스윕부터 빠짐 — 자동 종료)
 //  2) 09:10(KST, 평일) 1회: 그 시점 미체크자 명단을 관리자에게 요약
 // 연차·공가·병가는 종일 제외, 반차는 오전반차만 제외(오후반차는 오전에 정상 출근이라 대상 포함).
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
@@ -15,7 +15,7 @@ async function handle(request) {
   const nowKst = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
   const kstMins = nowKst.getHours() * 60 + nowKst.getMinutes();
   const isWeekday = nowKst.getDay() >= 1 && nowKst.getDay() <= 5;
-  const inWindow = isWeekday && kstMins >= 541 && kstMins <= 570; // 09:01~09:30
+  const inWindow = isWeekday && kstMins >= 541 && kstMins <= 600; // 09:01~10:00
   if (!inWindow) return Response.json({ ok: true, skipped: "시간대 아님" });
 
   const todayStr = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
