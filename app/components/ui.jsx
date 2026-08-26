@@ -6,6 +6,7 @@ import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, ChevronLeft, Che
 import { TODAY_STR } from "@/lib/constants";
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
+import { useBackHandler } from "@/app/hooks/useBackHandler";
 
 
 /* ------------------------------------------------------------------ */
@@ -174,6 +175,9 @@ export function PhotoLightbox({ urls, index, onIndexChange, onClose }) {
   // 다운로드는 앱에서 안드로이드 다운로드 매니저로 넘기고 나면 끝 — 눌러도 화면이 그대로라
   // "됐나?" 싶은 게 당연하다. 카톡처럼 하단에 진행 토스트를 잠깐 띄운다.
   const [toast, setToast] = useState(null);
+  // 안드로이드 뒤로가기 — 다운로드 메뉴가 떠 있으면 그것부터, 아니면 라이트박스 자체를 닫는다.
+  useBackHandler(downloadMenuOpen, () => setDownloadMenuOpen(false));
+  useBackHandler(!downloadMenuOpen, onClose);
 
   async function downloadOne() {
     setDownloadMenuOpen(false);
@@ -425,6 +429,7 @@ export function Sheet({ title, onClose, children, bg = "bg-slate-50", full = fal
   // 채팅처럼 "하단 고정 입력창 + 위쪽만 스크롤"을 자식이 직접 관리하는 화면용.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  useBackHandler(true, onClose); // 안드로이드 뒤로가기 — 열려있는 동안 이 시트를 닫는다
   const content = (
     <div className="fixed inset-0 z-30 flex flex-col bg-black/40" onClick={onClose}>
       {!full && <div className="mt-auto" />}
@@ -467,6 +472,7 @@ export const inputCls = "w-full border border-slate-300 rounded-lg px-3 py-2.5 t
 /* ------------------------------------------------------------------ */
 
 export function DrillHeader({ title, onBack, onHome }) {
+  useBackHandler(true, onBack); // 안드로이드 뒤로가기 — 이 드릴다운 화면에서 한 단계 뒤로
   return (
     <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-100 shrink-0">
       <div className="flex items-center gap-3">

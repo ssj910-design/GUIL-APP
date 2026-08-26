@@ -5,6 +5,7 @@ import { uploadPhoto, downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/ph
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { PhotoLightboxPane } from "@/app/components/ui";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
+import { useBackHandler } from "@/app/hooks/useBackHandler";
 
 const isVideo = (url) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(url);
 
@@ -16,6 +17,9 @@ function PhotoViewerOverlay({ urls, index, onIndexChange, onClose }) {
   // 다운로드는 앱에서 안드로이드 다운로드 매니저로 넘기고 나면 끝 — 눌러도 화면이 그대로라
   // "됐나?" 싶은 게 당연하다. 카톡처럼 하단에 진행 토스트를 잠깐 띄운다.
   const [toast, setToast] = useState(null);
+  // 안드로이드 뒤로가기 — 다운로드 메뉴가 떠 있으면 그것부터, 아니면 뷰어 자체를 닫는다.
+  useBackHandler(downloadMenuOpen, () => setDownloadMenuOpen(false));
+  useBackHandler(!downloadMenuOpen, onClose);
 
   async function downloadOne() {
     setDownloadMenuOpen(false);
@@ -249,6 +253,8 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   const [search, setSearch] = useState("");
   const fileRef = useRef(null);
   const isAdmin = role === "admin";
+  // 안드로이드 뒤로가기 — 글쓰기 중이면 취소(작성 중이던 내용도 함께 비움, 취소 버튼과 동일 동작).
+  useBackHandler(composing, () => { setComposing(false); setPostInput(""); setPendingPhotos([]); setPostIsNotice(false); });
 
   function goToPost(id) {
     setMenuFor(null);
@@ -341,6 +347,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   const bodyProps = { editingId, editText, setEditText, saveEdit, setEditingId, onOpenPhoto: openPhoto };
 
   const openPost = shownPostId ? feed.find((p) => p.id === shownPostId) : null;
+  useBackHandler(!!openPost, closePost); // 안드로이드 뒤로가기 — 게시글 상세화면에서 목록으로
 
   // ---- 게시글 상세화면 (첨부파일처럼 게시글을 누르면 진입) ----
   if (openPost) {

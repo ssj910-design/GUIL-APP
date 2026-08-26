@@ -15,6 +15,8 @@ import { WorkCalendarSheet } from "@/app/components/WorkCalendarSheet";
 import { MyPage } from "@/app/components/MyPage";
 import { notify, enablePush, ensureNativeChannels, onPushNotificationOpened, onPushNotificationReceived } from "@/lib/push";
 import { Capacitor } from "@capacitor/core";
+import { App as CapacitorApp } from "@capacitor/app";
+import { useBackHandler, popBackHandler } from "@/app/hooks/useBackHandler";
 import { ScreenHeader, BrandSplash, Sheet } from "@/app/components/ui";
 import { ConfirmHost, confirmAsync } from "@/app/components/ConfirmHost";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -219,11 +221,26 @@ export default function App() {
       document.removeEventListener("touchstart", handleOutside);
     };
   }, [notifOpen]);
+  useBackHandler(notifOpen, () => setNotifOpen(false)); // 안드로이드 뒤로가기 — 알림 드롭다운 닫기
 
   // 안드로이드 알림 채널을 앱 시작 시점마다 보장해둔다(권한과 무관하게 만들 수 있고, 이미 있으면 그대로 통과).
   // enablePush()는 로그인 시점에만 불리는데 로그인 세션이 localStorage에 남아있으면 재로그인 없이 계속 쓰이므로,
   // 이미 로그인된 기존 사용자 기기에도 새로 추가된 채널(예: urgent)이 앱 재실행만으로 만들어지게 하려는 것.
   useEffect(() => { ensureNativeChannels(); }, []);
+
+  // 안드로이드 하드웨어 뒤로가기 — 지금까지 앱 어디서도 안 받아서 눌렀다 하면 그냥 앱이 꺼졌다.
+  // useBackHandler 스택에 지금 열려있는 시트·드릴다운·모달이 있으면 그것부터 하나씩 닫고,
+  // 스택이 비어있으면(화면 맨 위) 홈 탭으로, 홈 탭에서 또 누르면 그때 앱을 종료한다.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let handle;
+    CapacitorApp.addListener("backButton", () => {
+      if (popBackHandler()) return;
+      if (tab !== "home") { setTab("home"); return; }
+      CapacitorApp.exitApp();
+    }).then((h) => { handle = h; });
+    return () => handle?.remove();
+  }, [tab]);
 
   // 로그인 세션 — Supabase Auth 대신 자체 로그인(민원24 아이디+비번, verify_login RPC) 결과를
   // localStorage에 담아둔다. 여기서 읽어와 로그인 여부를 판단한다. { id, name, role, mustChange }

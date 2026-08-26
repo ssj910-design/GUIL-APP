@@ -7,6 +7,7 @@ import { TODAY_STR } from "@/lib/constants";
 import { yearsOfService } from "@/lib/leave";
 import { forRole, GROUPS, LEVELS, isEnabled, levelOf } from "@/lib/notifications";
 import { pushSupported, pushPermission, enablePush, disablePush, isSubscribed, notify } from "@/lib/push";
+import { useBackHandler } from "@/app/hooks/useBackHandler";
 
 const KIND_TONE = { 당직: "bg-emerald-50 text-emerald-700", 숙직: "bg-blue-50 text-blue-700", 정상근무: "bg-violet-50 text-violet-500" };
 
@@ -30,6 +31,7 @@ function Card({ icon, title, children, extra }) {
 export function MyPage({ attendances, dutySchedules, onClose }) {
   const { name, role, selfId, profiles = [], signOut } = useContext(AuthContext);
   const me = profiles.find((p) => p.id === selfId) ?? {};
+  useBackHandler(true, onClose); // 안드로이드 뒤로가기 — 마이페이지 닫기
   const [orgSettings, setOrgSettings] = useState({});
   const [prefs, setPrefs] = useState(me.notify_prefs ?? {});
   const [notifOpen, setNotifOpen] = useState(false);

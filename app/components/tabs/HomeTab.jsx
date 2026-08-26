@@ -11,6 +11,7 @@ import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetail
 import { usePriorFlaggedBadge } from "@/app/hooks/useLiveInspections";
 import { FailureDetailSheet, DispatchEtaModal, ArrivalResultModal, FailureMiniCard, AssignEngineerSheet } from "@/app/components/tabs/FailureTab";
 import { EngineerLocationMap } from "@/app/components/admin/EngineerLocationMap";
+import { useBackHandler } from "@/app/hooks/useBackHandler";
 
 
 // 검사도래현장 한 줄: 직전 검사가 조건부합격/조건후합격이면 현장명을 눌러 당시 부적합내역을 볼 수 있다.
@@ -409,6 +410,7 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
   const [duties, setDuties] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [dayDetail, setDayDetail] = useState(null); // 날짜 카드 클릭 시 당직·숙직·휴가 인원 모아보기
+  useBackHandler(!!dayDetail, () => setDayDetail(null)); // 안드로이드 뒤로가기 — 팝업 닫기
   const scrollRef = useRef(null);
   const todayRef = useRef(null);
 
