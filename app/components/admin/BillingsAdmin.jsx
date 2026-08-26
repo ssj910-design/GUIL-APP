@@ -34,19 +34,26 @@ function buildCertificateData(b, data) {
   // 그 합계를 대신 쓴다.
   const itemsTotal = items.length && items.every((it) => it.amount != null) ? items.reduce((sum, it) => sum + it.amount, 0) : null;
 
+  // 한 청구가 여러 호기를 같이 다루면(견적요청을 현장 1건으로 합친 경우) 대표 호기 하나만
+  // 보여주는 locOf 대신 전체 호기를 같이 보여준다.
+  const siteUnit = b.elevatorNos?.length > 1
+    ? `${data.sites.find((s) => s.id === data.units.find((u) => u.id === b.unitId)?.siteId)?.name ?? b.siteName ?? "-"} · ${formatUnitLabel(b.elevatorNos)}`
+    : locOf(data, b.unitId, b.siteName, b.elevatorNo);
+  const replaceDate = shortDate(b.replaceDate);
+
   return {
     billingId: b.id,
     docNumber: `${BRAND.code}-${b.id.slice(0, 8).toUpperCase()}`,
     issuedDate: shortDate(new Date().toISOString().slice(0, 10)),
-    // 한 청구가 여러 호기를 같이 다루면(견적요청을 현장 1건으로 합친 경우) 대표 호기 하나만
-    // 보여주는 locOf 대신 전체 호기를 같이 보여준다.
-    siteUnit: b.elevatorNos?.length > 1
-      ? `${data.sites.find((s) => s.id === data.units.find((u) => u.id === b.unitId)?.siteId)?.name ?? b.siteName ?? "-"} · ${formatUnitLabel(b.elevatorNos)}`
-      : locOf(data, b.unitId, b.siteName, b.elevatorNo),
+    siteUnit,
+    // 다운로드 파일명 겸 Storage 오브젝트 이름 — 미리보기 창 내장 뷰어의 저장 버튼이
+    // URL 마지막 조각을 파일명으로 쓰기 때문에 둘이 같아야 한다. 경로/파일명에 못 쓰는
+    // 문자는 여기서 미리 털어낸다(서버도 같은 규칙으로 한 번 더 막는다).
+    fileName: `${siteUnit.replace(" · ", " ")} 부품교체확인서 ${replaceDate}`.replace(/[\/:*?"<>|]/g, " "),
     address: addressOf(data, b.unitId, b.siteName),
     // 고객이 보는 문서라 외주 여부는 노출하지 않는다 — 담당 기사 이름을 그대로 쓴다.
     engineerName: personOf(data, b.engineerId, b.engineer),
-    replaceDate: shortDate(b.replaceDate),
+    replaceDate,
     items,
     totalCost: b.cost ?? itemsTotal,
     isFree: b.isFree,
@@ -348,7 +355,7 @@ export default function BillingsAdmin({ data, setData }) {
       {certTarget && (
         <ReplacementCertificateViewer
           cert={cert}
-          filenameBase={`${cert.siteUnit.replace(" · ", " ")} 부품교체확인서 ${cert.replaceDate}`}
+          filenameBase={cert.fileName}
           cachedUrl={certTarget.certificatePdfUrl}
           onGenerated={(url) => {
             if (!certUrlReady) return;

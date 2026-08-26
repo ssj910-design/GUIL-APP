@@ -39,6 +39,13 @@ function triggerDownload(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
+// Storage 공개 URL → 문서명이 붙는 중계 URL(app/api/certificate-pdf). 미리보기를 이걸로
+// 열어야 브라우저 내장 PDF 뷰어의 저장 버튼도 문서명 그대로 받는다.
+function namedPdfUrl(storageUrl, filenameBase) {
+  const path = storageUrl?.split("/object/public/photos/")[1];
+  return path ? `/api/certificate-pdf/${encodeURIComponent(filenameBase + ".pdf")}?path=${path}` : null;
+}
+
 // 여러 페이지 캔버스를 세로로 이어 붙여 JPG 한 장으로 만든다.
 function stitchCanvasesToJpegBlob(canvases) {
   const w = Math.max(...canvases.map((c) => c.width));
@@ -69,32 +76,30 @@ export default function ReplacementCertificateViewer({ cert, filenameBase, cache
     let objectUrl = null;
     (async () => {
       try {
-        let blob;
         if (cachedUrl) {
-          // 이미 한 번 만들어 Storage에 올려둔 파일이 있으면 다시 그리지 않고 그대로 받아온다
-          // — 매번 새로 만들 때 몇 초씩 걸리던 한글 폰트 임베딩을 건너뛴다.
-          const res = await fetch(cachedUrl);
-          if (!res.ok) throw new Error("저장된 교체확인서를 불러오지 못했습니다");
-          blob = await res.blob();
-        } else {
-          const res = await fetch("/api/generate-replacement-certificate-pdf", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(cert),
-          });
-          const contentType = res.headers.get("content-type") ?? "";
-          if (!res.ok || !contentType.includes("application/pdf")) {
-            const body = await res.json().catch(() => null);
-            throw new Error(body?.reason ?? "교체확인서를 만들지 못했습니다");
-          }
-          const newCertUrl = res.headers.get("x-certificate-url");
-          if (newCertUrl) onGenerated?.(newCertUrl);
-          blob = await res.blob();
+          setPreviewUrl(namedPdfUrl(cachedUrl, filenameBase) ?? cachedUrl);
+          setStatus("ready");
+          return;
         }
+        const res = await fetch("/api/generate-replacement-certificate-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(cert),
+        });
+        const contentType = res.headers.get("content-type") ?? "";
+        if (!res.ok || !contentType.includes("application/pdf")) {
+          const body = await res.json().catch(() => null);
+          throw new Error(body?.reason ?? "교체확인서를 만들지 못했습니다");
+        }
+        const newCertUrl = res.headers.get("x-certificate-url");
+        if (newCertUrl) onGenerated?.(newCertUrl);
+        const blob = await res.blob();
         if (cancelled) return;
         pdfBlobRef.current = blob;
-        objectUrl = URL.createObjectURL(blob);
-        setPreviewUrl(objectUrl);
+        // Storage 업로드가 됐으면 문서명이 붙는 중계 URL로, 안 됐으면 blob으로 보여준다.
+        const named = newCertUrl && namedPdfUrl(newCertUrl, filenameBase);
+        if (!named) objectUrl = URL.createObjectURL(blob);
+        setPreviewUrl(named || objectUrl);
         setStatus("ready");
       } catch (err) {
         if (!cancelled) {
@@ -110,20 +115,24 @@ export default function ReplacementCertificateViewer({ cert, filenameBase, cache
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 다운로드 버튼용 원본 — 저장된 URL을 그대로 미리보기에 쓴 경우엔 아직 안 받아왔다.
+  async function pdfBlob() {
+    if (!pdfBlobRef.current) pdfBlobRef.current = await (await fetch(previewUrl)).blob();
+    return pdfBlobRef.current;
+  }
+
   async function downloadPdf() {
-    if (!pdfBlobRef.current) return;
     setDownloading("pdf");
-    triggerDownload(pdfBlobRef.current, `${filenameBase}.pdf`);
+    triggerDownload(await pdfBlob(), `${filenameBase}.pdf`);
     setDownloading(null);
   }
 
   // JPG는 자주 쓰는 기능이 아니라 여기서만 pdf.js를 지연 로드한다 — 미리보기(iframe)는
   // 이 비용을 안 치른다.
   async function downloadJpg() {
-    if (!pdfBlobRef.current) return;
     setDownloading("jpg");
     try {
-      const blobUrl = URL.createObjectURL(pdfBlobRef.current);
+      const blobUrl = URL.createObjectURL(await pdfBlob());
       const canvases = await renderPdfToCanvases(blobUrl);
       URL.revokeObjectURL(blobUrl);
       const jpegBlob = await stitchCanvasesToJpegBlob(canvases);
