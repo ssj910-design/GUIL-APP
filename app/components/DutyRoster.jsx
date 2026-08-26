@@ -2,13 +2,13 @@ import { useState, useContext } from "react";
 import { ChevronLeft, ChevronRight, X, ArrowLeftRight } from "lucide-react";
 import { DutySwapSheet } from "@/app/components/DutySwapSheet";
 import { AuthContext } from "@/app/components/context";
-import { TODAY_STR } from "@/lib/constants";
+import { TODAY_STR, DUTY_KINDS } from "@/lib/constants";
 import { useHolidays } from "@/app/hooks/useHolidays";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 
 // 칸에 그리는 순서 — 숙직 → 당직 → 정상근무 (근무표 생성 미리보기와 동일한 순서).
 // 정상근무는 주4일제 표에서 금요일에만 쓰이는 자리라 값이 있을 때(또는 관리자)만 칸을 보여준다.
-const KINDS = ["숙직", "당직", "정상근무"];
+const KINDS = DUTY_KINDS;
 const KIND_TEXT = { 당직: "text-emerald-700", 숙직: "text-blue-700", 정상근무: "text-violet-500" };
 const KIND_DOT = { 당직: "bg-emerald-500", 숙직: "bg-blue-500", 정상근무: "bg-violet-400" };
 

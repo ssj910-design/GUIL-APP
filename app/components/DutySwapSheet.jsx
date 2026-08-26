@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { X, ArrowLeftRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { AuthContext } from "@/app/components/context";
-import { TODAY_STR } from "@/lib/constants";
+import { TODAY_STR, DUTY_KINDS } from "@/lib/constants";
 import { useHolidays } from "@/app/hooks/useHolidays";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 
@@ -39,7 +39,7 @@ export function DutySwapSheet({ schedules, swaps, onRequestSwap, onClose }) {
   const monthKey = ymOf(y, m);
   const inMonth = schedules.filter((s) => s.dutyDate.startsWith(monthKey));
   const cellOf = (iso, kind) => inMonth.find((s) => s.dutyDate === iso && s.kind === kind);
-  const visibleKinds = inMonth.some((s) => s.kind === "정상근무") ? ["당직", "숙직", "정상근무"] : ["당직", "숙직"];
+  const visibleKinds = inMonth.some((s) => s.kind === "정상근무") ? DUTY_KINDS : DUTY_KINDS.filter((k) => k !== "정상근무");
 
   const changeMode = (mkey) => { setMode(mkey); setMine(null); };
 
