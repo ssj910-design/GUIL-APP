@@ -252,6 +252,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       type: "material",
       siteName: selected.siteName,
       elevatorNo: selected.elevatorNo,
+      elevatorNos: selected.elevatorNos ?? null,
       unitId: selected.unitId ?? null,
       materialRequestId: selected.materialRequestId ?? null,
       quoteRequestId: selected.quoteRequestId ?? null,

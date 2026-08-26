@@ -1,7 +1,7 @@
 import { Fragment, useState, useContext, useEffect } from "react";
 import { ChevronRight, X, Plus, Search, PackageCheck, PackageX, AlertTriangle, Check } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnitList, realInstallPlace, unitIdFor, profileIdByName, formatPhone } from "@/lib/utils";
+import { siteUnitList, realInstallPlace, unitIdFor, profileIdByName, formatPhone, formatUnitLabel } from "@/lib/utils";
 import { TODAY_STR, QUOTE_STAGES, KIT_PARTS } from "@/lib/constants";
 import { PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -606,7 +606,9 @@ export function PartsRowsInput({ rows, setRows, nameOptions, namePlaceholder = "
 
 
 // 현장의 호기를 그리드로 고르는 공용 위젯 (고장접수와 동일 — 1대면 자동선택, 여러 대 멀티선택).
-export function UnitPickGrid({ site, selected, onToggle }) {
+// merged=true(견적요청)면 여러 대를 골라도 요청은 현장 1건으로 합쳐진다는 안내를 보여준다.
+// merged가 없으면(자재신청·직접입력 청구) 지금처럼 호기별로 각각 처리된다는 기존 안내 그대로.
+export function UnitPickGrid({ site, selected, onToggle, merged = false }) {
   const allUnits = useContext(UnitsContext);
   // ★ units 테이블 기준 실제 호기 — 개수로 1..N 합성하면 실제 호기와 어긋난다 (국방부본부 등)
   const us = site ? siteUnitList(site, allUnits) : [];
@@ -633,7 +635,9 @@ export function UnitPickGrid({ site, selected, onToggle }) {
         })}
       </div>
       {selected.length > 1 && (
-        <p className="text-[11px] text-blue-600 font-semibold mt-1.5">선택 {selected.length}대 — 호기별로 {selected.length}건이 각각 생성됩니다</p>
+        <p className="text-[11px] text-blue-600 font-semibold mt-1.5">
+          {merged ? `선택 ${selected.length}대 — 현장 1건으로 접수됩니다 (호기는 요청 내용에 함께 표시)` : `선택 ${selected.length}대 — 호기별로 ${selected.length}건이 각각 생성됩니다`}
+        </p>
       )}
     </div>
   );
@@ -650,7 +654,7 @@ function DuplicateWarningSheet({ items, onCancel, onConfirm }) {
       <div className="space-y-2 mb-4 max-h-[50vh] overflow-y-auto">
         {items.map((it) => (
           <div key={it.id} className="border border-slate-200 rounded-xl px-3 py-2.5">
-            <p className="text-sm font-bold text-slate-800">{it.elevatorNo ? `${it.elevatorNo} · ` : ""}{it.part ?? it.constructionType}</p>
+            <p className="text-sm font-bold text-slate-800">{formatUnitLabel(it.elevatorNos?.length ? it.elevatorNos : it.elevatorNo) ? `${formatUnitLabel(it.elevatorNos?.length ? it.elevatorNos : it.elevatorNo)} · ` : ""}{it.part ?? it.constructionType}</p>
             <p className="text-[11px] text-amber-600 font-semibold mt-0.5">{it.status}</p>
             <p className="text-[11px] text-slate-400 mt-0.5">{it.requestedDate} 신청 · {it.engineer}</p>
           </div>
@@ -672,6 +676,8 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
   const { name: CURRENT_ENGINEER, selfId } = useContext(AuthContext);
   const units = useContext(UnitsContext);
   const v2Ready = units.length > 0;
+  // quote_requests.elevator_nos 컬럼 존재 여부 — 마이그레이션 131 실행 전엔 컬럼이 없다.
+  const quoteElevatorNosReady = quoteRequests.some((q) => q.elevatorNos !== undefined);
   const [uploadSession] = useState(() => Date.now());
   const [sub, setSub] = useState("material");
   const materialSubTabs = ["material", "quote"];
@@ -813,17 +819,22 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
     submitQuoteRequest();
   }
 
+  // 자재신청과 달리 견적요청은 호기를 여러 개 골라도 현장 1건으로 접수한다 — 지급·비용청구는
+  // 여전히 호기 단위지만, 이 요청이 다루는 호기 전체 목록은 elevatorNos에 같이 담아 요청
+  // 인박스·할일 제목·완료보고서에서 "1호기, 2호기"처럼 같이 보여준다(견적 다품목처럼 자재비는
+  // 호기별로 쪼개지 않아도 admin이 품목마다 호기를 따로 태그할 수 있어 지급·비용청구도
+  // 그대로 합쳐서 처리 가능 — quoteElevatorNosReady 참고).
   async function submitQuoteRequest() {
     setDupWarning(null);
     const site = sites.find((s) => s.id === quoteForm.siteId);
     if (!site) return;
-    const targets = quoteForm.units.length ? quoteForm.units : [null];
-    const stamp = Date.now();
-    const newQuotes = targets.map((u, i) => ({
-      id: "q" + (stamp + i),
+    const units_ = quoteForm.units.length ? quoteForm.units : [null];
+    const newQuote = {
+      id: "q" + Date.now(),
       siteId: quoteForm.siteId,
       siteName: site.name,
-      elevatorNo: u,
+      elevatorNo: units_[0],
+      elevatorNos: quoteForm.units.length > 1 ? units_ : null,
       constructionType: quoteFormText,
       contactPhone: quoteForm.contactPhone,
       note: quoteForm.note,
@@ -836,29 +847,30 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
       approvedDate: null,
       suppliedDate: null,
       hasSupplyPhoto: false,
-    }));
-    const dbRows = newQuotes.map((q) => ({
-      id: q.id,
-      site_id: q.siteId,
-      site_name: q.siteName,
-      elevator_no: q.elevatorNo,
-      construction_type: q.constructionType,
-      contact_phone: q.contactPhone,
-      note: q.note,
-      photo_count: q.photoCount,
-      photo_urls: q.photoUrls,
-      engineer: q.engineer,
-      requested_date: q.requestedDate,
-      status: q.status,
+    };
+    const dbRow = {
+      id: newQuote.id,
+      site_id: newQuote.siteId,
+      site_name: newQuote.siteName,
+      elevator_no: newQuote.elevatorNo,
+      construction_type: newQuote.constructionType,
+      contact_phone: newQuote.contactPhone,
+      note: newQuote.note,
+      photo_count: newQuote.photoCount,
+      photo_urls: newQuote.photoUrls,
+      engineer: newQuote.engineer,
+      requested_date: newQuote.requestedDate,
+      status: newQuote.status,
+      ...(quoteElevatorNosReady ? { elevator_nos: newQuote.elevatorNos } : {}),
       ...(v2Ready ? {
-        unit_id: unitIdFor(units, q.siteId, q.elevatorNo),
+        unit_id: unitIdFor(units, newQuote.siteId, newQuote.elevatorNo),
         requester_id: selfId,
       } : {}),
-    }));
-    if (!(await onAddQuoteRequest(newQuotes, dbRows))) return;
+    };
+    if (!(await onAddQuoteRequest([newQuote], [dbRow]))) return;
     setQuoteForm({ siteId: "", units: [], parts: [emptyPartRow(), emptyPartRow(), emptyPartRow()], contactPhone: "", photos: [], note: "" });
     setQuoteStep(0);
-    toastForm(newQuotes.length > 1 ? `견적 요청 ${newQuotes.length}건이 접수되었습니다` : "견적 요청이 접수되었습니다", true);
+    toastForm("견적 요청이 접수되었습니다", true);
   }
 
   if (showMaterialHistory) {
@@ -1167,6 +1179,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
                     site={sites.find((s) => s.id === quoteForm.siteId)}
                     selected={quoteForm.units}
                     onToggle={(u) => setQuoteForm({ ...quoteForm, units: quoteForm.units.includes(u) ? quoteForm.units.filter((x) => x !== u) : [...quoteForm.units, u] })}
+                    merged
                   />
                 )}
                 <Field label="현장 견적 담당자 전화번호">

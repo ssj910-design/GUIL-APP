@@ -171,6 +171,12 @@ export default function App() {
   // billings.quote_request_id 컬럼 존재 여부 — 마이그레이션 126 실행 전엔 컬럼이 없어, 있을 때만
   // 같이 써서 DB 트리거(create_waste_return_todo)가 반납 할일을 만들 수 있게 한다.
   const billingQuoteRequestIdReady = billings.some((b) => b.quoteRequestId !== undefined);
+  // quote_requests/todos/billings.elevator_nos 컬럼 존재 여부 — 마이그레이션 131 실행 전엔
+  // 컬럼이 없어, 있을 때만 한 견적요청이 다루는 호기 전체 목록(여러 호기를 한 요청으로
+  // 합친 경우)을 같이 쓴다.
+  const quoteElevatorNosReady = quoteRequests.some((q) => q.elevatorNos !== undefined);
+  const todoElevatorNosReady = todos.some((t) => t.elevatorNos !== undefined);
+  const billingElevatorNosReady = billings.some((b) => b.elevatorNos !== undefined);
   // todos.billing_part_rows 컬럼 존재 여부 — 마이그레이션 112 실행 전엔 컬럼이 없어, 있을 때만
   // 관리자가 지급 확정한 부품별 구조화 행(이름·수량·금액)을 같이 쓴다.
   const billingPartRowsReady = todos.some((t) => t.billingPartRows !== undefined);
@@ -1245,7 +1251,7 @@ export default function App() {
     }
   }
 
-  async function handleSubmitBilling({ type, siteName, elevatorNo, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId, quoteRequestId, signatureUrl, approvalMethod, approverName, approverPhone, approvedAt, partPhotos, isOutsourced, vendorName }) {
+  async function handleSubmitBilling({ type, siteName, elevatorNo, elevatorNos, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId, quoteRequestId, signatureUrl, approvalMethod, approverName, approverPhone, approvedAt, partPhotos, isOutsourced, vendorName }) {
     // 같은 자재신청 건에 이미 청구기록이 있으면 막는다 — 할 일 완료 처리가 실패해 재시도하는
     // 과정에서 청구 자체는 또 저장돼버리는(중복청구) 경로를 막기 위함.
     if (materialRequestId) {
@@ -1268,6 +1274,7 @@ export default function App() {
       type,
       siteName,
       elevatorNo: elevatorNo || null,
+      elevatorNos: elevatorNos ?? null,
       part,
       cost,
       replaceDate,
@@ -1310,6 +1317,7 @@ export default function App() {
       ...(billingPartPhotosReady ? { part_photos: newBilling.partPhotos } : {}),
       ...(billingOutsourcedReady ? { is_outsourced: newBilling.isOutsourced, vendor_name: newBilling.vendorName } : {}),
       ...(billingQuoteRequestIdReady ? { quote_request_id: quoteRequestId ?? null } : {}),
+      ...(billingElevatorNosReady ? { elevator_nos: newBilling.elevatorNos } : {}),
       ...(v2Ready ? {
         unit_id: billUnitId,
         engineer_id: profileIdByName(profilesAll, profile.name),
@@ -1901,6 +1909,7 @@ export default function App() {
   // 견적 요청 자체(elevatorNo)에 호기가 없으면(관리자가 새로 작성한 견적) 품목에 적어둔
   // 호기로 대신한다 — 품목마다 호기가 다르면 특정할 수 없으니 표시하지 않는다.
   function quoteUnitLabel(q) {
+    if (q.elevatorNos?.length) return formatUnitLabel(q.elevatorNos);
     const fromRequest = formatUnitLabel(q.elevatorNo);
     if (fromRequest) return fromRequest;
     const uniqueUnits = [...new Set((q.quoteItems ?? []).map((it) => it.unitNo).filter(Boolean))];
@@ -1937,6 +1946,7 @@ export default function App() {
       title: `${q.siteName}${quoteUnitLabel(q) ? ` ${quoteUnitLabel(q)}` : ""} ${q.quoteTitle || q.constructionType}`,
       siteName: q.siteName,
       elevatorNo: q.elevatorNo,
+      elevatorNos: q.elevatorNos ?? null,
       // 부품교체·공사내역 목록엔 공사구분(카테고리)보다 실제 작성한 견적명이 더 구체적이라 그걸 쓴다.
       part: q.quoteTitle || q.constructionType,
       assignee,
@@ -1965,6 +1975,7 @@ export default function App() {
           done: t.done,
           description: t.description,
           ...(todoOutsourcedReady ? { is_outsourced: t.isOutsourced, vendor_name: t.vendorName } : {}),
+          ...(todoElevatorNosReady ? { elevator_nos: q.elevatorNos ?? null } : {}),
           ...(v2Ready ? {
             unit_id: q.unitId ?? unitIdFor(units, q.siteId, q.elevatorNo),
             assignee_id: profileIdByName(profilesAll, t.assignee),
@@ -2000,7 +2011,7 @@ export default function App() {
       if (!assigneeId) continue;
       sendPush("supply_ready", [assigneeId], {
         title: "견적 자재 지급 완료 — 수령 확인해주세요",
-        body: `${q.siteName}${formatUnitLabel(q.elevatorNo) ? ` ${formatUnitLabel(q.elevatorNo)}` : ""} · ${q.constructionType}`,
+        body: `${q.siteName}${quoteUnitLabel(q) ? ` ${quoteUnitLabel(q)}` : ""} · ${q.constructionType}`,
         url: `/?openTodo=${t.id}`,
       });
     }
@@ -2044,6 +2055,7 @@ export default function App() {
       title: `${q.siteName}${quoteUnitLabel(q) ? ` ${quoteUnitLabel(q)}` : ""} ${q.quoteTitle || q.constructionType}`,
       siteName: q.siteName,
       elevatorNo: q.elevatorNo,
+      elevatorNos: q.elevatorNos ?? null,
       // 부품교체·공사내역 목록엔 공사구분(카테고리)보다 실제 작성한 견적명이 더 구체적이라 그걸 쓴다.
       part: q.quoteTitle || q.constructionType,
       assignee,
@@ -2061,6 +2073,7 @@ export default function App() {
           site_name: t.siteName, elevator_no: t.elevatorNo, part: t.part, assignee: t.assignee,
           assigned_date: t.assignedDate, due_date: t.dueDate, done: t.done, description: t.description,
           ...(todoOutsourcedReady ? { is_outsourced: t.isOutsourced, vendor_name: t.vendorName } : {}),
+          ...(todoElevatorNosReady ? { elevator_nos: t.elevatorNos } : {}),
           ...(v2Ready ? {
             unit_id: q.unitId ?? unitIdFor(units, q.siteId, q.elevatorNo),
             assignee_id: profileIdByName(profilesAll, t.assignee),

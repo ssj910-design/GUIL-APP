@@ -25,12 +25,23 @@ const QUOTE_TONE = { 요청접수: "blue", 작성: "amber", 승인: "amber", 지
 // 없으면 견적 요청 자체의 elevatorNo, 그것도 없으면(관리자가 새로 작성한 견적) 품목에
 // 적어둔 호기로 대신한다 — 품목마다 호기가 다르면 특정할 수 없으니 표시하지 않는다.
 function quoteUnitLabel(data, quote, unitId) {
+  if (quote.elevatorNos?.length) return formatUnitLabel(quote.elevatorNos);
   const u = (data.units ?? []).find((x) => x.id === unitId);
   if (u) return u.unitNo;
   const fromRequest = formatUnitLabel(quote.elevatorNo);
   if (fromRequest) return fromRequest;
   const uniqueUnits = [...new Set((quote.quoteItems ?? []).map((it) => it.unitNo).filter(Boolean))];
   return uniqueUnits.length === 1 ? uniqueUnits[0] : "";
+}
+
+// "현장 · 호기" 표시 — 여러 호기를 한 요청으로 합친 견적(elevatorNos)이면 대표 호기 하나만
+// 보여주는 locOf 대신 전체 호기를 같이 보여준다. 그 외(자재신청·단일호기 견적)는 locOf 그대로.
+function quoteLocLabel(data, q) {
+  if (q.elevatorNos?.length > 1) {
+    const siteName = data.sites.find((s) => s.id === q.siteId)?.name ?? q.siteName ?? "-";
+    return `${siteName} · ${formatUnitLabel(q.elevatorNos)}`;
+  }
+  return locOf(data, q.unitId, q.siteName, q.elevatorNo);
 }
 
 // 견적 자동생성 할일 내용에 "교체품목" 목록을 기본으로 넣는다 — 견적 작성 때 적은 품목
@@ -303,6 +314,9 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
   const billingPartRowsReady = (data.todos ?? []).some((t) => t.billingPartRows !== undefined);
   // todos.is_outsourced 컬럼 존재 여부 — 마이그레이션 121 실행 전엔 컬럼이 없다.
   const todoOutsourcedReady = (data.todos ?? []).some((t) => t.isOutsourced !== undefined);
+  // todos.elevator_nos 컬럼 존재 여부 — 마이그레이션 131 실행 전엔 컬럼이 없어, 있을 때만
+  // 한 견적이 다루는 호기 전체 목록을 할 일에도 같이 담는다.
+  const todoElevatorNosReady = (data.todos ?? []).some((t) => t.elevatorNos !== undefined);
 
   const query = search.trim().toLowerCase();
   const materialRequests = allMaterialRequests.filter((m) =>
@@ -451,6 +465,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         title: `${quote.siteName}${quoteUnitLabel(data, quote, unitId) ? ` ${quoteUnitLabel(data, quote, unitId)}` : ""} ${quote.quoteTitle || quote.constructionType}`,
         siteName: quote.siteName,
         elevatorNo: quote.elevatorNo,
+        elevatorNos: quote.elevatorNos ?? null,
         // 부품교체·공사내역 목록엔 공사구분(카테고리)보다 실제 작성한 견적명이 더 구체적이라 그걸 쓴다.
         part: quote.quoteTitle || quote.constructionType,
         assignee: engineer?.name ?? quote.engineer,
@@ -473,6 +488,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         assignee: t.assignee, assigned_date: t.assignedDate, due_date: t.dueDate, done: t.done,
         unit_id: t.unitId, assignee_id: t.assigneeId, description: t.description,
         ...(todoOutsourcedReady ? { is_outsourced: t.isOutsourced, vendor_name: t.vendorName } : {}),
+        ...(todoElevatorNosReady ? { elevator_nos: t.elevatorNos } : {}),
       }))
     );
     if (todoError) { alert("할 일 생성 실패: " + todoError.message); return; }
@@ -496,7 +512,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
     // 각자 다른 할일 id를 받으므로(assignees 수만큼 별도 행), 딥링크 url이 정확하도록 한 명씩 보낸다.
     for (const t of newTodos) {
       if (!t.assigneeId) continue;
-      notify("supply_ready", { profileIds: [t.assigneeId], title: "견적 자재 지급 완료 — 수령 확인해주세요", body: `${quote.siteName}${quote.elevatorNo ? ` · ${quote.elevatorNo}` : ""} · ${quote.constructionType}`, url: `/?openTodo=${t.id}` });
+      notify("supply_ready", { profileIds: [t.assigneeId], title: "견적 자재 지급 완료 — 수령 확인해주세요", body: `${quote.siteName}${quoteUnitLabel(data, quote, unitId) ? ` · ${quoteUnitLabel(data, quote, unitId)}` : ""} · ${quote.constructionType}`, url: `/?openTodo=${t.id}` });
     }
 
     setData((prev) => ({
@@ -555,6 +571,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         title: `${quote.siteName}${quoteUnitLabel(data, quote, unitId) ? ` ${quoteUnitLabel(data, quote, unitId)}` : ""} ${quote.quoteTitle || quote.constructionType}`,
         siteName: quote.siteName,
         elevatorNo: quote.elevatorNo,
+        elevatorNos: quote.elevatorNos ?? null,
         // 부품교체·공사내역 목록엔 공사구분(카테고리)보다 실제 작성한 견적명이 더 구체적이라 그걸 쓴다.
         part: quote.quoteTitle || quote.constructionType,
         assignee: engineer?.name ?? "",
@@ -576,13 +593,14 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
           assignee: t.assignee, assigned_date: t.assignedDate, due_date: t.dueDate, done: t.done,
           unit_id: t.unitId, assignee_id: t.assigneeId, description: t.description,
           ...(todoOutsourcedReady ? { is_outsourced: t.isOutsourced, vendor_name: t.vendorName } : {}),
+          ...(todoElevatorNosReady ? { elevator_nos: t.elevatorNos } : {}),
         }))
       );
       if (todoError) { alert("할 일 생성 실패: " + todoError.message); return; }
     }
     // 각자 다른 할일 id를 받으므로(assignees 수만큼 별도 행), 딥링크 url이 정확하도록 한 명씩 보낸다.
     for (const t of newTodos) {
-      notify("supply_ready", { profileIds: [t.assigneeId], title: "견적 자재 지급 담당자로 지정됨 — 수령 확인해주세요", body: `${quote.siteName}${quote.elevatorNo ? ` · ${quote.elevatorNo}` : ""} · ${quote.constructionType}`, url: `/?openTodo=${t.id}` });
+      notify("supply_ready", { profileIds: [t.assigneeId], title: "견적 자재 지급 담당자로 지정됨 — 수령 확인해주세요", body: `${quote.siteName}${quoteUnitLabel(data, quote, unitId) ? ` · ${quoteUnitLabel(data, quote, unitId)}` : ""} · ${quote.constructionType}`, url: `/?openTodo=${t.id}` });
     }
 
     setData((prev) => ({
@@ -728,7 +746,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
               onClick={() => setDetailTarget({ type: "quote", data: q })}
             >
               <td className="pl-5 pr-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(drafted ? q.quoteIssuedDate : q.requestedDate)}</td>
-              <td className="px-3 py-2.5 font-semibold whitespace-nowrap">{locOf(data, q.unitId, q.siteName, q.elevatorNo)}</td>
+              <td className="px-3 py-2.5 font-semibold whitespace-nowrap">{quoteLocLabel(data, q)}</td>
               <td className="px-3 py-2.5 text-slate-600">{drafted ? (q.quoteTitle || "-") : q.constructionType}</td>
               <td className="px-3 py-2.5 whitespace-nowrap">
                 {!q.requesterId && !q.engineer
@@ -1178,7 +1196,7 @@ function RequestDetailModal({ target, data, onClose }) {
     <Modal title={isMaterial ? "자재신청 상세내역" : isDraftedQuote ? "견적 상세내역" : "견적요청 상세내역"} onClose={onClose} wide="2xl">
       <div className="space-y-3 mb-4">
         <div className="grid grid-cols-2 gap-3 text-sm">
-          <div><p className="text-xs font-bold text-slate-400 mb-1">현장 · 호기</p><p className="font-semibold text-slate-800">{locOf(data, r.unitId, r.siteName, r.elevatorNo)}</p></div>
+          <div><p className="text-xs font-bold text-slate-400 mb-1">현장 · 호기</p><p className="font-semibold text-slate-800">{isMaterial ? locOf(data, r.unitId, r.siteName, r.elevatorNo) : quoteLocLabel(data, r)}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">현장 주소</p><p className="font-semibold text-slate-800">{addressOf(data, r.unitId, r.siteName)}</p></div>
           {isMaterial ? (
             <div><p className="text-xs font-bold text-slate-400 mb-1">부품 내역</p><p className="font-semibold text-slate-800">{r.part}</p></div>
