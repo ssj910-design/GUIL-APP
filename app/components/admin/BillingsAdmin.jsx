@@ -5,7 +5,7 @@
 import { useState, useContext } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { shortDate } from "@/lib/utils";
+import { shortDate, formatUnitLabel } from "@/lib/utils";
 import { BRAND } from "@/lib/company";
 import { locOf, addressOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate, AdminAuthContext } from "@/app/components/admin/adminShared";
 import ReplacementCertificateViewer from "@/app/components/admin/ReplacementCertificateViewer";
@@ -38,7 +38,11 @@ function buildCertificateData(b, data) {
     billingId: b.id,
     docNumber: `${BRAND.code}-${b.id.slice(0, 8).toUpperCase()}`,
     issuedDate: shortDate(new Date().toISOString().slice(0, 10)),
-    siteUnit: locOf(data, b.unitId, b.siteName, b.elevatorNo),
+    // 한 청구가 여러 호기를 같이 다루면(견적요청을 현장 1건으로 합친 경우) 대표 호기 하나만
+    // 보여주는 locOf 대신 전체 호기를 같이 보여준다.
+    siteUnit: b.elevatorNos?.length > 1
+      ? `${data.sites.find((s) => s.id === data.units.find((u) => u.id === b.unitId)?.siteId)?.name ?? b.siteName ?? "-"} · ${formatUnitLabel(b.elevatorNos)}`
+      : locOf(data, b.unitId, b.siteName, b.elevatorNo),
     address: addressOf(data, b.unitId, b.siteName),
     // 고객이 보는 문서라 외주 여부는 노출하지 않는다 — 담당 기사 이름을 그대로 쓴다.
     engineerName: personOf(data, b.engineerId, b.engineer),
@@ -279,6 +283,8 @@ export default function BillingsAdmin({ data, setData }) {
     }));
   }
 
+  const cert = certTarget && buildCertificateData(certTarget, data);
+
   return (
     <div className="max-w-[100rem] mx-auto">
       <div className="flex items-end justify-between mb-4">
@@ -341,8 +347,8 @@ export default function BillingsAdmin({ data, setData }) {
       {detail && <BillingDetailModal b={detail} data={data} onClose={() => setDetail(null)} onSave={saveBilling} onToggleFree={toggleFree} onAdjustPrice={adjustPrice} />}
       {certTarget && (
         <ReplacementCertificateViewer
-          cert={buildCertificateData(certTarget, data)}
-          filenameBase="교체확인서(교체내역 및 교체사진)"
+          cert={cert}
+          filenameBase={`${cert.siteUnit.replace(" · ", " ")} 부품교체확인서 ${cert.replaceDate}`}
           cachedUrl={certTarget.certificatePdfUrl}
           onGenerated={(url) => {
             if (!certUrlReady) return;
