@@ -6,13 +6,13 @@
 import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { TODAY_STR } from "@/lib/constants";
+import { TODAY_STR, DUTY_KINDS } from "@/lib/constants";
 import { useHolidays } from "@/app/hooks/useHolidays";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const KIND_TONE = {
-  당직: "bg-emerald-50 text-emerald-700",
   숙직: "bg-blue-50 text-blue-700",
+  당직: "bg-emerald-50 text-emerald-700",
   정상근무: "bg-violet-50 text-violet-500",
 };
 const LEAVE_TONE = "bg-amber-50 text-amber-700";
@@ -51,7 +51,7 @@ export default function WorkCalendar({ data }) {
   function itemsOf(iso) {
     const out = [];
     if (show.근무) {
-      for (const kind of ["당직", "숙직", "정상근무"]) {
+      for (const kind of DUTY_KINDS) {
         const d = duties.find((x) => x.duty_date === iso && x.kind === kind);
         if (d?.profile_id) out.push({ key: `${kind}-${d.id}`, tone: KIND_TONE[kind], label: `${kind.slice(0, 2)} ${nameOf(d.profile_id)}` });
       }
@@ -129,8 +129,8 @@ export default function WorkCalendar({ data }) {
       </div>
 
       <div className="flex items-center gap-3 mt-2.5 text-[11px] text-slate-400 flex-wrap">
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-400 inline-block" /> 초록 — 당직</span>
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-blue-400 inline-block" /> 파랑 — 숙직</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-400 inline-block" /> 초록 — 당직</span>
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-violet-400 inline-block" /> 보라 — 정상근무</span>
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-amber-400 inline-block" /> 노랑 — 휴가</span>
         <span className="ml-auto">공휴일 {monthHolidays}일 · 휴가 {monthLeaveDays}일 <span className="text-slate-300">({holidaySource === "db" ? "자동 동기화" : "내장 파일"})</span></span>

@@ -5,13 +5,13 @@
 // 자세히는 워크 캘린더로 넘긴다. 화살표는 하루씩 이동.
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { TODAY_STR } from "@/lib/constants";
+import { TODAY_STR, DUTY_KINDS } from "@/lib/constants";
 import { useHolidays } from "@/app/hooks/useHolidays";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const KIND_TONE = {
-  당직: "bg-emerald-50 text-emerald-700",
   숙직: "bg-blue-50 text-blue-700",
+  당직: "bg-emerald-50 text-emerald-700",
   정상근무: "bg-violet-50 text-violet-500",
 };
 
@@ -83,7 +83,7 @@ export default function WeekStrip({ data, onOpenCalendar }) {
               </p>
               {holiday && <p className="text-[9px] font-bold text-red-400 truncate mb-0.5">{holiday}</p>}
               <div className="space-y-0.5 mt-1">
-                {["당직", "숙직", "정상근무"].map((kind) => {
+                {DUTY_KINDS.map((kind) => {
                   const row = duties.find((x) => x.duty_date === d && x.kind === kind);
                   if (!row?.profile_id) return null;
                   return (

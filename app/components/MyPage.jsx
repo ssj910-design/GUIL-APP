@@ -3,7 +3,7 @@ import { X, LogOut, CalendarDays, Bell, BellRing, KeyRound, MessageSquarePlus } 
 import { supabase } from "@/lib/supabaseClient";
 import { AuthContext } from "@/app/components/context";
 import { PasswordChangeForm } from "@/app/components/PasswordChangeForm";
-import { TODAY_STR } from "@/lib/constants";
+import { TODAY_STR, DUTY_KINDS } from "@/lib/constants";
 import { yearsOfService } from "@/lib/leave";
 import { forRole, GROUPS, LEVELS, isEnabled, levelOf } from "@/lib/notifications";
 import { pushSupported, pushPermission, enablePush, disablePush, isSubscribed, notify } from "@/lib/push";
@@ -132,10 +132,10 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
   const myNotifs = forRole(role).filter((n) => orgSettings[n.key]?.enabled !== false && !(n.trigger === "scheduled" && !n.built));
 
 
-  // 오늘 이후 내 당직 (가까운 순 5건)
+  // 오늘 이후 내 당직 (가까운 순 5건) — 같은 날 숙직·당직이 둘 다 있으면 DUTY_KINDS 순서(숙직 먼저)로.
   const myDuties = dutySchedules
     .filter((d) => d.profileId === selfId && d.dutyDate >= TODAY_STR)
-    .sort((a, b) => a.dutyDate.localeCompare(b.dutyDate))
+    .sort((a, b) => a.dutyDate.localeCompare(b.dutyDate) || DUTY_KINDS.indexOf(a.kind) - DUTY_KINDS.indexOf(b.kind))
     .slice(0, 5);
 
   return (

@@ -10,11 +10,11 @@ import { supabase } from "@/lib/supabaseClient";
 import { AuthContext } from "@/app/components/context";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { mapDutySchedule } from "@/lib/mappers";
-import { TODAY_STR } from "@/lib/constants";
+import { TODAY_STR, DUTY_KINDS } from "@/lib/constants";
 import { inputCls } from "@/app/components/admin/adminShared";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
-const KIND_TEXT = { 당직: "text-emerald-700", 숙직: "text-blue-700", 정상근무: "text-violet-500" };
+const KIND_TEXT = { 숙직: "text-blue-700", 당직: "text-emerald-700", 정상근무: "text-violet-500" };
 
 // 요일별 순번 그룹 — 같은 순번표 인원이라도 평일/주말(주4일은 금요일도 별도)은 서로 독립된
 // 로테이션으로 돈다. 주5일: 평일(월~금)·주말. 주4일: 평일(월~목)·금요일(숙직·당직·정상근무)·주말.
@@ -348,7 +348,7 @@ export function DutyGenerateWidget({ schedules, onSchedulesChange, onEngineersCh
           )}
         </div>
         <div className="flex items-center gap-2.5 flex-wrap text-[11px] text-slate-500 mt-2">
-          {["당직", "숙직", "정상근무"].map((k) => (
+          {DUTY_KINDS.map((k) => (
             <span key={k} className="flex items-center gap-1 font-semibold">
               <span className={`w-2 h-2 rounded-full ${k === "당직" ? "bg-emerald-500" : k === "숙직" ? "bg-blue-500" : "bg-violet-400"}`} />
               {k}

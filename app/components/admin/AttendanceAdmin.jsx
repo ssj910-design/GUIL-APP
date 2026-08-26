@@ -146,7 +146,7 @@ function MonthlyView({ engineers, rows, cursor }) {
 
   return (
     <>
-      <p className="text-xs text-slate-500 mb-3"><span className="text-slate-500">●</span> 출근 · <span className="text-emerald-600">◆</span> 당직 · <span className="text-blue-600">▲</span> 숙직 · 빈칸 미출근 (지각 판정 없음)</p>
+      <p className="text-xs text-slate-500 mb-3"><span className="text-slate-500">●</span> 출근 · <span className="text-blue-600">▲</span> 숙직 · <span className="text-emerald-600">◆</span> 당직 · 빈칸 미출근 (지각 판정 없음)</p>
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <table className="text-xs" style={{ minWidth: `${20 + days * 1.6}rem` }}>
           <thead>
