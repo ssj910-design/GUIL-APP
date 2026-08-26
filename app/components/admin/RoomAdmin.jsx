@@ -267,7 +267,15 @@ export default function RoomAdmin({ data, setData }) {
       ? (data.profiles ?? []).filter((p) => p.is_active !== false && p.id !== myId).map((p) => p.id)
       : (data.profiles ?? []).filter((p) => tags.includes(p.name) && p.id !== myId).map((p) => p.id);
     if (mentionIds.length) notify("room_mention", { profileIds: mentionIds, title: `${ADMIN_NAME}님이 회원님을 언급했어요`, body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
-    if (newPost.isNotice) notify("room_notice", { title: "새 공지가 등록됐어요", body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
+    if (newPost.isNotice) {
+      notify("room_notice", { title: "새 공지가 등록됐어요", body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
+    } else if (!newPost.replyToId) {
+      // 새 글(댓글 제외) 전체 알림 — 앱(ElevatorFieldApp.jsx handleSendFeedPost)에만 있고 콘솔엔
+      // 빠져있던 것을 추가. 이 글로 이미 멘션 알림을 받은 사람은 중복으로 안 보낸다.
+      const mentionSet = new Set(mentionIds);
+      const newPostIds = (data.profiles ?? []).filter((p) => p.is_active !== false && p.id !== myId && !mentionSet.has(p.id)).map((p) => p.id);
+      if (newPostIds.length) notify("room_new_post", { profileIds: newPostIds, title: `${ADMIN_NAME}님이 새 글을 올렸어요`, body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
+    }
     // 댓글이면 원글 작성자에게 알림 (본인 글에 본인이 단 댓글은 제외).
     if (newPost.replyToId) {
       const parentPost = feed.find((p) => p.id === newPost.replyToId);

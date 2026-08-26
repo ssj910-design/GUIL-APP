@@ -453,13 +453,14 @@ export default function App() {
   };
 
   // 알림 발송 — 실패해도 앱 동작을 막지 않는다(알림은 부가 기능이라 조용히 넘어간다).
+  // /api/push/send는 로그인 토큰이 있어야 통과한다(2026-08-11 보안 강화) — 여기선 그동안 그냥
+  // fetch를 써서 토큰을 안 붙이고 있었고, 그래서 이 함수로 보내는 알림(게시판 새글·할일배정·
+  // 자재지급완료 등 다수)이 로그인 여부와 무관하게 전부 401로 막혀 있었다. 관리자 콘솔이 쓰는
+  // notify()(lib/push.js)는 처음부터 토큰을 붙이고 있어 정상 발송됐던 것과 대비된다 — 그 함수로
+  // 위임해 같은 방식으로 고친다(호출부 시그니처는 그대로 유지).
   function sendPush(key, profileIds, { title, body, url } = {}) {
     if (!profileIds?.length) return;
-    fetch("/api/push/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key, profileIds, title, body, url }),
-    }).catch(() => {});
+    notify(key, { profileIds, title, body, url });
   }
 
   // 출퇴근 체크 — 하루 1행(profile_id + work_date). 출근은 insert, 퇴근/당직은 같은 행 update.
