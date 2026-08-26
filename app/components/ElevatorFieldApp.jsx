@@ -1252,7 +1252,7 @@ export default function App() {
     }
   }
 
-  async function handleSubmitBilling({ type, siteName, elevatorNo, elevatorNos, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId, quoteRequestId, signatureUrl, approvalMethod, approverName, approverPhone, approvedAt, partPhotos, isOutsourced, vendorName }) {
+  async function handleSubmitBilling({ type, siteName, elevatorNo, elevatorNos, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId, quoteRequestId, signatureUrl, approvalMethod, approverName, approverPhone, approvedAt, partPhotos, isOutsourced, vendorName, isFree, freeReason }) {
     // 같은 자재신청 건에 이미 청구기록이 있으면 막는다 — 할 일 완료 처리가 실패해 재시도하는
     // 과정에서 청구 자체는 또 저장돼버리는(중복청구) 경로를 막기 위함.
     if (materialRequestId) {
@@ -1293,6 +1293,10 @@ export default function App() {
       partPhotos: partPhotos?.length ? partPhotos : null,
       isOutsourced: !!isOutsourced,
       vendorName: isOutsourced ? (vendorName || null) : null,
+      // FM 계약 등 부품 무상 — 0원 청구 사유. 관리자웹의 기존 "무상 처리"(is_free)와 같은
+      // 컬럼·표시 규칙을 그대로 쓴다(새 컬럼 없이 notes에 사유를 남기는 것도 동일).
+      isFree: !!isFree,
+      notes: isFree && freeReason ? `[무상처리] ${freeReason}` : null,
     };
     const { error } = await supabase.from("billings").insert({
       id: newBilling.id,
@@ -1317,6 +1321,8 @@ export default function App() {
       } : {}),
       ...(billingPartPhotosReady ? { part_photos: newBilling.partPhotos } : {}),
       ...(billingOutsourcedReady ? { is_outsourced: newBilling.isOutsourced, vendor_name: newBilling.vendorName } : {}),
+      is_free: newBilling.isFree,
+      ...(newBilling.notes ? { notes: newBilling.notes } : {}),
       ...(billingQuoteRequestIdReady ? { quote_request_id: quoteRequestId ?? null } : {}),
       ...(billingElevatorNosReady ? { elevator_nos: newBilling.elevatorNos } : {}),
       ...(v2Ready ? {

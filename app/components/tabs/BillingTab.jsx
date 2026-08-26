@@ -17,6 +17,8 @@ import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 const BILL_STEP_TITLES = ["청구 정보", "증빙 사진", "완료 서명"]; // 자재 지급건(3-step)
 const draftKey = (todoId) => `guilBillingDraftV1:${todoId}`;
 const MAN_BILL_TITLES = ["현장·호기", "교체 내역·비용", "증빙 사진", "완료 서명"]; // 직접 입력(4-step)
+// FM 계약은 부품이 무상이라 수리비 0원 청구가 있다 — 0원이면 이 중 하나를 사유로 반드시 고르게 한다.
+const FREE_REASONS = ["FM", "하자", "서비스"];
 
 // 자릿수(9~11)만 보면 "191-494-949"처럼 0으로 시작하지 않는 엉뚱한 숫자도 통과한다 —
 // 국내 전화번호는 항상 0으로 시작하므로 그것까지 같이 확인한다.
@@ -43,9 +45,11 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
     setSelectedId(openTodos[0]?.id ?? "");
   }, [openIdsKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const [materialCost, setMaterialCost] = useState("");
+  const [freeReason, setFreeReason] = useState(""); // 수리비 0원(무상)일 때 사유 — FM/하자/서비스
   const [materialReplaceDate, setMaterialReplaceDate] = useState(TODAY_STR);
   const [submitted, setSubmitted] = useState(null);
   const [manualForm, setManualForm] = useState({ siteId: "", units: [], parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
+  const [manualFreeReason, setManualFreeReason] = useState(""); // 수리비 0원(무상)일 때 사유 — FM/하자/서비스
   const [materialPhotos, setMaterialPhotos] = useState({ before: [], after: [] });
   const [partPhotos, setPartPhotos] = useState({}); // 부품 2개 이상일 때만 사용: { [index]: { before: [], after: [] } }
   const [manualPhotos, setManualPhotos] = useState({ before: [], after: [] });
@@ -98,6 +102,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
     if (draft) {
       setBillStep(draft.billStep ?? 0);
       setMaterialCost(draft.materialCost ?? "");
+      setFreeReason(draft.freeReason ?? "");
       setMaterialReplaceDate(draft.materialReplaceDate ?? TODAY_STR);
       setMaterialPhotos(draft.materialPhotos ?? { before: [], after: [] });
       setPartPhotos(draft.partPhotos ?? {});
@@ -113,6 +118,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
     } else {
       const quoteTotal = quoteBillingItems?.length ? quoteBillingItems.reduce((sum, it) => sum + (it.amount || 0), 0) : null;
       setMaterialCost(quoteTotal != null ? String(quoteTotal) : selected?.billingAmount != null ? String(selected.billingAmount) : "");
+      setFreeReason("");
       setSignerName("");
       setSignerPhone("");
       setVendorNameInput(selected?.vendorName ?? "");
@@ -125,13 +131,21 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
   const manualApprovalOk = manualAbsentMode
     ? manualApproverName.trim() && manualApproverPhone.replace(/\D/g, "").length >= 9 && manualAbsentConfirmed
     : manualSignerName.trim() && manualSignerPhone.replace(/\D/g, "").length >= 9 && !!manualSignatureUrl;
-  const manualValid = manualForm.siteId && manualForm.units.length > 0 && formatPartRows(manualForm.parts) && manualForm.replaceDate && manualForm.contactPhone.trim() && Number(manualForm.cost) > 0 && manualPhotosOk && manualApprovalOk;
+  // FM 계약 등으로 부품이 무상이면 0원 청구가 가능하다 — 단 0원일 땐 사유(FM/하자/서비스)를
+  // 반드시 골라야 한다. 빈 입력과 0원을 구분해야 해서(둘 다 Number()로는 0) 원본 문자열을 본다.
+  const manualCostRaw = String(manualForm.cost ?? "").trim();
+  const manualCostOk = manualCostRaw !== "" && Number(manualCostRaw) >= 0 && (Number(manualCostRaw) > 0 || !!manualFreeReason);
+  const manualValid = manualForm.siteId && manualForm.units.length > 0 && formatPartRows(manualForm.parts) && manualForm.replaceDate && manualForm.contactPhone.trim() && manualCostOk && manualPhotosOk && manualApprovalOk;
 
   // 스텝별 필수 검증 — 미입력이면 안내 문구 반환(다음/제출 막힘), 없으면 null.
   function matStepError(step) {
     if (step === 0) {
       if (!selected) return "청구 대상 건을 선택해주세요";
-      if (!isQuoteBilling && !(Number(materialCost) > 0)) return "수리비를 입력해주세요";
+      if (!isQuoteBilling) {
+        const raw = String(materialCost ?? "").trim();
+        if (raw === "" || Number(raw) < 0) return "수리비를 입력해주세요";
+        if (Number(raw) === 0 && !freeReason) return "무상 사유를 선택해주세요";
+      }
       if (selected?.isOutsourced && !vendorNameInput.trim()) return "작업 업체명을 입력해주세요";
     }
     if (step === 1) {
@@ -167,7 +181,8 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
     if (step === 1) {
       if (!formatPartRows(manualForm.parts)) return "교체내역을 1개 이상 입력해주세요";
       if (!manualForm.contactPhone.trim()) return "현장담당자 연락처를 입력해주세요";
-      if (!(Number(manualForm.cost) > 0)) return "수리비를 입력해주세요";
+      if (manualCostRaw === "" || Number(manualCostRaw) < 0) return "수리비를 입력해주세요";
+      if (Number(manualCostRaw) === 0 && !manualFreeReason) return "무상 사유를 선택해주세요";
     }
     if (step === 2) {
       if (manualPhotos.before.length === 0) return "교체 전 사진을 등록해주세요";
@@ -203,7 +218,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
     if (!selected) return;
     try {
       localStorage.setItem(draftKey(selected.id), JSON.stringify({
-        billStep, materialCost, materialReplaceDate, materialPhotos, partPhotos,
+        billStep, materialCost, freeReason, materialReplaceDate, materialPhotos, partPhotos,
         signatureUrl, absentMode, approverName, approverPhone, absentConfirmed, signerName, signerPhone,
         vendorName: vendorNameInput,
       }));
@@ -260,6 +275,10 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       // billings.cost는 숫자 컬럼이라 "견적서 참조" 같은 문자열은 넣을 수 없습니다(넣으면 insert가
       // 조용히 실패합니다). 견적 연동 건은 실제 비용을 이 시스템에 남기지 않는다는 의미로 null 처리합니다.
       cost: isQuoteBilling ? null : materialCost,
+      // FM 계약 등 부품 무상 — 0원 청구는 사유를 관리자웹의 기존 "무상 처리" 배지·합계 제외
+      // 로직(is_free)과 그대로 호환되게 남긴다.
+      isFree: !isQuoteBilling && Number(materialCost) === 0,
+      freeReason: !isQuoteBilling && Number(materialCost) === 0 ? freeReason : null,
       replaceDate: materialReplaceDate,
       contactPhone: null,
       beforePhotoUrls,
@@ -288,6 +307,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
     setSubmitted({ siteName: selected.siteName, part: selected.part, manual: false });
     setSelectedId(openTodos.find((t) => t.id !== selected.id)?.id ?? "");
     setMaterialCost("");
+    setFreeReason("");
     setMaterialReplaceDate(TODAY_STR);
     setMaterialPhotos({ before: [], after: [] });
     setPartPhotos({});
@@ -321,6 +341,8 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
         siteId: site.id,
         part: partText,
         cost: manualForm.cost,
+        isFree: Number(manualForm.cost) === 0,
+        freeReason: Number(manualForm.cost) === 0 ? manualFreeReason : null,
         beforePhotoUrls: manualPhotos.before.map((p) => p.url),
         afterPhotoUrls: manualPhotos.after.map((p) => p.url),
         replaceDate: manualForm.replaceDate,
@@ -346,6 +368,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
     }
     setSubmitted({ siteName: site.name, part: partText, manual: true, fromKit: manualForm.fromKit });
     setManualForm({ siteId: "", units: [], parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
+    setManualFreeReason("");
     setManualPhotos({ before: [], after: [] });
     setManualSignatureUrl(null);
     setManualAbsentMode(false);
@@ -420,12 +443,29 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                         <input
                           type="number"
                           className={inputCls}
-                          placeholder="예: 350000"
+                          placeholder="예: 350000 (FM 계약 등 무상이면 0)"
                           value={materialCost}
                           onChange={(e) => setMaterialCost(e.target.value)}
                         />
-                        {!(Number(materialCost) > 0) ? (
+                        {materialCost === "" ? (
                           <p className="text-[11px] text-red-500 mt-1">수리비를 입력해주세요</p>
+                        ) : Number(materialCost) === 0 ? (
+                          <div className="mt-1.5">
+                            <p className="text-[11px] font-bold text-slate-500 mb-1">무상 사유 (필수)</p>
+                            <div className="flex gap-1.5">
+                              {FREE_REASONS.map((r) => (
+                                <button
+                                  key={r}
+                                  type="button"
+                                  onClick={() => setFreeReason(r)}
+                                  className={`flex-1 py-2 rounded-lg text-xs font-bold ${freeReason === r ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}
+                                >
+                                  {r}
+                                </button>
+                              ))}
+                            </div>
+                            {!freeReason && <p className="text-[11px] text-red-500 mt-1">무상 사유를 선택해주세요</p>}
+                          </div>
                         ) : (
                           selected?.billingAmount != null && Number(materialCost) !== Number(selected.billingAmount) && (
                             <p className="text-[11px] text-amber-600 mt-1 flex items-start gap-1">
@@ -691,12 +731,29 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                   <input
                     type="number"
                     className={inputCls}
-                    placeholder="예: 150000"
+                    placeholder="예: 150000 (FM 계약 등 무상이면 0)"
                     value={manualForm.cost}
                     onChange={(e) => setManualForm({ ...manualForm, cost: e.target.value })}
                   />
-                  {!(Number(manualForm.cost) > 0) && (
+                  {manualCostRaw === "" ? (
                     <p className="text-[11px] text-red-500 mt-1">수리비를 입력해주세요</p>
+                  ) : Number(manualCostRaw) === 0 && (
+                    <div className="mt-1.5">
+                      <p className="text-[11px] font-bold text-slate-500 mb-1">무상 사유 (필수)</p>
+                      <div className="flex gap-1.5">
+                        {FREE_REASONS.map((r) => (
+                          <button
+                            key={r}
+                            type="button"
+                            onClick={() => setManualFreeReason(r)}
+                            className={`flex-1 py-2 rounded-lg text-xs font-bold ${manualFreeReason === r ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}
+                          >
+                            {r}
+                          </button>
+                        ))}
+                      </div>
+                      {!manualFreeReason && <p className="text-[11px] text-red-500 mt-1">무상 사유를 선택해주세요</p>}
+                    </div>
                   )}
                 </Field>
               </>
