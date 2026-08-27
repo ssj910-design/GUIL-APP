@@ -917,11 +917,16 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
 /* ------------------------------------------------------------------ */
 
 export function BillingCard({ b, onPhotoClick }) {
-  const photoSlots = [
-    ...(b.beforePhotoUrls ?? []).map((url) => ({ label: "교체 전", url })),
-    ...(b.afterPhotoUrls ?? []).map((url) => ({ label: "교체 후", url })),
-    ...(b.confirmPhotoUrl ? [{ label: "확인서", url: b.confirmPhotoUrl }] : []),
-  ];
+  const beforeUrls = b.beforePhotoUrls ?? [];
+  const afterUrls = b.afterPhotoUrls ?? [];
+  // 전체 목록(클릭 시 라이트박스에 넘길 순서)은 그대로 두고, 카드에는 구분마다 대표 1장만
+  // 미리보기로 보여준다 — 여러 장이면 우측 상단에 "+N"만 표시.
+  const allUrls = [...beforeUrls, ...afterUrls, ...(b.confirmPhotoUrl ? [b.confirmPhotoUrl] : [])];
+  const previewSlots = [
+    beforeUrls.length > 0 ? { label: "교체 전", url: beforeUrls[0], count: beforeUrls.length, index: 0 } : null,
+    afterUrls.length > 0 ? { label: "교체 후", url: afterUrls[0], count: afterUrls.length, index: beforeUrls.length } : null,
+    b.confirmPhotoUrl ? { label: "확인서", url: b.confirmPhotoUrl, count: 1, index: beforeUrls.length + afterUrls.length } : null,
+  ].filter(Boolean);
   return (
     <div className="border border-slate-100 rounded-xl p-3">
       <div className="flex items-center justify-between mb-1">
@@ -934,16 +939,21 @@ export function BillingCard({ b, onPhotoClick }) {
         <span>{b.engineer} · {b.replaceDate} 교체{b.contactPhone ? ` · 현장담당 ${b.contactPhone}` : ""}</span>
         <span className="font-bold text-slate-600 shrink-0 ml-2">{b.cost ? `₩${Number(b.cost).toLocaleString()}` : "-"}</span>
       </div>
-      {photoSlots.length > 0 && (
+      {previewSlots.length > 0 && (
         <div className="flex gap-2 mt-2">
-          {photoSlots.map((s, i) => (
+          {previewSlots.map((s, i) => (
             <button
               key={i}
               type="button"
-              onClick={() => (onPhotoClick ? onPhotoClick(photoSlots.map((p) => p.url), i) : window.open(s.url, "_blank"))}
+              onClick={() => (onPhotoClick ? onPhotoClick(allUrls, s.index) : window.open(s.url, "_blank"))}
               className="flex flex-col items-center gap-0.5"
             >
-              <img src={s.url} alt="" className="w-12 h-12 rounded-lg object-cover border border-slate-200" />
+              <div className="relative">
+                <img src={s.url} alt="" className="w-12 h-12 rounded-lg object-cover border border-slate-200" />
+                {s.count > 1 && (
+                  <span className="absolute -top-1 -right-1 text-[8px] font-bold text-white bg-slate-700 rounded-full px-1 leading-4">+{s.count - 1}</span>
+                )}
+              </div>
               <span className="text-[9px] text-slate-400">{s.label}</span>
             </button>
           ))}
