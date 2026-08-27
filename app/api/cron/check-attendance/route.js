@@ -28,11 +28,13 @@ async function handle(request) {
       body: JSON.stringify(body),
     }).then((r) => r.ok).catch(() => false);
 
-  const [{ data: engineers }, { data: attendances }, { data: leaves }] = await Promise.all([
-    db.from("profiles").select("id,name").eq("role", "engineer").eq("is_active", true),
+  const [{ data: allEngineers }, { data: attendances }, { data: leaves }] = await Promise.all([
+    db.from("profiles").select("id,name,member_type").eq("role", "engineer").eq("is_active", true),
     db.from("attendances").select("profile_id,checked_in_at").eq("work_date", todayStr),
     db.from("leaves").select("profile_id,kind,note").lte("start_date", todayStr).gte("end_date", todayStr),
   ]);
+  // TEST계정은 실제 출근을 안 하니 출근체크 리마인드·미체크 보고 대상에서 뺀다.
+  const engineers = (allEngineers ?? []).filter((e) => e.member_type !== "TEST계정");
 
   const checkedInIds = new Set((attendances ?? []).filter((a) => a.checked_in_at).map((a) => a.profile_id));
   const excludedIds = new Set(
