@@ -198,10 +198,16 @@ function NewBillingModal({ data, onClose, onCreate }) {
     const t = todos.find((x) => x.id === id);
     if (!t) return;
     const unit = units.find((u) => u.id === t.unitId);
-    const quoteItems = t.source === "quote"
-      ? (quoteRequests.find((q) => q.id === t.quoteRequestId)?.quoteItems ?? [])
-          .filter((it) => it.name?.trim())
-          .map((it) => ({ name: it.name, qty: it.qty || null, amount: Math.round(Number(it.qty || 0) * Number(it.unitPrice || 0)) }))
+    const quote = t.source === "quote" ? quoteRequests.find((q) => q.id === t.quoteRequestId) : null;
+    const quoteItems = quote
+      ? [
+          ...quote.quoteItems
+            .filter((it) => it.name?.trim())
+            .map((it) => ({ name: it.name, qty: it.qty || null, amount: Math.round(Number(it.qty || 0) * Number(it.unitPrice || 0)) })),
+          // 견적서에 할인을 입력했으면 청구금액·교체확인서 합계에도 그대로 반영되게 별도 행으로 추가한다
+          // (견적서에 없던 값을 새로 계산하는 게 아니라, 견적에 이미 입력된 할인을 그대로 옮기는 것).
+          ...(Number(quote.discountAmount) > 0 ? [{ name: "할인", qty: null, amount: -Number(quote.discountAmount) }] : []),
+        ]
       : null;
     const parts = quoteItems?.length > 1 ? quoteItems : t.billingPartRows?.length > 1 ? t.billingPartRows : null;
     setForm({
