@@ -912,7 +912,7 @@ export default function SitesAdmin({ data, setData }) {
   // 계약종료/복구 (soft delete — 설계 원칙 4). 종료는 일자·근거·사유를 받아야 해서 모달을 연다.
   // 종료일자를 미래로 잡으면 지금 당장은 활성 상태를 유지하고, 그 날짜가 되면
   // check-terminations 크론(매일 KST 00:10)이 자동으로 비활성화한다.
-  const pendingTermination = site.isActive !== false && site.terminatedDate && site.terminatedDate > TODAY_STR;
+  const pendingTermination = site?.isActive !== false && site?.terminatedDate && site.terminatedDate > TODAY_STR;
 
   async function toggleSiteActive() {
     if (site.isActive === false) {
