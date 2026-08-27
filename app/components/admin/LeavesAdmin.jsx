@@ -31,7 +31,7 @@ export default function LeavesAdmin({ data, setData }) {
   const staff = profiles.filter((p) => p.is_active !== false && p.role !== "system");
   const [leaves, setLeaves] = useState([]);
   const [year, setYear] = useState(Number(TODAY_STR.slice(0, 4)));
-  const [form, setForm] = useState({ profileId: "", start: TODAY_STR, end: TODAY_STR, kind: "연차", note: "" });
+  const [form, setForm] = useState({ profileId: "", start: TODAY_STR, end: TODAY_STR, kind: "연차", period: "오전", note: "" });
   const [busy, setBusy] = useState(false);
   const [cycleLeaves, setCycleLeaves] = useState([]);
   const { start: cycleStart, end: cycleEnd } = payCycleFor(TODAY_STR.slice(0, 7));
@@ -125,12 +125,15 @@ export default function LeavesAdmin({ data, setData }) {
     if (cycleEnd.slice(0, 4) === String(year)) setLeaves((prev) => [rows[0], ...prev]);
   }
 
+  // 반차 오전/오후는 별도 컬럼이 없어 note 맨 앞에 적어둔다 — 모바일 WorkCalendarSheet.jsx
+  // submitLeave와 동일한 규칙(HomeTab.jsx/WorkCalendarSheet.jsx의 periodOf가 이 형식을 읽는다).
   async function add() {
     if (!form.profileId) return;
     setBusy(true);
+    const finalNote = form.kind === "반차" ? `${form.period}${form.note ? " · " + form.note : ""}` : (form.note || null);
     const { data: rows, error } = await supabase.from("leaves").insert({
       profile_id: form.profileId, start_date: form.start, end_date: form.end,
-      kind: form.kind, days: autoDays, note: form.note || null, status: "승인",
+      kind: form.kind, days: autoDays, note: finalNote, status: "승인",
     }).select();
     setBusy(false);
     if (error) { alert("등록 실패: " + error.message); return; }
@@ -169,6 +172,15 @@ export default function LeavesAdmin({ data, setData }) {
             {KINDS.map((k) => <option key={k}>{k}</option>)}
           </select>
         </div>
+        {form.kind === "반차" && (
+          <div>
+            <p className="text-[11px] font-bold text-slate-500 mb-1">반차</p>
+            <select className={inputCls} value={form.period} onChange={(e) => setForm({ ...form, period: e.target.value })}>
+              <option value="오전">오전</option>
+              <option value="오후">오후</option>
+            </select>
+          </div>
+        )}
         <div>
           <p className="text-[11px] font-bold text-slate-500 mb-1">시작일</p>
           <DateTextInput key={form.start} value={form.start}
