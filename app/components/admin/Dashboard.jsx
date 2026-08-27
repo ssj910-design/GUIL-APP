@@ -338,10 +338,13 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
             {criticalSites.map((s) => {
               const stopped = stoppedSiteIds.has(s.id);
               const support = supportSiteIds.has(s.id);
-              const trappedCount = entrapmentSiteIds.get(s.id)?.length ?? 0;
+              const trapped = entrapmentSiteIds.get(s.id) ?? [];
+              const trappedCount = trapped.length;
               const recent = recentFailuresBySiteId.get(s.id) ?? [];
               const count30d = recent.length;
-              const units = [...new Set(recent.map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean))];
+              // 갇힘사고 1건만으로 편입된 현장은 recent(3회 이상 고장 그룹)엔 안 잡히므로
+              // 갇힘사고 목록도 같이 합쳐야 그 호기가 라벨에 나온다.
+              const units = [...new Set([...recent, ...trapped].map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean))];
               const unitText = units.length ? units.join(", ") : formatUnitLabel(s.elevatorNo);
               return (
                 <button
