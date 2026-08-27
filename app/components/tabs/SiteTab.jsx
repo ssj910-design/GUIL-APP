@@ -33,9 +33,11 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
   const { history: inspectionHistory, loading: historyLoading } = useInspectionHistory(unitGovNo);
   const manualInspections = [...inspections.filter((i) => i.siteId === site.id)].sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate));
   // 호기가 지정된 청구건은 그 호기에서만, 호기 미지정(기존) 청구건은 현장 전체에서 계속 보여줍니다.
-  const unitBillings = billings.filter((b) => b.siteName === site.name && (!b.elevatorNo || b.elevatorNo === unit));
+  const unitBillings = billings.filter((b) => b.siteName === site.name && (!b.elevatorNo || b.elevatorNo === unit || b.elevatorNos?.includes(unit)));
+  // 여러 호기를 한 요청으로 합친 견적(elevatorNos)은 대표 호기(unitId)로만 걸러내면 나머지
+  // 호기 화면에선 안 보인다 — elevatorNos에 이 호기가 있으면 그것도 포함한다.
   const unitQuotes = [...quoteRequests
-    .filter((q) => (realUnit?.id && q.unitId ? q.unitId === realUnit.id : q.siteId === site.id && q.elevatorNo === unit))]
+    .filter((q) => q.elevatorNos?.includes(unit) || (realUnit?.id && q.unitId ? q.unitId === realUnit.id : q.siteId === site.id && q.elevatorNo === unit))]
     .sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate));
   const unitPhotos = (unitPartPhotos ?? []).filter((p) => p.unitId === realUnit?.id);
   const [inspectionFailTarget, setInspectionFailTarget] = useState(null);
@@ -242,8 +244,11 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
                   // 어플 "나의 견적 요청 전체보기"(MaterialTab.jsx QuoteHistoryScreen)와 동일한
                   // 4단계(QUOTE_STAGES) + 비용청구완료 오버레이 배지를 그대로 재사용한다.
                   const isBilled = (todos ?? []).some((t) => t.quoteRequestId === q.id && t.source !== "waste_return" && t.done === true);
-                  const displayStage = isBilled ? "비용청구완료" : q.status;
-                  const dateMap = { 요청접수: q.requestedDate, 작성: q.quoteIssuedDate, 승인: q.approvedDate, 자재지급완료: q.suppliedDate, 비용청구완료: q.suppliedDate };
+                  // "작성" 상태에서 이메일/카카오로 실제 발송까지 됐으면 관리자웹처럼 "발송"으로 보여준다
+                  // (status 컬럼 자체는 발송해도 "작성" 그대로라, 여기서 같이 판단해줘야 한다).
+                  const isSent = q.status === "작성" && !!(q.emailSentAt || q.kakaoSentAt);
+                  const displayStage = isBilled ? "비용청구완료" : isSent ? "발송" : q.status;
+                  const dateMap = { 요청접수: q.requestedDate, 작성: q.quoteIssuedDate, 발송: q.quoteIssuedDate, 승인: q.approvedDate, 자재지급완료: q.suppliedDate, 비용청구완료: q.suppliedDate };
                   const stageDate = dateMap[displayStage];
                   return (
                     <div key={q.id} className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
@@ -255,7 +260,7 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
                               displayStage === "비용청구완료" ? "bg-slate-100 text-slate-500" :
                               displayStage === "자재지급완료" ? "bg-emerald-100 text-emerald-700" :
                               displayStage === "승인" ? "bg-indigo-100 text-indigo-700" :
-                              displayStage === "작성" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+                              displayStage === "작성" || displayStage === "발송" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
                             }`}
                           >
                             {displayStage === "비용청구완료" ? "비용청구 완료" : displayStage}

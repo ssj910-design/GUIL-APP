@@ -258,9 +258,14 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack, onCancelQuot
   const [stage, setStage] = useState("전체");
   const [detailTarget, setDetailTarget] = useState(null);
   const [photoViewer, setPhotoViewer] = useState(null);
-  const stages = ["전체", "요청접수", "작성", "승인", "자재지급완료", "비용청구완료"];
+  const stages = ["전체", "요청접수", "작성", "발송", "승인", "자재지급완료", "비용청구완료"];
 
-  const withStage = quoteRequests.map((q) => ({ ...q, displayStage: isQuoteBilled(q.id) ? "비용청구완료" : q.status }));
+  // "작성" 상태에서 이메일/카카오로 실제 발송까지 됐으면 관리자웹처럼 "발송"으로 보여준다
+  // (status 컬럼 자체는 발송해도 "작성" 그대로라, 여기서 같이 판단해줘야 한다).
+  const withStage = quoteRequests.map((q) => ({
+    ...q,
+    displayStage: isQuoteBilled(q.id) ? "비용청구완료" : q.status === "작성" && (q.emailSentAt || q.kakaoSentAt) ? "발송" : q.status,
+  }));
   const filtered = withStage
     .filter((q) => stage === "전체" || q.displayStage === stage)
     .filter((q) => q.siteName.toLowerCase().includes(query.trim().toLowerCase()) || q.constructionType.toLowerCase().includes(query.trim().toLowerCase()))
@@ -296,7 +301,7 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack, onCancelQuot
           <p className="text-xs text-slate-400 text-center py-10">해당 조건의 견적 요청 내역이 없습니다</p>
         ) : (
           filtered.map((q) => {
-            const bar = q.displayStage === "비용청구완료" ? "border-l-slate-400" : q.displayStage === "자재지급완료" ? "border-l-emerald-500" : q.displayStage === "승인" ? "border-l-indigo-500" : q.displayStage === "작성" ? "border-l-blue-500" : "border-l-amber-400";
+            const bar = q.displayStage === "비용청구완료" ? "border-l-slate-400" : q.displayStage === "자재지급완료" ? "border-l-emerald-500" : q.displayStage === "승인" ? "border-l-indigo-500" : q.displayStage === "작성" || q.displayStage === "발송" ? "border-l-blue-500" : "border-l-amber-400";
             return (
             <button
               key={q.id}
@@ -321,7 +326,7 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack, onCancelQuot
                     q.displayStage === "비용청구완료" ? "bg-slate-100 text-slate-500" :
                     q.displayStage === "자재지급완료" ? "bg-emerald-100 text-emerald-700" :
                     q.displayStage === "승인" ? "bg-indigo-100 text-indigo-700" :
-                    q.displayStage === "작성" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+                    q.displayStage === "작성" || q.displayStage === "발송" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
                   }`}
                 >
                   {q.displayStage === "비용청구완료" ? "비용청구 완료" : q.displayStage}
