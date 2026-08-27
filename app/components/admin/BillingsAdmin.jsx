@@ -5,7 +5,7 @@
 import { useState, useContext } from "react";
 import { Search, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { shortDate, formatUnitLabel } from "@/lib/utils";
+import { shortDate, formatUnitLabel, quoteGrandTotal } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { mapBilling } from "@/lib/mappers";
 import { BRAND } from "@/lib/company";
@@ -200,14 +200,18 @@ function NewBillingModal({ data, onClose, onCreate }) {
     const unit = units.find((u) => u.id === t.unitId);
     const quote = t.source === "quote" ? quoteRequests.find((q) => q.id === t.quoteRequestId) : null;
     const quoteItems = quote
-      ? [
-          ...quote.quoteItems
+      ? (() => {
+          const rows = quote.quoteItems
             .filter((it) => it.name?.trim())
-            .map((it) => ({ name: it.name, qty: it.qty || null, amount: Math.round(Number(it.qty || 0) * Number(it.unitPrice || 0)) })),
-          // 견적서에 할인을 입력했으면 청구금액·교체확인서 합계에도 그대로 반영되게 별도 행으로 추가한다
-          // (견적서에 없던 값을 새로 계산하는 게 아니라, 견적에 이미 입력된 할인을 그대로 옮기는 것).
-          ...(Number(quote.discountAmount) > 0 ? [{ name: "할인", qty: null, amount: -Number(quote.discountAmount) }] : []),
-        ]
+            .map((it) => ({ name: it.name, qty: it.qty || null, amount: Math.round(Number(it.qty || 0) * Number(it.unitPrice || 0)) }));
+          // 견적서 합계는 품목 원가 - 할인을 천단위 절사한 값(quoteGrandTotal, 견적서 PDF와 동일 계산식)
+          // 이라 할인 금액을 그대로 빼기만 하면 절사분만큼 청구금액이 견적서와 어긋난다. 품목 합계와
+          // 견적서 최종 합계의 차이를 "할인" 한 행으로 넣어 절사까지 포함해 정확히 맞춘다.
+          const itemsSubtotal = rows.reduce((s, it) => s + (it.amount || 0), 0);
+          const grand = quoteGrandTotal(quote.quoteItems, quote.transportCost, quote.safetyCost, quote.profit, quote.discountAmount);
+          const adjust = grand - itemsSubtotal;
+          return adjust !== 0 ? [...rows, { name: "할인", qty: null, amount: adjust }] : rows;
+        })()
       : null;
     const parts = quoteItems?.length > 1 ? quoteItems : t.billingPartRows?.length > 1 ? t.billingPartRows : null;
     setForm({
