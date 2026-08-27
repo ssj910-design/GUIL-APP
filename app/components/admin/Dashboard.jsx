@@ -218,10 +218,15 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
   const combinedInspections = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId))];
 
   // 금일검사현장: 국가승강기정보센터 API 연동 현장은 제외하고, 관리자가 수기입력한 검사일자(inspections.due_date) 기준으로만 판단한다.
+  // 다 같은 날짜라 날짜순 정렬은 의미가 없다 — 방문 예정 시각순(시간 미지정 건은 뒤로),
+  // InspectionsAdmin.jsx의 검사도래현장 정렬과 동일 기준.
   const todayInspections = groupBySite(
     inspections
       .filter((i) => i.dueDate === TODAY_STR)
-      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+      .sort((a, b) => {
+        if (a.dueTime && b.dueTime) return a.dueTime.localeCompare(b.dueTime);
+        return a.dueTime ? -1 : b.dueTime ? 1 : 0;
+      })
   );
 
   // 조건부/불합격 카드의 "검사일정"은 관리자가 InspectionsAdmin에서 수기입력한 방문 예정 일시(inspections.due_date/due_time)다
