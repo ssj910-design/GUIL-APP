@@ -7,6 +7,7 @@ import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { shortDate, formatUnitLabel } from "@/lib/utils";
 import { BRAND } from "@/lib/company";
+import { uploadPhoto } from "@/lib/photos";
 import { locOf, addressOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate, AdminAuthContext } from "@/app/components/admin/adminShared";
 import ReplacementCertificateViewer from "@/app/components/admin/ReplacementCertificateViewer";
 
@@ -80,6 +81,49 @@ function siteManagerOf(data, unitId, fallbackSiteName) {
   return primary?.name || site.manager || "-";
 }
 
+// 수정 모드에서 쓰는 사진 편집 — 여러 장(교체 전/후)이든 1장(확인서, 배열로만 감싸서 재사용)이든
+// 같은 위젯 하나로 처리한다. 추가는 관리자 콘솔의 기존 업로드 패턴(uploadPhoto + 파일 input)과 동일.
+function EditablePhotoRow({ label, urls, onChange, uploadFolder }) {
+  const [uploading, setUploading] = useState(false);
+  async function handleFiles(e) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const newUrls = await Promise.all(files.map((f) => uploadPhoto(f, uploadFolder)));
+      onChange([...urls, ...newUrls]);
+    } catch (err) {
+      alert("사진 업로드 실패: " + (err.message ?? "알 수 없는 오류"));
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  }
+  return (
+    <div>
+      <p className="text-[11px] font-bold text-slate-500 mb-1">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {urls.map((url, i) => (
+          <div key={i} className="relative">
+            <img src={url} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
+            <button
+              type="button"
+              onClick={() => onChange(urls.filter((_, idx) => idx !== i))}
+              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-900 text-white text-xs flex items-center justify-center leading-none"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <label className="w-16 h-16 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400 cursor-pointer text-xs">
+          {uploading ? "..." : "+"}
+          <input type="file" accept="image/*" multiple={label !== "확인서"} className="hidden" onChange={handleFiles} disabled={uploading} />
+        </label>
+      </div>
+    </div>
+  );
+}
+
 function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPrice }) {
   const { profiles } = data;
   const isSuper = useContext(AdminAuthContext).tier === "super"; // 무상처리·가격조정은 최고관리자만
@@ -95,14 +139,71 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
   const photos = [...(b.beforePhotoUrls ?? []), ...(b.afterPhotoUrls ?? [])];
   if (b.confirmPhotoUrl) photos.push(b.confirmPhotoUrl);
 
+  // 품목이 2개 이상(다품목 청구)이면 flat 필드(part/cost) 대신 품목별 구조화 데이터(part_photos:
+  // 이름·수량·금액·사진)를 직접 수정한다 — 완료보고서(buildCertificateData)가 이 구조화 데이터를
+  // 우선해서 쓰기 때문에, flat 필드만 고치면 완료보고서엔 반영이 안 된다.
+  const isMultiItem = (b.partPhotos?.length ?? 0) > 1;
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+
+  function startEdit() {
+    setEditForm({
+      part: b.part ?? "",
+      cost: b.cost ?? "",
+      contactPhone: b.contactPhone ?? "",
+      vendorName: b.vendorName ?? "",
+      beforePhotoUrls: b.beforePhotoUrls ?? [],
+      afterPhotoUrls: b.afterPhotoUrls ?? [],
+      confirmPhotoUrl: b.confirmPhotoUrl ?? null,
+      partPhotos: (b.partPhotos ?? []).map((p) => ({ ...p, beforeUrls: p.beforeUrls ?? [], afterUrls: p.afterUrls ?? [] })),
+    });
+    setEditing(true);
+  }
+
+  async function saveEdit() {
+    setSaving(true);
+    const dbPatch = { contact_phone: editForm.contactPhone || null };
+    const localPatch = { contactPhone: editForm.contactPhone || null };
+    if (b.isOutsourced) {
+      dbPatch.vendor_name = editForm.vendorName || null;
+      localPatch.vendorName = editForm.vendorName || null;
+    }
+    if (isMultiItem) {
+      const partNames = editForm.partPhotos.map((p) => p.name).filter(Boolean).join(", ") || null;
+      dbPatch.part_photos = editForm.partPhotos;
+      dbPatch.part = partNames;
+      localPatch.partPhotos = editForm.partPhotos;
+      localPatch.part = partNames;
+    } else {
+      dbPatch.part = editForm.part || null;
+      dbPatch.cost = editForm.cost === "" ? null : Number(editForm.cost);
+      dbPatch.before_photo_urls = editForm.beforePhotoUrls.length ? editForm.beforePhotoUrls : null;
+      dbPatch.after_photo_urls = editForm.afterPhotoUrls.length ? editForm.afterPhotoUrls : null;
+      dbPatch.confirm_photo_url = editForm.confirmPhotoUrl || null;
+      localPatch.part = dbPatch.part;
+      localPatch.cost = dbPatch.cost;
+      localPatch.beforePhotoUrls = editForm.beforePhotoUrls;
+      localPatch.afterPhotoUrls = editForm.afterPhotoUrls;
+      localPatch.confirmPhotoUrl = editForm.confirmPhotoUrl || null;
+    }
+    await onSave(b, dbPatch, localPatch);
+    setSaving(false);
+    setEditing(false);
+    onClose();
+  }
+
   async function save() {
     setSaving(true);
     const engineerName = engineers.find((p) => p.id === form.engineerId)?.name ?? b.engineer;
-    await onSave(b, {
+    const patch = {
       engineer_id: form.engineerId || null,
       engineer: engineerName,
       replace_date: form.replaceDate || null,
       ...(notesReady ? { notes: form.notes || null } : {}),
+    };
+    await onSave(b, patch, {
+      engineerId: patch.engineer_id, engineer: patch.engineer, replaceDate: patch.replace_date,
+      ...(notesReady ? { notes: patch.notes } : {}),
     });
     setSaving(false);
     onClose();
@@ -137,19 +238,47 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div><p className="text-xs font-bold text-slate-400 mb-1">현장 · 호기</p><p className="font-semibold text-slate-800">{locOf(data, b.unitId, b.siteName, b.elevatorNo)}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">현장 주소</p><p className="font-semibold text-slate-800">{addressOf(data, b.unitId, b.siteName)}</p></div>
-          <div><p className="text-xs font-bold text-slate-400 mb-1">교체내역</p><p className="font-semibold text-slate-800">{b.part}</p></div>
-          <div>
-            <p className="text-xs font-bold text-slate-400 mb-1">금액</p>
-            {b.isFree ? (
-              <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">무상</span>
-            ) : (
-              <p className="font-semibold text-slate-800">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</p>
-            )}
-          </div>
+          {!editing || isMultiItem ? (
+            <div><p className="text-xs font-bold text-slate-400 mb-1">교체내역</p><p className="font-semibold text-slate-800">{b.part}</p></div>
+          ) : (
+            <div>
+              <p className="text-xs font-bold text-slate-400 mb-1">교체내역</p>
+              <input className={inputCls} value={editForm.part} onChange={(e) => setEditForm({ ...editForm, part: e.target.value })} />
+            </div>
+          )}
+          {!editing || isMultiItem ? (
+            <div>
+              <p className="text-xs font-bold text-slate-400 mb-1">금액</p>
+              {b.isFree ? (
+                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">무상</span>
+              ) : (
+                <p className="font-semibold text-slate-800">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</p>
+              )}
+            </div>
+          ) : (
+            <div>
+              <p className="text-xs font-bold text-slate-400 mb-1">금액</p>
+              <input type="number" className={inputCls} value={editForm.cost} onChange={(e) => setEditForm({ ...editForm, cost: e.target.value })} />
+            </div>
+          )}
           <div><p className="text-xs font-bold text-slate-400 mb-1">제출일</p><p className="font-semibold text-slate-800">{shortDate(b.submittedAt)}</p></div>
-          <div><p className="text-xs font-bold text-slate-400 mb-1">현장 담당자 연락처</p><p className="font-semibold text-slate-800">{b.contactPhone || "-"}</p></div>
+          {!editing ? (
+            <div><p className="text-xs font-bold text-slate-400 mb-1">현장 담당자 연락처</p><p className="font-semibold text-slate-800">{b.contactPhone || "-"}</p></div>
+          ) : (
+            <div>
+              <p className="text-xs font-bold text-slate-400 mb-1">현장 담당자 연락처</p>
+              <input className={inputCls} value={editForm.contactPhone} onChange={(e) => setEditForm({ ...editForm, contactPhone: e.target.value })} />
+            </div>
+          )}
           {b.isOutsourced && (
-            <div><p className="text-xs font-bold text-slate-400 mb-1">작업 업체</p><p className="font-semibold text-slate-800">{b.vendorName || "-"}</p></div>
+            !editing ? (
+              <div><p className="text-xs font-bold text-slate-400 mb-1">작업 업체</p><p className="font-semibold text-slate-800">{b.vendorName || "-"}</p></div>
+            ) : (
+              <div>
+                <p className="text-xs font-bold text-slate-400 mb-1">작업 업체</p>
+                <input className={inputCls} value={editForm.vendorName} onChange={(e) => setEditForm({ ...editForm, vendorName: e.target.value })} />
+              </div>
+            )
           )}
           <div>
             {b.materialRequestId || b.type === "material"
@@ -186,10 +315,49 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
         </div>
       </div>
 
-      <div>
-        <p className="text-xs font-bold text-slate-500 mb-2">사진 ({photos.length}장)</p>
-        <PhotoGrid urls={photos} />
-      </div>
+      {!editing ? (
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-2">사진 ({photos.length}장)</p>
+          <PhotoGrid urls={photos} />
+        </div>
+      ) : isMultiItem ? (
+        <div className="space-y-3">
+          <p className="text-xs font-bold text-slate-500">품목별 수정</p>
+          {editForm.partPhotos.map((p, i) => {
+            function updateRow(patch) {
+              setEditForm({ ...editForm, partPhotos: editForm.partPhotos.map((row, idx) => (idx === i ? { ...row, ...patch } : row)) });
+            }
+            return (
+              <div key={i} className="border border-slate-200 rounded-xl p-3 space-y-2">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2">
+                    <p className="text-[11px] font-bold text-slate-500 mb-1">품명</p>
+                    <input className={inputCls} value={p.name ?? ""} onChange={(e) => updateRow({ name: e.target.value })} />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold text-slate-500 mb-1">수량</p>
+                    <input className={inputCls} value={p.qty ?? ""} onChange={(e) => updateRow({ qty: e.target.value })} />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-500 mb-1">금액</p>
+                  <input type="number" className={inputCls} value={p.amount ?? ""} onChange={(e) => updateRow({ amount: e.target.value === "" ? null : Number(e.target.value) })} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <EditablePhotoRow label="교체 전" urls={p.beforeUrls ?? []} onChange={(urls) => updateRow({ beforeUrls: urls })} uploadFolder={`billings/${b.id}/part${i}/before`} />
+                  <EditablePhotoRow label="교체 후" urls={p.afterUrls ?? []} onChange={(urls) => updateRow({ afterUrls: urls })} uploadFolder={`billings/${b.id}/part${i}/after`} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          <EditablePhotoRow label="교체 전" urls={editForm.beforePhotoUrls} onChange={(urls) => setEditForm({ ...editForm, beforePhotoUrls: urls })} uploadFolder={`billings/${b.id}/before`} />
+          <EditablePhotoRow label="교체 후" urls={editForm.afterPhotoUrls} onChange={(urls) => setEditForm({ ...editForm, afterPhotoUrls: urls })} uploadFolder={`billings/${b.id}/after`} />
+          <EditablePhotoRow label="확인서" urls={editForm.confirmPhotoUrl ? [editForm.confirmPhotoUrl] : []} onChange={(urls) => setEditForm({ ...editForm, confirmPhotoUrl: urls[0] ?? null })} uploadFolder={`billings/${b.id}/confirm`} />
+        </div>
+      )}
 
       <div className="flex justify-between mt-4">
         <div className="flex gap-2">
@@ -206,9 +374,27 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
             <p className="text-[11px] text-slate-400 self-center">무상 처리·가격 조정은 최고관리자만 가능합니다</p>
           )}
         </div>
-        <button disabled={saving} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
-          저장
-        </button>
+        <div className="flex gap-2">
+          {editing ? (
+            <>
+              <button onClick={() => setEditing(false)} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-5 py-2.5">
+                취소
+              </button>
+              <button disabled={saving} onClick={saveEdit} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
+                수정 저장
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={startEdit} className="text-sm font-bold text-blue-700 bg-white border border-blue-200 rounded-xl px-5 py-2.5">
+                수정
+              </button>
+              <button disabled={saving} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
+                저장
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </Modal>
   );
@@ -233,18 +419,19 @@ export default function BillingsAdmin({ data, setData }) {
   // 무상 처리된 건은 합계에서 제외한다.
   const total = rows.reduce((sum, b) => sum + (b.isFree ? 0 : Number(b.cost) || 0), 0);
 
-  async function saveBilling(b, patch) {
-    // 담당자·교체일자가 바뀌면 교체확인서 내용도 바뀌어야 하니, 저장해둔 PDF는 비워서
-    // 다음에 열 때 새로 만들어지게 한다.
-    const fullPatch = { ...patch, ...(certUrlReady ? { certificate_pdf_url: null } : {}) };
+  // localPatch는 화면(camelCase) 반영용 — dbPatch(snake_case)와 내용은 같되 키 이름만 다르다.
+  // 호출부(BillingDetailModal)가 필드를 늘릴 때마다 여기서 매핑을 다시 안 써도 되게 둘 다 받는다.
+  async function saveBilling(b, dbPatch, localPatch) {
+    // 담당자·교체일자·교체내역·사진 등이 바뀌면 교체확인서 내용도 바뀌어야 하니, 저장해둔
+    // PDF는 비워서 다음에 열 때 새로 만들어지게 한다.
+    const fullPatch = { ...dbPatch, ...(certUrlReady ? { certificate_pdf_url: null } : {}) };
     const { error } = await supabase.from("billings").update(fullPatch).eq("id", b.id);
     if (error) { alert("저장 실패: " + error.message); return; }
     setData((prev) => ({
       ...prev,
       billings: prev.billings.map((x) => (x.id === b.id ? {
         ...x,
-        engineerId: patch.engineer_id, engineer: patch.engineer, replaceDate: patch.replace_date,
-        ...("notes" in patch ? { notes: patch.notes } : {}),
+        ...localPatch,
         ...(certUrlReady ? { certificatePdfUrl: null } : {}),
       } : x)),
     }));
