@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
 import { mapQuoteRequest } from "@/lib/mappers";
 import { uploadPhoto } from "@/lib/photos";
-import { unitIdFor, addDays, shortDate, parsePartQty, formatUnitLabel } from "@/lib/utils";
+import { unitIdFor, addDays, shortDate, parsePartQty, formatUnitLabel, labelToSeq } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { recordQuoteSupplyStockOut } from "@/lib/inventoryStock";
 import { locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid, DateTextInput, lastSentDate, SentHistory, AdminAuthContext } from "@/app/components/admin/adminShared";
@@ -27,21 +27,22 @@ const QUOTE_TONE = { 요청접수: "blue", 작성: "amber", 승인: "amber", 지
 function quoteUnitLabel(data, quote, unitId) {
   if (quote.elevatorNos?.length) return formatUnitLabel(quote.elevatorNos);
   const u = (data.units ?? []).find((x) => x.id === unitId);
-  if (u) return u.unitNo;
+  if (u) return formatUnitLabel(u.unitNo);
   const fromRequest = formatUnitLabel(quote.elevatorNo);
   if (fromRequest) return fromRequest;
-  const uniqueUnits = [...new Set((quote.quoteItems ?? []).map((it) => it.unitNo).filter(Boolean))];
-  return uniqueUnits.length === 1 ? uniqueUnits[0] : "";
+  // 관리자가 기사 요청 없이 새로 작성한 견적은 elevatorNo/unitId가 없다 — 품목마다 적어둔
+  // 호기(quoteItems[].unitNo, "1"처럼 접미사 없는 숫자도 formatUnitLabel이 "1호기"로 정규화)
+  // 전체를 대신 보여준다.
+  const uniqueUnits = [...new Set((quote.quoteItems ?? []).map((it) => it.unitNo?.trim()).filter(Boolean))];
+  return formatUnitLabel(uniqueUnits);
 }
 
-// "현장 · 호기" 표시 — 여러 호기를 한 요청으로 합친 견적(elevatorNos)이면 대표 호기 하나만
-// 보여주는 locOf 대신 전체 호기를 같이 보여준다. 그 외(자재신청·단일호기 견적)는 locOf 그대로.
+// "현장 · 호기" 표시 — 호기는 quoteUnitLabel과 같은 기준(요청 elevatorNos/elevatorNo →
+// 품목별 unitNo)으로 정한다.
 function quoteLocLabel(data, q) {
-  if (q.elevatorNos?.length > 1) {
-    const siteName = data.sites.find((s) => s.id === q.siteId)?.name ?? q.siteName ?? "-";
-    return `${siteName} · ${formatUnitLabel(q.elevatorNos)}`;
-  }
-  return locOf(data, q.unitId, q.siteName, q.elevatorNo);
+  const siteName = data.sites.find((s) => s.id === q.siteId)?.name ?? q.siteName ?? "-";
+  const unit = quoteUnitLabel(data, q, q.unitId);
+  return unit ? `${siteName} · ${unit}` : siteName;
 }
 
 // 견적 자동생성 할일 내용에 "교체품목" 목록을 기본으로 넣는다 — 견적 작성 때 적은 품목
@@ -50,7 +51,20 @@ function quoteLocLabel(data, q) {
 function quotePartsSummary(items) {
   const rows = (items ?? []).filter((it) => it.name?.trim());
   if (!rows.length) return "";
-  return "교체품목\n" + rows.map((it) => `${it.name.trim()} ${it.qty || 1}${(it.unit || "EA").toLowerCase()}`).join("\n");
+  const fmt = (it) => `${it.name.trim()} ${it.qty || 1}${(it.unit || "EA").toLowerCase()}`;
+  // 품목마다 호기가 다르면(다호기 견적) 호기별로 묶어서 "N호기 교체품목"으로 나눠 보여준다 —
+  // 단일 호기(또는 호기 미입력)면 기존처럼 통으로 나열한다.
+  const groups = new Map();
+  for (const it of rows) {
+    const label = formatUnitLabel(it.unitNo?.trim()) || "";
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(fmt(it));
+  }
+  if (groups.size <= 1) return "교체품목\n" + rows.map(fmt).join("\n");
+  return [...groups.entries()]
+    .sort((a, b) => (labelToSeq(a[0]) ?? Infinity) - (labelToSeq(b[0]) ?? Infinity))
+    .map(([label, lines]) => `${label || "호기 미상"} 교체품목\n` + lines.join("\n"))
+    .join("\n\n");
 }
 function quoteTodoDescription(quote, adminNote) {
   return [quotePartsSummary(quote.quoteItems), adminNote || ""].filter(Boolean).join("\n\n") || null;
