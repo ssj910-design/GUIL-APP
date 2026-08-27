@@ -1156,52 +1156,22 @@ export default function App() {
   async function handleFailureResult(failure, payload) {
     const { result, symptom, cause, processContent, note, photoCount, photoUrls, model } = payload;
     const errorCode = (payload.errorCode || "").trim();
-    // 이미 완료된 건을 다시 열어 고친 경우 — 상태·배정·알림 로직(아래)은 건드리지 않고
-    // 처리결과 내용 필드만 갱신한다. 수정 권한(본인/관리자)은 FailureDetailSheet에서 이미 제한됨.
-    if (failure.status === "완료") {
-      const { data: editRows, error: editError } = await supabase
-        .from("failures")
-        .update({
-          fault_symptom: symptom || null,
-          fault_error_code: errorCode || null,
-          fault_cause: cause || null,
-          process_content: processContent || null,
-          process_note: note || null,
-          photo_count: photoCount || 0,
-          photo_urls: photoUrls?.length ? photoUrls : null,
-          ...(faultModelReady ? { fault_model: model || null } : {}),
-        })
-        .eq("id", failure.id).eq("status", "완료")
-        .select();
-      if (editError) { alert(`수정 저장 실패\n${editError.message ?? ""}`); return; }
-      if (!editRows?.length) { notifyFailure("이미 상태가 바뀌어 수정할 수 없습니다"); return; }
-      setFailures((prev) =>
-        prev.map((x) =>
-          x.id === failure.id
-            ? {
-                ...x,
-                faultSymptom: symptom || null,
-                faultErrorCode: errorCode || null,
-                faultCause: cause || null,
-                processContent: processContent || null,
-                processNote: note || null,
-                photoCount: photoCount || 0,
-                photoUrls: photoUrls ?? [],
-                ...(faultModelReady ? { faultModel: model || null } : {}),
-              }
-            : x
-        )
-      );
-      return;
-    }
+    // 이미 완료된 건을 다시 열어 고친 경우 — 수정 권한(본인/관리자)은 FailureDetailSheet에서
+    // 이미 제한됨. 구분(처리완료/오신고)을 서로 바꾸는 건 내용만 갱신하면 되지만, 지원요청·
+    // 운행정지로 고치면 실제로 미배정 복귀시켜야 해서 아래 로직을 신규 제출과 그대로 공유한다.
+    const isEdit = failure.status === "완료";
     const isClosed = result === "처리완료" || result === "오신고";
     // 지원요청·운행정지 = 혼자 못 끝냄 → 미배정(미처리)으로 되돌려 지원 갈 기사가 이어받게 한다.
     // 출동 기록(배정자·출발·ETA·도착)을 초기화하되, escalation은 남겨 위험 상태로 표시한다.
     const isEscalation = result === "지원요청" || result === "운행정지";
-    if (result === "처리완료") markAtSite(failure, "처리완료"); // 완료한 그 현장 = 마지막 위치
+    if (!isEdit && result === "처리완료") markAtSite(failure, "처리완료"); // 완료한 그 현장 = 마지막 위치
     const escalation = isClosed ? null : result;
     // 완료 시각도 도착시각과 같은 "HH:MM" 형식으로 남긴다 — 상세 타임라인(도착→완료)에 쓰인다.
-    const completeTime = isClosed ? new Date().toTimeString().slice(0, 5) : null;
+    // 수정이면서 그대로 완료 상태를 유지하는 경우엔 처음 완료했던 시각을 그대로 둔다(다시 지금
+    // 시각으로 덮으면 "언제 끝났는지" 기록이 편집 시점으로 바뀌어버린다).
+    const completeTime = isClosed
+      ? (isEdit ? (failure.completeTime || new Date().toTimeString().slice(0, 5)) : new Date().toTimeString().slice(0, 5))
+      : null;
     // 지원요청·운행정지로 배정을 풀면 assignee가 비어서 "누가 그 판단을 내렸는지"가 사라진다 —
     // 비우기 직전 값을 별도 컬럼에 스냅샷으로 남겨 고장상세 화면에서 보여준다.
     const escalatedBy = isEscalation ? (failure.assignee || null) : null;
@@ -1223,7 +1193,8 @@ export default function App() {
       : { status: failure.status };
     // 처리결과는 유실되면 재작성이 어렵다 — 저장 실패는 물론, 그 사이 재배정/거부로 담당자·상태가
     // 바뀐 경우(동시성 충돌)에도 낙관적 반영을 막는다. 배정 갱신과 동일한 조건부 update 패턴.
-    const { data: resultRows, error: resultError } = await supabase
+    // 수정(isEdit)일 땐 원래 조건(진행중+같은 담당자)이 이미 안 맞으므로 완료 상태 기준으로 건다.
+    let resultQuery = supabase
       .from("failures")
       .update({
         ...statePatch,
@@ -1238,13 +1209,14 @@ export default function App() {
         photo_urls: photoUrls?.length ? photoUrls : null,
         ...(faultModelReady ? { fault_model: model || null } : {}),
       })
-      .eq("id", failure.id).eq("status", "진행중").eq("assignee", failure.assignee)
-      .select();
+      .eq("id", failure.id);
+    resultQuery = isEdit ? resultQuery.eq("status", "완료") : resultQuery.eq("status", "진행중").eq("assignee", failure.assignee);
+    const { data: resultRows, error: resultError } = await resultQuery.select();
     if (resultError) { alert(`처리결과 저장 실패\n${resultError.message ?? ""}`); return; }
     if (!resultRows?.length) {
       const { data: fresh } = await supabase.from("failures").select("*").eq("id", failure.id).single();
       if (fresh) setFailures((prev) => prev.map((x) => (x.id === failure.id ? mapFailure(fresh) : x)));
-      notifyFailure("다른 곳에서 이미 처리된 건이에요 · 목록을 새로고침했습니다");
+      notifyFailure(isEdit ? "이미 상태가 바뀌어 수정할 수 없습니다 · 목록을 새로고침했습니다" : "다른 곳에서 이미 처리된 건이에요 · 목록을 새로고침했습니다");
       return;
     }
     setFailures((prev) =>
@@ -1270,7 +1242,9 @@ export default function App() {
       )
     );
     const unit = formatUnitLabel(failure.elevatorNo);
-    if (isClosed) {
+    // 완료건을 수정하면서 계속 완료 상태로 남는 경우(처리완료↔오신고 정정 포함)는 이미 한 번
+    // 알림이 나갔던 건이라 다시 보내지 않는다 — 지원요청·운행정지로 재오픈되는 경우만 알린다.
+    if (isClosed && !isEdit) {
       // 처리완료·오신고 — 최고+중간관리자와 그 현장 담당기사 전원에게. 담당기사가 직접 처리한
       // 본인 건이어도 "확인용"으로 그대로 보낸다(누가 처리했든 알아야 하는 관리 성격의 알림).
       sendPush("failure_completed", [...new Set([...seniorAdminIds(), ...siteEngineerIds(failure.siteId)])], {
@@ -1282,6 +1256,7 @@ export default function App() {
     if (isEscalation) {
       // 처리 중 지원요청·운행정지로 바뀌면 관리자+기사 전원에게 — 미배정 풀로 되돌아간 급한
       // 건이라 선착순으로 잡을 기사뿐 아니라 관리자도 즉시 알아야 한다. (기존엔 기사에게만 갔다.)
+      // 완료건을 수정해서 재오픈되는 경우도 실질적으로 같은 상황이라 동일하게 보낸다.
       sendPush("failure_result_escalated", [...adminIds(), ...engineerIds()], {
         title: `${result} — 지원 필요 (미배정 복귀)`,
         body: `${failure.siteName}${unit ? ` ${unit}` : ""}`,

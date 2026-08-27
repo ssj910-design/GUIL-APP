@@ -1005,25 +1005,24 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
       <div className="space-y-3.5">
         <div>
           <label className="text-xs font-bold text-slate-600 mb-1 block">처리결과</label>
-          {isEdit ? (
-            <p className="text-xs text-slate-500 bg-slate-100 rounded-lg px-3 py-2">{result} <span className="text-slate-400">(구분은 수정할 수 없습니다)</span></p>
-          ) : (
-            <div className="grid grid-cols-4 gap-1.5">
-              {FAILURE_RESULT_OPTIONS.map((o) => {
-                const on = result === o.value;
-                return (
-                  <button
-                    key={o.value}
-                    type="button"
-                    onClick={() => setResult(o.value)}
-                    className={`flex flex-col items-center gap-1 py-2 rounded-lg border text-[11px] font-bold transition-colors ${on ? o.on : "border-slate-200 text-slate-400"}`}
-                  >
-                    <span className={`w-2.5 h-2.5 rounded-full ${on ? o.dot : "bg-slate-300"}`} />
-                    {o.value}
-                  </button>
-                );
-              })}
-            </div>
+          <div className="grid grid-cols-4 gap-1.5">
+            {FAILURE_RESULT_OPTIONS.map((o) => {
+              const on = result === o.value;
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => setResult(o.value)}
+                  className={`flex flex-col items-center gap-1 py-2 rounded-lg border text-[11px] font-bold transition-colors ${on ? o.on : "border-slate-200 text-slate-400"}`}
+                >
+                  <span className={`w-2.5 h-2.5 rounded-full ${on ? o.dot : "bg-slate-300"}`} />
+                  {o.value}
+                </button>
+              );
+            })}
+          </div>
+          {isEdit && (result === "지원요청" || result === "운행정지") && (
+            <p className="text-[11px] text-red-600 mt-1.5">완료 처리를 취소하고 미배정 상태로 되돌립니다 — 저장하면 다시 배정이 필요해요.</p>
           )}
         </div>
         <div>
