@@ -53,6 +53,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
   const [materialPhotos, setMaterialPhotos] = useState({ before: [], after: [] });
   const [partPhotos, setPartPhotos] = useState({}); // 부품 2개 이상일 때만 사용: { [index]: { before: [], after: [] } }
   const [manualPhotos, setManualPhotos] = useState({ before: [], after: [] });
+  const [manualPartPhotos, setManualPartPhotos] = useState({}); // 직접입력 부품 2개 이상일 때만 사용, partPhotos와 동일한 형태
   const [billStep, setBillStep] = useState(0); // 0 정보 · 1 증빙사진 · 2 완료서명
   const [billToast, setBillToast] = useState(null); // { msg, ok }
   function toastBill(msg, ok = false) { setBillToast({ msg, ok }); setTimeout(() => setBillToast(null), 2500); }
@@ -127,7 +128,12 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
   // 관리자가 지급 확정한 부품이 2개 이상이면 부품별로 전/후 사진을 따로 받는다 — 1개면
   // 나눌 이유가 없어 지금처럼 통합 업로더를 그대로 쓴다. 외주 견적건은 견적 품목을 우선한다.
   const billingParts = quoteBillingItems?.length > 1 ? quoteBillingItems : selected?.billingPartRows?.length > 1 ? selected.billingPartRows : null;
-  const manualPhotosOk = manualPhotos.before.length > 0 && manualPhotos.after.length > 0;
+  // 직접입력도 부품을 2개 이상 적으면(부품명+수량 둘 다 채운 행 기준) 부품별로 전/후 사진을 따로 받는다.
+  const manualFilledParts = manualForm.parts.filter((r) => r.name.trim() && r.qty);
+  const manualBillingParts = manualFilledParts.length > 1 ? manualFilledParts : null;
+  const manualPhotosOk = manualBillingParts
+    ? manualBillingParts.every((_, i) => manualPartPhotos[i]?.before?.length > 0 && manualPartPhotos[i]?.after?.length > 0)
+    : manualPhotos.before.length > 0 && manualPhotos.after.length > 0;
   const manualApprovalOk = manualAbsentMode
     ? manualApproverName.trim() && manualApproverPhone.replace(/\D/g, "").length >= 9 && manualAbsentConfirmed
     : manualSignerName.trim() && manualSignerPhone.replace(/\D/g, "").length >= 9 && !!manualSignatureUrl;
@@ -185,8 +191,13 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       if (Number(manualCostRaw) === 0 && !manualFreeReason) return "사유를 선택해주세요";
     }
     if (step === 2) {
-      if (manualPhotos.before.length === 0) return "교체 전 사진을 등록해주세요";
-      if (manualPhotos.after.length === 0) return "교체 후 사진을 등록해주세요";
+      if (manualBillingParts) {
+        const allFilled = manualBillingParts.every((_, i) => (manualPartPhotos[i]?.before?.length > 0) && (manualPartPhotos[i]?.after?.length > 0));
+        if (!allFilled) return "모든 부품의 교체 전/후 사진을 등록해주세요";
+      } else {
+        if (manualPhotos.before.length === 0) return "교체 전 사진을 등록해주세요";
+        if (manualPhotos.after.length === 0) return "교체 후 사진을 등록해주세요";
+      }
     }
     if (step === 3) {
       if (manualAbsentMode) {
@@ -207,6 +218,12 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
   // 부품별 전/후 사진 슬롯 하나를 갱신 — { [index]: { before: [...], after: [...] } } 형태를 유지한다.
   function updatePartPhotos(index, key, updater) {
     setPartPhotos((prev) => {
+      const cur = prev[index] ?? { before: [], after: [] };
+      return { ...prev, [index]: { ...cur, [key]: updater(cur[key]) } };
+    });
+  }
+  function updateManualPartPhotos(index, key, updater) {
+    setManualPartPhotos((prev) => {
       const cur = prev[index] ?? { before: [], after: [] };
       return { ...prev, [index]: { ...cur, [key]: updater(cur[key]) } };
     });
@@ -327,6 +344,20 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
     if (!manualValid) return;
     const site = sites.find((s) => s.id === manualForm.siteId);
     const partText = formatPartRows(manualForm.parts);
+    // 부품이 여러 개면 부품별 전/후 사진을 따로 묶어 보내고, 통합 배열(beforePhotoUrls/
+    // afterPhotoUrls)에도 전체를 합쳐 같이 남긴다(기존 화면 호환) — 자재지급건과 동일한 패턴.
+    // 직접입력은 부품별 단가가 없어(수리비는 총액 1개) amount는 null로 둔다.
+    const partPhotosPayload = manualBillingParts
+      ? manualBillingParts.map((part, i) => ({
+          name: part.name,
+          qty: part.qty ?? null,
+          amount: null,
+          beforeUrls: (manualPartPhotos[i]?.before ?? []).map((p) => p.url),
+          afterUrls: (manualPartPhotos[i]?.after ?? []).map((p) => p.url),
+        }))
+      : null;
+    const manualBeforeUrls = manualBillingParts ? partPhotosPayload.flatMap((p) => p.beforeUrls) : manualPhotos.before.map((p) => p.url);
+    const manualAfterUrls = manualBillingParts ? partPhotosPayload.flatMap((p) => p.afterUrls) : manualPhotos.after.map((p) => p.url);
     // 선택한 호기마다 청구 1건씩 생성 (호기 단위 정합 — 자재/견적과 동일)
     const targets = manualForm.units.length ? manualForm.units : [null];
     // 순차 await — insert 실패 시 즉시 중단하고 폼을 유지(리셋 안 함)해 재시도 가능 (P1-1/P1-2).
@@ -343,8 +374,9 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
         cost: manualForm.cost,
         isFree: Number(manualForm.cost) === 0,
         freeReason: Number(manualForm.cost) === 0 ? manualFreeReason : null,
-        beforePhotoUrls: manualPhotos.before.map((p) => p.url),
-        afterPhotoUrls: manualPhotos.after.map((p) => p.url),
+        beforePhotoUrls: manualBeforeUrls,
+        afterPhotoUrls: manualAfterUrls,
+        partPhotos: partPhotosPayload,
         replaceDate: manualForm.replaceDate,
         contactPhone: manualForm.contactPhone,
         // 지류 교체확인서 대신: 서명했으면 서명 이미지, 고객 부재중이면 전화승인자 정보.
@@ -370,6 +402,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
     setManualForm({ siteId: "", units: [], parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
     setManualFreeReason("");
     setManualPhotos({ before: [], after: [] });
+    setManualPartPhotos({});
     setManualSignatureUrl(null);
     setManualAbsentMode(false);
     setManualApproverName("");
@@ -691,7 +724,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
               <>
                 <button
                   type="button"
-                  onClick={() => setManualForm({ ...manualForm, fromKit: !manualForm.fromKit, parts: [emptyPartRow()] })}
+                  onClick={() => { setManualForm({ ...manualForm, fromKit: !manualForm.fromKit, parts: [emptyPartRow()] }); setManualPartPhotos({}); }}
                   className={`w-full flex items-center gap-2.5 border rounded-xl px-3.5 py-3 mb-4 text-left ${manualForm.fromKit ? "border-blue-400 bg-blue-50" : "border-slate-200 bg-white"}`}
                 >
                   <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${manualForm.fromKit ? "bg-blue-600 border-blue-600" : "border-slate-300"}`}>
@@ -760,26 +793,56 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
             )}
 
             {billStep === 2 && (
-              <>
-                <Field label="교체 전 사진 (필수)">
-                  <MultiPhotoUpload
-                    photos={manualPhotos.before}
-                    uploadFolder={`billings/${uploadSession}/before`}
-                    onUploaded={(url) => setManualPhotos((p) => ({ ...p, before: [...p.before, { url }] }))}
-                    onRemove={(idx) => setManualPhotos((p) => ({ ...p, before: p.before.filter((_, i) => i !== idx) }))}
-                    label="교체 전 표준 화질 사진 등록"
-                  />
-                </Field>
-                <Field label="교체 후 사진 (필수)">
-                  <MultiPhotoUpload
-                    photos={manualPhotos.after}
-                    uploadFolder={`billings/${uploadSession}/after`}
-                    onUploaded={(url) => setManualPhotos((p) => ({ ...p, after: [...p.after, { url }] }))}
-                    onRemove={(idx) => setManualPhotos((p) => ({ ...p, after: p.after.filter((_, i) => i !== idx) }))}
-                    label="교체 후 표준 화질 사진 등록"
-                  />
-                </Field>
-              </>
+              manualBillingParts ? (
+                <div className="space-y-4">
+                  {manualBillingParts.map((part, i) => (
+                    <div key={i} className="border border-slate-200 rounded-xl p-3">
+                      <p className="text-xs font-extrabold text-slate-700 mb-2">{part.name}{part.qty ? ` ${part.qty}개` : ""}</p>
+                      <Field label="교체 전">
+                        <MultiPhotoUpload
+                          photos={manualPartPhotos[i]?.before ?? []}
+                          uploadFolder={`billings/${uploadSession}/manualpart${i}/before`}
+                          onUploaded={(url) => updateManualPartPhotos(i, "before", (arr) => [...arr, { url }])}
+                          onRemove={(idx) => updateManualPartPhotos(i, "before", (arr) => arr.filter((_, bi) => bi !== idx))}
+                          label="교체 전 표준 화질 사진 등록"
+                          compactHint
+                        />
+                      </Field>
+                      <Field label="교체 후">
+                        <MultiPhotoUpload
+                          photos={manualPartPhotos[i]?.after ?? []}
+                          uploadFolder={`billings/${uploadSession}/manualpart${i}/after`}
+                          onUploaded={(url) => updateManualPartPhotos(i, "after", (arr) => [...arr, { url }])}
+                          onRemove={(idx) => updateManualPartPhotos(i, "after", (arr) => arr.filter((_, ai) => ai !== idx))}
+                          label="교체 후 표준 화질 사진 등록"
+                          compactHint
+                        />
+                      </Field>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <Field label="교체 전 사진 (필수)">
+                    <MultiPhotoUpload
+                      photos={manualPhotos.before}
+                      uploadFolder={`billings/${uploadSession}/before`}
+                      onUploaded={(url) => setManualPhotos((p) => ({ ...p, before: [...p.before, { url }] }))}
+                      onRemove={(idx) => setManualPhotos((p) => ({ ...p, before: p.before.filter((_, i) => i !== idx) }))}
+                      label="교체 전 표준 화질 사진 등록"
+                    />
+                  </Field>
+                  <Field label="교체 후 사진 (필수)">
+                    <MultiPhotoUpload
+                      photos={manualPhotos.after}
+                      uploadFolder={`billings/${uploadSession}/after`}
+                      onUploaded={(url) => setManualPhotos((p) => ({ ...p, after: [...p.after, { url }] }))}
+                      onRemove={(idx) => setManualPhotos((p) => ({ ...p, after: p.after.filter((_, i) => i !== idx) }))}
+                      label="교체 후 표준 화질 사진 등록"
+                    />
+                  </Field>
+                </>
+              )
             )}
 
             {billStep === 3 && (
@@ -787,22 +850,40 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3">
                   <p className="text-xs font-extrabold text-slate-700">완료보고서 미리보기</p>
                   <p className="text-[11px] text-slate-500 mt-0.5">{sites.find((s) => s.id === manualForm.siteId)?.name}{manualForm.units.length ? ` · ${manualForm.units.join(", ")}` : ""}</p>
-                  <div className="mt-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-bold text-slate-800">{formatPartRows(manualForm.parts)}</p>
-                      <p className="text-sm font-extrabold text-blue-700 shrink-0">₩{Number(manualForm.cost || 0).toLocaleString()}</p>
+                  {manualBillingParts ? (
+                    <div className="space-y-3 mt-2">
+                      {manualBillingParts.map((part, i) => (
+                        <div key={i}>
+                          <p className="text-sm font-bold text-slate-800">{part.name}{part.qty ? ` ${part.qty}개` : ""}</p>
+                          <div className="flex gap-1.5 mt-1">
+                            {manualPartPhotos[i]?.before?.[0] && (
+                              <img src={manualPartPhotos[i].before[0].url} alt={`${part.name} 교체 전`} className="flex-1 min-w-0 aspect-square rounded-lg object-cover border border-slate-200" />
+                            )}
+                            {manualPartPhotos[i]?.after?.[0] && (
+                              <img src={manualPartPhotos[i].after[0].url} alt={`${part.name} 교체 후`} className="flex-1 min-w-0 aspect-square rounded-lg object-cover border border-slate-200" />
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    {(manualPhotos.before[0] || manualPhotos.after[0]) && (
-                      <div className="flex gap-1.5 mt-1">
-                        {manualPhotos.before[0] && (
-                          <img src={manualPhotos.before[0].url} alt="교체 전" className="flex-1 min-w-0 aspect-square rounded-lg object-cover border border-slate-200" />
-                        )}
-                        {manualPhotos.after[0] && (
-                          <img src={manualPhotos.after[0].url} alt="교체 후" className="flex-1 min-w-0 aspect-square rounded-lg object-cover border border-slate-200" />
-                        )}
+                  ) : (
+                    <div className="mt-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-bold text-slate-800">{formatPartRows(manualForm.parts)}</p>
+                        <p className="text-sm font-extrabold text-blue-700 shrink-0">₩{Number(manualForm.cost || 0).toLocaleString()}</p>
                       </div>
-                    )}
-                  </div>
+                      {(manualPhotos.before[0] || manualPhotos.after[0]) && (
+                        <div className="flex gap-1.5 mt-1">
+                          {manualPhotos.before[0] && (
+                            <img src={manualPhotos.before[0].url} alt="교체 전" className="flex-1 min-w-0 aspect-square rounded-lg object-cover border border-slate-200" />
+                          )}
+                          {manualPhotos.after[0] && (
+                            <img src={manualPhotos.after[0].url} alt="교체 후" className="flex-1 min-w-0 aspect-square rounded-lg object-cover border border-slate-200" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-200">
                     <p className="text-xs font-bold text-slate-500">합계</p>
                     <p className="text-sm font-extrabold text-blue-700">
