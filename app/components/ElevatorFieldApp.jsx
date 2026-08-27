@@ -1156,6 +1156,44 @@ export default function App() {
   async function handleFailureResult(failure, payload) {
     const { result, symptom, cause, processContent, note, photoCount, photoUrls, model } = payload;
     const errorCode = (payload.errorCode || "").trim();
+    // 이미 완료된 건을 다시 열어 고친 경우 — 상태·배정·알림 로직(아래)은 건드리지 않고
+    // 처리결과 내용 필드만 갱신한다. 수정 권한(본인/관리자)은 FailureDetailSheet에서 이미 제한됨.
+    if (failure.status === "완료") {
+      const { data: editRows, error: editError } = await supabase
+        .from("failures")
+        .update({
+          fault_symptom: symptom || null,
+          fault_error_code: errorCode || null,
+          fault_cause: cause || null,
+          process_content: processContent || null,
+          process_note: note || null,
+          photo_count: photoCount || 0,
+          photo_urls: photoUrls?.length ? photoUrls : null,
+          ...(faultModelReady ? { fault_model: model || null } : {}),
+        })
+        .eq("id", failure.id).eq("status", "완료")
+        .select();
+      if (editError) { alert(`수정 저장 실패\n${editError.message ?? ""}`); return; }
+      if (!editRows?.length) { notifyFailure("이미 상태가 바뀌어 수정할 수 없습니다"); return; }
+      setFailures((prev) =>
+        prev.map((x) =>
+          x.id === failure.id
+            ? {
+                ...x,
+                faultSymptom: symptom || null,
+                faultErrorCode: errorCode || null,
+                faultCause: cause || null,
+                processContent: processContent || null,
+                processNote: note || null,
+                photoCount: photoCount || 0,
+                photoUrls: photoUrls ?? [],
+                ...(faultModelReady ? { faultModel: model || null } : {}),
+              }
+            : x
+        )
+      );
+      return;
+    }
     const isClosed = result === "처리완료" || result === "오신고";
     // 지원요청·운행정지 = 혼자 못 끝냄 → 미배정(미처리)으로 되돌려 지원 갈 기사가 이어받게 한다.
     // 출동 기록(배정자·출발·ETA·도착)을 초기화하되, escalation은 남겨 위험 상태로 표시한다.

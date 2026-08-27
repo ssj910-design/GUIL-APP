@@ -472,7 +472,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
 
 
 export function FailureDetailSheet({ failure, failures = [], nested = false, onClose, onDispatch, onArrive, onOpenResult, onAssignOpen }) {
-  const { role } = useContext(AuthContext);
+  const { role, name: myName } = useContext(AuthContext);
   const sites = useContext(SitesContext);
   const units = useContext(UnitsContext);
   const site = sites.find((s) => s.id === failure.siteId);
@@ -664,6 +664,16 @@ export function FailureDetailSheet({ failure, failures = [], nested = false, onC
               <Wrench size={15} strokeWidth={2.5} /> 고장처리결과 입력
             </button>
           )}
+        </div>
+      )}
+      {!nested && stage === "done" && onOpenResult && (role === "admin" || failure.assignee === myName) && (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { onOpenResult(failure); onClose(); }}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 bg-slate-800 text-white text-sm font-bold py-3 rounded-xl active:bg-slate-900"
+          >
+            <Wrench size={15} strokeWidth={2.5} /> 고장처리결과 수정
+          </button>
         </div>
       )}
     </Sheet>
@@ -954,23 +964,30 @@ function ErrorCodeRow({ code, model, errorCodes, failures, units, onChange, onRe
 }
 
 export function ArrivalResultModal({ failure, failures = [], errorCodes = [], onConfirm, onClose }) {
-  const [result, setResult] = useState("처리완료");
-  const [symptom, setSymptom] = useState("");
-  const [cause, setCause] = useState("");
-  const [processContent, setProcessContent] = useState("");
-  const [note, setNote] = useState("");
-  const [photos, setPhotos] = useState([]);
+  // 이미 완료 처리된 건을 다시 연 경우 = 수정. 상태 재분류(escalation)까지 이 모달에서 다시
+  // 하면 handleFailureResult의 상태 전이 로직과 충돌하므로, 수정은 내용 필드만 고친다
+  // (처리결과 구분은 잠가서 그대로 유지).
+  const isEdit = failure.status === "완료";
+  const [result, setResult] = useState(isEdit ? failure.processResult || "처리완료" : "처리완료");
+  const [symptom, setSymptom] = useState(isEdit ? failure.faultSymptom || "" : "");
+  const [cause, setCause] = useState(isEdit ? failure.faultCause || "" : "");
+  const [processContent, setProcessContent] = useState(isEdit ? failure.processContent || "" : "");
+  const [note, setNote] = useState(isEdit ? failure.processNote || "" : "");
+  const [photos, setPhotos] = useState(isEdit ? (failure.photoUrls || []).map((url) => ({ url })) : []);
   const units = useContext(UnitsContext);
   // 기종은 실제 호기 데이터가 아니라 에러코드집에 등록된 기종 중에서만 고른다.
   const models = distinctModels(errorCodes);
   const [selectedModel, setSelectedModel] = useState("");
 
   // 에러코드 없음(해당 없음 처리) — 체크하면 코드 입력 없이도 등록할 수 있다.
-  const [noErrorCode, setNoErrorCode] = useState(false);
+  const [noErrorCode, setNoErrorCode] = useState(isEdit && !failure.faultErrorCode);
 
   // 에러코드 1개 이상 입력 — 부품 내역 입력(PartsRowsInput)과 같은 "줄 추가/삭제" 방식.
-  const nextCodeRowId = useRef(2);
-  const [codeRows, setCodeRows] = useState([{ id: 1, code: "" }]);
+  const initialCodeRows = isEdit && failure.faultErrorCode
+    ? failure.faultErrorCode.split(",").map((c) => c.trim()).filter(Boolean).map((code, i) => ({ id: i + 1, code }))
+    : [{ id: 1, code: "" }];
+  const nextCodeRowId = useRef(initialCodeRows.length + 1);
+  const [codeRows, setCodeRows] = useState(initialCodeRows);
   function updateCodeRow(id, value) {
     setCodeRows((rows) => rows.map((r) => (r.id === id ? { ...r, code: value } : r)));
   }
@@ -983,27 +1000,31 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
   const errorCodeText = noErrorCode ? "" : codeRows.map((r) => r.code.trim()).filter(Boolean).join(", ");
 
   return (
-    <Sheet title="고장처리결과 입력" onClose={onClose}>
+    <Sheet title={isEdit ? "고장처리결과 수정" : "고장처리결과 입력"} onClose={onClose}>
       <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {formatUnitLabel(failure.elevatorNo)}</p>
       <div className="space-y-3.5">
         <div>
           <label className="text-xs font-bold text-slate-600 mb-1 block">처리결과</label>
-          <div className="grid grid-cols-4 gap-1.5">
-            {FAILURE_RESULT_OPTIONS.map((o) => {
-              const on = result === o.value;
-              return (
-                <button
-                  key={o.value}
-                  type="button"
-                  onClick={() => setResult(o.value)}
-                  className={`flex flex-col items-center gap-1 py-2 rounded-lg border text-[11px] font-bold transition-colors ${on ? o.on : "border-slate-200 text-slate-400"}`}
-                >
-                  <span className={`w-2.5 h-2.5 rounded-full ${on ? o.dot : "bg-slate-300"}`} />
-                  {o.value}
-                </button>
-              );
-            })}
-          </div>
+          {isEdit ? (
+            <p className="text-xs text-slate-500 bg-slate-100 rounded-lg px-3 py-2">{result} <span className="text-slate-400">(구분은 수정할 수 없습니다)</span></p>
+          ) : (
+            <div className="grid grid-cols-4 gap-1.5">
+              {FAILURE_RESULT_OPTIONS.map((o) => {
+                const on = result === o.value;
+                return (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => setResult(o.value)}
+                    className={`flex flex-col items-center gap-1 py-2 rounded-lg border text-[11px] font-bold transition-colors ${on ? o.on : "border-slate-200 text-slate-400"}`}
+                  >
+                    <span className={`w-2.5 h-2.5 rounded-full ${on ? o.dot : "bg-slate-300"}`} />
+                    {o.value}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
         <div>
           <label className="text-xs font-bold text-slate-600 mb-1 block">증상 <span className="text-red-500">*</span></label>
@@ -1081,7 +1102,7 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
               onClick={() => onConfirm({ result, symptom, errorCode: errorCodeText, cause, processContent, note, model: selectedModel, photoCount: photos.length, photoUrls: photos.map((p) => p.url) })}
               className={`w-full text-white text-sm font-bold py-3 rounded-xl ${valid ? FAILURE_RESULT_BTN_CLS[result] : "bg-slate-300"}`}
             >
-              {result} 등록
+              {isEdit ? "수정 저장" : `${result} 등록`}
             </button>
           );
         })()}
@@ -1558,10 +1579,11 @@ const DATE_RANGES = [
   { key: "3m", label: "3개월", days: 90 },
 ];
 
-function FailureStatusOverview({ failures, onReassign, attendances = [], todayLeaves = [] }) {
+function FailureStatusOverview({ failures, onReassign, onResult, errorCodes = [], attendances = [], todayLeaves = [] }) {
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
   const [reassignTarget, setReassignTarget] = useState(null);
+  const [resultTarget, setResultTarget] = useState(null);
   const [filter, setFilter] = useState("all"); // all · 미처리(미배정) · 진행중 · 완료
   const [dateRange, setDateRange] = useState("7d");
   const [search, setSearch] = useState("");
@@ -1657,9 +1679,28 @@ function FailureStatusOverview({ failures, onReassign, attendances = [], todayLe
         )}
       </div>
 
-      {detailTarget && <FailureDetailSheet failure={detailTarget} failures={failures} onClose={() => setDetailTarget(null)} />}
+      {detailTarget && (
+        <FailureDetailSheet
+          failure={detailTarget}
+          failures={failures}
+          onClose={() => setDetailTarget(null)}
+          onOpenResult={setResultTarget}
+        />
+      )}
       {reassignTarget && (
         <AssignEngineerSheet failure={reassignTarget} failures={failures} onAssign={onReassign} attendances={attendances} todayLeaves={todayLeaves} onClose={() => setReassignTarget(null)} allowUnassign />
+      )}
+      {resultTarget && (
+        <ArrivalResultModal
+          failure={resultTarget}
+          failures={failures}
+          errorCodes={errorCodes}
+          onClose={() => setResultTarget(null)}
+          onConfirm={(result) => {
+            onResult(resultTarget, result);
+            setResultTarget(null);
+          }}
+        />
       )}
     </div>
   );
@@ -1770,7 +1811,7 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
     if (tab === "접수등록") return <FailureRegisterForm onReported={onReported} onDispatch={onDispatch} failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />;
     if (tab === "미배정") return <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
     if (tab === "처리등록") return <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
-    if (tab === "처리현황") return <FailureStatusOverview failures={failures} onReassign={onReassign} attendances={attendances} todayLeaves={todayLeaves} />;
+    if (tab === "처리현황") return <FailureStatusOverview failures={failures} onReassign={onReassign} onResult={onResult} errorCodes={errorCodes} attendances={attendances} todayLeaves={todayLeaves} />;
     return <ErrorCodeBook errorCodes={errorCodes} failures={failures} />;
   }
 

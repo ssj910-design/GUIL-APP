@@ -52,7 +52,7 @@ function DueSoonRow({ i, address, govElevatorNo, onOpenFail, priorUnit }) {
 }
 
 
-function FailureHistoryDetailScreen({ site, failures, onBack }) {
+function FailureHistoryDetailScreen({ site, failures, onBack, onOpenResult }) {
   const history = failures.filter((f) => f.siteId === site.id);
   const [detailTarget, setDetailTarget] = useState(null);
   return (
@@ -83,7 +83,7 @@ function FailureHistoryDetailScreen({ site, failures, onBack }) {
           ))
         )}
       </div>
-      {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} />}
+      {detailTarget && <FailureDetailSheet failure={detailTarget} onClose={() => setDetailTarget(null)} onOpenResult={onOpenResult} />}
     </Sheet>
   );
 }
@@ -956,7 +956,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
         <InspectionFailDetailSheet inspection={inspectionFailTarget} onClose={() => setInspectionFailTarget(null)} />
       )}
       {historySite && (
-        <FailureHistoryDetailScreen site={historySite} failures={failures} onBack={() => setHistorySite(null)} />
+        <FailureHistoryDetailScreen site={historySite} failures={failures} onBack={() => setHistorySite(null)} onOpenResult={setResultTarget} />
       )}
       <SmsToast message={toast} />
     </div>
