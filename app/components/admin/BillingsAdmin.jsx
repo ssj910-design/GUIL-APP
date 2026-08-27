@@ -3,12 +3,14 @@
 // 부품교체·공사 내역 — 청구 건 조회 + 합계. 각 건 클릭 시 상세보기(사진 포함)에서
 // 내용(관리자 메모) 추가, 담당자 변경, 기한(교체일자) 수정이 가능하다.
 import { useState, useContext } from "react";
-import { Search } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { shortDate, formatUnitLabel } from "@/lib/utils";
+import { TODAY_STR } from "@/lib/constants";
+import { mapBilling } from "@/lib/mappers";
 import { BRAND } from "@/lib/company";
 import { uploadPhoto } from "@/lib/photos";
-import { locOf, addressOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate, AdminAuthContext } from "@/app/components/admin/adminShared";
+import { locOf, addressOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate, AdminAuthContext, SiteAutocomplete } from "@/app/components/admin/adminShared";
 import ReplacementCertificateViewer from "@/app/components/admin/ReplacementCertificateViewer";
 
 const BILLING_METHODS = ["계좌이체", "CMS", "지로"];
@@ -121,6 +123,204 @@ function EditablePhotoRow({ label, urls, onChange, uploadFolder }) {
         </label>
       </div>
     </div>
+  );
+}
+
+function emptyBillingItem() {
+  return { name: "", qty: "", amount: "", beforeUrls: [], afterUrls: [] };
+}
+
+// 새 청구 등록 폼의 품목 입력 — 품명·수량·금액에 품목별 전/후 사진까지 한 번에 받는다
+// (기존 상세수정 화면의 품목별 수정 UI와 동일한 필드 구성, 여기선 행 추가·삭제까지 지원).
+function ItemRowsInput({ items, onChange, uploadFolder }) {
+  function updateItem(i, patch) {
+    onChange(items.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
+  }
+  return (
+    <div className="space-y-3">
+      {items.map((item, i) => (
+        <div key={i} className="border border-slate-200 rounded-xl p-3 space-y-2">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2">
+              <p className="text-[11px] font-bold text-slate-500 mb-1">품명</p>
+              <input className={inputCls} value={item.name} onChange={(e) => updateItem(i, { name: e.target.value })} />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-slate-500 mb-1">수량</p>
+              <input className={inputCls} value={item.qty} onChange={(e) => updateItem(i, { qty: e.target.value })} />
+            </div>
+          </div>
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <p className="text-[11px] font-bold text-slate-500 mb-1">금액</p>
+              <input type="number" className={inputCls} value={item.amount} onChange={(e) => updateItem(i, { amount: e.target.value })} />
+            </div>
+            {items.length > 1 && (
+              <button type="button" onClick={() => onChange(items.filter((_, idx) => idx !== i))} className="text-xs font-bold text-red-500 border border-red-200 rounded-lg px-3 py-2">
+                삭제
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <EditablePhotoRow label="교체 전" urls={item.beforeUrls} onChange={(urls) => updateItem(i, { beforeUrls: urls })} uploadFolder={`${uploadFolder}/part${i}/before`} />
+            <EditablePhotoRow label="교체 후" urls={item.afterUrls} onChange={(urls) => updateItem(i, { afterUrls: urls })} uploadFolder={`${uploadFolder}/part${i}/after`} />
+          </div>
+        </div>
+      ))}
+      <button type="button" onClick={() => onChange([...items, emptyBillingItem()])} className="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-2">
+        + 품목 추가
+      </button>
+    </div>
+  );
+}
+
+// 새 청구 등록 — 자재 지급건에 연동(청구 안 된 완료 대기 할일 하나를 골라 그 내용으로 채움) 또는
+// 직접 입력(현장·호기부터 전부 수기입력) 두 모드. 기사어플과 달리 고객 서명·전화승인은 관리자가
+// 현장에 없어 받을 수 없으므로 요구하지 않는다(사후 입력·보정용이라는 전제).
+function NewBillingModal({ data, onClose, onCreate }) {
+  const { sites, units, profiles, todos, quoteRequests } = data;
+  const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false);
+  const [mode, setMode] = useState("material"); // material | manual
+  // 자재 지급건 연동 대상 — 기사어플 청구 화면과 같은 조건(완료 안 된, 수동배정·반납확인 아닌 할일). 기사 제한 없이 전체.
+  const linkableTodos = todos.filter((t) => !t.done && t.source !== "manual" && t.source !== "waste_return");
+  const [linkedTodoId, setLinkedTodoId] = useState("");
+  const [uploadToken] = useState(() => Date.now());
+  const [form, setForm] = useState({
+    siteId: "", unitId: "", engineerId: "", replaceDate: TODAY_STR, contactPhone: "",
+    isOutsourced: false, vendorName: "", items: [emptyBillingItem()],
+  });
+  const [saving, setSaving] = useState(false);
+  const siteUnits = units.filter((u) => u.siteId === form.siteId);
+
+  // 지급건을 고르면 그 건의 현장·호기·담당자·품목으로 폼을 채운다(그대로 써도 되고 고쳐도 됨).
+  function pickLinkedTodo(id) {
+    setLinkedTodoId(id);
+    const t = todos.find((x) => x.id === id);
+    if (!t) return;
+    const unit = units.find((u) => u.id === t.unitId);
+    const quoteItems = t.source === "quote"
+      ? (quoteRequests.find((q) => q.id === t.quoteRequestId)?.quoteItems ?? [])
+          .filter((it) => it.name?.trim())
+          .map((it) => ({ name: it.name, qty: it.qty || null, amount: Math.round(Number(it.qty || 0) * Number(it.unitPrice || 0)) }))
+      : null;
+    const parts = quoteItems?.length > 1 ? quoteItems : t.billingPartRows?.length > 1 ? t.billingPartRows : null;
+    setForm({
+      siteId: unit?.siteId ?? sites.find((s) => s.name === t.siteName)?.id ?? "",
+      unitId: t.unitId ?? "",
+      engineerId: t.assigneeId ?? "",
+      replaceDate: TODAY_STR,
+      contactPhone: "",
+      isOutsourced: !!t.isOutsourced,
+      vendorName: t.vendorName ?? "",
+      items: parts
+        ? parts.map((p) => ({ name: p.name ?? "", qty: p.qty ?? "", amount: p.amount ?? "", beforeUrls: [], afterUrls: [] }))
+        : [{ name: t.part ?? "", qty: "", amount: t.billingAmount ?? "", beforeUrls: [], afterUrls: [] }],
+    });
+  }
+
+  const filledItems = form.items.filter((i) => i.name.trim());
+  const valid = form.siteId && form.unitId && form.engineerId && form.replaceDate && filledItems.length > 0;
+
+  async function submit() {
+    if (!valid) return;
+    setSaving(true);
+    await onCreate({ ...form, linkedTodoId: mode === "material" ? linkedTodoId : null });
+    setSaving(false);
+    onClose();
+  }
+
+  return (
+    <Modal title="새 청구 등록" onClose={onClose} wide="xl">
+      <div className="space-y-4">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setMode("material")}
+            className={`flex-1 text-sm font-bold rounded-xl px-3 py-2.5 ${mode === "material" ? "bg-blue-700 text-white" : "bg-slate-100 text-slate-500"}`}
+          >
+            자재 지급건 연동
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("manual")}
+            className={`flex-1 text-sm font-bold rounded-xl px-3 py-2.5 ${mode === "manual" ? "bg-blue-700 text-white" : "bg-slate-100 text-slate-500"}`}
+          >
+            직접 입력
+          </button>
+        </div>
+
+        {mode === "material" && (
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">청구 대상 지급건</p>
+            <select className={inputCls} value={linkedTodoId} onChange={(e) => pickLinkedTodo(e.target.value)}>
+              <option value="">선택하세요</option>
+              {linkableTodos.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {locOf(data, t.unitId, t.siteName, t.elevatorNo)} · {personOf(data, t.assigneeId, t.assignee)} · {t.part ?? t.title}
+                </option>
+              ))}
+            </select>
+            {!linkableTodos.length && <p className="text-[11px] text-slate-400 mt-1">청구 안 된 지급 완료 대기 할일이 없습니다</p>}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">현장</p>
+            <SiteAutocomplete sites={sites} value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitId: "" })} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">호기</p>
+            <select className={inputCls} value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })} disabled={!form.siteId}>
+              <option value="">선택하세요</option>
+              {siteUnits.map((u) => <option key={u.id} value={u.id}>{u.unitNo}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">담당 기사</p>
+            <select className={inputCls} value={form.engineerId} onChange={(e) => setForm({ ...form, engineerId: e.target.value })}>
+              <option value="">선택하세요</option>
+              {engineers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">교체일자</p>
+            <DateTextInput key={form.replaceDate} value={form.replaceDate} onChange={(v) => setForm({ ...form, replaceDate: v })} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">현장 담당자 연락처 (선택)</p>
+            <input className={inputCls} value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} />
+          </div>
+          <div>
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-600 mt-6">
+              <input type="checkbox" checked={form.isOutsourced} onChange={(e) => setForm({ ...form, isOutsourced: e.target.checked })} />
+              외주 처리
+            </label>
+            {form.isOutsourced && (
+              <input className={`${inputCls} mt-1.5`} placeholder="작업 업체명" value={form.vendorName} onChange={(e) => setForm({ ...form, vendorName: e.target.value })} />
+            )}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-2">교체 품목 (사진은 선택)</p>
+          <ItemRowsInput items={form.items} onChange={(items) => setForm({ ...form, items })} uploadFolder={`billings/admin-${uploadToken}`} />
+        </div>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-5 py-2.5">취소</button>
+          <button disabled={!valid || saving} onClick={submit} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
+            등록
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -405,6 +605,7 @@ export default function BillingsAdmin({ data, setData }) {
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState(null);
   const [certTarget, setCertTarget] = useState(null);
+  const [creating, setCreating] = useState(false);
   // billings.certificate_pdf_url 컬럼 존재 여부 — 마이그레이션 122 실행 전엔 컬럼이 없다.
   const certUrlReady = billings.some((b) => b.certificatePdfUrl !== undefined);
 
@@ -477,6 +678,76 @@ export default function BillingsAdmin({ data, setData }) {
     }));
   }
 
+  // 새 청구 등록 — 자재 지급건 연동이면 관련 할일(같은 견적·자재신청·자체점검 건을 공유하는
+  // 미완료 할일 전부, 담당자가 여럿이면 그만큼)을 기사어플 청구 제출과 동일한 규칙으로 완료 처리한다.
+  async function createBilling(form) {
+    const filled = form.items.filter((i) => i.name.trim());
+    if (!filled.length) return;
+    const isMulti = filled.length > 1;
+    const unit = data.units.find((u) => u.id === form.unitId);
+    const site = data.sites.find((s) => s.id === form.siteId);
+    const engineer = data.profiles.find((p) => p.id === form.engineerId);
+    const linked = form.linkedTodoId ? data.todos.find((t) => t.id === form.linkedTodoId) : null;
+
+    const partPhotos = isMulti
+      ? filled.map((i) => ({ name: i.name.trim(), qty: i.qty || null, amount: i.amount === "" ? null : Number(i.amount), beforeUrls: i.beforeUrls, afterUrls: i.afterUrls }))
+      : null;
+    const part = isMulti ? filled.map((i) => i.name.trim()).join(", ") : `${filled[0].name.trim()}${filled[0].qty ? ` ${filled[0].qty}개` : ""}`;
+    const cost = isMulti
+      ? (filled.every((i) => i.amount !== "") ? filled.reduce((sum, i) => sum + Number(i.amount || 0), 0) : null)
+      : (filled[0].amount === "" ? null : Number(filled[0].amount));
+    const beforePhotoUrls = isMulti ? partPhotos.flatMap((p) => p.beforeUrls) : filled[0].beforeUrls;
+    const afterPhotoUrls = isMulti ? partPhotos.flatMap((p) => p.afterUrls) : filled[0].afterUrls;
+
+    const row = {
+      id: "bill-" + crypto.randomUUID(),
+      type: linked ? linked.source : "manual",
+      site_name: site?.name ?? null,
+      elevator_no: unit?.unitNo ?? null,
+      elevator_nos: linked?.elevatorNos ?? null,
+      unit_id: form.unitId || null,
+      part,
+      cost,
+      replace_date: form.replaceDate || null,
+      contact_phone: form.contactPhone || null,
+      engineer: engineer?.name ?? null,
+      engineer_id: form.engineerId || null,
+      submitted_at: TODAY_STR,
+      before_photo_urls: beforePhotoUrls.length ? beforePhotoUrls : null,
+      after_photo_urls: afterPhotoUrls.length ? afterPhotoUrls : null,
+      part_photos: partPhotos,
+      is_outsourced: !!form.isOutsourced,
+      vendor_name: form.isOutsourced ? (form.vendorName || null) : null,
+      is_free: cost === 0,
+      material_request_id: linked?.materialRequestId ?? null,
+      quote_request_id: linked?.quoteRequestId ?? null,
+    };
+    const { data: inserted, error } = await supabase.from("billings").insert(row).select().single();
+    if (error) { alert("등록 실패: " + error.message); return; }
+
+    let doneIds = [];
+    if (linked) {
+      doneIds = data.todos
+        .filter((t) => !t.done && t.source !== "waste_return" && (
+          (linked.quoteRequestId && t.quoteRequestId === linked.quoteRequestId) ||
+          (linked.materialRequestId && t.materialRequestId === linked.materialRequestId) ||
+          (linked.selfCheckItemId && t.selfCheckItemId === linked.selfCheckItemId) ||
+          (!linked.quoteRequestId && !linked.materialRequestId && !linked.selfCheckItemId && t.id === linked.id)
+        ))
+        .map((t) => t.id);
+      if (doneIds.length) {
+        const { error: todoError } = await supabase.from("todos").update({ done: true }).in("id", doneIds);
+        if (todoError) alert("청구는 등록됐지만 할일 완료 처리에 실패했습니다: " + todoError.message);
+      }
+    }
+
+    setData((prev) => ({
+      ...prev,
+      billings: [mapBilling(inserted), ...prev.billings],
+      todos: doneIds.length ? prev.todos.map((t) => (doneIds.includes(t.id) ? { ...t, done: true } : t)) : prev.todos,
+    }));
+  }
+
   const cert = certTarget && buildCertificateData(certTarget, data);
 
   return (
@@ -487,9 +758,14 @@ export default function BillingsAdmin({ data, setData }) {
           {q && `검색결과 ${rows.length}건 / `}총 {billings.length}건 · <span className="font-extrabold text-slate-900">{total.toLocaleString()}원</span>
         </p>
       </div>
-      <div className="relative mb-3 max-w-72">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input className={`${inputCls} pl-8`} placeholder="현장·부품·기사명 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div className="flex items-center justify-between mb-3 gap-3">
+        <div className="relative max-w-72 flex-1">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input className={`${inputCls} pl-8`} placeholder="현장·부품·기사명 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <button onClick={() => setCreating(true)} className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
+          <Plus size={15} /> 새 청구 등록
+        </button>
       </div>
       <AdminTable head={["현장 · 호기", "담당자", "작업자", "교체내역", "금액", "교체일", "교체확인서", "청구일", "청구방식"]}>
         {rows.map((b) => (
@@ -539,6 +815,7 @@ export default function BillingsAdmin({ data, setData }) {
       </AdminTable>
 
       {detail && <BillingDetailModal b={detail} data={data} onClose={() => setDetail(null)} onSave={saveBilling} onToggleFree={toggleFree} onAdjustPrice={adjustPrice} />}
+      {creating && <NewBillingModal data={data} onClose={() => setCreating(false)} onCreate={createBilling} />}
       {certTarget && (
         <ReplacementCertificateViewer
           cert={cert}
