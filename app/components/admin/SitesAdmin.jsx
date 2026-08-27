@@ -910,6 +910,10 @@ export default function SitesAdmin({ data, setData }) {
   }
 
   // 계약종료/복구 (soft delete — 설계 원칙 4). 종료는 일자·근거·사유를 받아야 해서 모달을 연다.
+  // 종료일자를 미래로 잡으면 지금 당장은 활성 상태를 유지하고, 그 날짜가 되면
+  // check-terminations 크론(매일 KST 00:10)이 자동으로 비활성화한다.
+  const pendingTermination = site.isActive !== false && site.terminatedDate && site.terminatedDate > TODAY_STR;
+
   async function toggleSiteActive() {
     if (site.isActive === false) {
       await supabase.from("sites").update({
@@ -919,18 +923,32 @@ export default function SitesAdmin({ data, setData }) {
         ...prev,
         sites: prev.sites.map((x) => (x.id === selectedId ? { ...x, isActive: true, terminatedDate: null, terminationBasis: null, terminationReason: null } : x)),
       }));
+    } else if (pendingTermination) {
+      await supabase.from("sites").update({
+        terminated_date: null, termination_basis: null, termination_reason: null,
+      }).eq("id", selectedId);
+      setData((prev) => ({
+        ...prev,
+        sites: prev.sites.map((x) => (x.id === selectedId ? { ...x, terminatedDate: null, terminationBasis: null, terminationReason: null } : x)),
+      }));
     } else {
       setTerminating(true);
     }
   }
 
   async function confirmTermination({ date, basis, reason }) {
+    const effectiveNow = !date || date <= TODAY_STR;
     await supabase.from("sites").update({
-      is_active: false, terminated_date: date || null, termination_basis: basis, termination_reason: reason || null,
+      ...(effectiveNow ? { is_active: false } : {}),
+      terminated_date: date || null, termination_basis: basis, termination_reason: reason || null,
     }).eq("id", selectedId);
     setData((prev) => ({
       ...prev,
-      sites: prev.sites.map((x) => (x.id === selectedId ? { ...x, isActive: false, terminatedDate: date, terminationBasis: basis, terminationReason: reason } : x)),
+      sites: prev.sites.map((x) => (x.id === selectedId ? {
+        ...x,
+        ...(effectiveNow ? { isActive: false } : {}),
+        terminatedDate: date, terminationBasis: basis, terminationReason: reason,
+      } : x)),
     }));
     setTerminating(false);
   }
@@ -1228,9 +1246,12 @@ export default function SitesAdmin({ data, setData }) {
                         )}
                       </div>
                     )}
-                    <div className="flex justify-end">
+                    <div className="flex justify-end items-center gap-2">
+                      {pendingTermination && (
+                        <span className="text-[11px] font-bold text-amber-600">예정된 계약종료 {shortDate(site.terminatedDate)}</span>
+                      )}
                       <button onClick={toggleSiteActive} className="text-xs font-bold text-slate-500 border border-slate-200 rounded-lg px-3 py-1.5 whitespace-nowrap">
-                        {site.isActive === false ? "계약 복구" : "계약종료"}
+                        {site.isActive === false ? "계약 복구" : pendingTermination ? "예정 취소" : "계약종료"}
                       </button>
                     </div>
                   </>
