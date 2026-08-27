@@ -264,9 +264,12 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
   }
 
   if (role === "admin") {
+    // TEST계정은 기사배정 등 다른 화면에선 계속 써야 해서 AuthContext의 engineers 목록 자체는
+    // 그대로 두고, 출근 현황 카드에서만 뺀다.
+    const attendanceEngineers = engineers.filter((e) => e.member_type !== "TEST계정");
     return (
       <div className="px-5 pt-4">
-        <AdminAttendanceCard attendances={attendances} engineers={engineers} todayLeaves={todayLeaves} />
+        <AdminAttendanceCard attendances={attendances} engineers={attendanceEngineers} todayLeaves={todayLeaves} />
       </div>
     );
   }

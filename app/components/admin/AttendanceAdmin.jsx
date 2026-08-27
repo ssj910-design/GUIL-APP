@@ -14,7 +14,9 @@ const isoDay = (y, m, d) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).
 export default function AttendanceAdmin({ data }) {
   // 자재담당관리자도 기사와 동일하게 출근 체크를 하므로(모바일 앱에서 role이 engineer로 스코프됨)
   // 여기서 빠지면 출근 기록은 쌓이는데 표에 이름이 안 뜨는 상태가 된다 — 같이 포함시킨다.
-  const engineers = data.profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false);
+  // TEST계정(member_type으로 표시)은 다른 화면(기사배정 등)에선 계속 써야 해서 is_active는
+  // 그대로 두고, 출퇴근부에서만 뺀다.
+  const engineers = data.profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false && p.member_type !== "TEST계정");
   const [view, setView] = useState("일별"); // 일별 | 월별
   const today = new Date(`${TODAY_STR}T00:00:00`);
   const [day, setDay] = useState(TODAY_STR);
