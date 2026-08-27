@@ -814,7 +814,11 @@ export function DispatchEtaModal({ failure, onConfirm, onClose }) {
   const [eta, setEta] = useState("");
   const [driveMin, setDriveMin] = useState(null); // T맵 예상 소요시간(분) — 실패·키 미설정 시 null로 조용히 숨김
   const [driveLoading, setDriveLoading] = useState(false);
-  const valid = eta !== "";
+  // 지원요청·운행정지로 미배정 복귀된 건은 목록에서 배지만 보고 일반 고장인 줄 알고 무심코
+  // 출동을 눌러버릴 수 있다 — 모든 자기출동은 이 모달을 반드시 거치므로, 여기서 이전 기사가
+  // 남긴 내용을 보여주고 확인 체크 전엔 출동을 못 누르게 막는다.
+  const [ackEscalation, setAckEscalation] = useState(false);
+  const valid = eta !== "" && (!failure.escalation || ackEscalation);
   const sites = useContext(SitesContext);
   const { selfId, engineers = [] } = useContext(AuthContext);
   const site = sites.find((s) => s.id === failure.siteId);
@@ -842,6 +846,23 @@ export function DispatchEtaModal({ failure, onConfirm, onClose }) {
   return (
     <Sheet title="도착 예정 시간 입력" onClose={onClose}>
       <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {formatUnitLabel(failure.elevatorNo)}</p>
+      {failure.escalation && (
+        <div className="mb-4 rounded-xl border-2 border-red-400 bg-red-50 p-3.5">
+          <p className="text-sm font-bold text-red-700 flex items-center gap-1.5 mb-1.5">
+            <AlertTriangle size={16} strokeWidth={2.5} /> {failure.escalatedBy || "다른 기사"}가 &lsquo;{failure.escalation}&rsquo;로 남긴 건입니다
+          </p>
+          <div className="space-y-1 text-[13px] text-red-900/80 mb-2.5">
+            {failure.faultSymptom && <p><span className="font-semibold">증상</span> {failure.faultSymptom}</p>}
+            {failure.faultCause && <p><span className="font-semibold">원인</span> {failure.faultCause}</p>}
+            {failure.processContent && <p><span className="font-semibold">이전 조치</span> {failure.processContent}</p>}
+            {!failure.faultSymptom && !failure.faultCause && !failure.processContent && <p>이전 조치 내용이 남아있지 않습니다 — 도착 후 상황을 다시 확인하세요.</p>}
+          </div>
+          <label className="flex items-center gap-2 text-[13px] font-bold text-red-800">
+            <input type="checkbox" checked={ackEscalation} onChange={(e) => setAckEscalation(e.target.checked)} />
+            이전 조치 내용을 확인했습니다
+          </label>
+        </div>
+      )}
       <Field
         label="도착 예정 시간 *"
         right={driveLoading ? (
@@ -1128,7 +1149,7 @@ function FailureResponseCard({ f, dist, history = [], site, onOpenDetail, onDisp
         <div className="flex items-center justify-between gap-2 mb-1">
           <p className="font-bold text-slate-800 text-[15px] truncate flex-1 min-w-0">{f.siteName} · {unitLabel}</p>
           {contractBadge && <span className="shrink-0 text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">{contractBadge}</span>}
-          {f.escalation && <span className="shrink-0 text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{f.escalation}</span>}
+          {f.escalation && <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full"><AlertTriangle size={11} strokeWidth={2.5} />{f.escalation}</span>}
         </div>
         <p className="text-[13px] text-slate-500 mb-2 flex items-center gap-1">
           {dist != null && <span className="inline-flex items-center gap-0.5 font-bold text-blue-600"><MapPin size={12} strokeWidth={2.5} />{fmtDist(dist)} ·</span>}
@@ -1191,7 +1212,7 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
               <span className="shrink-0 text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">{contractBadge}</span>
             )}
             {f.escalation && (
-              <span className="shrink-0 text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{f.escalation}</span>
+              <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full"><AlertTriangle size={11} strokeWidth={2.5} />{f.escalation}</span>
             )}
           </div>
           <div className="flex items-start gap-1.5">
