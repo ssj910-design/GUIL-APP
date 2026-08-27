@@ -192,6 +192,18 @@ export function usePhotoLightboxGestures(urlsLength, index, onIndexChange, { whe
     // 공용). 여기 onDoubleClick까지 같이 붙어있으면 브라우저 네이티브 dblclick이 두 번째
     // pointerup 직후 뒤늦게 또 한 번 toggleZoom을 불러 방금 켠 확대를 바로 꺼버리는 경쟁이
     // 생겨 "될 때도 있고 안 될 때도 있는" 현상이 났다 — 중복 핸들러를 없앤다.
-    handlers: { onPointerDown, onPointerMove, onPointerUp: endGesture, onPointerCancel: endGesture },
+    //
+    // onTouch*는 넘김 동작에 안 쓴다(Pointer만으로 처리)지만, 이 화면이 포탈로 body에 붙어도
+    // React는 실제 DOM 위치가 아니라 컴포넌트 트리 기준으로 이벤트를 올려보낸다 — 그래서
+    // 여기서 안 잡고 두면 같은 터치가 조상의 useSwipeSubtab(서브탭 좌우 스와이프)에도 그대로
+    // 전달돼, 사진을 넘기려던 손짓이 뒤에 깔린 서브탭까지 같이 넘겨버렸다(실사고: 고장처리상세
+    // 사진에서 오른쪽으로 넘기면 모달이 닫히며 에러코드집 탭으로 넘어감). stopPropagation만
+    // 하는 빈 핸들러로 그 누수를 막는다.
+    handlers: {
+      onPointerDown, onPointerMove, onPointerUp: endGesture, onPointerCancel: endGesture,
+      onTouchStart: (e) => e.stopPropagation(),
+      onTouchMove: (e) => e.stopPropagation(),
+      onTouchEnd: (e) => e.stopPropagation(),
+    },
   };
 }
