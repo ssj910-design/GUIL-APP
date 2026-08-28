@@ -19,3 +19,16 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* 게시판 화면 전환(목록↔상세·글쓰기·공지사항) 슬라이드 이펙트 — 드래그는 아니고
+   화면이 바뀔 때 새 화면이 옆에서 밀려 들어오는 애니메이션만. */
+@keyframes room-slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes room-slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+.room-slide-in-right { animation: room-slide-in-right 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
+.room-slide-in-left { animation: room-slide-in-left 0.28s cubic-bezier(0.22, 1, 0.36, 1); }

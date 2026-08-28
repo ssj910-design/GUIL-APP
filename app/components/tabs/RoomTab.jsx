@@ -259,11 +259,14 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   // 기존 글을 공지로 등록할 때 제목을 받는 대상 — { id, ... } | null
   const [noticeTarget, setNoticeTarget] = useState(null);
   const [noticeTitleInput, setNoticeTitleInput] = useState("");
+  // 화면 전환 방향 — 목록으로 "돌아갈" 때만 참조한다(상세·글쓰기·공지사항은 늘 목록에서
+  // 들어가는 진입점이라 항상 오른쪽에서 슬라이드 인, 방향을 따질 필요가 없다).
+  const [navDir, setNavDir] = useState("forward");
   const fileRef = useRef(null);
   const isAdmin = role === "admin";
   // 안드로이드 뒤로가기 — 글쓰기 중이면 취소(작성 중이던 내용도 함께 비움, 취소 버튼과 동일 동작).
-  useBackHandler(composing, () => { setComposing(false); setPostInput(""); setPendingPhotos([]); setPostIsNotice(false); setPostTitle(""); });
-  useBackHandler(showNoticeList, () => setShowNoticeList(false));
+  useBackHandler(composing, () => { setNavDir("back"); setComposing(false); setPostInput(""); setPendingPhotos([]); setPostIsNotice(false); setPostTitle(""); });
+  useBackHandler(showNoticeList, () => { setNavDir("back"); setShowNoticeList(false); });
 
   function goToPost(id) {
     setMenuFor(null);
@@ -302,6 +305,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
     setPendingPhotos([]);
     setPostIsNotice(false);
     setPostTitle("");
+    setNavDir("back");
     setComposing(false);
   }
 
@@ -364,6 +368,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   // materialFocusId/quoteFocusId와 동일한 방식(effect 없이 렌더 시점에 반영, 로컬 openPostId가 우선).
   const shownPostId = openPostId ?? focusPostId;
   function closePost() {
+    setNavDir("back");
     setMenuFor(null);
     setOpenPostId(null);
     if (focusPostId) onFocusHandled?.();
@@ -406,9 +411,9 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   // ---- 공지사항 전체 목록 ----
   if (showNoticeList) {
     return (
-      <div className="flex-1 flex flex-col overflow-hidden bg-white">
+      <div className="flex-1 flex flex-col overflow-hidden bg-white room-slide-in-right">
         <div className="px-4 pt-4 pb-2.5 flex items-center gap-2 shrink-0 border-b border-slate-100">
-          <button onClick={() => setShowNoticeList(false)} className="p-1 text-slate-500 active:text-slate-800" aria-label="뒤로">
+          <button onClick={() => { setNavDir("back"); setShowNoticeList(false); }} className="p-1 text-slate-500 active:text-slate-800" aria-label="뒤로">
             <ChevronLeft size={20} />
           </button>
           <p className="text-sm font-bold text-slate-800">공지사항</p>
@@ -428,9 +433,9 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
 
   // ---- 글쓰기 (첨부파일처럼 전용 화면으로 넘어가서 작성) ----
   if (composing) {
-    const closeCompose = () => { setComposing(false); setPostInput(""); setPendingPhotos([]); setPostIsNotice(false); setPostTitle(""); };
+    const closeCompose = () => { setNavDir("back"); setComposing(false); setPostInput(""); setPendingPhotos([]); setPostIsNotice(false); setPostTitle(""); };
     return (
-      <div className="flex-1 flex flex-col overflow-hidden bg-white">
+      <div className="flex-1 flex flex-col overflow-hidden bg-white room-slide-in-right">
         <div className="px-4 pt-4 pb-2.5 flex items-center justify-between shrink-0 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <button onClick={closeCompose} className="p-1 text-slate-500 active:text-slate-800" aria-label="뒤로">
@@ -518,7 +523,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
     const comments = commentsOf(openPost.id);
     const canManage = isAdmin || (openPost.authorId != null ? openPost.authorId === selfId : openPost.author === CURRENT_ENGINEER);
     return (
-      <div className="flex-1 flex flex-col overflow-hidden bg-white">
+      <div className="flex-1 flex flex-col overflow-hidden bg-white room-slide-in-right">
         <div className="px-4 pt-4 pb-2.5 flex items-center gap-2 shrink-0 border-b border-slate-100">
           <button onClick={closePost} className="p-1 text-slate-500 active:text-slate-800" aria-label="뒤로">
             <ChevronLeft size={20} />
@@ -579,7 +584,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-white relative">
+    <div className={`flex-1 flex flex-col overflow-hidden bg-white relative ${navDir === "back" ? "room-slide-in-left" : ""}`}>
       <div className="px-4 pt-3 pb-2 shrink-0 border-b border-slate-100">
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
