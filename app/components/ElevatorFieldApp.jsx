@@ -1063,10 +1063,16 @@ export default function App() {
     try {
       const reason = window.prompt("출동을 거부하고 미배정으로 돌립니다.\n사유를 입력하세요 (선택)");
       if (reason === null) return; // 취소
-      // 출동 후 취소도 지원 — 출동 기록을 초기화하고 미처리·미배정으로 되돌린다 (완료 건은 불가)
+      // 출동 후 취소도 지원 — 출동 기록을 초기화하고 미처리·미배정으로 되돌린다 (완료 건은 불가).
+      // escalation은 handleFailureResult의 지원요청·운행정지와 같은 컬럼·의미로 재사용한다 —
+      // 그래야 FailureMiniCard 등 기존 카드의 "지원미배정" 강조 배지가 그대로 뜬다.
+      const escalatedBy = failure.assignee || null;
+      const escalatedById = failure.assigneeId ?? profileIdByName(profilesAll, failure.assignee) ?? null;
+      const escalatedAt = new Date().toISOString();
       const { data: ok, error } = await supabase.from("failures")
         .update({
           assignee: null, dispatched_at: null, eta_minutes: null, arrival_time: null, status: "미처리",
+          escalation: "지원요청", escalated_by: escalatedBy, escalated_by_id: escalatedById, escalated_at: escalatedAt,
           ...(v2Ready ? { assignee_id: null } : {}),
         })
         .eq("id", failure.id).neq("status", "완료")
@@ -1074,7 +1080,8 @@ export default function App() {
       if (error) { alert(`출동거부 저장 실패\n${error.message ?? ""}`); return; }
       if (!ok?.length) { notifyFailure("이미 완료 처리된 건이에요"); return; }
       setFailures((prev) => prev.map((x) => (x.id === failure.id
-        ? { ...x, assignee: null, dispatchedAt: null, etaMinutes: null, arrivalTime: null, status: "미처리" }
+        ? { ...x, assignee: null, dispatchedAt: null, etaMinutes: null, arrivalTime: null, status: "미처리",
+            escalation: "지원요청", escalatedBy, escalatedById, escalatedAt }
         : x)));
       sendPush("failure_refused", adminIds(), {
         title: "출동 거부됨 — 재배정 필요",
