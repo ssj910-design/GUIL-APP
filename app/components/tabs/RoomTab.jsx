@@ -137,7 +137,29 @@ function PostMenu({ post, canManage, canNotice, onClose, onNotice, onEdit, onDel
   );
 }
 
-function CommentRow({ c, onLike, liked, likeCount }) {
+function CommentRow({ c, onLike, liked, likeCount, canManage, editingId, editText, setEditText, saveEdit, setEditingId, onStartEdit, onDelete, onOpenPhoto }) {
+  if (editingId === c.id) {
+    return (
+      <div className="flex gap-2 py-2">
+        <span className="w-6 h-6 rounded-full bg-slate-200 text-slate-600 text-[10px] font-bold flex items-center justify-center shrink-0">
+          {(c.author || "?")[0]}
+        </span>
+        <div className="flex-1 min-w-0">
+          <textarea
+            autoFocus
+            className="w-full text-xs border border-slate-200 rounded-lg p-2 resize-none focus:outline-none"
+            rows={2}
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+          />
+          <div className="flex justify-end gap-2 mt-1">
+            <button onClick={saveEdit} className="text-[10px] font-bold text-white bg-blue-700 rounded-full px-3 py-1">저장</button>
+            <button onClick={() => setEditingId(null)} className="text-[10px] font-bold text-slate-400 px-2 py-1">취소</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex gap-2 py-2">
       <span className="w-6 h-6 rounded-full bg-slate-200 text-slate-600 text-[10px] font-bold flex items-center justify-center shrink-0">
@@ -148,11 +170,26 @@ function CommentRow({ c, onLike, liked, likeCount }) {
           <span className="font-bold text-slate-800 mr-1.5">{c.author}</span>
           {renderText(c.text)}
         </p>
+        {(c.photoUrls ?? []).length > 0 && (
+          <div className="flex gap-1.5 flex-wrap mt-1">
+            {c.photoUrls.map((u, i) =>
+              isVideo(u)
+                ? <video key={u} src={u} className="w-16 h-16 rounded-lg object-cover" onClick={() => onOpenPhoto(c.photoUrls, i)} />
+                : <img key={u} src={u} alt="첨부" className="w-16 h-16 rounded-lg object-cover" onClick={() => onOpenPhoto(c.photoUrls, i)} />
+            )}
+          </div>
+        )}
         <div className="flex items-center gap-2 mt-0.5">
           <span className="text-[10px] text-slate-400">{formatDateTime(c.createdAt)}</span>
           <button onClick={onLike} className={`text-[10px] font-bold ${liked ? "text-blue-600" : "text-slate-400"}`}>
             좋아요{likeCount > 0 ? ` ${likeCount}` : ""}
           </button>
+          {canManage && (
+            <>
+              <button onClick={onStartEdit} className="text-[10px] font-bold text-slate-400">수정</button>
+              <button onClick={onDelete} className="text-[10px] font-bold text-red-500">삭제</button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -250,6 +287,9 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   const [viewer, setViewer] = useState(null); // { urls, index } | null
   const openPhoto = (urls, index) => setViewer({ urls, index });
   const [commentDrafts, setCommentDrafts] = useState({});
+  const [commentPhotos, setCommentPhotos] = useState({}); // { [postId]: string[] } — 상세화면 하나에서만 쓰므로 postId별 배열이면 충분
+  const [commentUploading, setCommentUploading] = useState(false);
+  const commentFileRef = useRef(null);
   const [menuFor, setMenuFor] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState("");
@@ -264,6 +304,14 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   const [navDir, setNavDir] = useState("forward");
   const fileRef = useRef(null);
   const composeTextareaRef = useRef(null);
+  // 목록 스크롤 위치 — 상세·글쓰기·공지사항으로 나갔다 돌아오면 목록 DOM이 통째로 다시
+  // 마운트돼(위 room-slide-in 분기) 스크롤이 맨 위로 리셋된다. 나가기 직전 위치를 저장해뒀다가
+  // 목록으로 돌아온 직후 되돌린다.
+  const listScrollRef = useRef(null);
+  const savedScrollTop = useRef(0);
+  function saveListScroll() {
+    if (listScrollRef.current) savedScrollTop.current = listScrollRef.current.scrollTop;
+  }
   // 글쓰기 화면 진입 직후 바로 포커스를 주면 키보드가 슬라이드 애니메이션 도중에 튀어
   // 올라오면서 화면이 같이 눌려 전환이 뚝뚝 끊겨 보인다 — 슬라이드가 끝난 뒤에 포커스한다.
   useEffect(() => {
@@ -277,6 +325,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   useBackHandler(showNoticeList, () => { setNavDir("back"); setShowNoticeList(false); });
 
   function goToPost(id) {
+    saveListScroll();
     setMenuFor(null);
     setOpenPostId(id);
     onDismissNotif?.("post:" + id);
@@ -343,9 +392,31 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
 
   function submitComment(postId) {
     const text = (commentDrafts[postId] ?? "").trim();
-    if (!text) return;
-    onSendChat(text, { replyToId: postId });
+    const photos = commentPhotos[postId] ?? [];
+    if (!text && photos.length === 0) return;
+    onSendChat(text, { replyToId: postId, photoUrls: photos });
     setCommentDrafts((d) => ({ ...d, [postId]: "" }));
+    setCommentPhotos((p) => ({ ...p, [postId]: [] }));
+  }
+
+  async function pickCommentFiles(postId, e) {
+    const files = [...(e.target.files ?? [])];
+    e.target.value = "";
+    if (!files.length) return;
+    setCommentUploading(true);
+    try {
+      const urls = [];
+      for (const f of files) urls.push(await uploadPhoto(f, "room"));
+      setCommentPhotos((prev) => ({ ...prev, [postId]: [...(prev[postId] ?? []), ...urls] }));
+    } catch (err) {
+      alert("업로드에 실패했습니다: " + err.message);
+    }
+    setCommentUploading(false);
+  }
+
+  async function deleteComment(c) {
+    if (!(await confirmAsync("이 댓글을 삭제할까요?"))) return;
+    onDeletePost?.(c.id);
   }
 
   // 공지 등록 — 켤 때는 제목이 필요해 모달을 띄우고, 끌 때는 바로 해제한다.
@@ -392,6 +463,14 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
 
   const openPost = shownPostId ? feed.find((p) => p.id === shownPostId) : null;
   useBackHandler(!!openPost, closePost); // 안드로이드 뒤로가기 — 게시글 상세화면에서 목록으로
+
+  // 목록으로 돌아온 직후(방금 새로 마운트된 시점) 저장해둔 스크롤 위치로 되돌린다.
+  const showingList = !openPost && !composing && !showNoticeList;
+  useEffect(() => {
+    if (showingList && listScrollRef.current) {
+      listScrollRef.current.scrollTop = savedScrollTop.current;
+    }
+  }, [showingList]);
 
   // 공지 등록 시 제목을 받는 모달 — 목록·상세 어느 쪽에서 열어도 공용으로 쓴다.
   const noticeTitleModal = noticeTarget && (
@@ -562,21 +641,67 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
               ? <p className="text-xs text-slate-400 text-center py-6">첫 댓글을 남겨보세요</p>
               : comments.map((c) => {
                   const cLikes = c.reactions?.["👍"] ?? [];
-                  return <CommentRow key={c.id} c={c} onLike={() => onToggleLike?.(c.id)} liked={cLikes.includes(CURRENT_ENGINEER)} likeCount={cLikes.length} />;
+                  const cCanManage = isAdmin || (c.authorId != null ? c.authorId === selfId : c.author === CURRENT_ENGINEER);
+                  return (
+                    <CommentRow
+                      key={c.id} c={c}
+                      onLike={() => onToggleLike?.(c.id)}
+                      liked={cLikes.includes(CURRENT_ENGINEER)}
+                      likeCount={cLikes.length}
+                      canManage={cCanManage}
+                      editingId={editingId} editText={editText} setEditText={setEditText} saveEdit={saveEdit} setEditingId={setEditingId}
+                      onStartEdit={() => startEdit(c)}
+                      onDelete={() => deleteComment(c)}
+                      onOpenPhoto={openPhoto}
+                    />
+                  );
                 })}
           </div>
         </div>
-        <div className="shrink-0 border-t border-slate-100 bg-white px-4 py-3 flex items-center gap-2">
-          <input
-            className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
-            placeholder="댓글을 입력하세요"
-            value={commentDrafts[openPost.id] ?? ""}
-            onChange={(e) => setCommentDrafts((d) => ({ ...d, [openPost.id]: e.target.value }))}
-            onKeyDown={(e) => e.key === "Enter" && submitComment(openPost.id)}
-          />
-          <button onClick={() => submitComment(openPost.id)} disabled={!(commentDrafts[openPost.id] ?? "").trim()} className="w-9 h-9 rounded-full bg-blue-700 disabled:bg-slate-300 text-white flex items-center justify-center shrink-0">
-            <Send size={14} />
-          </button>
+        <div className="shrink-0 border-t border-slate-100 bg-white px-4 py-3">
+          {(commentPhotos[openPost.id] ?? []).length > 0 && (
+            <div className="flex gap-2 flex-wrap mb-2">
+              {(commentPhotos[openPost.id] ?? []).map((u, i) => (
+                <div key={u} className="relative">
+                  {isVideo(u)
+                    ? <video src={u} className="w-12 h-12 rounded-lg object-cover" />
+                    : <img src={u} alt="첨부" className="w-12 h-12 rounded-lg object-cover" />}
+                  <button
+                    onClick={() => setCommentPhotos((p) => ({ ...p, [openPost.id]: (p[openPost.id] ?? []).filter((_, idx) => idx !== i) }))}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-800 text-white flex items-center justify-center"
+                    aria-label="첨부 제거"
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-end gap-2">
+            <input ref={commentFileRef} type="file" accept="image/*,video/*" multiple hidden onChange={(e) => pickCommentFiles(openPost.id, e)} />
+            <button
+              onClick={() => commentFileRef.current?.click()}
+              disabled={commentUploading}
+              aria-label="사진·영상 첨부"
+              className="w-9 h-9 rounded-full border border-slate-300 text-slate-500 flex items-center justify-center active:bg-slate-100 shrink-0"
+            >
+              <Plus size={16} />
+            </button>
+            <textarea
+              className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none max-h-32"
+              rows={2}
+              placeholder="댓글을 입력하세요"
+              value={commentDrafts[openPost.id] ?? ""}
+              onChange={(e) => setCommentDrafts((d) => ({ ...d, [openPost.id]: e.target.value }))}
+            />
+            <button
+              onClick={() => submitComment(openPost.id)}
+              disabled={commentUploading || (!(commentDrafts[openPost.id] ?? "").trim() && (commentPhotos[openPost.id] ?? []).length === 0)}
+              className="w-9 h-9 rounded-full bg-blue-700 disabled:bg-slate-300 text-white flex items-center justify-center shrink-0"
+            >
+              <Send size={14} />
+            </button>
+          </div>
         </div>
         {viewer && (
           <PhotoViewerOverlay
@@ -605,13 +730,13 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div ref={listScrollRef} className="flex-1 overflow-y-auto">
         {/* 공지 핀 — 제목만, 최대 3개. 전체는 우측 "전체보기"로 */}
         {pinnedNotices.length > 0 && (
           <div className="mx-4 mt-3 mb-1 border border-amber-200 bg-amber-50 rounded-xl overflow-hidden">
             <div className="px-3.5 py-2 border-b border-amber-100 flex items-center justify-between">
               <p className="text-[11px] font-extrabold text-amber-700">📌 공지</p>
-              <button onClick={() => setShowNoticeList(true)} className="text-[10px] font-bold text-amber-600 underline underline-offset-2">전체보기</button>
+              <button onClick={() => { saveListScroll(); setShowNoticeList(true); }} className="text-[10px] font-bold text-amber-600 underline underline-offset-2">전체보기</button>
             </div>
             {pinnedNotices.map((p, i) => (
               <button
@@ -663,7 +788,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
 
       {/* 새 글 쓰기 플로팅 — 누르면 전용 글쓰기 화면(위 if (composing) 분기)으로 이동 */}
       <button
-        onClick={() => setComposing(true)}
+        onClick={() => { saveListScroll(); setComposing(true); }}
         aria-label="새 글 쓰기"
         className="absolute right-4 bottom-4 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95"
       >
