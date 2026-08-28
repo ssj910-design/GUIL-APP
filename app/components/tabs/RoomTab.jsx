@@ -1,4 +1,4 @@
-import { useState, useContext, useRef } from "react";
+import { useState, useContext, useRef, useEffect } from "react";
 import { Send, Plus, X, Download, MessageCircle, ThumbsUp, MoreVertical, ChevronLeft, ChevronRight, Pin, Search, Pencil } from "lucide-react";
 import { AuthContext } from "@/app/components/context";
 import { uploadPhoto, downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
@@ -263,6 +263,14 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   // 들어가는 진입점이라 항상 오른쪽에서 슬라이드 인, 방향을 따질 필요가 없다).
   const [navDir, setNavDir] = useState("forward");
   const fileRef = useRef(null);
+  const composeTextareaRef = useRef(null);
+  // 글쓰기 화면 진입 직후 바로 포커스를 주면 키보드가 슬라이드 애니메이션 도중에 튀어
+  // 올라오면서 화면이 같이 눌려 전환이 뚝뚝 끊겨 보인다 — 슬라이드가 끝난 뒤에 포커스한다.
+  useEffect(() => {
+    if (!composing) return;
+    const t = setTimeout(() => composeTextareaRef.current?.focus(), 430);
+    return () => clearTimeout(t);
+  }, [composing]);
   const isAdmin = role === "admin";
   // 안드로이드 뒤로가기 — 글쓰기 중이면 취소(작성 중이던 내용도 함께 비움, 취소 버튼과 동일 동작).
   useBackHandler(composing, () => { setNavDir("back"); setComposing(false); setPostInput(""); setPendingPhotos([]); setPostIsNotice(false); setPostTitle(""); });
@@ -469,7 +477,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
             </>
           )}
           <textarea
-            autoFocus
+            ref={composeTextareaRef}
             className="w-full text-sm resize-none focus:outline-none min-h-[50vh]"
             placeholder="무슨 소식을 나눠볼까요? (@이름으로 태그)"
             value={postInput}
