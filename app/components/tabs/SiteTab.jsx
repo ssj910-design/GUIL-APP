@@ -8,11 +8,42 @@ import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/
 import { Badge, TimelineRow, HistoryCard, PrimaryButton, Sheet, Field, inputCls, DrillHeader, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, PhotoLightboxPane } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
-import { BillingCard } from "@/app/components/tabs/BillingTab";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
 import { PartPhotosPanel } from "@/app/components/tabs/PartPhotosPanel";
 
+
+// 승강기정보 교체내역 카드 — 청구 건이 아니라 "부품 하나"가 기준. 한 청구 건에 부품이 여럿이면
+// (partPhotos 2개 이상) 부품마다 카드를 따로 그린다. 금액·자재지급/직접입력 배지는 여기선 안 보여준다
+// (비용청구 탭의 청구 내역 화면에서 확인). 날짜·담당기사·현장담당 연락처는 같은 청구 건이면 반복 표시.
+function PartReplacementCard({ r, onPhotoClick }) {
+  const allUrls = [...r.beforeUrls, ...r.afterUrls];
+  const previewSlots = [
+    r.beforeUrls.length > 0 ? { label: "교체 전", url: r.beforeUrls[0], count: r.beforeUrls.length, index: 0 } : null,
+    r.afterUrls.length > 0 ? { label: "교체 후", url: r.afterUrls[0], count: r.afterUrls.length, index: r.beforeUrls.length } : null,
+  ].filter(Boolean);
+  return (
+    <div className="border border-slate-100 rounded-xl p-3">
+      <p className="text-sm font-bold text-slate-800">{r.name}</p>
+      <p className="text-[11px] text-slate-400 mt-0.5">{r.engineer} · {r.replaceDate} 교체{r.contactPhone ? ` · 현장담당 ${r.contactPhone}` : ""}</p>
+      {previewSlots.length > 0 && (
+        <div className="flex gap-2 mt-2">
+          {previewSlots.map((s, i) => (
+            <button key={i} type="button" onClick={() => onPhotoClick(allUrls, s.index)} className="flex flex-col items-center gap-0.5">
+              <div className="relative">
+                <img src={s.url} alt="" className="w-12 h-12 rounded-lg object-cover border border-slate-200" />
+                {s.count > 1 && (
+                  <span className="absolute -top-1 -right-1 text-[8px] font-bold text-white bg-slate-700 rounded-full px-1 leading-4">+{s.count - 1}</span>
+                )}
+              </div>
+              <span className="text-[9px] text-slate-400">{s.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ---- 승강기정보 화면 (정보 / 고장 / 검사) ---- */
 function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspections, billings, quoteRequests, todos, unitPartPhotos, onAddUnitPartPhoto, onRemoveUnitPartPhoto, onBack, onHome }) {
@@ -206,24 +237,41 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
           </div>
         );
 
-    if (tab === "교체내역") return (
-          <div className="bg-slate-50 pt-4 pb-6 px-5">
-            <p className="pb-3 text-xs font-bold text-slate-400">교체내역</p>
-            {unitBillings.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-10">등록된 부품교체 내역이 없습니다</p>
-            ) : (
-              <div className="space-y-2">
-                {unitBillings.map((b) => (
-                  <BillingCard
-                    key={b.id}
-                    b={b}
-                    onPhotoClick={(urls, i) => setPhotoViewer({ urls, index: i, siteName: b.siteName, date: b.replaceDate })}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        );
+    if (tab === "교체내역") {
+      // 청구 건이 아니라 부품 단위로 펼친다 — 한 건에 부품이 여럿이면(partPhotos 2개 이상)
+      // 부품마다 행을 따로 만들고, 날짜·담당기사·현장담당 연락처는 그 청구 건 값을 그대로 물려받는다.
+      const replacementRows = unitBillings
+        .flatMap((b) =>
+          b.partPhotos?.length > 1
+            ? b.partPhotos.map((p, i) => ({
+                key: `${b.id}-${i}`, name: p.name, replaceDate: b.replaceDate, engineer: b.engineer, contactPhone: b.contactPhone,
+                beforeUrls: p.beforeUrls ?? [], afterUrls: p.afterUrls ?? [],
+              }))
+            : [{
+                key: b.id, name: b.part, replaceDate: b.replaceDate, engineer: b.engineer, contactPhone: b.contactPhone,
+                beforeUrls: b.beforePhotoUrls ?? [], afterUrls: b.afterPhotoUrls ?? [],
+              }]
+        )
+        .sort((a, c) => new Date(c.replaceDate) - new Date(a.replaceDate));
+      return (
+        <div className="bg-slate-50 pt-4 pb-6 px-5">
+          <p className="pb-3 text-xs font-bold text-slate-400">교체내역</p>
+          {replacementRows.length === 0 ? (
+            <p className="text-xs text-slate-400 text-center py-10">등록된 부품교체 내역이 없습니다</p>
+          ) : (
+            <div className="space-y-2">
+              {replacementRows.map((r) => (
+                <PartReplacementCard
+                  key={r.key}
+                  r={r}
+                  onPhotoClick={(urls, i) => setPhotoViewer({ urls, index: i, siteName: site.name, date: r.replaceDate })}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
 
     if (tab === "부품현황") return (
       <PartPhotosPanel
