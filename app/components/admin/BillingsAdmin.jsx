@@ -83,12 +83,15 @@ function siteManagerOf(data, unitId, fallbackSiteName) {
   return primary?.name || site.manager || "-";
 }
 
-// 수정 모드에서 쓰는 사진 편집 — 여러 장(교체 전/후)이든 1장(확인서, 배열로만 감싸서 재사용)이든
-// 같은 위젯 하나로 처리한다. 추가는 관리자 콘솔의 기존 업로드 패턴(uploadPhoto + 파일 input)과 동일.
+// 수정 모드·새 청구 등록에서 쓰는 사진 편집 — 여러 장(교체 전/후)이든 1장(확인서, 배열로만
+// 감싸서 재사용)이든 같은 위젯 하나로 처리한다. 클릭 선택은 관리자 콘솔의 기존 업로드 패턴
+// (uploadPhoto + 파일 input)과 동일, 끌어다 놓기는 FileCarousel(adminShared.jsx)과 같은 방식.
 function EditablePhotoRow({ label, urls, onChange, uploadFolder }) {
   const [uploading, setUploading] = useState(false);
-  async function handleFiles(e) {
-    const files = Array.from(e.target.files ?? []);
+  const [dragOver, setDragOver] = useState(false);
+
+  async function uploadFiles(fileList) {
+    const files = Array.from(fileList ?? []);
     if (!files.length) return;
     setUploading(true);
     try {
@@ -98,13 +101,28 @@ function EditablePhotoRow({ label, urls, onChange, uploadFolder }) {
       alert("사진 업로드 실패: " + (err.message ?? "알 수 없는 오류"));
     } finally {
       setUploading(false);
-      e.target.value = "";
     }
   }
+  function handleFiles(e) {
+    const files = [...(e.target.files ?? [])];
+    e.target.value = "";
+    uploadFiles(files);
+  }
+  function handleDrop(e) {
+    e.preventDefault();
+    setDragOver(false);
+    uploadFiles(e.dataTransfer.files);
+  }
+
   return (
     <div>
       <p className="text-[11px] font-bold text-slate-500 mb-1">{label}</p>
-      <div className="flex flex-wrap gap-2">
+      <div
+        className={`flex flex-wrap gap-2 p-1.5 -m-1.5 rounded-xl ${dragOver ? "ring-2 ring-blue-300 bg-blue-50/40" : ""}`}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+      >
         {urls.map((url, i) => (
           <div key={i} className="relative">
             <img src={url} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
@@ -117,8 +135,8 @@ function EditablePhotoRow({ label, urls, onChange, uploadFolder }) {
             </button>
           </div>
         ))}
-        <label className="w-16 h-16 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400 cursor-pointer text-xs">
-          {uploading ? "..." : "+"}
+        <label className={`w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer text-xs ${dragOver ? "border-blue-400 bg-blue-50 text-blue-500" : "border-slate-300 text-slate-400"}`}>
+          {uploading ? "..." : dragOver ? "놓기" : "+"}
           <input type="file" accept="image/*" multiple={label !== "확인서"} className="hidden" onChange={handleFiles} disabled={uploading} />
         </label>
       </div>
