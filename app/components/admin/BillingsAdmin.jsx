@@ -491,7 +491,7 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
           )}
           {!editing || isMultiItem ? (
             <div>
-              <p className="text-xs font-bold text-slate-400 mb-1">금액</p>
+              <p className="text-xs font-bold text-slate-400 mb-1">금액(VAT별도)</p>
               {b.isFree ? (
                 <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">무상</span>
               ) : (
@@ -500,7 +500,7 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
             </div>
           ) : (
             <div>
-              <p className="text-xs font-bold text-slate-400 mb-1">금액</p>
+              <p className="text-xs font-bold text-slate-400 mb-1">금액(VAT별도)</p>
               <input type="number" className={inputCls} value={editForm.cost} onChange={(e) => setEditForm({ ...editForm, cost: e.target.value })} />
             </div>
           )}
@@ -813,7 +813,7 @@ export default function BillingsAdmin({ data, setData }) {
           <Plus size={15} /> 새 청구 등록
         </button>
       </div>
-      <AdminTable head={["현장 · 호기", "담당자", "작업자", "교체내역", "금액", "교체일", "교체확인서", "청구일", "청구방식"]}>
+      <AdminTable head={["현장 · 호기", "담당자", "작업자", "교체내역", "금액(VAT별도)", "교체일", "교체확인서", "청구일", "청구방식"]}>
         {rows.map((b) => (
           <tr key={b.id} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setDetail(b)}>
             <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{locOf(data, b.unitId, b.siteName, b.elevatorNo)}</td>
