@@ -170,8 +170,8 @@ function ItemRowsInput({ items, onChange, uploadFolder }) {
           </div>
           <div className="flex items-end gap-2">
             <div className="flex-1">
-              <p className="text-[11px] font-bold text-slate-500 mb-1">금액</p>
-              <input type="number" className={inputCls} value={item.amount} onChange={(e) => updateItem(i, { amount: e.target.value })} />
+              <p className="text-[11px] font-bold text-slate-500 mb-1">금액 (선택)</p>
+              <input type="number" className={inputCls} placeholder="-" value={item.amount} onChange={(e) => updateItem(i, { amount: e.target.value })} />
             </div>
             {items.length > 1 && (
               <button type="button" onClick={() => onChange(items.filter((_, idx) => idx !== i))} className="text-xs font-bold text-red-500 border border-red-200 rounded-lg px-3 py-2">
@@ -205,7 +205,7 @@ function NewBillingModal({ data, onClose, onCreate }) {
   const [uploadToken] = useState(() => Date.now());
   const [form, setForm] = useState({
     siteId: "", unitId: "", engineerId: "", replaceDate: TODAY_STR, contactPhone: "",
-    isOutsourced: false, vendorName: "", items: [emptyBillingItem()],
+    isOutsourced: false, vendorName: "", items: [emptyBillingItem()], totalCost: "",
   });
   const [saving, setSaving] = useState(false);
   const siteUnits = units.filter((u) => u.siteId === form.siteId);
@@ -243,10 +243,12 @@ function NewBillingModal({ data, onClose, onCreate }) {
       items: parts
         ? parts.map((p) => ({ name: p.name ?? "", qty: p.qty ?? "", amount: p.amount ?? "", beforeUrls: [], afterUrls: [] }))
         : [{ name: t.part ?? "", qty: "", amount: t.billingAmount ?? "", beforeUrls: [], afterUrls: [] }],
+      totalCost: "",
     });
   }
 
   const filledItems = form.items.filter((i) => i.name.trim());
+  const isMultiItem = filledItems.length > 1;
   const valid = form.siteId && form.unitId && form.engineerId && form.replaceDate && filledItems.length > 0;
 
   async function submit() {
@@ -337,9 +339,22 @@ function NewBillingModal({ data, onClose, onCreate }) {
         </div>
 
         <div>
-          <p className="text-xs font-bold text-slate-500 mb-2">교체 품목 (사진은 선택)</p>
+          <p className="text-xs font-bold text-slate-500 mb-2">교체 품목 (사진은 선택, 품목별 금액도 선택)</p>
           <ItemRowsInput items={form.items} onChange={(items) => setForm({ ...form, items })} uploadFolder={`billings/admin-${uploadToken}`} />
         </div>
+
+        {isMultiItem && (
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">합계금액</p>
+            <input
+              type="number"
+              className={inputCls}
+              placeholder="품목별 금액을 다 입력하면 자동으로 더해집니다 — 직접 입력해도 됩니다"
+              value={form.totalCost}
+              onChange={(e) => setForm({ ...form, totalCost: e.target.value })}
+            />
+          </div>
+        )}
 
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onClose} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-5 py-2.5">취소</button>
@@ -721,9 +736,12 @@ export default function BillingsAdmin({ data, setData }) {
       ? filled.map((i) => ({ name: i.name.trim(), qty: i.qty || null, amount: i.amount === "" ? null : Number(i.amount), beforeUrls: i.beforeUrls, afterUrls: i.afterUrls }))
       : null;
     const part = isMulti ? filled.map((i) => i.name.trim()).join(", ") : `${filled[0].name.trim()}${filled[0].qty ? ` ${filled[0].qty}개` : ""}`;
-    const cost = isMulti
+    // 품목별 금액을 다 채우면 그 합계를 쓰고, 하나라도 비었으면(개별 단가를 모르는 경우 등)
+    // 합계금액을 직접 입력한 값을 대신 쓴다 — 둘 다 없으면 가격 미정으로 null.
+    const itemsCost = isMulti
       ? (filled.every((i) => i.amount !== "") ? filled.reduce((sum, i) => sum + Number(i.amount || 0), 0) : null)
       : (filled[0].amount === "" ? null : Number(filled[0].amount));
+    const cost = isMulti && form.totalCost !== "" ? Number(form.totalCost) : itemsCost;
     const beforePhotoUrls = isMulti ? partPhotos.flatMap((p) => p.beforeUrls) : filled[0].beforeUrls;
     const afterPhotoUrls = isMulti ? partPhotos.flatMap((p) => p.afterUrls) : filled[0].afterUrls;
 
