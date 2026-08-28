@@ -290,6 +290,12 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   const [commentPhotos, setCommentPhotos] = useState({}); // { [postId]: string[] } — 상세화면 하나에서만 쓰므로 postId별 배열이면 충분
   const [commentUploading, setCommentUploading] = useState(false);
   const commentFileRef = useRef(null);
+  const commentTextareaRef = useRef(null);
+  // 기본 높이(1줄)일 땐 placeholder·버튼이 가운데 정렬돼 보이게, 여러 줄 입력하면 늘어나게.
+  function autoGrowComment(e) {
+    e.target.style.height = "auto";
+    e.target.style.height = Math.min(e.target.scrollHeight, 128) + "px";
+  }
   const [menuFor, setMenuFor] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState("");
@@ -397,6 +403,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
     onSendChat(text, { replyToId: postId, photoUrls: photos });
     setCommentDrafts((d) => ({ ...d, [postId]: "" }));
     setCommentPhotos((p) => ({ ...p, [postId]: [] }));
+    if (commentTextareaRef.current) commentTextareaRef.current.style.height = "auto";
   }
 
   async function pickCommentFiles(postId, e) {
@@ -677,7 +684,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
               ))}
             </div>
           )}
-          <div className="flex items-end gap-2">
+          <div className="flex items-center gap-2">
             <input ref={commentFileRef} type="file" accept="image/*,video/*" multiple hidden onChange={(e) => pickCommentFiles(openPost.id, e)} />
             <button
               onClick={() => commentFileRef.current?.click()}
@@ -688,11 +695,12 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
               <Plus size={16} />
             </button>
             <textarea
-              className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none max-h-32"
-              rows={2}
+              ref={commentTextareaRef}
+              className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm leading-5 resize-none focus:outline-none max-h-32 overflow-y-auto"
+              rows={1}
               placeholder="댓글을 입력하세요"
               value={commentDrafts[openPost.id] ?? ""}
-              onChange={(e) => setCommentDrafts((d) => ({ ...d, [openPost.id]: e.target.value }))}
+              onChange={(e) => { setCommentDrafts((d) => ({ ...d, [openPost.id]: e.target.value })); autoGrowComment(e); }}
             />
             <button
               onClick={() => submitComment(openPost.id)}
