@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR, DUTY_KINDS } from "@/lib/constants";
 import { useHolidays } from "@/app/hooks/useHolidays";
+import { leaveLabel } from "@/lib/utils";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const KIND_TONE = {
@@ -94,7 +95,7 @@ export default function WeekStrip({ data, onOpenCalendar }) {
                 })}
                 {dayLeaves.map((l) => (
                   <p key={l.id} className="text-[9.5px] font-semibold rounded px-1 py-0.5 truncate bg-amber-50 text-amber-700">
-                    {l.kind} {nameOf(l.profile_id)}
+                    {leaveLabel(l.kind, l.note)} {nameOf(l.profile_id)}
                   </p>
                 ))}
               </div>
