@@ -1,7 +1,7 @@
 import React, { useState, useContext } from "react";
 import { createPortal } from "react-dom";
 import { X, MapPin, Search, ClipboardCheck, PhoneCall, Flag, Mail, User, Paperclip, Download, KeyRound, ChevronDown, ChevronLeft, ChevronRight, Receipt } from "lucide-react";
-import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, shortDate, recentFailuresBySite, siteMatchesQuery, unitContractBadges, unitBadgeLabel, initialOf } from "@/lib/utils";
+import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, shortDate, recentFailuresBySite, siteMatchesQuery, unitContractBadges, unitBadgeLabel, initialOf, quoteCoversUnit } from "@/lib/utils";
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
@@ -34,12 +34,11 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
   const manualInspections = [...inspections.filter((i) => i.siteId === site.id)].sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate));
   // 호기가 지정된 청구건은 그 호기에서만, 호기 미지정(기존) 청구건은 현장 전체에서 계속 보여줍니다.
   const unitBillings = billings.filter((b) => b.siteName === site.name && (!b.elevatorNo || b.elevatorNo === unit || b.elevatorNos?.includes(unit)));
-  // 여러 호기를 한 요청으로 합친 견적(elevatorNos)은 대표 호기(unitId)로만 걸러내면 나머지
-  // 호기 화면에선 안 보인다 — elevatorNos에 이 호기가 있으면 그것도 포함한다. 단 elevatorNos엔
-  // "1호기"처럼 호기 라벨만 들어있고 현장 구분이 없어, 현장 체크 없이 라벨만 비교하면 다른
-  // 현장의 같은 번호 호기(다들 "1호기"가 있음)에서도 보이는 버그가 생긴다 — siteId를 먼저 걸러야 한다.
+  // 어느 호기가 이 견적을 다루는지는 quoteCoversUnit(lib/utils.js)이 판정한다 — elevatorNos에
+  // "1호기"처럼 호기 라벨만 들어있고 현장 구분이 없어, 현장 체크(siteId)를 먼저 걸러야 다른
+  // 현장의 같은 번호 호기에서도 보이는 버그가 생기지 않는다.
   const unitQuotes = [...quoteRequests
-    .filter((q) => q.siteId === site.id && (q.elevatorNos?.includes(unit) || (realUnit?.id && q.unitId ? q.unitId === realUnit.id : q.elevatorNo === unit)))]
+    .filter((q) => q.siteId === site.id && quoteCoversUnit(q, unit, realUnit?.id))]
     .sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate));
   const unitPhotos = (unitPartPhotos ?? []).filter((p) => p.unitId === realUnit?.id);
   const [inspectionFailTarget, setInspectionFailTarget] = useState(null);
