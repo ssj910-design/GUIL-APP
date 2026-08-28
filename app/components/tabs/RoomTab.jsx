@@ -211,7 +211,10 @@ function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEdit
   }
   return (
     <div className={full ? "mb-2" : "flex items-start justify-between gap-2 mb-2"}>
-      {p.text && <p className={`${full ? "" : "flex-1 min-w-0"} text-sm text-slate-700 leading-relaxed whitespace-pre-wrap`}>{renderText(p.text)}</p>}
+      <div className={full ? "" : "flex-1 min-w-0"}>
+        {p.title && <p className="text-sm font-extrabold text-slate-800 mb-1">{p.title}</p>}
+        {p.text && <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{renderText(p.text)}</p>}
+      </div>
       {(p.photoUrls ?? []).length > 0 && (
         full ? (
           <div className="space-y-1.5 mt-2">
@@ -241,6 +244,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   const [composing, setComposing] = useState(false);
   const [postInput, setPostInput] = useState("");
   const [postIsNotice, setPostIsNotice] = useState(false);
+  const [postTitle, setPostTitle] = useState("");
   const [pendingPhotos, setPendingPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [viewer, setViewer] = useState(null); // { urls, index } | null
@@ -251,10 +255,15 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   const [editText, setEditText] = useState("");
   const [openPostId, setOpenPostId] = useState(null);
   const [search, setSearch] = useState("");
+  const [showNoticeList, setShowNoticeList] = useState(false);
+  // 기존 글을 공지로 등록할 때 제목을 받는 대상 — { id, ... } | null
+  const [noticeTarget, setNoticeTarget] = useState(null);
+  const [noticeTitleInput, setNoticeTitleInput] = useState("");
   const fileRef = useRef(null);
   const isAdmin = role === "admin";
   // 안드로이드 뒤로가기 — 글쓰기 중이면 취소(작성 중이던 내용도 함께 비움, 취소 버튼과 동일 동작).
-  useBackHandler(composing, () => { setComposing(false); setPostInput(""); setPendingPhotos([]); setPostIsNotice(false); });
+  useBackHandler(composing, () => { setComposing(false); setPostInput(""); setPendingPhotos([]); setPostIsNotice(false); setPostTitle(""); });
+  useBackHandler(showNoticeList, () => setShowNoticeList(false));
 
   function goToPost(id) {
     setMenuFor(null);
@@ -262,9 +271,14 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
     onDismissNotif?.("post:" + id);
   }
 
+  // 공지는 일반 피드에서 빼서 상단 핀 영역·공지사항 전체목록에서만 보여준다(중복 노출 방지).
+  const allNotices = [...feed]
+    .filter((p) => p.isNotice && !p.replyToId)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const pinnedNotices = allNotices.slice(0, 3);
   const posts = [...feed]
-    .filter((p) => !p.replyToId)
-    .sort((a, b) => (b.isNotice ? 1 : 0) - (a.isNotice ? 1 : 0) || new Date(b.createdAt) - new Date(a.createdAt));
+    .filter((p) => !p.replyToId && !p.isNotice)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   const commentsOf = (postId) =>
     feed.filter((p) => p.replyToId === postId).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
@@ -279,13 +293,15 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
 
   async function submitPost() {
     if (!postInput.trim() && pendingPhotos.length === 0) return;
+    if (postIsNotice && !postTitle.trim()) return; // 버튼도 막지만 한 번 더 방어
     // 저장 성공을 확인한 뒤에만 입력창을 비운다 — 실패했는데 먼저 비우면 이미 올린 사진은
     // 어디에도 안 붙은 채 남고, 사용자는 글을 처음부터 다시 써야 한다.
-    const ok = await onSendChat(postInput.trim(), { photoUrls: pendingPhotos, replyToId: null, isNotice: postIsNotice });
+    const ok = await onSendChat(postInput.trim(), { photoUrls: pendingPhotos, replyToId: null, isNotice: postIsNotice, title: postIsNotice ? postTitle.trim() : null });
     if (!ok) return;
     setPostInput("");
     setPendingPhotos([]);
     setPostIsNotice(false);
+    setPostTitle("");
     setComposing(false);
   }
 
@@ -320,6 +336,21 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
     setCommentDrafts((d) => ({ ...d, [postId]: "" }));
   }
 
+  // 공지 등록 — 켤 때는 제목이 필요해 모달을 띄우고, 끌 때는 바로 해제한다.
+  function handleNoticeToggleClick(p) {
+    if (p.isNotice) {
+      onSetNotice?.(p.id, false);
+    } else {
+      setNoticeTarget(p);
+      setNoticeTitleInput("");
+    }
+  }
+  function confirmNoticeTitle() {
+    if (!noticeTitleInput.trim()) return;
+    onSetNotice?.(noticeTarget.id, true, noticeTitleInput.trim());
+    setNoticeTarget(null);
+  }
+
   function startEdit(p) {
     setEditingId(p.id);
     setEditText(p.text ?? "");
@@ -349,6 +380,52 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   const openPost = shownPostId ? feed.find((p) => p.id === shownPostId) : null;
   useBackHandler(!!openPost, closePost); // 안드로이드 뒤로가기 — 게시글 상세화면에서 목록으로
 
+  // 공지 등록 시 제목을 받는 모달 — 목록·상세 어느 쪽에서 열어도 공용으로 쓴다.
+  const noticeTitleModal = noticeTarget && (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end" onClick={() => setNoticeTarget(null)}>
+      <div className="w-full bg-white rounded-t-2xl p-4 pb-6" onClick={(e) => e.stopPropagation()}>
+        <p className="text-sm font-extrabold text-slate-800 mb-1">공지로 등록</p>
+        <p className="text-[11px] text-slate-500 mb-3">게시판 상단에 고정될 제목을 입력하세요.</p>
+        <input
+          autoFocus
+          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none"
+          placeholder="공지 제목"
+          value={noticeTitleInput}
+          onChange={(e) => setNoticeTitleInput(e.target.value)}
+        />
+        <div className="flex justify-end gap-2">
+          <button onClick={() => setNoticeTarget(null)} className="text-xs font-bold text-slate-500 border border-slate-200 rounded-lg px-3.5 py-2">취소</button>
+          <button onClick={confirmNoticeTitle} disabled={!noticeTitleInput.trim()} className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-lg px-3.5 py-2">
+            등록
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ---- 공지사항 전체 목록 ----
+  if (showNoticeList) {
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden bg-white">
+        <div className="px-4 pt-4 pb-2.5 flex items-center gap-2 shrink-0 border-b border-slate-100">
+          <button onClick={() => setShowNoticeList(false)} className="p-1 text-slate-500 active:text-slate-800" aria-label="뒤로">
+            <ChevronLeft size={20} />
+          </button>
+          <p className="text-sm font-bold text-slate-800">공지사항</p>
+        </div>
+        <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+          {allNotices.map((p) => (
+            <button key={p.id} onClick={() => { setShowNoticeList(false); goToPost(p.id); }} className="w-full text-left px-4 py-3.5 active:bg-slate-50">
+              <p className="text-sm font-bold text-slate-800 mb-0.5 truncate">{p.title || p.text}</p>
+              <p className="text-[11px] text-slate-400">{p.author} · {formatDateTime(p.createdAt)}</p>
+            </button>
+          ))}
+          {allNotices.length === 0 && <p className="text-xs text-slate-400 text-center py-10">등록된 공지가 없습니다</p>}
+        </div>
+      </div>
+    );
+  }
+
   // ---- 게시글 상세화면 (첨부파일처럼 게시글을 누르면 진입) ----
   if (openPost) {
     const likes = openPost.reactions?.["👍"] ?? [];
@@ -369,7 +446,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
             menuOpen={menuFor === openPost.id}
             onToggleMenu={() => setMenuFor(menuFor === openPost.id ? null : openPost.id)}
             onCloseMenu={() => setMenuFor(null)}
-            onNotice={() => onSetNotice?.(openPost.id, !openPost.isNotice)}
+            onNotice={() => handleNoticeToggleClick(openPost)}
             onEdit={() => startEdit(openPost)}
             onDelete={() => deletePost(openPost)}
           />
@@ -411,6 +488,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
             onClose={() => setViewer(null)}
           />
         )}
+        {noticeTitleModal}
       </div>
     );
   }
@@ -430,6 +508,26 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
       </div>
 
       <div className="flex-1 overflow-y-auto">
+        {/* 공지 핀 — 제목만, 최대 3개. 전체는 우측 "전체보기"로 */}
+        {pinnedNotices.length > 0 && (
+          <div className="mx-4 mt-3 mb-1 border border-amber-200 bg-amber-50 rounded-xl overflow-hidden">
+            <div className="px-3.5 py-2 border-b border-amber-100 flex items-center justify-between">
+              <p className="text-[11px] font-extrabold text-amber-700">📌 공지</p>
+              <button onClick={() => setShowNoticeList(true)} className="text-[10px] font-bold text-amber-600 underline underline-offset-2">전체보기</button>
+            </div>
+            {pinnedNotices.map((p, i) => (
+              <button
+                key={p.id}
+                onClick={() => goToPost(p.id)}
+                className={`w-full text-left px-3.5 py-2.5 flex items-center gap-2 active:bg-amber-100 ${i < pinnedNotices.length - 1 ? "border-b border-amber-100" : ""}`}
+              >
+                <span className="text-[10px] font-bold text-white bg-amber-600 rounded px-1.5 py-0.5 shrink-0">공지</span>
+                <span className="text-xs font-bold text-slate-800 truncate">{p.title || p.text}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* 글쓰기 */}
         {/* 컴포즈는 FAB(연필)로만 연다 — 상단 "무슨 소식을…" 입력창은 없앰 */}
         {composing && (
@@ -473,10 +571,20 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
                 </div>
               )}
               {!!onSetNotice && (
-                <label className="flex items-center gap-1.5 mb-2 text-xs font-bold text-slate-600">
-                  <input type="checkbox" checked={postIsNotice} onChange={(e) => setPostIsNotice(e.target.checked)} />
-                  공지로 등록
-                </label>
+                <>
+                  <label className="flex items-center gap-1.5 mb-2 text-xs font-bold text-slate-600">
+                    <input type="checkbox" checked={postIsNotice} onChange={(e) => setPostIsNotice(e.target.checked)} />
+                    공지로 등록
+                  </label>
+                  {postIsNotice && (
+                    <input
+                      className="w-full text-sm font-bold border border-amber-200 bg-amber-50 rounded-lg px-3 py-2 mb-2 focus:outline-none"
+                      placeholder="공지 제목을 입력하세요 (필수)"
+                      value={postTitle}
+                      onChange={(e) => setPostTitle(e.target.value)}
+                    />
+                  )}
+                </>
               )}
               <div className="flex items-center justify-between pt-2 border-t border-slate-100 mt-2">
                 <input ref={fileRef} type="file" accept="image/*,video/*" multiple hidden onChange={pickFiles} />
@@ -484,10 +592,14 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
                   <Plus size={16} />
                 </button>
                 <div className="flex items-center gap-2">
-                  <button onClick={submitPost} disabled={(!postInput.trim() && pendingPhotos.length === 0) || uploading} className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-full px-4 py-2">
+                  <button
+                    onClick={submitPost}
+                    disabled={(!postInput.trim() && pendingPhotos.length === 0) || uploading || (postIsNotice && !postTitle.trim())}
+                    className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-full px-4 py-2"
+                  >
                     {uploading ? "업로드 중..." : "게시"}
                   </button>
-                  <button onClick={() => { setComposing(false); setPostInput(""); setPendingPhotos([]); setPostIsNotice(false); }} className="text-xs font-bold text-slate-400 px-3 py-2">취소</button>
+                  <button onClick={() => { setComposing(false); setPostInput(""); setPendingPhotos([]); setPostIsNotice(false); setPostTitle(""); }} className="text-xs font-bold text-slate-400 px-3 py-2">취소</button>
                 </div>
               </div>
             </div>
@@ -508,7 +620,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
                   menuOpen={menuFor === p.id}
                   onToggleMenu={() => setMenuFor(menuFor === p.id ? null : p.id)}
                   onCloseMenu={() => setMenuFor(null)}
-                  onNotice={() => onSetNotice?.(p.id, !p.isNotice)}
+                  onNotice={() => handleNoticeToggleClick(p)}
                   onEdit={() => startEdit(p)}
                   onDelete={() => deletePost(p)}
                 />
@@ -549,6 +661,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
           onClose={() => setViewer(null)}
         />
       )}
+      {noticeTitleModal}
     </div>
   );
 }

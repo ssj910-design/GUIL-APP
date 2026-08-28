@@ -157,6 +157,8 @@ export default function App() {
   const [feed, setFeed] = useState([]);
   // is_notice 컬럼은 마이그레이션 022 실행 전엔 존재하지 않는다 — undefined면 아직 미실행으로 간주.
   const feedNoticeReady = feed.some((p) => p.isNotice !== undefined);
+  // title 컬럼은 마이그레이션 134 실행 전엔 존재하지 않는다 — 공지 등록 시 제목을 받는 데 쓴다.
+  const feedTitleReady = feed.some((p) => p.title !== undefined);
   // failures.assigned_at 컬럼 존재 여부 — 마이그레이션 074 전엔 컬럼이 없어, 있을 때만 배정 시각을 쓴다(미구현 시 배정이 깨지지 않게).
   const assignedAtReady = failures.some((f) => f.assignedAt !== undefined);
   // failures.fault_model 컬럼 존재 여부 — 마이그레이션 131 전엔 컬럼이 없어, 있을 때만 처리등록 시
@@ -1376,6 +1378,7 @@ export default function App() {
       replyToId: extra.replyToId ?? null,
       reactions: {},
       isNotice: extra.isNotice ?? false,
+      title: extra.title ?? null,
     };
     const posted = await writeOk(supabase.from("feed_posts").insert({
       id: newPost.id,
@@ -1385,6 +1388,7 @@ export default function App() {
       reply_to_id: newPost.replyToId,
       ...(v2Ready ? { author_id: profileIdByName(profilesAll, newPost.author) } : {}),
       ...(feedNoticeReady ? { is_notice: newPost.isNotice } : {}),
+      ...(feedTitleReady ? { title: newPost.title } : {}),
     }), "글 등록 실패 — 다시 시도해주세요");
     if (!posted) return false; // 글이 조용히 사라지지 않도록 (P1-7)
     setFeed((prev) => [...prev, newPost]);
@@ -1396,7 +1400,7 @@ export default function App() {
       : profilesAll.filter((p) => tags.includes(p.name) && p.id !== myId).map((p) => p.id);
     if (mentionIds.length) sendPush("room_mention", mentionIds, { title: `${profile.name}님이 회원님을 언급했어요`, body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
     if (newPost.isNotice) {
-      notify("room_notice", { title: "새 공지가 등록됐어요", body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
+      notify("room_notice", { title: "새 공지가 등록됐어요", body: newPost.title || text.slice(0, 60), url: `/?openPost=${newPost.id}` });
     } else if (!newPost.replyToId) {
       // 새 글(댓글 제외) 전체 알림 — 이 글로 이미 멘션 알림을 받은 사람은 중복으로 안 보낸다(최우선 알림 하나만).
       const mentionSet = new Set(mentionIds);
@@ -1446,14 +1450,18 @@ export default function App() {
     await supabase.from("feed_posts").delete().eq("id", postId);
   }
 
-  // ★ 게시판 공지 등록/해제 — is_notice 컬럼 없으면(마이그레이션 전) 조용히 건너뜀
-  async function handleSetFeedNotice(postId, isNotice) {
+  // ★ 게시판 공지 등록/해제 — is_notice 컬럼 없으면(마이그레이션 전) 조용히 건너뜀.
+  // 등록(isNotice: true)일 때만 title을 받는다(RoomTab에서 제목 입력 모달을 거친 뒤 호출).
+  async function handleSetFeedNotice(postId, isNotice, title) {
     if (!feedNoticeReady) return;
-    setFeed((prev) => prev.map((p) => (p.id === postId ? { ...p, isNotice } : p)));
-    await supabase.from("feed_posts").update({ is_notice: isNotice }).eq("id", postId);
+    setFeed((prev) => prev.map((p) => (p.id === postId ? { ...p, isNotice, ...(isNotice ? { title: title ?? p.title } : {}) } : p)));
+    await supabase.from("feed_posts").update({
+      is_notice: isNotice,
+      ...(isNotice && feedTitleReady ? { title } : {}),
+    }).eq("id", postId);
     if (isNotice) {
       const post = feed.find((p) => p.id === postId);
-      notify("room_notice", { title: "새 공지가 등록됐어요", body: (post?.text ?? "").slice(0, 60), url: `/?openPost=${postId}` });
+      notify("room_notice", { title: "새 공지가 등록됐어요", body: title || (post?.text ?? "").slice(0, 60), url: `/?openPost=${postId}` });
     }
   }
 
@@ -2670,7 +2678,7 @@ export default function App() {
                   onToggleLike={handleToggleLike}
                   onUpdatePost={handleUpdateFeedPost}
                   onDeletePost={handleDeleteFeedPost}
-                  onSetNotice={feedNoticeReady ? handleSetFeedNotice : null}
+                  onSetNotice={feedNoticeReady && profile.role === "admin" ? handleSetFeedNotice : null}
                   onDismissNotif={handleDismissNotif}
                   focusPostId={openFeedPostId}
                   onFocusHandled={() => setOpenFeedPostId(null)}

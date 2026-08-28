@@ -125,6 +125,7 @@ function ComposeBox({ onSubmit, placeholder, compact, members = [] }) {
   const [text, setText] = useState("");
   const [photos, setPhotos] = useState([]);
   const [notice, setNotice] = useState(false);
+  const [noticeTitle, setNoticeTitle] = useState("");
   const [uploading, setUploading] = useState(false);
 
   async function handleFiles(e) {
@@ -143,10 +144,12 @@ function ComposeBox({ onSubmit, placeholder, compact, members = [] }) {
 
   function submit() {
     if (!text.trim() && photos.length === 0) return;
-    onSubmit(text.trim(), { photoUrls: photos, isNotice: notice });
+    if (notice && !noticeTitle.trim()) return;
+    onSubmit(text.trim(), { photoUrls: photos, isNotice: notice, title: notice ? noticeTitle.trim() : null });
     setText("");
     setPhotos([]);
     setNotice(false);
+    setNoticeTitle("");
   }
 
   // @멘션 자동완성 — 입력 끝이 "@..."면 후보를 띄우고, 고르면 "@이름 "으로 채운다 (모바일 게시판과 동일).
@@ -188,6 +191,14 @@ function ComposeBox({ onSubmit, placeholder, compact, members = [] }) {
           ))}
         </div>
       )}
+      {!compact && notice && (
+        <input
+          className={`${inputCls} mt-2.5`}
+          placeholder="공지 제목을 입력하세요 (필수)"
+          value={noticeTitle}
+          onChange={(e) => setNoticeTitle(e.target.value)}
+        />
+      )}
       <div className="flex items-center justify-between mt-2.5">
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 cursor-pointer">
@@ -204,7 +215,7 @@ function ComposeBox({ onSubmit, placeholder, compact, members = [] }) {
         </div>
         <button
           onClick={submit}
-          disabled={uploading || (!text.trim() && photos.length === 0)}
+          disabled={uploading || (!text.trim() && photos.length === 0) || (notice && !noticeTitle.trim())}
           className="flex items-center gap-1.5 text-xs font-bold text-white bg-blue-700 disabled:bg-slate-300 px-4 py-2 rounded-lg"
         >
           <Send size={13} /> {uploading ? "업로드 중..." : "등록"}
@@ -224,6 +235,8 @@ export default function RoomAdmin({ data, setData }) {
   const [editText, setEditText] = useState("");
 
   const feed = data.feed ?? [];
+  // title 컬럼은 마이그레이션 134 실행 전엔 존재하지 않는다 — 있을 때만 써서 그 전엔 글쓰기 자체가 깨지지 않게 한다.
+  const titleReady = feed.some((p) => p.title !== undefined);
   const commentsOf = (id) =>
     feed.filter((p) => p.replyToId === id).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
@@ -251,6 +264,7 @@ export default function RoomAdmin({ data, setData }) {
       replyToId: extra.replyToId ?? null,
       reactions: {},
       isNotice: extra.isNotice ?? false,
+      title: extra.title ?? null,
     };
     await supabase.from("feed_posts").insert({
       id: newPost.id,
@@ -260,6 +274,7 @@ export default function RoomAdmin({ data, setData }) {
       reply_to_id: newPost.replyToId,
       author_id: adminId,
       is_notice: newPost.isNotice,
+      ...(titleReady ? { title: newPost.title } : {}),
     });
     setData((prev) => ({ ...prev, feed: [...(prev.feed ?? []), newPost] }));
     // 게시판 알림 — 앱과 동일하게 @멘션 대상·공지 전원에게 (콘솔에서 쓴 글도 기사 폰에 뜨게).
@@ -270,7 +285,7 @@ export default function RoomAdmin({ data, setData }) {
       : (data.profiles ?? []).filter((p) => tags.includes(p.name) && p.id !== myId).map((p) => p.id);
     if (mentionIds.length) notify("room_mention", { profileIds: mentionIds, title: `${ADMIN_NAME}님이 회원님을 언급했어요`, body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
     if (newPost.isNotice) {
-      notify("room_notice", { title: "새 공지가 등록됐어요", body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
+      notify("room_notice", { title: "새 공지가 등록됐어요", body: newPost.title || text.slice(0, 60), url: `/?openPost=${newPost.id}` });
     } else if (!newPost.replyToId) {
       // 새 글(댓글 제외) 전체 알림 — 앱(ElevatorFieldApp.jsx handleSendFeedPost)에만 있고 콘솔엔
       // 빠져있던 것을 추가. 이 글로 이미 멘션 알림을 받은 사람은 중복으로 안 보낸다.
@@ -323,13 +338,21 @@ export default function RoomAdmin({ data, setData }) {
     await supabase.from("feed_posts").update({ body: text }).eq("id", id);
   }
 
-  async function setNotice(postId, isNotice) {
-    setData((prev) => ({ ...prev, feed: prev.feed.map((p) => (p.id === postId ? { ...p, isNotice } : p)) }));
-    await supabase.from("feed_posts").update({ is_notice: isNotice }).eq("id", postId);
+  // 등록(isNotice: true)일 때만 title을 받는다 — 호출부(카드 목록·상세 모달)에서 prompt로 미리 받아 넘긴다.
+  async function setNotice(postId, isNotice, title) {
+    setData((prev) => ({ ...prev, feed: prev.feed.map((p) => (p.id === postId ? { ...p, isNotice, ...(isNotice ? { title: title ?? p.title } : {}) } : p)) }));
+    await supabase.from("feed_posts").update({ is_notice: isNotice, ...(isNotice && titleReady ? { title } : {}) }).eq("id", postId);
     if (isNotice) {
-      const post = feed.find((p) => p.id === postId);
-      notify("room_notice", { title: "새 공지가 등록됐어요", body: (post?.text ?? "").slice(0, 60), url: `/?openPost=${postId}` });
+      notify("room_notice", { title: "새 공지가 등록됐어요", body: title || "", url: `/?openPost=${postId}` });
     }
+  }
+  // "공지로 등록" 클릭 — 켤 때만 제목을 prompt로 받는다(끌 때는 바로 해제).
+  function handleNoticeClick(p) {
+    if (p.isNotice) { setNotice(p.id, false); return; }
+    const t = prompt("공지 제목을 입력하세요");
+    if (t === null) return;
+    if (!t.trim()) { alert("제목을 입력해주세요"); return; }
+    setNotice(p.id, true, t.trim());
   }
 
   const detailPost = detailId ? feed.find((p) => p.id === detailId) : null;
@@ -387,7 +410,7 @@ export default function RoomAdmin({ data, setData }) {
                             <button onClick={() => startEdit(p)} className="w-full text-left px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
                               수정하기
                             </button>
-                            <button onClick={() => { setNotice(p.id, !p.isNotice); setMenuFor(null); }} className="w-full text-left px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                            <button onClick={() => { handleNoticeClick(p); setMenuFor(null); }} className="w-full text-left px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
                               {p.isNotice ? "공지 해제" : "공지로 등록"}
                             </button>
                             <button onClick={() => { setMenuFor(null); deletePost(p.id); }} className="w-full text-left px-3.5 py-2 text-xs font-bold text-red-600 hover:bg-red-50">
@@ -412,9 +435,10 @@ export default function RoomAdmin({ data, setData }) {
                         </div>
                       </div>
                     ) : (
-                      <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap mt-1.5">
-                        {p.text}
-                      </p>
+                      <div className="mt-1.5">
+                        {p.title && <p className="text-sm font-extrabold text-slate-800 mb-1">{p.title}</p>}
+                        <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{p.text}</p>
+                      </div>
                     )}
                     {p.photoUrls?.length > 0 && (
                       <div className="mt-2">
@@ -454,7 +478,7 @@ export default function RoomAdmin({ data, setData }) {
                         <button onClick={() => startEdit(detailPost)} className="w-full text-left px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
                           수정하기
                         </button>
-                        <button onClick={() => { setNotice(detailPost.id, !detailPost.isNotice); setMenuFor(null); }} className="w-full text-left px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                        <button onClick={() => { handleNoticeClick(detailPost); setMenuFor(null); }} className="w-full text-left px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
                           {detailPost.isNotice ? "공지 해제" : "공지로 등록"}
                         </button>
                         <button onClick={() => { setMenuFor(null); deletePost(detailPost.id); }} className="w-full text-left px-3.5 py-2 text-xs font-bold text-red-600 hover:bg-red-50">
@@ -480,7 +504,10 @@ export default function RoomAdmin({ data, setData }) {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">{detailPost.text}</p>
+                  <>
+                    {detailPost.title && <p className="text-sm font-extrabold text-slate-800 mb-1">{detailPost.title}</p>}
+                    <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">{detailPost.text}</p>
+                  </>
                 )}
                 <PhotoGrid urls={detailPost.photoUrls} onOpen={(urls, index) => setPhotoViewer({ urls, index })} />
               </div>
