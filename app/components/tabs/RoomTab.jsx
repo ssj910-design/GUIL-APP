@@ -562,25 +562,29 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
               )}
             </>
           )}
-          <textarea
-            ref={composeTextareaRef}
-            className="w-full text-sm resize-none focus:outline-none min-h-[50vh]"
-            placeholder="무슨 소식을 나눠볼까요? (@이름으로 태그)"
-            value={postInput}
-            onChange={(e) => setPostInput(e.target.value)}
-          />
-          {tagCands.length > 0 && (
-            <div className="border border-slate-200 rounded-xl overflow-hidden mb-2 max-h-40 overflow-y-auto">
-              {tagCands.map((n) => (
-                <button key={n} onClick={() => pickTag(n)} className="w-full flex items-center gap-2 px-3 py-2 border-b border-slate-50 last:border-0 active:bg-blue-50 text-left">
-                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${n === "모두" ? "bg-blue-700 text-white" : "bg-slate-200 text-slate-600"}`}>
-                    {n === "모두" ? "@" : n[0]}
-                  </span>
-                  <span className="text-xs font-bold text-slate-700">{n}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="relative">
+            <textarea
+              ref={composeTextareaRef}
+              className="w-full text-sm resize-none focus:outline-none min-h-[50vh]"
+              placeholder="무슨 소식을 나눠볼까요? (@이름으로 태그)"
+              value={postInput}
+              onChange={(e) => setPostInput(e.target.value)}
+            />
+            {/* 텍스트란이 화면 대부분을 차지해서(min-h-50vh) 아래에 붙이면 스크롤해야 보인다 —
+                입력 위치와 무관하게 항상 바로 보이도록 텍스트란 위에 겹쳐서 띄운다. */}
+            {tagCands.length > 0 && (
+              <div className="absolute top-1 left-0 right-0 z-10 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden max-h-40 overflow-y-auto">
+                {tagCands.map((n) => (
+                  <button key={n} onClick={() => pickTag(n)} className="w-full flex items-center gap-2 px-3 py-2 border-b border-slate-50 last:border-0 active:bg-blue-50 text-left">
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${n === "모두" ? "bg-blue-700 text-white" : "bg-slate-200 text-slate-600"}`}>
+                      {n === "모두" ? "@" : n[0]}
+                    </span>
+                    <span className="text-xs font-bold text-slate-700">{n}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           {pendingPhotos.length > 0 && (
             <div className="flex gap-2 flex-wrap mb-2">
               {pendingPhotos.map((u, i) => (
@@ -616,6 +620,11 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
     const liked = likes.includes(CURRENT_ENGINEER);
     const comments = commentsOf(openPost.id);
     const canManage = isAdmin || (openPost.authorId != null ? openPost.authorId === selfId : openPost.author === CURRENT_ENGINEER);
+    // 댓글 @태그 자동완성 — 글쓰기와 같은 방식, 이 화면엔 댓글창이 하나뿐이라 postId 구분 없이 openPost 기준.
+    const commentDraft = commentDrafts[openPost.id] ?? "";
+    const commentTagMatch = /@([가-힣a-zA-Z0-9()]*)$/.exec(commentDraft);
+    const commentTagCands = commentTagMatch ? ["모두", ...memberNames].filter((n) => n.toLowerCase().includes(commentTagMatch[1].toLowerCase())) : [];
+    const pickCommentTag = (n) => setCommentDrafts((d) => ({ ...d, [openPost.id]: (d[openPost.id] ?? "").replace(/@[가-힣a-zA-Z0-9()]*$/, "@" + n + " ") }));
     return (
       <div className="flex-1 flex flex-col overflow-hidden bg-white room-slide-in-right">
         <div className="px-4 pt-4 pb-2.5 flex items-center gap-2 shrink-0 border-b border-slate-100">
@@ -681,6 +690,18 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
                     <X size={10} />
                   </button>
                 </div>
+              ))}
+            </div>
+          )}
+          {commentTagCands.length > 0 && (
+            <div className="border border-slate-200 rounded-xl overflow-hidden mb-2 max-h-40 overflow-y-auto">
+              {commentTagCands.map((n) => (
+                <button key={n} onClick={() => pickCommentTag(n)} className="w-full flex items-center gap-2 px-3 py-2 border-b border-slate-50 last:border-0 active:bg-blue-50 text-left">
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${n === "모두" ? "bg-blue-700 text-white" : "bg-slate-200 text-slate-600"}`}>
+                    {n === "모두" ? "@" : n[0]}
+                  </span>
+                  <span className="text-xs font-bold text-slate-700">{n}</span>
+                </button>
               ))}
             </div>
           )}
