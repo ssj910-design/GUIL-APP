@@ -166,7 +166,6 @@ export default function App() {
   const faultModelReady = failures.some((f) => f.faultModel !== undefined);
   // billings.signature_url 등 컬럼 존재 여부 — 마이그레이션 119 실행 전엔 컬럼이 없어, 있을 때만
   // 서명/전화승인 정보를 같이 쓴다(미실행 시에도 청구 저장 자체는 깨지지 않게).
-  const billingApprovalReady = billings.some((b) => b.signatureUrl !== undefined);
   // billings.part_photos 컬럼 존재 여부 — 마이그레이션 120 실행 전엔 컬럼이 없어, 있을 때만
   // 부품별 전/후 사진 묶음을 같이 쓴다.
   const billingPartPhotosReady = billings.some((b) => b.partPhotos !== undefined);
@@ -1327,13 +1326,15 @@ export default function App() {
       before_photo_urls: newBilling.beforePhotoUrls.length ? newBilling.beforePhotoUrls : null,
       after_photo_urls: newBilling.afterPhotoUrls.length ? newBilling.afterPhotoUrls : null,
       confirm_photo_url: newBilling.confirmPhotoUrl,
-      ...(billingApprovalReady ? {
-        signature_url: newBilling.signatureUrl,
-        approval_method: newBilling.approvalMethod,
-        approver_name: newBilling.approverName,
-        approver_phone: newBilling.approverPhone,
-        approved_at: newBilling.approvedAt,
-      } : {}),
+      // 서명/승인 컬럼은 오래전부터 있어(늘 채워져 있음) 더 이상 존재 여부 가드가 필요 없다 —
+      // 예전엔 billingApprovalReady로 감쌌는데, 이 값이 billings 배열이 아직 덜 로드된 순간엔
+      // false가 될 수 있어 기사가 실제로 서명·전화번호를 입력했는데도 그 값이 통째로 빠진 채
+      // 저장되는 사고가 있었다(2026-08-26 유일빌딩 청구건).
+      signature_url: newBilling.signatureUrl,
+      approval_method: newBilling.approvalMethod,
+      approver_name: newBilling.approverName,
+      approver_phone: newBilling.approverPhone,
+      approved_at: newBilling.approvedAt,
       ...(billingPartPhotosReady ? { part_photos: newBilling.partPhotos } : {}),
       ...(billingOutsourcedReady ? { is_outsourced: newBilling.isOutsourced, vendor_name: newBilling.vendorName } : {}),
       is_free: newBilling.isFree,

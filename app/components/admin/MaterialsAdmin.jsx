@@ -345,7 +345,10 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
   );
   // 아직 견적서를 만들기 전(요청만 들어온 건)과 이미 작성을 시작한 건을 목록에서 바로 구분해 보여준다.
   const pendingQuoteRequests = quoteRequests.filter((q) => q.status === "요청접수");
-  const draftedQuoteRequests = quoteRequests.filter((q) => q.status !== "요청접수");
+  // 기사가 요청 후 취소한 건은 목록에서 뺀다 — 삭제하지 않고 데이터는 그대로 남겨(cancelled_at/
+  // cancelled_by로 감사 기록 보존) 화면에만 안 보이게 한다. quoteStageInfo가 '취소' 상태를
+  // 처리하지 않아(stage: null) 어차피 단계 표시도 못 하고 처리 버튼도 없는 죽은 행이었다.
+  const draftedQuoteRequests = quoteRequests.filter((q) => q.status !== "요청접수" && q.status !== "취소");
 
   async function handleMaterialSupplyComplete(request, { assigneeId, billingPart, billingAmount, billingPartRows, photoUrls }) {
     const engineer = (data.profiles ?? []).find((p) => p.id === assigneeId);
