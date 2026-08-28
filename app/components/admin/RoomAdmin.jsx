@@ -6,7 +6,7 @@
 // 중앙 모달(adminShared의 Modal)로 — PC 게시판에 맞는 레이아웃.
 // 작성자는 실제 로그인한 관리자 이름(AdminAuthContext)을 쓴다 — "관리자"로 뭉뚱그리지 않는다.
 import { useContext, useState } from "react";
-import { Image as ImageIcon, Pin, ThumbsUp, MessageCircle, Trash2, X, Send, Search, MoreVertical, ChevronLeft, ChevronRight } from "lucide-react";
+import { Image as ImageIcon, Pin, ThumbsUp, MessageCircle, Trash2, X, Send, Search, MoreVertical, ChevronLeft, ChevronRight, Pencil } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
 import { uploadPhoto, downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
@@ -161,7 +161,7 @@ function ComposeBox({ onSubmit, placeholder, compact, members = [] }) {
     <div className={compact ? "" : "bg-white rounded-2xl border border-slate-200 p-4"}>
       <textarea
         className={`${inputCls} resize-none`}
-        rows={compact ? 2 : 3}
+        rows={compact ? 2 : 8}
         placeholder={placeholder}
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -225,6 +225,84 @@ function ComposeBox({ onSubmit, placeholder, compact, members = [] }) {
   );
 }
 
+// 게시글 카드 — 게시판 목록·공지사항 전체보기 화면 공용(둘 다 같은 스타일로 보이게).
+function PostCard({ p, comments, liked, likes, menuOpen, onToggleMenu, onOpenDetail, onStartEdit, onNoticeClick, onDelete, editingId, editText, setEditText, saveEdit, setEditingId, onToggleLike, onOpenPhoto }) {
+  return (
+    <div
+      onClick={onOpenDetail}
+      className={`bg-white rounded-2xl border p-4 cursor-pointer ${p.isNotice ? "border-amber-300 bg-amber-50/40" : "border-slate-200"}`}
+    >
+      <div className="flex items-start gap-3">
+        <Avatar name={p.author} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="font-bold text-slate-800 text-sm truncate">{p.author}</span>
+              {p.isNotice && (
+                <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full shrink-0">
+                  <Pin size={10} /> 공지
+                </span>
+              )}
+              <span className="text-[11px] text-slate-400 shrink-0">{timeOf(p.createdAt)}</span>
+            </div>
+            <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+              <button onClick={onToggleMenu} className="p-1 text-slate-300 hover:text-slate-500" aria-label="더보기">
+                <MoreVertical size={16} />
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 top-7 z-10 bg-white rounded-xl border border-slate-200 shadow-lg py-1 w-36">
+                  <button onClick={onStartEdit} className="w-full text-left px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                    수정하기
+                  </button>
+                  <button onClick={onNoticeClick} className="w-full text-left px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                    {p.isNotice ? "공지 해제" : "공지로 등록"}
+                  </button>
+                  <button onClick={onDelete} className="w-full text-left px-3.5 py-2 text-xs font-bold text-red-600 hover:bg-red-50">
+                    삭제하기
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          {editingId === p.id ? (
+            <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+              <textarea
+                className={`${inputCls} resize-none`}
+                rows={3}
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                autoFocus
+              />
+              <div className="flex gap-2 mt-1.5">
+                <button onClick={saveEdit} className="text-xs font-bold text-white bg-blue-700 rounded-lg px-3.5 py-1.5">저장</button>
+                <button onClick={() => setEditingId(null)} className="text-xs font-bold text-slate-400 px-2.5 py-1.5">취소</button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-1.5">
+              {p.title && <p className="text-sm font-extrabold text-slate-800 mb-1">{p.title}</p>}
+              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{p.text}</p>
+            </div>
+          )}
+          {p.photoUrls?.length > 0 && (
+            <div className="mt-2">
+              <PhotoGrid urls={p.photoUrls} onOpen={onOpenPhoto} compact />
+            </div>
+          )}
+          <div className="flex items-center gap-4 mt-3 pt-2.5 border-t border-slate-50" onClick={(e) => e.stopPropagation()}>
+            <button onClick={onToggleLike} className={`flex items-center gap-1.5 text-xs font-bold ${liked ? "text-blue-600" : "text-slate-500"}`}>
+              <ThumbsUp size={15} fill={liked ? "currentColor" : "none"} /> {likes.length > 0 ? likes.length : "좋아요"}
+            </button>
+            <button onClick={onOpenDetail} className="flex items-center gap-1.5 text-xs font-bold text-slate-500">
+              <MessageCircle size={15} /> {comments.length > 0 ? `댓글 ${comments.length}` : "댓글"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function RoomAdmin({ data, setData }) {
   const { name: ADMIN_NAME, id: adminId } = useContext(AdminAuthContext);
   const [search, setSearch] = useState("");
@@ -233,6 +311,8 @@ export default function RoomAdmin({ data, setData }) {
   const [menuFor, setMenuFor] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState("");
+  const [composing, setComposing] = useState(false); // 글쓰기 모달
+  const [showNoticeFeed, setShowNoticeFeed] = useState(false); // 공지사항 전체보기 화면
 
   const feed = data.feed ?? [];
   // title 컬럼은 마이그레이션 134 실행 전엔 존재하지 않는다 — 있을 때만 써서 그 전엔 글쓰기 자체가 깨지지 않게 한다.
@@ -240,18 +320,21 @@ export default function RoomAdmin({ data, setData }) {
   const commentsOf = (id) =>
     feed.filter((p) => p.replyToId === id).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
+  // 공지는 일반 목록에서 빼서(기사어플과 동일) 상단 핀 박스·공지사항 전체보기에서만 보여준다.
+  const allNotices = feed
+    .filter((p) => p.isNotice && !p.replyToId)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const pinnedNotices = allNotices.slice(0, 3);
+
   const q = search.trim().toLowerCase();
   const roots = feed
-    .filter((p) => !p.replyToId)
+    .filter((p) => !p.replyToId && !p.isNotice)
     .filter((p) => {
       if (!q) return true;
       if ((p.text ?? "").toLowerCase().includes(q) || (p.author ?? "").toLowerCase().includes(q)) return true;
       return commentsOf(p.id).some((c) => (c.text ?? "").toLowerCase().includes(q) || (c.author ?? "").toLowerCase().includes(q));
     })
-    .sort((a, b) => {
-      if (!!a.isNotice !== !!b.isNotice) return a.isNotice ? -1 : 1;
-      return new Date(b.createdAt) - new Date(a.createdAt);
-    });
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   async function sendPost(text, extra = {}) {
     const newPost = {
@@ -357,109 +440,103 @@ export default function RoomAdmin({ data, setData }) {
 
   const detailPost = detailId ? feed.find((p) => p.id === detailId) : null;
 
+  // PostCard 하나에 필요한 공통 props — 목록·공지사항 전체보기 둘 다에서 재사용.
+  function cardProps(p) {
+    const comments = commentsOf(p.id);
+    const likes = p.reactions?.["👍"] ?? [];
+    return {
+      p, comments, likes,
+      liked: likes.includes(ADMIN_NAME),
+      menuOpen: menuFor === p.id,
+      onToggleMenu: () => setMenuFor(menuFor === p.id ? null : p.id),
+      onOpenDetail: () => setDetailId(p.id),
+      onStartEdit: () => startEdit(p),
+      onNoticeClick: () => { handleNoticeClick(p); setMenuFor(null); },
+      onDelete: () => { setMenuFor(null); deletePost(p.id); },
+      editingId, editText, setEditText, saveEdit, setEditingId,
+      onToggleLike: () => toggleLike(p.id),
+      onOpenPhoto: (urls, index) => setPhotoViewer({ urls, index }),
+    };
+  }
+
   return (
     <div className="max-w-[100rem] mx-auto space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-800">게시판</h1>
-        <div className="relative w-64">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="글 검색"
-            className={`${inputCls} pl-9`}
-          />
+      {showNoticeFeed ? (
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowNoticeFeed(false)} className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100" aria-label="뒤로">
+            <ChevronLeft size={20} />
+          </button>
+          <h1 className="text-xl font-bold text-slate-800">공지사항</h1>
+          <span className="text-sm text-slate-400">전체 {allNotices.length}건</span>
         </div>
-      </div>
+      ) : (
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-slate-800">게시판</h1>
+          <div className="flex items-center gap-2">
+            <div className="relative w-64">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="글 검색"
+                className={`${inputCls} pl-9`}
+              />
+            </div>
+            <button onClick={() => setComposing(true)} className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
+              <Pencil size={15} /> 글쓰기
+            </button>
+          </div>
+        </div>
+      )}
 
-      <ComposeBox onSubmit={sendPost} placeholder="팀에 공지하거나 이야기를 나눠보세요 (@로 멘션)" members={(data.profiles ?? []).filter((p) => p.is_active !== false).map((p) => p.name).filter((n) => n && n !== ADMIN_NAME)} />
-
-      <div className="space-y-3">
-        {roots.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-16">등록된 글이 없습니다</p>
-        ) : (
-          roots.map((p) => {
-            const comments = commentsOf(p.id);
-            const likes = p.reactions?.["👍"] ?? [];
-            const liked = likes.includes(ADMIN_NAME);
-            return (
-              <div
-                key={p.id}
-                onClick={() => setDetailId(p.id)}
-                className={`bg-white rounded-2xl border p-4 cursor-pointer ${p.isNotice ? "border-amber-300 bg-amber-50/40" : "border-slate-200"}`}
-              >
-                <div className="flex items-start gap-3">
-                  <Avatar name={p.author} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="font-bold text-slate-800 text-sm truncate">{p.author}</span>
-                        {p.isNotice && (
-                          <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full shrink-0">
-                            <Pin size={10} /> 공지
-                          </span>
-                        )}
-                        <span className="text-[11px] text-slate-400 shrink-0">{timeOf(p.createdAt)}</span>
-                      </div>
-                      <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <button onClick={() => setMenuFor(menuFor === p.id ? null : p.id)} className="p-1 text-slate-300 hover:text-slate-500" aria-label="더보기">
-                          <MoreVertical size={16} />
-                        </button>
-                        {menuFor === p.id && (
-                          <div className="absolute right-0 top-7 z-10 bg-white rounded-xl border border-slate-200 shadow-lg py-1 w-36">
-                            <button onClick={() => startEdit(p)} className="w-full text-left px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
-                              수정하기
-                            </button>
-                            <button onClick={() => { handleNoticeClick(p); setMenuFor(null); }} className="w-full text-left px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
-                              {p.isNotice ? "공지 해제" : "공지로 등록"}
-                            </button>
-                            <button onClick={() => { setMenuFor(null); deletePost(p.id); }} className="w-full text-left px-3.5 py-2 text-xs font-bold text-red-600 hover:bg-red-50">
-                              삭제하기
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    {editingId === p.id ? (
-                      <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
-                        <textarea
-                          className={`${inputCls} resize-none`}
-                          rows={3}
-                          value={editText}
-                          onChange={(e) => setEditText(e.target.value)}
-                          autoFocus
-                        />
-                        <div className="flex gap-2 mt-1.5">
-                          <button onClick={saveEdit} className="text-xs font-bold text-white bg-blue-700 rounded-lg px-3.5 py-1.5">저장</button>
-                          <button onClick={() => setEditingId(null)} className="text-xs font-bold text-slate-400 px-2.5 py-1.5">취소</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="mt-1.5">
-                        {p.title && <p className="text-sm font-extrabold text-slate-800 mb-1">{p.title}</p>}
-                        <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{p.text}</p>
-                      </div>
-                    )}
-                    {p.photoUrls?.length > 0 && (
-                      <div className="mt-2">
-                        <PhotoGrid urls={p.photoUrls} onOpen={(urls, index) => setPhotoViewer({ urls, index })} compact />
-                      </div>
-                    )}
-                    <div className="flex items-center gap-4 mt-3 pt-2.5 border-t border-slate-50" onClick={(e) => e.stopPropagation()}>
-                      <button onClick={() => toggleLike(p.id)} className={`flex items-center gap-1.5 text-xs font-bold ${liked ? "text-blue-600" : "text-slate-500"}`}>
-                        <ThumbsUp size={15} fill={liked ? "currentColor" : "none"} /> {likes.length > 0 ? likes.length : "좋아요"}
-                      </button>
-                      <button onClick={() => setDetailId(p.id)} className="flex items-center gap-1.5 text-xs font-bold text-slate-500">
-                        <MessageCircle size={15} /> {comments.length > 0 ? `댓글 ${comments.length}` : "댓글"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
+      {showNoticeFeed ? (
+        <div className="space-y-3">
+          {allNotices.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-16">등록된 공지가 없습니다</p>
+          ) : (
+            allNotices.map((p) => <PostCard key={p.id} {...cardProps(p)} />)
+          )}
+        </div>
+      ) : (
+        <>
+          {pinnedNotices.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-amber-100 flex items-center justify-between">
+                <p className="text-xs font-extrabold text-amber-700">📌 공지</p>
+                <button onClick={() => setShowNoticeFeed(true)} className="text-xs font-bold text-amber-700 underline underline-offset-2">전체보기</button>
               </div>
-            );
-          })
-        )}
-      </div>
+              {pinnedNotices.map((p, i) => (
+                <button
+                  key={p.id}
+                  onClick={() => setDetailId(p.id)}
+                  className={`w-full text-left px-4 py-2.5 flex items-center gap-2 hover:bg-amber-100 ${i < pinnedNotices.length - 1 ? "border-b border-amber-100" : ""}`}
+                >
+                  <span className="text-[10px] font-bold text-white bg-amber-600 rounded px-1.5 py-0.5 shrink-0">공지</span>
+                  <span className="text-sm font-bold text-slate-800 truncate">{p.title || p.text}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {roots.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-16">등록된 글이 없습니다</p>
+            ) : (
+              roots.map((p) => <PostCard key={p.id} {...cardProps(p)} />)
+            )}
+          </div>
+        </>
+      )}
+
+      {composing && (
+        <Modal title="글쓰기" onClose={() => setComposing(false)} wide>
+          <ComposeBox
+            onSubmit={(text, extra) => { sendPost(text, extra); setComposing(false); }}
+            placeholder="팀에 공지하거나 이야기를 나눠보세요 (@로 멘션)"
+            members={(data.profiles ?? []).filter((p) => p.is_active !== false).map((p) => p.name).filter((n) => n && n !== ADMIN_NAME)}
+          />
+        </Modal>
+      )}
 
       {detailPost && (
         <Modal title={`${detailPost.author}님의 글`} onClose={() => setDetailId(null)} wide>
