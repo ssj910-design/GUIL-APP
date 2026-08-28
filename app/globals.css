@@ -30,5 +30,5 @@ body {
   from { transform: translateX(-100%); }
   to { transform: translateX(0); }
 }
-.room-slide-in-right { animation: room-slide-in-right 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
-.room-slide-in-left { animation: room-slide-in-left 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
+.room-slide-in-right { animation: room-slide-in-right 0.42s cubic-bezier(0.22, 1, 0.36, 1); }
+.room-slide-in-left { animation: room-slide-in-left 0.42s cubic-bezier(0.22, 1, 0.36, 1); }
