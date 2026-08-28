@@ -426,6 +426,91 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
     );
   }
 
+  // ---- 글쓰기 (첨부파일처럼 전용 화면으로 넘어가서 작성) ----
+  if (composing) {
+    const closeCompose = () => { setComposing(false); setPostInput(""); setPendingPhotos([]); setPostIsNotice(false); setPostTitle(""); };
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden bg-white">
+        <div className="px-4 pt-4 pb-2.5 flex items-center justify-between shrink-0 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <button onClick={closeCompose} className="p-1 text-slate-500 active:text-slate-800" aria-label="뒤로">
+              <ChevronLeft size={20} />
+            </button>
+            <p className="text-sm font-bold text-slate-800">글쓰기</p>
+          </div>
+          <button
+            onClick={submitPost}
+            disabled={(!postInput.trim() && pendingPhotos.length === 0) || uploading || (postIsNotice && !postTitle.trim())}
+            className="text-sm font-bold text-blue-700 disabled:text-slate-300"
+          >
+            {uploading ? "업로드 중..." : "게시"}
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          {!!onSetNotice && (
+            <>
+              <label className="flex items-center gap-1.5 mb-2 text-xs font-bold text-slate-600">
+                <input type="checkbox" checked={postIsNotice} onChange={(e) => setPostIsNotice(e.target.checked)} />
+                공지로 등록
+              </label>
+              {postIsNotice && (
+                <input
+                  className="w-full text-sm font-bold border border-amber-200 bg-amber-50 rounded-lg px-3 py-2 mb-2 focus:outline-none"
+                  placeholder="공지 제목을 입력하세요 (필수)"
+                  value={postTitle}
+                  onChange={(e) => setPostTitle(e.target.value)}
+                />
+              )}
+            </>
+          )}
+          <textarea
+            autoFocus
+            className="w-full text-sm resize-none focus:outline-none min-h-[50vh]"
+            placeholder="무슨 소식을 나눠볼까요? (@이름으로 태그)"
+            value={postInput}
+            onChange={(e) => setPostInput(e.target.value)}
+          />
+          {tagCands.length > 0 && (
+            <div className="border border-slate-200 rounded-xl overflow-hidden mb-2 max-h-40 overflow-y-auto">
+              {tagCands.map((n) => (
+                <button key={n} onClick={() => pickTag(n)} className="w-full flex items-center gap-2 px-3 py-2 border-b border-slate-50 last:border-0 active:bg-blue-50 text-left">
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${n === "모두" ? "bg-blue-700 text-white" : "bg-slate-200 text-slate-600"}`}>
+                    {n === "모두" ? "@" : n[0]}
+                  </span>
+                  <span className="text-xs font-bold text-slate-700">{n}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {pendingPhotos.length > 0 && (
+            <div className="flex gap-2 flex-wrap mb-2">
+              {pendingPhotos.map((u, i) => (
+                <div key={u} className="relative">
+                  {isVideo(u)
+                    ? <video src={u} className="w-14 h-14 rounded-lg object-cover" />
+                    : <img src={u} alt="첨부" className="w-14 h-14 rounded-lg object-cover" />}
+                  <button
+                    onClick={() => setPendingPhotos((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-800 text-white flex items-center justify-center"
+                    aria-label="첨부 제거"
+                  >
+                    <X size={11} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="shrink-0 border-t border-slate-100 px-4 py-3">
+          <input ref={fileRef} type="file" accept="image/*,video/*" multiple hidden onChange={pickFiles} />
+          <button onClick={() => fileRef.current?.click()} disabled={uploading} aria-label="사진·영상 첨부" className="w-9 h-9 rounded-full border border-slate-300 text-slate-500 flex items-center justify-center active:bg-slate-100">
+            <Plus size={16} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // ---- 게시글 상세화면 (첨부파일처럼 게시글을 누르면 진입) ----
   if (openPost) {
     const likes = openPost.reactions?.["👍"] ?? [];
@@ -528,84 +613,6 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
           </div>
         )}
 
-        {/* 글쓰기 */}
-        {/* 컴포즈는 FAB(연필)로만 연다 — 상단 "무슨 소식을…" 입력창은 없앰 */}
-        {composing && (
-          <div className="px-4 py-3 border-b border-slate-100">
-            <div>
-              <textarea
-                autoFocus
-                className="w-full text-sm resize-none focus:outline-none min-h-[4.5rem]"
-                placeholder="무슨 소식을 나눠볼까요? (@이름으로 태그)"
-                value={postInput}
-                onChange={(e) => setPostInput(e.target.value)}
-              />
-              {tagCands.length > 0 && (
-                <div className="border border-slate-200 rounded-xl overflow-hidden mb-2 max-h-40 overflow-y-auto">
-                  {tagCands.map((n) => (
-                    <button key={n} onClick={() => pickTag(n)} className="w-full flex items-center gap-2 px-3 py-2 border-b border-slate-50 last:border-0 active:bg-blue-50 text-left">
-                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${n === "모두" ? "bg-blue-700 text-white" : "bg-slate-200 text-slate-600"}`}>
-                        {n === "모두" ? "@" : n[0]}
-                      </span>
-                      <span className="text-xs font-bold text-slate-700">{n}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {pendingPhotos.length > 0 && (
-                <div className="flex gap-2 flex-wrap mb-2">
-                  {pendingPhotos.map((u, i) => (
-                    <div key={u} className="relative">
-                      {isVideo(u)
-                        ? <video src={u} className="w-14 h-14 rounded-lg object-cover" />
-                        : <img src={u} alt="첨부" className="w-14 h-14 rounded-lg object-cover" />}
-                      <button
-                        onClick={() => setPendingPhotos((prev) => prev.filter((_, idx) => idx !== i))}
-                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-800 text-white flex items-center justify-center"
-                        aria-label="첨부 제거"
-                      >
-                        <X size={11} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {!!onSetNotice && (
-                <>
-                  <label className="flex items-center gap-1.5 mb-2 text-xs font-bold text-slate-600">
-                    <input type="checkbox" checked={postIsNotice} onChange={(e) => setPostIsNotice(e.target.checked)} />
-                    공지로 등록
-                  </label>
-                  {postIsNotice && (
-                    <input
-                      className="w-full text-sm font-bold border border-amber-200 bg-amber-50 rounded-lg px-3 py-2 mb-2 focus:outline-none"
-                      placeholder="공지 제목을 입력하세요 (필수)"
-                      value={postTitle}
-                      onChange={(e) => setPostTitle(e.target.value)}
-                    />
-                  )}
-                </>
-              )}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-100 mt-2">
-                <input ref={fileRef} type="file" accept="image/*,video/*" multiple hidden onChange={pickFiles} />
-                <button onClick={() => fileRef.current?.click()} disabled={uploading} aria-label="사진·영상 첨부" className="w-9 h-9 rounded-full border border-slate-300 text-slate-500 flex items-center justify-center active:bg-slate-100">
-                  <Plus size={16} />
-                </button>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={submitPost}
-                    disabled={(!postInput.trim() && pendingPhotos.length === 0) || uploading || (postIsNotice && !postTitle.trim())}
-                    className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-full px-4 py-2"
-                  >
-                    {uploading ? "업로드 중..." : "게시"}
-                  </button>
-                  <button onClick={() => { setComposing(false); setPostInput(""); setPendingPhotos([]); setPostIsNotice(false); setPostTitle(""); }} className="text-xs font-bold text-slate-400 px-3 py-2">취소</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* 게시글 목록 — 누르면 상세화면(첨부파일처럼)으로 진입 */}
         <div className="px-4 divide-y divide-slate-100">
           {visiblePosts.map((p) => {
@@ -641,16 +648,14 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
         {posts.length > 0 && visiblePosts.length === 0 && <p className="text-xs text-slate-400 text-center py-10">검색 결과가 없습니다</p>}
       </div>
 
-      {/* 새 글 쓰기 플로팅 — 스크롤 중에도 바로 작성 (컴포즈 열려 있으면 숨김) */}
-      {!composing && (
-        <button
-          onClick={() => setComposing(true)}
-          aria-label="새 글 쓰기"
-          className="absolute right-4 bottom-4 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95"
-        >
-          <Pencil size={19} />
-        </button>
-      )}
+      {/* 새 글 쓰기 플로팅 — 누르면 전용 글쓰기 화면(위 if (composing) 분기)으로 이동 */}
+      <button
+        onClick={() => setComposing(true)}
+        aria-label="새 글 쓰기"
+        className="absolute right-4 bottom-4 z-20 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg flex items-center justify-center active:scale-95"
+      >
+        <Pencil size={19} />
+      </button>
 
       {/* 이미지 확대보기 — 저장/닫기 */}
       {viewer && (
