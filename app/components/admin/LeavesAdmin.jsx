@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { AdminTable, inputCls, StatusBadge, DateTextInput } from "@/app/components/admin/adminShared";
 import { TODAY_STR } from "@/lib/constants";
 import { annualLeaveDays, yearsOfService } from "@/lib/leave";
-import { shortDate } from "@/lib/utils";
+import { shortDate, leaveLabel } from "@/lib/utils";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { notify } from "@/lib/push";
 
@@ -210,7 +210,7 @@ export default function LeavesAdmin({ data, setData }) {
               return (
               <div key={l.id} className="flex items-center justify-between gap-2 bg-white rounded-lg px-3 py-2.5">
                 <p className="text-xs text-slate-600 min-w-0">
-                  <b className="text-slate-800">{nameOf(l.profile_id)}</b> · {l.kind} {l.days}일
+                  <b className="text-slate-800">{nameOf(l.profile_id)}</b> · {leaveLabel(l.kind, l.note)} {l.days}일
                   <br />
                   <span className="text-[11px] text-slate-400">
                     {shortDate(l.start_date)}{l.end_date !== l.start_date && ` ~ ${shortDate(l.end_date)}`}
@@ -244,7 +244,7 @@ export default function LeavesAdmin({ data, setData }) {
             {cancelPending.map((l) => (
               <div key={l.id} className="flex items-center justify-between gap-2 bg-white rounded-lg px-3 py-2.5">
                 <p className="text-xs text-slate-600 min-w-0">
-                  <b className="text-slate-800">{nameOf(l.profile_id)}</b> · {l.kind} {l.days}일
+                  <b className="text-slate-800">{nameOf(l.profile_id)}</b> · {leaveLabel(l.kind, l.note)} {l.days}일
                   <br />
                   <span className="text-[11px] text-slate-400">
                     {shortDate(l.start_date)}{l.end_date !== l.start_date && ` ~ ${shortDate(l.end_date)}`}
@@ -330,7 +330,7 @@ export default function LeavesAdmin({ data, setData }) {
         ) : leaves.map((l) => (
           <tr key={l.id} className="border-b border-slate-50">
             <td className="pl-5 pr-3 py-2.5 font-bold whitespace-nowrap">{nameOf(l.profile_id)}</td>
-            <td className="px-3 py-2.5">{l.kind}</td>
+            <td className="px-3 py-2.5">{leaveLabel(l.kind, l.note)}</td>
             <td className="px-3 py-2.5 whitespace-nowrap">
               {shortDate(l.start_date)}{l.end_date !== l.start_date && ` ~ ${shortDate(l.end_date)}`}
             </td>

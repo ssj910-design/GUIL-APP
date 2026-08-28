@@ -3,7 +3,7 @@ import { Capacitor } from "@capacitor/core";
 import { ShieldCheck, AlertOctagon, X, Map as MapIcon } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR, DUTY_KINDS } from "@/lib/constants";
-import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, distanceKm, activeSites } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, distanceKm, activeSites, periodOf, leaveLabel as leaveKindLabel } from "@/lib/utils";
 import { Badge, DDay, SmsToast, Sheet } from "@/app/components/ui";
 import { LOCATION_TRACKING } from "@/lib/features";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -96,12 +96,7 @@ const GEO_HELP =
   "· 아이폰: 설정 → Safari(또는 홈 화면 추가한 앱) → 위치 → 허용, 그리고 설정 → 개인정보 보호 → 위치 서비스 ON";
 
 function leaveLabel(l) {
-  if (!l) return null;
-  if (l.kind === "반차") {
-    const period = periodOf(l.note);
-    return period ? `반차(${period})` : "반차";
-  }
-  return l.kind; // 연차 | 병가 | 공가
+  return l ? leaveKindLabel(l.kind, l.note) : null;
 }
 
 // 관리자 출근 현황 — 요약을 누르면 출근·미출근 명단과 위치 권한 상태를 펼친다.
@@ -395,13 +390,6 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
-// 반차 신청 시 note 맨 앞에 "오전"/"오후"를 적어두므로(WorkCalendarSheet.jsx의 submitLeave 참고)
-// 날짜 상세 팝업에도 그대로 꺼내 보여준다.
-function periodOf(note) {
-  const m = (note ?? "").match(/^(오전|오후)/);
-  return m ? m[1] : null;
-}
-
 // 홈탭용 워크 캘린더 미리보기 — 관리자 대시보드의 WeekStrip(admin/WeekStrip.jsx)을 좁은
 // 모바일 화면에 맞게 압축한 버전. 카드 폭이 좁아 "당직 아무개" 같은 라벨은 안 들어가서
 // 색점(당직=초록/숙직=파랑/휴가=호박색)만으로 구분하고 이름만 보여준다. 오늘 기준 앞뒤 7일씩
@@ -537,7 +525,7 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
                       <div className="text-right">
                         {people.map((l) => (
                           <p key={l.id} className="text-slate-700 font-bold">
-                            {nameOf(l.profile_id)} {l.kind}{l.kind === "반차" && periodOf(l.note) ? `(${periodOf(l.note)})` : ""}
+                            {nameOf(l.profile_id)} {leaveKindLabel(l.kind, l.note)}
                           </p>
                         ))}
                       </div>

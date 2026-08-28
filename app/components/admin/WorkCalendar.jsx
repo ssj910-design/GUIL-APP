@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR, DUTY_KINDS } from "@/lib/constants";
 import { useHolidays } from "@/app/hooks/useHolidays";
+import { leaveLabel } from "@/lib/utils";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const KIND_TONE = {
@@ -58,7 +59,7 @@ export default function WorkCalendar({ data }) {
     }
     if (show.휴가) {
       for (const l of leaves.filter((x) => x.start_date <= iso && iso <= x.end_date)) {
-        out.push({ key: `leave-${l.id}`, tone: LEAVE_TONE, label: `${l.kind} ${nameOf(l.profile_id)}` });
+        out.push({ key: `leave-${l.id}`, tone: LEAVE_TONE, label: `${leaveLabel(l.kind, l.note)} ${nameOf(l.profile_id)}` });
       }
     }
     return out;

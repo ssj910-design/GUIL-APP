@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { AuthContext } from "@/app/components/context";
 import { TODAY_STR } from "@/lib/constants";
 import { annualLeaveDays } from "@/lib/leave";
+import { periodOf } from "@/lib/utils";
 import { DutyRoster } from "@/app/components/DutyRoster";
 import { DutyGenerateWidget } from "@/app/components/DutyGenerateWidget";
 import { Sheet, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
@@ -20,12 +21,6 @@ const ymOf = (y, m) => `${y}-${String(m + 1).padStart(2, "0")}`;
 
 // 캘린더에 뜨는 연차 태그 — 종류 구분 없이 전부 동일한 진한초록.
 const LEAVE_TAG_STYLE = "bg-emerald-600 text-white";
-// 반차 신청 시 note 맨 앞에 "오전"/"오후"를 적어두므로(submitLeave 참고) 캘린더 태그에 다시 꺼내 보여준다.
-function periodOf(note) {
-  const m = (note ?? "").match(/^(오전|오후)/);
-  return m ? m[1] : null;
-}
-
 // 연차·반차·병가·공가 캘린더 — 워크캘린더의 "연차" 탭. 당직·숙직 탭(DutyRoster)과 동일한
 // 상단 월 이동 바 + 전체보기/신청 컨트롤 바 + 캘린더 박스 레이아웃을 그대로 맞춘다.
 // 연차 신청 로직은 MyPage.jsx와 동일(반차 0.5일, 근무 겹침 시 신청 막기)하되 이 탭 전용으로 둔다.
