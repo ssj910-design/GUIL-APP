@@ -1081,9 +1081,10 @@ export default function App() {
         body: `${profile.name}님이 ${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` (${reason.trim()})` : ""}`,
         url: `/?openFailure=${failure.id}`,
       });
-      const admins = profilesAll.filter((p) => p.role === "admin").map((p) => "@" + p.name).join(" ");
+      // 재배정 담당자만 태그 — 관리자 전원이 아니라 신석주·이에라 계정만.
+      const supportTags = ["신석주", "이에라"].map((n) => "@" + n).join(" ");
       handleSendFeedPost(
-        `[출동 거부] ${profile.name}님이 ${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` — 사유: ${reason.trim()}` : ""}. 재배정이 필요합니다 ${admins}`.trim()
+        `[출동 지원요청] ${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} 고장 출동 지원을 요청합니다.${reason.trim() ? `\n사유: ${reason.trim()}.` : ""} 재배정이 필요합니다 ${supportTags}`.trim()
       );
       notifyFailure("출동 거부됨 — 미배정으로 이동, 관리자에게 알림");
     } finally {
