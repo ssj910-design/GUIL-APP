@@ -701,6 +701,9 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
   const [showQuoteHistory, setShowQuoteHistory] = useState(false);
   const [showRestockHistory, setShowRestockHistory] = useState(false);
   const [dupWarning, setDupWarning] = useState(null); // { items } — 중복 신청 경고 (자재·견적 공용)
+  // 사진 업로드가 끝나기 전에 신청 버튼을 누르면 그 사진이 빠진 채로 접수될 수 있어 막는다.
+  const [photosUploading, setPhotosUploading] = useState(false);
+  const [quotePhotosUploading, setQuotePhotosUploading] = useState(false);
 
   // 상비부품 지급완료 알림에서 온 딥링크 — 특정 건이 아니라 이 화면 자체를 바로 연다.
   useEffect(() => {
@@ -808,6 +811,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
     if (step === 1) {
       if (!formPartText) return "부품 내역을 1개 이상 입력해주세요";
       if (form.photos.length === 0) return "부품 규격 사진을 최소 1장 등록해주세요";
+      if (photosUploading) return "사진 업로드가 끝날 때까지 기다려주세요";
     }
     return null;
   }
@@ -825,6 +829,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
         return "견적 내역을 1개 이상 입력해주세요";
       }
       if (quoteForm.photos.length === 0) return "현장 상태 사진을 최소 1장 등록해주세요";
+      if (quotePhotosUploading) return "사진 업로드가 끝날 때까지 기다려주세요";
     }
     return null;
   }
@@ -982,6 +987,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
                       uploadFolder={`materials/${uploadSession}`}
                       onUploaded={(url) => setForm((f) => ({ ...f, photos: [...f.photos, { url }] }))}
                       onRemove={(idx) => setForm((f) => ({ ...f, photos: f.photos.filter((_, i) => i !== idx) }))}
+                      onUploadingChange={setPhotosUploading}
                       label="교체할 부품 규격/모델명이 보이도록 촬영"
                     />
                   </Field>
@@ -1241,6 +1247,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
                     uploadFolder={`quotes/${uploadSession}`}
                     onUploaded={(url) => setQuoteForm((f) => ({ ...f, photos: [...f.photos, { url }] }))}
                     onRemove={(idx) => setQuoteForm((f) => ({ ...f, photos: f.photos.filter((_, i) => i !== idx) }))}
+                    onUploadingChange={setQuotePhotosUploading}
                     label="견적이 필요한 현장 상태 촬영"
                   />
                 </Field>

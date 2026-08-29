@@ -105,6 +105,8 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   const [checkupSubProfileId, setCheckupSubProfileId] = useState(""); // 부점검자
   const [checkupNotes, setCheckupNotes] = useState("");
   const [checkupPhotos, setCheckupPhotos] = useState([]); // [{ url }]
+  // 사진 업로드가 끝나기 전에 다음 단계로 넘어가면 그 사진이 빠질 수 있어 막는다.
+  const [checkupPhotosUploading, setCheckupPhotosUploading] = useState(false);
   const [itemExceptions, setItemExceptions] = useState({}); // { [itemCd]: { result, remark } } — 이번 달 대상 항목 중 기본값(A)과 다른 것만
   const [itemQuery, setItemQuery] = useState("");
   const [itemStates, setItemStates] = useState({}); // { [itemCd]: { applicable } } — 호기별 해당없음(E) 상태
@@ -278,6 +280,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
       if (!checkupStartTime || !checkupEndTime) return "점검 시작·완료시각을 입력해주세요";
       if (!checkupSubProfileId) return "부점검자를 선택해주세요";
       if (checkupPhotos.length === 0) return "점검 사진을 최소 1장 등록해주세요";
+      if (checkupPhotosUploading) return "사진 업로드가 끝날 때까지 기다려주세요";
     }
     // step 1(점검항목)은 기본값 '양호'라 필수 없음
     return null;
@@ -683,6 +686,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
                   uploadFolder={`self-checks/${checkupUnitId ?? "unknown"}/${ym}`}
                   onUploaded={(url) => setCheckupPhotos((p) => [...p, { url }])}
                   onRemove={(idx) => setCheckupPhotos((p) => p.filter((_, i) => i !== idx))}
+                  onUploadingChange={setCheckupPhotosUploading}
                 />
               </Field>
             </>

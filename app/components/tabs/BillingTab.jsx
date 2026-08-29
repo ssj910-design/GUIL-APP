@@ -57,6 +57,13 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
   const [billStep, setBillStep] = useState(0); // 0 정보 · 1 증빙사진 · 2 완료서명
   const [billToast, setBillToast] = useState(null); // { msg, ok }
   function toastBill(msg, ok = false) { setBillToast({ msg, ok }); setTimeout(() => setBillToast(null), 2500); }
+  // 부품별 사진 업로더가 여러 개 동시에 떠 있을 수 있어(부품 2개 이상) 개수를 센다 — 하나라도
+  // 업로드 중이면 다음/제출을 막아, 업로드가 끝나기 전에 넘어가 사진이 빠지는 걸 막는다.
+  const [matPhotosUploading, setMatPhotosUploading] = useState(0);
+  const [manPhotosUploading, setManPhotosUploading] = useState(0);
+  function bumpUploading(setter) {
+    return (u) => setter((c) => Math.max(0, c + (u ? 1 : -1)));
+  }
 
   // 지류 교체확인서 대신 현장에서 바로 받는 서명, 또는 고객 부재중일 때의 전화승인 정보.
   const [signatureUrl, setSignatureUrl] = useState(null);
@@ -162,6 +169,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
         if (materialPhotos.before.length === 0) return "교체 전 사진을 등록해주세요";
         if (materialPhotos.after.length === 0) return "교체 후 사진을 등록해주세요";
       }
+      if (matPhotosUploading > 0) return "사진 업로드가 끝날 때까지 기다려주세요";
     }
     if (step === 2) {
       if (absentMode) {
@@ -198,6 +206,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
         if (manualPhotos.before.length === 0) return "교체 전 사진을 등록해주세요";
         if (manualPhotos.after.length === 0) return "교체 후 사진을 등록해주세요";
       }
+      if (manPhotosUploading > 0) return "사진 업로드가 끝날 때까지 기다려주세요";
     }
     if (step === 3) {
       if (manualAbsentMode) {
@@ -525,6 +534,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                             uploadFolder={`billings/${uploadSession}/part${i}/before`}
                             onUploaded={(url) => updatePartPhotos(i, "before", (arr) => [...arr, { url }])}
                             onRemove={(idx) => updatePartPhotos(i, "before", (arr) => arr.filter((_, bi) => bi !== idx))}
+                            onUploadingChange={bumpUploading(setMatPhotosUploading)}
                             label="교체 전 표준 화질 사진 등록"
                             compactHint
                           />
@@ -535,6 +545,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                             uploadFolder={`billings/${uploadSession}/part${i}/after`}
                             onUploaded={(url) => updatePartPhotos(i, "after", (arr) => [...arr, { url }])}
                             onRemove={(idx) => updatePartPhotos(i, "after", (arr) => arr.filter((_, ai) => ai !== idx))}
+                            onUploadingChange={bumpUploading(setMatPhotosUploading)}
                             label="교체 후 표준 화질 사진 등록"
                             compactHint
                           />
@@ -550,6 +561,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                         uploadFolder={`billings/${uploadSession}/before`}
                         onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, before: [...p.before, { url }] }))}
                         onRemove={(idx) => setMaterialPhotos((p) => ({ ...p, before: p.before.filter((_, i) => i !== idx) }))}
+                        onUploadingChange={bumpUploading(setMatPhotosUploading)}
                         label="교체 전 표준 화질 사진 등록"
                         compactHint
                       />
@@ -560,6 +572,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                         uploadFolder={`billings/${uploadSession}/after`}
                         onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, after: [...p.after, { url }] }))}
                         onRemove={(idx) => setMaterialPhotos((p) => ({ ...p, after: p.after.filter((_, i) => i !== idx) }))}
+                        onUploadingChange={bumpUploading(setMatPhotosUploading)}
                         label="교체 후 표준 화질 사진 등록"
                         compactHint
                       />
@@ -804,6 +817,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                           uploadFolder={`billings/${uploadSession}/manualpart${i}/before`}
                           onUploaded={(url) => updateManualPartPhotos(i, "before", (arr) => [...arr, { url }])}
                           onRemove={(idx) => updateManualPartPhotos(i, "before", (arr) => arr.filter((_, bi) => bi !== idx))}
+                          onUploadingChange={bumpUploading(setManPhotosUploading)}
                           label="교체 전 표준 화질 사진 등록"
                           compactHint
                         />
@@ -814,6 +828,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                           uploadFolder={`billings/${uploadSession}/manualpart${i}/after`}
                           onUploaded={(url) => updateManualPartPhotos(i, "after", (arr) => [...arr, { url }])}
                           onRemove={(idx) => updateManualPartPhotos(i, "after", (arr) => arr.filter((_, ai) => ai !== idx))}
+                          onUploadingChange={bumpUploading(setManPhotosUploading)}
                           label="교체 후 표준 화질 사진 등록"
                           compactHint
                         />
@@ -829,6 +844,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                       uploadFolder={`billings/${uploadSession}/before`}
                       onUploaded={(url) => setManualPhotos((p) => ({ ...p, before: [...p.before, { url }] }))}
                       onRemove={(idx) => setManualPhotos((p) => ({ ...p, before: p.before.filter((_, i) => i !== idx) }))}
+                      onUploadingChange={bumpUploading(setManPhotosUploading)}
                       label="교체 전 표준 화질 사진 등록"
                     />
                   </Field>
@@ -838,6 +854,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                       uploadFolder={`billings/${uploadSession}/after`}
                       onUploaded={(url) => setManualPhotos((p) => ({ ...p, after: [...p.after, { url }] }))}
                       onRemove={(idx) => setManualPhotos((p) => ({ ...p, after: p.after.filter((_, i) => i !== idx) }))}
+                      onUploadingChange={bumpUploading(setManPhotosUploading)}
                       label="교체 후 표준 화질 사진 등록"
                     />
                   </Field>

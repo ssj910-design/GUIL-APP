@@ -600,6 +600,8 @@ export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
   const sites = useContext(SitesContext);
   const [uploadSession] = useState(() => Date.now());
   const [form, setForm] = useState({ assignees: [], siteId: "", title: "", dueDate: addDays(TODAY_STR, 7), photos: [] });
+  // 사진 업로드가 끝나기 전에 부여 버튼을 누르면 그 사진이 빠진 채로 저장될 수 있어 막는다.
+  const [photosUploading, setPhotosUploading] = useState(false);
 
   function toggleAssignee(name) {
     setForm((f) => ({
@@ -609,7 +611,7 @@ export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
   }
 
   const site = sites.find((s) => s.id === form.siteId);
-  const canSubmit = form.assignees.length > 0 && !!site && form.title.trim().length > 0;
+  const canSubmit = form.assignees.length > 0 && !!site && form.title.trim().length > 0 && !photosUploading;
 
   return (
     <Sheet title="할 일 부여" onClose={onClose}>
@@ -650,6 +652,7 @@ export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
           uploadFolder={`todos/${uploadSession}`}
           onUploaded={(url) => setForm((f) => ({ ...f, photos: [...f.photos, { url }] }))}
           onRemove={(idx) => setForm((f) => ({ ...f, photos: f.photos.filter((_, i) => i !== idx) }))}
+          onUploadingChange={setPhotosUploading}
           label="작업 관련 참고 사진 (선택)"
         />
       </Field>

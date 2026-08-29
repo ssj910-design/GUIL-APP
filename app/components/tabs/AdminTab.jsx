@@ -143,6 +143,8 @@ function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto
   const [description, setDescription] = useState("");
   const [advanced, setAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
+  // 사진 업로드가 끝나기 전에 지급완료를 눌러버리면 그 사진이 빠질 수 있어 막는다.
+  const [photosUploading, setPhotosUploading] = useState(false);
   // 완료 처리되면 이 카드가 지급대기 목록에서 곧바로 빠지며 통째로 사라진다 — 그 사이 setSaving을
   // 부르면 "unmounted 컴포넌트 갱신" 경고가 나므로 마운트 여부를 확인하고 갱신한다.
   const mountedRef = useRef(true);
@@ -175,6 +177,7 @@ function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto
           uploadFolder={`materials/${r.id}/supply`}
           onUploaded={(url) => onAttachPhoto(r.id, url)}
           onRemove={(idx) => onRemoveSupplyPhoto(r.id, idx)}
+          onUploadingChange={setPhotosUploading}
           label="지급할 자재 사진 촬영"
           required={false}
         />
@@ -226,9 +229,10 @@ function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto
       )}
 
       {!allAmountsFilled && <p className="text-[10px] text-red-500 mt-2">모든 부품의 금액을 입력해주세요</p>}
+      {photosUploading && <p className="text-[10px] text-amber-600 mt-2">사진 업로드가 끝날 때까지 기다려주세요</p>}
       <button
         onClick={async () => {
-          if (!allAmountsFilled || saving) return;
+          if (!allAmountsFilled || saving || photosUploading) return;
           setSaving(true);
           try {
             await onSupplyComplete(r.id, assignee, billingPartText || null, total || null, dueDate, description, billingPartRows);
@@ -237,7 +241,7 @@ function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto
             if (mountedRef.current) setSaving(false);
           }
         }}
-        disabled={!allAmountsFilled || saving}
+        disabled={!allAmountsFilled || saving || photosUploading}
         className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg bg-blue-700 disabled:bg-slate-300 text-white active:bg-blue-800"
       >
         <PackageCheck size={14} /> {saving ? "처리 중..." : "자재 지급 완료 체크"}
@@ -286,7 +290,9 @@ function QuoteDetailActions({ q, engineerNames, onAdvanceQuote, onOpenWizard, on
   // setCompleting을 부르면 "unmounted 컴포넌트 갱신" 경고가 나므로 마운트 여부를 확인한다.
   const mountedRef = useRef(true);
   useEffect(() => () => { mountedRef.current = false; }, []);
-  const canComplete = assignees.length > 0 && (!outsourced || vendorName.trim());
+  // 사진 업로드가 끝나기 전에 지급완료를 눌러버리면 그 사진이 빠질 수 있어 막는다.
+  const [photosUploading, setPhotosUploading] = useState(false);
+  const canComplete = assignees.length > 0 && (!outsourced || vendorName.trim()) && !photosUploading;
   const alreadySent = !!(q.emailSentAt || q.kakaoSentAt);
 
   if (q.status === "요청접수") {
@@ -338,6 +344,7 @@ function QuoteDetailActions({ q, engineerNames, onAdvanceQuote, onOpenWizard, on
           uploadFolder={`quotes/${q.id}/supply`}
           onUploaded={(url) => onAttachQuotePhoto(q.id, url)}
           onRemove={(idx) => onRemoveQuoteSupplyPhoto(q.id, idx)}
+          onUploadingChange={setPhotosUploading}
           label="지급할 자재 사진 촬영"
           required={false}
         />
@@ -370,7 +377,11 @@ function QuoteDetailActions({ q, engineerNames, onAdvanceQuote, onOpenWizard, on
             </div>
           </div>
         )}
-        {!canComplete && <p className="text-[10px] text-slate-400 mt-2">{assignees.length === 0 ? "담당 기사를 1명 이상 선택해주세요" : "작업 업체명을 입력해주세요"}</p>}
+        {!canComplete && (
+          <p className="text-[10px] text-slate-400 mt-2">
+            {photosUploading ? "사진 업로드가 끝날 때까지 기다려주세요" : assignees.length === 0 ? "담당 기사를 1명 이상 선택해주세요" : "작업 업체명을 입력해주세요"}
+          </p>
+        )}
         <button
           onClick={async () => {
             if (!canComplete || completing) return;
@@ -473,6 +484,8 @@ function QuoteSendConfirmModal({ q, alreadySent, onClose, onSendQuote }) {
 
 // 상비부품 보충 대기 한 건.
 function RestockPendingCard({ r, onCompleteRestock, onAttachRestockPhoto, onRemoveRestockSupplyPhoto }) {
+  // 사진 업로드가 끝나기 전에 지급완료를 눌러버리면 그 사진이 빠질 수 있어 막는다.
+  const [photosUploading, setPhotosUploading] = useState(false);
   return (
     <div className="bg-white rounded-xl border border-amber-200 p-3.5 mx-0.5">
       <p className="text-sm font-bold text-slate-800">{r.part}</p>
@@ -483,11 +496,17 @@ function RestockPendingCard({ r, onCompleteRestock, onAttachRestockPhoto, onRemo
           uploadFolder={`restock/${r.id}/supply`}
           onUploaded={(url) => onAttachRestockPhoto(r.id, url)}
           onRemove={(idx) => onRemoveRestockSupplyPhoto(r.id, idx)}
+          onUploadingChange={setPhotosUploading}
           label="보충할 부품 사진 촬영"
           required={false}
         />
       </div>
-      <button onClick={() => onCompleteRestock(r.id)} className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg bg-blue-700 text-white active:bg-blue-800">
+      {photosUploading && <p className="text-[10px] text-amber-600 mt-2">사진 업로드가 끝날 때까지 기다려주세요</p>}
+      <button
+        onClick={() => { if (!photosUploading) onCompleteRestock(r.id); }}
+        disabled={photosUploading}
+        className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-lg bg-blue-700 disabled:bg-slate-300 text-white active:bg-blue-800"
+      >
         <PackageCheck size={14} /> 보충 지급 완료 체크
       </button>
     </div>
@@ -899,6 +918,8 @@ function SupplyEditForm({ r, existingTodo, engineerNames, onSubmit, onAttachPhot
   const [dueDate, setDueDate] = useState(existingTodo?.dueDate ?? addDays(TODAY_STR, 30));
   const [description, setDescription] = useState(existingTodo?.description ?? "");
   const [saving, setSaving] = useState(false);
+  // 사진 업로드가 끝나기 전에 저장을 눌러버리면 그 사진이 빠질 수 있어 막는다.
+  const [photosUploading, setPhotosUploading] = useState(false);
 
   const total = parts.reduce((sum, _, i) => sum + (Number(amounts[i]) || 0), 0);
   const billingPartText = parts
@@ -911,7 +932,7 @@ function SupplyEditForm({ r, existingTodo, engineerNames, onSubmit, onAttachPhot
   });
 
   async function submit() {
-    if (!allAmountsFilled) return;
+    if (!allAmountsFilled || photosUploading) return;
     setSaving(true);
     await onSubmit(assignee, billingPartText || null, total || null, dueDate, description, billingPartRows);
     setSaving(false);
@@ -931,6 +952,7 @@ function SupplyEditForm({ r, existingTodo, engineerNames, onSubmit, onAttachPhot
           uploadFolder={`materials/${r.id}/supply`}
           onUploaded={(url) => onAttachPhoto(r.id, url)}
           onRemove={(idx) => onRemoveSupplyPhoto(r.id, idx)}
+          onUploadingChange={setPhotosUploading}
           label="지급할 자재 사진 촬영"
           required={false}
         />
@@ -981,9 +1003,10 @@ function SupplyEditForm({ r, existingTodo, engineerNames, onSubmit, onAttachPhot
         />
       </div>
 
+      {photosUploading && <p className="text-[10px] text-amber-600 -mt-2">사진 업로드가 끝날 때까지 기다려주세요</p>}
       <button
         onClick={submit}
-        disabled={saving || !allAmountsFilled}
+        disabled={saving || !allAmountsFilled || photosUploading}
         className="w-full bg-blue-700 disabled:bg-slate-300 text-white text-sm font-bold py-2.5 rounded-lg"
       >
         {saving ? "저장 중..." : "수정 저장"}
@@ -1064,7 +1087,9 @@ function QuoteSupplyEditForm({ q, existingTodos, engineerNames, onSubmit, onAtta
   const [outsourced, setOutsourced] = useState(!!existingTodos[0]?.isOutsourced);
   const [vendorName, setVendorName] = useState(existingTodos[0]?.vendorName ?? "");
   const [saving, setSaving] = useState(false);
-  const canSave = assignees.length > 0 && (!outsourced || vendorName.trim());
+  // 사진 업로드가 끝나기 전에 저장을 눌러버리면 그 사진이 빠질 수 있어 막는다.
+  const [photosUploading, setPhotosUploading] = useState(false);
+  const canSave = assignees.length > 0 && (!outsourced || vendorName.trim()) && !photosUploading;
 
   async function submit() {
     if (!canSave) return;
@@ -1087,6 +1112,7 @@ function QuoteSupplyEditForm({ q, existingTodos, engineerNames, onSubmit, onAtta
           uploadFolder={`quotes/${q.id}/supply`}
           onUploaded={(url) => onAttachQuotePhoto(q.id, url)}
           onRemove={(idx) => onRemoveQuoteSupplyPhoto(q.id, idx)}
+          onUploadingChange={setPhotosUploading}
           label="지급할 자재 사진 촬영"
           required={false}
         />
