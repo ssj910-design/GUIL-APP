@@ -53,7 +53,7 @@ export function SiteSearchSelect({ value, onChange, placeholder = "현장명을 
 }
 
 
-export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = true, uploadFolder, onUploaded, compactHint = false }) {
+export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = true, uploadFolder, onUploaded, compactHint = false, onUploadingChange }) {
   // iOS Safari는 accept="image/*" 입력칸에 multiple까지 붙으면(여러 장 한꺼번에 선택) 카메라
   // 촬영 옵션을 아예 빼고 곧장 사진 라이브러리 선택 화면으로 건너뛴다 — "촬영하면서 동시에
   // 여러 장 선택"은 말이 안 되기 때문. 그래서 카메라 입력칸(한 장, capture)과 사진첩 입력칸
@@ -68,6 +68,7 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
     e.target.value = "";
     if (files.length === 0) return;
     setUploading(true);
+    onUploadingChange?.(true);
     for (const file of files) {
       try {
         const url = await uploadPhoto(file, uploadFolder);
@@ -79,6 +80,7 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
       }
     }
     setUploading(false);
+    onUploadingChange?.(false);
   }
 
   return (

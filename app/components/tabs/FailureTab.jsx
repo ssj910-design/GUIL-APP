@@ -995,6 +995,10 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
   const [processContent, setProcessContent] = useState(isEdit ? failure.processContent || "" : "");
   const [note, setNote] = useState(isEdit ? failure.processNote || "" : "");
   const [photos, setPhotos] = useState(isEdit ? (failure.photoUrls || []).map((url) => ({ url })) : []);
+  // 사진 업로드가 끝나기 전에 등록 버튼을 눌러버리면 그 사진은 저장 안 된 채로 결과가 등록돼버린다
+  // (업로드는 비동기라 "추가" 버튼만 잠깐 "업로드 중"으로 바뀌고 아래 등록 버튼은 그대로 눌려서 —
+  // 실제로 이렇게 사진이 빠진 채 저장된 사례가 있었다). 업로드 중엔 등록 버튼도 같이 막는다.
+  const [photosUploading, setPhotosUploading] = useState(false);
   const units = useContext(UnitsContext);
   // 기종은 실제 호기 데이터가 아니라 에러코드집에 등록된 기종 중에서만 고른다.
   const models = distinctModels(errorCodes);
@@ -1106,15 +1110,17 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
           uploadFolder={`failures/${failure.id}`}
           onUploaded={(url) => setPhotos((p) => [...p, { url }])}
           onRemove={(idx) => setPhotos((p) => p.filter((_, i) => i !== idx))}
+          onUploadingChange={setPhotosUploading}
           label="처리 사진"
           required={false}
         />
+        {photosUploading && <p className="text-[11px] text-amber-600 font-semibold -mt-2">사진 업로드가 끝날 때까지 잠시 기다려주세요...</p>}
         {(() => {
           const enteredCodes = codeRows.map((r) => r.code.trim()).filter(Boolean);
           const codesValid = noErrorCode
             ? true
             : enteredCodes.length > 0 && enteredCodes.every((c) => findErrorCode(errorCodes, selectedModel, c));
-          const valid = symptom.trim() && codesValid && cause.trim() && processContent.trim();
+          const valid = symptom.trim() && codesValid && cause.trim() && processContent.trim() && !photosUploading;
           return (
             <button
               type="button"
