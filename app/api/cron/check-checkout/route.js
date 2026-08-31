@@ -1,7 +1,7 @@
 // 퇴근체크 리마인드 + 관리자 요약 — pg_cron이 매분 이 주소를 호출한다.
-//  1) 12:01~13:00(KST, 평일·공휴일·근로자의날 제외) 매분: 오후반차인 사람 중 출근은 했는데
-//     아직 퇴근체크 안 한 사람에게 리마인드 (오후반차는 정오 무렵 퇴근이라 따로 다룸 —
-//     체크할 때까지 매분 반복되다가 체크하면 다음 스윕부터 빠진다).
+//  1) 12:00(KST, 평일·공휴일·근로자의날 제외) 1회: 오후반차인 사람 중 출근은 했는데 아직
+//     퇴근체크 안 한 사람에게 리마인드 (오후반차는 정오 무렵 퇴근이라 따로 다룸 — 18:00
+//     일반 리마인드와 동일하게 반복 없이 이 시각에 한 번만).
 //  2) 18:00(KST) 1회: 오늘 출근은 했는데 아직 퇴근체크 안 한 기사에게 리마인드. 숙직·당직
 //     (오늘 duty_schedules), 연차·공가·병가, 오후반차(위 1번에서 이미 다룸)는 제외 — 오전반차는
 //     오후엔 정상 근무라 대상에 포함(일반 직원과 동일하게 18:00에 같이 알림 감).
@@ -21,10 +21,10 @@ async function handle(request) {
   const nowKst = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
   const kstMins = nowKst.getHours() * 60 + nowKst.getMinutes();
   const isWeekday = nowKst.getDay() >= 1 && nowKst.getDay() <= 5;
-  const inNoonWindow = kstMins >= 721 && kstMins <= 780; // 12:01~13:00 (오후반차)
-  const isReminderMoment = kstMins === 1080; // 18:00 (일반)
-  const isReportMoment = kstMins === 1110; // 18:30 (관리자 요약)
-  if (!isWeekday || !(inNoonWindow || isReminderMoment || isReportMoment)) return Response.json({ ok: true, skipped: "시간대 아님" });
+  const isNoonMoment = kstMins === 720; // 12:00 (오후반차, 1회)
+  const isReminderMoment = kstMins === 1080; // 18:00 (일반, 1회)
+  const isReportMoment = kstMins === 1110; // 18:30 (관리자 요약, 1회)
+  if (!isWeekday || !(isNoonMoment || isReminderMoment || isReportMoment)) return Response.json({ ok: true, skipped: "시간대 아님" });
 
   const todayStr = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
   const db = supabaseAdmin;
@@ -52,7 +52,7 @@ async function handle(request) {
   );
   const pmHalfDayIds = new Set((leaves ?? []).filter((l) => l.kind === "반차" && periodOf(l.note) === "오후").map((l) => l.profile_id));
 
-  if (inNoonWindow) {
+  if (isNoonMoment) {
     const notCheckedOut = engineers.filter((e) => pmHalfDayIds.has(e.id) && checkedInNotOutIds.has(e.id));
     let reminded = false;
     if (notCheckedOut.length) {
