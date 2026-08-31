@@ -235,6 +235,25 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
     .sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate));
   const unitPhotos = unitPartPhotos.filter((p) => p.unitId === unit.id);
 
+  // 청구 건이 아니라 부품 단위로 펼친다 — 여러 호기를 한 번에 청구한 건은 부품마다 unit이
+  // 찍혀 있어(안 찍혀 있으면 한 호기짜리 옛 방식) 지금 보는 호기 것만 남긴다. 안 그러면
+  // 다른 호기 부품·사진까지 여기 다 섞여 나온다(이 호기 필터 없이 beforeUrls/afterUrls를
+  // 그대로 합쳐 보여주던 예전 방식의 버그).
+  const unitReplacementRows = unitBillings
+    .flatMap((b) => {
+      const items = b.partPhotos?.length > 1 ? b.partPhotos.filter((p) => !p.unit || p.unit === unit.unitNo) : null;
+      return items
+        ? items.map((p, i) => ({
+            key: `${b.id}-${i}`, name: p.name, cost: p.amount, replaceDate: b.replaceDate, engineer: b.engineer,
+            beforeUrls: p.beforeUrls ?? [], afterUrls: p.afterUrls ?? [],
+          }))
+        : [{
+            key: b.id, name: b.part, cost: b.cost, replaceDate: b.replaceDate, engineer: b.engineer,
+            beforeUrls: b.beforePhotoUrls ?? [], afterUrls: b.afterPhotoUrls ?? [],
+          }];
+    })
+    .sort((a, c) => new Date(c.replaceDate) - new Date(a.replaceDate));
+
   return (
     <Modal title={`${site.name} · ${unit.unitNo} 상세정보`} onClose={onClose} wide="xl">
       <div className="flex gap-1 mb-4 border-b border-slate-100 shrink-0">
@@ -389,17 +408,17 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
         )}
 
         {tab === "부품교체내역" && (
-          unitBillings.length === 0 ? <p className="text-xs text-slate-400 text-center py-10">등록된 부품교체 내역이 없습니다</p> : (
+          unitReplacementRows.length === 0 ? <p className="text-xs text-slate-400 text-center py-10">등록된 부품교체 내역이 없습니다</p> : (
             <div className="space-y-2">
-              {unitBillings.map((b) => {
-                const photos = [...(b.beforePhotoUrls ?? []), ...(b.afterPhotoUrls ?? [])];
+              {unitReplacementRows.map((r) => {
+                const photos = [...r.beforeUrls, ...r.afterUrls];
                 return (
-                  <div key={b.id} className="border border-slate-200 rounded-lg p-3">
+                  <div key={r.key} className="border border-slate-200 rounded-lg p-3">
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <p className="font-bold text-sm whitespace-pre-line">{b.part}</p>
-                      <span className="text-sm font-bold shrink-0">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</span>
+                      <p className="font-bold text-sm whitespace-pre-line">{r.name}</p>
+                      <span className="text-sm font-bold shrink-0">{r.cost ? Number(r.cost).toLocaleString() + "원" : "-"}</span>
                     </div>
-                    <p className="text-xs text-slate-500">{shortDate(b.replaceDate)} · {b.engineer ?? "-"}</p>
+                    <p className="text-xs text-slate-500">{shortDate(r.replaceDate)} · {r.engineer ?? "-"}</p>
                     {photos.length > 0 && (
                       <div className="flex gap-1.5 mt-2 overflow-x-auto">
                         {photos.map((url, i) => (
