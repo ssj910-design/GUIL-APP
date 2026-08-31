@@ -3,14 +3,14 @@
 //     아직 퇴근체크 안 한 사람에게 리마인드 (오후반차는 정오 무렵 퇴근이라 따로 다룸 —
 //     체크할 때까지 매분 반복되다가 체크하면 다음 스윕부터 빠진다).
 //  2) 18:00(KST) 1회: 오늘 출근은 했는데 아직 퇴근체크 안 한 기사에게 리마인드. 숙직·당직
-//     (오늘 duty_schedules), 연차·공가·병가·반차(오전/오후 무관 종일 제외 — 오전반차는
-//     정오까지 근무 아니었을 수 있고, 오후반차는 위 1번에서 이미 다뤘으므로)는 제외.
+//     (오늘 duty_schedules), 연차·공가·병가, 오후반차(위 1번에서 이미 다룸)는 제외 — 오전반차는
+//     오후엔 정상 근무라 대상에 포함(일반 직원과 동일하게 18:00에 같이 알림 감).
 //  3) 18:30(KST) 1회: 그 시점(2번과 동일 대상 기준) 퇴근 미체크자 명단을 관리자에게 요약.
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { periodOf } from "@/lib/utils";
 import { isKstHoliday } from "@/lib/serverHolidays";
 
-const FULL_DAY_EXCLUDE_KINDS = ["연차", "공가", "병가", "반차"];
+const FULL_DAY_EXCLUDE_KINDS = ["연차", "공가", "병가"];
 
 async function handle(request) {
   const secret = process.env.CRON_SECRET;
@@ -50,9 +50,9 @@ async function handle(request) {
   const checkedInNotOutIds = new Set(
     (attendances ?? []).filter((a) => a.checked_in_at && !a.checked_out_at).map((a) => a.profile_id)
   );
+  const pmHalfDayIds = new Set((leaves ?? []).filter((l) => l.kind === "반차" && periodOf(l.note) === "오후").map((l) => l.profile_id));
 
   if (inNoonWindow) {
-    const pmHalfDayIds = new Set((leaves ?? []).filter((l) => l.kind === "반차" && periodOf(l.note) === "오후").map((l) => l.profile_id));
     const notCheckedOut = engineers.filter((e) => pmHalfDayIds.has(e.id) && checkedInNotOutIds.has(e.id));
     let reminded = false;
     if (notCheckedOut.length) {
@@ -70,6 +70,7 @@ async function handle(request) {
   const excludedIds = new Set([
     ...(leaves ?? []).filter((l) => FULL_DAY_EXCLUDE_KINDS.includes(l.kind)).map((l) => l.profile_id),
     ...(duties ?? []).filter((d) => d.kind === "숙직" || d.kind === "당직").map((d) => d.profile_id),
+    ...pmHalfDayIds,
   ]);
 
   const notCheckedOut = engineers.filter((e) => checkedInNotOutIds.has(e.id) && !excludedIds.has(e.id));
