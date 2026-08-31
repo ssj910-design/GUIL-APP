@@ -209,7 +209,7 @@ function NewBillingModal({ data, onClose, onCreate }) {
   const [uploadToken] = useState(() => Date.now());
   const [form, setForm] = useState({
     siteId: "", unitId: "", engineerId: "", replaceDate: TODAY_STR, contactPhone: "",
-    isOutsourced: false, vendorName: "", items: [emptyBillingItem()], totalCost: "",
+    vendorName: "", items: [emptyBillingItem()], totalCost: "",
   });
   const [saving, setSaving] = useState(false);
   const siteUnits = units.filter((u) => u.siteId === form.siteId);
@@ -242,7 +242,6 @@ function NewBillingModal({ data, onClose, onCreate }) {
       engineerId: t.assigneeId ?? "",
       replaceDate: TODAY_STR,
       contactPhone: "",
-      isOutsourced: !!t.isOutsourced,
       vendorName: t.vendorName ?? "",
       items: parts
         ? parts.map((p) => ({ name: p.name ?? "", qty: p.qty ?? "", amount: p.amount ?? "", beforeUrls: [], afterUrls: [] }))
@@ -319,6 +318,13 @@ function NewBillingModal({ data, onClose, onCreate }) {
               <option value="">선택하세요</option>
               {engineers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
+            <p className="text-xs font-bold text-slate-500 mb-1 mt-3">외주작업 (선택)</p>
+            <input
+              className={inputCls}
+              placeholder="업체명을 입력하면 외주작업으로 처리됩니다"
+              value={form.vendorName}
+              onChange={(e) => setForm({ ...form, vendorName: e.target.value })}
+            />
           </div>
           <div>
             <p className="text-xs font-bold text-slate-500 mb-1">교체일자</p>
@@ -326,20 +332,9 @@ function NewBillingModal({ data, onClose, onCreate }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">현장 담당자 연락처 (선택)</p>
-            <input className={inputCls} value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} />
-          </div>
-          <div>
-            <label className="flex items-center gap-2 text-sm font-bold text-slate-600 mt-6">
-              <input type="checkbox" checked={form.isOutsourced} onChange={(e) => setForm({ ...form, isOutsourced: e.target.checked })} />
-              외주 처리
-            </label>
-            {form.isOutsourced && (
-              <input className={`${inputCls} mt-1.5`} placeholder="작업 업체명" value={form.vendorName} onChange={(e) => setForm({ ...form, vendorName: e.target.value })} />
-            )}
-          </div>
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">현장 담당자 연락처 (선택)</p>
+          <input className={inputCls} value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} />
         </div>
 
         <div>
@@ -766,8 +761,9 @@ export default function BillingsAdmin({ data, setData }) {
       before_photo_urls: beforePhotoUrls.length ? beforePhotoUrls : null,
       after_photo_urls: afterPhotoUrls.length ? afterPhotoUrls : null,
       part_photos: partPhotos,
-      is_outsourced: !!form.isOutsourced,
-      vendor_name: form.isOutsourced ? (form.vendorName || null) : null,
+      // 외주작업 여부는 별도 체크박스 없이 업체명 입력 여부로 판단한다.
+      is_outsourced: !!form.vendorName.trim(),
+      vendor_name: form.vendorName.trim() || null,
       is_free: cost === 0,
       material_request_id: linked?.materialRequestId ?? null,
       quote_request_id: linked?.quoteRequestId ?? null,

@@ -25,7 +25,7 @@ function PartReplacementCard({ r, onPhotoClick }) {
   return (
     <div className="border border-slate-100 rounded-xl p-3">
       <p className="text-sm font-bold text-slate-800">{r.name}</p>
-      <p className="text-[11px] text-slate-400 mt-0.5">{r.engineer} · {r.replaceDate} 교체{r.contactPhone ? ` · 현장담당 ${r.contactPhone}` : ""}</p>
+      <p className="text-[11px] text-slate-400 mt-0.5">{r.isOutsourced && r.vendorName ? r.vendorName : r.engineer} · {r.replaceDate} 교체{r.contactPhone ? ` · 현장담당 ${r.contactPhone}` : ""}</p>
       {previewSlots.length > 0 && (
         <div className="flex gap-2 mt-2">
           {previewSlots.map((s, i) => (
@@ -249,10 +249,12 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
                 .filter((p) => !p.unit || p.unit === unit)
                 .map((p, i) => ({
                   key: `${b.id}-${i}`, name: p.name, replaceDate: b.replaceDate, engineer: b.engineer, contactPhone: b.contactPhone,
+                  isOutsourced: b.isOutsourced, vendorName: b.vendorName,
                   beforeUrls: p.beforeUrls ?? [], afterUrls: p.afterUrls ?? [],
                 }))
             : [{
                 key: b.id, name: b.part, replaceDate: b.replaceDate, engineer: b.engineer, contactPhone: b.contactPhone,
+                isOutsourced: b.isOutsourced, vendorName: b.vendorName,
                 beforeUrls: b.beforePhotoUrls ?? [], afterUrls: b.afterPhotoUrls ?? [],
               }]
         )
