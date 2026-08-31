@@ -1,9 +1,9 @@
 import { useState, useContext, useEffect, useRef } from "react";
 import { Capacitor } from "@capacitor/core";
-import { ShieldCheck, AlertOctagon, X, Map as MapIcon } from "lucide-react";
+import { ShieldCheck, AlertOctagon, X, Map as MapIcon, ChevronDown } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR, DUTY_KINDS } from "@/lib/constants";
-import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, distanceKm, activeSites, periodOf, leaveLabel as leaveKindLabel } from "@/lib/utils";
+import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, distanceKm, activeSites, periodOf, leaveLabel as leaveKindLabel, formatShortDate } from "@/lib/utils";
 import { Badge, DDay, SmsToast, Sheet } from "@/app/components/ui";
 import { LOCATION_TRACKING } from "@/lib/features";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -593,7 +593,7 @@ function WorkEndRow({ onAttendance, dutyKind }) {
   );
 }
 
-export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, onCloseNight, onAttendance, onOpenRoster, swapCount, inspections, failures, errorCodes = [], onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, toast, todayLeaves = [] }) {
+export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, onCloseNight, onAttendance, onOpenRoster, swapCount, inspections, failures, errorCodes = [], onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onShowAllFailures, toast, todayLeaves = [], todos = [], onOpenTodoList }) {
   const sites = useContext(SitesContext);
   const siteById = new Map(sites.map((s) => [s.id, s]));
   const { name: CURRENT_ENGINEER, role, selfId, engineers = [], profiles = [] } = useContext(AuthContext);
@@ -620,6 +620,14 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
   const criticalSites = activeSites(sites).filter((s) =>
     (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || entrapmentSiteIds.has(s.id)
   );
+
+  // 홈의 "할일" 카드 — 할일관리(TodoTab)와 동일 기준(본인 담당·미완료)으로 마감일순 정렬해
+  // 상위 5건만 미리보기. 관리자는 여기서 빼고(할일관리에서 전체를 이미 보므로) 기사·자재담당
+  // 관리자(둘 다 이 화면에서는 role: "engineer"로 스코프됨)에게만 보여준다.
+  const myTodos = todos
+    .filter((t) => !t.done && t.dueDate && t.assignee === CURRENT_ENGINEER)
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  const [expandedTodoId, setExpandedTodoId] = useState(null);
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [assignTarget, setAssignTarget] = useState(null);
@@ -799,6 +807,57 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
           )}
         </div>
       </div>
+
+      {/* 할일 — 관리자는 할일관리 탭에서 전체를 이미 보므로 여기선 기사·자재담당 관리자에게만.
+          행 디자인·클릭 시 아코디언 펼침은 할일관리(TodoTab) 목록 행과 동일(체크박스·빨간점·
+          "기한: N월 N일" 표기, 클릭하면 그 자리에서 펼쳐져 설명이 보임). 마감일순 상위 5건만
+          미리보고 "전체보기"로 할일관리 탭으로 넘어간다(워크캘린더 미니스트립과 동일 패턴). */}
+      {role !== "admin" && (
+        <div className="px-5 pt-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-3">
+            <div className="flex items-center justify-between px-1 mb-1">
+              <h3 className="font-bold text-slate-800 text-sm">할일</h3>
+              {onOpenTodoList && <button onClick={onOpenTodoList} className="text-[11px] font-bold text-blue-700">전체보기 →</button>}
+            </div>
+            {myTodos.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-6">할일이 없습니다</p>
+            ) : (
+              <div className="px-1">
+                {myTodos.slice(0, 5).map((t) => {
+                  const overdue = new Date(t.dueDate) < new Date(TODAY_STR);
+                  const expanded = expandedTodoId === t.id;
+                  return (
+                    <div key={t.id} className="border-b border-slate-50 last:border-0">
+                      <div className="flex items-start gap-2.5 py-2">
+                        <div className="pt-0.5">
+                          <div className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedTodoId(expanded ? null : t.id)}
+                          className="flex-1 min-w-0 text-left"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            {overdue && <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />}
+                            <p className={`text-sm font-bold min-w-0 ${expanded ? "" : "truncate"} text-slate-800`}>{t.title}</p>
+                            <ChevronDown size={15} className={`shrink-0 text-slate-300 ml-auto transition-transform ${expanded ? "rotate-180" : ""}`} />
+                          </div>
+                          <p className="text-[11px] text-slate-400 truncate mt-0.5">기한: {formatShortDate(t.dueDate)}</p>
+                        </button>
+                      </div>
+                      {expanded && (
+                        <div className="pl-8 pr-0.5 pb-3 pt-1">
+                          <p className="text-sm text-slate-700 whitespace-pre-wrap">{t.description || "등록된 내용이 없습니다"}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 공공데이터 실시간 검사 관제 */}
       <div className="px-5 pt-4">

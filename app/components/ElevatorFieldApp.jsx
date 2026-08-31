@@ -2635,6 +2635,8 @@ export default function App() {
               onReassign={handleReassignFailure}
               onShowAllFailures={() => { setFailureFocusTab("처리현황"); setTab("failure"); }}
               toast={failureToast}
+              todos={todos}
+              onOpenTodoList={() => setTab("todo")}
             />
           )}
           {tab === "sites" && <SiteTab inspections={inspections} failures={failures} billings={billings} quoteRequests={quoteRequests} todos={todos} siteManagers={siteManagers} onUpdateSiteNotes={handleUpdateSiteNotes} onUpdateSiteAccessInfo={handleUpdateSiteAccessInfo} unitPartPhotos={unitPartPhotos} onAddUnitPartPhoto={handleAddUnitPartPhoto} onRemoveUnitPartPhoto={handleRemoveUnitPartPhoto} />}
