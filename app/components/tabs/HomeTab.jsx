@@ -687,12 +687,8 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
     if (db == null) return -1;
     return da - db;
   };
-  // 관리자 홈은 그동안 "미처리"만 보여주고 "진행중"(이미 출동·작업 시작한 건)은 숨겨서
-  // "모두보기"를 눌러야만 볼 수 있었다 — 미완료 건 전체(미처리+진행중)를 여기서도 보여준다.
-  // 정렬은 급한 순: 미배정 > 응답대기(배정됐지만 아직 출동 전) > 진행중(이미 처리 중이라 가장 덜 급함).
-  const adminStageRank = (f) => (!f.assignee ? 0 : f.status === "진행중" ? 2 : 1);
   const listSource = role === "admin"
-    ? activeMine.sort((a, b) => adminStageRank(a) - adminStageRank(b))
+    ? activeMine.filter((f) => f.status === "미처리").sort((a, b) => (a.assignee ? 1 : 0) - (b.assignee ? 1 : 0))
     : [...activeMine].sort(byDistance);
   const [showAllFailures, setShowAllFailures] = useState(false);
   const shownFailures = showAllFailures ? listSource : listSource.slice(0, 5);
@@ -716,8 +712,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
                 {listSource.some((f) => !f.assignee && f.escalation === "지원요청") && (
                   <span className="text-amber-600 font-bold"> · 지원미배정 {listSource.filter((f) => !f.assignee && f.escalation === "지원요청").length}</span>
                 )}
-                {" · 응답대기 "}{listSource.filter((f) => f.assignee && f.status !== "진행중").length}
-                {" · 진행중 "}{listSource.filter((f) => f.status === "진행중").length}
+                {" · 응답대기 "}{listSource.filter((f) => f.assignee).length}
               </p>
             )}
           </div>
@@ -730,7 +725,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
         <div className="space-y-2.5">
           {listSource.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-200 py-5">
-              <p className="text-xs text-slate-400 text-center">{role === "admin" ? "미완료 고장이 없습니다" : "진행 중인 고장이 없습니다"}</p>
+              <p className="text-xs text-slate-400 text-center">{role === "admin" ? "배정 대기 중인 고장이 없습니다" : "진행 중인 고장이 없습니다"}</p>
             </div>
           ) : (
             shownFailures.map((f) => (
