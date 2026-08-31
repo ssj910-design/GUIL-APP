@@ -241,7 +241,9 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
   // 그대로 합쳐 보여주던 예전 방식의 버그).
   const unitReplacementRows = unitBillings
     .flatMap((b) => {
-      const items = b.partPhotos?.length > 1 ? b.partPhotos.filter((p) => !p.unit || p.unit === unit.unitNo) : null;
+      // "할인"은 견적 할인을 청구금액에 반영하려고 끼워넣은 금액 조정 행이지 실제 교체한
+      // 부품이 아니다 — 부품교체내역엔 안 보여준다(청구금액·교체확인서 합계에는 그대로 반영됨).
+      const items = b.partPhotos?.length > 1 ? b.partPhotos.filter((p) => (!p.unit || p.unit === unit.unitNo) && p.name !== "할인") : null;
       return items
         ? items.map((p, i) => ({
             key: `${b.id}-${i}`, name: p.name, cost: p.amount, replaceDate: b.replaceDate, engineer: b.engineer,
