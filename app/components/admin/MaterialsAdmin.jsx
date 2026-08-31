@@ -333,8 +333,11 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
   const todoElevatorNosReady = (data.todos ?? []).some((t) => t.elevatorNos !== undefined);
 
   const query = search.trim().toLowerCase();
+  // 기사가 요청 후 취소한 건은 견적요청과 동일하게 목록에서 뺀다 — 삭제하지 않고 데이터는
+  // 그대로 남겨(cancelled_at/cancelled_by로 감사 기록 보존) 화면에만 안 보이게 한다.
   const materialRequests = allMaterialRequests.filter((m) =>
-    !query || locOf(data, m.unitId, m.siteName, m.elevatorNo).toLowerCase().includes(query) || (m.part ?? "").toLowerCase().includes(query) || personOf(data, m.requesterId, m.engineer).toLowerCase().includes(query)
+    m.status !== "취소" &&
+    (!query || locOf(data, m.unitId, m.siteName, m.elevatorNo).toLowerCase().includes(query) || (m.part ?? "").toLowerCase().includes(query) || personOf(data, m.requesterId, m.engineer).toLowerCase().includes(query))
   );
   const quoteRequestsSearched = allQuoteRequests.filter((q) =>
     !query || locOf(data, q.unitId, q.siteName, q.elevatorNo).toLowerCase().includes(query) || (q.constructionType ?? "").toLowerCase().includes(query) || personOf(data, q.requesterId, q.engineer).toLowerCase().includes(query)

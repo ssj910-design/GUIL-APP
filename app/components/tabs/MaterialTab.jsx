@@ -160,7 +160,8 @@ function MaterialHistoryScreen({ requests, todos, isBilled, onBack, onCancelMate
   const [photoViewer, setPhotoViewer] = useState(null);
   const stages = ["전체", "승인대기", "지급완료", "반려", "비용청구완료"];
 
-  const withStage = requests.map((r) => ({ ...r, displayStage: isBilled(r.id) ? "비용청구완료" : r.status }));
+  // 취소한 건은 관리자웹과 동일하게 목록에서 뺀다(데이터는 그대로 남고 화면에만 안 보임).
+  const withStage = requests.filter((r) => r.status !== "취소").map((r) => ({ ...r, displayStage: isBilled(r.id) ? "비용청구완료" : r.status }));
   const filtered = withStage
     .filter((r) => stage === "전체" || r.displayStage === stage)
     .filter((r) => r.siteName.toLowerCase().includes(query.trim().toLowerCase()) || r.part.toLowerCase().includes(query.trim().toLowerCase()))
@@ -262,7 +263,8 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack, onCancelQuot
 
   // "작성" 상태에서 이메일/카카오로 실제 발송까지 됐으면 관리자웹처럼 "발송"으로 보여준다
   // (status 컬럼 자체는 발송해도 "작성" 그대로라, 여기서 같이 판단해줘야 한다).
-  const withStage = quoteRequests.map((q) => ({
+  // 취소한 건은 관리자웹과 동일하게 목록에서 뺀다(데이터는 그대로 남고 화면에만 안 보임).
+  const withStage = quoteRequests.filter((q) => q.status !== "취소").map((q) => ({
     ...q,
     displayStage: isQuoteBilled(q.id) ? "비용청구완료" : q.status === "작성" && (q.emailSentAt || q.kakaoSentAt) ? "발송" : q.status,
   }));
