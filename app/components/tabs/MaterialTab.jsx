@@ -687,7 +687,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
   const [sub, setSub] = useState("material");
   const materialSubTabs = ["material", "quote"];
   const swipe = useSwipeSubtab(materialSubTabs, sub, setSub);
-  const [form, setForm] = useState({ siteId: "", units: [], parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
+  const [form, setForm] = useState({ siteId: "", units: [], parts: [emptyPartRow()], partsByUnit: {}, urgency: "일반", photos: [], note: "" });
   const [quoteForm, setQuoteForm] = useState({ siteId: "", units: [], parts: [emptyPartRow(), emptyPartRow(), emptyPartRow()], partsByUnit: {}, contactPhone: "", photos: [], note: "" });
   const [matStep, setMatStep] = useState(0);
   const [quoteStep, setQuoteStep] = useState(0);
@@ -713,9 +713,17 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
   }, [focusRestockHistory]);
 
   const formPartText = formatPartRows(form.parts);
+  // 호기를 2개 이상 고르면 호기마다 실제로 다른 부품을 신청할 수 있어(견적신청의 partsByUnit과
+  // 동일한 이유) 호기별로 부품 내역을 따로 입력받는다 — 호기 1개면 기존처럼 단일 입력 그대로.
+  function formUnitPartsText(u) {
+    return formatPartRows(form.partsByUnit[u] ?? []);
+  }
+  const formPartsOk = form.units.length > 1
+    ? form.units.every((u) => formUnitPartsText(u))
+    : !!formPartText;
 
   function addRequest() {
-    if (!form.siteId || !formPartText || form.photos.length === 0) return;
+    if (!form.siteId || !formPartsOk || form.photos.length === 0) return;
     // 같은 현장에 비용청구 전 단계(승인대기·지급완료 — 반려는 끝난 건이라 제외)인 자재신청이
     // 있으면 접수 전에 보여주고 기사가 직접 중복 여부를 판단하게 한다 (부품명이 자유텍스트라
     // 정확매칭은 표기차이로 놓칠 수 있어, 현장 단위로 넓게 걸고 사람이 보게 함).
@@ -730,13 +738,14 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
     if (!site) return;
     // 선택한 호기마다 신청 1건씩 생성 (지급·비용청구가 호기 단위라 데이터도 호기별로 쪼갠다)
     const targets = form.units.length ? form.units : [null];
+    const isMultiUnit = form.units.length > 1;
     const stamp = Date.now();
     const newRequests = targets.map((u, i) => ({
       id: "m" + (stamp + i),
       siteId: form.siteId,
       siteName: site.name,
       elevatorNo: u,
-      part: formPartText,
+      part: isMultiUnit ? formUnitPartsText(u) : formPartText,
       urgency: form.urgency,
       note: form.note,
       photoCount: form.photos.length,
@@ -766,7 +775,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
       } : {}),
     }));
     if (!(await onAddMaterialRequest(newRequests, dbRows))) return;
-    setForm({ siteId: "", units: [], parts: [emptyPartRow()], urgency: "일반", photos: [], note: "" });
+    setForm({ siteId: "", units: [], parts: [emptyPartRow()], partsByUnit: {}, urgency: "일반", photos: [], note: "" });
     setMatStep(0);
     toastForm(newRequests.length > 1 ? `자재 신청 ${newRequests.length}건이 접수되었습니다` : "자재 신청이 접수되었습니다", true);
   }
@@ -809,7 +818,12 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
       if (form.units.length === 0) return "호기를 선택해주세요";
     }
     if (step === 1) {
-      if (!formPartText) return "부품 내역을 1개 이상 입력해주세요";
+      if (form.units.length > 1) {
+        const missing = form.units.filter((u) => !formUnitPartsText(u));
+        if (missing.length) return `${missing.join(", ")} 부품 내역을 입력해주세요`;
+      } else if (!formPartText) {
+        return "부품 내역을 1개 이상 입력해주세요";
+      }
       if (form.photos.length === 0) return "부품 규격 사진을 최소 1장 등록해주세요";
       if (photosUploading) return "사진 업로드가 끝날 때까지 기다려주세요";
     }
@@ -973,14 +987,27 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
 
               {matStep === 1 && (
                 <>
-                  <Field label="부품 내역">
-                    <PartsRowsInput
-                      rows={form.parts}
-                      setRows={(rows) => setForm({ ...form, parts: rows })}
-                      namePlaceholder="예: 1층 승장도어 스위치"
-                      nameLabel="부품명 (해당 층까지 기재)"
-                    />
-                  </Field>
+                  {form.units.length > 1 ? (
+                    form.units.map((u) => (
+                      <Field key={u} label={`${u} 부품 내역`}>
+                        <PartsRowsInput
+                          rows={form.partsByUnit[u] ?? [emptyPartRow()]}
+                          setRows={(rows) => setForm({ ...form, partsByUnit: { ...form.partsByUnit, [u]: rows } })}
+                          namePlaceholder="예: 1층 승장도어 스위치"
+                          nameLabel="부품명 (해당 층까지 기재)"
+                        />
+                      </Field>
+                    ))
+                  ) : (
+                    <Field label="부품 내역">
+                      <PartsRowsInput
+                        rows={form.parts}
+                        setRows={(rows) => setForm({ ...form, parts: rows })}
+                        namePlaceholder="예: 1층 승장도어 스위치"
+                        nameLabel="부품명 (해당 층까지 기재)"
+                      />
+                    </Field>
+                  )}
                   <Field label="부품 규격 사진">
                     <MultiPhotoUpload
                       photos={form.photos}
