@@ -366,12 +366,17 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
     if (!manualValid) return;
     const site = sites.find((s) => s.id === manualForm.siteId);
     const isMultiUnit = manualForm.units.length > 1;
-    // 호기가 여러 개면 호기별로 입력받은 교체내역을 그대로 그 호기의 청구 건에 쓴다(합쳐서
-    // 중복 표시되던 문제 수정) — 호기 1개면 기존처럼 단일 교체내역 그대로.
-    const partText = isMultiUnit ? null : formatPartRows(manualForm.parts);
-    // 부품이 여러 개면 부품별 전/후 사진을 따로 묶어 보내고, 통합 배열(beforePhotoUrls/
-    // afterPhotoUrls)에도 전체를 합쳐 같이 남긴다(기존 화면 호환) — 자재지급건과 동일한 패턴.
-    // 직접입력은 부품별 단가가 없어(수리비는 총액 1개) amount는 null로 둔다.
+    const units_ = manualForm.units.length ? manualForm.units : [null];
+    // 여러 호기를 한 번에 청구해도 현장 1건으로 접수한다(견적신청과 동일한 방식) — 예전엔
+    // 호기마다 청구 건을 따로 만들어서 부품교체내역 목록에 같은 작업이 호기 수만큼 나뉘어
+    // 보이고 교체확인서도 호기 수만큼 나왔는데, 그걸 한 건으로 합친다. 다만 어느 호기에
+    // 뭘 했는지는 구분이 남아야 하므로 교체내역 텍스트와 완료보고서 항목은 호기별로 나눈다.
+    const partText = isMultiUnit
+      ? units_.map((u) => `${u} 교체내역\n${manualUnitPartsText(u)}`).join("\n\n")
+      : formatPartRows(manualForm.parts);
+    // 부품이 여러 개(같은 호기)면 부품별로, 호기가 여러 개면 호기별로 항목을 나눠 완료보고서에
+    // 보여준다 — 어느 쪽이든 통합 배열(beforePhotoUrls/afterPhotoUrls)에도 전체를 합쳐 같이
+    // 남긴다(기존 화면 호환). 직접입력은 항목별 단가가 없어(수리비는 총액 1개) amount는 null.
     const partPhotosPayload = manualBillingParts
       ? manualBillingParts.map((part, i) => ({
           name: part.name,
@@ -380,56 +385,55 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
           beforeUrls: (manualPartPhotos[i]?.before ?? []).map((p) => p.url),
           afterUrls: (manualPartPhotos[i]?.after ?? []).map((p) => p.url),
         }))
+      : isMultiUnit
+      ? units_.map((u) => ({
+          name: `${u}: ${manualUnitPartsText(u)}`,
+          // 어느 호기 항목인지 표시 문구(name)와 별개로 남겨둔다 — 호기별 화면(SiteTab
+          // 부품교체내역)에서 그 호기 항목만 걸러 보여줄 때 이 값으로 매칭한다.
+          unit: u,
+          qty: null,
+          amount: null,
+          // 사진은 호기별로 따로 받지 않고 이 청구 건 전체 공통 사진을 그대로 쓴다.
+          beforeUrls: manualPhotos.before.map((p) => p.url),
+          afterUrls: manualPhotos.after.map((p) => p.url),
+        }))
       : null;
     const manualBeforeUrls = manualBillingParts ? partPhotosPayload.flatMap((p) => p.beforeUrls) : manualPhotos.before.map((p) => p.url);
     const manualAfterUrls = manualBillingParts ? partPhotosPayload.flatMap((p) => p.afterUrls) : manualPhotos.after.map((p) => p.url);
-    // 선택한 호기마다 청구 1건씩 생성 (호기 단위 정합 — 자재/견적과 동일)
-    const targets = manualForm.units.length ? manualForm.units : [null];
-    // 순차 await — insert 실패 시 즉시 중단하고 폼을 유지(리셋 안 함)해 재시도 가능 (P1-1/P1-2).
-    // 단, 이미 성공한 호기까지 폼에 남겨두면 재시도 시 그 호기들을 또 청구(중복청구)하게 되므로,
-    // 실패한 호기부터만 남기고 이미 성공한 호기는 폼에서 미리 제거한다.
-    for (let i = 0; i < targets.length; i++) {
-      const u = targets[i];
-      const ok = await onSubmitBilling({
-        type: "manual",
-        siteName: site.name,
-        elevatorNo: u,
-        siteId: site.id,
-        part: isMultiUnit ? manualUnitPartsText(u) : partText,
-        cost: manualForm.cost,
-        isFree: Number(manualForm.cost) === 0,
-        freeReason: Number(manualForm.cost) === 0 ? manualFreeReason : null,
-        beforePhotoUrls: manualBeforeUrls,
-        afterPhotoUrls: manualAfterUrls,
-        partPhotos: partPhotosPayload,
-        replaceDate: manualForm.replaceDate,
-        contactPhone: manualForm.contactPhone,
-        // 지류 교체확인서 대신: 서명했으면 서명 이미지, 고객 부재중이면 전화승인자 정보.
-        signatureUrl: manualAbsentMode ? null : manualSignatureUrl,
-        approvalMethod: manualAbsentMode ? "전화승인" : "서명",
-        approverName: manualAbsentMode ? manualApproverName.trim() : manualSignerName.trim(),
-        approverPhone: manualAbsentMode ? manualApproverPhone.trim() : manualSignerPhone.trim(),
-        approvedAt: new Date().toISOString(),
-      });
-      if (!ok) {
-        if (manualForm.units.length) setManualForm((f) => ({ ...f, units: targets.slice(i) }));
-        return;
-      }
-    }
+    const ok = await onSubmitBilling({
+      type: "manual",
+      siteName: site.name,
+      elevatorNo: units_[0],
+      elevatorNos: isMultiUnit ? units_ : null,
+      siteId: site.id,
+      part: partText,
+      cost: manualForm.cost,
+      isFree: Number(manualForm.cost) === 0,
+      freeReason: Number(manualForm.cost) === 0 ? manualFreeReason : null,
+      beforePhotoUrls: manualBeforeUrls,
+      afterPhotoUrls: manualAfterUrls,
+      partPhotos: partPhotosPayload,
+      replaceDate: manualForm.replaceDate,
+      contactPhone: manualForm.contactPhone,
+      // 지류 교체확인서 대신: 서명했으면 서명 이미지, 고객 부재중이면 전화승인자 정보.
+      signatureUrl: manualAbsentMode ? null : manualSignatureUrl,
+      approvalMethod: manualAbsentMode ? "전화승인" : "서명",
+      approverName: manualAbsentMode ? manualApproverName.trim() : manualSignerName.trim(),
+      approverPhone: manualAbsentMode ? manualApproverPhone.trim() : manualSignerPhone.trim(),
+      approvedAt: new Date().toISOString(),
+    });
+    if (!ok) return; // 실패 시 폼 유지(리셋 안 함)해 재시도 가능
     if (manualForm.fromKit) {
       // 호기별로 실제 쓴 부품·수량만큼 차감한다 — 호기마다 교체내역이 다를 수 있어(위 isMultiUnit)
-      // 예전처럼 "호기 수 × 동일 수량"으로 일괄 차감하면 안 되고 호기별 실제 입력을 그대로 쓴다.
-      targets.forEach((u) => {
+      // "호기 수 × 동일 수량"으로 일괄 차감하지 않고 호기별 실제 입력을 그대로 쓴다.
+      units_.forEach((u) => {
         const rows = isMultiUnit ? (manualForm.partsByUnit[u] ?? []) : manualForm.parts;
         rows
           .filter((r) => r.name.trim() && r.qty)
           .forEach((r) => onUseKitPart({ part: r.name.trim(), siteName: site.name, qty: Number(r.qty) }));
       });
     }
-    const submittedPartText = isMultiUnit
-      ? targets.map((u) => `${u} ${manualUnitPartsText(u)}`).join(" · ")
-      : partText;
-    setSubmitted({ siteName: site.name, part: submittedPartText, manual: true, fromKit: manualForm.fromKit });
+    setSubmitted({ siteName: site.name, part: partText, manual: true, fromKit: manualForm.fromKit });
     setManualForm({ siteId: "", units: [], parts: [emptyPartRow()], partsByUnit: {}, replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
     setManualFreeReason("");
     setManualPhotos({ before: [], after: [] });

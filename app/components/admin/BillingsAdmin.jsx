@@ -15,6 +15,14 @@ import ReplacementCertificateViewer from "@/app/components/admin/ReplacementCert
 
 const BILLING_METHODS = ["계좌이체", "CMS", "지로"];
 
+// 목록·완료보고서에서 "현장 · 호기"를 표시할 때 쓴다 — 한 청구가 여러 호기를 같이 다루면
+// (여러 호기를 한 번에 청구한 경우) 대표 호기 하나만 보여주는 locOf 대신 전체 호기를 같이 보여준다.
+function siteUnitOf(b, data) {
+  return b.elevatorNos?.length > 1
+    ? `${data.sites.find((s) => s.id === data.units.find((u) => u.id === b.unitId)?.siteId)?.name ?? b.siteName ?? "-"} · ${formatUnitLabel(b.elevatorNos)}`
+    : locOf(data, b.unitId, b.siteName, b.elevatorNo);
+}
+
 // 청구 건 하나를 교체확인서 PDF 입력 형태로 바꾼다. 부품이 2개 이상(billing_part_rows
 // 기반 구조화 저장건)이면 부품별 단가·금액까지 나오고, 그 전 방식(부품 1개 또는 옛
 // 데이터)으로 남은 건은 단가 정보가 없어 수량만 보여준다 — 없는 값을 지어내지 않는다.
@@ -37,11 +45,7 @@ function buildCertificateData(b, data) {
   // 그 합계를 대신 쓴다.
   const itemsTotal = items.length && items.every((it) => it.amount != null) ? items.reduce((sum, it) => sum + it.amount, 0) : null;
 
-  // 한 청구가 여러 호기를 같이 다루면(견적요청을 현장 1건으로 합친 경우) 대표 호기 하나만
-  // 보여주는 locOf 대신 전체 호기를 같이 보여준다.
-  const siteUnit = b.elevatorNos?.length > 1
-    ? `${data.sites.find((s) => s.id === data.units.find((u) => u.id === b.unitId)?.siteId)?.name ?? b.siteName ?? "-"} · ${formatUnitLabel(b.elevatorNos)}`
-    : locOf(data, b.unitId, b.siteName, b.elevatorNo);
+  const siteUnit = siteUnitOf(b, data);
   const replaceDate = shortDate(b.replaceDate);
 
   return {
@@ -479,10 +483,10 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
     <Modal title="상세내역" onClose={onClose} wide>
       <div className="space-y-3 mb-4">
         <div className="grid grid-cols-2 gap-3 text-sm">
-          <div><p className="text-xs font-bold text-slate-400 mb-1">현장 · 호기</p><p className="font-semibold text-slate-800">{locOf(data, b.unitId, b.siteName, b.elevatorNo)}</p></div>
+          <div><p className="text-xs font-bold text-slate-400 mb-1">현장 · 호기</p><p className="font-semibold text-slate-800">{siteUnitOf(b, data)}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">현장 주소</p><p className="font-semibold text-slate-800">{addressOf(data, b.unitId, b.siteName)}</p></div>
           {!editing || isMultiItem ? (
-            <div><p className="text-xs font-bold text-slate-400 mb-1">교체내역</p><p className="font-semibold text-slate-800">{b.part}</p></div>
+            <div><p className="text-xs font-bold text-slate-400 mb-1">교체내역</p><p className="font-semibold text-slate-800 whitespace-pre-line">{b.part}</p></div>
           ) : (
             <div>
               <p className="text-xs font-bold text-slate-400 mb-1">교체내역</p>
@@ -816,7 +820,7 @@ export default function BillingsAdmin({ data, setData }) {
       <AdminTable head={["현장 · 호기", "담당자", "작업자", "교체내역", "금액(VAT별도)", "교체일", "교체확인서", "청구일", "청구방식"]}>
         {rows.map((b) => (
           <tr key={b.id} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setDetail(b)}>
-            <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{locOf(data, b.unitId, b.siteName, b.elevatorNo)}</td>
+            <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{siteUnitOf(b, data)}</td>
             <td className="px-3 py-2.5 whitespace-nowrap">{siteManagerOf(data, b.unitId, b.siteName)}</td>
             <td className="px-3 py-2.5 whitespace-nowrap">
               {b.isOutsourced ? (
@@ -825,7 +829,7 @@ export default function BillingsAdmin({ data, setData }) {
                 </span>
               ) : personOf(data, b.engineerId, b.engineer)}
             </td>
-            <td className="px-3 py-2.5 text-slate-600">{b.part}</td>
+            <td className="px-3 py-2.5 text-slate-600 whitespace-pre-line">{b.part}</td>
             <td className="px-3 py-2.5 whitespace-nowrap">
               {b.isFree ? (
                 <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">무상</span>

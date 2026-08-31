@@ -222,7 +222,11 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
     .filter((f) => (f.unitId ? f.unitId === unit.id : f.siteId === site.id))
     .sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt));
   const manualInspections = inspections.filter((i) => (i.unitId ? i.unitId === unit.id : i.siteId === site.id));
-  const unitBillings = billings.filter((b) => (b.unitId ? b.unitId === unit.id : b.siteName === site.name));
+  // 여러 호기를 한 번에 청구한 건은 unitId가 대표 호기 하나만 가리켜서 unitId만으로 거르면
+  // 나머지 호기 페이지에서 그 청구가 통째로 안 보인다 — elevatorNos에 이 호기가 있으면 포함.
+  const unitBillings = billings.filter((b) =>
+    b.elevatorNos?.length ? b.elevatorNos.includes(unit.unitNo) : b.unitId ? b.unitId === unit.id : b.siteName === site.name
+  );
 
   // 고장내역/부품교체내역과 동일한 컨벤션: unit_id가 있으면 그 호기만, 없으면(관리자가 호기를
   // 안 정한 경우 등) 현장 전체로 fallback.
@@ -391,9 +395,9 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
                 const photos = [...(b.beforePhotoUrls ?? []), ...(b.afterPhotoUrls ?? [])];
                 return (
                   <div key={b.id} className="border border-slate-200 rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="font-bold text-sm">{b.part}</p>
-                      <span className="text-sm font-bold">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</span>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <p className="font-bold text-sm whitespace-pre-line">{b.part}</p>
+                      <span className="text-sm font-bold shrink-0">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</span>
                     </div>
                     <p className="text-xs text-slate-500">{shortDate(b.replaceDate)} · {b.engineer ?? "-"}</p>
                     {photos.length > 0 && (

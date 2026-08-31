@@ -243,10 +243,14 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
       const replacementRows = unitBillings
         .flatMap((b) =>
           b.partPhotos?.length > 1
-            ? b.partPhotos.map((p, i) => ({
-                key: `${b.id}-${i}`, name: p.name, replaceDate: b.replaceDate, engineer: b.engineer, contactPhone: b.contactPhone,
-                beforeUrls: p.beforeUrls ?? [], afterUrls: p.afterUrls ?? [],
-              }))
+            ? b.partPhotos
+                // 여러 호기를 한 번에 청구한 건은 항목마다 unit이 찍혀 있다 — 지금 보는 호기
+                // 것만 남긴다(안 찍혀 있으면 한 호기 안에서 부품만 나뉜 기존 방식이라 전부 포함).
+                .filter((p) => !p.unit || p.unit === unit)
+                .map((p, i) => ({
+                  key: `${b.id}-${i}`, name: p.name, replaceDate: b.replaceDate, engineer: b.engineer, contactPhone: b.contactPhone,
+                  beforeUrls: p.beforeUrls ?? [], afterUrls: p.afterUrls ?? [],
+                }))
             : [{
                 key: b.id, name: b.part, replaceDate: b.replaceDate, engineer: b.engineer, contactPhone: b.contactPhone,
                 beforeUrls: b.beforePhotoUrls ?? [], afterUrls: b.afterPhotoUrls ?? [],
