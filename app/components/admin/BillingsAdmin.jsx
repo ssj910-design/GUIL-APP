@@ -333,7 +333,7 @@ function NewBillingModal({ data, onClose, onCreate }) {
         </div>
 
         <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">현장 담당자 연락처 (선택)</p>
+          <p className="text-xs font-bold text-slate-500 mb-1">교체 확인자 연락처 (선택)</p>
           <input className={inputCls} value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} />
         </div>
 
@@ -505,10 +505,10 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
           )}
           <div><p className="text-xs font-bold text-slate-400 mb-1">제출일</p><p className="font-semibold text-slate-800">{shortDate(b.submittedAt)}</p></div>
           {!editing ? (
-            <div><p className="text-xs font-bold text-slate-400 mb-1">현장 담당자 연락처</p><p className="font-semibold text-slate-800">{b.contactPhone || "-"}</p></div>
+            <div><p className="text-xs font-bold text-slate-400 mb-1">교체 확인자 연락처</p><p className="font-semibold text-slate-800">{b.contactPhone || "-"}</p></div>
           ) : (
             <div>
-              <p className="text-xs font-bold text-slate-400 mb-1">현장 담당자 연락처</p>
+              <p className="text-xs font-bold text-slate-400 mb-1">교체 확인자 연락처</p>
               <input className={inputCls} value={editForm.contactPhone} onChange={(e) => setEditForm({ ...editForm, contactPhone: e.target.value })} />
             </div>
           )}
@@ -813,7 +813,7 @@ export default function BillingsAdmin({ data, setData }) {
           <Plus size={15} /> 새 청구 등록
         </button>
       </div>
-      <AdminTable head={["현장 · 호기", "담당자", "작업자", "교체내역", "금액(VAT별도)", "교체일", "교체확인서", "청구일", "청구방식"]}>
+      <AdminTable head={["현장 · 호기", "교체 확인자", "작업자", "교체내역", "금액(VAT별도)", "교체일", "교체확인서", "청구일", "청구방식"]}>
         {rows.map((b) => (
           <tr key={b.id} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setDetail(b)}>
             <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{siteUnitOf(b, data)}</td>
