@@ -28,6 +28,7 @@ import { useQuoteRecipientFields, QuoteRecipientInfo, QuoteRecipientExtras } fro
 
 const CATEGORIES = ["자재비", "인건비"];
 const VAT_RATE = 0.1;
+const UNIT_PRESETS = ["EA", "SET", "식", "M"];
 
 function emptyItem(category) {
   return { category, name: "", unitNo: "", spec: "", unit: "", qty: 1, unitPrice: 0, partId: null, returnRequired: false, qtyTaken: null };
@@ -129,6 +130,17 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
     if (quote.discountAmount) handleDiscountAmount(quote.discountAmount);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 단위 드롭다운에서 "직접입력"을 고르면 그 행만 텍스트 입력으로 바꾼다 — 프리셋에 없는
+  // 값(불러온 기존 데이터 포함)이면 굳이 이 목록에 없어도 자동으로 텍스트 입력으로 보인다.
+  const [customUnitIdx, setCustomUnitIdx] = useState(() => new Set());
+  function setCustomUnit(idx, on) {
+    setCustomUnitIdx((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(idx); else next.delete(idx);
+      return next;
+    });
+  }
 
   function addItem(category) {
     setItems((prev) => [...prev, emptyItem(category)]);
@@ -351,12 +363,37 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
                           <input className={inputCls} placeholder="규격" value={it.spec} onChange={(e) => updateItem(idx, { spec: e.target.value })} />
                         </div>
                         <div className="flex-[4] min-w-0">
-                          <select className={inputCls} value={it.unit} onChange={(e) => updateItem(idx, { unit: e.target.value })}>
-                            <option value="">단위</option>
-                            <option value="EA">EA</option>
-                            <option value="SET">SET</option>
-                            <option value="식">식</option>
-                          </select>
+                          {customUnitIdx.has(idx) || (it.unit && !UNIT_PRESETS.includes(it.unit)) ? (
+                            <div className="flex items-center gap-1">
+                              <input
+                                className={inputCls}
+                                placeholder="단위 직접입력"
+                                value={it.unit}
+                                onChange={(e) => updateItem(idx, { unit: e.target.value })}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => { setCustomUnit(idx, false); updateItem(idx, { unit: "" }); }}
+                                className="shrink-0 text-slate-400 hover:text-slate-600"
+                                title="목록에서 선택"
+                              >
+                                <ChevronDown size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <select
+                              className={inputCls}
+                              value={it.unit}
+                              onChange={(e) => (e.target.value === "__custom__" ? setCustomUnit(idx, true) : updateItem(idx, { unit: e.target.value }))}
+                            >
+                              <option value="">단위</option>
+                              <option value="EA">EA</option>
+                              <option value="SET">SET</option>
+                              <option value="식">식</option>
+                              <option value="M">M</option>
+                              <option value="__custom__">직접입력</option>
+                            </select>
+                          )}
                         </div>
                         <div className="flex-[5] min-w-0">
                           <input type="number" className={inputCls} placeholder="수량" value={it.qty} onChange={(e) => updateItem(idx, { qty: e.target.value })} />
