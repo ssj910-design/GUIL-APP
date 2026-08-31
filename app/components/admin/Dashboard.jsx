@@ -175,9 +175,19 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
   const pendingMaterials = materialRequests.filter((m) => m.status === "승인대기");
   const activeQuotes = quoteRequests.filter((q) => q.status !== "자재지급완료");
   const openTodos = todos.filter((t) => !t.done);
-  // 지급됐지만 미청구: 자재·견적 지급완료로 자동 생성된 할일(마감=지급일+30일 기본)이 아직도
-  // 안 끝났으면(청구 처리 전) — 개별 할일 목록을 일일이 정렬해보지 않아도 밀린 정산이 한눈에 보이게.
-  const overdueUnbilled = todos.filter((t) => (t.source === "material" || t.source === "quote") && !t.done && t.dueDate && t.dueDate < TODAY_STR);
+  // 지급됐지만 미청구: 자재·견적 지급일로부터 30일이 지났는데 아직도 안 끝났으면(청구 처리 전).
+  // 할일의 마감일(dueDate)은 담당자가 작업 일정에 맞춰 자유롭게 고쳐 쓰는 값이라(예: 급한 건
+  // 며칠로 당겨 잡기) 지급일 기준 30일 경과와 무관하다 — dueDate가 아니라 실제 지급일
+  // (material_requests/quote_requests.supplied_date)로 직접 계산해야 한다.
+  const materialRequestById = new Map(materialRequests.map((m) => [m.id, m]));
+  const quoteRequestById = new Map(quoteRequests.map((q) => [q.id, q]));
+  const overdueUnbilled = todos.filter((t) => {
+    if (t.done || (t.source !== "material" && t.source !== "quote")) return false;
+    const suppliedDate = t.source === "material"
+      ? materialRequestById.get(t.materialRequestId)?.suppliedDate
+      : quoteRequestById.get(t.quoteRequestId)?.suppliedDate;
+    return suppliedDate && suppliedDate < addDays(TODAY_STR, -30);
+  });
 
   // 오늘 처리할 것 — 관리자 승인대기 큐 8종을 한 곳에 모은다. 새 데이터가 아니라
   // 각 화면(LeavesAdmin/TodosAdmin/MaterialsAdmin/FailuresAdmin/SelfChecksAdmin)이
