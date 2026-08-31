@@ -510,7 +510,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
         </div>
       </div>
 
-      <QuoteRecipientExtras rf={rf} showChannels={false} />
+      <QuoteRecipientExtras rf={rf} />
 
       {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">{error}</p>}
 

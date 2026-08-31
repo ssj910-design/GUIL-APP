@@ -3,9 +3,10 @@
 // 발행된 견적서를 이메일/카카오 알림톡으로 발송 — 품목편집(QuoteItemsModal)에서 저장만
 // 하고 닫으면, 이 모달이 유일한 발송 경로다(최초 발송·재발송 모두). 한 번이라도 보낸
 // 적이 있으면(emailSentAt/kakaoSentAt) 제목·버튼을 "재발송"으로, 없으면 "발송"으로 표시.
-// 두 채널은 독립적으로 시도되고, 실패해도 조용히 숨기지 않고 채널별로 성공/실패를
-// 그대로 보여준다. 공급자/고객 정보·안내메시지·첨부파일·채널 체크박스는
-// QuoteRecipientFields.jsx로 뽑아 QuoteItemsModal과 공유한다.
+// 채널(이메일/카카오)은 모바일 관리자 화면과 동일하게 따로 고르지 않고 받는사람
+// 이메일/전화번호가 채워져 있으면 그 채널로 자동 발송한다 — 두 채널은 독립적으로
+// 시도되고, 실패해도 조용히 숨기지 않고 채널별로 성공/실패를 그대로 보여준다.
+// 공급자/고객 정보·안내메시지·첨부파일은 QuoteRecipientFields.jsx로 뽑아 QuoteItemsModal과 공유한다.
 import { useState } from "react";
 import { Modal } from "@/app/components/admin/adminShared";
 import { useQuoteRecipientFields, QuoteRecipientInfo, QuoteRecipientExtras } from "@/app/components/admin/QuoteRecipientFields";

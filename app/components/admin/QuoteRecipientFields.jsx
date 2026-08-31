@@ -1,10 +1,11 @@
 "use client";
 
-// 견적 발송 관련 폼 상태(공급자/고객 정보, 안내메시지, 첨부파일, 채널 체크박스)를
-// QuoteSendModal.jsx에서 뽑아낸 공유 파일 — QuoteItemsModal(발행+바로 발송하기)과
-// QuoteSendModal(재발송) 양쪽에서 재사용한다. 상태는 훅을 호출한 부모가 소유한다:
-// useQuoteRecipientFields가 상태를 만들어 반환하고, QuoteRecipientInfo/
-// QuoteRecipientExtras는 그 값을 props로 받아 렌더링만 하는 순수 컴포넌트다.
+// 견적 발송 관련 폼 상태(공급자/고객 정보, 안내메시지, 첨부파일)를 QuoteSendModal.jsx에서
+// 뽑아낸 공유 파일 — QuoteItemsModal(발행+바로 발송하기)과 QuoteSendModal(재발송) 양쪽에서
+// 재사용한다. 상태는 훅을 호출한 부모가 소유한다: useQuoteRecipientFields가 상태를 만들어
+// 반환하고, QuoteRecipientInfo/QuoteRecipientExtras는 그 값을 props로 받아 렌더링만 하는
+// 순수 컴포넌트다. 발송 채널(이메일/카카오)은 모바일 관리자 화면과 동일하게 사람이 따로
+// 고르지 않고 받는사람 이메일/전화번호가 채워져 있는지로 자동 결정한다(sendEmail/sendKakao).
 import { useRef, useState } from "react";
 import { inputCls } from "@/app/components/admin/adminShared";
 import { COMPANY } from "@/lib/company";
@@ -19,8 +20,6 @@ export function useQuoteRecipientFields(quote, siteManagers, profiles) {
   const [phone, setPhone] = useState(quote.recipientPhone || primaryManager?.phone || "");
   const [referenceEmail, setReferenceEmail] = useState(quote.referenceEmail || "");
   const [referencePhone, setReferencePhone] = useState(quote.referencePhone || "");
-  const [sendEmail, setSendEmail] = useState(true);
-  const [sendKakao, setSendKakao] = useState(true);
   const [noticeMessage, setNoticeMessage] = useState(quote.noticeMessage || "");
   const [attachments, setAttachments] = useState(quote.attachmentUrls ?? []); // { name, url }[]
   const [uploading, setUploading] = useState(false);
@@ -104,14 +103,18 @@ export function useQuoteRecipientFields(quote, siteManagers, profiles) {
     setAttachments((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  const canSend = !uploading && (sendEmail || sendKakao) && (!sendEmail || email) && (!sendKakao || phone);
+  // 모바일 관리자 화면과 동일한 규칙 — 채널을 따로 고르지 않고 받는사람 이메일/전화번호가
+  // 채워져 있으면 그 채널로 자동 발송한다(둘 다 채워져 있으면 둘 다).
+  const sendEmail = !!email.trim();
+  const sendKakao = !!phone.trim();
+  const canSend = !uploading && (sendEmail || sendKakao);
 
   return {
     email, setEmail, phone, setPhone,
     senderCcEmail, setSenderCcEmail,
     referenceEmail, setReferenceEmail,
     referencePhone, setReferencePhone,
-    sendEmail, setSendEmail, sendKakao, setSendKakao,
+    sendEmail, sendKakao,
     noticeMessage, setNoticeMessage,
     attachments, uploading, attachError,
     supplierId, setSupplierId, supplierCcId,
@@ -183,7 +186,7 @@ export function QuoteRecipientInfo({ rf, siteManagers }) {
   );
 }
 
-export function QuoteRecipientExtras({ rf, showChannels = true }) {
+export function QuoteRecipientExtras({ rf }) {
   const fileInputRef = useRef(null);
 
   return (
@@ -227,19 +230,6 @@ export function QuoteRecipientExtras({ rf, showChannels = true }) {
           </ul>
         )}
       </div>
-
-      {showChannels && (
-        <div className="flex gap-4 mb-4">
-          <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-            <input type="checkbox" checked={rf.sendEmail} onChange={(e) => rf.setSendEmail(e.target.checked)} />
-            이메일
-          </label>
-          <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-            <input type="checkbox" checked={rf.sendKakao} onChange={(e) => rf.setSendKakao(e.target.checked)} />
-            카카오 알림톡
-          </label>
-        </div>
-      )}
     </>
   );
 }
