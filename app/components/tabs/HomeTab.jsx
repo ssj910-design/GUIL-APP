@@ -381,6 +381,17 @@ function AttendanceBar({ attendances, dutySchedules = [], pendingNight, onCloseN
             {/* 근무 종료 — 언제든 누를 수 있게(2단계라 오터치 안전). 눌러야 당직/퇴근 선택이 열린다.
                 오늘 본인 근무표(dutyKind)가 당직/숙직이면 그 마감 버튼만, 없으면 퇴근만 뜬다 */}
             {!done && <WorkEndRow onAttendance={onAttendance} dutyKind={dutyKind} />}
+            {/* 실수로 퇴근(당직·숙직 마감 포함)을 누른 경우 되돌리는 버튼 — done이 되면 이 카드에
+                다른 버튼이 전혀 없어서(위 WorkEndRow도 숨음) 실수했을 때 되돌릴 방법이 없었다. */}
+            {done && (
+              <button
+                onClick={async () => { setChecking(true); await onAttendance("cancel_out"); setChecking(false); }}
+                disabled={checking}
+                className="w-full mt-2 text-xs font-bold text-red-600 bg-red-50 rounded-lg py-2.5 disabled:opacity-60"
+              >
+                {checking ? "처리 중…" : "퇴근 취소"}
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -610,6 +610,18 @@ export default function App() {
       const todayAtt = attendances.find((a) => a.profileId === pid && a.workDate === TODAY_STR);
       if (!todayAtt?.checkedInAt) { alert("출근 기록이 없어 퇴근 처리를 할 수 없어요."); return { locFailed: false }; }
     }
+    // 실수로 퇴근(당직/숙직 마감 포함)을 누른 경우 취소 — 퇴근 관련 필드만 지우고 원래 출근
+    // 시각·위치는 그대로 둔다(kind:"in"과 달리 재출근으로 취급하지 않음, 위치도 새로 안 받음).
+    if (kind === "cancel_out") {
+      const { data } = await supabase
+        .from("attendances")
+        .update({ checked_out_at: null, status: null, out_lat: null, out_lng: null })
+        .eq("profile_id", pid).eq("work_date", TODAY_STR)
+        .select();
+      const row = data?.[0];
+      if (row) setAttendances((prev) => [...prev.filter((a) => a.id !== row.id), mapAttendance(row)]);
+      return {};
+    }
     const here = wantLoc ? await getPositionOnce() : null;
 
     // 위치만 다시 받기인데 실패하면 아무것도 저장하지 않는다
