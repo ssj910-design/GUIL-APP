@@ -48,7 +48,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
   const [freeReason, setFreeReason] = useState(""); // 수리비 0원(무상)일 때 사유 — FM/하자/서비스
   const [materialReplaceDate, setMaterialReplaceDate] = useState(TODAY_STR);
   const [submitted, setSubmitted] = useState(null);
-  const [manualForm, setManualForm] = useState({ siteId: "", units: [], parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
+  const [manualForm, setManualForm] = useState({ siteId: "", units: [], parts: [emptyPartRow()], partsByUnit: {}, replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
   const [manualFreeReason, setManualFreeReason] = useState(""); // 수리비 0원(무상)일 때 사유 — FM/하자/서비스
   const [materialPhotos, setMaterialPhotos] = useState({ before: [], after: [] });
   const [partPhotos, setPartPhotos] = useState({}); // 부품 2개 이상일 때만 사용: { [index]: { before: [], after: [] } }
@@ -148,7 +148,15 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
   // 반드시 골라야 한다. 빈 입력과 0원을 구분해야 해서(둘 다 Number()로는 0) 원본 문자열을 본다.
   const manualCostRaw = String(manualForm.cost ?? "").trim();
   const manualCostOk = manualCostRaw !== "" && Number(manualCostRaw) >= 0 && (Number(manualCostRaw) > 0 || !!manualFreeReason);
-  const manualValid = manualForm.siteId && manualForm.units.length > 0 && formatPartRows(manualForm.parts) && manualForm.replaceDate && manualForm.contactPhone.trim() && manualCostOk && manualPhotosOk && manualApprovalOk;
+  // 호기를 2개 이상 고르면 호기마다 실제로 다른 부품을 썼을 수 있어(예: 1호기는 팬릴레이, 2호기는
+  // 홀도어 접점) 호기별로 교체내역을 따로 입력받는다 — 호기 1개면 기존처럼 단일 입력 그대로.
+  function manualUnitPartsText(u) {
+    return formatPartRows(manualForm.partsByUnit[u] ?? []);
+  }
+  const manualPartsOk = manualForm.units.length > 1
+    ? manualForm.units.every((u) => manualUnitPartsText(u))
+    : !!formatPartRows(manualForm.parts);
+  const manualValid = manualForm.siteId && manualForm.units.length > 0 && manualPartsOk && manualForm.replaceDate && manualForm.contactPhone.trim() && manualCostOk && manualPhotosOk && manualApprovalOk;
 
   // 스텝별 필수 검증 — 미입력이면 안내 문구 반환(다음/제출 막힘), 없으면 null.
   function matStepError(step) {
@@ -193,7 +201,12 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       if (manualForm.units.length === 0) return "호기를 선택해주세요";
     }
     if (step === 1) {
-      if (!formatPartRows(manualForm.parts)) return "교체내역을 1개 이상 입력해주세요";
+      if (manualForm.units.length > 1) {
+        const missing = manualForm.units.filter((u) => !manualUnitPartsText(u));
+        if (missing.length) return `${missing.join(", ")} 교체내역을 입력해주세요`;
+      } else if (!formatPartRows(manualForm.parts)) {
+        return "교체내역을 1개 이상 입력해주세요";
+      }
       if (!manualForm.contactPhone.trim()) return "현장담당자 연락처를 입력해주세요";
       if (manualCostRaw === "" || Number(manualCostRaw) < 0) return "수리비를 입력해주세요";
       if (Number(manualCostRaw) === 0 && !manualFreeReason) return "사유를 선택해주세요";
@@ -352,7 +365,10 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
   async function submitManual() {
     if (!manualValid) return;
     const site = sites.find((s) => s.id === manualForm.siteId);
-    const partText = formatPartRows(manualForm.parts);
+    const isMultiUnit = manualForm.units.length > 1;
+    // 호기가 여러 개면 호기별로 입력받은 교체내역을 그대로 그 호기의 청구 건에 쓴다(합쳐서
+    // 중복 표시되던 문제 수정) — 호기 1개면 기존처럼 단일 교체내역 그대로.
+    const partText = isMultiUnit ? null : formatPartRows(manualForm.parts);
     // 부품이 여러 개면 부품별 전/후 사진을 따로 묶어 보내고, 통합 배열(beforePhotoUrls/
     // afterPhotoUrls)에도 전체를 합쳐 같이 남긴다(기존 화면 호환) — 자재지급건과 동일한 패턴.
     // 직접입력은 부품별 단가가 없어(수리비는 총액 1개) amount는 null로 둔다.
@@ -379,7 +395,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
         siteName: site.name,
         elevatorNo: u,
         siteId: site.id,
-        part: partText,
+        part: isMultiUnit ? manualUnitPartsText(u) : partText,
         cost: manualForm.cost,
         isFree: Number(manualForm.cost) === 0,
         freeReason: Number(manualForm.cost) === 0 ? manualFreeReason : null,
@@ -401,14 +417,20 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       }
     }
     if (manualForm.fromKit) {
-      // 호기 수만큼 부품을 썼으니 그만큼 차감해야 한다 — 3개 호기를 한 번에 청구하면 3배 차감.
-      const unitCount = targets.length;
-      manualForm.parts
-        .filter((r) => r.name.trim() && r.qty)
-        .forEach((r) => onUseKitPart({ part: r.name.trim(), siteName: site.name, qty: Number(r.qty) * unitCount }));
+      // 호기별로 실제 쓴 부품·수량만큼 차감한다 — 호기마다 교체내역이 다를 수 있어(위 isMultiUnit)
+      // 예전처럼 "호기 수 × 동일 수량"으로 일괄 차감하면 안 되고 호기별 실제 입력을 그대로 쓴다.
+      targets.forEach((u) => {
+        const rows = isMultiUnit ? (manualForm.partsByUnit[u] ?? []) : manualForm.parts;
+        rows
+          .filter((r) => r.name.trim() && r.qty)
+          .forEach((r) => onUseKitPart({ part: r.name.trim(), siteName: site.name, qty: Number(r.qty) }));
+      });
     }
-    setSubmitted({ siteName: site.name, part: partText, manual: true, fromKit: manualForm.fromKit });
-    setManualForm({ siteId: "", units: [], parts: [emptyPartRow()], replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
+    const submittedPartText = isMultiUnit
+      ? targets.map((u) => `${u} ${manualUnitPartsText(u)}`).join(" · ")
+      : partText;
+    setSubmitted({ siteName: site.name, part: submittedPartText, manual: true, fromKit: manualForm.fromKit });
+    setManualForm({ siteId: "", units: [], parts: [emptyPartRow()], partsByUnit: {}, replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
     setManualFreeReason("");
     setManualPhotos({ before: [], after: [] });
     setManualPartPhotos({});
@@ -737,7 +759,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
               <>
                 <button
                   type="button"
-                  onClick={() => { setManualForm({ ...manualForm, fromKit: !manualForm.fromKit, parts: [emptyPartRow()] }); setManualPartPhotos({}); }}
+                  onClick={() => { setManualForm({ ...manualForm, fromKit: !manualForm.fromKit, parts: [emptyPartRow()], partsByUnit: {} }); setManualPartPhotos({}); }}
                   className={`w-full flex items-center gap-2.5 border rounded-xl px-3.5 py-3 mb-4 text-left ${manualForm.fromKit ? "border-blue-400 bg-blue-50" : "border-slate-200 bg-white"}`}
                 >
                   <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${manualForm.fromKit ? "bg-blue-600 border-blue-600" : "border-slate-300"}`}>
@@ -748,15 +770,29 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                     <p className="text-[11px] text-slate-400 mt-0.5">체크하면 자재 담당자에게 보충 요청이 자동으로 전달됩니다</p>
                   </div>
                 </button>
-                <Field label="교체내역">
-                  <PartsRowsInput
-                    rows={manualForm.parts}
-                    setRows={(rows) => setManualForm({ ...manualForm, parts: rows })}
-                    nameOptions={manualForm.fromKit ? KIT_PARTS : undefined}
-                    namePlaceholder={manualForm.fromKit ? "상비부품 목록에서 선택하세요" : "예: 1층 승장도어 스위치"}
-                    nameLabel="부품명 (해당 층까지 기재)"
-                  />
-                </Field>
+                {manualForm.units.length > 1 ? (
+                  manualForm.units.map((u) => (
+                    <Field key={u} label={`${u} 교체내역`}>
+                      <PartsRowsInput
+                        rows={manualForm.partsByUnit[u] ?? [emptyPartRow()]}
+                        setRows={(rows) => setManualForm({ ...manualForm, partsByUnit: { ...manualForm.partsByUnit, [u]: rows } })}
+                        nameOptions={manualForm.fromKit ? KIT_PARTS : undefined}
+                        namePlaceholder={manualForm.fromKit ? "상비부품 목록에서 선택하세요" : "예: 1층 승장도어 스위치"}
+                        nameLabel="부품명 (해당 층까지 기재)"
+                      />
+                    </Field>
+                  ))
+                ) : (
+                  <Field label="교체내역">
+                    <PartsRowsInput
+                      rows={manualForm.parts}
+                      setRows={(rows) => setManualForm({ ...manualForm, parts: rows })}
+                      nameOptions={manualForm.fromKit ? KIT_PARTS : undefined}
+                      namePlaceholder={manualForm.fromKit ? "상비부품 목록에서 선택하세요" : "예: 1층 승장도어 스위치"}
+                      nameLabel="부품명 (해당 층까지 기재)"
+                    />
+                  </Field>
+                )}
                 <Field label="교체일자">
                   <input
                     type="date"
@@ -882,6 +918,23 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                           </div>
                         </div>
                       ))}
+                    </div>
+                  ) : manualForm.units.length > 1 ? (
+                    <div className="space-y-1.5 mt-2">
+                      {manualForm.units.map((u) => (
+                        <p key={u} className="text-sm font-bold text-slate-800">{u}: {manualUnitPartsText(u)}</p>
+                      ))}
+                      <p className="text-sm font-extrabold text-blue-700 text-right">₩{Number(manualForm.cost || 0).toLocaleString()}</p>
+                      {(manualPhotos.before[0] || manualPhotos.after[0]) && (
+                        <div className="flex gap-1.5 mt-1">
+                          {manualPhotos.before[0] && (
+                            <img src={manualPhotos.before[0].url} alt="교체 전" className="flex-1 min-w-0 aspect-square rounded-lg object-cover border border-slate-200" />
+                          )}
+                          {manualPhotos.after[0] && (
+                            <img src={manualPhotos.after[0].url} alt="교체 후" className="flex-1 min-w-0 aspect-square rounded-lg object-cover border border-slate-200" />
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="mt-2">
