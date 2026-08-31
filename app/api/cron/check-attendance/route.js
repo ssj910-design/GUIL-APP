@@ -3,8 +3,9 @@
 //     (체크하면 다음 스윕부터 빠짐 — 자동 종료). 연차·공가·병가는 종일 제외, 오전반차도 제외
 //     (오전반차는 아래 3번에서 정오에 따로 다룬다). 오후반차는 오전에 정상 출근이라 대상 포함.
 //  2) 09:10(KST) 1회: 그 시점 미체크자 명단을 관리자에게 요약
-//  3) 12:00(KST) 1회: 오전반차인 사람 중 아직 출근체크 안 한 사람에게만 리마인드
-//     (오전반차는 정오 무렵부터 근무 시작이라 위 09:01~10:00 리마인드 대상에서는 빠져 있다)
+//  3) 12:01~13:00(KST) 매분: 오전반차인 사람 중 아직 출근체크 안 한 사람에게 리마인드
+//     (오전반차는 정오 무렵부터 근무 시작이라 위 09:01~10:00 리마인드 대상에서는 빠져 있다 —
+//     1번과 동일하게 체크할 때까지 매분 반복되다가 체크하면 다음 스윕부터 빠진다)
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { periodOf } from "@/lib/utils";
 import { isKstHoliday } from "@/lib/serverHolidays";
@@ -21,8 +22,8 @@ async function handle(request) {
   const kstMins = nowKst.getHours() * 60 + nowKst.getMinutes();
   const isWeekday = nowKst.getDay() >= 1 && nowKst.getDay() <= 5;
   const inMorningWindow = kstMins >= 541 && kstMins <= 600; // 09:01~10:00
-  const inNoonMoment = kstMins === 720; // 12:00
-  if (!isWeekday || !(inMorningWindow || inNoonMoment)) return Response.json({ ok: true, skipped: "시간대 아님" });
+  const inNoonWindow = kstMins >= 721 && kstMins <= 780; // 12:01~13:00 (오전반차 — 09시 알람과 동일한 방식)
+  if (!isWeekday || !(inMorningWindow || inNoonWindow)) return Response.json({ ok: true, skipped: "시간대 아님" });
 
   const todayStr = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
   const db = supabaseAdmin;
@@ -47,7 +48,7 @@ async function handle(request) {
   const checkedInIds = new Set((attendances ?? []).filter((a) => a.checked_in_at).map((a) => a.profile_id));
   const amHalfDayIds = new Set((leaves ?? []).filter((l) => l.kind === "반차" && periodOf(l.note) === "오전").map((l) => l.profile_id));
 
-  if (inNoonMoment) {
+  if (inNoonWindow) {
     const notCheckedIn = engineers.filter((e) => amHalfDayIds.has(e.id) && !checkedInIds.has(e.id));
     let reminded = false;
     if (notCheckedIn.length) {
