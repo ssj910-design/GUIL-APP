@@ -611,9 +611,9 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
   const openEscalations = failures.filter((f) => f.escalation && f.status !== "완료");
   const supportSiteIds = new Set(openEscalations.filter((f) => f.escalation === "지원요청").map((f) => f.siteId));
   const stoppedSiteIds = new Set(openEscalations.filter((f) => f.escalation === "운행정지").map((f) => f.siteId));
-  // 최근 30일 고장 목록은 실시간 계산 — 처리완료 여부와 무관하게 누적. 3회↑ 재발 배지·집중관리 판정에 쓴다.
+  // 최근 14일 고장 목록은 실시간 계산 — 처리완료 여부와 무관하게 누적. 3회↑ 재발 배지·집중관리 판정에 쓴다.
   const recentFailuresBySiteId = recentFailuresBySite(failures);
-  // 갇힘사고는 재발 횟수와 무관하게 최근 30일 내 1건만 있어도 집중관리 대상 — 30일 지나면 자동으로 빠진다.
+  // 갇힘사고는 재발 횟수와 무관하게 최근 14일 내 1건만 있어도 집중관리 대상 — 14일 지나면 자동으로 빠진다.
   const entrapmentSiteIds = entrapmentSitesRecent(failures);
   // 집중관리현장: 3회 이상 고장 또는 갇힘사고 걸린 현장 (담당 무관 — 기사도 회사 전체 위험 현장을 봄).
   // 계약종료 현장은 대응 대상이 아니므로 뺀다.
@@ -779,7 +779,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
                 const trapped = entrapmentSiteIds.get(s.id) ?? [];
                 const trappedCount = trapped.length;
                 const recent = recentFailuresBySiteId.get(s.id) ?? [];
-                const count30d = recent.length;
+                const count14d = recent.length;
                 // 갇힘사고 1건만으로 편입된 현장은 recent(3회 이상 고장 그룹)엔 안 잡히므로
                 // 갇힘사고 목록도 같이 합쳐야 그 호기가 라벨에 나온다.
                 const units = [...new Set([...recent, ...trapped].map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean))];
@@ -798,7 +798,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
                       {trappedCount > 0 && <span className="text-xs font-extrabold text-white bg-red-600 px-2 py-1 rounded-full">갇힘 {trappedCount}회</span>}
                       {support && <span className="text-xs font-extrabold text-amber-600 bg-amber-100 px-2 py-1 rounded-full">지원요청</span>}
                       {stopped && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">운행정지</span>}
-                      {count30d > 0 && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">고장 {count30d}회</span>}
+                      {count14d > 0 && <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-1 rounded-full">고장 {count14d}회</span>}
                     </span>
                   </button>
                 );

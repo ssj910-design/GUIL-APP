@@ -1039,7 +1039,7 @@ export default function App() {
     // 방금 기준을 넘겼는지(새로 발생), 이미 대상이었는데 또 접수됐는지(추가고장)를 가른다.
     // created는 항상 단일 현장이라(Global Constraints 참고) first.siteId 하나만 보면 된다.
     const isCritical = (list) =>
-      recentFailuresBySite(list, 30, 3).has(first.siteId) || entrapmentSitesRecent(list, 30).has(first.siteId);
+      recentFailuresBySite(list).has(first.siteId) || entrapmentSitesRecent(list).has(first.siteId);
     const wasCritical = isCritical(failures);
     const isCriticalNow = isCritical([...failures, ...created]);
     if (!wasCritical && isCriticalNow) {

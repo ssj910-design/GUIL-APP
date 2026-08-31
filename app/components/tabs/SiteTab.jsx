@@ -708,7 +708,7 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
   function openFailures(siteId) {
     return failures.filter((f) => f.siteId === siteId && f.status !== "완료").length;
   }
-  // 최근 30일 고장 건수 — 처리완료 여부와 무관하게 누적(집중관리 판정용, 홈/대시보드와 동일 기준).
+  // 최근 14일 고장 건수 — 처리완료 여부와 무관하게 누적(집중관리 판정용, 홈/대시보드와 동일 기준).
   const recentFailuresMap = recentFailuresBySite(failures);
 
   function backToList() {

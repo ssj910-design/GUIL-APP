@@ -1333,7 +1333,7 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
           <p className="font-bold text-slate-800 text-sm truncate flex-1 min-w-0">{f.siteName}{formatUnitLabel(f.elevatorNo) ? ` · ${unitLabel}` : ""}</p>
           {contractBadge && <span className="shrink-0 text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-1.5 py-0.5">{contractBadge}</span>}
           <span className={`shrink-0 text-[10px] font-bold rounded-full px-1.5 py-0.5 ${state.chip}`}>{state.label}</span>
-          {warnCount >= 3 && <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold rounded-full px-1.5 py-0.5 bg-red-100 text-red-600" title={`최근 30일 ${warnCount}회 고장`}><Repeat size={10} strokeWidth={2.8} />{warnCount}</span>}
+          {warnCount >= 3 && <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold rounded-full px-1.5 py-0.5 bg-red-100 text-red-600" title={`최근 14일 ${warnCount}회 고장`}><Repeat size={10} strokeWidth={2.8} />{warnCount}</span>}
         </div>
         <p className="text-[11px] text-slate-400 truncate flex items-center gap-0.5 mt-0.5">
           {dist != null && <span className="inline-flex items-center gap-0.5 font-bold text-blue-600"><MapPin size={11} strokeWidth={2.5} />{fmtDist(dist)} ·</span>}
