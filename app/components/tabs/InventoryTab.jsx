@@ -293,7 +293,7 @@ export function InventoryTab({ products, movements, onCreateProduct, onSaveProdu
   const active = products.filter((p) => p.active !== false);
   const rows = active.filter((p) => {
     const q = search.trim().toLowerCase();
-    return !q || `${p.materialNo} ${p.name}`.toLowerCase().includes(q);
+    return !q || `${p.materialNo} ${p.name} ${p.spec ?? ""} ${p.memo ?? ""} ${p.location ?? ""} ${p.vendor ?? ""}`.toLowerCase().includes(q);
   });
   const selected = active.find((p) => p.id === selectedId) ?? null;
   const existingNos = active.map((p) => p.materialNo);
@@ -328,7 +328,7 @@ export function InventoryTab({ products, movements, onCreateProduct, onSaveProdu
       <div className="p-3 flex gap-2 border-b border-slate-100">
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input className={`${inputCls} pl-8`} placeholder="제품 이름, 자재번호 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input className={`${inputCls} pl-8`} placeholder="제품 이름, 자재번호, 규격, 비고, 위치, 구매처 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         {isAdmin && (
           <button onClick={() => setCreating(true)} className="text-xs font-bold text-white bg-blue-700 rounded-lg px-3 whitespace-nowrap">+ 등록</button>

@@ -469,7 +469,7 @@ export default function InventoryAdmin({ data, setData }) {
   const active = inventoryProducts.filter((p) => p.active !== false);
   const rows = active.filter((p) => {
     const q = search.trim().toLowerCase();
-    if (q && !`${p.materialNo} ${p.name}`.toLowerCase().includes(q)) return false;
+    if (q && !`${p.materialNo} ${p.name} ${p.spec ?? ""} ${p.memo ?? ""} ${p.location ?? ""} ${p.vendor ?? ""}`.toLowerCase().includes(q)) return false;
     if (onlyInStock && currentStock(inventoryStockMovements, p.id) <= 0) return false;
     return true;
   });
@@ -576,7 +576,7 @@ export default function InventoryAdmin({ data, setData }) {
             <button onClick={startCreating} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5">+ 제품 추가</button>
           </div>
           <div className="flex gap-2 mb-3">
-            <input className={`${inputCls} flex-1`} placeholder="자재번호·제품명 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input className={`${inputCls} flex-1`} placeholder="자재번호·제품명·규격·비고·위치·구매처 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
             <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 border border-slate-200 rounded-lg px-3 whitespace-nowrap">
               <input type="checkbox" checked={onlyInStock} onChange={(e) => setOnlyInStock(e.target.checked)} /> 재고 보유
             </label>
