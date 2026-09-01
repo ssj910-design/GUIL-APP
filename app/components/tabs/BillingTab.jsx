@@ -510,38 +510,48 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                         )}
                         <input
                           type="number"
-                          className={inputCls}
-                          placeholder="예: 350000 (FM 계약 등 무상이면 0)"
+                          className={`${inputCls} ${freeReason ? "bg-slate-100 text-slate-400" : ""}`}
+                          placeholder="예: 350000 (FM 계약 등 무상이면 아래에서 사유 선택)"
                           value={materialCost}
+                          disabled={!!freeReason}
                           onChange={(e) => setMaterialCost(e.target.value)}
                         />
-                        {materialCost === "" ? (
+                        {materialCost === "" && !freeReason && (
                           <p className="text-[11px] text-red-500 mt-1">수리비를 입력해주세요</p>
-                        ) : Number(materialCost) === 0 ? (
-                          <div className="mt-1.5">
-                            <p className="text-[11px] font-bold text-slate-500 mb-1">사유 (필수)</p>
-                            <div className="grid grid-cols-2 gap-1.5">
-                              {FREE_REASONS.map((r) => (
-                                <button
-                                  key={r}
-                                  type="button"
-                                  onClick={() => setFreeReason(r)}
-                                  className={`py-2 rounded-lg text-xs font-bold ${freeReason === r ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}
-                                >
-                                  {freeReasonLabel(r)}
-                                </button>
-                              ))}
-                            </div>
-                            {!freeReason && <p className="text-[11px] text-red-500 mt-1">사유를 선택해주세요</p>}
-                          </div>
-                        ) : (
+                        )}
+                        {!freeReason && Number(materialCost) > 0 &&
                           selected?.billingAmount != null && Number(materialCost) !== Number(selected.billingAmount) && (
                             <p className="text-[11px] text-amber-600 mt-1 flex items-start gap-1">
                               <AlertTriangle size={12} className="shrink-0 mt-0.5" />
                               사전승인 금액과 달라요 — 맞는지 한 번 더 확인해주세요
                             </p>
-                          )
-                        )}
+                          )}
+                        <div className="mt-1.5">
+                          <p className="text-[11px] font-bold text-slate-500 mb-1">무상 처리 사유 (해당 시 선택)</p>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {FREE_REASONS.map((r) => (
+                              <button
+                                key={r}
+                                type="button"
+                                onClick={() => { setFreeReason(r); setMaterialCost("0"); }}
+                                className={`py-2 rounded-lg text-xs font-bold ${freeReason === r ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}
+                              >
+                                {freeReasonLabel(r)}
+                              </button>
+                            ))}
+                          </div>
+                          {freeReason ? (
+                            <button
+                              type="button"
+                              onClick={() => { setFreeReason(""); setMaterialCost(""); }}
+                              className="text-[11px] text-blue-600 underline mt-1"
+                            >
+                              직접 금액 입력하기
+                            </button>
+                          ) : Number(materialCost) === 0 && (
+                            <p className="text-[11px] text-red-500 mt-1">사유를 선택해주세요</p>
+                          )}
+                        </div>
                       </>
                     )}
                   </Field>
@@ -816,31 +826,41 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                 <Field label="수리비 (필수)">
                   <input
                     type="number"
-                    className={inputCls}
-                    placeholder="예: 150000 (FM 계약 등 무상이면 0)"
+                    className={`${inputCls} ${manualFreeReason ? "bg-slate-100 text-slate-400" : ""}`}
+                    placeholder="예: 150000 (FM 계약 등 무상이면 아래에서 사유 선택)"
                     value={manualForm.cost}
+                    disabled={!!manualFreeReason}
                     onChange={(e) => setManualForm({ ...manualForm, cost: e.target.value })}
                   />
-                  {manualCostRaw === "" ? (
+                  {manualCostRaw === "" && !manualFreeReason && (
                     <p className="text-[11px] text-red-500 mt-1">수리비를 입력해주세요</p>
-                  ) : Number(manualCostRaw) === 0 && (
-                    <div className="mt-1.5">
-                      <p className="text-[11px] font-bold text-slate-500 mb-1">사유 (필수)</p>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {FREE_REASONS.map((r) => (
-                          <button
-                            key={r}
-                            type="button"
-                            onClick={() => setManualFreeReason(r)}
-                            className={`py-2 rounded-lg text-xs font-bold ${manualFreeReason === r ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}
-                          >
-                            {freeReasonLabel(r)}
-                          </button>
-                        ))}
-                      </div>
-                      {!manualFreeReason && <p className="text-[11px] text-red-500 mt-1">사유를 선택해주세요</p>}
-                    </div>
                   )}
+                  <div className="mt-1.5">
+                    <p className="text-[11px] font-bold text-slate-500 mb-1">무상 처리 사유 (해당 시 선택)</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {FREE_REASONS.map((r) => (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => { setManualFreeReason(r); setManualForm({ ...manualForm, cost: "0" }); }}
+                          className={`py-2 rounded-lg text-xs font-bold ${manualFreeReason === r ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}
+                        >
+                          {freeReasonLabel(r)}
+                        </button>
+                      ))}
+                    </div>
+                    {manualFreeReason ? (
+                      <button
+                        type="button"
+                        onClick={() => { setManualFreeReason(""); setManualForm({ ...manualForm, cost: "" }); }}
+                        className="text-[11px] text-blue-600 underline mt-1"
+                      >
+                        직접 금액 입력하기
+                      </button>
+                    ) : Number(manualCostRaw) === 0 && (
+                      <p className="text-[11px] text-red-500 mt-1">사유를 선택해주세요</p>
+                    )}
+                  </div>
                 </Field>
               </>
             )}
