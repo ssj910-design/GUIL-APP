@@ -16,6 +16,7 @@ import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 
 const BILL_STEP_TITLES = ["청구 정보", "증빙 사진", "완료 서명"]; // 자재 지급건(3-step)
 const draftKey = (todoId) => `guilBillingDraftV1:${todoId}`;
+const MANUAL_DRAFT_KEY = "guilBillingManualDraftV1";
 const MAN_BILL_TITLES = ["현장·호기", "교체 내역·비용", "증빙 사진", "완료 서명"]; // 직접 입력(4-step)
 // FM 계약은 부품이 무상이라 수리비 0원 청구가 있다 — 0원이면 이 중 하나를 사유로 반드시 고르게 한다.
 const FREE_REASONS = ["FM", "하자", "서비스", "견적서 참조"];
@@ -48,7 +49,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
   const [freeReason, setFreeReason] = useState(""); // 수리비 0원(무상)일 때 사유 — FM/하자/서비스
   const [materialReplaceDate, setMaterialReplaceDate] = useState(TODAY_STR);
   const [submitted, setSubmitted] = useState(null);
-  const [manualForm, setManualForm] = useState({ siteId: "", units: [], parts: [emptyPartRow()], partsByUnit: {}, replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
+  const [manualForm, setManualForm] = useState({ siteId: "", units: [], parts: [emptyPartRow()], partsByUnit: {}, replaceDate: TODAY_STR, cost: "", fromKit: false });
   const [manualFreeReason, setManualFreeReason] = useState(""); // 수리비 0원(무상)일 때 사유 — FM/하자/서비스
   const [materialPhotos, setMaterialPhotos] = useState({ before: [], after: [] });
   const [partPhotos, setPartPhotos] = useState({}); // 부품 2개 이상일 때만 사용: { [index]: { before: [], after: [] } }
@@ -132,6 +133,26 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       setVendorNameInput(selected?.vendorName ?? "");
     }
   }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 직접입력은 특정 할일에 묶이지 않으므로 고정 키 하나로 임시저장 — 앱 진입 시 1회만 복원.
+  useEffect(() => {
+    let draft = null;
+    try {
+      const raw = localStorage.getItem(MANUAL_DRAFT_KEY);
+      if (raw) draft = JSON.parse(raw);
+    } catch { /* 손상된 임시저장은 무시 */ }
+    if (!draft) return;
+    if (draft.manualForm) setManualForm(draft.manualForm);
+    setManualFreeReason(draft.manualFreeReason ?? "");
+    setManualPhotos(draft.manualPhotos ?? { before: [], after: [] });
+    setManualPartPhotos(draft.manualPartPhotos ?? {});
+    setManualSignatureUrl(draft.manualSignatureUrl ?? null);
+    setManualAbsentMode(draft.manualAbsentMode ?? false);
+    setManualApproverName(draft.manualApproverName ?? "");
+    setManualApproverPhone(draft.manualApproverPhone ?? "");
+    setManualAbsentConfirmed(draft.manualAbsentConfirmed ?? false);
+    setManualSignerName(draft.manualSignerName ?? "");
+    setManualSignerPhone(draft.manualSignerPhone ?? "");
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // 관리자가 지급 확정한 부품이 2개 이상이면 부품별로 전/후 사진을 따로 받는다 — 1개면
   // 나눌 이유가 없어 지금처럼 통합 업로더를 그대로 쓴다. 외주 견적건은 견적 품목을 우선한다.
   const billingParts = quoteBillingItems?.length > 1 ? quoteBillingItems : selected?.billingPartRows?.length > 1 ? selected.billingPartRows : null;
@@ -156,7 +177,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
   const manualPartsOk = manualForm.units.length > 1
     ? manualForm.units.every((u) => manualUnitPartsText(u))
     : !!formatPartRows(manualForm.parts);
-  const manualValid = manualForm.siteId && manualForm.units.length > 0 && manualPartsOk && manualForm.replaceDate && manualForm.contactPhone.trim() && manualCostOk && manualPhotosOk && manualApprovalOk;
+  const manualValid = manualForm.siteId && manualForm.units.length > 0 && manualPartsOk && manualForm.replaceDate && manualCostOk && manualPhotosOk && manualApprovalOk;
 
   // 스텝별 필수 검증 — 미입력이면 안내 문구 반환(다음/제출 막힘), 없으면 null.
   function matStepError(step) {
@@ -207,7 +228,6 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       } else if (!formatPartRows(manualForm.parts)) {
         return "교체내역을 1개 이상 입력해주세요";
       }
-      if (!manualForm.contactPhone.trim()) return "현장담당자 연락처를 입력해주세요";
       if (manualCostRaw === "" || Number(manualCostRaw) < 0) return "수리비를 입력해주세요";
       if (Number(manualCostRaw) === 0 && !manualFreeReason) return "사유를 선택해주세요";
     }
@@ -267,6 +287,19 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
     }
   }
 
+  function saveManualDraft() {
+    try {
+      localStorage.setItem(MANUAL_DRAFT_KEY, JSON.stringify({
+        manualForm, manualFreeReason, manualPhotos, manualPartPhotos,
+        manualSignatureUrl, manualAbsentMode, manualApproverName, manualApproverPhone,
+        manualAbsentConfirmed, manualSignerName, manualSignerPhone,
+      }));
+      toastBill("임시저장했습니다", true);
+    } catch {
+      toastBill("임시저장에 실패했습니다");
+    }
+  }
+
   async function submitMaterial() {
     if (!selected) return;
     // 견적 지급 시 담당자를 2명 이상 지정한 경우, 같은 quoteRequestId(또는 materialRequestId,
@@ -319,7 +352,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       isFree: !isQuoteBilling && Number(materialCost) === 0,
       freeReason: !isQuoteBilling && Number(materialCost) === 0 ? freeReason : null,
       replaceDate: materialReplaceDate,
-      contactPhone: null,
+      contactPhone: absentMode ? approverPhone.trim() : signerPhone.trim(),
       beforePhotoUrls,
       afterPhotoUrls,
       partPhotos: partPhotosPayload,
@@ -414,7 +447,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       afterPhotoUrls: manualAfterUrls,
       partPhotos: partPhotosPayload,
       replaceDate: manualForm.replaceDate,
-      contactPhone: manualForm.contactPhone,
+      contactPhone: manualAbsentMode ? manualApproverPhone.trim() : manualSignerPhone.trim(),
       // 지류 교체확인서 대신: 서명했으면 서명 이미지, 고객 부재중이면 전화승인자 정보.
       signatureUrl: manualAbsentMode ? null : manualSignatureUrl,
       approvalMethod: manualAbsentMode ? "전화승인" : "서명",
@@ -423,6 +456,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       approvedAt: new Date().toISOString(),
     });
     if (!ok) return; // 실패 시 폼 유지(리셋 안 함)해 재시도 가능
+    try { localStorage.removeItem(MANUAL_DRAFT_KEY); } catch { /* 임시저장 정리 실패는 무시 */ }
     if (manualForm.fromKit) {
       // 호기별로 실제 쓴 부품·수량만큼 차감한다 — 호기마다 교체내역이 다를 수 있어(위 isMultiUnit)
       // "호기 수 × 동일 수량"으로 일괄 차감하지 않고 호기별 실제 입력을 그대로 쓴다.
@@ -434,7 +468,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       });
     }
     setSubmitted({ siteName: site.name, part: partText, manual: true, fromKit: manualForm.fromKit });
-    setManualForm({ siteId: "", units: [], parts: [emptyPartRow()], partsByUnit: {}, replaceDate: TODAY_STR, contactPhone: "", cost: "", fromKit: false });
+    setManualForm({ siteId: "", units: [], parts: [emptyPartRow()], partsByUnit: {}, replaceDate: TODAY_STR, cost: "", fromKit: false });
     setManualFreeReason("");
     setManualPhotos({ before: [], after: [] });
     setManualPartPhotos({});
@@ -810,14 +844,6 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                     onChange={(e) => setManualForm({ ...manualForm, replaceDate: e.target.value })}
                   />
                 </Field>
-                <Field label="교체확인서 받은 현장담당자 연락처">
-                  <input
-                    className={inputCls}
-                    placeholder="예: 010-1234-5678"
-                    value={manualForm.contactPhone}
-                    onChange={(e) => setManualForm({ ...manualForm, contactPhone: formatPhone(e.target.value) })}
-                  />
-                </Field>
                 <Field label="수리비 (필수)">
                   <input
                     type="number"
@@ -1020,6 +1046,9 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
             <div className="flex gap-2 mt-2">
               {billStep > 0 && (
                 <button type="button" onClick={() => setBillStep((s) => s - 1)} className="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200">이전</button>
+              )}
+              {billStep >= 1 && (
+                <button type="button" onClick={saveManualDraft} className="px-4 py-3 rounded-xl text-sm font-bold text-blue-700 border border-blue-200 bg-blue-50">임시저장</button>
               )}
               {billStep < 3 ? (
                 <button type="button" onClick={() => { const err = manStepError(billStep); if (err) { toastBill(err); return; } setBillStep((s) => s + 1); }} className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-blue-700 active:bg-blue-800">다음</button>
