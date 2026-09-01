@@ -79,6 +79,8 @@ function siteDueSoonLabel(site, inspections, todayStr) {
 }
 
 const CHECKUP_STEP_TITLES = ["점검 정보", "점검 항목", "특이사항·제출"];
+// 호기·이번 달 단위로 임시저장 — 청구 화면(BillingTab)의 임시저장과 동일 패턴(기기 로컬).
+const checkupDraftKey = (unitId, ym) => `guilCheckupDraftV1:${unitId}:${ym}`;
 const fmtMD = (d) => (d ? `${d.slice(5, 7)}/${d.slice(8, 10)}` : ""); // "2026-07-25" → "07/25"
 const fmtDist = (km) => (km == null ? null : km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`);
 
@@ -258,15 +260,52 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     setItemStates(stateMap);
 
     const existing = selfChecks.find((c) => c.unitId === unitId && c.ym === ym);
-    if (!existing) return;
-    if (existing.doneDate) setCheckupDate(existing.doneDate);
-    setCheckupNotes(existing.notes ?? "");
-    setCheckupPhotos((existing.photos ?? []).map((url) => ({ url })));
-    if (existing.govResultCode) setCheckupResult({ resultCode: existing.govResultCode, resultMsg: existing.govResultMsg });
-    const { data } = await supabase.from("self_check_items").select("*").eq("self_check_id", existing.id);
-    const map = {};
-    (data ?? []).map(mapSelfCheckItem).forEach((it) => { map[it.itemCd] = { result: it.result, remark: it.remark ?? "" }; });
-    setItemExceptions(map);
+    if (existing) {
+      if (existing.doneDate) setCheckupDate(existing.doneDate);
+      setCheckupNotes(existing.notes ?? "");
+      setCheckupPhotos((existing.photos ?? []).map((url) => ({ url })));
+      if (existing.govResultCode) setCheckupResult({ resultCode: existing.govResultCode, resultMsg: existing.govResultMsg });
+      const { data } = await supabase.from("self_check_items").select("*").eq("self_check_id", existing.id);
+      const map = {};
+      (data ?? []).map(mapSelfCheckItem).forEach((it) => { map[it.itemCd] = { result: it.result, remark: it.remark ?? "" }; });
+      setItemExceptions(map);
+    }
+    // 이번 달 등록이 이미 완료된 건(existing.doneDate)은 임시저장을 안 불러온다 — 이미 제출된
+    // 내용을 DB에서 보여주는 게 맞고, 남아있는 옛 임시저장이 있으면 오히려 헷갈린다.
+    if (!existing?.doneDate) {
+      try {
+        const raw = localStorage.getItem(checkupDraftKey(unitId, ym));
+        if (raw) {
+          const draft = JSON.parse(raw);
+          setCheckupDate(draft.checkupDate ?? TODAY_STR);
+          setCheckupStartTime(draft.checkupStartTime ?? "09:00");
+          setCheckupEndTime(draft.checkupEndTime ?? "09:30");
+          setCheckupCnfirm(draft.checkupCnfirm ?? "");
+          setCheckupCnfirmTel(draft.checkupCnfirmTel ?? "");
+          setCheckupSubProfileId(draft.checkupSubProfileId ?? "");
+          setCheckupNotes(draft.checkupNotes ?? "");
+          setCheckupPhotos(draft.checkupPhotos ?? []);
+          setItemExceptions(draft.itemExceptions ?? {});
+          setCheckupStep(draft.checkupStep ?? 0);
+          toastCheckup("임시저장된 내용을 불러왔습니다");
+        }
+      } catch { /* 손상된 임시저장은 무시하고 빈 폼으로 시작 */ }
+    }
+  }
+
+  // 사진 찍다 중간에 나가는 등 등록이 끊기기 쉬워, 지금까지 입력한 내용을 기기에 임시저장해뒀다가
+  // 같은 호기·이번 달로 돌아오면 자동으로 이어서 하게 한다(청구 화면 임시저장과 동일 패턴).
+  function saveCheckupDraft() {
+    if (!checkupUnitId) return;
+    try {
+      localStorage.setItem(checkupDraftKey(checkupUnitId, ym), JSON.stringify({
+        checkupDate, checkupStartTime, checkupEndTime, checkupCnfirm, checkupCnfirmTel,
+        checkupSubProfileId, checkupNotes, checkupPhotos, itemExceptions, checkupStep,
+      }));
+      toastCheckup("임시저장했습니다");
+    } catch {
+      toastCheckup("임시저장에 실패했습니다");
+    }
   }
 
   function toastCheckup(msg) {
@@ -325,6 +364,8 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
       .eq("unit_id", checkupUnitId)
       .eq("ym", ym);
     if (error) { alert("자체점검 등록 실패: " + error.message); setSavingCheckup(false); return; }
+    // 사내 기록까지 저장됐으니(공단 제출 성공 여부와 무관) 임시저장은 더 필요 없다.
+    try { localStorage.removeItem(checkupDraftKey(checkupUnitId, ym)); } catch { /* 임시저장 정리 실패는 무시 */ }
     const { data: freshRow } = await supabase.from("self_checks").select("*").eq("unit_id", checkupUnitId).eq("ym", ym).single();
     const mapped = mapSelfCheck(freshRow);
 
@@ -776,6 +817,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
                 이전
               </button>
             )}
+            <button type="button" onClick={saveCheckupDraft} className="px-4 py-3 rounded-xl text-sm font-bold text-blue-700 border border-blue-200 bg-blue-50">임시저장</button>
             {checkupStep < 2 ? (
               <button
                 onClick={() => { const err = checkupStepError(checkupStep); if (err) { toastCheckup(err); return; } setCheckupStep((s) => s + 1); }}
