@@ -815,14 +815,28 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
                   </div>
                 )}
                 {q.status === "승인" && (
-                  <button onClick={(e) => { e.stopPropagation(); setQuoteSupplyTarget(q); }} className="text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors px-2.5 py-1.5 rounded-lg">
-                    지급하기
-                  </button>
+                  <div className="flex gap-1.5">
+                    <button onClick={(e) => { e.stopPropagation(); setQuoteSupplyTarget(q); }} className="text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors px-2.5 py-1.5 rounded-lg">
+                      지급하기
+                    </button>
+                    {q.quotePdfUrl && (
+                      <a href={q.quotePdfUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs font-bold text-blue-700 border border-blue-200 px-2.5 py-1.5 rounded-lg">
+                        PDF 보기
+                      </a>
+                    )}
+                  </div>
                 )}
                 {q.status === "자재지급완료" && (
-                  <button onClick={(e) => { e.stopPropagation(); setQuoteSupplyTarget(q); }} className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors px-2.5 py-1.5 rounded-lg">
-                    수정
-                  </button>
+                  <div className="flex gap-1.5">
+                    <button onClick={(e) => { e.stopPropagation(); setQuoteSupplyTarget(q); }} className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors px-2.5 py-1.5 rounded-lg">
+                      수정
+                    </button>
+                    {q.quotePdfUrl && (
+                      <a href={q.quotePdfUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs font-bold text-blue-700 border border-blue-200 px-2.5 py-1.5 rounded-lg">
+                        PDF 보기
+                      </a>
+                    )}
+                  </div>
                 )}
               </td>
             </tr>
