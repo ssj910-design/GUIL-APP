@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { Receipt, Check, Search, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnitList, formatPhone } from "@/lib/utils";
+import { siteUnitList, formatPhone, freeReasonLabel } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
 import { DDay, PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -528,7 +528,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                                   onClick={() => setFreeReason(r)}
                                   className={`py-2 rounded-lg text-xs font-bold ${freeReason === r ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}
                                 >
-                                  {r}
+                                  {freeReasonLabel(r)}
                                 </button>
                               ))}
                             </div>
@@ -834,7 +834,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                             onClick={() => setManualFreeReason(r)}
                             className={`py-2 rounded-lg text-xs font-bold ${manualFreeReason === r ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}
                           >
-                            {r}
+                            {freeReasonLabel(r)}
                           </button>
                         ))}
                       </div>

@@ -5,7 +5,7 @@
 import { useState, useContext } from "react";
 import { Search, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { shortDate, formatUnitLabel, quoteGrandTotal } from "@/lib/utils";
+import { shortDate, formatUnitLabel, quoteGrandTotal, freeReasonOf, freeReasonLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { mapBilling } from "@/lib/mappers";
 import { BRAND } from "@/lib/company";
@@ -492,9 +492,13 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
             <div>
               <p className="text-xs font-bold text-slate-400 mb-1">금액(VAT별도)</p>
               {b.isFree ? (
-                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">무상</span>
+                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
+                  {freeReasonLabel(freeReasonOf(b.notes))}
+                </span>
+              ) : b.cost == null ? (
+                <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">견적서 참조</span>
               ) : (
-                <p className="font-semibold text-slate-800">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</p>
+                <p className="font-semibold text-slate-800">{Number(b.cost).toLocaleString()}원</p>
               )}
             </div>
           ) : (
@@ -828,9 +832,13 @@ export default function BillingsAdmin({ data, setData }) {
             <td className="px-3 py-2.5 text-slate-600 whitespace-pre-line">{b.part}</td>
             <td className="px-3 py-2.5 whitespace-nowrap">
               {b.isFree ? (
-                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">무상</span>
+                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
+                  {freeReasonLabel(freeReasonOf(b.notes))}
+                </span>
+              ) : b.cost == null ? (
+                <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">견적서 참조</span>
               ) : (
-                <span className="font-bold">{b.cost ? Number(b.cost).toLocaleString() + "원" : "-"}</span>
+                <span className="font-bold">{Number(b.cost).toLocaleString()}원</span>
               )}
             </td>
             <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(b.replaceDate)}</td>
