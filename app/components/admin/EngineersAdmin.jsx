@@ -5,7 +5,7 @@ import { useState, useContext } from "react";
 import { GripVertical, X, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto } from "@/lib/photos";
-import { formatPhone, shortDate } from "@/lib/utils";
+import { formatPhone, handlePhoneInputChange, shortDate } from "@/lib/utils";
 import { StatusBadge, AdminTable, inputCls, DateTextInput, EditableDate, EditableText, Modal, FileCarousel, AdminAuthContext } from "@/app/components/admin/adminShared";
 import ImportEngineers from "@/app/components/admin/ImportEngineers";
 import DutyAdmin from "@/app/components/admin/DutyAdmin";
@@ -148,7 +148,7 @@ function EngineerCard({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenCont
           </div>
           <div>
             <p className="text-[11px] font-bold text-slate-500 mb-1">연락처</p>
-            <input className={inputCls} inputMode="numeric" value={form.phone} onChange={(e) => setForm({ ...form, phone: formatPhone(e.target.value) })} />
+            <input className={inputCls} inputMode="numeric" value={form.phone} onChange={(e) => handlePhoneInputChange(e, (v) => setForm({ ...form, phone: v }))} />
           </div>
           <div>
             <p className="text-[11px] font-bold text-slate-500 mb-1">차량번호</p>

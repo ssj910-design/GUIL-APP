@@ -5,7 +5,7 @@ import { useState, useRef, createContext } from "react";
 import { createPortal } from "react-dom";
 import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil, Paperclip, Camera, Image as ImageIcon, Download, Trash2, Search } from "lucide-react";
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
-import { shortDate, parseShortDate, autoFormatShortDate, formatUnitLabel, sortEngineersByDistance, busyStatusOf } from "@/lib/utils";
+import { shortDate, parseShortDate, autoFormatShortDate, formatUnitLabel, sortEngineersByDistance, busyStatusOf, handleFormattedInputChange } from "@/lib/utils";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { PhotoLightboxPane, Sheet } from "@/app/components/ui";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
@@ -665,7 +665,7 @@ export function EditableText({ value, onCommit, placeholder = "", format, emptyT
         className={`${inputCls} min-w-24 ${className}`}
         placeholder={placeholder}
         value={text}
-        onChange={(e) => setText(format ? format(e.target.value) : e.target.value)}
+        onChange={(e) => (format ? handleFormattedInputChange(e, format, setText) : setText(e.target.value))}
         onBlur={() => { onCommit(text); setEditing(false); }}
         onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
       />

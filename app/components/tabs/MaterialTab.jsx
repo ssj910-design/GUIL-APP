@@ -1,7 +1,7 @@
 import { Fragment, useState, useContext, useEffect } from "react";
 import { ChevronRight, X, Plus, Search, PackageCheck, PackageX, AlertTriangle, Check } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnitList, realInstallPlace, unitIdFor, profileIdByName, formatPhone, formatUnitLabel } from "@/lib/utils";
+import { siteUnitList, realInstallPlace, unitIdFor, profileIdByName, handlePhoneInputChange, formatUnitLabel } from "@/lib/utils";
 import { TODAY_STR, QUOTE_STAGES, KIT_PARTS } from "@/lib/constants";
 import { PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -1241,7 +1241,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
                     className={inputCls}
                     placeholder="예: 010-1234-5678"
                     value={quoteForm.contactPhone}
-                    onChange={(e) => setQuoteForm({ ...quoteForm, contactPhone: formatPhone(e.target.value) })}
+                    onChange={(e) => handlePhoneInputChange(e, (v) => setQuoteForm({ ...quoteForm, contactPhone: v }))}
                   />
                 </Field>
               </>

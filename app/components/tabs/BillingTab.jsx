@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { Receipt, Check, Search, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnitList, formatPhone, freeReasonLabel } from "@/lib/utils";
+import { siteUnitList, handlePhoneInputChange, freeReasonLabel } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
 import { DDay, PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -713,7 +713,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                         <input type="text" className={inputCls} placeholder="예: 김O식 관리소장" value={signerName} onChange={(e) => setSignerName(e.target.value)} />
                       </Field>
                       <Field label="서명자 연락처*">
-                        <input type="tel" className={inputCls} placeholder="010-0000-0000" value={signerPhone} onChange={(e) => setSignerPhone(formatPhone(e.target.value))} />
+                        <input type="tel" className={inputCls} placeholder="010-0000-0000" value={signerPhone} onChange={(e) => handlePhoneInputChange(e, setSignerPhone)} />
                       </Field>
                       <Field label="고객 서명*">
                         <SignaturePad
@@ -733,7 +733,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                         <input type="text" className={inputCls} placeholder="예: 김O식 관리소장" value={approverName} onChange={(e) => setApproverName(e.target.value)} />
                       </Field>
                       <Field label="연락처">
-                        <input type="tel" className={inputCls} placeholder="010-0000-0000" value={approverPhone} onChange={(e) => setApproverPhone(formatPhone(e.target.value))} />
+                        <input type="tel" className={inputCls} placeholder="010-0000-0000" value={approverPhone} onChange={(e) => handlePhoneInputChange(e, setApproverPhone)} />
                       </Field>
                       <label className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2.5 mt-1">
                         <input type="checkbox" checked={absentConfirmed} onChange={(e) => setAbsentConfirmed(e.target.checked)} />
@@ -1009,7 +1009,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                       <input type="text" className={inputCls} placeholder="예: 김O식 관리소장" value={manualSignerName} onChange={(e) => setManualSignerName(e.target.value)} />
                     </Field>
                     <Field label="서명자 연락처*">
-                      <input type="tel" className={inputCls} placeholder="010-0000-0000" value={manualSignerPhone} onChange={(e) => setManualSignerPhone(formatPhone(e.target.value))} />
+                      <input type="tel" className={inputCls} placeholder="010-0000-0000" value={manualSignerPhone} onChange={(e) => handlePhoneInputChange(e, setManualSignerPhone)} />
                     </Field>
                     <Field label="고객 서명*">
                       <SignaturePad
@@ -1029,7 +1029,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                       <input type="text" className={inputCls} placeholder="예: 김O식 관리소장" value={manualApproverName} onChange={(e) => setManualApproverName(e.target.value)} />
                     </Field>
                     <Field label="연락처">
-                      <input type="tel" className={inputCls} placeholder="010-0000-0000" value={manualApproverPhone} onChange={(e) => setManualApproverPhone(formatPhone(e.target.value))} />
+                      <input type="tel" className={inputCls} placeholder="010-0000-0000" value={manualApproverPhone} onChange={(e) => handlePhoneInputChange(e, setManualApproverPhone)} />
                     </Field>
                     <label className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2.5 mt-1">
                       <input type="checkbox" checked={manualAbsentConfirmed} onChange={(e) => setManualAbsentConfirmed(e.target.checked)} />

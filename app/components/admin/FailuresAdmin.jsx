@@ -7,7 +7,7 @@ import { Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
 import { TODAY_STR, FAULT_TYPES } from "@/lib/constants";
-import { formatPhone, sortEngineersByDistance, engineerJobsByName } from "@/lib/utils";
+import { handlePhoneInputChange, sortEngineersByDistance, engineerJobsByName } from "@/lib/utils";
 import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls, ReassignModal, SiteAutocomplete } from "@/app/components/admin/adminShared";
 import { FailureDetailContent } from "@/app/components/admin/Dashboard";
 import { EngineerLocationMap } from "@/app/components/admin/EngineerLocationMap";
@@ -289,7 +289,7 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <p className="text-xs font-bold text-slate-500 mb-1">신고자 연락처 *</p>
-            <input className={inputCls} placeholder="010-0000-0000" value={form.reporterPhone} onChange={(e) => setForm({ ...form, reporterPhone: formatPhone(e.target.value) })} />
+            <input className={inputCls} placeholder="010-0000-0000" value={form.reporterPhone} onChange={(e) => handlePhoneInputChange(e, (v) => setForm({ ...form, reporterPhone: v }))} />
           </div>
           <div>
             <p className="text-xs font-bold text-slate-500 mb-1">배정 기사{site && <span className="text-slate-400 font-normal"> — 가까운 순</span>}</p>

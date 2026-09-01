@@ -9,7 +9,7 @@ import { Plus, Trash2, Paperclip, FileText, ShieldCheck, BadgeCheck, PhoneCall }
 import { supabase } from "@/lib/supabaseClient";
 import { mapUnit, mapSite, mapUnitPartPhoto } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, govDateToDashed, siteMatchesQuery, siteMatchReasons, formatPhone, shortDate, realInstallPlace, unitContractBadges } from "@/lib/utils";
+import { addDays, govDateToDashed, siteMatchesQuery, siteMatchReasons, handlePhoneInputChange, shortDate, realInstallPlace, unitContractBadges } from "@/lib/utils";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -114,9 +114,9 @@ function AddSiteModal({ engineers, onClose, onSave }) {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div><p className="text-xs font-bold text-slate-500 mb-1">전화번호</p>
-            <input className={inputCls} placeholder="관리사무소 대표번호" value={form.phone} onChange={(e) => set("phone")(formatPhone(e.target.value))} /></div>
+            <input className={inputCls} placeholder="관리사무소 대표번호" value={form.phone} onChange={(e) => handlePhoneInputChange(e, set("phone"))} /></div>
           <div><p className="text-xs font-bold text-slate-500 mb-1">팩스</p>
-            <input className={inputCls} value={form.fax} onChange={(e) => set("fax")(formatPhone(e.target.value))} /></div>
+            <input className={inputCls} value={form.fax} onChange={(e) => handlePhoneInputChange(e, set("fax"))} /></div>
           <div><p className="text-xs font-bold text-slate-500 mb-1">이메일</p>
             <input className={inputCls} value={form.email} onChange={(e) => set("email")(e.target.value)} /></div>
         </div>
@@ -548,9 +548,9 @@ function ContactRow({ c, onSave, onDelete, onSetPrimary, isDefault }) {
         </select>
       </td>
       <td className="px-2 py-2"><input className={inputCls} placeholder="이름" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></td>
-      <td className="px-2 py-2"><input className={inputCls} placeholder="전화번호" value={form.phone} onChange={(e) => setForm({ ...form, phone: formatPhone(e.target.value) })} /></td>
+      <td className="px-2 py-2"><input className={inputCls} placeholder="전화번호" value={form.phone} onChange={(e) => handlePhoneInputChange(e, (v) => setForm({ ...form, phone: v }))} /></td>
       <td className="px-2 py-2"><input className={inputCls} placeholder="이메일" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></td>
-      <td className="px-2 py-2"><input className={inputCls} placeholder="팩스" value={form.fax} onChange={(e) => setForm({ ...form, fax: formatPhone(e.target.value) })} /></td>
+      <td className="px-2 py-2"><input className={inputCls} placeholder="팩스" value={form.fax} onChange={(e) => handlePhoneInputChange(e, (v) => setForm({ ...form, fax: v }))} /></td>
       <td className="px-2 py-2 whitespace-nowrap text-right pr-3">
         <button disabled={!dirty} onClick={() => onSave(c, form)} className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-3 py-1.5 mr-1">저장</button>
         <button onClick={() => onDelete(c)} className="text-xs font-bold text-red-400 border border-red-100 rounded-lg px-2 py-1.5">삭제</button>
@@ -1334,8 +1334,8 @@ export default function SitesAdmin({ data, setData }) {
                       </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div><p className="text-xs font-bold text-slate-500 mb-1">전화번호</p><input className={inputCls} placeholder="관리사무소 대표번호" value={siteForm.phone} onChange={(e) => setSiteForm({ ...siteForm, phone: formatPhone(e.target.value) })} /></div>
-                      <div><p className="text-xs font-bold text-slate-500 mb-1">팩스</p><input className={inputCls} value={siteForm.fax} onChange={(e) => setSiteForm({ ...siteForm, fax: formatPhone(e.target.value) })} /></div>
+                      <div><p className="text-xs font-bold text-slate-500 mb-1">전화번호</p><input className={inputCls} placeholder="관리사무소 대표번호" value={siteForm.phone} onChange={(e) => handlePhoneInputChange(e, (v) => setSiteForm({ ...siteForm, phone: v }))} /></div>
+                      <div><p className="text-xs font-bold text-slate-500 mb-1">팩스</p><input className={inputCls} value={siteForm.fax} onChange={(e) => handlePhoneInputChange(e, (v) => setSiteForm({ ...siteForm, fax: v }))} /></div>
                       <div><p className="text-xs font-bold text-slate-500 mb-1">이메일</p><input className={inputCls} value={siteForm.email} onChange={(e) => setSiteForm({ ...siteForm, email: e.target.value })} /></div>
                     </div>
                     <div>
