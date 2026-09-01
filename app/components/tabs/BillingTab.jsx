@@ -533,22 +533,17 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                               <button
                                 key={r}
                                 type="button"
-                                onClick={() => { setFreeReason(r); setMaterialCost("0"); }}
+                                onClick={() => {
+                                  if (freeReason === r) { setFreeReason(""); setMaterialCost(""); }
+                                  else { setFreeReason(r); setMaterialCost("0"); }
+                                }}
                                 className={`py-2 rounded-lg text-xs font-bold ${freeReason === r ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}
                               >
                                 {freeReasonLabel(r)}
                               </button>
                             ))}
                           </div>
-                          {freeReason ? (
-                            <button
-                              type="button"
-                              onClick={() => { setFreeReason(""); setMaterialCost(""); }}
-                              className="text-[11px] text-blue-600 underline mt-1"
-                            >
-                              직접 금액 입력하기
-                            </button>
-                          ) : Number(materialCost) === 0 && (
+                          {!freeReason && Number(materialCost) === 0 && (
                             <p className="text-[11px] text-red-500 mt-1">사유를 선택해주세요</p>
                           )}
                         </div>
@@ -842,22 +837,17 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                         <button
                           key={r}
                           type="button"
-                          onClick={() => { setManualFreeReason(r); setManualForm({ ...manualForm, cost: "0" }); }}
+                          onClick={() => {
+                            if (manualFreeReason === r) { setManualFreeReason(""); setManualForm({ ...manualForm, cost: "" }); }
+                            else { setManualFreeReason(r); setManualForm({ ...manualForm, cost: "0" }); }
+                          }}
                           className={`py-2 rounded-lg text-xs font-bold ${manualFreeReason === r ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}
                         >
                           {freeReasonLabel(r)}
                         </button>
                       ))}
                     </div>
-                    {manualFreeReason ? (
-                      <button
-                        type="button"
-                        onClick={() => { setManualFreeReason(""); setManualForm({ ...manualForm, cost: "" }); }}
-                        className="text-[11px] text-blue-600 underline mt-1"
-                      >
-                        직접 금액 입력하기
-                      </button>
-                    ) : Number(manualCostRaw) === 0 && (
+                    {!manualFreeReason && Number(manualCostRaw) === 0 && (
                       <p className="text-[11px] text-red-500 mt-1">사유를 선택해주세요</p>
                     )}
                   </div>
