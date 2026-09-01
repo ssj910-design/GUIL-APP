@@ -37,8 +37,19 @@ function displayTitle(t) {
   return t.title;
 }
 
-function TodoDetailModal({ t, data, onClose, onSave, onDelete }) {
+// 자재/견적 연동 할일은 담당자 수만큼 각자 별도 행으로 저장돼 있다(위 displayTitle 주석 참고) —
+// 목록에서는 같은 요청을 공유하는 행을 한 건으로 묶어서 보여준다. 요청 연결이 없는(수동·검사보완 등)
+// 할일은 원래도 1건뿐이라 그대로 둔다.
+function groupKeyOf(t) {
+  if (t.source === "quote" && t.quoteRequestId) return `quote:${t.quoteRequestId}`;
+  if (t.source === "material" && t.materialRequestId) return `material:${t.materialRequestId}`;
+  return `solo:${t.id}`;
+}
+
+function TodoDetailModal({ group, data, onClose, onSave, onSaveGroup, onDelete, onDeleteGroup, onToggleMember }) {
   const { sites, units, profiles } = data;
+  const isGroup = group.length > 1;
+  const t = group[0];
   // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 관리자가 자재담당자에게도 배정할 수 있어야 한다.
   const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
   const currentUnit = units.find((u) => u.id === t.unitId);
@@ -77,15 +88,20 @@ function TodoDetailModal({ t, data, onClose, onSave, onDelete }) {
   async function save() {
     if (!form.title.trim()) return;
     setSaving(true);
-    await onSave(t, { ...form, photoUrls: photos });
+    if (isGroup) await onSaveGroup(group, form);
+    else await onSave(t, { ...form, photoUrls: photos });
     setSaving(false);
     onClose();
   }
 
   async function handleDelete() {
-    if (!(await confirmAsync("이 할 일을 삭제하시겠습니까?"))) return;
+    const msg = isGroup
+      ? `이 할 일을 삭제하시겠습니까? 담당자 ${group.length}명 전원의 할일이 함께 삭제됩니다.`
+      : "이 할 일을 삭제하시겠습니까?";
+    if (!(await confirmAsync(msg))) return;
     setDeleting(true);
-    await onDelete(t);
+    if (isGroup) await onDeleteGroup(group);
+    else await onDelete(t);
     setDeleting(false);
     onClose();
   }
@@ -133,22 +149,38 @@ function TodoDetailModal({ t, data, onClose, onSave, onDelete }) {
           <p className="text-xs font-bold text-slate-500 mb-1">내용</p>
           <textarea className={inputCls} rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        {isGroup ? (
           <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">담당자</p>
-            <select className={inputCls} value={form.assigneeId} onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}>
-              <option value="">미배정</option>
-              {engineers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            <p className="text-xs font-bold text-slate-500 mb-1">담당자 ({group.length}명)</p>
+            <div className="space-y-1.5">
+              {group.map((m) => (
+                <label key={m.id} className="flex items-center gap-2 text-sm bg-slate-50 rounded-lg px-3 py-2 cursor-pointer">
+                  <input type="checkbox" checked={m.done} onChange={() => onToggleMember(m)} className="w-4 h-4 rounded accent-blue-700" />
+                  <span className={m.done ? "line-through text-slate-400" : "text-slate-700 font-semibold"}>{personOf(data, m.assigneeId, m.assignee)}</span>
+                  {m.done && <span className="text-[10px] text-emerald-600 font-bold ml-auto">완료</span>}
+                </label>
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1.5">담당자 구성(추가·제외) 변경은 자재·견적관리의 지급완료 처리 화면에서 하세요.</p>
           </div>
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">상태</p>
-            <select className={inputCls} value={form.done ? "done" : "open"} onChange={(e) => setForm({ ...form, done: e.target.value === "done" })}>
-              <option value="open">진행</option>
-              <option value="done">완료</option>
-            </select>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs font-bold text-slate-500 mb-1">담당자</p>
+              <select className={inputCls} value={form.assigneeId} onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}>
+                <option value="">미배정</option>
+                {engineers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-500 mb-1">상태</p>
+              <select className={inputCls} value={form.done ? "done" : "open"} onChange={(e) => setForm({ ...form, done: e.target.value === "done" })}>
+                <option value="open">진행</option>
+                <option value="done">완료</option>
+              </select>
+            </div>
           </div>
-        </div>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <p className="text-xs font-bold text-slate-500 mb-1">배정일</p>
@@ -160,30 +192,32 @@ function TodoDetailModal({ t, data, onClose, onSave, onDelete }) {
           </div>
         </div>
       </div>
-      <div>
-        <p className="text-xs font-bold text-slate-500 mb-2">사진 ({photos.length}장)</p>
-        <div className="flex flex-wrap gap-1.5 mb-1.5">
-          {photos.map((url, i) => (
-            <div key={i} className="relative">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
-              <button
-                onClick={() => setPhotos((p) => p.filter((_, idx) => idx !== i))}
-                className="absolute -top-1.5 -right-1.5 bg-slate-800 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]"
-              >
-                ×
-              </button>
-            </div>
-          ))}
+      {!isGroup && (
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-2">사진 ({photos.length}장)</p>
+          <div className="flex flex-wrap gap-1.5 mb-1.5">
+            {photos.map((url, i) => (
+              <div key={i} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+                <button
+                  onClick={() => setPhotos((p) => p.filter((_, idx) => idx !== i))}
+                  className="absolute -top-1.5 -right-1.5 bg-slate-800 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+          <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 cursor-pointer">
+            사진 추가
+            <input type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} disabled={uploading} />
+          </label>
         </div>
-        <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 cursor-pointer">
-          사진 추가
-          <input type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} disabled={uploading} />
-        </label>
-      </div>
+      )}
       <div className="flex justify-between mt-4">
         <button disabled={deleting} onClick={handleDelete} className="text-sm font-bold text-red-600 border border-red-200 disabled:opacity-50 rounded-xl px-5 py-2.5">
-          {deleting ? "삭제 중..." : "삭제"}
+          {deleting ? "삭제 중..." : isGroup ? `전체 삭제 (${group.length}명)` : "삭제"}
         </button>
         <button disabled={saving || !form.title.trim()} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
           저장
@@ -388,19 +422,29 @@ export default function TodosAdmin({ data, setData, initialView }) {
     if (value === "waste_return") setView("all");
   }
 
-  const getVal = (t, key) => {
+  // 같은 요청(quoteRequestId/materialRequestId)을 공유하는 행을 한 그룹으로 묶는다.
+  const groupsMap = new Map();
+  for (const t of rows) {
+    const key = groupKeyOf(t);
+    if (!groupsMap.has(key)) groupsMap.set(key, []);
+    groupsMap.get(key).push(t);
+  }
+  const groups = [...groupsMap.values()];
+
+  const getVal = (group, key) => {
+    const t = group[0];
     switch (key) {
       case "source": return SOURCE_LABEL[t.source] ?? t.source ?? "";
       case "title": return displayTitle(t) ?? "";
       case "loc": return locOf(data, t.unitId, t.siteName, t.elevatorNo);
-      case "person": return personOf(data, t.assigneeId, t.assignee);
+      case "person": return group.map((m) => personOf(data, m.assigneeId, m.assignee)).join(", ");
       case "assignedDate": return t.assignedDate ?? "";
       case "dueDate": return t.dueDate ?? "";
-      case "done": return t.done ? 1 : 0;
+      case "done": return group.every((m) => (wasteReturnPending(m) ? false : m.done)) ? 1 : 0;
       default: return "";
     }
   };
-  const sortedRows = sortRows(rows, sort, getVal);
+  const sortedGroups = sortRows(groups, sort, getVal);
 
   async function saveTodoDetail(t, form) {
     const unit = units.find((u) => u.id === form.unitId);
@@ -433,11 +477,43 @@ export default function TodosAdmin({ data, setData, initialView }) {
     }));
   }
 
+  // 담당자 여러 명(그룹)의 할 일 상세 저장 — 공통 필드(제목·현장·호기·내용·배정일·기한)만
+  // 그룹 전원에게 동일하게 적용한다. 담당자 구성·완료 여부는 개별 처리(onToggleMember)로 따로 다룬다.
+  async function saveGroupDetail(group, form) {
+    const unit = units.find((u) => u.id === form.unitId);
+    const site = sites.find((s) => s.id === form.siteId);
+    const ids = group.map((t) => t.id);
+    const patch = {
+      title: form.title.trim(), description: form.description || null,
+      site_name: site?.name ?? null, elevator_no: unit?.unitNo ?? null, unit_id: form.unitId || null,
+      assigned_date: form.assignedDate || null, due_date: form.dueDate || null,
+    };
+    const { error } = await supabase.from("todos").update(patch).in("id", ids);
+    if (error) { alert("저장 실패: " + error.message); return; }
+    setData((prev) => ({
+      ...prev,
+      todos: prev.todos.map((x) => (ids.includes(x.id) ? {
+        ...x,
+        title: patch.title, description: patch.description ?? "",
+        siteName: patch.site_name, elevatorNo: patch.elevator_no, unitId: patch.unit_id,
+        assignedDate: patch.assigned_date, dueDate: patch.due_date,
+      } : x)),
+    }));
+  }
+
   // 할 일 삭제 — 확인 대화상자는 TodoDetailModal에서 이미 거쳤다.
   async function deleteTodo(t) {
     const { error } = await supabase.from("todos").delete().eq("id", t.id);
     if (error) { alert("삭제 실패: " + error.message); return; }
     setData((prev) => ({ ...prev, todos: prev.todos.filter((x) => x.id !== t.id) }));
+  }
+
+  // 그룹(담당자 여러 명) 전원의 할 일을 한 번에 삭제 — 확인 대화상자는 TodoDetailModal에서 이미 거쳤다.
+  async function deleteTodoGroup(group) {
+    const ids = group.map((t) => t.id);
+    const { error } = await supabase.from("todos").delete().in("id", ids);
+    if (error) { alert("삭제 실패: " + error.message); return; }
+    setData((prev) => ({ ...prev, todos: prev.todos.filter((x) => !ids.includes(x.id)) }));
   }
 
   // 관리자가 반납확인 모달에서 입력한 확인수량(confirmedQty: { productId: qty })을 반영한다.
@@ -610,25 +686,32 @@ export default function TodosAdmin({ data, setData, initialView }) {
             </tr>
           </thead>
           <tbody>
-            {sortedRows.map((t) => {
+            {sortedGroups.map((group) => {
+              const t = group[0];
               // 반납확인 할일은 기사가 완료 처리해도(t.done) 관리자가 수량을 확인하기 전까진
               // 관리자 입장에선 "미완료"다 — 체크박스·행 흐림 표시는 실제 확인 여부(stockConfirmedAt)를 본다.
-              const effectiveDone = wasteReturnPending(t) ? false : t.done;
+              const effectiveDone = (m) => (wasteReturnPending(m) ? false : m.done);
+              const groupDone = group.every(effectiveDone);
               return (
-              <tr key={t.id} className={`border-b border-slate-50 ${effectiveDone ? "opacity-50" : ""} cursor-pointer hover:bg-slate-50`} onClick={() => setDetail(t)}>
+              <tr key={t.id} className={`border-b border-slate-50 ${groupDone ? "opacity-50" : ""} cursor-pointer hover:bg-slate-50`} onClick={() => setDetail(group)}>
                 <td className="pl-5 pr-2 py-2.5" onClick={(e) => e.stopPropagation()}>
-                  <input type="checkbox" checked={effectiveDone} onChange={() => toggle(t)} className="w-4 h-4 rounded border-slate-300 cursor-pointer accent-blue-700" />
+                  <input
+                    type="checkbox"
+                    checked={groupDone}
+                    onChange={() => group.forEach((m) => { if (effectiveDone(m) !== !groupDone) toggle(m); })}
+                    className="w-4 h-4 rounded border-slate-300 cursor-pointer accent-blue-700"
+                  />
                 </td>
                 <td className="px-3 py-2.5"><StatusBadge tone={t.source === "manual" ? "slate" : "blue"}>{SOURCE_LABEL[t.source] ?? t.source}</StatusBadge></td>
                 <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{locOf(data, t.unitId, t.siteName, t.elevatorNo)}</td>
                 <td className="px-3 py-2.5 font-semibold">{displayTitle(t)}</td>
-                <td className="px-3 py-2.5 whitespace-nowrap">{personOf(data, t.assigneeId, t.assignee)}</td>
+                <td className="px-3 py-2.5">{group.map((m) => personOf(data, m.assigneeId, m.assignee)).join(", ")}</td>
                 <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(t.assignedDate)}</td>
                 <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(t.dueDate)}</td>
                 <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                  {wasteReturnPending(t) ? (
+                  {group.length === 1 && wasteReturnPending(t) ? (
                     <button onClick={() => setConfirmTarget(t)} className="text-xs font-bold text-white bg-blue-700 rounded-lg px-2.5 py-1">반납확인</button>
-                  ) : t.done ? (
+                  ) : groupDone ? (
                     <StatusBadge tone="green">완료</StatusBadge>
                   ) : (
                     <StatusBadge tone="amber">진행</StatusBadge>
@@ -642,7 +725,18 @@ export default function TodosAdmin({ data, setData, initialView }) {
       </div>
       <p className="text-[10px] text-slate-400 mt-2">* 자재·견적 할일의 정상 완료 경로는 기사 비용청구입니다. 체크박스는 관리자 예외 처리용.</p>
 
-      {detail && <TodoDetailModal t={detail} data={data} onClose={() => setDetail(null)} onSave={saveTodoDetail} onDelete={deleteTodo} />}
+      {detail && (
+        <TodoDetailModal
+          group={detail}
+          data={data}
+          onClose={() => setDetail(null)}
+          onSave={saveTodoDetail}
+          onSaveGroup={saveGroupDetail}
+          onDelete={deleteTodo}
+          onDeleteGroup={deleteTodoGroup}
+          onToggleMember={toggle}
+        />
+      )}
       {assigning && <AssignTodoModal data={data} onClose={() => setAssigning(false)} onCreate={createTodo} />}
       {confirmTarget && (
         <WasteReturnConfirmModal

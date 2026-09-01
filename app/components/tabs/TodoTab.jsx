@@ -23,6 +23,15 @@ export function getRequesterName(todo, materialRequests, quoteRequests) {
   return todo.requestedByName ?? "관리자";
 }
 
+// 자재/견적 연동 할일은 담당자 수만큼 각자 별도 행으로 저장돼 있다(요청 하나당 여러 건) —
+// 목록에는 같은 요청을 공유하는 행을 한 건으로 묶어서 보여준다(펼치면 기존처럼 전체
+// 담당자가 보인다). 관리자 부여·검사보완 등 요청 연결이 없는 할일은 원래도 1건뿐이라 그대로 둔다.
+function groupKeyOf(t) {
+  if (t.source === "quote" && t.quoteRequestId) return `quote:${t.quoteRequestId}`;
+  if (t.source === "material" && t.materialRequestId) return `material:${t.materialRequestId}`;
+  return `solo:${t.id}`;
+}
+
 // 같은 견적/자재 요청에 연결된 다른 담당자의 할 일(공동 담당)을 찾습니다.
 export function getCoAssignees(todo, todos) {
   if (!todo.quoteRequestId && !todo.materialRequestId) return [];
@@ -150,11 +159,20 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
   }
 
   const q = search.trim().toLowerCase();
-  const visible = mine
+  const filtered = mine
     .filter((t) => showDone || !t.done || t.id === focusTodoId)
-    .filter((t) => !q || t.title.toLowerCase().includes(q) || (t.siteName ?? "").toLowerCase().includes(q))
-    .slice()
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    .filter((t) => !q || t.title.toLowerCase().includes(q) || (t.siteName ?? "").toLowerCase().includes(q));
+  // 같은 요청을 공유하는 행끼리 묶는다 — 기사 본인 화면은 어차피 자기 몫 1건만 남아 있어
+  // 묶어도 그대로다. focusTodoId가 그룹 안에 있으면 그 행을 대표로 써서 딥링크 스크롤이 맞게 한다.
+  const groupsMap = new Map();
+  for (const t of filtered) {
+    const key = groupKeyOf(t);
+    if (!groupsMap.has(key)) groupsMap.set(key, []);
+    groupsMap.get(key).push(t);
+  }
+  const visible = [...groupsMap.values()]
+    .map((group) => ({ t: group.find((m) => m.id === focusTodoId) ?? group[0], group }))
+    .sort((a, b) => new Date(a.t.dueDate) - new Date(b.t.dueDate));
 
   return (
     <div className="flex-1 overflow-y-auto pb-4">
@@ -187,7 +205,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
         {visible.length === 0 && (
           <p className="text-xs text-slate-400 text-center py-10">완료되지 않은 할 일이 없습니다</p>
         )}
-        {visible.map((t, i) => {
+        {visible.map(({ t, group }, i) => {
           // 자재/견적 연동 할 일은 비용청구가 완료되어야 자동으로 끝나지만, 관리자가 직접 부여한
           // 할 일과 정기검사 보완조치·자체점검 지적사항 할 일은 그런 연결고리가 없어 본인이 직접 완료 처리해야 한다.
           const isManual = t.source === "manual" || t.source === "inspection" || t.source === "selfcheck" || t.source === "waste_return";
@@ -195,7 +213,8 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
           // 재오픈 후에는 기존 사진이 누적 보존되므로(관리자 화면 감사이력용), "사진이 있으면"이 아니라
           // "재오픈 시점 기준선(photoCount)보다 사진이 늘었으면"으로 판정 — 새 사진을 추가해야 잠금이 풀린다.
           const wasteReturnLocked = t.source === "waste_return" && !((t.photoUrls?.length ?? 0) > (t.photoCount ?? 0));
-          const overdue = !t.done && new Date(t.dueDate) < new Date(TODAY_STR);
+          const groupDone = group.every((m) => m.done);
+          const overdue = !groupDone && new Date(t.dueDate) < new Date(TODAY_STR);
           const requester = getRequesterName(t, materialRequests, quoteRequests);
           const expanded = shownExpandedId === t.id;
           // 지브라 스트라이프 — 짝수줄만 살짝 톤(bg-slate-50), 펼친 행은 제목·내용을 한 박스로 묶어 흰 배경
@@ -204,11 +223,11 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
               <div className="flex items-start gap-2.5 py-2">
                 <div className="pt-0.5">
                   <TodoCheckbox
-                    done={t.done}
+                    done={groupDone}
                     locked={role !== "admin" && (!isManual || wasteReturnLocked)}
                     onClick={
                       role === "admin"
-                        ? () => onAdminToggle(t.id)
+                        ? () => { const target = !groupDone; group.forEach((m) => { if (m.done !== target) onAdminToggle(m.id); }); }
                         : isManual && !wasteReturnLocked
                           ? () => toggleManualTodo(t.id)
                           : undefined
@@ -219,15 +238,15 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
                 <button type="button" onClick={() => setExpanded(expanded ? null : t.id)} className="flex-1 min-w-0 text-left">
                   <div className="flex items-center gap-1.5">
                     {overdue && <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />}
-                    <p className={`text-sm font-bold min-w-0 ${expanded ? "" : "truncate"} ${t.done ? "line-through text-slate-400" : "text-slate-800"}`}>{t.title}</p>
+                    <p className={`text-sm font-bold min-w-0 ${expanded ? "" : "truncate"} ${groupDone ? "line-through text-slate-400" : "text-slate-800"}`}>{t.title}</p>
                     {t.reassignRequested && <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full"><Repeat size={9} strokeWidth={2.8} />재배정 요청</span>}
                     <ChevronDown size={15} className={`shrink-0 text-slate-300 ml-auto transition-transform ${expanded ? "rotate-180" : ""}`} />
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-0.5">
                     <p className="text-[11px] text-slate-400 truncate">
-                      {role === "admin" ? `담당: ${t.assignee} · ` : ""}기한: {formatShortDate(t.dueDate)}{requester ? ` · 요청자: ${requester}` : ""}
+                      {role === "admin" ? `담당: ${group.length > 1 ? group.map((m) => m.assignee).join(", ") : t.assignee} · ` : ""}기한: {formatShortDate(t.dueDate)}{requester ? ` · 요청자: ${requester}` : ""}
                     </p>
-                    {!isManual && !t.done && <p className="text-[10px] text-slate-300 shrink-0 whitespace-nowrap">비용청구 시 자동완료</p>}
+                    {!isManual && !groupDone && <p className="text-[10px] text-slate-300 shrink-0 whitespace-nowrap">비용청구 시 자동완료</p>}
                   </div>
                 </button>
               </div>
