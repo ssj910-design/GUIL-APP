@@ -153,7 +153,7 @@ function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto
   const qtyOf = (part) => { const q = parsePartQty(part).qty; return q ? parseInt(q, 10) : 1; };
   const lineTotal = (part, i) => (Number(amounts[i]) || 0) * qtyOf(part);
   const total = parts.reduce((sum, part, i) => sum + lineTotal(part, i), 0);
-  const allAmountsFilled = parts.every((_, i) => Number(amounts[i]) > 0);
+  const allAmountsFilled = parts.every((_, i) => amounts[i] !== undefined && amounts[i] !== "");
   const billingPartText = parts
     .map((part, i) => (amounts[i] ? `${part}(₩${lineTotal(part, i).toLocaleString()})` : part))
     .join(", ");
@@ -927,7 +927,7 @@ function SupplyEditForm({ r, existingTodo, engineerNames, onSubmit, onAttachPhot
   const billingPartText = parts
     .map((part, i) => (amounts[i] ? `${part}(₩${Number(amounts[i]).toLocaleString()})` : part))
     .join(", ");
-  const allAmountsFilled = parts.every((_, i) => Number(amounts[i]) > 0);
+  const allAmountsFilled = parts.every((_, i) => amounts[i] !== undefined && amounts[i] !== "");
   const billingPartRows = parts.map((part, i) => {
     const { name, qty } = parsePartQty(part);
     return { name: name || part, qty: qty || null, amount: Number(amounts[i]) || 0 };
