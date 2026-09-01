@@ -48,8 +48,11 @@ function quoteLocLabel(data, q) {
 // 견적 자동생성 할일 내용에 "교체품목" 목록을 기본으로 넣는다 — 견적 작성 때 적은 품목
 // 그대로(품명 수량단위)라 담당 기사가 뭘 챙겨야 하는지 할일만 봐도 알 수 있다. 관리자가
 // 지급완료 처리 때 따로 적은 전달내용이 있으면 그 아래에 이어붙인다.
+// 할일내용(자동생성) 미리보기 — 인건비/운반비/안전관리비및기타/이윤/할인은 빼고 자재비 품목만.
+// (운반비 등 4가지는 애초에 quoteItems가 아니라 별도 컬럼이라 원래도 안 섞였고, 자재비만
+// 남기려면 인건비 카테고리 품목만 걸러내면 된다.)
 function quotePartsSummary(items) {
-  const rows = (items ?? []).filter((it) => it.name?.trim());
+  const rows = (items ?? []).filter((it) => it.name?.trim() && it.category === "자재비");
   if (!rows.length) return "";
   const fmt = (it) => `${it.name.trim()} ${it.qty || 1}${(it.unit || "EA").toLowerCase()}`;
   // 품목마다 호기가 다르면(다호기 견적) 호기별로 묶어서 "N호기 교체품목"으로 나눠 보여준다 —
@@ -65,9 +68,6 @@ function quotePartsSummary(items) {
     .sort((a, b) => (labelToSeq(a[0]) ?? Infinity) - (labelToSeq(b[0]) ?? Infinity))
     .map(([label, lines]) => `${label || "호기 미상"} 교체품목\n` + lines.join("\n"))
     .join("\n\n");
-}
-function quoteTodoDescription(quote, adminNote) {
-  return [quotePartsSummary(quote.quoteItems), adminNote || ""].filter(Boolean).join("\n\n") || null;
 }
 
 // 부품별 금액 필수 입력값을 지급 문자열("부품명(₩1,000)")에서 되찾아 수정 모달 기본값으로 쓴다.
@@ -494,7 +494,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         done: false,
         unitId,
         assigneeId,
-        description: quoteTodoDescription(quote, description),
+        description: (description || null),
         isOutsourced: !!isOutsourced,
         vendorName: finalVendorName,
       };
@@ -572,7 +572,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
       const { error: keepError } = await supabase
         .from("todos")
         .update({
-          due_date: dueDate, description: quoteTodoDescription(quote, description),
+          due_date: dueDate, description: (description || null),
           ...(todoOutsourcedReady ? { is_outsourced: !!isOutsourced, vendor_name: finalVendorName } : {}),
         })
         .in("id", kept.map((t) => t.id));
@@ -600,7 +600,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         done: false,
         unitId,
         assigneeId,
-        description: quoteTodoDescription(quote, description),
+        description: (description || null),
         isOutsourced: !!isOutsourced,
         vendorName: finalVendorName,
       };
@@ -632,7 +632,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         ...newTodos,
         ...prev.todos
           .filter((t) => !toRemove.some((r) => r.id === t.id))
-          .map((t) => (kept.some((k) => k.id === t.id) ? { ...t, dueDate, description: quoteTodoDescription(quote, description), isOutsourced: !!isOutsourced, vendorName: finalVendorName } : t)),
+          .map((t) => (kept.some((k) => k.id === t.id) ? { ...t, dueDate, description: (description || null), isOutsourced: !!isOutsourced, vendorName: finalVendorName } : t)),
       ],
     }));
   }
@@ -1073,7 +1073,9 @@ function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
   const defaultId = quote.requesterId || engineers.find((p) => p.name === quote.engineer)?.id || "";
   const [assigneeIds, setAssigneeIds] = useState(existingAssigneeIds.length ? existingAssigneeIds : (defaultId ? [defaultId] : []));
   const [dueDate, setDueDate] = useState(existingTodosForQuote[0]?.dueDate ?? addDays(TODAY_STR, 30));
-  const [description, setDescription] = useState(existingTodosForQuote[0]?.description ?? "");
+  // 처음 지급완료 처리하는 경우엔 자재비 품목 목록을 미리 채워서 보여준다 — 그래야 할일에
+  // 뭐가 자동으로 들어가는지 여기서 바로 보고 고칠 수 있다(수정 시엔 기존 저장값을 그대로).
+  const [description, setDescription] = useState(existingTodosForQuote[0]?.description ?? quotePartsSummary(quote.quoteItems));
   const [photos, setPhotos] = useState(quote.supplyPhotoUrls ?? []);
   const [outsourced, setOutsourced] = useState(!!existingTodosForQuote[0]?.isOutsourced);
   const [vendorName, setVendorName] = useState(existingTodosForQuote[0]?.vendorName ?? "");

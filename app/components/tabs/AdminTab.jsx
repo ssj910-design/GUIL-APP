@@ -5,7 +5,7 @@ import { Badge, PhotoThumb, PhotoGrid, PrimaryButton, Sheet, Field, inputCls, Dr
 import { AuthContext, SitesContext } from "@/app/components/context";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
-import { parsePartQty, formatPhone, addDays } from "@/lib/utils";
+import { parsePartQty, formatPhone, addDays, quotePartsSummary } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { supabase } from "@/lib/supabaseClient";
 import { mapSiteManager } from "@/lib/mappers";
@@ -279,8 +279,10 @@ function QuoteListRow({ q, onOpenDetail }) {
 function QuoteDetailActions({ q, engineerNames, onAdvanceQuote, onOpenWizard, onSendQuote, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onNotify }) {
   const [assignees, setAssignees] = useState([q.engineer]);
   const [dueDate, setDueDate] = useState(addDays(TODAY_STR, 30));
-  const [description, setDescription] = useState("");
-  const [advanced, setAdvanced] = useState(false);
+  // 자재비 품목 목록을 미리 채워서 보여준다 — 할일에 뭐가 자동으로 들어가는지 여기서 바로
+  // 보고 고칠 수 있게(담당기사·기한·내용 칸도 접어두지 않고 처음부터 펼쳐서 보여준다).
+  const [description, setDescription] = useState(() => quotePartsSummary(q.quoteItems));
+  const [advanced, setAdvanced] = useState(true);
   const [sendModalOpen, setSendModalOpen] = useState(false);
   const [outsourced, setOutsourced] = useState(false);
   const [vendorName, setVendorName] = useState("");

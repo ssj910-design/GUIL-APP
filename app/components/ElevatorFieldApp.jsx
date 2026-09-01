@@ -7,7 +7,7 @@ import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken, onSessionExpired } from "@/lib/supabaseClient";
 import { authFetch } from "@/lib/apiFetch";
 import { mapSite, mergeAssignedEngineers, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode, mapUnitPartPhoto, mapInventoryProduct, mapInventoryStockMovement } from "@/lib/mappers";
-import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent, quoteGrandTotal } from "@/lib/utils";
+import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent, quoteGrandTotal, quotePartsSummary } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { recordQuoteSupplyStockOut } from "@/lib/inventoryStock";
 import { DutySwapNotice } from "@/app/components/DutyRoster";
@@ -1965,18 +1965,6 @@ export default function App() {
     return uniqueUnits.length === 1 ? uniqueUnits[0] : "";
   }
 
-  // 견적 자동생성 할일 내용에 "교체품목" 목록을 기본으로 넣는다 — 견적 작성 때 적은 품목
-  // 그대로(품명 수량단위)라 담당 기사가 뭘 챙겨야 하는지 할일만 봐도 알 수 있다. 관리자가
-  // 지급완료 처리 때 따로 적은 전달내용이 있으면 그 아래에 이어붙인다.
-  function quotePartsSummary(items) {
-    const rows = (items ?? []).filter((it) => it.name?.trim());
-    if (!rows.length) return "";
-    return "교체품목\n" + rows.map((it) => `${it.name.trim()} ${it.qty || 1}${(it.unit || "EA").toLowerCase()}`).join("\n");
-  }
-  function quoteTodoDescription(q, adminNote) {
-    return [quotePartsSummary(q.quoteItems), adminNote || ""].filter(Boolean).join("\n\n") || null;
-  }
-
   // ★ 자재지급완료 트리거: 이 순간 담당 기사(들)에게 할 일이 자동 생성됩니다
   // assignees(배열)를 넘기면 신청자 외에 실제 시공 기사를 2명 이상 지정할 수 있고,
   // 각 담당자마다 할 일이 하나씩 생성됩니다 (같은 quoteRequestId를 공유 — 한 명이 비용청구를
@@ -2002,7 +1990,7 @@ export default function App() {
       assignedDate: TODAY_STR,
       dueDate: finalDueDate,
       done: false,
-      description: quoteTodoDescription(q, description),
+      description: (description || null),
       isOutsourced: !!isOutsourced,
       vendorName: isOutsourced ? (vendorName || null) : null,
     }));
@@ -2089,7 +2077,7 @@ export default function App() {
     if (kept.length) {
       const { error: keepError } = await supabase.from("todos")
         .update({
-          due_date: finalDueDate, description: quoteTodoDescription(q, description),
+          due_date: finalDueDate, description: (description || null),
           ...(todoOutsourcedReady ? { is_outsourced: !!isOutsourced, vendor_name: finalVendorName } : {}),
         })
         .in("id", kept.map((t) => t.id));
@@ -2111,7 +2099,7 @@ export default function App() {
       assignedDate: TODAY_STR,
       dueDate: finalDueDate,
       done: false,
-      description: quoteTodoDescription(q, description),
+      description: (description || null),
       isOutsourced: !!isOutsourced,
       vendorName: finalVendorName,
     }));
@@ -2136,7 +2124,7 @@ export default function App() {
       ...newTodos,
       ...prev
         .filter((t) => !toRemove.some((r) => r.id === t.id))
-        .map((t) => (kept.some((k) => k.id === t.id) ? { ...t, dueDate: finalDueDate, description: quoteTodoDescription(q, description), isOutsourced: !!isOutsourced, vendorName: finalVendorName } : t)),
+        .map((t) => (kept.some((k) => k.id === t.id) ? { ...t, dueDate: finalDueDate, description: (description || null), isOutsourced: !!isOutsourced, vendorName: finalVendorName } : t)),
     ]);
   }
 
