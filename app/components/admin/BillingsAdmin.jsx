@@ -382,51 +382,57 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
   if (b.confirmPhotoUrl) photos.push(b.confirmPhotoUrl);
 
   // 품목이 2개 이상(다품목 청구)이면 flat 필드(part/cost) 대신 품목별 구조화 데이터(part_photos:
-  // 이름·수량·금액·사진)를 직접 수정한다 — 완료보고서(buildCertificateData)가 이 구조화 데이터를
-  // 우선해서 쓰기 때문에, flat 필드만 고치면 완료보고서엔 반영이 안 된다.
-  const isMultiItem = (b.partPhotos?.length ?? 0) > 1;
+  // 이름·수량·금액·사진)를 쓴다 — 완료보고서(buildCertificateData)가 이 구조화 데이터를 우선해서
+  // 쓰기 때문에, flat 필드만 고치면 완료보고서엔 반영이 안 된다. 수정 모드에서는 새 청구 등록과
+  // 동일하게 품목을 항상 목록(품목추가·삭제 가능)으로 편집한 뒤, 저장 시점의 품목 수로 flat/
+  // 구조화 여부를 다시 정한다(단품 ↔ 다품목 전환도 가능해야 하므로 — saveEdit 참고).
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState(null);
 
   function startEdit() {
+    const seededItems = (b.partPhotos ?? []).length
+      ? b.partPhotos.map((p) => ({ ...p, beforeUrls: p.beforeUrls ?? [], afterUrls: p.afterUrls ?? [] }))
+      : [{ name: b.part ?? "", qty: "", amount: b.cost ?? "", beforeUrls: b.beforePhotoUrls ?? [], afterUrls: b.afterPhotoUrls ?? [] }];
     setEditForm({
-      part: b.part ?? "",
-      cost: b.cost ?? "",
       contactPhone: b.contactPhone ?? "",
       vendorName: b.vendorName ?? "",
-      beforePhotoUrls: b.beforePhotoUrls ?? [],
-      afterPhotoUrls: b.afterPhotoUrls ?? [],
       confirmPhotoUrl: b.confirmPhotoUrl ?? null,
-      partPhotos: (b.partPhotos ?? []).map((p) => ({ ...p, beforeUrls: p.beforeUrls ?? [], afterUrls: p.afterUrls ?? [] })),
+      partPhotos: seededItems,
     });
     setEditing(true);
   }
 
   async function saveEdit() {
     setSaving(true);
-    const dbPatch = { contact_phone: editForm.contactPhone || null };
-    const localPatch = { contactPhone: editForm.contactPhone || null };
+    const dbPatch = { contact_phone: editForm.contactPhone || null, confirm_photo_url: editForm.confirmPhotoUrl || null };
+    const localPatch = { contactPhone: editForm.contactPhone || null, confirmPhotoUrl: editForm.confirmPhotoUrl || null };
     if (b.isOutsourced) {
       dbPatch.vendor_name = editForm.vendorName || null;
       localPatch.vendorName = editForm.vendorName || null;
     }
-    if (isMultiItem) {
-      const partNames = editForm.partPhotos.map((p) => p.name).filter(Boolean).join(", ") || null;
-      dbPatch.part_photos = editForm.partPhotos;
+    const filled = editForm.partPhotos.filter((p) => p.name?.trim());
+    if (filled.length > 1) {
+      const partNames = filled.map((p) => p.name).join(", ") || null;
+      dbPatch.part_photos = filled;
       dbPatch.part = partNames;
-      localPatch.partPhotos = editForm.partPhotos;
+      dbPatch.before_photo_urls = null;
+      dbPatch.after_photo_urls = null;
+      localPatch.partPhotos = filled;
       localPatch.part = partNames;
+      localPatch.beforePhotoUrls = [];
+      localPatch.afterPhotoUrls = [];
     } else {
-      dbPatch.part = editForm.part || null;
-      dbPatch.cost = editForm.cost === "" ? null : Number(editForm.cost);
-      dbPatch.before_photo_urls = editForm.beforePhotoUrls.length ? editForm.beforePhotoUrls : null;
-      dbPatch.after_photo_urls = editForm.afterPhotoUrls.length ? editForm.afterPhotoUrls : null;
-      dbPatch.confirm_photo_url = editForm.confirmPhotoUrl || null;
+      const only = filled[0] ?? {};
+      dbPatch.part = only.name || null;
+      dbPatch.cost = only.amount === "" || only.amount == null ? null : Number(only.amount);
+      dbPatch.before_photo_urls = only.beforeUrls?.length ? only.beforeUrls : null;
+      dbPatch.after_photo_urls = only.afterUrls?.length ? only.afterUrls : null;
+      dbPatch.part_photos = null;
       localPatch.part = dbPatch.part;
       localPatch.cost = dbPatch.cost;
-      localPatch.beforePhotoUrls = editForm.beforePhotoUrls;
-      localPatch.afterPhotoUrls = editForm.afterPhotoUrls;
-      localPatch.confirmPhotoUrl = editForm.confirmPhotoUrl || null;
+      localPatch.beforePhotoUrls = only.beforeUrls ?? [];
+      localPatch.afterPhotoUrls = only.afterUrls ?? [];
+      localPatch.partPhotos = [];
     }
     await onSave(b, dbPatch, localPatch);
     setSaving(false);
@@ -480,15 +486,12 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div><p className="text-xs font-bold text-slate-400 mb-1">현장 · 호기</p><p className="font-semibold text-slate-800">{siteUnitOf(b, data)}</p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">현장 주소</p><p className="font-semibold text-slate-800">{addressOf(data, b.unitId, b.siteName)}</p></div>
-          {!editing || isMultiItem ? (
+          {!editing ? (
             <div><p className="text-xs font-bold text-slate-400 mb-1">교체내역</p><p className="font-semibold text-slate-800 whitespace-pre-line">{b.part}</p></div>
           ) : (
-            <div>
-              <p className="text-xs font-bold text-slate-400 mb-1">교체내역</p>
-              <input className={inputCls} value={editForm.part} onChange={(e) => setEditForm({ ...editForm, part: e.target.value })} />
-            </div>
+            <div><p className="text-xs font-bold text-slate-400 mb-1">교체내역</p><p className="text-xs text-slate-400">아래 품목 목록에서 수정하세요</p></div>
           )}
-          {!editing || isMultiItem ? (
+          {!editing ? (
             <div>
               <p className="text-xs font-bold text-slate-400 mb-1">금액(VAT별도)</p>
               {b.isFree ? (
@@ -502,10 +505,7 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
               )}
             </div>
           ) : (
-            <div>
-              <p className="text-xs font-bold text-slate-400 mb-1">금액(VAT별도)</p>
-              <input type="number" className={inputCls} value={editForm.cost} onChange={(e) => setEditForm({ ...editForm, cost: e.target.value })} />
-            </div>
+            <div><p className="text-xs font-bold text-slate-400 mb-1">금액(VAT별도)</p><p className="text-xs text-slate-400">아래 품목 목록에서 수정하세요</p></div>
           )}
           <div><p className="text-xs font-bold text-slate-400 mb-1">제출일</p><p className="font-semibold text-slate-800">{shortDate(b.submittedAt)}</p></div>
           {!editing ? (
@@ -566,42 +566,25 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
           <p className="text-xs font-bold text-slate-500 mb-2">사진 ({photos.length}장)</p>
           <PhotoGrid urls={photos} />
         </div>
-      ) : isMultiItem ? (
-        <div className="space-y-3">
-          <p className="text-xs font-bold text-slate-500">품목별 수정</p>
-          {editForm.partPhotos.map((p, i) => {
-            function updateRow(patch) {
-              setEditForm({ ...editForm, partPhotos: editForm.partPhotos.map((row, idx) => (idx === i ? { ...row, ...patch } : row)) });
-            }
-            return (
-              <div key={i} className="border border-slate-200 rounded-xl p-3 space-y-2">
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="col-span-2">
-                    <p className="text-[11px] font-bold text-slate-500 mb-1">품명</p>
-                    <input className={inputCls} value={p.name ?? ""} onChange={(e) => updateRow({ name: e.target.value })} />
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-500 mb-1">수량</p>
-                    <input className={inputCls} value={p.qty ?? ""} onChange={(e) => updateRow({ qty: e.target.value })} />
-                  </div>
-                </div>
-                <div>
-                  <p className="text-[11px] font-bold text-slate-500 mb-1">금액</p>
-                  <input type="number" className={inputCls} value={p.amount ?? ""} onChange={(e) => updateRow({ amount: e.target.value === "" ? null : Number(e.target.value) })} />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <EditablePhotoRow label="교체 전" urls={p.beforeUrls ?? []} onChange={(urls) => updateRow({ beforeUrls: urls })} uploadFolder={`billings/${b.id}/part${i}/before`} />
-                  <EditablePhotoRow label="교체 후" urls={p.afterUrls ?? []} onChange={(urls) => updateRow({ afterUrls: urls })} uploadFolder={`billings/${b.id}/part${i}/after`} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
-          <EditablePhotoRow label="교체 전" urls={editForm.beforePhotoUrls} onChange={(urls) => setEditForm({ ...editForm, beforePhotoUrls: urls })} uploadFolder={`billings/${b.id}/before`} />
-          <EditablePhotoRow label="교체 후" urls={editForm.afterPhotoUrls} onChange={(urls) => setEditForm({ ...editForm, afterPhotoUrls: urls })} uploadFolder={`billings/${b.id}/after`} />
-          <EditablePhotoRow label="확인서" urls={editForm.confirmPhotoUrl ? [editForm.confirmPhotoUrl] : []} onChange={(urls) => setEditForm({ ...editForm, confirmPhotoUrl: urls[0] ?? null })} uploadFolder={`billings/${b.id}/confirm`} />
+        <div className="space-y-4">
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-2">품목별 수정 (새 청구 등록과 동일하게 품목 추가·삭제 가능)</p>
+            <ItemRowsInput
+              items={editForm.partPhotos}
+              onChange={(partPhotos) => setEditForm({ ...editForm, partPhotos })}
+              uploadFolder={`billings/${b.id}`}
+            />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">확인서</p>
+            <EditablePhotoRow
+              label="확인서"
+              urls={editForm.confirmPhotoUrl ? [editForm.confirmPhotoUrl] : []}
+              onChange={(urls) => setEditForm({ ...editForm, confirmPhotoUrl: urls[0] ?? null })}
+              uploadFolder={`billings/${b.id}/confirm`}
+            />
+          </div>
         </div>
       )}
 
