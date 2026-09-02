@@ -16,7 +16,7 @@ import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 
 const BILL_STEP_TITLES = ["청구 정보", "증빙 사진", "완료 서명"]; // 자재 지급건(3-step)
 const draftKey = (todoId) => `guilBillingDraftV1:${todoId}`;
-const MANUAL_DRAFT_KEY = "guilBillingManualDraftV1";
+const manualDraftKey = (siteId) => `guilBillingManualDraftV1:${siteId}`;
 const MAN_BILL_TITLES = ["현장·호기", "교체 내역·비용", "증빙 사진", "완료 서명"]; // 직접 입력(4-step)
 // FM 계약은 부품이 무상이라 수리비 0원 청구가 있다 — 0원이면 이 중 하나를 사유로 반드시 고르게 한다.
 const FREE_REASONS = ["FM", "하자", "서비스", "견적서 참조"];
@@ -49,7 +49,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
   const [freeReason, setFreeReason] = useState(""); // 수리비 0원(무상)일 때 사유 — FM/하자/서비스
   const [materialReplaceDate, setMaterialReplaceDate] = useState(TODAY_STR);
   const [submitted, setSubmitted] = useState(null);
-  const [manualForm, setManualForm] = useState({ siteId: "", units: [], parts: [emptyPartRow()], partsByUnit: {}, replaceDate: TODAY_STR, cost: "", fromKit: false });
+  const [manualForm, setManualForm] = useState({ siteId: "", units: [], parts: [emptyPartRow()], partsByUnit: {}, replaceDate: TODAY_STR, cost: "" });
   const [manualFreeReason, setManualFreeReason] = useState(""); // 수리비 0원(무상)일 때 사유 — FM/하자/서비스
   const [materialPhotos, setMaterialPhotos] = useState({ before: [], after: [] });
   const [partPhotos, setPartPhotos] = useState({}); // 부품 2개 이상일 때만 사용: { [index]: { before: [], after: [] } }
@@ -133,26 +133,44 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       setVendorNameInput(selected?.vendorName ?? "");
     }
   }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
-  // 직접입력은 특정 할일에 묶이지 않으므로 고정 키 하나로 임시저장 — 앱 진입 시 1회만 복원.
+  // 직접입력은 특정 할일에 묶이지 않아 현장별로 임시저장을 나눈다 — 현장을 바꾸면 그 현장에
+  // 저장해둔 내용이 있으면 이어서 하고, 없으면 다른 현장 값이 섞이지 않게 빈 폼으로 시작한다.
   useEffect(() => {
+    if (!manualForm.siteId) return;
     let draft = null;
     try {
-      const raw = localStorage.getItem(MANUAL_DRAFT_KEY);
+      const raw = localStorage.getItem(manualDraftKey(manualForm.siteId));
       if (raw) draft = JSON.parse(raw);
     } catch { /* 손상된 임시저장은 무시 */ }
-    if (!draft) return;
-    if (draft.manualForm) setManualForm(draft.manualForm);
-    setManualFreeReason(draft.manualFreeReason ?? "");
-    setManualPhotos(draft.manualPhotos ?? { before: [], after: [] });
-    setManualPartPhotos(draft.manualPartPhotos ?? {});
-    setManualSignatureUrl(draft.manualSignatureUrl ?? null);
-    setManualAbsentMode(draft.manualAbsentMode ?? false);
-    setManualApproverName(draft.manualApproverName ?? "");
-    setManualApproverPhone(draft.manualApproverPhone ?? "");
-    setManualAbsentConfirmed(draft.manualAbsentConfirmed ?? false);
-    setManualSignerName(draft.manualSignerName ?? "");
-    setManualSignerPhone(draft.manualSignerPhone ?? "");
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (draft) {
+      if (draft.manualForm) setManualForm(draft.manualForm);
+      setManualFreeReason(draft.manualFreeReason ?? "");
+      setManualPhotos(draft.manualPhotos ?? { before: [], after: [] });
+      setManualPartPhotos(draft.manualPartPhotos ?? {});
+      setManualSignatureUrl(draft.manualSignatureUrl ?? null);
+      setManualAbsentMode(draft.manualAbsentMode ?? false);
+      setManualApproverName(draft.manualApproverName ?? "");
+      setManualApproverPhone(draft.manualApproverPhone ?? "");
+      setManualAbsentConfirmed(draft.manualAbsentConfirmed ?? false);
+      setManualSignerName(draft.manualSignerName ?? "");
+      setManualSignerPhone(draft.manualSignerPhone ?? "");
+      toastBill("임시저장된 내용을 불러왔습니다", true);
+    } else {
+      // 다른 현장에서 입력하던 내용이 새로 고른 현장으로 섞여 들어가지 않게 비운다
+      // (siteId·units는 방금 선택으로 이미 반영돼 있으니 그대로 둔다).
+      setManualForm((f) => ({ ...f, parts: [emptyPartRow()], partsByUnit: {}, replaceDate: TODAY_STR, cost: "" }));
+      setManualFreeReason("");
+      setManualPhotos({ before: [], after: [] });
+      setManualPartPhotos({});
+      setManualSignatureUrl(null);
+      setManualAbsentMode(false);
+      setManualApproverName("");
+      setManualApproverPhone("");
+      setManualAbsentConfirmed(false);
+      setManualSignerName("");
+      setManualSignerPhone("");
+    }
+  }, [manualForm.siteId]); // eslint-disable-line react-hooks/exhaustive-deps
   // 관리자가 지급 확정한 부품이 2개 이상이면 부품별로 전/후 사진을 따로 받는다 — 1개면
   // 나눌 이유가 없어 지금처럼 통합 업로더를 그대로 쓴다. 외주 견적건은 견적 품목을 우선한다.
   const billingParts = quoteBillingItems?.length > 1 ? quoteBillingItems : selected?.billingPartRows?.length > 1 ? selected.billingPartRows : null;
@@ -288,8 +306,9 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
   }
 
   function saveManualDraft() {
+    if (!manualForm.siteId) { toastBill("현장을 먼저 선택해주세요"); return; }
     try {
-      localStorage.setItem(MANUAL_DRAFT_KEY, JSON.stringify({
+      localStorage.setItem(manualDraftKey(manualForm.siteId), JSON.stringify({
         manualForm, manualFreeReason, manualPhotos, manualPartPhotos,
         manualSignatureUrl, manualAbsentMode, manualApproverName, manualApproverPhone,
         manualAbsentConfirmed, manualSignerName, manualSignerPhone,
@@ -456,19 +475,16 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       approvedAt: new Date().toISOString(),
     });
     if (!ok) return; // 실패 시 폼 유지(리셋 안 함)해 재시도 가능
-    try { localStorage.removeItem(MANUAL_DRAFT_KEY); } catch { /* 임시저장 정리 실패는 무시 */ }
-    if (manualForm.fromKit) {
-      // 호기별로 실제 쓴 부품·수량만큼 차감한다 — 호기마다 교체내역이 다를 수 있어(위 isMultiUnit)
-      // "호기 수 × 동일 수량"으로 일괄 차감하지 않고 호기별 실제 입력을 그대로 쓴다.
-      units_.forEach((u) => {
-        const rows = isMultiUnit ? (manualForm.partsByUnit[u] ?? []) : manualForm.parts;
-        rows
-          .filter((r) => r.name.trim() && r.qty)
-          .forEach((r) => onUseKitPart({ part: r.name.trim(), siteName: site.name, qty: Number(r.qty) }));
-      });
-    }
-    setSubmitted({ siteName: site.name, part: partText, manual: true, fromKit: manualForm.fromKit });
-    setManualForm({ siteId: "", units: [], parts: [emptyPartRow()], partsByUnit: {}, replaceDate: TODAY_STR, cost: "", fromKit: false });
+    try { localStorage.removeItem(manualDraftKey(manualForm.siteId)); } catch { /* 임시저장 정리 실패는 무시 */ }
+    // 상비 체크한 줄만 차감한다 — 한 청구에 상비부품과 직접입력 부품이 섞일 수 있다.
+    // 호기별로도 교체내역이 다를 수 있어(위 isMultiUnit) 호기별 실제 입력을 그대로 쓴다.
+    const kitRows = units_.flatMap((u) =>
+      (isMultiUnit ? (manualForm.partsByUnit[u] ?? []) : manualForm.parts)
+        .filter((r) => r.fromKit && r.name.trim() && r.qty)
+    );
+    kitRows.forEach((r) => onUseKitPart({ part: r.name.trim(), siteName: site.name, qty: Number(r.qty) }));
+    setSubmitted({ siteName: site.name, part: partText, manual: true, fromKit: kitRows.length > 0 });
+    setManualForm({ siteId: "", units: [], parts: [emptyPartRow()], partsByUnit: {}, replaceDate: TODAY_STR, cost: "" });
     setManualFreeReason("");
     setManualPhotos({ before: [], after: [] });
     setManualPartPhotos({});
@@ -800,27 +816,17 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
 
             {billStep === 1 && (
               <>
-                <button
-                  type="button"
-                  onClick={() => { setManualForm({ ...manualForm, fromKit: !manualForm.fromKit, parts: [emptyPartRow()], partsByUnit: {} }); setManualPartPhotos({}); }}
-                  className={`w-full flex items-center gap-2.5 border rounded-xl px-3.5 py-3 mb-4 text-left ${manualForm.fromKit ? "border-blue-400 bg-blue-50" : "border-slate-200 bg-white"}`}
-                >
-                  <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${manualForm.fromKit ? "bg-blue-600 border-blue-600" : "border-slate-300"}`}>
-                    {manualForm.fromKit && <Check size={13} className="text-white" />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-700">상비부품에서 사용함</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">체크하면 자재 담당자에게 보충 요청이 자동으로 전달됩니다</p>
-                  </div>
-                </button>
+                <p className="text-[11px] text-slate-400 mb-2 px-0.5">
+                  상비부품에서 꺼내 쓴 항목은 왼쪽 <span className="font-bold text-slate-500">상비</span> 칸을 체크하세요 — 그 항목만 자재 담당자에게 보충 요청이 전달됩니다.
+                </p>
                 {manualForm.units.length > 1 ? (
                   manualForm.units.map((u) => (
                     <Field key={u} label={`${u} 교체내역`}>
                       <PartsRowsInput
                         rows={manualForm.partsByUnit[u] ?? [emptyPartRow()]}
                         setRows={(rows) => setManualForm({ ...manualForm, partsByUnit: { ...manualForm.partsByUnit, [u]: rows } })}
-                        nameOptions={manualForm.fromKit ? KIT_PARTS : undefined}
-                        namePlaceholder={manualForm.fromKit ? "상비부품 목록에서 선택하세요" : "예: 1층 승장도어 스위치"}
+                        kitOptions={KIT_PARTS}
+                        namePlaceholder="예: 1층 승장도어 스위치"
                         nameLabel="부품명 (해당 층까지 기재)"
                       />
                     </Field>
@@ -830,8 +836,8 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                     <PartsRowsInput
                       rows={manualForm.parts}
                       setRows={(rows) => setManualForm({ ...manualForm, parts: rows })}
-                      nameOptions={manualForm.fromKit ? KIT_PARTS : undefined}
-                      namePlaceholder={manualForm.fromKit ? "상비부품 목록에서 선택하세요" : "예: 1층 승장도어 스위치"}
+                      kitOptions={KIT_PARTS}
+                      namePlaceholder="예: 1층 승장도어 스위치"
                       nameLabel="부품명 (해당 층까지 기재)"
                     />
                   </Field>
