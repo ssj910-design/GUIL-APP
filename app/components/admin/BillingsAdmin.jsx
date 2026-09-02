@@ -28,18 +28,18 @@ function siteNameOf(b, data) {
   return data.sites.find((s) => s.id === data.units.find((u) => u.id === b.unitId)?.siteId)?.name ?? b.siteName ?? "-";
 }
 
-// 목록 한 행 = 청구 한 건이 기본이지만, 품목마다 호기를 다르게 지정해둔(다호기) 청구는
-// 호기별로 행을 나눠서 "이 호기엔 뭘 교체했는지"가 한 줄에 섞이지 않고 바로 보이게 한다.
-// 품목에 호기 지정이 하나도 없으면(단일 호기 청구 등) 기존처럼 통짜 한 행 그대로.
-function billingRowsFor(b) {
+// 청구 한 건은 목록에서 한 행이 기본이지만, 품목마다 호기를 다르게 지정해둔(다호기) 청구는
+// 호기·교체내역만 호기별로 행을 나누고(다른 열은 rowSpan으로 합쳐서 한 번만 보여줌 — 그 외
+// 열은 청구 한 건 단위 값이라 호기별로 나눌 값이 아니다), "이 호기엔 뭘 교체했는지"가 한
+// 줄에 섞이지 않고 바로 보이게 한다. 품목에 호기 지정이 하나도 없으면(단일 호기 청구 등)
+// 기존처럼 통짜 한 행 그대로.
+function unitPartRowsFor(b) {
   const items = (b.partPhotos ?? []).filter((p) => p.name?.trim());
   const hasPerUnitTags = items.length > 1 && items.some((it) => it.unit);
   if (!hasPerUnitTags) {
     const label = formatUnitLabel(b.elevatorNos?.length ? b.elevatorNos : b.elevatorNo);
-    return [{ billing: b, unitLabel: label || "-", part: b.part, cost: b.cost, isFree: b.isFree }];
+    return [{ unitLabel: label || "-", part: b.part }];
   }
-  // 금액은 품목별로 안 나뉘어 있는 게 보통이라(전체 합계 1개) 나눠 계산하지 않고, 청구 전체
-  // 금액을 호기별 행마다 그대로 반복해서 보여준다 — "이 청구 전체가 이 금액"이라는 뜻.
   const groups = new Map();
   for (const it of items) {
     const key = it.unit || "";
@@ -47,7 +47,7 @@ function billingRowsFor(b) {
     groups.get(key).push(it);
   }
   return [...groups.entries()].map(([unit, its]) => (
-    { billing: b, unitLabel: unit ? formatUnitLabel(unit) : "호기 미지정", part: its.map((it) => `${it.name}${it.qty ? ` ${it.qty}개` : ""}`).join(", "), cost: b.cost, isFree: b.isFree }
+    { unitLabel: unit ? formatUnitLabel(unit) : "호기 미지정", part: its.map((it) => `${it.name}${it.qty ? ` ${it.qty}개` : ""}`).join(", ") }
   ));
 }
 
@@ -731,8 +731,6 @@ export default function BillingsAdmin({ data, setData }) {
   );
   // 무상 처리된 건은 합계에서 제외한다.
   const total = rows.reduce((sum, b) => sum + (b.isFree ? 0 : Number(b.cost) || 0), 0);
-  // 목록 표시용 — 다호기(품목별 호기 지정) 청구는 호기별로 행을 나눈다(billingRowsFor 참고).
-  const displayRows = rows.flatMap(billingRowsFor);
 
   // localPatch는 화면(camelCase) 반영용 — dbPatch(snake_case)와 내용은 같되 키 이름만 다르다.
   // 호출부(BillingDetailModal)가 필드를 늘릴 때마다 여기서 매핑을 다시 안 써도 되게 둘 다 받는다.
@@ -888,56 +886,65 @@ export default function BillingsAdmin({ data, setData }) {
         </button>
       </div>
       <AdminTable head={["현장", "작업자", "호기", "교체내역", "금액(VAT별도)", "교체일", "교체확인서", "청구일", "청구방식"]}>
-        {displayRows.map((r, i) => {
-          const b = r.billing;
-          return (
-          <tr key={`${b.id}-${i}`} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setDetail(b)}>
-            <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{siteNameOf(b, data)}</td>
-            <td className="px-3 py-2.5 whitespace-nowrap">
-              {b.isOutsourced ? (
-                <span className="inline-flex items-center gap-1">
-                  <StatusBadge tone="purple">외주</StatusBadge> {b.vendorName || "-"}
-                </span>
-              ) : personOf(data, b.engineerId, b.engineer)}
-            </td>
-            <td className="px-3 py-2.5 whitespace-nowrap">{r.unitLabel}</td>
-            <td className="px-3 py-2.5 text-slate-600 whitespace-pre-line">{r.part}</td>
-            <td className="px-3 py-2.5 whitespace-nowrap">
-              {r.isFree ? (
-                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
-                  {freeReasonLabel(freeReasonOf(b.notes))}
-                </span>
-              ) : r.cost == null ? (
-                <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">견적서 참조</span>
-              ) : (
-                <span className="font-bold">{Number(r.cost).toLocaleString()}원</span>
+        {rows.map((b) => {
+          const unitPartRows = unitPartRowsFor(b);
+          const span = unitPartRows.length;
+          return unitPartRows.map((r, i) => (
+            <tr key={`${b.id}-${i}`} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setDetail(b)}>
+              {i === 0 && (
+                <>
+                  <td rowSpan={span} className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap align-top">{siteNameOf(b, data)}</td>
+                  <td rowSpan={span} className="px-3 py-2.5 whitespace-nowrap align-top">
+                    {b.isOutsourced ? (
+                      <span className="inline-flex items-center gap-1">
+                        <StatusBadge tone="purple">외주</StatusBadge> {b.vendorName || "-"}
+                      </span>
+                    ) : personOf(data, b.engineerId, b.engineer)}
+                  </td>
+                </>
               )}
-            </td>
-            <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(b.replaceDate)}</td>
-            <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-              <button
-                type="button"
-                onClick={() => setCertTarget(b)}
-                className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5 whitespace-nowrap hover:bg-blue-100"
-              >
-                교체확인서 보기
-              </button>
-            </td>
-            <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-              <EditableDate key={b.billingDate ?? "unset"} value={b.billingDate} onCommit={(v) => updateManualField(b, "billing_date", "billingDate", v)} />
-            </td>
-            <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-              <select
-                className={`${inputCls} min-w-24`}
-                value={b.billingMethod ?? ""}
-                onChange={(e) => updateManualField(b, "billing_method", "billingMethod", e.target.value)}
-              >
-                <option value="">선택</option>
-                {BILLING_METHODS.map((m) => <option key={m}>{m}</option>)}
-              </select>
-            </td>
-          </tr>
-          );
+              <td className="px-3 py-2.5 whitespace-nowrap">{r.unitLabel}</td>
+              <td className="px-3 py-2.5 text-slate-600 whitespace-pre-line">{r.part}</td>
+              {i === 0 && (
+                <>
+                  <td rowSpan={span} className="px-3 py-2.5 whitespace-nowrap align-top">
+                    {b.isFree ? (
+                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
+                        {freeReasonLabel(freeReasonOf(b.notes))}
+                      </span>
+                    ) : b.cost == null ? (
+                      <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">견적서 참조</span>
+                    ) : (
+                      <span className="font-bold">{Number(b.cost).toLocaleString()}원</span>
+                    )}
+                  </td>
+                  <td rowSpan={span} className="px-3 py-2.5 text-slate-500 whitespace-nowrap align-top">{shortDate(b.replaceDate)}</td>
+                  <td rowSpan={span} className="px-3 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => setCertTarget(b)}
+                      className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5 whitespace-nowrap hover:bg-blue-100"
+                    >
+                      교체확인서 보기
+                    </button>
+                  </td>
+                  <td rowSpan={span} className="px-3 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
+                    <EditableDate key={b.billingDate ?? "unset"} value={b.billingDate} onCommit={(v) => updateManualField(b, "billing_date", "billingDate", v)} />
+                  </td>
+                  <td rowSpan={span} className="px-3 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
+                    <select
+                      className={`${inputCls} min-w-24`}
+                      value={b.billingMethod ?? ""}
+                      onChange={(e) => updateManualField(b, "billing_method", "billingMethod", e.target.value)}
+                    >
+                      <option value="">선택</option>
+                      {BILLING_METHODS.map((m) => <option key={m}>{m}</option>)}
+                    </select>
+                  </td>
+                </>
+              )}
+            </tr>
+          ));
         })}
       </AdminTable>
 
