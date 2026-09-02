@@ -154,7 +154,11 @@ function emptyBillingItem() {
 
 // 새 청구 등록 폼의 품목 입력 — 품명·수량·금액에 품목별 전/후 사진까지 한 번에 받는다
 // (기존 상세수정 화면의 품목별 수정 UI와 동일한 필드 구성, 여기선 행 추가·삭제까지 지원).
-function ItemRowsInput({ items, onChange, uploadFolder }) {
+// unitOptions(호기 라벨 배열)를 주면 품목마다 어느 호기 것인지 고를 수 있다 — 이 청구가
+// 여러 호기를 같이 다룰 때만 의미가 있어(단일 호기면 다 그 호기 것이므로) 상위(BillingDetailModal)
+// 에서 호기를 2개 이상 골랐을 때만 넘겨준다. item.unit에 저장 — SitesAdmin.jsx 호기상세
+// 부품교체내역이 이 값으로 "이 호기 것만" 걸러서 보여준다(기존부터 있던 컨벤션).
+function ItemRowsInput({ items, onChange, uploadFolder, unitOptions = null }) {
   function updateItem(i, patch) {
     onChange(items.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
   }
@@ -172,6 +176,15 @@ function ItemRowsInput({ items, onChange, uploadFolder }) {
               <input className={inputCls} value={item.qty} onChange={(e) => updateItem(i, { qty: e.target.value })} />
             </div>
           </div>
+          {unitOptions && (
+            <div>
+              <p className="text-[11px] font-bold text-slate-500 mb-1">호기</p>
+              <select className={inputCls} value={item.unit ?? ""} onChange={(e) => updateItem(i, { unit: e.target.value || null })}>
+                <option value="">호기 미지정</option>
+                {unitOptions.map((label) => <option key={label} value={label}>{label}</option>)}
+              </select>
+            </div>
+          )}
           <div className="flex items-end gap-2">
             <div className="flex-1">
               <p className="text-[11px] font-bold text-slate-500 mb-1">금액 (선택)</p>
@@ -372,6 +385,10 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
   // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 관리자가 자재담당자에게도 배정할 수 있어야 한다.
   const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
   const notesReady = data.billings.some((x) => x.notes !== undefined);
+  // 교체호기 수정 대상 — 이 청구가 속한 현장의 호기 목록만 고를 수 있다(다른 현장 호기로는
+  // 못 바꾼다, 현장 자체를 옮기는 기능이 아니라 그 현장 안에서 호기를 다시 고르는 것).
+  const billingSiteId = data.units.find((u) => u.id === b.unitId)?.siteId ?? data.sites.find((s) => s.name === b.siteName)?.id ?? null;
+  const siteUnits = data.units.filter((u) => u.siteId === billingSiteId);
   const [form, setForm] = useState({
     notes: b.notes ?? "",
     engineerId: b.engineerId ?? "",
@@ -393,11 +410,15 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
     const seededItems = (b.partPhotos ?? []).length
       ? b.partPhotos.map((p) => ({ ...p, beforeUrls: p.beforeUrls ?? [], afterUrls: p.afterUrls ?? [] }))
       : [{ name: b.part ?? "", qty: "", amount: b.cost ?? "", beforeUrls: b.beforePhotoUrls ?? [], afterUrls: b.afterPhotoUrls ?? [] }];
+    const initialUnitIds = b.elevatorNos?.length
+      ? siteUnits.filter((u) => b.elevatorNos.includes(u.unitNo)).map((u) => u.id)
+      : b.unitId ? [b.unitId] : [];
     setEditForm({
       contactPhone: b.contactPhone ?? "",
       vendorName: b.vendorName ?? "",
       confirmPhotoUrl: b.confirmPhotoUrl ?? null,
       partPhotos: seededItems,
+      unitIds: initialUnitIds,
     });
     setEditing(true);
   }
@@ -409,6 +430,18 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
     if (b.isOutsourced) {
       dbPatch.vendor_name = editForm.vendorName || null;
       localPatch.vendorName = editForm.vendorName || null;
+    }
+    // 교체호기 — 1개 고르면 unit_id/elevator_no만, 2개 이상이면 대표 호기(unit_id) +
+    // elevator_nos(전체 호기 라벨)까지 같이 채운다. 다른 화면(SitesAdmin 호기상세·SiteTab
+    // 견적내역 등)이 이 두 필드로 "이 청구가 어느 호기(들)인지" 판단한다.
+    const selectedUnits = siteUnits.filter((u) => editForm.unitIds.includes(u.id));
+    if (selectedUnits.length > 0) {
+      dbPatch.unit_id = selectedUnits[0].id;
+      dbPatch.elevator_no = selectedUnits[0].unitNo;
+      dbPatch.elevator_nos = selectedUnits.length > 1 ? selectedUnits.map((u) => u.unitNo) : null;
+      localPatch.unitId = dbPatch.unit_id;
+      localPatch.elevatorNo = dbPatch.elevator_no;
+      localPatch.elevatorNos = dbPatch.elevator_nos;
     }
     const filled = editForm.partPhotos.filter((p) => p.name?.trim());
     if (filled.length > 1) {
@@ -569,11 +602,37 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
       ) : (
         <div className="space-y-4">
           <div>
-            <p className="text-xs font-bold text-slate-500 mb-2">품목별 수정 (새 청구 등록과 동일하게 품목 추가·삭제 가능)</p>
+            <p className="text-xs font-bold text-slate-500 mb-2">교체 호기 (여러 호기 선택 가능)</p>
+            <div className="flex flex-wrap gap-1.5">
+              {siteUnits.map((u) => {
+                const checked = editForm.unitIds.includes(u.id);
+                return (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => setEditForm({
+                      ...editForm,
+                      unitIds: checked ? editForm.unitIds.filter((id) => id !== u.id) : [...editForm.unitIds, u.id],
+                    })}
+                    className={`text-xs font-bold rounded-lg px-3 py-1.5 border ${checked ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200"}`}
+                  >
+                    {u.unitNo}
+                  </button>
+                );
+              })}
+            </div>
+            {siteUnits.length === 0 && <p className="text-xs text-slate-400">이 현장에 등록된 호기가 없습니다</p>}
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-2">
+              품목별 수정 (새 청구 등록과 동일하게 품목 추가·삭제 가능)
+              {editForm.unitIds.length > 1 && " · 호기를 2개 이상 고르면 품목마다 어느 호기 것인지 지정할 수 있습니다"}
+            </p>
             <ItemRowsInput
               items={editForm.partPhotos}
               onChange={(partPhotos) => setEditForm({ ...editForm, partPhotos })}
               uploadFolder={`billings/${b.id}`}
+              unitOptions={editForm.unitIds.length > 1 ? siteUnits.filter((u) => editForm.unitIds.includes(u.id)).map((u) => u.unitNo) : null}
             />
           </div>
           <div>
