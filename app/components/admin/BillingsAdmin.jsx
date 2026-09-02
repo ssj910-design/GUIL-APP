@@ -620,8 +620,28 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
 
       {!editing ? (
         <div>
-          <p className="text-xs font-bold text-slate-500 mb-2">사진 ({photos.length}장)</p>
-          <PhotoGrid urls={photos} />
+          {/* 품목이 2개 이상이면 사진이 flat 필드(beforePhotoUrls 등)가 아니라 품목별
+              partPhotos[].beforeUrls/afterUrls에 들어있다(saveEdit 참고) — 품목별로 나눠 보여준다. */}
+          {b.partPhotos?.length > 1 ? (
+            <div className="space-y-3">
+              {b.partPhotos.filter((p) => p.name?.trim()).map((p, i) => {
+                const urls = [...(p.beforeUrls ?? []), ...(p.afterUrls ?? [])];
+                return (
+                  <div key={i}>
+                    <p className="text-xs font-bold text-slate-500 mb-2">
+                      {p.name}{p.unit ? ` · ${formatUnitLabel(p.unit)}` : ""} 사진 ({urls.length}장)
+                    </p>
+                    <PhotoGrid urls={urls} />
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <>
+              <p className="text-xs font-bold text-slate-500 mb-2">사진 ({photos.length}장)</p>
+              <PhotoGrid urls={photos} />
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
@@ -715,6 +735,10 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
 export default function BillingsAdmin({ data, setData }) {
   const { billings } = data;
   const [search, setSearch] = useState("");
+  // 호기별로 행이 나뉜(다호기) 청구는 어느 행에 마우스를 올려도 그 청구의 행 전체가 같이
+  // 밝아지게 해서 "이건 한 청구다"가 보이게 한다 — 안 그러면 행마다 따로 반응해 서로 다른
+  // 건처럼 보인다.
+  const [hoveredBillingId, setHoveredBillingId] = useState(null);
   const [detail, setDetail] = useState(null);
   const [certTarget, setCertTarget] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -890,7 +914,13 @@ export default function BillingsAdmin({ data, setData }) {
           const unitPartRows = unitPartRowsFor(b);
           const span = unitPartRows.length;
           return unitPartRows.map((r, i) => (
-            <tr key={`${b.id}-${i}`} className="border-b border-slate-50 cursor-pointer hover:bg-slate-50" onClick={() => setDetail(b)}>
+            <tr
+              key={`${b.id}-${i}`}
+              className={`border-b border-slate-50 cursor-pointer ${hoveredBillingId === b.id ? "bg-slate-50" : ""}`}
+              onClick={() => setDetail(b)}
+              onMouseEnter={() => setHoveredBillingId(b.id)}
+              onMouseLeave={() => setHoveredBillingId((id) => (id === b.id ? null : id))}
+            >
               {i === 0 && (
                 <>
                   <td rowSpan={span} className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap align-top">{siteNameOf(b, data)}</td>
