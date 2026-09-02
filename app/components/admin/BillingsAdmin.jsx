@@ -696,14 +696,16 @@ export default function BillingsAdmin({ data, setData }) {
   }
 
   // 가격 조정 — 청구 상세내역에서 금액을 다시 입력했을 때 반영한다. 금액이 바뀌면 교체확인서에
-  // 찍힌 합계도 달라지니 저장해둔 PDF는 비워서 다음에 열 때 새로 만들어지게 한다.
+  // 찍힌 합계도 달라지니 저장해둔 PDF는 비워서 다음에 열 때 새로 만들어지게 한다. 무상 처리된
+  // 건에 실제 금액을 입력하는 것도 이 액션이라(무상/견적서참조 배지 → 금액), 무상 상태를 같이
+  // 해제한다 — 안 그러면 방금 입력한 금액 대신 배지가 계속 표시되고 합계에서도 계속 빠진다.
   async function adjustPrice(b, cost) {
-    const patch = { cost, ...(certUrlReady ? { certificate_pdf_url: null } : {}) };
+    const patch = { cost, is_free: false, ...(certUrlReady ? { certificate_pdf_url: null } : {}) };
     const { error } = await supabase.from("billings").update(patch).eq("id", b.id);
     if (error) { alert("저장 실패: " + error.message); return; }
     setData((prev) => ({
       ...prev,
-      billings: prev.billings.map((x) => (x.id === b.id ? { ...x, cost, ...(certUrlReady ? { certificatePdfUrl: null } : {}) } : x)),
+      billings: prev.billings.map((x) => (x.id === b.id ? { ...x, cost, isFree: false, ...(certUrlReady ? { certificatePdfUrl: null } : {}) } : x)),
     }));
   }
 
