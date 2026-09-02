@@ -99,6 +99,7 @@ function buildCertificateData(b, data) {
     items,
     totalCost: b.cost ?? itemsTotal,
     isFree: b.isFree,
+    freeReason: freeReasonOf(b.notes),
     approval: b.approvalMethod
       ? {
           method: b.approvalMethod,

@@ -76,7 +76,8 @@ export default function ReplacementCertificateViewer({ cert, filenameBase, cache
     let objectUrl = null;
     (async () => {
       try {
-        if (cachedUrl) {
+        // v2 이전에 만들어 둔 PDF는 캐시로 쓰지 않고 새로 그린다(생성 라우트 주석 참고).
+        if (cachedUrl?.includes("/v2/")) {
           setPreviewUrl(namedPdfUrl(cachedUrl, filenameBase) ?? cachedUrl);
           setStatus("ready");
           return;
