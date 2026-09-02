@@ -28,9 +28,11 @@ function Avatar({ name, small }) {
 }
 
 const isImageAttachment = (url) => /\.(jpe?g|png|gif|webp|heic|heif|bmp|svg)(\?|$)/i.test(url);
-// 사진·영상이 아닌 첨부(문서 등)는 미리보기 없이 아이콘+파일명 카드로 보여주고, 누르면
-// 새 탭에서 열린다(다운로드). 모바일 RoomTab.jsx와 동일 규칙(Storage 경로가
-// "폴더/타임스탬프-원본파일명"이라 타임스탬프 접두어만 떼면 원래 파일명이 나온다).
+// 사진·영상이 아닌 첨부(문서 등)는 미리보기 없이 아이콘+"파일명.확장자" 카드로 보여주고,
+// 누르면 (PDF 등 브라우저가 새 탭에 미리보기로 열어버리는 형식도) 바로 다운로드된다 —
+// downloadPhoto가 blob으로 받아 강제 저장하는 방식이라 미리보기로 새지 않는다. 모바일
+// RoomTab.jsx와 동일 규칙(Storage 경로가 "폴더/타임스탬프-원본파일명"이라 타임스탬프
+// 접두어만 떼면 원래 파일명이 나온다).
 function attachmentFileName(url) {
   try {
     return decodeURIComponent(url.split("/").pop().split("?")[0]).replace(/^\d+-/, "");
@@ -39,17 +41,16 @@ function attachmentFileName(url) {
   }
 }
 function FileAttachmentCard({ url, className }) {
+  const name = attachmentFileName(url);
   return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer"
-      onClick={(e) => e.stopPropagation()}
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); downloadPhoto(url, name).catch((err) => alert("다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"))); }}
       className={`${className} rounded-lg bg-slate-100 border border-slate-200 flex flex-col items-center justify-center gap-0.5 px-1 text-center`}
     >
       <FileText size={16} className="text-slate-400 shrink-0" />
-      <span className="text-[8px] text-slate-500 leading-tight break-all line-clamp-2">{attachmentFileName(url)}</span>
-    </a>
+      <span className="text-[8px] text-slate-500 leading-tight break-all line-clamp-2">{name}</span>
+    </button>
   );
 }
 
