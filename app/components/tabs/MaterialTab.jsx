@@ -526,7 +526,8 @@ function RestockHistoryScreen({ restockRequests, kitStock, onBack, onReceiveRest
 
 
 export function emptyPartRow() {
-  return { id: Date.now() + Math.random(), name: "", qty: "" };
+  // fromKit: 이 줄만 상비부품에서 꺼내 썼다는 표시 (비용청구 직접입력에서만 씀).
+  return { id: Date.now() + Math.random(), name: "", qty: "", fromKit: false };
 }
 
 
@@ -538,10 +539,16 @@ export function formatPartRows(rows) {
 }
 
 
-// nameOptions를 넘기면 부품명 칸이 드롭다운으로 바뀝니다 (예: 상비부품 목록에서 선택).
-export function PartsRowsInput({ rows, setRows, nameOptions, namePlaceholder = "예: 인버터", nameLabel = "부품명" }) {
+// kitOptions를 넘기면 줄마다 "상비" 토글이 붙습니다 — 켠 줄만 부품명이 상비부품 목록
+// 드롭다운으로 바뀌고, 부르는 쪽은 그 줄만 재고 차감·보충요청 대상으로 쓰면 됩니다.
+// (한 청구에 상비부품과 직접입력 부품이 섞이는 경우가 많아 줄 단위로 나눠뒀습니다.)
+export function PartsRowsInput({ rows, setRows, kitOptions, namePlaceholder = "예: 인버터", nameLabel = "부품명" }) {
   function updateRow(id, field, value) {
     setRows(rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
+  }
+  // 상비 여부를 바꾸면 입력칸 종류(자유입력↔드롭다운)가 달라져 이전 부품명은 못 쓴다.
+  function toggleKit(id) {
+    setRows(rows.map((r) => (r.id === id ? { ...r, fromKit: !r.fromKit, name: "" } : r)));
   }
   function addRow() {
     setRows([...rows, emptyPartRow()]);
@@ -554,6 +561,7 @@ export function PartsRowsInput({ rows, setRows, nameOptions, namePlaceholder = "
   return (
     <div>
       <div className="flex gap-1.5 mb-1.5 px-0.5">
+        {kitOptions && <span className="text-[10px] font-bold text-slate-400 w-9 shrink-0">상비</span>}
         <span className="text-[10px] font-bold text-slate-400" style={{ flex: 2 }}>{nameLabel}</span>
         <span className="text-[10px] font-bold text-slate-400" style={{ flex: 1 }}>수량</span>
         <span className="w-5 shrink-0" />
@@ -561,15 +569,25 @@ export function PartsRowsInput({ rows, setRows, nameOptions, namePlaceholder = "
       <div className="space-y-2">
         {rows.map((row) => (
           <div key={row.id} className="flex gap-1.5 items-center">
-            {nameOptions ? (
+            {kitOptions && (
+              <button
+                type="button"
+                onClick={() => toggleKit(row.id)}
+                aria-pressed={!!row.fromKit}
+                className={`w-9 h-9 rounded-lg border shrink-0 flex items-center justify-center ${row.fromKit ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-300"}`}
+              >
+                <Check size={15} />
+              </button>
+            )}
+            {kitOptions && row.fromKit ? (
               <select
                 className={inputCls}
                 style={{ flex: 2 }}
                 value={row.name}
                 onChange={(e) => updateRow(row.id, "name", e.target.value)}
               >
-                <option value="">{namePlaceholder}</option>
-                {nameOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+                <option value="">상비부품 선택</option>
+                {kitOptions.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             ) : (
               <input
