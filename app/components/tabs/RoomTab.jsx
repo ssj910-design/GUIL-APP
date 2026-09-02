@@ -1,13 +1,38 @@
 import { useState, useContext, useRef, useEffect } from "react";
-import { Send, Plus, X, Download, MessageCircle, ThumbsUp, MoreVertical, ChevronLeft, ChevronRight, Pin, Search, Pencil } from "lucide-react";
+import { Send, Plus, X, Download, MessageCircle, ThumbsUp, MoreVertical, ChevronLeft, ChevronRight, Pin, Search, Pencil, FileText } from "lucide-react";
 import { AuthContext } from "@/app/components/context";
-import { uploadPhoto, downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
+import { uploadPhoto, downloadPhoto, downloadPhotosAsZip, extOf, isVideoUrl } from "@/lib/photos";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { PhotoLightboxPane } from "@/app/components/ui";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
 import { useBackHandler } from "@/app/hooks/useBackHandler";
 
-const isVideo = (url) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(url);
+const isVideo = isVideoUrl;
+const isImageAttachment = (url) => /\.(jpe?g|png|gif|webp|heic|heif|bmp|svg)(\?|$)/i.test(url);
+// 사진·영상이 아닌 첨부(문서 등)는 미리보기 없이 아이콘+파일명 카드로 보여주고, 누르면
+// 새 탭에서 열린다(다운로드) — Storage 업로드 경로가 "폴더/타임스탬프-원본파일명"이라
+// 타임스탬프 접두어만 떼면 사용자가 올린 원래 파일명이 그대로 나온다.
+function attachmentFileName(url) {
+  try {
+    return decodeURIComponent(url.split("/").pop().split("?")[0]).replace(/^\d+-/, "");
+  } catch {
+    return "첨부파일";
+  }
+}
+function FileAttachmentCard({ url, className }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className={`${className} rounded-lg bg-slate-100 border border-slate-200 flex flex-col items-center justify-center gap-0.5 px-1 text-center`}
+    >
+      <FileText size={16} className="text-slate-400 shrink-0" />
+      <span className="text-[8px] text-slate-500 leading-tight break-all line-clamp-2">{attachmentFileName(url)}</span>
+    </a>
+  );
+}
 
 // 게시글 사진 확대보기 — 여러 장이면 좌우 스와이프/화살표로 넘기고, 더블탭·핀치·휠로 확대.
 function PhotoViewerOverlay({ urls, index, onIndexChange, onClose }) {
@@ -175,7 +200,9 @@ function CommentRow({ c, onLike, liked, likeCount, canManage, editingId, editTex
             {c.photoUrls.map((u, i) =>
               isVideo(u)
                 ? <video key={u} src={u} className="w-16 h-16 rounded-lg object-cover" onClick={() => onOpenPhoto(c.photoUrls, i)} />
-                : <img key={u} src={u} alt="첨부" className="w-16 h-16 rounded-lg object-cover" onClick={() => onOpenPhoto(c.photoUrls, i)} />
+                : isImageAttachment(u)
+                  ? <img key={u} src={u} alt="첨부" className="w-16 h-16 rounded-lg object-cover" onClick={() => onOpenPhoto(c.photoUrls, i)} />
+                  : <FileAttachmentCard key={u} url={u} className="w-16 h-16" />
             )}
           </div>
         )}
@@ -258,10 +285,12 @@ function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEdit
             {p.photoUrls.map((u, i) =>
               isVideo(u)
                 ? <video key={u} src={u} controls playsInline className="rounded-lg w-full" />
-                : <img key={u} src={u} alt="첨부 사진" className="rounded-lg w-full object-cover" onClick={() => onOpenPhoto(p.photoUrls, i)} />
+                : isImageAttachment(u)
+                  ? <img key={u} src={u} alt="첨부 사진" className="rounded-lg w-full object-cover" onClick={() => onOpenPhoto(p.photoUrls, i)} />
+                  : <FileAttachmentCard key={u} url={u} className="w-full h-16" />
             )}
           </div>
-        ) : (
+        ) : isImageAttachment(p.photoUrls[0]) || isVideo(p.photoUrls[0]) ? (
           <button onClick={(e) => { e.stopPropagation(); onOpenPhoto(p.photoUrls, 0); }} className="relative shrink-0">
             {isVideo(p.photoUrls[0])
               ? <video src={p.photoUrls[0]} className="w-16 h-16 rounded-lg object-cover" />
@@ -270,6 +299,13 @@ function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEdit
               <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] font-bold rounded px-1">{p.photoUrls.length}</span>
             )}
           </button>
+        ) : (
+          <div className="relative shrink-0">
+            <FileAttachmentCard url={p.photoUrls[0]} className="w-16 h-16" />
+            {p.photoUrls.length > 1 && (
+              <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] font-bold rounded px-1">{p.photoUrls.length}</span>
+            )}
+          </div>
         )
       )}
     </div>
@@ -591,7 +627,9 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
                 <div key={u} className="relative">
                   {isVideo(u)
                     ? <video src={u} className="w-14 h-14 rounded-lg object-cover" />
-                    : <img src={u} alt="첨부" className="w-14 h-14 rounded-lg object-cover" />}
+                    : isImageAttachment(u)
+                      ? <img src={u} alt="첨부" className="w-14 h-14 rounded-lg object-cover" />
+                      : <FileAttachmentCard url={u} className="w-14 h-14" />}
                   <button
                     onClick={() => setPendingPhotos((prev) => prev.filter((_, idx) => idx !== i))}
                     className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-800 text-white flex items-center justify-center"
@@ -605,8 +643,8 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
           )}
         </div>
         <div className="shrink-0 border-t border-slate-100 px-4 py-3">
-          <input ref={fileRef} type="file" accept="image/*,video/*" multiple hidden onChange={pickFiles} />
-          <button onClick={() => fileRef.current?.click()} disabled={uploading} aria-label="사진·영상 첨부" className="w-9 h-9 rounded-full border border-slate-300 text-slate-500 flex items-center justify-center active:bg-slate-100">
+          <input ref={fileRef} type="file" multiple hidden onChange={pickFiles} />
+          <button onClick={() => fileRef.current?.click()} disabled={uploading} aria-label="사진·영상·파일 첨부" className="w-9 h-9 rounded-full border border-slate-300 text-slate-500 flex items-center justify-center active:bg-slate-100">
             <Plus size={16} />
           </button>
         </div>
@@ -681,7 +719,9 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
                 <div key={u} className="relative">
                   {isVideo(u)
                     ? <video src={u} className="w-12 h-12 rounded-lg object-cover" />
-                    : <img src={u} alt="첨부" className="w-12 h-12 rounded-lg object-cover" />}
+                    : isImageAttachment(u)
+                      ? <img src={u} alt="첨부" className="w-12 h-12 rounded-lg object-cover" />
+                      : <FileAttachmentCard url={u} className="w-12 h-12" />}
                   <button
                     onClick={() => setCommentPhotos((p) => ({ ...p, [openPost.id]: (p[openPost.id] ?? []).filter((_, idx) => idx !== i) }))}
                     className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-800 text-white flex items-center justify-center"
@@ -706,11 +746,11 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
             </div>
           )}
           <div className="flex items-center gap-2">
-            <input ref={commentFileRef} type="file" accept="image/*,video/*" multiple hidden onChange={(e) => pickCommentFiles(openPost.id, e)} />
+            <input ref={commentFileRef} type="file" multiple hidden onChange={(e) => pickCommentFiles(openPost.id, e)} />
             <button
               onClick={() => commentFileRef.current?.click()}
               disabled={commentUploading}
-              aria-label="사진·영상 첨부"
+              aria-label="사진·영상·파일 첨부"
               className="w-9 h-9 rounded-full border border-slate-300 text-slate-500 flex items-center justify-center active:bg-slate-100 shrink-0"
             >
               <Plus size={16} />

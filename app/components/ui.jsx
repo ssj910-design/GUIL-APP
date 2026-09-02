@@ -4,7 +4,7 @@ import { BRAND } from "@/lib/company";
 import { createPortal } from "react-dom";
 import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Download } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
+import { downloadPhoto, downloadPhotosAsZip, extOf, isVideoUrl } from "@/lib/photos";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
 import { useBackHandler } from "@/app/hooks/useBackHandler";
 
@@ -152,6 +152,13 @@ export function PhotoGrid({ urls = [], cols = 3, className = "" }) {
 // 사진 한 장 — 라이트박스 트랙 안 슬롯 하나. active일 때만 확대·이동 스타일을 받는다.
 // PC 관리자 콘솔(adminShared.jsx)의 라이트박스도 이 조각을 그대로 재사용한다.
 export function PhotoLightboxPane({ url, active, zoom, pan, isGesturing }) {
+  if (isVideoUrl(url)) {
+    return (
+      <div className="w-full h-full shrink-0 flex items-center justify-center px-4">
+        <video src={url} controls playsInline className="max-w-full max-h-full object-contain" />
+      </div>
+    );
+  }
   return (
     <div className="w-full h-full shrink-0 flex items-center justify-center px-4">
       {/* eslint-disable-next-line @next/next/no-img-element */}

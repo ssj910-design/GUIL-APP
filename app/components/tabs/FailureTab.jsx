@@ -6,6 +6,7 @@ import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
 import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
+import { isVideoUrl } from "@/lib/photos";
 import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
@@ -614,11 +615,13 @@ export function FailureDetailSheet({ failure, failures = [], nested = false, onC
       )}
       {failure.photoUrls?.length > 0 && (
         <div className="mb-4">
-          <p className="text-xs font-bold text-slate-500 mb-2">처리 사진 ({failure.photoUrls.length}장)</p>
+          <p className="text-xs font-bold text-slate-500 mb-2">처리 사진·영상 ({failure.photoUrls.length}장)</p>
           <div className="grid grid-cols-3 gap-2">
             {failure.photoUrls.map((url, i) => (
               <button key={i} type="button" onClick={() => setPhotoViewer({ urls: failure.photoUrls, index: i })}>
-                <img src={url} alt="" className="w-full aspect-square rounded-xl object-cover border border-slate-200" />
+                {isVideoUrl(url)
+                  ? <video src={url} className="w-full aspect-square rounded-xl object-cover border border-slate-200" />
+                  : <img src={url} alt="" className="w-full aspect-square rounded-xl object-cover border border-slate-200" />}
               </button>
             ))}
           </div>
@@ -1111,7 +1114,7 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
           onUploaded={(url) => setPhotos((p) => [...p, { url }])}
           onRemove={(idx) => setPhotos((p) => p.filter((_, i) => i !== idx))}
           onUploadingChange={setPhotosUploading}
-          label="처리 사진"
+          label="처리 사진·영상"
           required={false}
         />
         {photosUploading && <p className="text-[11px] text-amber-600 font-semibold -mt-2">사진 업로드가 끝날 때까지 잠시 기다려주세요...</p>}

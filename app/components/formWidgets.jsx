@@ -1,6 +1,6 @@
 import { useState, useContext, useRef, useEffect } from "react";
 import { X, Camera, Search, Image as ImageIcon } from "lucide-react";
-import { uploadPhoto, dataUrlToBlob } from "@/lib/photos";
+import { uploadPhoto, dataUrlToBlob, isVideoUrl } from "@/lib/photos";
 import { inputCls, Sheet, PhotoLightbox } from "@/app/components/ui";
 import { SitesContext } from "@/app/components/context";
 import { activeSites } from "@/lib/utils";
@@ -88,7 +88,9 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
       <div className="grid grid-cols-4 gap-2 mb-2">
         {photos.map((p, idx) => (
           <div key={idx} className="relative aspect-square rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden">
-            {p?.url ? <img src={p.url} alt="" className="w-full h-full object-cover" /> : <ImageIcon size={16} className="text-slate-400" />}
+            {p?.url ? (
+              isVideoUrl(p.url) ? <video src={p.url} className="w-full h-full object-cover" /> : <img src={p.url} alt="" className="w-full h-full object-cover" />
+            ) : <ImageIcon size={16} className="text-slate-400" />}
             <button
               type="button"
               onClick={() => onRemove(idx)}
@@ -100,8 +102,8 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
         ))}
         {uploadFolder ? (
           <>
-            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFiles} />
-            <input ref={galleryInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+            <input ref={cameraInputRef} type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={handleFiles} />
+            <input ref={galleryInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleFiles} />
             <button
               type="button"
               onClick={() => setChoosing(true)}
@@ -143,7 +145,7 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
               onClick={() => { setChoosing(false); galleryInputRef.current?.click(); }}
               className="w-full flex items-center gap-2.5 text-sm font-bold text-slate-800 bg-slate-100 rounded-xl px-4 py-3.5 active:bg-slate-200"
             >
-              <ImageIcon size={18} /> 사진첩에서 선택
+              <ImageIcon size={18} /> 사진·영상첩에서 선택
             </button>
           </div>
         </Sheet>
