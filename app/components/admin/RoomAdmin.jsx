@@ -6,10 +6,10 @@
 // 중앙 모달(adminShared의 Modal)로 — PC 게시판에 맞는 레이아웃.
 // 작성자는 실제 로그인한 관리자 이름(AdminAuthContext)을 쓴다 — "관리자"로 뭉뚱그리지 않는다.
 import { useContext, useState } from "react";
-import { Image as ImageIcon, Pin, ThumbsUp, MessageCircle, Trash2, X, Send, Search, MoreVertical, ChevronLeft, ChevronRight, Pencil } from "lucide-react";
+import { Image as ImageIcon, Pin, ThumbsUp, MessageCircle, Trash2, X, Send, Search, MoreVertical, ChevronLeft, ChevronRight, Pencil, FileText } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
-import { uploadPhoto, downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
+import { uploadPhoto, downloadPhoto, downloadPhotosAsZip, extOf, isVideoUrl } from "@/lib/photos";
 import { Modal, inputCls, AdminAuthContext, useBackdropClose } from "@/app/components/admin/adminShared";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { profileIdByName } from "@/lib/utils";
@@ -27,6 +27,32 @@ function Avatar({ name, small }) {
   );
 }
 
+const isImageAttachment = (url) => /\.(jpe?g|png|gif|webp|heic|heif|bmp|svg)(\?|$)/i.test(url);
+// 사진·영상이 아닌 첨부(문서 등)는 미리보기 없이 아이콘+파일명 카드로 보여주고, 누르면
+// 새 탭에서 열린다(다운로드). 모바일 RoomTab.jsx와 동일 규칙(Storage 경로가
+// "폴더/타임스탬프-원본파일명"이라 타임스탬프 접두어만 떼면 원래 파일명이 나온다).
+function attachmentFileName(url) {
+  try {
+    return decodeURIComponent(url.split("/").pop().split("?")[0]).replace(/^\d+-/, "");
+  } catch {
+    return "첨부파일";
+  }
+}
+function FileAttachmentCard({ url, className }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className={`${className} rounded-lg bg-slate-100 border border-slate-200 flex flex-col items-center justify-center gap-0.5 px-1 text-center`}
+    >
+      <FileText size={16} className="text-slate-400 shrink-0" />
+      <span className="text-[8px] text-slate-500 leading-tight break-all line-clamp-2">{attachmentFileName(url)}</span>
+    </a>
+  );
+}
+
 function timeOf(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -38,10 +64,22 @@ function PhotoGrid({ urls, onOpen, compact }) {
   // compact: 목록 카드용 — 모바일 앱과 동일하게 썸네일 1장 + 매수 배지만 보여줘서
   // 사진 여러 장인 글도 카드 세로 길이가 늘어나지 않게 한다.
   if (compact) {
+    if (!isVideoUrl(urls[0]) && !isImageAttachment(urls[0])) {
+      return (
+        <div className="relative shrink-0">
+          <FileAttachmentCard url={urls[0]} className="w-16 h-16" />
+          {urls.length > 1 && (
+            <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] font-bold rounded px-1">{urls.length}</span>
+          )}
+        </div>
+      );
+    }
     return (
       <button onClick={(e) => { e.stopPropagation(); onOpen(urls, 0); }} className="relative shrink-0">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={urls[0]} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
+        {isVideoUrl(urls[0])
+          ? <video src={urls[0]} className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
+          // eslint-disable-next-line @next/next/no-img-element
+          : <img src={urls[0]} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />}
         {urls.length > 1 && (
           <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] font-bold rounded px-1">{urls.length}</span>
         )}
@@ -50,16 +88,22 @@ function PhotoGrid({ urls, onOpen, compact }) {
   }
   return (
     <div className="mt-2 grid grid-cols-4 gap-1.5 max-w-md">
-      {urls.map((url, i) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={i}
-          src={url}
-          alt=""
-          onClick={() => onOpen(urls, i)}
-          className="w-full aspect-square object-cover rounded-lg border border-slate-200 cursor-pointer"
-        />
-      ))}
+      {urls.map((url, i) =>
+        isVideoUrl(url) ? (
+          <video key={i} src={url} onClick={() => onOpen(urls, i)} className="w-full aspect-square object-cover rounded-lg border border-slate-200 cursor-pointer" />
+        ) : isImageAttachment(url) ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={i}
+            src={url}
+            alt=""
+            onClick={() => onOpen(urls, i)}
+            className="w-full aspect-square object-cover rounded-lg border border-slate-200 cursor-pointer"
+          />
+        ) : (
+          <FileAttachmentCard key={i} url={url} className="w-full aspect-square" />
+        )
+      )}
     </div>
   );
 }
@@ -179,8 +223,12 @@ function ComposeBox({ onSubmit, placeholder, compact, members = [] }) {
         <div className="mt-2 flex flex-wrap gap-1.5">
           {photos.map((url, i) => (
             <div key={i} className="relative">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+              {isVideoUrl(url)
+                ? <video src={url} className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+                : isImageAttachment(url)
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+                  : <FileAttachmentCard url={url} className="w-16 h-16" />}
               <button
                 onClick={() => setPhotos((p) => p.filter((_, idx) => idx !== i))}
                 className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-800 text-white flex items-center justify-center"
@@ -203,8 +251,8 @@ function ComposeBox({ onSubmit, placeholder, compact, members = [] }) {
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 cursor-pointer">
             <ImageIcon size={16} />
-            사진
-            <input type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} disabled={uploading} />
+            사진·영상·파일
+            <input type="file" multiple className="hidden" onChange={handleFiles} disabled={uploading} />
           </label>
           {!compact && (
             <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500">
