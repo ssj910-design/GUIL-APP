@@ -5,7 +5,7 @@
 import { useState, useContext } from "react";
 import { Search, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { shortDate, formatUnitLabel, quoteGrandTotal, freeReasonOf, freeReasonLabel } from "@/lib/utils";
+import { shortDate, formatUnitLabel, quoteGrandTotal, freeReasonOf, freeReasonLabel, isCostPending } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { mapBilling } from "@/lib/mappers";
 import { BRAND } from "@/lib/company";
@@ -270,7 +270,7 @@ function NewBillingModal({ data, onClose, onCreate }) {
           const itemsSubtotal = rows.reduce((s, it) => s + (it.amount || 0), 0);
           const grand = quoteGrandTotal(quote.quoteItems, quote.transportCost, quote.safetyCost, quote.profit, quote.discountAmount);
           const adjust = grand - itemsSubtotal;
-          return adjust !== 0 ? [...rows, { name: "할인", qty: null, amount: adjust }] : rows;
+          return adjust !== 0 ? [...rows, { name: adjust < 0 ? "할인" : "운반비·기타", qty: null, amount: adjust }] : rows;
         })()
       : null;
     const parts = quoteItems?.length > 1 ? quoteItems : t.billingPartRows?.length > 1 ? t.billingPartRows : null;
@@ -939,7 +939,10 @@ export default function BillingsAdmin({ data, setData }) {
               {i === 0 && (
                 <>
                   <td rowSpan={span} className="px-3 py-2.5 whitespace-nowrap align-top">
-                    {b.isFree ? (
+                    {isCostPending(b) ? (
+                      // 기사가 "견적서 참조"로 낸 건 — 무상이 아니라 관리자가 금액을 넣어야 하는 상태.
+                      <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded-lg">금액 입력 필요</span>
+                    ) : b.isFree ? (
                       <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
                         {freeReasonLabel(freeReasonOf(b.notes))}
                       </span>
@@ -954,7 +957,9 @@ export default function BillingsAdmin({ data, setData }) {
                     <button
                       type="button"
                       onClick={() => setCertTarget(b)}
-                      className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5 whitespace-nowrap hover:bg-blue-100"
+                      disabled={isCostPending(b)}
+                      title={isCostPending(b) ? "금액을 먼저 입력해주세요 (상세내역 → 가격 조정)" : undefined}
+                      className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5 whitespace-nowrap hover:bg-blue-100 disabled:text-slate-400 disabled:bg-slate-100 disabled:border-slate-200 disabled:cursor-not-allowed"
                     >
                       교체확인서 보기
                     </button>

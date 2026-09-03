@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { Receipt, Check, Search, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnitList, handlePhoneInputChange, freeReasonLabel } from "@/lib/utils";
+import { siteUnitList, handlePhoneInputChange, freeReasonLabel, quoteGrandTotal } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
 import { DDay, PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -19,7 +19,10 @@ const draftKey = (todoId) => `guilBillingDraftV1:${todoId}`;
 const manualDraftKey = (siteId) => `guilBillingManualDraftV1:${siteId}`;
 const MAN_BILL_TITLES = ["현장·호기", "교체 내역·비용", "증빙 사진", "완료 서명"]; // 직접 입력(4-step)
 // FM 계약은 부품이 무상이라 수리비 0원 청구가 있다 — 0원이면 이 중 하나를 사유로 반드시 고르게 한다.
-const FREE_REASONS = ["FM", "하자", "서비스", "견적서 참조"];
+// 견적서 참조는 무상이 아니라 "금액은 견적서에 있고 관리자가 나중에 입력한다"는 뜻이다.
+// 버튼은 같은 줄에 두되(기사 손에 익은 자리) 저장·표시 규칙만 무상과 다르게 간다.
+const QUOTE_REF = "견적서 참조";
+const FREE_REASONS = ["FM", "하자", "서비스", QUOTE_REF];
 
 // 자릿수(9~11)만 보면 "191-494-949"처럼 0으로 시작하지 않는 엉뚱한 숫자도 통과한다 —
 // 국내 전화번호는 항상 0으로 시작하므로 그것까지 같이 확인한다.
@@ -97,6 +100,15 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
     ? (quoteRequests.find((q) => q.id === selected.quoteRequestId)?.quoteItems ?? [])
         .filter((it) => it.name?.trim())
         .map((it) => ({ name: it.name, qty: it.qty || null, amount: Math.round(Number(it.qty || 0) * Number(it.unitPrice || 0)) }))
+    : null;
+  // 견적 연동 건의 청구 금액 = 견적 승인 금액(견적서 PDF와 같은 계산식 — 운반비·안전관리비·
+  // 이윤·할인과 천단위 절사까지 반영). 제출 시점에 스냅샷으로 저장해, 나중에 견적서를 손봐도
+  // 이미 낸 청구 금액은 흔들리지 않게 한다. 기사 화면엔 여전히 노출하지 않는다.
+  const linkedQuote = selected?.source === "quote"
+    ? quoteRequests.find((q) => q.id === selected.quoteRequestId)
+    : null;
+  const quoteApprovedTotal = linkedQuote
+    ? quoteGrandTotal(linkedQuote.quoteItems, linkedQuote.transportCost, linkedQuote.safetyCost, linkedQuote.profit, linkedQuote.discountAmount)
     : null;
   const [vendorNameInput, setVendorNameInput] = useState("");
   // 청구 대상이 바뀌면, 그 건에 임시저장해둔 내용이 있으면 그대로 이어서 하고(사진 찍다 앱을
@@ -185,6 +197,12 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
     : manualSignerName.trim() && manualSignerPhone.replace(/\D/g, "").length >= 9 && !!manualSignatureUrl;
   // FM 계약 등으로 부품이 무상이면 0원 청구가 가능하다 — 단 0원일 땐 사유(FM/하자/서비스)를
   // 반드시 골라야 한다. 빈 입력과 0원을 구분해야 해서(둘 다 Number()로는 0) 원본 문자열을 본다.
+  // 사유 버튼에서 "견적서 참조"를 고른 상태 — 0원(무상)이 아니라 금액 미정이다.
+  const isQuoteRef = !isQuoteBilling && freeReason === QUOTE_REF;
+  const isManualQuoteRef = manualFreeReason === QUOTE_REF;
+  // 서명 화면 미리보기 금액 — 견적서 참조는 금액 대신 그대로 적고(0원으로 보이면 안 된다),
+  // 무상이면 사유 라벨, 그 외엔 입력한 금액.
+  const manualTotalLabel = isManualQuoteRef ? QUOTE_REF : manualFreeReason ? freeReasonLabel(manualFreeReason) : null;
   const manualCostRaw = String(manualForm.cost ?? "").trim();
   const manualCostOk = manualCostRaw !== "" && Number(manualCostRaw) >= 0 && (Number(manualCostRaw) > 0 || !!manualFreeReason);
   // 호기를 2개 이상 고르면 호기마다 실제로 다른 부품을 썼을 수 있어(예: 1호기는 팬릴레이, 2호기는
@@ -348,6 +366,13 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
           afterUrls: (partPhotos[i]?.after ?? []).map((p) => p.url),
         }))
       : null;
+    // 견적서 합계는 품목 원가에 할인·천단위 절사까지 반영된 값이라 품목 금액만 더하면 교체확인서
+    // 품목표 합계와 청구 금액이 어긋난다 — 차액을 "할인" 한 줄로 넣어 맞춘다(관리자웹 등록 폼과 동일).
+    if (isQuoteBilling && partPhotosPayload && quoteApprovedTotal != null) {
+      const itemsSubtotal = partPhotosPayload.reduce((sum, p) => sum + (p.amount || 0), 0);
+      const adjust = quoteApprovedTotal - itemsSubtotal;
+      if (adjust !== 0) partPhotosPayload.push({ name: adjust < 0 ? "할인" : "운반비·기타", qty: null, amount: adjust, beforeUrls: [], afterUrls: [] });
+    }
     const beforePhotoUrls = billingParts
       ? partPhotosPayload.flatMap((p) => p.beforeUrls)
       : materialPhotos.before.map((p) => p.url);
@@ -365,11 +390,14 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       part: selected.part,
       // billings.cost는 숫자 컬럼이라 "견적서 참조" 같은 문자열은 넣을 수 없습니다(넣으면 insert가
       // 조용히 실패합니다). 견적 연동 건은 실제 비용을 이 시스템에 남기지 않는다는 의미로 null 처리합니다.
-      cost: isQuoteBilling ? null : materialCost,
+      // 견적 연동 건은 견적 승인 금액을 그대로 저장한다(기사 화면엔 계속 "견적서 참조"만 보인다).
+      // "견적서 참조"를 고른 건은 금액 미정이라 비워두고, 관리자가 관리자웹에서 입력한다.
+      cost: isQuoteBilling ? quoteApprovedTotal : isQuoteRef ? null : materialCost,
       // FM 계약 등 부품 무상 — 0원 청구는 사유를 관리자웹의 기존 "무상 처리" 배지·합계 제외
-      // 로직(is_free)과 그대로 호환되게 남긴다.
-      isFree: !isQuoteBilling && Number(materialCost) === 0,
-      freeReason: !isQuoteBilling && Number(materialCost) === 0 ? freeReason : null,
+      // 로직(is_free)과 그대로 호환되게 남긴다. 견적서 참조는 무상이 아니라 여기서 빠진다.
+      isFree: !isQuoteBilling && !isQuoteRef && Number(materialCost) === 0,
+      freeReason: !isQuoteBilling && !isQuoteRef && Number(materialCost) === 0 ? freeReason : null,
+      quoteRef: isQuoteRef,
       replaceDate: materialReplaceDate,
       contactPhone: absentMode ? approverPhone.trim() : signerPhone.trim(),
       beforePhotoUrls,
@@ -459,9 +487,10 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       elevatorNos: isMultiUnit ? units_ : null,
       siteId: site.id,
       part: partText,
-      cost: manualForm.cost,
-      isFree: Number(manualForm.cost) === 0,
-      freeReason: Number(manualForm.cost) === 0 ? manualFreeReason : null,
+      cost: isManualQuoteRef ? null : manualForm.cost,
+      isFree: !isManualQuoteRef && Number(manualForm.cost) === 0,
+      freeReason: !isManualQuoteRef && Number(manualForm.cost) === 0 ? manualFreeReason : null,
+      quoteRef: isManualQuoteRef,
       beforePhotoUrls: manualBeforeUrls,
       afterPhotoUrls: manualAfterUrls,
       partPhotos: partPhotosPayload,
@@ -577,7 +606,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                             </p>
                           )}
                         <div className="mt-1.5">
-                          <p className="text-[11px] font-bold text-slate-500 mb-1">무상 처리 사유 (해당 시 선택)</p>
+                          <p className="text-[11px] font-bold text-slate-500 mb-1">수리비 미정·무상 사유 (해당 시 선택)</p>
                           <div className="grid grid-cols-2 gap-1.5">
                             {FREE_REASONS.map((r) => (
                               <button
@@ -587,12 +616,15 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                                   if (freeReason === r) { setFreeReason(""); setMaterialCost(""); }
                                   else { setFreeReason(r); setMaterialCost("0"); }
                                 }}
-                                className={`py-2 rounded-lg text-xs font-bold ${freeReason === r ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}
+                                className={`py-2 rounded-lg text-xs font-bold ${freeReason !== r ? "bg-slate-100 text-slate-500" : r === QUOTE_REF ? "bg-blue-600 text-white" : "bg-emerald-600 text-white"}`}
                               >
                                 {freeReasonLabel(r)}
                               </button>
                             ))}
                           </div>
+                          {isQuoteRef && (
+                            <p className="text-[11px] text-blue-600 mt-1">무상이 아닙니다 — 금액은 관리자가 견적서를 보고 입력합니다</p>
+                          )}
                           {!freeReason && Number(materialCost) === 0 && (
                             <p className="text-[11px] text-red-500 mt-1">사유를 선택해주세요</p>
                           )}
@@ -674,7 +706,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                           <div key={i}>
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-sm font-bold text-slate-800">{part.name}{part.qty ? ` ${part.qty}` : ""}</p>
-                              {!isQuoteBilling && (
+                              {!isQuoteBilling && !isQuoteRef && !freeReason && (
                                 <p className="text-sm font-extrabold text-blue-700 shrink-0">₩{Number(part.amount || 0).toLocaleString()}</p>
                               )}
                             </div>
@@ -693,7 +725,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                       <div className="mt-2">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm font-bold text-slate-800">{selected?.part}</p>
-                          {!isQuoteBilling && (
+                          {!isQuoteBilling && !isQuoteRef && !freeReason && (
                             <p className="text-sm font-extrabold text-blue-700 shrink-0">₩{Number(materialCost || 0).toLocaleString()}</p>
                           )}
                         </div>
@@ -713,7 +745,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                     <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-200">
                       <p className="text-xs font-bold text-slate-500">합계</p>
                       <p className="text-sm font-extrabold text-blue-700">
-                        {isQuoteBilling ? "견적서 참조" : (
+                        {isQuoteBilling || isQuoteRef ? QUOTE_REF : freeReason ? freeReasonLabel(freeReason) : (
                           <>
                             ₩{Number(materialCost || 0).toLocaleString()}
                             <span className="text-[11px] font-semibold text-slate-400 ml-1">(VAT별도)</span>
@@ -863,7 +895,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                     <p className="text-[11px] text-red-500 mt-1">수리비를 입력해주세요</p>
                   )}
                   <div className="mt-1.5">
-                    <p className="text-[11px] font-bold text-slate-500 mb-1">무상 처리 사유 (해당 시 선택)</p>
+                    <p className="text-[11px] font-bold text-slate-500 mb-1">수리비 미정·무상 사유 (해당 시 선택)</p>
                     <div className="grid grid-cols-2 gap-1.5">
                       {FREE_REASONS.map((r) => (
                         <button
@@ -873,12 +905,15 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                             if (manualFreeReason === r) { setManualFreeReason(""); setManualForm({ ...manualForm, cost: "" }); }
                             else { setManualFreeReason(r); setManualForm({ ...manualForm, cost: "0" }); }
                           }}
-                          className={`py-2 rounded-lg text-xs font-bold ${manualFreeReason === r ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}
+                          className={`py-2 rounded-lg text-xs font-bold ${manualFreeReason !== r ? "bg-slate-100 text-slate-500" : r === QUOTE_REF ? "bg-blue-600 text-white" : "bg-emerald-600 text-white"}`}
                         >
                           {freeReasonLabel(r)}
                         </button>
                       ))}
                     </div>
+                    {isManualQuoteRef && (
+                      <p className="text-[11px] text-blue-600 mt-1">무상이 아닙니다 — 금액은 관리자가 견적서를 보고 입력합니다</p>
+                    )}
                     {!manualFreeReason && Number(manualCostRaw) === 0 && (
                       <p className="text-[11px] text-red-500 mt-1">사유를 선택해주세요</p>
                     )}
@@ -970,7 +1005,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                       {manualForm.units.map((u) => (
                         <p key={u} className="text-sm font-bold text-slate-800">{u}: {manualUnitPartsText(u)}</p>
                       ))}
-                      <p className="text-sm font-extrabold text-blue-700 text-right">₩{Number(manualForm.cost || 0).toLocaleString()}</p>
+                      <p className="text-sm font-extrabold text-blue-700 text-right">{manualTotalLabel ?? `₩${Number(manualForm.cost || 0).toLocaleString()}`}</p>
                       {(manualPhotos.before[0] || manualPhotos.after[0]) && (
                         <div className="flex gap-1.5 mt-1">
                           {manualPhotos.before[0] && (
@@ -986,7 +1021,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                     <div className="mt-2">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-bold text-slate-800">{formatPartRows(manualForm.parts)}</p>
-                        <p className="text-sm font-extrabold text-blue-700 shrink-0">₩{Number(manualForm.cost || 0).toLocaleString()}</p>
+                        <p className="text-sm font-extrabold text-blue-700 shrink-0">{manualTotalLabel ?? `₩${Number(manualForm.cost || 0).toLocaleString()}`}</p>
                       </div>
                       {(manualPhotos.before[0] || manualPhotos.after[0]) && (
                         <div className="flex gap-1.5 mt-1">
@@ -1003,8 +1038,12 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                   <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-200">
                     <p className="text-xs font-bold text-slate-500">합계</p>
                     <p className="text-sm font-extrabold text-blue-700">
-                      ₩{Number(manualForm.cost || 0).toLocaleString()}
-                      <span className="text-[11px] font-semibold text-slate-400 ml-1">(VAT별도)</span>
+                      {manualTotalLabel ?? (
+                        <>
+                          ₩{Number(manualForm.cost || 0).toLocaleString()}
+                          <span className="text-[11px] font-semibold text-slate-400 ml-1">(VAT별도)</span>
+                        </>
+                      )}
                     </p>
                   </div>
                 </div>
