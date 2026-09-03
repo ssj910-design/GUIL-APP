@@ -14,6 +14,9 @@ import { locOf, addressOf, personOf, StatusBadge, AdminTable, Modal, inputCls, P
 import ReplacementCertificateViewer from "@/app/components/admin/ReplacementCertificateViewer";
 
 const BILLING_METHODS = ["계좌이체", "CMS", "지로", "무자료"];
+// 무상 처리 사유 — 기사어플(BillingTab.jsx)의 FM/하자/서비스와 동일 3개(견적서 참조는
+// "무상"이 아니라 별개 상태라 여기 포함하지 않는다).
+const FREE_REASONS = ["FM", "하자", "서비스"];
 
 // 목록·완료보고서에서 "현장 · 호기"를 표시할 때 쓴다 — 한 청구가 여러 호기를 같이 다루면
 // (여러 호기를 한 번에 청구한 경우) 대표 호기 하나만 보여주는 locOf 대신 전체 호기를 같이 보여준다.
@@ -517,16 +520,19 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
     onClose();
   }
 
-  // 무상 처리 — 켤 때는 사유를 받아 내용(notes)에 남긴다. 이미 무상이면 사유 없이 바로 해제.
-  async function handleToggleFree() {
+  // 무상 처리 — 켤 때는 사유를 FM/하자/서비스 중에서 고르게 한다(기사어플과 동일). 이미
+  // 무상이면 사유 없이 바로 해제.
+  const [pickingFreeReason, setPickingFreeReason] = useState(false);
+  function handleToggleFree() {
     if (b.isFree) {
-      await onToggleFree(b, null);
-      onClose();
+      onToggleFree(b, null).then(onClose);
       return;
     }
-    const reason = prompt("무상 처리 사유를 입력해주세요 (부품 하자 A/S, 서비스 차원 등)");
-    if (reason === null) return; // 취소
-    await onToggleFree(b, reason.trim() || null);
+    setPickingFreeReason(true);
+  }
+  async function selectFreeReason(reason) {
+    setPickingFreeReason(false);
+    await onToggleFree(b, reason);
     onClose();
   }
 
@@ -695,16 +701,28 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
       )}
 
       <div className="flex justify-between mt-4">
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           {isSuper ? (
-            <>
-              <button onClick={handleToggleFree} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-5 py-2.5">
-                {b.isFree ? "무상 해제하기" : "무상 처리"}
-              </button>
-              <button onClick={handleAdjustPrice} className="text-sm font-bold text-blue-700 bg-white border border-blue-200 rounded-xl px-5 py-2.5">
-                가격 조정
-              </button>
-            </>
+            pickingFreeReason ? (
+              <>
+                <span className="text-xs font-bold text-slate-500">무상 사유:</span>
+                {FREE_REASONS.map((r) => (
+                  <button key={r} onClick={() => selectFreeReason(r)} className="text-sm font-bold text-white bg-emerald-600 rounded-xl px-4 py-2.5">
+                    {r}
+                  </button>
+                ))}
+                <button onClick={() => setPickingFreeReason(false)} className="text-sm font-bold text-slate-400 px-2">취소</button>
+              </>
+            ) : (
+              <>
+                <button onClick={handleToggleFree} className="text-sm font-bold text-white bg-blue-700 rounded-xl px-5 py-2.5">
+                  {b.isFree ? "무상 해제하기" : "무상 처리"}
+                </button>
+                <button onClick={handleAdjustPrice} className="text-sm font-bold text-blue-700 bg-white border border-blue-200 rounded-xl px-5 py-2.5">
+                  가격 조정
+                </button>
+              </>
+            )
           ) : (
             <p className="text-[11px] text-slate-400 self-center">무상 처리·가격 조정은 최고관리자만 가능합니다</p>
           )}
