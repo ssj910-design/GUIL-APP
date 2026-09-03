@@ -13,7 +13,7 @@ import { uploadPhoto } from "@/lib/photos";
 import { locOf, addressOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate, AdminAuthContext, SiteAutocomplete } from "@/app/components/admin/adminShared";
 import ReplacementCertificateViewer from "@/app/components/admin/ReplacementCertificateViewer";
 
-const BILLING_METHODS = ["계좌이체", "CMS", "지로"];
+const BILLING_METHODS = ["계좌이체", "CMS", "지로", "무자료"];
 
 // 목록·완료보고서에서 "현장 · 호기"를 표시할 때 쓴다 — 한 청구가 여러 호기를 같이 다루면
 // (여러 호기를 한 번에 청구한 경우) 대표 호기 하나만 보여주는 locOf 대신 전체 호기를 같이 보여준다.
@@ -747,6 +747,8 @@ export default function BillingsAdmin({ data, setData }) {
   const [creating, setCreating] = useState(false);
   // billings.certificate_pdf_url 컬럼 존재 여부 — 마이그레이션 122 실행 전엔 컬럼이 없다.
   const certUrlReady = billings.some((b) => b.certificatePdfUrl !== undefined);
+  // billings.received_date 컬럼 존재 여부 — 마이그레이션 136 실행 전엔 컬럼이 없다.
+  const receivedDateReady = billings.some((b) => b.receivedDate !== undefined);
 
   const q = search.trim().toLowerCase();
   const rows = billings.filter((b) =>
@@ -912,7 +914,7 @@ export default function BillingsAdmin({ data, setData }) {
           <Plus size={15} /> 새 청구 등록
         </button>
       </div>
-      <AdminTable head={["현장", "작업자", "호기", "교체내역", "금액(VAT별도)", "교체일", "교체확인서", "청구일", "청구방식"]}>
+      <AdminTable head={["현장", "작업자", "호기", "교체내역", "금액(VAT별도)", "교체일", "교체확인서", "청구일", "입금일", "청구방식"]}>
         {rows.map((b) => {
           const unitPartRows = unitPartRowsFor(b);
           const span = unitPartRows.length;
@@ -968,6 +970,11 @@ export default function BillingsAdmin({ data, setData }) {
                   </td>
                   <td rowSpan={span} className="px-3 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
                     <EditableDate key={b.billingDate ?? "unset"} value={b.billingDate} onCommit={(v) => updateManualField(b, "billing_date", "billingDate", v)} />
+                  </td>
+                  <td rowSpan={span} className="px-3 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
+                    {receivedDateReady ? (
+                      <EditableDate key={b.receivedDate ?? "unset"} value={b.receivedDate} onCommit={(v) => updateManualField(b, "received_date", "receivedDate", v)} />
+                    ) : "-"}
                   </td>
                   <td rowSpan={span} className="px-3 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
                     <select
