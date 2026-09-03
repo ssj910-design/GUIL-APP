@@ -54,9 +54,33 @@ const MENU = [
   { id: "notify", label: "알림 설정", icon: Bell, superOnly: true },
 ];
 
+// 새로고침해도 보고 있던 메뉴로 돌아오게 sessionStorage에 저장한다(탭 닫으면 사라짐 —
+// 북마크·새 탭까지 남길 필요는 없고 "새로고침"만 커버하면 된다). 화면 안의 상세보기 모달·
+// 필터 등은 각 화면이 따로 관리하는 로컬 state라 여기서는 다루지 않는다(1단계: 메뉴만).
+const ADMIN_MENU_KEY = "guilAdminMenuV1";
+const ADMIN_HRSUB_KEY = "guilAdminHrSubV1";
+
 export default function AdminApp() {
   const [menu, setMenu] = useState("dashboard");
   const [hrSub, setHrSub] = useState("직원"); // 인사관리 하위 탭 (대시보드에서 워크 캘린더·연차관리로 바로 진입)
+  // 마운트 직후(하이드레이션 이후) sessionStorage에 저장된 값이 있으면 복원 — SSR 시점엔
+  // window가 없어 초기 useState 값 자체를 여기서 읽으면 하이드레이션 불일치가 나므로,
+  // 마운트 후 effect에서 한 번 덮어쓴다. 이 시점엔 아직 데이터 로딩 스피너가 떠 있어
+  // 화면이 "대시보드"로 잠깐 보였다 바뀌는 깜빡임도 없다.
+  useEffect(() => {
+    try {
+      const savedMenu = sessionStorage.getItem(ADMIN_MENU_KEY);
+      if (savedMenu) setMenu(savedMenu);
+      const savedHrSub = sessionStorage.getItem(ADMIN_HRSUB_KEY);
+      if (savedHrSub) setHrSub(savedHrSub);
+    } catch { /* 세션스토리지 차단 환경이면 그냥 기본값(대시보드)으로 */ }
+  }, []);
+  useEffect(() => {
+    try { sessionStorage.setItem(ADMIN_MENU_KEY, menu); } catch { /* 무시 */ }
+  }, [menu]);
+  useEffect(() => {
+    try { sessionStorage.setItem(ADMIN_HRSUB_KEY, hrSub); } catch { /* 무시 */ }
+  }, [hrSub]);
   const [navOpen, setNavOpen] = useState(false); // 모바일 드로어
   // 대시보드 "오늘 처리할 것" 클릭 시 해당 화면의 하위 탭/필터를 미리 지정해 바로 그 목록이 보이게 한다.
   const [todosInitialView, setTodosInitialView] = useState("open");
