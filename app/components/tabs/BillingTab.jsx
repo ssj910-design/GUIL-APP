@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { Receipt, Check, Search, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnitList, handlePhoneInputChange, freeReasonLabel, quoteGrandTotal } from "@/lib/utils";
+import { siteUnitList, handlePhoneInputChange, freeReasonLabel, quoteGrandTotal, quoteMaterialItems } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
 import { DDay, PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
@@ -96,9 +96,10 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
   // 프리필합니다 — 품목별 전/후 사진을 받고, 완료보고서(교체확인서)도 품목별로 나옵니다.
   // 자체처리 건은 금액을 기사 화면에 노출하지 않지만(위 isQuoteBilling), 이 금액은 그대로
   // partPhotos에 실려 billings에 저장되고, 완료보고서는 이 실제 견적금액을 보여줍니다.
+  // 증빙사진·확인서 품목은 실제 교체한 자재만 — 인건비(승강기숙련공 N인 등)와 운반비·
+  // 안전관리비·이윤·할인은 청구 품목이 아니다(금액은 아래 견적 승인 금액에 이미 다 들어있다).
   const quoteBillingItems = selected?.source === "quote"
-    ? (quoteRequests.find((q) => q.id === selected.quoteRequestId)?.quoteItems ?? [])
-        .filter((it) => it.name?.trim())
+    ? quoteMaterialItems(quoteRequests.find((q) => q.id === selected.quoteRequestId)?.quoteItems)
         .map((it) => ({ name: it.name, qty: it.qty || null, amount: Math.round(Number(it.qty || 0) * Number(it.unitPrice || 0)) }))
     : null;
   // 견적 연동 건의 청구 금액 = 견적 승인 금액(견적서 PDF와 같은 계산식 — 운반비·안전관리비·
@@ -137,8 +138,8 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       setVendorNameInput(draft.vendorName ?? "");
       toastBill("임시저장된 내용을 불러왔습니다", true);
     } else {
-      const quoteTotal = quoteBillingItems?.length ? quoteBillingItems.reduce((sum, it) => sum + (it.amount || 0), 0) : null;
-      setMaterialCost(quoteTotal != null ? String(quoteTotal) : selected?.billingAmount != null ? String(selected.billingAmount) : "");
+      // 견적 연동 건은 견적 승인 금액으로 채운다 — 자재 품목합이 아니다(인건비·운반비 등 포함 총액).
+      setMaterialCost(quoteApprovedTotal != null ? String(quoteApprovedTotal) : selected?.billingAmount != null ? String(selected.billingAmount) : "");
       setFreeReason("");
       setSignerName("");
       setSignerPhone("");
@@ -366,13 +367,6 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
           afterUrls: (partPhotos[i]?.after ?? []).map((p) => p.url),
         }))
       : null;
-    // 견적서 합계는 품목 원가에 할인·천단위 절사까지 반영된 값이라 품목 금액만 더하면 교체확인서
-    // 품목표 합계와 청구 금액이 어긋난다 — 차액을 "할인" 한 줄로 넣어 맞춘다(관리자웹 등록 폼과 동일).
-    if (isQuoteBilling && partPhotosPayload && quoteApprovedTotal != null) {
-      const itemsSubtotal = partPhotosPayload.reduce((sum, p) => sum + (p.amount || 0), 0);
-      const adjust = quoteApprovedTotal - itemsSubtotal;
-      if (adjust !== 0) partPhotosPayload.push({ name: adjust < 0 ? "할인" : "운반비·기타", qty: null, amount: adjust, beforeUrls: [], afterUrls: [] });
-    }
     const beforePhotoUrls = billingParts
       ? partPhotosPayload.flatMap((p) => p.beforeUrls)
       : materialPhotos.before.map((p) => p.url);
