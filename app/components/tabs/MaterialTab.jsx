@@ -254,7 +254,7 @@ function MaterialHistoryScreen({ requests, todos, isBilled, onBack, onCancelMate
 }
 
 
-function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack, onCancelQuoteRequest }) {
+function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack, onCancelQuoteRequest, title }) {
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState("전체");
   const [detailTarget, setDetailTarget] = useState(null);
@@ -275,7 +275,7 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack, onCancelQuot
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
-      <DrillHeader title="나의 견적 요청 전체보기" onBack={onBack} onHome={onBack} />
+      <DrillHeader title={title} onBack={onBack} onHome={onBack} />
       <div className="px-5 pt-3 pb-2 shrink-0">
         <div className="relative mb-2.5">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -698,7 +698,11 @@ const QUOTE_STEP_TITLES = ["현장·호기·담당자", "견적·사진·의견"
 
 export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRequest, todos, onReject, quoteRequests, onAddQuoteRequest, onCancelQuoteRequest, restockRequests, kitStock = [], onReceiveRestock, focusRestockHistory, onRestockHistoryHandled }) {
   const sites = useContext(SitesContext);
-  const { name: CURRENT_ENGINEER, selfId } = useContext(AuthContext);
+  const { name: CURRENT_ENGINEER, selfId, role } = useContext(AuthContext);
+  // 관리자는 전체 견적을 본다 — 관리자웹에서 발행한 견적(요청자 없음, engineer null)은
+  // "내가 요청한 것"만 거르면 앱에서 영영 안 보인다.
+  const isAdmin = role === "admin";
+  const quoteHistoryTitle = isAdmin ? "견적 요청 전체보기" : "나의 견적 요청 전체보기";
   const units = useContext(UnitsContext);
   const v2Ready = units.length > 0;
   // quote_requests.elevator_nos 컬럼 존재 여부 — 마이그레이션 131 실행 전엔 컬럼이 없다.
@@ -946,7 +950,8 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
   if (showQuoteHistory) {
     return (
       <QuoteHistoryScreen
-        quoteRequests={quoteRequests.filter((q) => q.engineer === CURRENT_ENGINEER)}
+        quoteRequests={isAdmin ? quoteRequests : quoteRequests.filter((q) => q.engineer === CURRENT_ENGINEER)}
+        title={quoteHistoryTitle}
         isQuoteBilled={isQuoteBilled}
         onBack={() => setShowQuoteHistory(false)}
         onCancelQuoteRequest={onCancelQuoteRequest}
@@ -1327,7 +1332,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
               onClick={() => setShowQuoteHistory(true)}
               className="w-full flex items-center justify-between bg-white rounded-xl border border-slate-200 px-4 py-3"
             >
-              <h3 className="font-bold text-slate-800 text-sm">나의 견적 요청 현황 전체보기</h3>
+              <h3 className="font-bold text-slate-800 text-sm">{isAdmin ? "견적 요청 현황 전체보기" : "나의 견적 요청 현황 전체보기"}</h3>
               <ChevronRight size={16} className="text-blue-600" />
             </button>
           </div>
