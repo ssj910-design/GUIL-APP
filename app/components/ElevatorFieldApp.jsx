@@ -1103,7 +1103,7 @@ export default function App() {
       // 특정 관리자만 태그하면 그 사람이 자리를 비웠을 때 아무도 못 봐서 @모두로 전원에게 알린다.
       const supportTags = "@모두";
       handleSendFeedPost(
-        `[출동 지원요청] ${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} 고장 출동 지원을 요청합니다.${reason.trim() ? `\n사유: ${reason.trim()}.` : ""} 재배정이 필요합니다 ${supportTags}`.trim()
+        `[출동 지원요청] ${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} 고장 출동 지원을 요청합니다.${reason.trim() ? `\n사유: ${reason.trim()}.` : ""} ${supportTags}`.trim()
       );
       notifyFailure("출동 거부됨 — 미배정으로 이동, 관리자에게 알림");
     } finally {
