@@ -377,11 +377,15 @@ export default function FailuresAdmin({ data, setData, initialStatus }) {
         reportNote: form.reportNote?.trim() || null,
       };
     });
+    // 접수와 동시에 담당기사를 바로 고르면(재배정과 달리) assigned_at을 안 남겨서, "출동 미응답
+    // 3분" 재촉(check-failures 크론)이 이 값으로 대상을 조회하다 보니 기사·관리자 누구에게도
+    // 재촉이 안 나갔다 — 배정된 상태로 접수하는 경우도 지금 시각을 배정 시각으로 같이 남긴다.
     const { error } = await supabase.from("failures").insert(rows.map((f) => ({
       id: f.id, site_id: f.siteId, site_name: f.siteName, elevator_no: f.elevatorNo, unit_id: f.unitId,
       error_code: f.errorCode, status: f.status, reported_at: f.reportedAt,
       assignee: f.assignee, assignee_id: f.assigneeId, not_fault: f.notFault, reporter_phone: f.reporterPhone,
       report_note: f.reportNote,
+      assigned_at: f.assigneeId ? new Date().toISOString() : null,
     })));
     if (error) { alert("접수 실패: " + error.message); return; }
     setData((prev) => ({
