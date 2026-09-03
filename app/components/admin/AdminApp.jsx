@@ -231,35 +231,28 @@ export default function AdminApp() {
     async function load() {
       const [sites, units, siteManagers, failures, inspections, materials, quotes, restock, todos, billings, selfChecks, selfCheckItems, profiles, feed, errorCodes, unitPartPhotos, inventoryProducts, inventoryStockMovements, siteAssignments] =
         await Promise.all([
-          supabase.from("sites").select("*").order("name"),
-          supabase.from("units").select("*").order("seq"),
-          // site_managers는 1021행(2026-08-11 기준)으로 기본 1000행 한도를 넘어서, 페이지네이션
-          // 없이 조회하면 최근에 추가된 담당자가 조용히 누락된다(실제로 발생) — 전체를 받는다.
+          // 아래 fetchAll들은 전부 같은 이유다 — 계속 쌓이는 테이블은 언젠가 기본 1000행 한도를
+          // 넘고, 그 순간부터 select("*")만으론 조용히 잘린다(site_managers·error_codes·
+          // self_checks·unit_part_photos·inventory_*가 실제로 이미 겪었다). self_check_items는
+          // B/C(주의관찰·긴급수리)만 걸러서 규모가 작아 그대로 둔다.
+          fetchAll("sites", "*", { column: "name" }),
+          fetchAll("units", "*", { column: "seq" }),
           fetchAll("site_managers"),
-          supabase.from("failures").select("*").order("created_at", { ascending: false }),
-          supabase.from("inspections").select("*").order("due_date"),
-          supabase.from("material_requests").select("*").order("created_at", { ascending: false }),
-          supabase.from("quote_requests").select("*").order("created_at", { ascending: false }),
-          supabase.from("restock_requests").select("*").order("created_at", { ascending: false }),
-          supabase.from("todos").select("*").order("created_at", { ascending: false }),
-          supabase.from("billings").select("*").order("created_at", { ascending: false }),
+          fetchAll("failures", "*", { column: "created_at", ascending: false }),
+          fetchAll("inspections", "*", { column: "due_date" }),
+          fetchAll("material_requests", "*", { column: "created_at", ascending: false }),
+          fetchAll("quote_requests", "*", { column: "created_at", ascending: false }),
+          fetchAll("restock_requests", "*", { column: "created_at", ascending: false }),
+          fetchAll("todos", "*", { column: "created_at", ascending: false }),
+          fetchAll("billings", "*", { column: "created_at", ascending: false }),
           fetchAll("self_checks"),
-          // B/C(주의관찰·긴급수리)만 — 나머지(A/D/E)는 자체점검 지적사항 화면에 필요 없어 뺀다(전체는 수백~수천행).
           supabase.from("self_check_items").select("*").in("result", ["B", "C"]),
-          supabase.from("profiles").select("*").order("name"),
-          supabase.from("feed_posts").select("*").order("created_at", { ascending: true }),
-          // 기본 조회는 1000행에서 잘려 새로 추가된 코드가 누락될 수 있어(실제로 발생) 전체를 페이지네이션으로 받는다.
+          fetchAll("profiles", "*", { column: "name" }),
+          fetchAll("feed_posts", "*", { column: "created_at", ascending: true }),
           fetchAll("error_codes"),
-          // 부품현황 사진 — 호기당 38리프×사진 1행이라 전체 시스템 기준 1000행을 금방 넘는다.
-          // site_managers·error_codes와 같은 이유로 페이지네이션 없이는 조용히 잘린다.
           fetchAll("unit_part_photos"),
-          // 재고이력(inventory_stock_movements)은 제품마다 입고/출고/조정이 쌓이는 append-only
-          // 원장이라 무제한으로 늘어난다 — site_managers·error_codes와 같은 이유로
-          // 페이지네이션 없이는 1000행 기본 한도를 넘는 순간 재고 합계가 조용히 틀려진다.
           fetchAll("inventory_products"),
           fetchAll("inventory_stock_movements"),
-          // site_assignments는 현재 760행이지만 기사 2인 배정이 늘수록 1000행 한도를 넘어설 수 있어
-          // 페이지네이션 없이는 조용히 잘린다 — site_managers·error_codes와 같은 이유로 전체를 받는다.
           fetchAll("site_assignments"),
         ]);
       setData({

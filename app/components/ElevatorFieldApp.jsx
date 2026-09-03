@@ -830,41 +830,33 @@ export default function App() {
         inventoryStockMovementsRes,
         siteAssignmentsRes,
       ] = await Promise.all([
-        supabase.from("sites").select("*"),
-        // site_managers는 1021행(2026-08-11 기준)으로 기본 1000행 한도를 넘어서, 페이지네이션
-        // 없이 조회하면 최근에 추가된 담당자가 조용히 누락된다(실제로 발생) — 전체를 받는다.
+        // 아래 fetchAll들은 전부 같은 이유다 — 계속 쌓이는 테이블은 언젠가 기본 1000행 한도를
+        // 넘고, 그 순간부터 select("*")만으론 조용히 잘린다(site_managers·error_codes·
+        // self_checks·unit_part_photos·inventory_*가 실제로 이미 겪었다). 날짜로 범위를 좁힌
+        // 조회(attendances 오늘자, duty_schedules 이번 달, leaves 오늘 걸치는 것만)는 애초에
+        // 규모가 작아 안전해서 그대로 둔다.
+        fetchAll("sites"),
         fetchAll("site_managers"),
-        supabase.from("failures").select("*").order("created_at", { ascending: false }),
-        supabase.from("inspections").select("*"),
-        supabase.from("material_requests").select("*").order("created_at", { ascending: false }),
-        supabase.from("todos").select("*").order("created_at", { ascending: false }),
-        supabase.from("quote_requests").select("*").order("created_at", { ascending: false }),
-        supabase.from("billings").select("*").order("created_at", { ascending: false }),
-        supabase.from("restock_requests").select("*").order("created_at", { ascending: false }),
-        supabase.from("feed_posts").select("*").order("created_at", { ascending: true }), // 카톡식: 오래된 글이 위, 최신이 아래
-        supabase.from("profiles").select("*").order("name"),
-        supabase.from("units").select("*").order("seq"),
-        // 기본 조회는 1000행에서 잘려 새로 추가된 코드가 누락될 수 있어(실제로 발생) 전체를 페이지네이션으로 받는다.
+        fetchAll("failures", "*", { column: "created_at", ascending: false }),
+        fetchAll("inspections"),
+        fetchAll("material_requests", "*", { column: "created_at", ascending: false }),
+        fetchAll("todos", "*", { column: "created_at", ascending: false }),
+        fetchAll("quote_requests", "*", { column: "created_at", ascending: false }),
+        fetchAll("billings", "*", { column: "created_at", ascending: false }),
+        fetchAll("restock_requests", "*", { column: "created_at", ascending: false }),
+        fetchAll("feed_posts", "*", { column: "created_at", ascending: true }), // 카톡식: 오래된 글이 위, 최신이 아래
+        fetchAll("profiles", "*", { column: "name" }),
+        fetchAll("units", "*", { column: "seq" }),
         fetchAll("error_codes"),
-        supabase.from("kit_stock").select("*"),
+        fetchAll("kit_stock"),
         fetchAll("self_checks"),
         supabase.from("attendances").select("*").eq("work_date", TODAY_STR),
         supabase.from("duty_schedules").select("*").gte("duty_date", TODAY_STR.slice(0, 8) + "01").order("duty_date"),
-        supabase.from("duty_swaps").select("*"),
+        fetchAll("duty_swaps"),
         supabase.from("leaves").select("*").lte("start_date", TODAY_STR).gte("end_date", TODAY_STR),
-        // 부품현황 사진 — 호기당 38리프×사진 1행이라 전체 시스템 기준 1000행을 금방 넘는다.
-        // site_managers·error_codes와 같은 이유로 페이지네이션 없이는 조용히 잘린다(PC
-        // 관리자콘솔 AdminApp.jsx는 이미 fetchAll로 고쳐져 있었는데 기사어플만 빠져 있었다
-        // — "사진 등록했는데 다시 들어가면 없다"는 신고의 실제 원인).
         fetchAll("unit_part_photos"),
-        // 재고이력(inventory_stock_movements)은 제품마다 입고/출고/조정이 쌓이는 append-only
-        // 원장이라 무제한으로 늘어난다 — 위와 같은 이유로 페이지네이션 없이는 1000행 기본
-        // 한도를 넘는 순간 재고 합계가 조용히 틀려진다. PC 관리자콘솔(AdminApp.jsx)은 이미
-        // fetchAll인데 기사어플만 빠져 있었다.
         fetchAll("inventory_products"),
         fetchAll("inventory_stock_movements"),
-        // site_assignments는 현재 760행이지만 기사 2인 배정이 늘수록 1000행 한도를 넘어설 수 있어
-        // 페이지네이션 없이는 조용히 잘린다 — site_managers·error_codes와 같은 이유로 전체를 받는다.
         fetchAll("site_assignments"),
       ]);
       setSites(mergeAssignedEngineers((sitesRes.data ?? []).map(mapSite), siteAssignmentsRes.data ?? [], engineersRes.data ?? []));
