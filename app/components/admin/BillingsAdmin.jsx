@@ -80,6 +80,13 @@ function buildCertificateData(b, data) {
   // 그 합계를 대신 쓴다.
   const itemsTotal = items.length && items.every((it) => it.amount != null) ? items.reduce((sum, it) => sum + it.amount, 0) : null;
 
+  // 견적 연동 건(자체처리)은 품목별 금액을 문서에 찍지 않는다 — 청구 금액은 견적 승인 금액
+  // (인건비·운반비·안전관리비·이윤 포함)인데 품목표엔 자재만 나오니, 품목 금액을 같이 보여주면
+  // 합이 합계와 안 맞는 문서가 된다. 기사앱 서명 미리보기와 같은 규칙. 합계 계산엔 그대로 쓴다.
+  const certItems = b.quoteRequestId && !b.isOutsourced
+    ? items.map((it) => ({ ...it, amount: null }))
+    : items;
+
   const siteUnit = siteUnitOf(b, data);
   const replaceDate = shortDate(b.replaceDate);
 
@@ -96,7 +103,7 @@ function buildCertificateData(b, data) {
     // 고객이 보는 문서라 외주 여부는 노출하지 않는다 — 담당 기사 이름을 그대로 쓴다.
     engineerName: personOf(data, b.engineerId, b.engineer),
     replaceDate,
-    items,
+    items: certItems,
     totalCost: b.cost ?? itemsTotal,
     isFree: b.isFree,
     freeReason: freeReasonOf(b.notes),
