@@ -105,6 +105,7 @@ function LeafDetail({ unitId, selected, photos, onAdd, onRemove }) {
         chooser={false}
         uploadLabel="사진 촬영/선택"
         onUpload={(file) => uploadPhoto(file, `unit-parts/${unitId}`)}
+        onUploadOne={(url) => onAdd({ unitId, category: selected.category, subcategory: selected.subcategory, part: selected.part, url })}
         onSave={handleSave}
       />
     </div>

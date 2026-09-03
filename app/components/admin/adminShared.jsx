@@ -284,7 +284,7 @@ export function Modal({ title, onClose, children, wide }) {
 
 // 계약서·지급대장 등 첨부파일 뷰어 — 클릭해서 새 탭을 열 필요 없이 바로 보여주고,
 // 여러 장이면 좌우로 넘기고, 다운로드·삭제·추가까지 한 곳에서 한다 (현장정보 계약서와 인사관리 첨부 공통 사용).
-export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파일 첨부 (사진/PDF)", height = "h-[60vh]", onUpload, onSave, chooser = true, layout = "carousel" }) {
+export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파일 첨부 (사진/PDF)", height = "h-[60vh]", onUpload, onSave, onUploadOne, chooser = true, layout = "carousel" }) {
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
@@ -309,15 +309,18 @@ export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파
         const url = await onUpload(file);
         currentUrls = [...currentUrls, url];
         setIdx(currentUrls.length - 1);
+        // onUploadOne이 있으면(부품현황처럼 사진 1장=DB 1행) 그걸로 한 장씩 즉시 저장한다.
+        // 카메라 촬영은 앱이 백그라운드로 밀려 중간에 실행이 끊기기 쉬운데(특히 모바일),
+        // 예전처럼 배치가 다 끝난 뒤 onSave를 한 번만 부르면 이미 스토리지엔 올라간
+        // 사진이 DB엔 기록 안 된 채로 통째로 유실됐다. onUploadOne은 diff 없이 그 한
+        // 장만 바로 저장하니 "이전 urls 대비 새 항목" 비교(onSave)가 겪던 낡은 urls
+        // 기준 중복 기록 문제도 없다.
+        if (onUploadOne) await onUploadOne(url);
       } catch (err) {
         alert("업로드 실패: " + (err.message ?? "알 수 없는 오류"));
       }
     }
-    // onSave는 배치가 다 끝난 뒤 한 번만 부른다 — 파일마다 불렀더니, "이전 urls
-    // 대비 뭐가 새로 생겼는지" 비교하는 onSave(부품현황)는 같은 배치 안 호출들이
-    // 전부 업로드 시작 시점에 굳어진 낡은 urls를 기준으로 비교해서, 2장 이상 한
-    // 번에 올리면 첫 장만 중복 기록되고 나머지는 유실됐다.
-    if (currentUrls.length !== urls.length) await onSave(currentUrls);
+    if (!onUploadOne && currentUrls.length !== urls.length) await onSave(currentUrls);
     setUploading(false);
   }
 
