@@ -323,11 +323,6 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
                           <span className="text-[10px] text-slate-400 mt-0.5">{stageDate || "-"}</span>
                         </div>
                       </div>
-                      {q.quotePdfUrl && (
-                        <a href={q.quotePdfUrl} target="_blank" rel="noreferrer" className="text-[11px] text-blue-600 font-semibold mt-1.5 inline-block">
-                          PDF 보기
-                        </a>
-                      )}
                     </div>
                   );
                 })}
