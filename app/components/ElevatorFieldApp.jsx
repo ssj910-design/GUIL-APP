@@ -852,7 +852,11 @@ export default function App() {
         supabase.from("duty_schedules").select("*").gte("duty_date", TODAY_STR.slice(0, 8) + "01").order("duty_date"),
         supabase.from("duty_swaps").select("*"),
         supabase.from("leaves").select("*").lte("start_date", TODAY_STR).gte("end_date", TODAY_STR),
-        supabase.from("unit_part_photos").select("*"), // 테이블 없으면(마이그레이션 전) error → 빈 배열
+        // 부품현황 사진 — 호기당 38리프×사진 1행이라 전체 시스템 기준 1000행을 금방 넘는다.
+        // site_managers·error_codes와 같은 이유로 페이지네이션 없이는 조용히 잘린다(PC
+        // 관리자콘솔 AdminApp.jsx는 이미 fetchAll로 고쳐져 있었는데 기사어플만 빠져 있었다
+        // — "사진 등록했는데 다시 들어가면 없다"는 신고의 실제 원인).
+        fetchAll("unit_part_photos"),
         supabase.from("inventory_products").select("*").order("created_at", { ascending: false }),
         supabase.from("inventory_stock_movements").select("*"),
         // site_assignments는 현재 760행이지만 기사 2인 배정이 늘수록 1000행 한도를 넘어설 수 있어
