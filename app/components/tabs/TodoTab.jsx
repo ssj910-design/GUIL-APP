@@ -618,7 +618,7 @@ export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoU
 export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
   const sites = useContext(SitesContext);
   const [uploadSession] = useState(() => Date.now());
-  const [form, setForm] = useState({ assignees: [], siteId: "", title: "", dueDate: addDays(TODAY_STR, 7), photos: [] });
+  const [form, setForm] = useState({ assignees: [], siteId: "", title: "", description: "", dueDate: addDays(TODAY_STR, 7), photos: [] });
   // 사진 업로드가 끝나기 전에 부여 버튼을 누르면 그 사진이 빠진 채로 저장될 수 있어 막는다.
   const [photosUploading, setPhotosUploading] = useState(false);
 
@@ -652,13 +652,21 @@ export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
       <Field label="현장">
         <SiteSearchSelect value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id })} />
       </Field>
-      <Field label="할 일 내용">
-        <textarea
+      <Field label="할 일 제목">
+        <input
           className={inputCls}
-          rows={3}
           placeholder="예: 소방연동 점검 서류 제출"
           value={form.title}
           onChange={(e) => setForm({ ...form, title: e.target.value })}
+        />
+      </Field>
+      <Field label="내용 (선택)">
+        <textarea
+          className={inputCls}
+          rows={3}
+          placeholder="세부 내용을 적어주세요"
+          value={form.description}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
         />
       </Field>
       <Field label="마감일">
@@ -682,6 +690,7 @@ export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
             assignees: form.assignees,
             siteName: site.name,
             title: form.title.trim(),
+            description: form.description.trim() || null,
             dueDate: form.dueDate,
             photoCount: form.photos.length,
             photoUrls: form.photos.map((p) => p.url),

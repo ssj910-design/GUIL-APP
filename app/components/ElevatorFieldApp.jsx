@@ -2131,15 +2131,13 @@ export default function App() {
   }
 
   // ★ 관리자가 직원(1명 이상)에게 할 일을 직접 부여 — 담당자마다 할 일을 하나씩 만듭니다
-  async function handleAssignTodo({ assignees, siteName, title, dueDate, photoCount, photoUrls }) {
+  async function handleAssignTodo({ assignees, siteName, title, description, dueDate, photoCount, photoUrls }) {
     const newTodos = assignees.map((assignee, idx) => ({
       id: "todo-manual-" + Date.now() + "-" + idx,
       materialRequestId: null,
       source: "manual",
       title,
-      // 관리자가 부여할 때 쓰는 입력칸이 "할 일 내용" 하나뿐이라, 자재/견적 연동 할 일처럼
-      // 상세보기 "내용" 칸에도 그대로 보이도록 title과 같은 텍스트를 description에도 남긴다.
-      description: title,
+      description: description ?? null,
       siteName,
       part: null,
       assignee,
