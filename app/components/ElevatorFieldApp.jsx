@@ -1100,8 +1100,8 @@ export default function App() {
         body: `${profile.name}님이 ${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} 출동을 거부했습니다${reason.trim() ? ` (${reason.trim()})` : ""}`,
         url: `/?openFailure=${failure.id}`,
       });
-      // 재배정 담당자만 태그 — 관리자 전원이 아니라 신석주·이에라 계정만.
-      const supportTags = ["신석주", "이에라"].map((n) => "@" + n).join(" ");
+      // 특정 관리자만 태그하면 그 사람이 자리를 비웠을 때 아무도 못 봐서 @모두로 전원에게 알린다.
+      const supportTags = "@모두";
       handleSendFeedPost(
         `[출동 지원요청] ${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"} 고장 출동 지원을 요청합니다.${reason.trim() ? `\n사유: ${reason.trim()}.` : ""} 재배정이 필요합니다 ${supportTags}`.trim()
       );
