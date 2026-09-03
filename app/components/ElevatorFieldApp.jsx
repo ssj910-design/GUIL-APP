@@ -857,8 +857,12 @@ export default function App() {
         // 관리자콘솔 AdminApp.jsx는 이미 fetchAll로 고쳐져 있었는데 기사어플만 빠져 있었다
         // — "사진 등록했는데 다시 들어가면 없다"는 신고의 실제 원인).
         fetchAll("unit_part_photos"),
-        supabase.from("inventory_products").select("*").order("created_at", { ascending: false }),
-        supabase.from("inventory_stock_movements").select("*"),
+        // 재고이력(inventory_stock_movements)은 제품마다 입고/출고/조정이 쌓이는 append-only
+        // 원장이라 무제한으로 늘어난다 — 위와 같은 이유로 페이지네이션 없이는 1000행 기본
+        // 한도를 넘는 순간 재고 합계가 조용히 틀려진다. PC 관리자콘솔(AdminApp.jsx)은 이미
+        // fetchAll인데 기사어플만 빠져 있었다.
+        fetchAll("inventory_products"),
+        fetchAll("inventory_stock_movements"),
         // site_assignments는 현재 760행이지만 기사 2인 배정이 늘수록 1000행 한도를 넘어설 수 있어
         // 페이지네이션 없이는 조용히 잘린다 — site_managers·error_codes와 같은 이유로 전체를 받는다.
         fetchAll("site_assignments"),
