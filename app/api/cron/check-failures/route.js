@@ -2,8 +2,8 @@
 // 개별 카운트다운이 아니라 "기준 넘긴 것을 매분 훑어서 울리는" 폴링 방식.
 //  1) 미배정 반복 재촉: 처음 접수부터 미배정인 건(에스컬레이션으로 되돌아간 건 제외)이 10분째부터
 //     10분 간격으로 최대 3회 → 그 시점 출근중인 기사 전원 + 관리자에게 (stale_notified_at로 간격 관리)
-//  2) 출동 미응답 3분: 배정됐는데 3분째 출동응답 없음 → 배정 기사(출근중일 때만) + 관리자에게
-//     (배정 후 30분까지 3분 간격, no_response_nag_at)
+//  2) 출동 미응답: 배정됐는데 출동응답 없음 → 배정 기사(출근중일 때만)는 3분 간격,
+//     관리자는 15분 간격으로 따로 (배정 후 30분까지, no_response_nag_at·admin_no_response_nag_at)
 // 24시간 돈다(야간·주말 포함) — 숙직·당직도 놓치면 안 되는 알림이라 시간대로 거르지 않는다.
 // 기사 쪽 수신자는 그 시점 출근상태(checked_in_at 있고 checked_out_at 없음)인 사람만 —
 // 퇴근한 기사를 밤새 깨우지 않기 위함. 관리자는 출퇴근체크를 안 하는 경우가 많아 항상 보낸다.
@@ -15,6 +15,7 @@ const CATALOG = Object.fromEntries(NOTIFICATIONS.map((n) => [n.key, n]));
 
 const TEN_MIN = 10 * 60 * 1000;
 const THREE_MIN = 3 * 60 * 1000;
+const FIFTEEN_MIN = 15 * 60 * 1000;
 const THIRTY_MIN = 30 * 60 * 1000; // 10분 간격 재촉 3회(10·20·30분)의 상한 · 3분 간격 재촉의 상한 겸용
 
 async function handle(request) {
@@ -81,10 +82,12 @@ async function handle(request) {
       if (ok) { await db.from("failures").update({ stale_notified_at: new Date().toISOString() }).eq("id", f.id); staleSent++; }
     }
 
-    // 2) 출동 미응답 3분 — 배정됐는데(assignee_id 있음) 3분째 미처리(출동응답 전), 마지막 알림이 3분 넘음.
+    // 2) 출동 미응답 — 배정됐는데(assignee_id 있음) 3분째 미처리(출동응답 전), 마지막 알림이 3분 넘음.
+    // 이 3분 주기는 "행을 얼마나 자주 들여다보는지"(기사 재촉 주기)를 정하고, 그 안에서 관리자는
+    // admin_no_response_nag_at로 15분 주기를 따로 판단한다(3분마다 들여다보되 5번에 1번만 관리자 포함).
     const { data: pending } = await db
       .from("failures")
-      .select("id,site_name,elevator_no,assignee,assignee_id,assigned_at,no_response_nag_at")
+      .select("id,site_name,elevator_no,assignee,assignee_id,assigned_at,no_response_nag_at,admin_no_response_nag_at")
       .eq("status", "미처리").not("assignee_id", "is", null)
       .lte("assigned_at", nagBefore).gte("assigned_at", nagFloor)
       .or(`no_response_nag_at.is.null,no_response_nag_at.lte.${nagBefore}`)
@@ -93,10 +96,17 @@ async function handle(request) {
     let nagSent = 0;
     for (const f of pending ?? []) {
       const assigneeTarget = workingIds.has(f.assignee_id) ? f.assignee_id : null;
-      const ids = [assigneeTarget, ...adminIdsFor("dispatch_no_response")].filter(Boolean);
+      const adminDue = !f.admin_no_response_nag_at || new Date(f.admin_no_response_nag_at).getTime() <= now - FIFTEEN_MIN;
+      const ids = [assigneeTarget, ...(adminDue ? adminIdsFor("dispatch_no_response") : [])].filter(Boolean);
+      if (!ids.length) continue; // 담당기사 퇴근 + 관리자도 아직 15분 안 됐으면 이번 회차는 건너뛴다(다음 분에 다시 검사).
       // 고장별 고정 tag — 같은 고장 재촉은 알림 한 칸에서 갱신(긴급이라 다시 소리·진동), 다른 고장은 따로 쌓임.
       const ok = await send({ key: "dispatch_no_response", profileIds: ids, tag: `dispatch_no_response-${f.id}`, title: "출동 응답 없음", body: `${label(f)} — ${f.assignee ?? "배정 기사"} 미응답 (배정 후 3분+)`, url: `/?openFailure=${f.id}` });
-      if (ok) { await db.from("failures").update({ no_response_nag_at: new Date().toISOString() }).eq("id", f.id); nagSent++; }
+      if (ok) {
+        const patch = { no_response_nag_at: new Date().toISOString() };
+        if (adminDue) patch.admin_no_response_nag_at = new Date().toISOString();
+        await db.from("failures").update(patch).eq("id", f.id);
+        nagSent++;
+      }
     }
 
     return Response.json({ ok: true, stale: staleSent, noResponse: nagSent });
