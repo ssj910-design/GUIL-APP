@@ -621,6 +621,7 @@ export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
   const [form, setForm] = useState({ assignees: [], siteId: "", title: "", description: "", dueDate: addDays(TODAY_STR, 7), photos: [] });
   // 사진 업로드가 끝나기 전에 부여 버튼을 누르면 그 사진이 빠진 채로 저장될 수 있어 막는다.
   const [photosUploading, setPhotosUploading] = useState(false);
+  const [assigneeOpen, setAssigneeOpen] = useState(false);
 
   function toggleAssignee(name) {
     setForm((f) => ({
@@ -630,26 +631,37 @@ export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
   }
 
   const site = sites.find((s) => s.id === form.siteId);
-  const canSubmit = form.assignees.length > 0 && !!site && form.title.trim().length > 0 && !photosUploading;
+  // 현장은 필수가 아니다 — 현장과 무관한 일반 할일도 부여할 수 있어야 한다.
+  const canSubmit = form.assignees.length > 0 && form.title.trim().length > 0 && !photosUploading;
 
   return (
     <Sheet title="할 일 부여" onClose={onClose}>
       <Field label="담당자 (1명 이상 선택)">
-        <div className="flex flex-wrap gap-1.5">
-          {engineerNames.map((e) => (
-            <button
-              key={e}
-              type="button"
-              onClick={() => toggleAssignee(e)}
-              className={`text-xs font-bold px-3 py-1.5 rounded-full border ${form.assignees.includes(e) ? "bg-blue-700 text-white border-blue-700" : "bg-white text-slate-500 border-slate-300"}`}
-            >
-              {e}
-            </button>
-          ))}
-          {engineerNames.length === 0 && <p className="text-xs text-slate-400">등록된 기사 계정이 없습니다</p>}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setAssigneeOpen((v) => !v)}
+            className={`${inputCls} flex items-center justify-between text-left`}
+          >
+            <span className={`truncate ${form.assignees.length ? "text-slate-800" : "text-slate-400"}`}>
+              {form.assignees.length ? form.assignees.join(", ") : "담당자를 선택하세요"}
+            </span>
+            <ChevronDown size={16} className={`shrink-0 text-slate-400 transition-transform ${assigneeOpen ? "rotate-180" : ""}`} />
+          </button>
+          {assigneeOpen && (
+            <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+              {engineerNames.map((e) => (
+                <label key={e} className="flex items-center gap-2 px-3 py-2.5 text-sm border-b border-slate-50 last:border-0 active:bg-slate-50">
+                  <input type="checkbox" checked={form.assignees.includes(e)} onChange={() => toggleAssignee(e)} className="w-4 h-4" />
+                  {e}
+                </label>
+              ))}
+              {engineerNames.length === 0 && <p className="text-xs text-slate-400 text-center py-3">등록된 기사 계정이 없습니다</p>}
+            </div>
+          )}
         </div>
       </Field>
-      <Field label="현장">
+      <Field label="현장 (선택)">
         <SiteSearchSelect value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id })} />
       </Field>
       <Field label="할 일 제목">
@@ -688,7 +700,7 @@ export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
         onClick={() => {
           onSubmit({
             assignees: form.assignees,
-            siteName: site.name,
+            siteName: site?.name ?? null,
             title: form.title.trim(),
             description: form.description.trim() || null,
             dueDate: form.dueDate,
