@@ -43,6 +43,12 @@ function displayTitle(t) {
 function groupKeyOf(t) {
   if (t.source === "quote" && t.quoteRequestId) return `quote:${t.quoteRequestId}`;
   if (t.source === "material" && t.materialRequestId) return `material:${t.materialRequestId}`;
+  // 관리자 직접 할일부여(복수 담당자)도 담당자 수만큼 행이 생기는데, 요청 id가 없어 위와 같은
+  // 방식으로 묶을 수 없다 — 대신 id가 "todo-manual-<생성시각>-<순번>" 형태로 배정 배치마다
+  // 같은 시각을 공유하므로 순번만 떼어 배치 키로 쓴다.
+  if (t.source === "manual" && typeof t.id === "string" && /^todo-manual-\d+-\d+$/.test(t.id)) {
+    return t.id.replace(/-\d+$/, "");
+  }
   return `solo:${t.id}`;
 }
 
