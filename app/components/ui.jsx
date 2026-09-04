@@ -473,6 +473,47 @@ export function Field({ label, right, children }) {
 
 export const inputCls = "w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500";
 
+// 좁은 폭 안에서 여러 개를 고르는 드롭다운 — 필드를 탭하면 체크박스 목록이 펼쳐지고,
+// 바깥을 탭하면 닫힌다(SiteSearchSelect의 열림/닫힘 방식과 동일). 닫힌 상태에선 고른
+// 항목을 콤마로 이어붙여 보여준다.
+export function CheckboxDropdown({ value = [], options = [], onChange, placeholder = "선택" }) {
+  const [open, setOpen] = useState(false);
+  function toggle(opt) {
+    onChange(value.includes(opt) ? value.filter((v) => v !== opt) : [...value, opt]);
+  }
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`${inputCls} flex items-center justify-between gap-1 text-left`}
+      >
+        <span className={`truncate ${value.length ? "text-slate-800" : "text-slate-400"}`}>
+          {value.length ? value.join(", ") : placeholder}
+        </span>
+        <ChevronDown size={14} className={`shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+            {options.map((opt) => (
+              <label
+                key={opt}
+                className="flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0 cursor-pointer"
+              >
+                <input type="checkbox" checked={value.includes(opt)} onChange={() => toggle(opt)} />
+                <span className="font-semibold text-slate-700">{opt}</span>
+              </label>
+            ))}
+            {options.length === 0 && <p className="text-xs text-slate-400 text-center py-3">선택 가능한 항목이 없습니다</p>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 
 /* ------------------------------------------------------------------ */
 /* HOME                                                                 */

@@ -8,7 +8,7 @@ import { useState, useContext, useEffect } from "react";
 import { ChevronRight, Search } from "lucide-react";
 import { SitesContext, UnitsContext } from "@/app/components/context";
 import { SiteSearchSelect } from "@/app/components/formWidgets";
-import { inputCls, Sheet } from "@/app/components/ui";
+import { inputCls, Sheet, CheckboxDropdown } from "@/app/components/ui";
 import { supabase } from "@/lib/supabaseClient";
 import { mapQuoteRequest, mapSiteManager } from "@/lib/mappers";
 import { siteUnitList } from "@/lib/utils";
@@ -411,12 +411,13 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
                           <input className={inputCls} value={it.spec} onChange={(e) => updateItem(idx, { spec: e.target.value })} />
                         </div>
                         <div>
-                          <p className="text-[11px] font-bold text-slate-500 mb-1">호기</p>
+                          <p className="text-[11px] font-bold text-slate-500 mb-1">호기 (복수 선택 가능)</p>
                           {siteUnitOptions.length > 0 ? (
-                            <select className={inputCls} value={it.unitNo} onChange={(e) => updateItem(idx, { unitNo: e.target.value })}>
-                              {!siteUnitOptions.includes(it.unitNo) && <option value={it.unitNo}>{it.unitNo || "선택"}</option>}
-                              {siteUnitOptions.map((u) => <option key={u} value={u}>{u}</option>)}
-                            </select>
+                            <CheckboxDropdown
+                              options={siteUnitOptions}
+                              value={it.unitNo ? it.unitNo.split(",").map((s) => s.trim()).filter(Boolean) : []}
+                              onChange={(next) => updateItem(idx, { unitNo: next.join(", ") })}
+                            />
                           ) : (
                             <input className={inputCls} value={it.unitNo} onChange={(e) => updateItem(idx, { unitNo: e.target.value })} />
                           )}
