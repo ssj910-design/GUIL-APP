@@ -469,12 +469,12 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
           // DB에서 온 순서 그대로 쓰면 요청/수정 이력에 따라 날짜마다 숙직·당직 순서가 들쭉날쭉해진다
           // (오늘 날짜만 뒤바뀌어 보이던 원인) — 근무표·근무조정과 같은 순서(DUTY_KINDS)로 강제 정렬한다.
           const dutyDay = duties
-            .filter((x) => x.duty_date === d && (x.kind === "당직" || x.kind === "숙직"))
+            .filter((x) => x.duty_date === d && (x.kind === "당직" || x.kind === "숙직" || x.kind === "정상근무"))
             .sort((a, b) => DUTY_KINDS.indexOf(a.kind) - DUTY_KINDS.indexOf(b.kind));
           const leaveDay = leaves.filter((l) => l.start_date <= d && d <= l.end_date);
           // 카드 폭이 좁아 이름을 3명까지만 보여주고, 나머지는 "+N"으로 요약한다 (자세히는 카드 클릭 시 팝업).
           const dayPeople = [
-            ...dutyDay.map((x) => ({ id: `duty-${x.id}`, color: x.kind === "당직" ? "bg-emerald-500" : "bg-blue-500", name: nameOf(x.profile_id) })),
+            ...dutyDay.map((x) => ({ id: `duty-${x.id}`, color: x.kind === "당직" ? "bg-emerald-500" : x.kind === "숙직" ? "bg-blue-500" : "bg-violet-400", name: nameOf(x.profile_id) })),
             ...leaveDay.map((l) => ({ id: `leave-${l.id}`, color: "bg-amber-500", name: nameOf(l.profile_id) })),
           ];
           const visiblePeople = dayPeople.slice(0, 3);
@@ -516,11 +516,14 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
               <button onClick={() => setDayDetail(null)} className="p-1 text-slate-400" aria-label="닫기"><X size={16} /></button>
             </div>
             <div className="space-y-2.5">
-              {DUTY_KINDS.filter((k) => k !== "정상근무").map((kind) => {
+              {DUTY_KINDS.map((kind) => {
                 const person = duties.find((x) => x.duty_date === dayDetail && x.kind === kind);
+                // 정상근무(주4일제 금요일 전용 자리)는 이 날짜에 배치가 없으면 칸 자체를 숨긴다
+                // (주5일제 달엔 애초에 레코드가 없어 매일 "미배정"만 뜨는 걸 막는다 — DutyRoster와 동일 규칙).
+                if (kind === "정상근무" && !person) return null;
                 return (
                   <div key={kind} className="flex items-start justify-between gap-3 text-sm border-b border-slate-50 pb-2 last:border-0 last:pb-0">
-                    <span className={`font-bold shrink-0 ${kind === "당직" ? "text-emerald-700" : "text-blue-700"}`}>{kind}</span>
+                    <span className={`font-bold shrink-0 ${kind === "당직" ? "text-emerald-700" : kind === "숙직" ? "text-blue-700" : "text-violet-500"}`}>{kind}</span>
                     <span className="text-slate-700 font-bold text-right">{person ? nameOf(person.profile_id) : "미배정"}</span>
                   </div>
                 );
