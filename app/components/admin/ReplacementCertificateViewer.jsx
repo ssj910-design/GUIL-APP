@@ -11,7 +11,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Download, Loader2 } from "lucide-react";
-import { useMainScrollLock } from "@/app/components/admin/adminShared";
 
 async function renderPdfToCanvases(blobUrl) {
   const pdfjsLib = await import("pdfjs-dist");
@@ -71,7 +70,6 @@ export default function ReplacementCertificateViewer({ cert, filenameBase, cache
   const [previewUrl, setPreviewUrl] = useState(null);
   const [downloading, setDownloading] = useState(null); // "pdf" | "jpg" | null
   const pdfBlobRef = useRef(null);
-  useMainScrollLock();
 
   useEffect(() => {
     let cancelled = false;

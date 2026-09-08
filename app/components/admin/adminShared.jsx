@@ -1,7 +1,7 @@
 "use client";
 
 // 관리자 콘솔 공용 헬퍼 — 표기(호기·담당자)는 v2 FK 우선, 옛 라벨 fallback.
-import { useState, useRef, useEffect, createContext } from "react";
+import { useState, useRef, createContext } from "react";
 import { createPortal } from "react-dom";
 import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil, Paperclip, Camera, Image as ImageIcon, Download, Trash2, Search } from "lucide-react";
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
@@ -263,31 +263,12 @@ export function useBackdropClose(onClose) {
   };
 }
 
-// 오버레이(모달·라이트박스·전체화면 뷰어)가 열려있는 동안 뒤 배경 스크롤을 잠근다.
-// 실제 스크롤 컨테이너가 <main>(넓은 화면, lg:flex 레이아웃)인지 html/body(좁은 화면·브라우저
-// 확대 등으로 lg 브레이크포인트가 안 걸려 <main>의 overflow-y-auto가 실질적으로 작동하지
-// 않는 경우)인지 확실치 않아 — <main>·body·documentElement를 한꺼번에 잠가서 어느 쪽이
-// 실제로 스크롤되고 있든 막는다. 이전 값을 저장해뒀다 복원하므로 오버레이가 겹쳐 열려도 안전.
-// 여는 컴포넌트마다 이 훅을 호출해서 쓴다. 오버레이가 항상 마운트돼있고 열림 여부만 상태로
-// 갈리는 경우(예: 부모 컴포넌트 안의 조건부 모달)엔 active=false를 넘기면 잠그지 않는다 —
-// 훅 규칙상 호출 자체는 무조건 해야 하므로.
-export function useMainScrollLock(active = true) {
-  useEffect(() => {
-    if (!active) return;
-    const targets = [document.querySelector("main"), document.body, document.documentElement].filter(Boolean);
-    const prevValues = targets.map((el) => el.style.overflow);
-    targets.forEach((el) => { el.style.overflow = "hidden"; });
-    return () => { targets.forEach((el, i) => { el.style.overflow = prevValues[i]; }); };
-  }, [active]);
-}
-
 // PC용 중앙 모달 (관리자 콘솔 최초의 상세보기 팝업 패턴 — 모바일 Sheet와 별개).
 export function Modal({ title, onClose, children, wide }) {
   const widthCls = wide === "2xl" ? "max-w-[88rem]" : wide === "xl" ? "max-w-5xl" : wide ? "max-w-3xl" : "max-w-lg";
-  useMainScrollLock();
   // overscroll-contain — 안쪽 스크롤이 끝(위/아래)에 닿아도 그 다음 휠 동작이 뒤 배경으로
   // 안 넘어가게 막는다(스크롤 체이닝 차단). overflow-y-auto가 없으면 이 속성이 의미가 없어
-  // 바깥 배경(패딩 부분)에도 같이 넣어준다 — main 잠금(useMainScrollLock)과 이중 방어.
+  // 바깥 배경(패딩 부분)에도 같이 넣어준다.
   return (
     <div className="fixed inset-0 lg:left-56 z-40 flex items-center justify-center bg-black/40 p-6 overflow-y-auto overscroll-contain" {...useBackdropClose(onClose)}>
       <div
@@ -738,7 +719,6 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose, onDelete }) {
     usePhotoLightboxGestures(urls.length, index, onIndexChange);
   const prev = () => onIndexChange((index - 1 + urls.length) % urls.length);
   const next = () => onIndexChange((index + 1) % urls.length);
-  useMainScrollLock();
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   // 다운로드는 앱에서 안드로이드 다운로드 매니저로 넘기고 나면 끝 — 눌러도 화면이 그대로라
   // "됐나?" 싶은 게 당연하다. 카톡처럼 하단에 진행 토스트를 잠깐 띄운다.
