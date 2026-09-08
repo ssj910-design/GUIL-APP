@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
 import { mapQuoteRequest } from "@/lib/mappers";
 import { uploadPhoto } from "@/lib/photos";
-import { unitIdFor, addDays, shortDate, parsePartQty, formatUnitLabel, labelToSeq } from "@/lib/utils";
+import { unitIdFor, addDays, shortDate, parsePartQty, formatUnitLabel, labelToSeq, quoteUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { recordQuoteSupplyStockOut } from "@/lib/inventoryStock";
 import { locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid, DateTextInput, lastSentDate, SentHistory, AdminAuthContext } from "@/app/components/admin/adminShared";
@@ -24,24 +24,11 @@ const QUOTE_TONE = { 요청접수: "blue", 작성: "amber", 승인: "amber", 지
 // 할 일 제목에 쓸 호기 — v2 unit_id가 있으면 그걸 우선하고(관리자 콘솔은 v2 네이티브),
 // 없으면 견적 요청 자체의 elevatorNo, 그것도 없으면(관리자가 새로 작성한 견적) 품목에
 // 적어둔 호기로 대신한다 — 품목마다 호기가 다르면 특정할 수 없으니 표시하지 않는다.
-function quoteUnitLabel(data, quote, unitId) {
-  if (quote.elevatorNos?.length) return formatUnitLabel(quote.elevatorNos);
-  const u = (data.units ?? []).find((x) => x.id === unitId);
-  if (u) return formatUnitLabel(u.unitNo);
-  const fromRequest = formatUnitLabel(quote.elevatorNo);
-  if (fromRequest) return fromRequest;
-  // 관리자가 기사 요청 없이 새로 작성한 견적은 elevatorNo/unitId가 없다 — 품목마다 적어둔
-  // 호기(quoteItems[].unitNo, "1"처럼 접미사 없는 숫자도 formatUnitLabel이 "1호기"로 정규화)
-  // 전체를 대신 보여준다.
-  const uniqueUnits = [...new Set((quote.quoteItems ?? []).map((it) => it.unitNo?.trim()).filter(Boolean))];
-  return formatUnitLabel(uniqueUnits);
-}
-
 // "현장 · 호기" 표시 — 호기는 quoteUnitLabel과 같은 기준(요청 elevatorNos/elevatorNo →
 // 품목별 unitNo)으로 정한다.
 function quoteLocLabel(data, q) {
   const siteName = data.sites.find((s) => s.id === q.siteId)?.name ?? q.siteName ?? "-";
-  const unit = quoteUnitLabel(data, q, q.unitId);
+  const unit = quoteUnitLabel(data.units, q, q.unitId);
   return unit ? `${siteName} · ${unit}` : siteName;
 }
 
@@ -478,14 +465,14 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
   async function handleQuoteSupplyComplete(quote, { assigneeIds, photoUrls, dueDate, description, isOutsourced, vendorName }) {
     const unitId = quote.unitId ?? unitIdFor(data.units, quote.siteId, quote.elevatorNo);
     const finalVendorName = isOutsourced ? (vendorName || null) : null;
-    const newTodos = assigneeIds.map((assigneeId, idx) => {
+    const newTodos = assigneeIds.filter(Boolean).map((assigneeId, idx) => {
       const engineer = (data.profiles ?? []).find((p) => p.id === assigneeId);
       return {
         id: `todo-quote-${quote.id}-${idx}`,
         quoteRequestId: quote.id,
         materialRequestId: null,
         source: "quote",
-        title: `${quote.siteName}${quoteUnitLabel(data, quote, unitId) ? ` ${quoteUnitLabel(data, quote, unitId)}` : ""} ${quote.quoteTitle || quote.constructionType}`,
+        title: `${quote.siteName}${quoteUnitLabel(data.units, quote, unitId) ? ` ${quoteUnitLabel(data.units, quote, unitId)}` : ""} ${quote.quoteTitle || quote.constructionType}`,
         siteName: quote.siteName,
         elevatorNo: quote.elevatorNo,
         elevatorNos: quote.elevatorNos ?? null,
@@ -535,7 +522,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
     // 각자 다른 할일 id를 받으므로(assignees 수만큼 별도 행), 딥링크 url이 정확하도록 한 명씩 보낸다.
     for (const t of newTodos) {
       if (!t.assigneeId) continue;
-      notify("supply_ready", { profileIds: [t.assigneeId], title: "견적 자재 지급 완료 — 수령 확인해주세요", body: `${quote.siteName}${quoteUnitLabel(data, quote, unitId) ? ` · ${quoteUnitLabel(data, quote, unitId)}` : ""} · ${quote.constructionType}`, url: `/?openTodo=${t.id}` });
+      notify("supply_ready", { profileIds: [t.assigneeId], title: "견적 자재 지급 완료 — 수령 확인해주세요", body: `${quote.siteName}${quoteUnitLabel(data.units, quote, unitId) ? ` · ${quoteUnitLabel(data.units, quote, unitId)}` : ""} · ${quote.constructionType}`, url: `/?openTodo=${t.id}` });
     }
 
     setData((prev) => ({
@@ -564,7 +551,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
     const existingTodos = (data.todos ?? []).filter((t) => t.quoteRequestId === quote.id && t.source === "quote");
     const kept = existingTodos.filter((t) => assigneeIds.includes(t.assigneeId));
     const toRemove = existingTodos.filter((t) => !assigneeIds.includes(t.assigneeId));
-    const toAddIds = assigneeIds.filter((id) => !existingTodos.some((t) => t.assigneeId === id));
+    const toAddIds = assigneeIds.filter((id) => id && !existingTodos.some((t) => t.assigneeId === id));
 
     if (toRemove.length) {
       const { error: delError } = await supabase.from("todos").delete().in("id", toRemove.map((t) => t.id));
@@ -591,7 +578,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
         quoteRequestId: quote.id,
         materialRequestId: null,
         source: "quote",
-        title: `${quote.siteName}${quoteUnitLabel(data, quote, unitId) ? ` ${quoteUnitLabel(data, quote, unitId)}` : ""} ${quote.quoteTitle || quote.constructionType}`,
+        title: `${quote.siteName}${quoteUnitLabel(data.units, quote, unitId) ? ` ${quoteUnitLabel(data.units, quote, unitId)}` : ""} ${quote.quoteTitle || quote.constructionType}`,
         siteName: quote.siteName,
         elevatorNo: quote.elevatorNo,
         elevatorNos: quote.elevatorNos ?? null,
@@ -623,7 +610,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
     }
     // 각자 다른 할일 id를 받으므로(assignees 수만큼 별도 행), 딥링크 url이 정확하도록 한 명씩 보낸다.
     for (const t of newTodos) {
-      notify("supply_ready", { profileIds: [t.assigneeId], title: "견적 자재 지급 담당자로 지정됨 — 수령 확인해주세요", body: `${quote.siteName}${quoteUnitLabel(data, quote, unitId) ? ` · ${quoteUnitLabel(data, quote, unitId)}` : ""} · ${quote.constructionType}`, url: `/?openTodo=${t.id}` });
+      notify("supply_ready", { profileIds: [t.assigneeId], title: "견적 자재 지급 담당자로 지정됨 — 수령 확인해주세요", body: `${quote.siteName}${quoteUnitLabel(data.units, quote, unitId) ? ` · ${quoteUnitLabel(data.units, quote, unitId)}` : ""} · ${quote.constructionType}`, url: `/?openTodo=${t.id}` });
     }
 
     setData((prev) => ({
@@ -1098,7 +1085,9 @@ function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
   // 견적(외주 처리 포함) 건은 대표(신석주)가 직접 처리하는 경우가 있어 명단에 추가로 포함한다.
   const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material" || p.name === "신석주") && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
   const existingTodosForQuote = todos.filter((t) => t.quoteRequestId === quote.id && t.source === "quote");
-  const existingAssigneeIds = existingTodosForQuote.map((t) => t.assigneeId);
+  // 담당자 없이 만들어진 옛 할일 행(assigneeId null)이 섞여 있으면 그대로 다시 담겨
+  // "담당자 -" 행이 계속 재생성된다 — 빈 값은 여기서 걸러낸다.
+  const existingAssigneeIds = existingTodosForQuote.map((t) => t.assigneeId).filter(Boolean);
   const defaultId = quote.requesterId || engineers.find((p) => p.name === quote.engineer)?.id || "";
   const [assigneeIds, setAssigneeIds] = useState(existingAssigneeIds.length ? existingAssigneeIds : (defaultId ? [defaultId] : []));
   const [dueDate, setDueDate] = useState(existingTodosForQuote[0]?.dueDate ?? addDays(TODAY_STR, 30));

@@ -7,7 +7,7 @@ import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken, onSessionExpired } from "@/lib/supabaseClient";
 import { authFetch } from "@/lib/apiFetch";
 import { mapSite, mergeAssignedEngineers, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode, mapUnitPartPhoto, mapInventoryProduct, mapInventoryStockMovement } from "@/lib/mappers";
-import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent, quoteGrandTotal, quotePartsSummary } from "@/lib/utils";
+import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent, quoteGrandTotal, quotePartsSummary, quoteUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { recordQuoteSupplyStockOut } from "@/lib/inventoryStock";
 import { DutySwapNotice } from "@/app/components/DutyRoster";
@@ -1959,14 +1959,6 @@ export default function App() {
 
   // 견적 요청 자체(elevatorNo)에 호기가 없으면(관리자가 새로 작성한 견적) 품목에 적어둔
   // 호기로 대신한다 — 품목마다 호기가 다르면 특정할 수 없으니 표시하지 않는다.
-  function quoteUnitLabel(q) {
-    if (q.elevatorNos?.length) return formatUnitLabel(q.elevatorNos);
-    const fromRequest = formatUnitLabel(q.elevatorNo);
-    if (fromRequest) return fromRequest;
-    const uniqueUnits = [...new Set((q.quoteItems ?? []).map((it) => it.unitNo).filter(Boolean))];
-    return uniqueUnits.length === 1 ? uniqueUnits[0] : "";
-  }
-
   // ★ 자재지급완료 트리거: 이 순간 담당 기사(들)에게 할 일이 자동 생성됩니다
   // assignees(배열)를 넘기면 신청자 외에 실제 시공 기사를 2명 이상 지정할 수 있고,
   // 각 담당자마다 할 일이 하나씩 생성됩니다 (같은 quoteRequestId를 공유 — 한 명이 비용청구를
@@ -1974,7 +1966,10 @@ export default function App() {
   async function handleCompleteQuoteSupply(quoteId, assignees, dueDate, description, isOutsourced, vendorName) {
     const q = quoteRequests.find((x) => x.id === quoteId);
     if (!q) return;
-    const finalAssignees = assignees?.length ? assignees : [q.engineer];
+    // 관리자가 직접 발행한 견적은 요청 기사가 없어(q.engineer null) 그대로 두면 담당자 없는
+    // 할일("담당자 -")이 만들어진다 — 빈 값을 걸러내고, 남는 사람이 없으면 진행하지 않는다.
+    const finalAssignees = (assignees?.length ? assignees : [q.engineer]).filter(Boolean);
+    if (!finalAssignees.length) { alert("담당 기사를 1명 이상 선택해주세요"); return; }
     const finalDueDate = dueDate || addDays(TODAY_STR, 30);
 
     const newTodos = finalAssignees.map((assignee, idx) => ({
@@ -1982,7 +1977,7 @@ export default function App() {
       materialRequestId: null,
       quoteRequestId: quoteId,
       source: "quote",
-      title: `${q.siteName}${quoteUnitLabel(q) ? ` ${quoteUnitLabel(q)}` : ""} ${q.quoteTitle || q.constructionType}`,
+      title: `${q.siteName}${quoteUnitLabel(units, q) ? ` ${quoteUnitLabel(units, q)}` : ""} ${q.quoteTitle || q.constructionType}`,
       siteName: q.siteName,
       elevatorNo: q.elevatorNo,
       elevatorNos: q.elevatorNos ?? null,
@@ -2050,7 +2045,7 @@ export default function App() {
       if (!assigneeId) continue;
       sendPush("supply_ready", [assigneeId], {
         title: "견적 자재 지급 완료 — 수령 확인해주세요",
-        body: `${q.siteName}${quoteUnitLabel(q) ? ` ${quoteUnitLabel(q)}` : ""} · ${q.constructionType}`,
+        body: `${q.siteName}${quoteUnitLabel(units, q) ? ` ${quoteUnitLabel(units, q)}` : ""} · ${q.constructionType}`,
         url: `/?openTodo=${t.id}`,
       });
     }
@@ -2063,7 +2058,10 @@ export default function App() {
   async function handleQuoteSupplyEdit(quoteId, assignees, dueDate, description, isOutsourced, vendorName) {
     const q = quoteRequests.find((x) => x.id === quoteId);
     if (!q) return;
-    const finalAssignees = assignees?.length ? assignees : [q.engineer];
+    // 관리자가 직접 발행한 견적은 요청 기사가 없어(q.engineer null) 그대로 두면 담당자 없는
+    // 할일("담당자 -")이 만들어진다 — 빈 값을 걸러내고, 남는 사람이 없으면 진행하지 않는다.
+    const finalAssignees = (assignees?.length ? assignees : [q.engineer]).filter(Boolean);
+    if (!finalAssignees.length) { alert("담당 기사를 1명 이상 선택해주세요"); return; }
     const finalDueDate = dueDate || addDays(TODAY_STR, 30);
     const finalVendorName = isOutsourced ? (vendorName || null) : null;
 
@@ -2091,7 +2089,7 @@ export default function App() {
       materialRequestId: null,
       quoteRequestId: quoteId,
       source: "quote",
-      title: `${q.siteName}${quoteUnitLabel(q) ? ` ${quoteUnitLabel(q)}` : ""} ${q.quoteTitle || q.constructionType}`,
+      title: `${q.siteName}${quoteUnitLabel(units, q) ? ` ${quoteUnitLabel(units, q)}` : ""} ${q.quoteTitle || q.constructionType}`,
       siteName: q.siteName,
       elevatorNo: q.elevatorNo,
       elevatorNos: q.elevatorNos ?? null,
