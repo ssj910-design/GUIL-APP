@@ -472,11 +472,12 @@ export function Field({ label, right, children }) {
 
 
 // 연락처 텍스트를 탭하면 바로 전화 연결 — 부모가 클릭 가능한 카드/행인 경우가 많아 이벤트 버블링을 막는다.
-// children을 넘기면(포맷된 표기 등) 그걸 보여주고, 없으면 phone 원본을 그대로 보여준다.
-export function PhoneLink({ phone, className, children }) {
+// 색은 항상 파란색으로 고정(탭 가능하다는 걸 한눈에 알 수 있게) — 부모의 검정 글씨색을 물려받지
+// 않도록 클래스에 명시한다. children을 넘기면(포맷된 표기 등) 그걸 보여주고, 없으면 phone 원본 그대로.
+export function PhoneLink({ phone, className = "", children }) {
   if (!phone) return null;
   return (
-    <a href={`tel:${phone}`} onClick={(e) => e.stopPropagation()} className={className}>
+    <a href={`tel:${phone}`} onClick={(e) => e.stopPropagation()} className={`text-blue-600 ${className}`}>
       {children ?? phone}
     </a>
   );
