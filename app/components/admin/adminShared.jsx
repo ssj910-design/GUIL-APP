@@ -1,7 +1,7 @@
 "use client";
 
 // 관리자 콘솔 공용 헬퍼 — 표기(호기·담당자)는 v2 FK 우선, 옛 라벨 fallback.
-import { useState, useRef, createContext } from "react";
+import { useState, useRef, useEffect, createContext } from "react";
 import { createPortal } from "react-dom";
 import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil, Paperclip, Camera, Image as ImageIcon, Download, Trash2, Search } from "lucide-react";
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
@@ -266,6 +266,16 @@ export function useBackdropClose(onClose) {
 // PC용 중앙 모달 (관리자 콘솔 최초의 상세보기 팝업 패턴 — 모바일 Sheet와 별개).
 export function Modal({ title, onClose, children, wide }) {
   const widthCls = wide === "2xl" ? "max-w-[88rem]" : wide === "xl" ? "max-w-5xl" : wide ? "max-w-3xl" : "max-w-lg";
+  // 모달은 <main>(overflow-y-auto) 위에 fixed로 뜰 뿐 DOM상 그 자식이라, 모달 위에서 휠을
+  // 굴리면 자체 스크롤 영역 경계에서 뒤 배경(main)까지 같이 스크롤됐다 — 열려있는 동안
+  // main 스크롤을 잠근다. 이전 값을 저장해뒀다 복원하므로 모달이 겹쳐 열려도 안전하다.
+  useEffect(() => {
+    const scroller = document.querySelector("main");
+    if (!scroller) return;
+    const prevOverflow = scroller.style.overflow;
+    scroller.style.overflow = "hidden";
+    return () => { scroller.style.overflow = prevOverflow; };
+  }, []);
   return (
     <div className="fixed inset-0 lg:left-56 z-40 flex items-center justify-center bg-black/40 p-6" {...useBackdropClose(onClose)}>
       <div
