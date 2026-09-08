@@ -3,7 +3,7 @@ import { ChevronRight, X, Plus, Search, PackageCheck, PackageX, AlertTriangle, C
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, realInstallPlace, unitIdFor, profileIdByName, handlePhoneInputChange, formatUnitLabel } from "@/lib/utils";
 import { TODAY_STR, QUOTE_STAGES, KIT_PARTS } from "@/lib/constants";
-import { PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
+import { PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
@@ -78,7 +78,7 @@ function RequestDetailSheet({ target, onClose, onPhotoClick, todos, onCancelMate
           {type === "quote" && (
             <div className="bg-slate-100 rounded-xl p-3">
               <p className="text-[11px] text-slate-500">현장 담당자 연락처</p>
-              <p className="font-bold text-slate-800">{data.contactPhone || "-"}</p>
+              <p className="font-bold text-slate-800">{data.contactPhone ? <PhoneLink phone={data.contactPhone} /> : "-"}</p>
             </div>
           )}
           {type === "restock" && (

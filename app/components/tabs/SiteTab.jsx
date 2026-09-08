@@ -5,7 +5,7 @@ import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, s
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
-import { Badge, TimelineRow, HistoryCard, PrimaryButton, Sheet, Field, inputCls, DrillHeader, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, PhotoLightboxPane } from "@/app/components/ui";
+import { Badge, TimelineRow, HistoryCard, PrimaryButton, Sheet, Field, inputCls, DrillHeader, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, PhotoLightboxPane, PhoneLink } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
@@ -25,7 +25,10 @@ function PartReplacementCard({ r, onPhotoClick }) {
   return (
     <div className="border border-slate-100 rounded-xl p-3">
       <p className="text-sm font-bold text-slate-800">{r.name}</p>
-      <p className="text-[11px] text-slate-400 mt-0.5">{r.isOutsourced && r.vendorName ? r.vendorName : r.engineer} · {r.replaceDate} 교체{r.contactPhone ? ` · 현장담당 ${r.contactPhone}` : ""}</p>
+      <p className="text-[11px] text-slate-400 mt-0.5">
+        {r.isOutsourced && r.vendorName ? r.vendorName : r.engineer} · {r.replaceDate} 교체
+        {r.contactPhone && <> · 현장담당 <PhoneLink phone={r.contactPhone} /></>}
+      </p>
       {previewSlots.length > 0 && (
         <div className="flex gap-2 mt-2">
           {previewSlots.map((s, i) => (
@@ -94,7 +97,7 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
               <TimelineRow icon={Flag} label="운행구간" value={realUnit?.runSection || "-"} />
               <TimelineRow icon={Flag} label="적재하중" value={realUnit?.loadKg ? `${realUnit.loadKg}kg` : "-"} />
               <TimelineRow icon={Flag} label="정원" value={realUnit?.capacityPersons ? `${realUnit.capacityPersons}인승` : "-"} />
-              <TimelineRow icon={Flag} label="비상통화장치" value={site.emergencyPhone || "-"} valueColor={site.emergencyPhone ? "text-blue-600" : "text-slate-700"} />
+              <TimelineRow icon={Flag} label="비상통화장치" value={site.emergencyPhone ? <PhoneLink phone={site.emergencyPhone} /> : "-"} valueColor={site.emergencyPhone ? "text-blue-600" : "text-slate-700"} />
               <TimelineRow icon={Flag} label="보험" value={realUnit?.insurer ? `${realUnit.insurer} (~${realUnit.insuranceEnd ?? "?"})` : "-"} valueColor="text-blue-600" last />
             </div>
             {liveInfo && <p className="px-5 pt-2 text-[10px] text-slate-400">* 국가승강기정보센터 실시간 데이터</p>}
@@ -520,7 +523,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
           {primaryManager && (
             <>
               <TimelineRow icon={User} label={primaryManager.role || "담당자"} value={primaryManager.name || "-"} />
-              <TimelineRow icon={PhoneCall} label={`${primaryManager.role || "담당자"} 전화번호`} value={primaryManager.phone || "-"} valueColor="text-blue-600" />
+              <TimelineRow icon={PhoneCall} label={`${primaryManager.role || "담당자"} 전화번호`} value={primaryManager.phone ? <PhoneLink phone={primaryManager.phone} /> : "-"} valueColor="text-blue-600" />
               <TimelineRow icon={Mail} label={`${primaryManager.role || "담당자"} 메일주소`} value={primaryManager.email || "-"} />
               <TimelineRow icon={Paperclip} label={`${primaryManager.role || "담당자"} FAX`} value={primaryManager.fax || "-"} />
             </>
@@ -544,7 +547,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
             return (
               <React.Fragment key={m.id}>
                 <TimelineRow icon={User} label={roleLabel} value={m.name || "-"} />
-                <TimelineRow icon={PhoneCall} label={`${roleLabel} 전화번호`} value={m.phone || "-"} valueColor="text-blue-600" />
+                <TimelineRow icon={PhoneCall} label={`${roleLabel} 전화번호`} value={m.phone ? <PhoneLink phone={m.phone} /> : "-"} valueColor="text-blue-600" />
                 <TimelineRow icon={Mail} label={`${roleLabel} 메일주소`} value={m.email || "-"} />
                 <TimelineRow icon={Paperclip} label={`${roleLabel} FAX`} value={m.fax || "-"} />
               </React.Fragment>
@@ -603,7 +606,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
                     )}
                   </p>
                   {site.emergencyPhone && (
-                    <p className="text-xs font-semibold text-slate-500 shrink-0">비상통화장치 {site.emergencyPhone}</p>
+                    <p className="text-xs font-semibold text-slate-500 shrink-0">비상통화장치 <PhoneLink phone={site.emergencyPhone} /></p>
                   )}
                 </div>
                 <button

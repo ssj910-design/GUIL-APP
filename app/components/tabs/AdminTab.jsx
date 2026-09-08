@@ -1,7 +1,7 @@
 import { useState, useContext, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Package, Receipt, ChevronRight, ChevronLeft, ChevronDown, FileText, PackageCheck, RotateCcw, PackageX, Search, Repeat, KeyRound, Check } from "lucide-react";
-import { Badge, PhotoThumb, PhotoGrid, PrimaryButton, Sheet, Field, inputCls, DrillHeader, AccordionRow } from "@/app/components/ui";
+import { Badge, PhotoThumb, PhotoGrid, PrimaryButton, Sheet, Field, inputCls, DrillHeader, AccordionRow, PhoneLink } from "@/app/components/ui";
 import { AuthContext, SitesContext } from "@/app/components/context";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
@@ -734,7 +734,12 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
               </div>
               <div className="bg-slate-100 rounded-xl p-3">
                 <p className="text-[11px] text-slate-500">담당자 연락처</p>
-                <p className="font-bold text-slate-800">{(isDraftedQuote ? shownDetail.recipientPhone : shownDetail.contactPhone) || "-"}</p>
+                <p className="font-bold text-slate-800">
+                  {(() => {
+                    const p = isDraftedQuote ? shownDetail.recipientPhone : shownDetail.contactPhone;
+                    return p ? <PhoneLink phone={p} /> : "-";
+                  })()}
+                </p>
               </div>
               {(shownDetail.requesterId || shownDetail.engineer) && (
                 <div className="bg-slate-100 rounded-xl p-3">

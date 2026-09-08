@@ -3,7 +3,7 @@ import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame,
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, handlePhoneInputChange, distanceKm, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf, unitBadgeLabel, normalizeModel, normalizeCode, distinctModels, formatListText } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
-import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
+import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 import { isVideoUrl } from "@/lib/photos";
@@ -259,7 +259,9 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                   {infoRows.map(([k, v]) => (
                     <div key={k} className="flex justify-between gap-3">
                       <span className="text-slate-400 shrink-0">{k}</span>
-                      <span className="font-semibold text-slate-700 text-right truncate">{v || "-"}</span>
+                      <span className="font-semibold text-slate-700 text-right truncate">
+                        {k === "현장 전화" && v ? <PhoneLink phone={v} /> : (v || "-")}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -508,7 +510,7 @@ export function FailureDetailSheet({ failure, failures = [], nested = false, onC
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">신고자 전화번호</span>
-          <span className="font-semibold text-slate-700">{failure.reporterPhone || "-"}</span>
+          <span className="font-semibold text-slate-700">{failure.reporterPhone ? <PhoneLink phone={failure.reporterPhone} /> : "-"}</span>
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">접수일시</span>
@@ -1178,7 +1180,7 @@ function FailureResponseCard({ f, dist, history = [], site, onOpenDetail, onDisp
           <div className="text-[12px] text-slate-500 space-y-1">
             {site?.address && <p className="flex items-center gap-1 min-w-0"><MapPin size={12} className="shrink-0 text-slate-400" /><span className="truncate">{site.address}</span></p>}
             {site?.elevatorModel && <p className="flex items-center gap-1 min-w-0"><Settings size={12} className="shrink-0 text-slate-400" /><span className="truncate">{site.elevatorModel}</span></p>}
-            {f.reporterPhone && <p className="flex items-center gap-1"><PhoneCall size={12} className="shrink-0 text-slate-400" />신고자 {formatPhone(f.reporterPhone)}</p>}
+            {f.reporterPhone && <p className="flex items-center gap-1"><PhoneCall size={12} className="shrink-0 text-slate-400" />신고자 <PhoneLink phone={f.reporterPhone}>{formatPhone(f.reporterPhone)}</PhoneLink></p>}
           </div>
         )}
         {stage === "dispatched" && <p className="text-xs font-semibold text-blue-700 mt-2 text-center">출동 {f.dispatchedAt} · {f.etaMinutes}분 후 도착예정</p>}

@@ -3,7 +3,7 @@ import { Receipt, Check, Search, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, handlePhoneInputChange, freeReasonLabel, quoteGrandTotal, quoteMaterialItems } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
-import { DDay, PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
+import { DDay, PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload, SignaturePad } from "@/app/components/formWidgets";
 import { emptyPartRow, formatPartRows, PartsRowsInput, UnitPickGrid } from "@/app/components/tabs/MaterialTab";
@@ -1169,7 +1169,7 @@ export function BillingCard({ b, onPhotoClick }) {
         </span>
       </div>
       <div className="flex items-center justify-between text-[11px] text-slate-400">
-        <span>{b.engineer} · {b.replaceDate} 교체{b.contactPhone ? ` · 현장담당 ${b.contactPhone}` : ""}</span>
+        <span>{b.engineer} · {b.replaceDate} 교체{b.contactPhone && <> · 현장담당 <PhoneLink phone={b.contactPhone} /></>}</span>
         <span className="font-bold text-slate-600 shrink-0 ml-2">{b.cost ? `₩${Number(b.cost).toLocaleString()}` : "-"}</span>
       </div>
       {previewSlots.length > 0 && (

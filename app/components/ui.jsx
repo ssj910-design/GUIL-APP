@@ -471,6 +471,17 @@ export function Field({ label, right, children }) {
 }
 
 
+// 연락처 텍스트를 탭하면 바로 전화 연결 — 부모가 클릭 가능한 카드/행인 경우가 많아 이벤트 버블링을 막는다.
+// children을 넘기면(포맷된 표기 등) 그걸 보여주고, 없으면 phone 원본을 그대로 보여준다.
+export function PhoneLink({ phone, className, children }) {
+  if (!phone) return null;
+  return (
+    <a href={`tel:${phone}`} onClick={(e) => e.stopPropagation()} className={className}>
+      {children ?? phone}
+    </a>
+  );
+}
+
 export const inputCls = "w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500";
 
 // 좁은 폭 안에서 여러 개를 고르는 드롭다운 — 필드를 탭하면 체크박스 목록이 펼쳐지고,
