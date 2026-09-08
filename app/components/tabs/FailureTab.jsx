@@ -217,7 +217,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                   // 호기가 1대뿐인 현장은 자동 선택 (여러 대는 오접수 방지를 위해 명시적 선택)
                   const s = sites.find((x) => x.id === id);
                   const us = s ? siteUnitList(s, units) : [];
-                  setForm({ ...form, siteId: id, units: us.length === 1 ? [us[0].unitNo] : [], reportNote: s?.notes || "" });
+                  setForm({ ...form, siteId: id, units: us.length === 1 ? [us[0].unitNo] : [] });
                 }}
                 placeholder="현장명 검색"
               />
@@ -311,10 +311,6 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                 <input className={inputCls} placeholder="예: 3층에서 문이 안 닫힘" value={form.faultDetail} onChange={(e) => setForm({ ...form, faultDetail: e.target.value })} />
               </div>
             )}
-            <div>
-              <p className="text-xs font-bold text-slate-500 mb-1.5">비고 (선택)</p>
-              <input className={inputCls} placeholder="참고사항" value={form.reportNote} onChange={(e) => setForm({ ...form, reportNote: e.target.value })} />
-            </div>
             <div className="flex items-center justify-between bg-white rounded-xl border border-slate-200 px-4 py-3">
               <span className="text-sm font-bold text-slate-600">고장아님(다발아님)으로 접수</span>
               <button onClick={() => setForm({ ...form, notFault: !form.notFault })}>
@@ -424,7 +420,6 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                   ? form.units.map((u) => `${u}: ${form.details[u] || "-"}`).join(" / ")
                   : form.faultDetail || "-"],
                 ...(form.notFault ? [["구분", "고장아님(다발아님)"]] : []),
-                ...(form.reportNote.trim() ? [["비고", form.reportNote]] : []),
                 ["신고자 전화", form.reporterPhone],
                 ["배정 기사", form.assignee || "나중에 배정"],
                 ...(selfDispatching ? [["도착 예정 시간", form.eta ? `${form.eta}분 후` : "-"]] : []),
@@ -508,6 +503,12 @@ export function FailureDetailSheet({ failure, failures = [], nested = false, onC
           <span className="text-slate-400 shrink-0">주소</span>
           <span className="font-semibold text-slate-700 text-right truncate min-w-0">{site?.address ?? "-"}</span>
         </div>
+        {site?.accessInfo && (
+          <div className="flex items-start justify-between gap-2 text-sm">
+            <span className="text-slate-400 shrink-0">출입정보</span>
+            <span className="font-semibold text-slate-700 text-right whitespace-pre-wrap">{site.accessInfo}</span>
+          </div>
+        )}
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">신고자 전화번호</span>
           <span className="font-semibold text-slate-700">{failure.reporterPhone ? <PhoneLink phone={failure.reporterPhone} /> : "-"}</span>
