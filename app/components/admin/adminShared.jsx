@@ -263,20 +263,21 @@ export function useBackdropClose(onClose) {
   };
 }
 
-// 오버레이(모달·라이트박스·전체화면 뷰어)가 열려있는 동안 뒤 배경(<main>) 스크롤을 잠근다 —
-// 오버레이는 <main>(overflow-y-auto) 안에 fixed로 뜰 뿐 DOM상 그 자식이라, 안 잠그면 오버레이
-// 스크롤 경계에서 휠을 계속 굴렸을 때 뒤 배경까지 스크롤 체이닝된다. 이전 값을 저장해뒀다
-// 복원하므로 오버레이가 겹쳐 열려도 안전하다. 여는 컴포넌트마다 이 훅을 호출해서 쓴다.
-// 오버레이가 항상 마운트돼있고 열림 여부만 상태로 갈리는 경우(예: 부모 컴포넌트 안의 조건부
-// 모달)엔 active=false를 넘기면 잠그지 않는다 — 훅 규칙상 호출 자체는 무조건 해야 하므로.
+// 오버레이(모달·라이트박스·전체화면 뷰어)가 열려있는 동안 뒤 배경 스크롤을 잠근다.
+// 실제 스크롤 컨테이너가 <main>(넓은 화면, lg:flex 레이아웃)인지 html/body(좁은 화면·브라우저
+// 확대 등으로 lg 브레이크포인트가 안 걸려 <main>의 overflow-y-auto가 실질적으로 작동하지
+// 않는 경우)인지 확실치 않아 — <main>·body·documentElement를 한꺼번에 잠가서 어느 쪽이
+// 실제로 스크롤되고 있든 막는다. 이전 값을 저장해뒀다 복원하므로 오버레이가 겹쳐 열려도 안전.
+// 여는 컴포넌트마다 이 훅을 호출해서 쓴다. 오버레이가 항상 마운트돼있고 열림 여부만 상태로
+// 갈리는 경우(예: 부모 컴포넌트 안의 조건부 모달)엔 active=false를 넘기면 잠그지 않는다 —
+// 훅 규칙상 호출 자체는 무조건 해야 하므로.
 export function useMainScrollLock(active = true) {
   useEffect(() => {
     if (!active) return;
-    const scroller = document.querySelector("main");
-    if (!scroller) return;
-    const prevOverflow = scroller.style.overflow;
-    scroller.style.overflow = "hidden";
-    return () => { scroller.style.overflow = prevOverflow; };
+    const targets = [document.querySelector("main"), document.body, document.documentElement].filter(Boolean);
+    const prevValues = targets.map((el) => el.style.overflow);
+    targets.forEach((el) => { el.style.overflow = "hidden"; });
+    return () => { targets.forEach((el, i) => { el.style.overflow = prevValues[i]; }); };
   }, [active]);
 }
 
@@ -284,8 +285,11 @@ export function useMainScrollLock(active = true) {
 export function Modal({ title, onClose, children, wide }) {
   const widthCls = wide === "2xl" ? "max-w-[88rem]" : wide === "xl" ? "max-w-5xl" : wide ? "max-w-3xl" : "max-w-lg";
   useMainScrollLock();
+  // overscroll-contain — 안쪽 스크롤이 끝(위/아래)에 닿아도 그 다음 휠 동작이 뒤 배경으로
+  // 안 넘어가게 막는다(스크롤 체이닝 차단). overflow-y-auto가 없으면 이 속성이 의미가 없어
+  // 바깥 배경(패딩 부분)에도 같이 넣어준다 — main 잠금(useMainScrollLock)과 이중 방어.
   return (
-    <div className="fixed inset-0 lg:left-56 z-40 flex items-center justify-center bg-black/40 p-6" {...useBackdropClose(onClose)}>
+    <div className="fixed inset-0 lg:left-56 z-40 flex items-center justify-center bg-black/40 p-6 overflow-y-auto overscroll-contain" {...useBackdropClose(onClose)}>
       <div
         className={`bg-white rounded-2xl shadow-2xl max-h-[85vh] flex flex-col w-full ${widthCls}`}
         onClick={(e) => e.stopPropagation()}
@@ -294,7 +298,7 @@ export function Modal({ title, onClose, children, wide }) {
           <h2 className="font-bold text-slate-900">{title}</h2>
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-700"><X size={18} /></button>
         </div>
-        <div className="overflow-y-auto px-5 py-4">{children}</div>
+        <div className="overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
       </div>
     </div>
   );
@@ -776,7 +780,7 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose, onDelete }) {
   // 사이드바(z-50)에 화살표가 가려지지 않도록 body에 바로 붙인다 — 이 div는 관리자 콘솔
   // 레이아웃(사이드바·본문) 트리 밖에서 렌더링되어 항상 전체 뷰포트 기준으로 뜬다.
   return createPortal(
-    <div className="fixed inset-0 z-[70] bg-black/85 flex flex-col" {...useBackdropClose(onClose)}>
+    <div className="fixed inset-0 z-[70] bg-black/85 flex flex-col overflow-y-auto overscroll-contain" {...useBackdropClose(onClose)}>
       <div className="flex items-center justify-between px-4 py-3 text-white shrink-0" onClick={(e) => e.stopPropagation()}>
         <span className="text-sm font-semibold">{index + 1} / {urls.length}</span>
         <div className="flex items-center gap-2">

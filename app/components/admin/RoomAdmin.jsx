@@ -131,7 +131,7 @@ function PhotoViewerOverlay({ urls, index, onIndexChange, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/80 flex flex-col" {...useBackdropClose(onClose)}>
+    <div className="fixed inset-0 z-[60] bg-black/80 flex flex-col overflow-y-auto overscroll-contain" {...useBackdropClose(onClose)}>
       <div className="flex items-center justify-between px-4 py-3 text-white shrink-0" onClick={(e) => e.stopPropagation()}>
         <span className="text-sm font-semibold">{urls.length > 1 ? `${index + 1} / ${urls.length}` : ""}</span>
         <div className="flex items-center gap-2">

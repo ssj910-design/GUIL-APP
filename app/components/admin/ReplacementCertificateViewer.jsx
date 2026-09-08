@@ -147,7 +147,7 @@ export default function ReplacementCertificateViewer({ cert, filenameBase, cache
   }
 
   return createPortal(
-    <div className="fixed inset-0 lg:left-56 z-[70] bg-slate-900/70 flex flex-col">
+    <div className="fixed inset-0 lg:left-56 z-[70] bg-slate-900/70 flex flex-col overflow-y-auto overscroll-contain">
       <div className="flex items-center justify-between px-4 py-3 bg-slate-900 text-white shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <button onClick={onClose} className="p-1.5 text-white/80 hover:text-white shrink-0" aria-label="닫기">
