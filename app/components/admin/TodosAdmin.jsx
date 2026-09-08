@@ -24,20 +24,7 @@ function wasteReturnPending(t) {
   return t.source === "waste_return" && t.done && !t.stockConfirmedAt;
 }
 
-// 자재/견적 연동 할일은 title이 "현장명[ 호기] ..." 형태로 저장되는데, 목록에는 이미
-// "현장·호기" 열이 있으니 중복을 피하려고 그 앞부분을 잘라서 보여준다.
-// (호기 라벨이 없던 옛 형식 데이터도 함께 매칭한다. 수동 할일은 제목에 현장명이 없어 그대로 둔다.)
-function displayTitle(t) {
-  if (t.source === "manual" || !t.siteName || !t.title) return t.title;
-  const unitLabel = formatUnitLabel(t.elevatorNo);
-  const withUnit = `${t.siteName}${unitLabel ? ` ${unitLabel}` : ""} `;
-  const withoutUnit = `${t.siteName} `;
-  if (t.title.startsWith(withUnit)) return t.title.slice(withUnit.length);
-  if (t.title.startsWith(withoutUnit)) return t.title.slice(withoutUnit.length);
-  return t.title;
-}
-
-// 자재/견적 연동 할일은 담당자 수만큼 각자 별도 행으로 저장돼 있다(위 displayTitle 주석 참고) —
+// 자재/견적 연동 할일은 담당자 수만큼 각자 별도 행으로 저장돼 있다 —
 // 목록에서는 같은 요청을 공유하는 행을 한 건으로 묶어서 보여준다. 요청 연결이 없는(수동·검사보완 등)
 // 할일은 원래도 1건뿐이라 그대로 둔다.
 function groupKeyOf(t) {
@@ -47,7 +34,8 @@ function groupKeyOf(t) {
   // 방식으로 묶을 수 없다 — 대신 id가 "todo-manual-<생성시각>-<순번>" 형태로 배정 배치마다
   // 같은 시각을 공유하므로 순번만 떼어 배치 키로 쓴다.
   if (t.source === "manual" && typeof t.id === "string" && /^todo-manual-\d+-\d+$/.test(t.id)) {
-    return t.id.replace(/-\d+$/, "");
+    // 생성시각(ms)이 우연히 겹친 다른 배정까지 한 건으로 묶이지 않게 제목·현장도 키에 넣는다.
+    return `${t.id.replace(/-\d+$/, "")}|${t.title ?? ""}|${t.siteName ?? ""}`;
   }
   return `solo:${t.id}`;
 }
@@ -153,7 +141,7 @@ function TodoDetailModal({ group, data, onClose, onSave, onSaveGroup, onDelete, 
         </div>
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">내용</p>
-          <textarea className={inputCls} rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          <textarea className={inputCls} rows={10} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </div>
         {isGroup ? (
           <div>
@@ -270,7 +258,7 @@ function AssignTodoModal({ data, onClose, onCreate }) {
   }
 
   return (
-    <Modal title="할 일 배정" onClose={onClose} wide="xl">
+    <Modal title="할 일 배정" onClose={onClose} wide="2xl">
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -291,7 +279,7 @@ function AssignTodoModal({ data, onClose, onCreate }) {
         </div>
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">내용</p>
-          <textarea className={inputCls} rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          <textarea className={inputCls} rows={10} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </div>
         <div>
           <p className="text-xs font-bold text-slate-500 mb-1">담당자 (2명 이상 선택 가능 — 선택한 인원 각각에게 별도로 배정됩니다)</p>
@@ -430,7 +418,12 @@ export default function TodosAdmin({ data, setData, initialView }) {
 
   // 같은 요청(quoteRequestId/materialRequestId)을 공유하는 행을 한 그룹으로 묶는다.
   const groupsMap = new Map();
+  // 같은 행이 두 번 들어오면(페이지네이션 경계에서 created_at이 같은 행이 겹쳐 오는 경우 등)
+  // 담당자가 한 명인데 "2명"으로 보인다 — id 기준으로 한 번 걸러낸다.
+  const seenIds = new Set();
   for (const t of rows) {
+    if (seenIds.has(t.id)) continue;
+    seenIds.add(t.id);
     const key = groupKeyOf(t);
     if (!groupsMap.has(key)) groupsMap.set(key, []);
     groupsMap.get(key).push(t);
@@ -441,7 +434,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
     const t = group[0];
     switch (key) {
       case "source": return SOURCE_LABEL[t.source] ?? t.source ?? "";
-      case "title": return displayTitle(t) ?? "";
+      case "title": return t.title ?? "";
       case "loc": return locOf(data, t.unitId, t.siteName, t.elevatorNo);
       case "person": return group.map((m) => personOf(data, m.assigneeId, m.assignee)).join(", ");
       case "assignedDate": return t.assignedDate ?? "";
@@ -589,10 +582,11 @@ export default function TodosAdmin({ data, setData, initialView }) {
     const unit = units.find((u) => u.id === form.unitId);
     const site = sites.find((s) => s.id === form.siteId);
     const photoUrls = form.photoUrls ?? [];
+    const batchId = Date.now(); // 담당자마다 부르면 ms가 달라져 같은 배정이 한 건으로 안 묶인다
     const rows = form.assigneeIds.map((assigneeId, i) => {
       const engineer = profiles.find((p) => p.id === assigneeId);
       return {
-        id: `todo-manual-${Date.now()}-${i}`, source: "manual", title: form.title.trim(), description: form.description || null,
+        id: `todo-manual-${batchId}-${i}`, source: "manual", title: form.title.trim(), description: form.description || null,
         site_name: site?.name ?? null, elevator_no: unit?.unitNo ?? null, unit_id: form.unitId || null,
         assignee: engineer?.name ?? null, assignee_id: assigneeId,
         assigned_date: TODAY_STR, due_date: form.dueDate || null, done: false,
@@ -710,7 +704,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
                 </td>
                 <td className="px-3 py-2.5"><StatusBadge tone={t.source === "manual" ? "slate" : "blue"}>{SOURCE_LABEL[t.source] ?? t.source}</StatusBadge></td>
                 <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{locOf(data, t.unitId, t.siteName, t.elevatorNo)}</td>
-                <td className="px-3 py-2.5 font-semibold">{displayTitle(t)}</td>
+                <td className="px-3 py-2.5 font-semibold">{t.title}</td>
                 <td className="px-3 py-2.5">{group.map((m) => personOf(data, m.assigneeId, m.assignee)).join(", ")}</td>
                 <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(t.assignedDate)}</td>
                 <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(t.dueDate)}</td>
