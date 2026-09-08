@@ -319,6 +319,9 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
   const [quoteStageFilter, setQuoteStageFilter] = useState("all");
   const [payTarget, setPayTarget] = useState(null); // 지급완료 처리 중인 자재신청
   const [quoteSupplyTarget, setQuoteSupplyTarget] = useState(null); // 자재지급완료 처리 중인 견적요청
+  // 지급완료 체크는 모달이 닫히는 것 말고는 눈에 보이는 반응이 없어(목록 배지 변화는 필터에
+  // 가려 안 보일 수 있음) "됐나?" 싶은 게 당연하다 — 처리 직후 잠깐 토스트를 띄운다.
+  const [toast, setToast] = useState(null);
   const [detailTarget, setDetailTarget] = useState(null); // 상세내역 보는 중인 신청 { type, data }
   const [itemsTarget, setItemsTarget] = useState(null); // 품목편집 중인 견적요청
   const [sendTarget, setSendTarget] = useState(null); // 발송 중인 견적요청
@@ -866,9 +869,12 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
           todos={data.todos ?? []}
           onClose={() => setPayTarget(null)}
           onSubmit={async (input) => {
-            if (payTarget.status === "지급완료") await handleMaterialEdit(payTarget, input);
+            const isEdit = payTarget.status === "지급완료";
+            if (isEdit) await handleMaterialEdit(payTarget, input);
             else await handleMaterialSupplyComplete(payTarget, input);
             setPayTarget(null);
+            setToast(isEdit ? "수정했습니다." : "지급완료 처리했습니다.");
+            setTimeout(() => setToast(null), 1800);
           }}
         />
       )}
@@ -880,9 +886,12 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
           todos={data.todos ?? []}
           onClose={() => setQuoteSupplyTarget(null)}
           onSubmit={async (input) => {
-            if (quoteSupplyTarget.status === "자재지급완료") await handleQuoteEdit(quoteSupplyTarget, input);
+            const isEdit = quoteSupplyTarget.status === "자재지급완료";
+            if (isEdit) await handleQuoteEdit(quoteSupplyTarget, input);
             else await handleQuoteSupplyComplete(quoteSupplyTarget, input);
             setQuoteSupplyTarget(null);
+            setToast(isEdit ? "수정했습니다." : "자재 지급 완료 처리했습니다.");
+            setTimeout(() => setToast(null), 1800);
           }}
         />
       )}
@@ -956,6 +965,12 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
 
       {detailTarget && (
         <RequestDetailModal target={detailTarget} data={data} onClose={() => setDetailTarget(null)} />
+      )}
+
+      {toast && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[80] bg-slate-800/90 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-lg">
+          {toast}
+        </div>
       )}
     </div>
   );
