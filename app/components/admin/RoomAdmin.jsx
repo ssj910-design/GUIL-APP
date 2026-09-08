@@ -10,7 +10,7 @@ import { Image as ImageIcon, Pin, ThumbsUp, MessageCircle, Trash2, X, Send, Sear
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
 import { uploadPhoto, downloadPhoto, downloadPhotosAsZip, extOf, isVideoUrl } from "@/lib/photos";
-import { Modal, inputCls, AdminAuthContext, useBackdropClose } from "@/app/components/admin/adminShared";
+import { Modal, inputCls, AdminAuthContext, useBackdropClose, useMainScrollLock } from "@/app/components/admin/adminShared";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { profileIdByName } from "@/lib/utils";
 import { PhotoLightboxPane } from "@/app/components/ui";
@@ -113,6 +113,7 @@ function PhotoGrid({ urls, onOpen, compact }) {
 function PhotoViewerOverlay({ urls, index, onIndexChange, onClose }) {
   const { containerRef, idx, showPrev, showNext, trackStyle, zoom, pan, isGesturing, handlers } =
     usePhotoLightboxGestures(urls.length, index, onIndexChange);
+  useMainScrollLock();
 
   async function downloadOne() {
     try {

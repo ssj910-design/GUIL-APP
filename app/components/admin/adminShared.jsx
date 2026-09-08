@@ -263,19 +263,27 @@ export function useBackdropClose(onClose) {
   };
 }
 
-// PC용 중앙 모달 (관리자 콘솔 최초의 상세보기 팝업 패턴 — 모바일 Sheet와 별개).
-export function Modal({ title, onClose, children, wide }) {
-  const widthCls = wide === "2xl" ? "max-w-[88rem]" : wide === "xl" ? "max-w-5xl" : wide ? "max-w-3xl" : "max-w-lg";
-  // 모달은 <main>(overflow-y-auto) 위에 fixed로 뜰 뿐 DOM상 그 자식이라, 모달 위에서 휠을
-  // 굴리면 자체 스크롤 영역 경계에서 뒤 배경(main)까지 같이 스크롤됐다 — 열려있는 동안
-  // main 스크롤을 잠근다. 이전 값을 저장해뒀다 복원하므로 모달이 겹쳐 열려도 안전하다.
+// 오버레이(모달·라이트박스·전체화면 뷰어)가 열려있는 동안 뒤 배경(<main>) 스크롤을 잠근다 —
+// 오버레이는 <main>(overflow-y-auto) 안에 fixed로 뜰 뿐 DOM상 그 자식이라, 안 잠그면 오버레이
+// 스크롤 경계에서 휠을 계속 굴렸을 때 뒤 배경까지 스크롤 체이닝된다. 이전 값을 저장해뒀다
+// 복원하므로 오버레이가 겹쳐 열려도 안전하다. 여는 컴포넌트마다 이 훅을 호출해서 쓴다.
+// 오버레이가 항상 마운트돼있고 열림 여부만 상태로 갈리는 경우(예: 부모 컴포넌트 안의 조건부
+// 모달)엔 active=false를 넘기면 잠그지 않는다 — 훅 규칙상 호출 자체는 무조건 해야 하므로.
+export function useMainScrollLock(active = true) {
   useEffect(() => {
+    if (!active) return;
     const scroller = document.querySelector("main");
     if (!scroller) return;
     const prevOverflow = scroller.style.overflow;
     scroller.style.overflow = "hidden";
     return () => { scroller.style.overflow = prevOverflow; };
-  }, []);
+  }, [active]);
+}
+
+// PC용 중앙 모달 (관리자 콘솔 최초의 상세보기 팝업 패턴 — 모바일 Sheet와 별개).
+export function Modal({ title, onClose, children, wide }) {
+  const widthCls = wide === "2xl" ? "max-w-[88rem]" : wide === "xl" ? "max-w-5xl" : wide ? "max-w-3xl" : "max-w-lg";
+  useMainScrollLock();
   return (
     <div className="fixed inset-0 lg:left-56 z-40 flex items-center justify-center bg-black/40 p-6" {...useBackdropClose(onClose)}>
       <div
@@ -726,6 +734,7 @@ function PhotoLightbox({ urls, index, onIndexChange, onClose, onDelete }) {
     usePhotoLightboxGestures(urls.length, index, onIndexChange);
   const prev = () => onIndexChange((index - 1 + urls.length) % urls.length);
   const next = () => onIndexChange((index + 1) % urls.length);
+  useMainScrollLock();
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   // 다운로드는 앱에서 안드로이드 다운로드 매니저로 넘기고 나면 끝 — 눌러도 화면이 그대로라
   // "됐나?" 싶은 게 당연하다. 카톡처럼 하단에 진행 토스트를 잠깐 띄운다.

@@ -29,7 +29,7 @@ import ErrorCodesAdmin from "@/app/components/admin/ErrorCodesAdmin";
 import { ConfirmHost } from "@/app/components/ConfirmHost";
 import { LoginScreen } from "@/app/components/LoginScreen";
 import { PasswordChangeForm } from "@/app/components/PasswordChangeForm";
-import { AdminAuthContext, useBackdropClose } from "@/app/components/admin/adminShared";
+import { AdminAuthContext, useBackdropClose, useMainScrollLock } from "@/app/components/admin/adminShared";
 import { BrandSplash } from "@/app/components/ui";
 import { trackEvent } from "@/lib/uiEvents";
 import { pushSupported, pushPermission, enablePush, disablePush, isSubscribed } from "@/lib/push";
@@ -103,6 +103,7 @@ export default function AdminApp() {
   const [pwOpen, setPwOpen] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+  useMainScrollLock(pwOpen); // 비밀번호 변경 모달이 열려있는 동안 뒤 배경 스크롤 잠금
 
   // 화면 사용 로그 — 콘솔 메뉴 이동도 같은 기준으로 남긴다(개인 아닌 역할만, lib/uiEvents.js).
   useEffect(() => { trackEvent(`admin:${menu}`, { role: "admin" }); }, [menu]);
