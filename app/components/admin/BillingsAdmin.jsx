@@ -5,7 +5,7 @@
 import { useState, useContext } from "react";
 import { Search, Plus, X, Pencil } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { shortDate, formatUnitLabel, quoteGrandTotal, freeReasonOf, freeReasonLabel, isCostPending, quoteMaterialItems, receivedTotalOf, receivedStatusOf, inferQuoteUnitId } from "@/lib/utils";
+import { shortDate, formatUnitLabel, quoteGrandTotal, freeReasonOf, freeReasonLabel, isCostPending, quoteMaterialItems, receivedTotalOf, receivedStatusOf, billingDueAmount, inferQuoteUnitId } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { mapBilling } from "@/lib/mappers";
 import { BRAND } from "@/lib/company";
@@ -887,7 +887,7 @@ function ReceivedPaymentsCell({ b, onSaveDate, onSavePayments }) {
       ))}
       {status && (
         <p className={`text-[10px] font-bold ${statusTone}`}>
-          {status} ({receivedTotalOf(b).toLocaleString()}/{(Number(b.cost) || 0).toLocaleString()}원)
+          {status} ({receivedTotalOf(b).toLocaleString()}/{billingDueAmount(b).toLocaleString()}원{b.billingMethod === "무자료" ? "" : " VAT포함"})
         </p>
       )}
       <button type="button" onClick={addRow} className="text-[11px] font-bold text-blue-600">
@@ -922,8 +922,9 @@ export default function BillingsAdmin({ data, setData }) {
     personOf(data, b.engineerId, b.engineer).toLowerCase().includes(q) ||
     (b.vendorName ?? "").toLowerCase().includes(q)
   );
-  // 무상 처리된 건은 합계에서 제외한다.
-  const total = rows.reduce((sum, b) => sum + (b.isFree ? 0 : Number(b.cost) || 0), 0);
+  // 무상 처리된 건은 합계에서 제외한다. 금액은 실제로 청구되는 값(부가세 포함, 무자료만 예외)
+  // 으로 더한다 — billings.cost 자체는 VAT 별도다.
+  const total = rows.reduce((sum, b) => sum + (b.isFree ? 0 : billingDueAmount(b)), 0);
 
   // localPatch는 화면(camelCase) 반영용 — dbPatch(snake_case)와 내용은 같되 키 이름만 다르다.
   // 호출부(BillingDetailModal)가 필드를 늘릴 때마다 여기서 매핑을 다시 안 써도 되게 둘 다 받는다.
@@ -1074,7 +1075,7 @@ export default function BillingsAdmin({ data, setData }) {
       <div className="flex items-end justify-between mb-4">
         <h1 className="text-xl font-extrabold">부품교체·공사 내역</h1>
         <p className="text-sm text-slate-500">
-          {q && `검색결과 ${rows.length}건 / `}총 {billings.length}건 · <span className="font-extrabold text-slate-900">{total.toLocaleString()}원</span>
+          {q && `검색결과 ${rows.length}건 / `}총 {billings.length}건 · <span className="font-extrabold text-slate-900">{total.toLocaleString()}원</span> <span className="text-xs text-slate-400">(VAT포함·무자료 제외)</span>
         </p>
       </div>
       <div className="flex items-center justify-between mb-3 gap-3">
