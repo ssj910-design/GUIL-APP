@@ -1,5 +1,6 @@
 import { useState, useContext, useRef, useEffect } from "react";
-import { X, Camera, Search, Image as ImageIcon } from "lucide-react";
+import { X, Camera as CameraIcon, Search, Image as ImageIcon } from "lucide-react";
+import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { uploadPhoto, dataUrlToBlob, isVideoUrl } from "@/lib/photos";
 import { inputCls, Sheet, PhotoLightbox } from "@/app/components/ui";
 import { SitesContext } from "@/app/components/context";
@@ -56,16 +57,13 @@ export function SiteSearchSelect({ value, onChange, placeholder = "현장명을 
 export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = true, uploadFolder, onUploaded, compactHint = false, onUploadingChange }) {
   // iOS Safari는 accept="image/*" 입력칸에 multiple까지 붙으면(여러 장 한꺼번에 선택) 카메라
   // 촬영 옵션을 아예 빼고 곧장 사진 라이브러리 선택 화면으로 건너뛴다 — "촬영하면서 동시에
-  // 여러 장 선택"은 말이 안 되기 때문. 그래서 카메라 입력칸(한 장, capture)과 사진첩 입력칸
-  // (여러 장, multiple)을 따로 두고, "추가" 버튼을 누르면 그중 뭘 쓸지 먼저 고르게 한다.
-  const cameraInputRef = useRef(null);
+  // 여러 장 선택"은 말이 안 되기 때문. 그래서 카메라(Capacitor Camera 플러그인, 한 장)와
+  // 사진첩 입력칸(여러 장, multiple)을 따로 두고, "추가" 버튼을 누르면 그중 뭘 쓸지 먼저 고르게 한다.
   const galleryInputRef = useRef(null);
   const [choosing, setChoosing] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  async function handleFiles(e) {
-    const files = [...(e.target.files ?? [])];
-    e.target.value = "";
+  async function uploadFiles(files) {
     if (files.length === 0) return;
     setUploading(true);
     onUploadingChange?.(true);
@@ -81,6 +79,30 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
     }
     setUploading(false);
     onUploadingChange?.(false);
+  }
+
+  async function handleFiles(e) {
+    const files = [...(e.target.files ?? [])];
+    e.target.value = "";
+    uploadFiles(files);
+  }
+
+  // 일반 <input capture> 방식은 카메라 앱이 뜨는 동안 우리 앱이 백그라운드로 밀려나는데,
+  // 안드로이드가 메모리 부족 시 그 사이 프로세스를 죽여버려 돌아왔을 때 앱이 꺼진 것처럼
+  // 보이는 문제가 있었다(실제 보고됨) — Capacitor Camera 플러그인은 이 경우를 견디도록
+  // 설계돼 있어 그걸로 대체한다. 웹(비앱 브라우저)에서도 같은 API가 파일 입력으로
+  // 자동 대체돼 그대로 동작한다.
+  async function takePhoto() {
+    try {
+      const photo = await Camera.getPhoto({ quality: 90, resultType: CameraResultType.Uri, source: CameraSource.Camera });
+      const res = await fetch(photo.webPath);
+      const blob = await res.blob();
+      const ext = photo.format || "jpeg";
+      const file = new File([blob], `camera-${Date.now()}.${ext}`, { type: blob.type || `image/${ext}` });
+      await uploadFiles([file]);
+    } catch {
+      // 촬영 취소도 여기로 들어온다 — 조용히 무시(기존 <input capture> 취소 시와 동일한 동작).
+    }
   }
 
   return (
@@ -102,7 +124,6 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
         ))}
         {uploadFolder ? (
           <>
-            <input ref={cameraInputRef} type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={handleFiles} />
             <input ref={galleryInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleFiles} />
             <button
               type="button"
@@ -110,7 +131,7 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
               disabled={uploading}
               className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 active:bg-slate-50 disabled:opacity-50"
             >
-              <Camera size={16} />
+              <CameraIcon size={16} />
               <span className="text-[9px] font-semibold mt-0.5">{uploading ? "업로드 중" : "추가"}</span>
             </button>
           </>
@@ -120,7 +141,7 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
             onClick={onAdd}
             className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 active:bg-slate-50"
           >
-            <Camera size={16} />
+            <CameraIcon size={16} />
             <span className="text-[9px] font-semibold mt-0.5">추가</span>
           </button>
         )}
@@ -135,10 +156,10 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
           <div className="space-y-2">
             <button
               type="button"
-              onClick={() => { setChoosing(false); cameraInputRef.current?.click(); }}
+              onClick={() => { setChoosing(false); takePhoto(); }}
               className="w-full flex items-center gap-2.5 text-sm font-bold text-slate-800 bg-slate-100 rounded-xl px-4 py-3.5 active:bg-slate-200"
             >
-              <Camera size={18} /> 카메라로 촬영
+              <CameraIcon size={18} /> 카메라로 촬영
             </button>
             <button
               type="button"
@@ -204,7 +225,7 @@ export function SinglePhotoUpload({ label, url, uploadFolder, onUploaded, onRemo
         disabled={uploading}
         className="w-full border-2 border-dashed border-slate-300 rounded-xl py-6 flex flex-col items-center gap-1.5 text-slate-500 active:bg-slate-50 disabled:opacity-50"
       >
-        <Camera size={22} />
+        <CameraIcon size={22} />
         <span className="text-xs font-semibold">{uploading ? "업로드 중..." : label}</span>
       </button>
     </>
@@ -240,7 +261,7 @@ export function SupplyPhotoButton({ label, uploadFolder, onUploaded, spacingClas
         disabled={uploading}
         className={`w-full ${spacingClassName} border-2 border-dashed border-slate-300 rounded-lg py-3 flex flex-col items-center gap-1 text-slate-500 active:bg-slate-50 disabled:opacity-50`}
       >
-        <Camera size={18} />
+        <CameraIcon size={18} />
         <span className="text-[11px] font-semibold">{uploading ? "업로드 중..." : label}</span>
       </button>
     </>

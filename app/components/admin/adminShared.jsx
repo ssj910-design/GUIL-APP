@@ -3,7 +3,8 @@
 // 관리자 콘솔 공용 헬퍼 — 표기(호기·담당자)는 v2 FK 우선, 옛 라벨 fallback.
 import { useState, useRef, createContext } from "react";
 import { createPortal } from "react-dom";
-import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil, Paperclip, Camera, Image as ImageIcon, Download, Trash2, Search } from "lucide-react";
+import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil, Paperclip, Camera as CameraIcon, Image as ImageIcon, Download, Trash2, Search } from "lucide-react";
+import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
 import { shortDate, parseShortDate, autoFormatShortDate, formatUnitLabel, sortEngineersByDistance, busyStatusOf, handleFormattedInputChange } from "@/lib/utils";
 import { confirmAsync } from "@/app/components/ConfirmHost";
@@ -289,7 +290,6 @@ export function Modal({ title, onClose, children, wide }) {
 // 여러 장이면 좌우로 넘기고, 다운로드·삭제·추가까지 한 곳에서 한다 (현장정보 계약서와 인사관리 첨부 공통 사용).
 export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파일 첨부 (사진/PDF)", height = "h-[60vh]", onUpload, onSave, onUploadOne, chooser = true, layout = "carousel" }) {
   const fileInputRef = useRef(null);
-  const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -370,11 +370,26 @@ export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파
     else fileInputRef.current?.click();
   }
 
+  // 일반 <input capture> 방식은 카메라 앱을 여는 동안 우리 앱이 백그라운드로 밀려나는데,
+  // 안드로이드가 메모리 부족 시 그 사이 프로세스를 죽여버려 돌아왔을 때 앱이 꺼진 것처럼
+  // 보이는 문제가 있었다(실제 보고됨) — Capacitor Camera 플러그인은 이 경우를 견디도록
+  // 설계돼 있어 그걸로 대체한다. 웹(비앱 브라우저)에서도 같은 API가 파일 입력으로
+  // 자동 대체돼 그대로 동작한다.
+  async function takePhoto() {
+    try {
+      const photo = await Camera.getPhoto({ quality: 90, resultType: CameraResultType.Uri, source: CameraSource.Camera });
+      const res = await fetch(photo.webPath);
+      const blob = await res.blob();
+      const ext = photo.format || "jpeg";
+      const file = new File([blob], `camera-${Date.now()}.${ext}`, { type: blob.type || `image/${ext}` });
+      await uploadFiles([file]);
+    } catch {
+      // 촬영 취소도 여기로 들어온다 — 조용히 무시(기존 <input capture> 취소 시와 동일한 동작).
+    }
+  }
+
   const pickerInputs = photoOnly ? (
-    <>
-      {chooser && <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />}
-      <input ref={galleryInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFile} />
-    </>
+    <input ref={galleryInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFile} />
   ) : (
     <input ref={fileInputRef} type="file" accept={accept} className="hidden" onChange={handleFile} />
   );
@@ -384,10 +399,10 @@ export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파
       <div className="space-y-2">
         <button
           type="button"
-          onClick={() => { setChoosing(false); cameraInputRef.current?.click(); }}
+          onClick={() => { setChoosing(false); takePhoto(); }}
           className="w-full flex items-center gap-2.5 text-sm font-bold text-slate-800 bg-slate-100 rounded-xl px-4 py-3.5 active:bg-slate-200"
         >
-          <Camera size={18} /> 카메라로 촬영
+          <CameraIcon size={18} /> 카메라로 촬영
         </button>
         <button
           type="button"
