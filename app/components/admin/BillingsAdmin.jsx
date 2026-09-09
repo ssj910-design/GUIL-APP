@@ -3,7 +3,7 @@
 // 부품교체·공사 내역 — 청구 건 조회 + 합계. 각 건 클릭 시 상세보기(사진 포함)에서
 // 내용(관리자 메모) 추가, 담당자 변경, 기한(교체일자) 수정이 가능하다.
 import { useState, useContext } from "react";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, X } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { shortDate, formatUnitLabel, quoteGrandTotal, freeReasonOf, freeReasonLabel, isCostPending, quoteMaterialItems } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
@@ -753,6 +753,69 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
   );
 }
 
+// 입금일 칸 — 보통은 한 번에 다 받아 날짜 하나면 되지만, 분할납부는 "+"를 눌러
+// (날짜, 금액) 행을 여러 개 쌓을 수 있게 전환한다. 합계를 청구금액과 맞춰보는 검증은
+// 아직 없다 — 나중에 필요해지면 추가(그때도 이 컬럼이 없던 옛 청구는 입금일 유무로만
+// 완납/미납을 판단할 수 있고, 분할 여부까진 소급 적용이 안 된다).
+function ReceivedPaymentsCell({ b, onSaveDate, onSavePayments }) {
+  const initialRows = b.receivedPayments?.length ? b.receivedPayments : [{ date: b.receivedDate ?? "", amount: "" }];
+  const [splitMode, setSplitMode] = useState(!!b.receivedPayments?.length);
+  const [rows, setRows] = useState(initialRows);
+
+  function commit(next) {
+    setRows(next);
+    onSavePayments(next.filter((r) => r.date || r.amount));
+  }
+  function removeRow(i) {
+    const next = rows.filter((_, idx) => idx !== i);
+    if (next.length === 0) {
+      setSplitMode(false);
+      onSavePayments(null);
+      return;
+    }
+    commit(next);
+  }
+
+  if (!splitMode) {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <EditableDate key={b.receivedDate ?? "unset"} value={b.receivedDate} onCommit={onSaveDate} />
+        <button
+          type="button"
+          onClick={() => { setRows([{ date: b.receivedDate ?? "", amount: "" }]); setSplitMode(true); }}
+          className="text-slate-300 hover:text-blue-600 shrink-0"
+          title="분할납부로 나눠 입력"
+        >
+          <Plus size={12} />
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <div className="space-y-1 min-w-[11rem]">
+      {rows.map((r, i) => (
+        <div key={i} className="flex items-center gap-1">
+          <DateTextInput className="min-w-24 text-xs" value={r.date} onChange={(v) => commit(rows.map((row, idx) => (idx === i ? { ...row, date: v } : row)))} />
+          <input
+            type="number"
+            placeholder="금액"
+            className={`${inputCls} text-xs px-1.5 py-1 w-20`}
+            value={r.amount ?? ""}
+            onChange={(e) => commit(rows.map((row, idx) => (idx === i ? { ...row, amount: e.target.value } : row)))}
+          />
+          <button type="button" onClick={() => removeRow(i)} className="text-slate-300 hover:text-red-500 shrink-0" aria-label="이 입금 삭제">
+            <X size={12} />
+          </button>
+        </div>
+      ))}
+      <button type="button" onClick={() => setRows((prev) => [...prev, { date: "", amount: "" }])} className="text-[11px] font-bold text-blue-600">
+        + 입금 추가
+      </button>
+    </div>
+  );
+}
+
 export default function BillingsAdmin({ data, setData }) {
   const { billings } = data;
   const [search, setSearch] = useState("");
@@ -767,6 +830,8 @@ export default function BillingsAdmin({ data, setData }) {
   const certUrlReady = billings.some((b) => b.certificatePdfUrl !== undefined);
   // billings.received_date 컬럼 존재 여부 — 마이그레이션 136 실행 전엔 컬럼이 없다.
   const receivedDateReady = billings.some((b) => b.receivedDate !== undefined);
+  // billings.received_payments 컬럼 존재 여부 — 마이그레이션 138 실행 전엔 컬럼이 없다.
+  const receivedPaymentsReady = billings.some((b) => b.receivedPayments !== undefined);
 
   const q = search.trim().toLowerCase();
   const rows = billings.filter((b) =>
@@ -802,6 +867,14 @@ export default function BillingsAdmin({ data, setData }) {
     const { error } = await supabase.from("billings").update({ [column]: value || null }).eq("id", b.id);
     if (error) { alert("저장 실패: " + error.message); return; }
     setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, [key]: value || null } : x)) }));
+  }
+
+  // 분할납부 목록 저장 — 빈 배열/null이면 컬럼도 비워서 다음에 열 때 단일 날짜 입력으로 돌아간다.
+  async function updateReceivedPayments(b, payments) {
+    const next = payments?.length ? payments : null;
+    const { error } = await supabase.from("billings").update({ received_payments: next }).eq("id", b.id);
+    if (error) { alert("저장 실패: " + error.message); return; }
+    setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, receivedPayments: next } : x)) }));
   }
 
   // 무상 처리 — 청구 상세내역에서만 지원(모바일 앱엔 없음). 금액은 그대로 두고 표시·합계에서만
@@ -990,7 +1063,14 @@ export default function BillingsAdmin({ data, setData }) {
                     <EditableDate key={b.billingDate ?? "unset"} value={b.billingDate} onCommit={(v) => updateManualField(b, "billing_date", "billingDate", v)} />
                   </td>
                   <td rowSpan={span} className="px-3 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
-                    {receivedDateReady ? (
+                    {receivedPaymentsReady ? (
+                      <ReceivedPaymentsCell
+                        key={`${b.id}:${b.receivedPayments?.length ?? 0}`}
+                        b={b}
+                        onSaveDate={(v) => updateManualField(b, "received_date", "receivedDate", v)}
+                        onSavePayments={(payments) => updateReceivedPayments(b, payments)}
+                      />
+                    ) : receivedDateReady ? (
                       <EditableDate key={b.receivedDate ?? "unset"} value={b.receivedDate} onCommit={(v) => updateManualField(b, "received_date", "receivedDate", v)} />
                     ) : "-"}
                   </td>
