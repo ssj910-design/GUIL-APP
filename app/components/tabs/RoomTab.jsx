@@ -192,7 +192,7 @@ function CommentRow({ c, onLike, liked, likeCount, canManage, editingId, editTex
         {(c.author || "?")[0]}
       </span>
       <div className="flex-1 min-w-0">
-        <p className="text-xs text-slate-700 leading-relaxed">
+        <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">
           <span className="font-bold text-slate-800 mr-1.5">{c.author}</span>
           {renderText(c.text)}
         </p>
