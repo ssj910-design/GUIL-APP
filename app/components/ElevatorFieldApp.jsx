@@ -42,6 +42,14 @@ import { RoomTab } from "@/app/components/tabs/RoomTab";
 // "순서가 바뀌었다"는 지적을 받고 되돌렸다. **데이터가 가리키는 최적 배치보다 몸에 익은 자리가
 // 우선**이라는 판단(할일관리·청구가 뒤에 있어도 기사들은 이미 그 위치를 외우고 있다).
 // 챗봇은 재고관리 우측에 끼워 넣었다 — 표시는 다른 탭과 똑같이 간다.
+// 알림(푸시·종)에서 특정 화면·모달로 바로 보내는 URL 파라미터들 — 존재 여부 판정과
+// 처리 후 URL 정리에서 같은 목록을 쓴다.
+const OPEN_PARAM_KEYS = [
+  "openMaterial", "openQuote", "openPost", "openTodo", "openFailure", "openRestock",
+  "openDuty", "openLeave", "openContract", "openCheckup", "openInspectionTab",
+  "openAttendance", "openAttendanceReport",
+];
+
 const TABS = [
   { id: "home", label: "홈", icon: Home },
   { id: "sites", label: "현장정보", icon: Building2 },
@@ -324,8 +332,7 @@ export default function App() {
     const openInspectionTab = params.get("openInspectionTab");
     const openAttendance = params.get("openAttendance");
     const openAttendanceReport = params.get("openAttendanceReport");
-    if (!openMaterial && !openQuote && !openPost && !openTodo && !openFailure && !openRestock
-      && !openDuty && !openLeave && !openContract && !openCheckup && !openInspectionTab && !openAttendance && !openAttendanceReport) return false;
+    if (!OPEN_PARAM_KEYS.some((k) => params.get(k))) return false;
     if (openMaterial || openQuote) setTab("admin");
     if (openMaterial) setMaterialFocusId(openMaterial);
     if (openQuote) setQuoteFocusId(openQuote);
@@ -343,27 +350,29 @@ export default function App() {
     return true;
   }
 
+  // 알림으로 들어온 이동은 그 건이 지금 화면 데이터에 없을 수 있다 — 앱을 켜둔 채로 알림을
+  // 받으면 그 건은 앱이 데이터를 읽은 뒤에 생긴 것이라 목록에 없고, 그래서 예전엔 모달이 안 뜨고
+  // 새로고침을 해야 나왔다. 데이터를 먼저 다시 받고(await) 그 다음에 화면을 연다.
+  async function openFromNotification(params) {
+    if (!OPEN_PARAM_KEYS.some((k) => params.get(k))) return false;
+    await loadData();
+    return applyOpenParams(params);
+  }
+
   // 웹(PWA) — 주소창 쿼리로 들어온 경우(sw.js의 notificationclick이 이 URL로 이동시킴).
   // 앱이 이미 떠 있는 상태에서 알림을 누르면 sw.js가 기존 창을 그대로 재사용(navigate)하므로,
   // 마운트 시점 한 번만 검사해선 못 잡는다 — 창이 다시 포커스/보임 상태가 될 때마다 다시 확인한다.
   useEffect(() => {
     if (!profile) return;
-    function checkOpenParams() {
+    let running = false; // 포커스 이벤트가 연달아 와도 재조회는 한 번만
+    async function checkOpenParams() {
+      if (running) return;
       const url = new URL(window.location.href);
-      if (applyOpenParams(url.searchParams)) {
-        url.searchParams.delete("openMaterial");
-        url.searchParams.delete("openQuote");
-        url.searchParams.delete("openPost");
-        url.searchParams.delete("openTodo");
-        url.searchParams.delete("openFailure");
-        url.searchParams.delete("openRestock");
-        url.searchParams.delete("openDuty");
-        url.searchParams.delete("openLeave");
-        url.searchParams.delete("openContract");
-        url.searchParams.delete("openCheckup");
-        url.searchParams.delete("openInspectionTab");
-        url.searchParams.delete("openAttendance");
-        url.searchParams.delete("openAttendanceReport");
+      running = true;
+      const opened = await openFromNotification(url.searchParams);
+      running = false;
+      if (opened) {
+        OPEN_PARAM_KEYS.forEach((k) => url.searchParams.delete(k));
         window.history.replaceState({}, "", url);
       }
     }
@@ -380,7 +389,7 @@ export default function App() {
   useEffect(() => {
     return onPushNotificationOpened((urlStr) => {
       try {
-        applyOpenParams(new URL(urlStr, window.location.origin).searchParams);
+        openFromNotification(new URL(urlStr, window.location.origin).searchParams);
       } catch {}
     });
   }, []);
@@ -403,7 +412,7 @@ export default function App() {
 
   function openPushBanner() {
     if (pushBanner?.url) {
-      try { applyOpenParams(new URL(pushBanner.url, window.location.origin).searchParams); } catch {}
+      try { openFromNotification(new URL(pushBanner.url, window.location.origin).searchParams); } catch {}
     }
     setPushBanner(null);
   }
@@ -894,13 +903,35 @@ export default function App() {
     loadData();
   }, [session, skipLogin, loadData]);
 
+  // 고장 감지 — 15초 폴링. 고장은 접수·배정·출동이 몇 분 안에 이어지는 일이라, 열어둔 화면이
+  // 새로고침 전까지 그대로 멈춰 있으면 안 된다. 화면이 보일 때만 돌리고(배터리·데이터), 앱으로
+  // 돌아오는 순간 한 번 즉시 받는다. 전체가 아니라 최근 100건만 받아 기존 목록에 덮어쓴다 —
+  // 그 뒤로 바뀌는 건 사실상 최근 건들이고, 옛 이력까지 15초마다 다시 받을 이유가 없다.
+  useEffect(() => {
+    if (!skipLogin && !session) return;
+    let timer = null;
+    async function tick() {
+      const { data } = await supabase.from("failures").select("*").order("created_at", { ascending: false }).limit(100);
+      if (!data) return;
+      const recent = data.map(mapFailure);
+      const ids = new Set(recent.map((f) => f.id));
+      setFailures((prev) => [...recent, ...prev.filter((f) => !ids.has(f.id))]);
+    }
+    function start() { if (!timer) { tick(); timer = setInterval(tick, 15000); } }
+    function stop() { if (timer) { clearInterval(timer); timer = null; } }
+    function onVisibility() { if (document.hidden) stop(); else start(); }
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => { stop(); document.removeEventListener("visibilitychange", onVisibility); };
+  }, [session, skipLogin]);
+
   // 새 글·근무 교환 감지 — 30초 폴링 (작은 팀이라 실시간 구독 대신 단순하게)
   // 교환은 상대가 수락하면 근무표 자체가 바뀌므로 duty_schedules도 같이 받는다.
   // 연차도 같이 받는다 — 안 받으면 앱을 오래 켜둔 세션에서 방금 승인된 연차가 고장 배정
   // 화면(todayLeaves 기준 배정 제외)에 계속 반영이 안 된다.
   useEffect(() => {
     if (!skipLogin && !session) return;
-    const t = setInterval(async () => {
+    const refresh = async () => {
       const [feedRes, swapRes, dutyRes, leaveRes] = await Promise.all([
         supabase.from("feed_posts").select("*").order("created_at", { ascending: true }),
         supabase.from("duty_swaps").select("*"),
@@ -911,8 +942,15 @@ export default function App() {
       if (swapRes.data) setDutySwaps(swapRes.data.map(mapDutySwap));
       if (dutyRes.data) setDutySchedules(dutyRes.data.map(mapDutySchedule));
       if (leaveRes.data) setTodayLeaves(leaveRes.data.filter((l) => (l.status ?? "승인") === "승인"));
-    }, 30000);
-    return () => clearInterval(t);
+    };
+    let timer = null;
+    function start() { if (!timer) timer = setInterval(refresh, 30000); }
+    function stop() { if (timer) { clearInterval(timer); timer = null; } }
+    // 앱으로 돌아오면 바로 한 번 받고 다시 돌린다 — 백그라운드에선 요청을 멈춘다.
+    function onVisibility() { if (document.hidden) stop(); else { refresh(); start(); } }
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => { stop(); document.removeEventListener("visibilitychange", onVisibility); };
   }, [session, skipLogin]);
 
   // 게시판을 보는 순간(보는 동안 새 글이 와도) 읽음 처리
