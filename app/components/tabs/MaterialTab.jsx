@@ -995,7 +995,18 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
                     <UnitPickGrid
                       site={sites.find((s) => s.id === form.siteId)}
                       selected={form.units}
-                      onToggle={(u) => setForm({ ...form, units: form.units.includes(u) ? form.units.filter((x) => x !== u) : [...form.units, u] })}
+                      onToggle={(u) => setForm((f) => {
+                        const selecting = !f.units.includes(u);
+                        return {
+                          ...f,
+                          units: selecting ? [...f.units, u] : f.units.filter((x) => x !== u),
+                          // 부품 입력칸을 처음 여기서 딱 한 번 만들어둔다 — 렌더마다 emptyPartRow()를
+                          // 새로 만들면(옛 코드의 partsByUnit[u] ?? [emptyPartRow()]) 매번 새 id가
+                          // 나와 리액트가 입력칸을 다른 요소로 보고 다시 그린다 — 포커스가 날아가서
+                          // 탭하자마자 입력이 안 되던 원인.
+                          partsByUnit: selecting && !f.partsByUnit[u] ? { ...f.partsByUnit, [u]: [emptyPartRow()] } : f.partsByUnit,
+                        };
+                      })}
                     />
                   )}
                   <Field label="긴급도">
@@ -1255,7 +1266,18 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
                   <UnitPickGrid
                     site={sites.find((s) => s.id === quoteForm.siteId)}
                     selected={quoteForm.units}
-                    onToggle={(u) => setQuoteForm({ ...quoteForm, units: quoteForm.units.includes(u) ? quoteForm.units.filter((x) => x !== u) : [...quoteForm.units, u] })}
+                    onToggle={(u) => setQuoteForm((f) => {
+                      const selecting = !f.units.includes(u);
+                      return {
+                        ...f,
+                        units: selecting ? [...f.units, u] : f.units.filter((x) => x !== u),
+                        // 부품 입력칸을 처음 여기서 딱 한 번 만들어둔다 — 렌더마다 emptyPartRow()를
+                        // 새로 만들면(옛 코드의 partsByUnit[u] ?? [emptyPartRow()]) 매번 새 id가
+                        // 나와 리액트가 입력칸을 다른 요소로 보고 다시 그린다 — 포커스가 날아가서
+                        // 탭하자마자 입력이 안 되던 원인.
+                        partsByUnit: selecting && !f.partsByUnit[u] ? { ...f.partsByUnit, [u]: [emptyPartRow()] } : f.partsByUnit,
+                      };
+                    })}
                     merged
                   />
                 )}
