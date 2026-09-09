@@ -5,7 +5,7 @@
 import { useState, useContext } from "react";
 import { Search, Plus, X, Pencil } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { shortDate, formatUnitLabel, quoteGrandTotal, freeReasonOf, freeReasonLabel, isCostPending, quoteMaterialItems, receivedTotalOf, receivedStatusOf } from "@/lib/utils";
+import { shortDate, formatUnitLabel, quoteGrandTotal, freeReasonOf, freeReasonLabel, isCostPending, quoteMaterialItems, receivedTotalOf, receivedStatusOf, inferQuoteUnitId } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { mapBilling } from "@/lib/mappers";
 import { BRAND } from "@/lib/company";
@@ -279,9 +279,14 @@ function NewBillingModal({ data, onClose, onCreate }) {
       ? quoteGrandTotal(quote.quoteItems, quote.transportCost, quote.safetyCost, quote.profit, quote.discountAmount)
       : null;
     const parts = quoteItems?.length > 1 ? quoteItems : t.billingPartRows?.length > 1 ? t.billingPartRows : null;
+    const siteId = unit?.siteId ?? sites.find((s) => s.name === t.siteName)?.id ?? "";
+    // 지급건 자체에 호기가 없으면(관리자가 호기 선택 없이 발행한 견적 등 — 이젠 지급완료
+    // 처리 시점에 채워지도록 고쳤지만, 그 전에 이미 만들어진 옛 할일에 대한 안전망으로 남겨둔다)
+    // 견적 품목의 호기 라벨로 추정한다.
+    const inferredUnitId = t.unitId || inferQuoteUnitId(units, siteId, quote) || "";
     setForm({
-      siteId: unit?.siteId ?? sites.find((s) => s.name === t.siteName)?.id ?? "",
-      unitId: t.unitId ?? "",
+      siteId,
+      unitId: inferredUnitId,
       engineerId: t.assigneeId ?? "",
       replaceDate: TODAY_STR,
       contactPhone: "",

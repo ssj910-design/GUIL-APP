@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
 import { mapQuoteRequest } from "@/lib/mappers";
 import { uploadPhoto } from "@/lib/photos";
-import { unitIdFor, addDays, shortDate, parsePartQty, formatUnitLabel, labelToSeq, quoteUnitLabel } from "@/lib/utils";
+import { unitIdFor, inferQuoteUnitId, addDays, shortDate, parsePartQty, formatUnitLabel, labelToSeq, quoteUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { recordQuoteSupplyStockOut } from "@/lib/inventoryStock";
 import { locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid, DateTextInput, lastSentDate, SentHistory, AdminAuthContext } from "@/app/components/admin/adminShared";
@@ -463,7 +463,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
   }
 
   async function handleQuoteSupplyComplete(quote, { assigneeIds, photoUrls, dueDate, description, isOutsourced, vendorName }) {
-    const unitId = quote.unitId ?? unitIdFor(data.units, quote.siteId, quote.elevatorNo);
+    const unitId = inferQuoteUnitId(data.units, quote.siteId, quote);
     const finalVendorName = isOutsourced ? (vendorName || null) : null;
     const newTodos = assigneeIds.filter(Boolean).map((assigneeId, idx) => {
       const engineer = (data.profiles ?? []).find((p) => p.id === assigneeId);
@@ -569,7 +569,7 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
       if (keepError) { alert("할 일 수정 실패: " + keepError.message); return; }
     }
 
-    const unitId = quote.unitId ?? unitIdFor(data.units, quote.siteId, quote.elevatorNo);
+    const unitId = inferQuoteUnitId(data.units, quote.siteId, quote);
     const newTodos = toAddIds.map((assigneeId) => {
       const engineer = (data.profiles ?? []).find((p) => p.id === assigneeId);
       return {

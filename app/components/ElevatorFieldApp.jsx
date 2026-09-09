@@ -7,7 +7,7 @@ import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken, onSessionExpired } from "@/lib/supabaseClient";
 import { authFetch } from "@/lib/apiFetch";
 import { mapSite, mergeAssignedEngineers, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode, mapUnitPartPhoto, mapInventoryProduct, mapInventoryStockMovement } from "@/lib/mappers";
-import { addDays, profileIdByName, unitIdFor, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent, quoteGrandTotal, quotePartsSummary, quoteUnitLabel } from "@/lib/utils";
+import { addDays, profileIdByName, unitIdFor, inferQuoteUnitId, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent, quoteGrandTotal, quotePartsSummary, quoteUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { recordQuoteSupplyStockOut } from "@/lib/inventoryStock";
 import { DutySwapNotice } from "@/app/components/DutyRoster";
@@ -2011,7 +2011,7 @@ export default function App() {
           ...(todoOutsourcedReady ? { is_outsourced: t.isOutsourced, vendor_name: t.vendorName } : {}),
           ...(todoElevatorNosReady ? { elevator_nos: q.elevatorNos ?? null } : {}),
           ...(v2Ready ? {
-            unit_id: q.unitId ?? unitIdFor(units, q.siteId, q.elevatorNo),
+            unit_id: inferQuoteUnitId(units, q.siteId, q),
             assignee_id: profileIdByName(profilesAll, t.assignee),
           } : {}),
         }))
@@ -2112,7 +2112,7 @@ export default function App() {
           ...(todoOutsourcedReady ? { is_outsourced: t.isOutsourced, vendor_name: t.vendorName } : {}),
           ...(todoElevatorNosReady ? { elevator_nos: t.elevatorNos } : {}),
           ...(v2Ready ? {
-            unit_id: q.unitId ?? unitIdFor(units, q.siteId, q.elevatorNo),
+            unit_id: inferQuoteUnitId(units, q.siteId, q),
             assignee_id: profileIdByName(profilesAll, t.assignee),
           } : {}),
         }))
