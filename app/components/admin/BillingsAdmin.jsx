@@ -5,7 +5,7 @@
 import { useState, useContext } from "react";
 import { Search, Plus, X, Pencil } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { shortDate, formatUnitLabel, quoteGrandTotal, freeReasonOf, freeReasonLabel, isCostPending, quoteMaterialItems } from "@/lib/utils";
+import { shortDate, formatUnitLabel, quoteGrandTotal, freeReasonOf, freeReasonLabel, isCostPending, quoteMaterialItems, receivedTotalOf, receivedStatusOf } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { mapBilling } from "@/lib/mappers";
 import { BRAND } from "@/lib/company";
@@ -866,6 +866,9 @@ function ReceivedPaymentsCell({ b, onSaveDate, onSavePayments }) {
     );
   }
 
+  const status = receivedStatusOf(b);
+  const statusTone = status === "완납" ? "text-emerald-600" : status === "부분입금" ? "text-amber-600" : "text-red-600";
+
   return (
     <div className="space-y-1 min-w-[11rem]">
       {rows.map((r, i) => (
@@ -877,6 +880,11 @@ function ReceivedPaymentsCell({ b, onSaveDate, onSavePayments }) {
           onRemove={() => removeRow(i)}
         />
       ))}
+      {status && (
+        <p className={`text-[10px] font-bold ${statusTone}`}>
+          {status} ({receivedTotalOf(b).toLocaleString()}/{(Number(b.cost) || 0).toLocaleString()}원)
+        </p>
+      )}
       <button type="button" onClick={addRow} className="text-[11px] font-bold text-blue-600">
         + 입금 추가
       </button>
