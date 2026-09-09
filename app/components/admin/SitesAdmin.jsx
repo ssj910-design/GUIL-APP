@@ -224,8 +224,10 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
   const manualInspections = inspections.filter((i) => (i.unitId ? i.unitId === unit.id : i.siteId === site.id));
   // 여러 호기를 한 번에 청구한 건은 unitId가 대표 호기 하나만 가리켜서 unitId만으로 거르면
   // 나머지 호기 페이지에서 그 청구가 통째로 안 보인다 — elevatorNos에 이 호기가 있으면 포함.
+  // elevatorNos는 "1호기"처럼 현장마다 겹치는 텍스트 라벨이라, 현장까지 같이 확인해야 한다
+  // (안 그러면 다른 현장의 같은 이름 호기에도 이 청구가 새어 보인다 — 실제 발생했던 버그).
   const unitBillings = billings.filter((b) =>
-    b.elevatorNos?.length ? b.elevatorNos.includes(unit.unitNo) : b.unitId ? b.unitId === unit.id : b.siteName === site.name
+    b.siteName === site.name && (b.elevatorNos?.length ? b.elevatorNos.includes(unit.unitNo) : b.unitId ? b.unitId === unit.id : true)
   );
 
   // 고장내역/부품교체내역과 동일한 컨벤션: unit_id가 있으면 그 호기만, 없으면(관리자가 호기를
