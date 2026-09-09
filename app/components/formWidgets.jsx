@@ -1,7 +1,7 @@
 import { useState, useContext, useRef, useEffect } from "react";
-import { X, Camera as CameraIcon, Search, Image as ImageIcon } from "lucide-react";
+import { X, Camera as CameraIcon, Search, Image as ImageIcon, Loader2 } from "lucide-react";
 import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
-import { uploadPhoto, dataUrlToBlob, isVideoUrl } from "@/lib/photos";
+import { uploadPhoto, dataUrlToBlob, isVideoUrl, videoPosterUrl } from "@/lib/photos";
 import { inputCls, Sheet, PhotoLightbox } from "@/app/components/ui";
 import { SitesContext } from "@/app/components/context";
 import { activeSites } from "@/lib/utils";
@@ -111,7 +111,9 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
         {photos.map((p, idx) => (
           <div key={idx} className="relative aspect-square rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden">
             {p?.url ? (
-              isVideoUrl(p.url) ? <video src={p.url} className="w-full h-full object-cover" /> : <img src={p.url} alt="" className="w-full h-full object-cover" />
+              isVideoUrl(p.url)
+                ? <video src={p.url} poster={videoPosterUrl(p.url)} preload="metadata" className="w-full h-full object-cover" />
+                : <img src={p.url} alt="" className="w-full h-full object-cover" />
             ) : <ImageIcon size={16} className="text-slate-400" />}
             <button
               type="button"
@@ -122,6 +124,11 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
             </button>
           </div>
         ))}
+        {uploading && (
+          <div className="aspect-square rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center">
+            <Loader2 size={16} className="text-slate-400 animate-spin" />
+          </div>
+        )}
         {uploadFolder ? (
           <>
             <input ref={galleryInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleFiles} />

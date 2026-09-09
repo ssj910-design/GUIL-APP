@@ -4,7 +4,7 @@ import { BRAND } from "@/lib/company";
 import { createPortal } from "react-dom";
 import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Download } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
-import { downloadPhoto, downloadPhotosAsZip, extOf, isVideoUrl } from "@/lib/photos";
+import { downloadPhoto, downloadPhotosAsZip, extOf, isVideoUrl, videoPosterUrl } from "@/lib/photos";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
 import { useBackHandler } from "@/app/hooks/useBackHandler";
 
@@ -155,7 +155,7 @@ export function PhotoLightboxPane({ url, active, zoom, pan, isGesturing }) {
   if (isVideoUrl(url)) {
     return (
       <div className="w-full h-full shrink-0 flex items-center justify-center px-4">
-        <video src={url} controls playsInline className="max-w-full max-h-full object-contain" />
+        <video src={url} poster={videoPosterUrl(url)} controls playsInline preload="metadata" className="max-w-full max-h-full object-contain" />
       </div>
     );
   }
