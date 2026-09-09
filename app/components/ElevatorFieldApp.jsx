@@ -789,7 +789,7 @@ export default function App() {
     setProfile(null);
   }
 
-  // 로그인 토큰(24시간 만료)이 끊긴 채로 쓰다가 저장을 시도하면 "exp claim..." 같은 알 수 없는
+  // 로그인 토큰(7일 만료)이 끊긴 채로 쓰다가 저장을 시도하면 "exp claim..." 같은 알 수 없는
   // alert만 뜨던 문제(docs/HANDOFF.md) — supabaseClient.js가 만료를 감지해 여기로 알려주면
   // 바로 로그아웃시키고 이유를 안내한다. skipLogin(로그인 생략) 모드는 토큰 자체가 없어
   // 해당 없음.

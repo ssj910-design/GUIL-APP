@@ -51,7 +51,9 @@ export async function POST(request) {
       admin_tier: profile.admin_tier ?? null,
     },
     secret,
-    { expiresIn: "24h", noTimestamp: true }
+    // 7일 — 발급한 토큰은 회수할 방법이 없어(자체 로그인, Supabase Auth 아님) 유효기간이
+    // 유일한 안전장치다. 24시간이면 기사들이 매일 다시 로그인해야 해서 늘렸다.
+    { expiresIn: "7d", noTimestamp: true }
   );
 
   return Response.json({
