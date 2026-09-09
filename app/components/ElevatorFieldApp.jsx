@@ -41,7 +41,7 @@ import { RoomTab } from "@/app/components/tabs/RoomTab";
 // 원래 순서를 유지한다 — 기사들이 익숙한 자리다. 2026-08-20에 열람 로그를 근거로 재배치했다가
 // "순서가 바뀌었다"는 지적을 받고 되돌렸다. **데이터가 가리키는 최적 배치보다 몸에 익은 자리가
 // 우선**이라는 판단(할일관리·청구가 뒤에 있어도 기사들은 이미 그 위치를 외우고 있다).
-// 챗봇만 새로 끼워 넣었다 — 재고관리 우측, 성격이 달라 배경색으로 구분한다(accent).
+// 챗봇은 재고관리 우측에 끼워 넣었다 — 표시는 다른 탭과 똑같이 간다.
 const TABS = [
   { id: "home", label: "홈", icon: Home },
   { id: "sites", label: "현장정보", icon: Building2 },
@@ -50,7 +50,7 @@ const TABS = [
   { id: "inspection", label: "검사관리", icon: ShieldCheck },
   { id: "material", label: "자재·견적", icon: Package },
   { id: "inventory", label: "재고관리", icon: Boxes },
-  { id: "lawqa", label: "챗봇", icon: Bot, accent: true },
+  { id: "lawqa", label: "챗봇", icon: Bot },
   { id: "billing", label: "청구", icon: Receipt },
   { id: "todo", label: "할일관리", icon: ListTodo },
   { id: "workcalendar", label: "워크캘린더", icon: CalendarClock },
@@ -2784,13 +2784,13 @@ export default function App() {
                   key={t.id}
                   onClick={() => setTab(t.id)}
                   className={`flex flex-col items-center justify-center gap-1 py-3 px-2 shrink-0 border-r border-slate-200 last:border-r-0 ${
-                    active ? (t.accent ? "bg-indigo-600" : "bg-blue-900") : t.accent ? "bg-indigo-50" : "bg-transparent"
+                    active ? "bg-blue-900" : "bg-transparent"
                   }`}
                   style={{ minWidth: "68px" }}
                 >
-                  <Icon size={19} className={active ? "text-white" : t.accent ? "text-indigo-500" : "text-slate-400"} strokeWidth={active ? 2.75 : 2} />
+                  <Icon size={19} className={active ? "text-white" : "text-slate-400"} strokeWidth={active ? 2.75 : 2} />
                   <span className={`text-[10px] leading-tight text-center font-bold ${
-                    active ? "text-white" : t.accent ? "text-indigo-600" : "text-slate-500"
+                    active ? "text-white" : "text-slate-500"
                   }`}>{t.label}</span>
                 </button>
               );
