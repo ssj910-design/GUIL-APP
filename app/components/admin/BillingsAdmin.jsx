@@ -3,14 +3,14 @@
 // 부품교체·공사 내역 — 청구 건 조회 + 합계. 각 건 클릭 시 상세보기(사진 포함)에서
 // 내용(관리자 메모) 추가, 담당자 변경, 기한(교체일자) 수정이 가능하다.
 import { useState, useContext } from "react";
-import { Search, Plus, X } from "lucide-react";
+import { Search, Plus, X, Pencil } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { shortDate, formatUnitLabel, quoteGrandTotal, freeReasonOf, freeReasonLabel, isCostPending, quoteMaterialItems } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { mapBilling } from "@/lib/mappers";
 import { BRAND } from "@/lib/company";
 import { uploadPhoto } from "@/lib/photos";
-import { locOf, addressOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate, EditableText, AdminAuthContext, SiteAutocomplete } from "@/app/components/admin/adminShared";
+import { locOf, addressOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate, AdminAuthContext, SiteAutocomplete } from "@/app/components/admin/adminShared";
 import ReplacementCertificateViewer from "@/app/components/admin/ReplacementCertificateViewer";
 
 const BILLING_METHODS = ["계좌이체", "CMS", "지로", "무자료"];
@@ -753,6 +753,63 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
   );
 }
 
+// 분할납부 한 줄 — 평소엔 "날짜 · 금액" 읽기전용 텍스트에 연필 하나(둘이 아니라)만 있고,
+// 누르면 날짜·금액을 같이 고치는 입력칸이 뜬다. 방금 "입금 추가"로 만든 새 줄은 비어있는
+// 채로 연필을 또 눌러야 하는 게 아니라 바로 이 입력 상태로 열린다. 포커스가 이 줄 바깥으로
+// 완전히 나갈 때(둘 중 하나에서 다른 하나로 옮기는 건 안에 있는 이동이라 안 닫힌다) 저장하고
+// 읽기전용으로 돌아간다.
+function PaymentRow({ r, startEditing, onCommit, onRemove }) {
+  const [editing, setEditing] = useState(startEditing);
+  const [draft, setDraft] = useState({ date: r.date ?? "", amount: r.amount ?? "" });
+
+  function openEdit() {
+    setDraft({ date: r.date ?? "", amount: r.amount ?? "" });
+    setEditing(true);
+  }
+  function closeAndCommit() {
+    onCommit(draft);
+    setEditing(false);
+  }
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-slate-700">
+          {r.date ? shortDate(r.date) : "-"} · {r.amount ? `${Number(r.amount).toLocaleString()}원` : "-"}
+        </span>
+        <button type="button" onClick={openEdit} className="text-slate-300 hover:text-slate-500 shrink-0" aria-label="입금 수정">
+          <Pencil size={12} />
+        </button>
+        <button type="button" onClick={onRemove} className="text-slate-300 hover:text-red-500 shrink-0" aria-label="이 입금 삭제">
+          <X size={12} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) closeAndCommit(); }}>
+      <DateTextInput
+        className="min-w-24 text-xs"
+        value={draft.date}
+        autoFocus={startEditing}
+        onChange={(v) => setDraft((d) => ({ ...d, date: v }))}
+      />
+      <input
+        type="number"
+        placeholder="금액"
+        className={`${inputCls} text-xs px-1.5 py-1 w-20`}
+        value={draft.amount}
+        onChange={(e) => setDraft((d) => ({ ...d, amount: e.target.value }))}
+        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+      />
+      <button type="button" onClick={onRemove} className="text-slate-300 hover:text-red-500 shrink-0" aria-label="이 입금 삭제">
+        <X size={12} />
+      </button>
+    </div>
+  );
+}
+
 // 입금일 칸 — 보통은 한 번에 다 받아 날짜 하나면 되지만, 분할납부는 "+"를 눌러
 // (날짜, 금액) 행을 여러 개 쌓을 수 있게 전환한다. 합계를 청구금액과 맞춰보는 검증은
 // 아직 없다 — 나중에 필요해지면 추가(그때도 이 컬럼이 없던 옛 청구는 입금일 유무로만
@@ -761,17 +818,22 @@ function ReceivedPaymentsCell({ b, onSaveDate, onSavePayments }) {
   const initialRows = b.receivedPayments?.length ? b.receivedPayments : [{ date: b.receivedDate ?? "", amount: "" }];
   const [splitMode, setSplitMode] = useState(!!b.receivedPayments?.length);
   const [rows, setRows] = useState(initialRows);
+  // 방금 "입금 추가"로 만든(또는 분할납부로 막 전환한) 줄의 인덱스 — 그 줄만 곧바로
+  // 입력 상태로 열어준다. 저장하거나 지우면 다시 null로 돌아간다.
+  const [justAddedIndex, setJustAddedIndex] = useState(null);
 
   function saveRows(next) {
     onSavePayments(next.filter((r) => r.date || r.amount));
   }
-  function saveDateRow(i, v) {
-    const next = rows.map((row, idx) => (idx === i ? { ...row, date: v } : row));
+  function commitRow(i, draft) {
+    const next = rows.map((row, idx) => (idx === i ? draft : row));
     setRows(next);
     saveRows(next);
+    setJustAddedIndex((cur) => (cur === i ? null : cur));
   }
   function removeRow(i) {
     const next = rows.filter((_, idx) => idx !== i);
+    setJustAddedIndex((cur) => (cur === i ? null : cur));
     if (next.length === 0) {
       setSplitMode(false);
       onSavePayments(null);
@@ -780,6 +842,13 @@ function ReceivedPaymentsCell({ b, onSaveDate, onSavePayments }) {
     setRows(next);
     saveRows(next);
   }
+  function addRow() {
+    setRows((prev) => {
+      const next = [...prev, { date: "", amount: "" }];
+      setJustAddedIndex(next.length - 1);
+      return next;
+    });
+  }
 
   if (!splitMode) {
     return (
@@ -787,7 +856,7 @@ function ReceivedPaymentsCell({ b, onSaveDate, onSavePayments }) {
         <EditableDate key={b.receivedDate ?? "unset"} value={b.receivedDate} onCommit={onSaveDate} />
         <button
           type="button"
-          onClick={() => { setRows([{ date: b.receivedDate ?? "", amount: "" }]); setSplitMode(true); }}
+          onClick={() => { setRows([{ date: b.receivedDate ?? "", amount: "" }]); setJustAddedIndex(0); setSplitMode(true); }}
           className="text-slate-300 hover:text-blue-600 shrink-0"
           title="분할납부로 나눠 입력"
         >
@@ -797,27 +866,18 @@ function ReceivedPaymentsCell({ b, onSaveDate, onSavePayments }) {
     );
   }
 
-  function saveAmountRow(i, v) {
-    const next = rows.map((row, idx) => (idx === i ? { ...row, amount: v } : row));
-    setRows(next);
-    saveRows(next);
-  }
-
-  // 다른 인라인 칸(입금일 단일 모드 등)과 동일하게 평소엔 읽기전용 텍스트 + 연필 버튼이고,
-  // 연필을 눌러야 입력칸이 뜨고 엔터(또는 포커스 아웃)로 확정된다 — 계속 열려있는 입력칸에
-  // 타이핑하다 리렌더로 포커스가 풀리는 문제(숫자 하나 치면 선택 해제되던 버그)를 피한다.
   return (
     <div className="space-y-1 min-w-[11rem]">
       {rows.map((r, i) => (
-        <div key={i} className="flex items-center gap-1.5">
-          <EditableDate value={r.date} onCommit={(v) => saveDateRow(i, v)} className="text-xs" />
-          <EditableText value={r.amount} placeholder="금액" className="text-xs" onCommit={(v) => saveAmountRow(i, v)} />
-          <button type="button" onClick={() => removeRow(i)} className="text-slate-300 hover:text-red-500 shrink-0" aria-label="이 입금 삭제">
-            <X size={12} />
-          </button>
-        </div>
+        <PaymentRow
+          key={i}
+          r={r}
+          startEditing={justAddedIndex === i}
+          onCommit={(draft) => commitRow(i, draft)}
+          onRemove={() => removeRow(i)}
+        />
       ))}
-      <button type="button" onClick={() => setRows((prev) => [...prev, { date: "", amount: "" }])} className="text-[11px] font-bold text-blue-600">
+      <button type="button" onClick={addRow} className="text-[11px] font-bold text-blue-600">
         + 입금 추가
       </button>
     </div>
