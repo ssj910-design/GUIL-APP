@@ -1075,7 +1075,7 @@ export default function BillingsAdmin({ data, setData }) {
       <div className="flex items-end justify-between mb-4">
         <h1 className="text-xl font-extrabold">부품교체·공사 내역</h1>
         <p className="text-sm text-slate-500">
-          {q && `검색결과 ${rows.length}건 / `}총 {billings.length}건 · <span className="font-extrabold text-slate-900">{total.toLocaleString()}원</span> <span className="text-xs text-slate-400">(VAT포함·무자료 제외)</span>
+          {q && `검색결과 ${rows.length}건 / `}총 {billings.length}건 · <span className="font-extrabold text-slate-900">{total.toLocaleString()}원</span>
         </p>
       </div>
       <div className="flex items-center justify-between mb-3 gap-3">
