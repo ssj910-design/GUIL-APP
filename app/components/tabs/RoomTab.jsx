@@ -1,5 +1,5 @@
 import { useState, useContext, useRef, useEffect } from "react";
-import { Send, Plus, X, Download, MessageCircle, ThumbsUp, MoreVertical, ChevronLeft, ChevronRight, Pin, Search, Pencil, FileText } from "lucide-react";
+import { Send, Plus, X, Download, MessageCircle, ThumbsUp, MoreVertical, ChevronLeft, ChevronRight, Pin, Search, Pencil, FileText, Loader2 } from "lucide-react";
 import { AuthContext } from "@/app/components/context";
 import { uploadPhoto, downloadPhoto, downloadPhotosAsZip, extOf, isVideoUrl, videoPosterUrl } from "@/lib/photos";
 import { confirmAsync } from "@/app/components/ConfirmHost";
@@ -418,9 +418,10 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
     if (files.some((f) => f.size > 50 * 1024 * 1024)) return alert("파일당 50MB까지 보낼 수 있어요");
     setUploading(true);
     try {
-      const urls = [];
-      for (const f of files) urls.push(await uploadPhoto(f, "room"));
-      setPendingPhotos((prev) => [...prev, ...urls]);
+      for (const f of files) {
+        const url = await uploadPhoto(f, "room");
+        setPendingPhotos((prev) => [...prev, url]);
+      }
     } catch (err) {
       alert("업로드에 실패했습니다: " + err.message);
     }
@@ -449,9 +450,10 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
     if (!files.length) return;
     setCommentUploading(true);
     try {
-      const urls = [];
-      for (const f of files) urls.push(await uploadPhoto(f, "room"));
-      setCommentPhotos((prev) => ({ ...prev, [postId]: [...(prev[postId] ?? []), ...urls] }));
+      for (const f of files) {
+        const url = await uploadPhoto(f, "room");
+        setCommentPhotos((prev) => ({ ...prev, [postId]: [...(prev[postId] ?? []), url] }));
+      }
     } catch (err) {
       alert("업로드에 실패했습니다: " + err.message);
     }
@@ -622,7 +624,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
               </div>
             )}
           </div>
-          {pendingPhotos.length > 0 && (
+          {(pendingPhotos.length > 0 || uploading) && (
             <div className="flex gap-2 flex-wrap mb-2">
               {pendingPhotos.map((u, i) => (
                 <div key={u} className="relative">
@@ -640,6 +642,11 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
                   </button>
                 </div>
               ))}
+              {uploading && (
+                <div className="w-14 h-14 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center shrink-0">
+                  <Loader2 size={18} className="text-slate-400 animate-spin" />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -714,7 +721,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
           </div>
         </div>
         <div className="shrink-0 border-t border-slate-100 bg-white px-4 py-3">
-          {(commentPhotos[openPost.id] ?? []).length > 0 && (
+          {((commentPhotos[openPost.id] ?? []).length > 0 || commentUploading) && (
             <div className="flex gap-2 flex-wrap mb-2">
               {(commentPhotos[openPost.id] ?? []).map((u, i) => (
                 <div key={u} className="relative">
@@ -732,6 +739,11 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
                   </button>
                 </div>
               ))}
+              {commentUploading && (
+                <div className="w-12 h-12 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center shrink-0">
+                  <Loader2 size={16} className="text-slate-400 animate-spin" />
+                </div>
+              )}
             </div>
           )}
           {commentTagCands.length > 0 && (
