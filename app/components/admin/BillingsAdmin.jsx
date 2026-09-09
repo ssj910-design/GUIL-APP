@@ -10,7 +10,7 @@ import { TODAY_STR } from "@/lib/constants";
 import { mapBilling } from "@/lib/mappers";
 import { BRAND } from "@/lib/company";
 import { uploadPhoto } from "@/lib/photos";
-import { locOf, addressOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate, AdminAuthContext, SiteAutocomplete } from "@/app/components/admin/adminShared";
+import { locOf, addressOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate, EditableText, AdminAuthContext, SiteAutocomplete } from "@/app/components/admin/adminShared";
 import ReplacementCertificateViewer from "@/app/components/admin/ReplacementCertificateViewer";
 
 const BILLING_METHODS = ["계좌이체", "CMS", "지로", "무자료"];
@@ -762,9 +762,13 @@ function ReceivedPaymentsCell({ b, onSaveDate, onSavePayments }) {
   const [splitMode, setSplitMode] = useState(!!b.receivedPayments?.length);
   const [rows, setRows] = useState(initialRows);
 
-  function commit(next) {
-    setRows(next);
+  function saveRows(next) {
     onSavePayments(next.filter((r) => r.date || r.amount));
+  }
+  function saveDateRow(i, v) {
+    const next = rows.map((row, idx) => (idx === i ? { ...row, date: v } : row));
+    setRows(next);
+    saveRows(next);
   }
   function removeRow(i) {
     const next = rows.filter((_, idx) => idx !== i);
@@ -773,7 +777,8 @@ function ReceivedPaymentsCell({ b, onSaveDate, onSavePayments }) {
       onSavePayments(null);
       return;
     }
-    commit(next);
+    setRows(next);
+    saveRows(next);
   }
 
   if (!splitMode) {
@@ -792,18 +797,21 @@ function ReceivedPaymentsCell({ b, onSaveDate, onSavePayments }) {
     );
   }
 
+  function saveAmountRow(i, v) {
+    const next = rows.map((row, idx) => (idx === i ? { ...row, amount: v } : row));
+    setRows(next);
+    saveRows(next);
+  }
+
+  // 다른 인라인 칸(입금일 단일 모드 등)과 동일하게 평소엔 읽기전용 텍스트 + 연필 버튼이고,
+  // 연필을 눌러야 입력칸이 뜨고 엔터(또는 포커스 아웃)로 확정된다 — 계속 열려있는 입력칸에
+  // 타이핑하다 리렌더로 포커스가 풀리는 문제(숫자 하나 치면 선택 해제되던 버그)를 피한다.
   return (
     <div className="space-y-1 min-w-[11rem]">
       {rows.map((r, i) => (
-        <div key={i} className="flex items-center gap-1">
-          <DateTextInput className="min-w-24 text-xs" value={r.date} onChange={(v) => commit(rows.map((row, idx) => (idx === i ? { ...row, date: v } : row)))} />
-          <input
-            type="number"
-            placeholder="금액"
-            className={`${inputCls} text-xs px-1.5 py-1 w-20`}
-            value={r.amount ?? ""}
-            onChange={(e) => commit(rows.map((row, idx) => (idx === i ? { ...row, amount: e.target.value } : row)))}
-          />
+        <div key={i} className="flex items-center gap-1.5">
+          <EditableDate value={r.date} onCommit={(v) => saveDateRow(i, v)} className="text-xs" />
+          <EditableText value={r.amount} placeholder="금액" className="text-xs" onCommit={(v) => saveAmountRow(i, v)} />
           <button type="button" onClick={() => removeRow(i)} className="text-slate-300 hover:text-red-500 shrink-0" aria-label="이 입금 삭제">
             <X size={12} />
           </button>
@@ -1065,7 +1073,7 @@ export default function BillingsAdmin({ data, setData }) {
                   <td rowSpan={span} className="px-3 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
                     {receivedPaymentsReady ? (
                       <ReceivedPaymentsCell
-                        key={`${b.id}:${b.receivedPayments?.length ?? 0}`}
+                        key={b.id}
                         b={b}
                         onSaveDate={(v) => updateManualField(b, "received_date", "receivedDate", v)}
                         onSavePayments={(payments) => updateReceivedPayments(b, payments)}
