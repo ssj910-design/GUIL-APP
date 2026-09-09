@@ -10,7 +10,7 @@ import { TODAY_STR } from "@/lib/constants";
 import { mapBilling } from "@/lib/mappers";
 import { BRAND } from "@/lib/company";
 import { uploadPhoto } from "@/lib/photos";
-import { locOf, addressOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate, AdminAuthContext, SiteAutocomplete } from "@/app/components/admin/adminShared";
+import { locOf, addressOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate, EditableSelect, AdminAuthContext, SiteAutocomplete } from "@/app/components/admin/adminShared";
 import ReplacementCertificateViewer from "@/app/components/admin/ReplacementCertificateViewer";
 
 const BILLING_METHODS = ["계좌이체", "CMS", "지로", "무자료"];
@@ -1151,14 +1151,11 @@ export default function BillingsAdmin({ data, setData }) {
                     ) : "-"}
                   </td>
                   <td rowSpan={span} className="px-3 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
-                    <select
-                      className={`${inputCls} min-w-24`}
+                    <EditableSelect
                       value={b.billingMethod ?? ""}
-                      onChange={(e) => updateManualField(b, "billing_method", "billingMethod", e.target.value)}
-                    >
-                      <option value="">선택</option>
-                      {BILLING_METHODS.map((m) => <option key={m}>{m}</option>)}
-                    </select>
+                      options={BILLING_METHODS}
+                      onCommit={(v) => updateManualField(b, "billing_method", "billingMethod", v)}
+                    />
                   </td>
                 </>
               )}

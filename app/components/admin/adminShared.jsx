@@ -660,6 +660,34 @@ export function EditableDate({ value, onCommit, emptyText = "-", className = "" 
   );
 }
 
+// 드롭다운 선택 칸 — 아직 안 골랐으면 드롭다운 그대로 두고, 고르고 나면 읽기전용 글자 +
+// 연필로 바뀐다(청구방식처럼 한 번 정하면 잘 안 바뀌는 값을 실수로 건드리는 걸 막는다).
+export function EditableSelect({ value, options, onCommit, placeholder = "선택", className = "" }) {
+  const [editing, setEditing] = useState(false);
+  if (!value || editing) {
+    return (
+      <select
+        autoFocus={editing}
+        className={`${inputCls} min-w-24 ${className}`}
+        value={value ?? ""}
+        onChange={(e) => { onCommit(e.target.value); setEditing(false); }}
+        onBlur={() => setEditing(false)}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((o) => <option key={o}>{o}</option>)}
+      </select>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`font-semibold text-slate-700 ${className}`}>{value}</span>
+      <button type="button" onClick={() => setEditing(true)} className="text-slate-300 hover:text-slate-500 shrink-0" aria-label="수정">
+        <Pencil size={12} />
+      </button>
+    </span>
+  );
+}
+
 // 일반 텍스트용 연필-수정 칸 (휴대폰·아이디(민원24) 등) — EditableDate와 동일한 방식.
 export function EditableText({ value, onCommit, placeholder = "", format, emptyText = "-", className = "" }) {
   const [editing, setEditing] = useState(false);
