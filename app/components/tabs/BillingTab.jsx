@@ -1,9 +1,9 @@
 import { useState, useContext, useEffect } from "react";
 import { Receipt, Check, Search, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnitList, handlePhoneInputChange, freeReasonLabel, quoteGrandTotal, quoteMaterialItems } from "@/lib/utils";
+import { siteUnitList, handlePhoneInputChange, freeReasonLabel, quoteGrandTotal, quoteMaterialItems, shortDate } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
-import { DDay, PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink } from "@/app/components/ui";
+import { DDay, PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink, Sheet, PhotoLightbox } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload, SignaturePad } from "@/app/components/formWidgets";
 import { emptyPartRow, formatPartRows, PartsRowsInput, UnitPickGrid } from "@/app/components/tabs/MaterialTab";
@@ -1149,7 +1149,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
 /* ROOM (게시판) incl. admin dashboard                                  */
 /* ------------------------------------------------------------------ */
 
-export function BillingCard({ b, onPhotoClick }) {
+export function BillingCard({ b, onPhotoClick, onClick }) {
   const beforeUrls = b.beforePhotoUrls ?? [];
   const afterUrls = b.afterPhotoUrls ?? [];
   // 전체 목록(클릭 시 라이트박스에 넘길 순서)은 그대로 두고, 카드에는 구분마다 대표 1장만
@@ -1161,7 +1161,7 @@ export function BillingCard({ b, onPhotoClick }) {
     b.confirmPhotoUrl ? { label: "확인서", url: b.confirmPhotoUrl, count: 1, index: beforeUrls.length + afterUrls.length } : null,
   ].filter(Boolean);
   return (
-    <div className="border border-slate-100 rounded-xl p-3">
+    <div className={`border border-slate-100 rounded-xl p-3 ${onClick ? "active:bg-slate-50" : ""}`} onClick={onClick}>
       <div className="flex items-center justify-between mb-1">
         <p className="text-sm font-bold text-slate-800">{b.siteName} · {b.part}</p>
         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${b.type === "material" ? "bg-blue-50 text-blue-600" : "bg-amber-50 text-amber-600"}`}>
@@ -1178,7 +1178,7 @@ export function BillingCard({ b, onPhotoClick }) {
             <button
               key={i}
               type="button"
-              onClick={() => (onPhotoClick ? onPhotoClick(allUrls, s.index) : window.open(s.url, "_blank"))}
+              onClick={(e) => { e.stopPropagation(); onPhotoClick ? onPhotoClick(allUrls, s.index) : window.open(s.url, "_blank"); }}
               className="flex flex-col items-center gap-0.5"
             >
               <div className="relative">
@@ -1197,9 +1197,106 @@ export function BillingCard({ b, onPhotoClick }) {
 }
 
 
+function DetailRow({ label, value }) {
+  return (
+    <div className="flex justify-between text-xs">
+      <span className="text-slate-400">{label}</span>
+      <span className="font-semibold text-slate-700">{value}</span>
+    </div>
+  );
+}
+
+// 관리자 모드 청구내역 목록에서 카드를 탭하면 뜨는 읽기 전용 상세 — 목록 카드엔 없는
+// 품목별 금액·승인(서명/전화승인)·외주·교체확인서 PDF까지 보여준다. 수정은 PC 관리자
+// 콘솔(BillingsAdmin.jsx)에만 있다 — 여기선 조회만.
+function BillingDetailSheet({ b, onClose, onPhotoClick }) {
+  const unitLabel = b.elevatorNos?.length ? b.elevatorNos.join(", ") : b.elevatorNo;
+  const items = b.partPhotos?.length
+    ? b.partPhotos
+    : [{ name: b.part, qty: null, amount: b.cost, beforeUrls: b.beforePhotoUrls ?? [], afterUrls: b.afterPhotoUrls ?? [] }];
+  const total = b.partPhotos?.length ? b.partPhotos.reduce((sum, it) => sum + (Number(it.amount) || 0), 0) : Number(b.cost) || 0;
+
+  return (
+    <Sheet title={`${b.siteName} · 청구 상세`} onClose={onClose}>
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <DetailRow label="유형" value={b.type === "material" ? "자재지급" : "직접입력"} />
+          <DetailRow label="호기" value={unitLabel || "-"} />
+          <DetailRow label="작업자" value={b.engineer || "-"} />
+          <DetailRow label="교체일" value={b.replaceDate || "-"} />
+          <DetailRow label="금액" value={b.isFree ? "무상" : total ? `₩${total.toLocaleString()}` : "-"} />
+          {b.billingMethod && <DetailRow label="청구방식" value={b.billingMethod} />}
+          {b.isOutsourced && <DetailRow label="외주업체" value={b.vendorName || "-"} />}
+        </div>
+
+        <div>
+          <p className="text-xs font-bold text-slate-400 mb-2">교체내역</p>
+          <div className="space-y-3">
+            {items.map((it, i) => {
+              const photos = [...(it.beforeUrls ?? []), ...(it.afterUrls ?? [])];
+              return (
+                <div key={i} className="border border-slate-100 rounded-xl p-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-bold text-slate-700">{it.name || "-"}{it.qty ? ` × ${it.qty}` : ""}</span>
+                    <span className="font-bold text-slate-600">{it.amount != null && it.amount !== "" ? `₩${Number(it.amount).toLocaleString()}` : "-"}</span>
+                  </div>
+                  {photos.length > 0 && (
+                    <div className="flex gap-2 mt-2">
+                      {photos.map((url, pi) => (
+                        <button key={pi} type="button" onClick={() => onPhotoClick(photos, pi)}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={url} alt="" className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {b.confirmPhotoUrl && (
+          <div>
+            <p className="text-xs font-bold text-slate-400 mb-2">지류 교체확인서 사진</p>
+            <button type="button" onClick={() => onPhotoClick([b.confirmPhotoUrl], 0)}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={b.confirmPhotoUrl} alt="" className="w-20 h-20 rounded-lg object-cover border border-slate-200" />
+            </button>
+          </div>
+        )}
+
+        <div>
+          <p className="text-xs font-bold text-slate-400 mb-2">승인정보</p>
+          <div className="space-y-1.5">
+            <DetailRow label="방식" value={b.approvalMethod || "-"} />
+            <DetailRow label="확인자" value={b.approverName || "-"} />
+            <DetailRow label="연락처" value={b.approverPhone ? <PhoneLink phone={b.approverPhone} /> : "-"} />
+            <DetailRow label="승인일" value={b.approvedAt ? shortDate(b.approvedAt.slice(0, 10)) : "-"} />
+          </div>
+          {b.approvalMethod === "서명" && b.signatureUrl && (
+            <button type="button" onClick={() => onPhotoClick([b.signatureUrl], 0)} className="mt-2 block w-full border border-slate-200 rounded-xl p-2 bg-white">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={b.signatureUrl} alt="서명" className="h-16 object-contain mx-auto" />
+            </button>
+          )}
+        </div>
+
+        {b.certificatePdfUrl && (
+          <a href={b.certificatePdfUrl} target="_blank" rel="noreferrer" className="block text-center text-sm font-bold text-blue-700 border border-blue-200 rounded-xl py-2.5">
+            교체확인서 PDF 보기
+          </a>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
 export function BillingHistoryScreen({ billings, onBack }) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState("전체");
+  const [detailTarget, setDetailTarget] = useState(null);
+  const [lightbox, setLightbox] = useState(null); // { urls, index }
 
   const filtered = billings.filter(
     (b) => (type === "전체" || (type === "자재지급" && b.type === "material") || (type === "직접입력" && b.type === "manual")) && b.siteName.toLowerCase().includes(query.trim().toLowerCase())
@@ -1253,12 +1350,27 @@ export function BillingHistoryScreen({ billings, onBack }) {
             <div key={d} className="mb-4">
               <p className="text-xs font-bold text-slate-400 mb-2 sticky top-0 bg-white py-1">{d} · {groups[d].length}건</p>
               <div className="space-y-2">
-                {groups[d].map((b) => <BillingCard key={b.id} b={b} />)}
+                {groups[d].map((b) => <BillingCard key={b.id} b={b} onClick={() => setDetailTarget(b)} />)}
               </div>
             </div>
           ))
         )}
       </div>
+      {detailTarget && (
+        <BillingDetailSheet
+          b={detailTarget}
+          onClose={() => setDetailTarget(null)}
+          onPhotoClick={(urls, index) => setLightbox({ urls, index })}
+        />
+      )}
+      {lightbox && (
+        <PhotoLightbox
+          urls={lightbox.urls}
+          index={lightbox.index}
+          onIndexChange={(i) => setLightbox({ ...lightbox, index: i })}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   );
 }
