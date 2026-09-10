@@ -440,8 +440,19 @@ export function Sheet({ title, onClose, children, bg = "bg-slate-50", full = fal
   // overscroll-contain — 안쪽 스크롤이 끝(위/아래)에 닿아도 그 다음 휠·터치스크롤이 뒤 배경으로
   // 안 넘어가게 막는다(스크롤 체이닝 차단). overflow-y-auto가 없으면 의미가 없어 배경(패딩
   // 부분)에도 같이 넣어준다 — 관리자웹 모달에서 같은 방식으로 이미 검증된 수정.
+  // 터치 이벤트도 막아야 한다 — Sheet는 createPortal로 실제 DOM은 <body> 바로 밑에 붙지만,
+  // React는 포털이어도 실제 DOM이 아니라 컴포넌트 트리 기준으로 이벤트를 버블링시켜서, 시트
+  // 안에서 아래로 스크롤한 터치가 그대로 이 시트를 연 탭을 감싼 PullToRefresh까지 올라가
+  // 당겨서 새로고침으로 오인된다(지도 모달에서 먼저 발견해 개별로 막았던 것과 같은 문제 —
+  // 여기 공용 컴포넌트에 한 번만 막아두면 Sheet를 쓰는 모든 모달에 다 적용된다).
   const content = (
-    <div className="fixed inset-0 z-30 flex flex-col bg-black/40 overflow-y-auto overscroll-contain" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-30 flex flex-col bg-black/40 overflow-y-auto overscroll-contain"
+      onClick={onClose}
+      onTouchStart={(e) => e.stopPropagation()}
+      onTouchMove={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
+    >
       {!full && <div className="mt-auto" />}
       <div
         className={`${bg} ${full ? "h-full" : "rounded-t-3xl max-h-[88%]"} flex flex-col shadow-2xl`}
