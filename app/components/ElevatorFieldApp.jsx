@@ -13,7 +13,7 @@ import { recordQuoteSupplyStockOut } from "@/lib/inventoryStock";
 import { DutySwapNotice } from "@/app/components/DutyRoster";
 import { WorkCalendarSheet } from "@/app/components/WorkCalendarSheet";
 import { MyPage } from "@/app/components/MyPage";
-import { notify, enablePush, ensureNativeChannels, onPushNotificationOpened, onPushNotificationReceived } from "@/lib/push";
+import { notify, enablePush, ensureNativeChannels, onPushNotificationOpened, onPushNotificationReceived, showForegroundNotification, onLocalNotificationOpened } from "@/lib/push";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { useBackHandler, popBackHandler } from "@/app/hooks/useBackHandler";
@@ -394,11 +394,24 @@ export default function App() {
     });
   }, []);
 
+  // 위에서 띄운 OS 알림(포그라운드 도착분)을 탭한 경우 — 푸시 탭과 같은 경로로 화면을 연다.
+  useEffect(() => {
+    return onLocalNotificationOpened((urlStr) => {
+      try {
+        openFromNotification(new URL(urlStr, window.location.origin).searchParams);
+      } catch {}
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 네이티브 앱 — 화면 켜짐+포그라운드 상태에서 푸시가 도착한 순간. OS가 이 상태에선 알림함에만
   // 조용히 쌓고 배너·소리를 안 띄워주는 게 안드로이드 기본 정책이라(코드로 못 바꿈), 앱이 직접
   // 상단 배너로 대신 알려준다. 탭하면 그 알림의 화면으로 바로 이동.
   useEffect(() => {
-    return onPushNotificationReceived((n) => {
+    return onPushNotificationReceived(async (n) => {
+      // 앱을 보고 있는 동안 온 푸시도 OS 알림으로 띄운다 — 소리·진동·헤드업(채널 등급대로)에
+      // 알림함 적재·스와이프 삭제까지 OS가 해준다. 권한·플러그인 문제로 실패할 때만 앱이
+      // 직접 그리는 배너로 대신 알린다(예전 방식).
+      if (await showForegroundNotification(n)) return;
       const time = new Date().toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
       setPushBanner({ title: n.title, body: n.body, url: n.data?.url, time });
     });

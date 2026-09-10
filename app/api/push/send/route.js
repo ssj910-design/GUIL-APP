@@ -159,7 +159,10 @@ async function handlePost(request) {
           await getMessaging(app).send({
             token: t.token,
             notification: { title: title || item.label, body: body || "" },
-            data: { url: url || "/", tag: uniqueTag },
+            // channelId를 data에도 싣는다 — 앱이 켜져 있을 때는 OS가 안 띄워줘서 앱이 직접 같은
+            // 채널로 알림을 다시 만드는데(lib/push.js showForegroundNotification), 푸시 스키마엔
+            // 채널이 안 실려 와서 이 값으로 전달해야 한다.
+            data: { url: url || "/", tag: uniqueTag, channelId: level === "urgent" ? "urgent" : level === "high" ? "high" : "silent" },
             android: {
               priority: urgency === "high" ? "high" : "normal",
               // level에 맞는 채널로 보낸다(urgent=헤드업 배너 뜨는 HIGH 채널, high=소리·진동만, 그 외엔 무음 채널) —
