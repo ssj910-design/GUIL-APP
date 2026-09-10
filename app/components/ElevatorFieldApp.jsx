@@ -97,23 +97,11 @@ function getDevProfileOverride() {
 
 
 // 알림 드롭다운의 고장/할일/자재지급 항목 한 줄 — 클릭하면 해당 탭으로, ×를 누르면 지운다(dismiss).
-// tag: {label, cls} — 자재·견적·상비부품처럼 한 그룹(같은 헤더) 안에 여러 종류가 섞여
-// 나올 때, 제목만으로는 어떤 신청인지 구분이 안 돼(둘 다 부품명이 제목으로 나옴) 작은
-// 배지로 구분해준다.
-const NOTIF_TAG = {
-  자재: { label: "자재", cls: "bg-blue-100 text-blue-700" },
-  견적: { label: "견적", cls: "bg-amber-100 text-amber-700" },
-  상비: { label: "상비", cls: "bg-emerald-100 text-emerald-700" },
-};
-function NotifRow({ onClick, onDismiss, title, subtitle, tag }) {
-  const t = tag && NOTIF_TAG[tag];
+function NotifRow({ onClick, onDismiss, title, subtitle }) {
   return (
     <div className="flex items-center border-b border-slate-50 active:bg-slate-50">
       <button onClick={onClick} className="flex-1 min-w-0 text-left px-4 py-2">
-        <p className="text-xs font-bold text-slate-700 truncate">
-          {t && <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded mr-1.5 align-middle ${t.cls}`}>{t.label}</span>}
-          {title}
-        </p>
+        <p className="text-xs font-bold text-slate-700 truncate">{title}</p>
         <p className="text-xs text-slate-500 truncate mt-0.5">{subtitle}</p>
       </button>
       <button onClick={onDismiss} className="p-2 pr-3 text-slate-300 active:text-slate-500 shrink-0" aria-label="알림 지우기">
@@ -2633,7 +2621,6 @@ export default function App() {
                                   onDismiss={() => handleDismissNotif("mat:" + r.id)}
                                   title={r.part}
                                   subtitle={`${r.siteName ?? ""} · 지급완료`}
-                                  tag="자재"
                                 />
                               ))}
                               {notifQuotes.map((q) => (
@@ -2643,7 +2630,6 @@ export default function App() {
                                   onDismiss={() => handleDismissNotif("quote:" + q.id)}
                                   title={q.constructionType}
                                   subtitle={`${q.siteName ?? ""} · 자재지급완료`}
-                                  tag="견적"
                                 />
                               ))}
                               {notifRestock.map((r) => (
@@ -2653,7 +2639,6 @@ export default function App() {
                                   onDismiss={() => handleDismissNotif("restock:" + r.id)}
                                   title={`${r.part} 상비부품`}
                                   subtitle={`${r.suppliedDate} 지급완료 · 수령확인 필요`}
-                                  tag="상비"
                                 />
                               ))}
                             </div>
@@ -2668,7 +2653,6 @@ export default function App() {
                                   onDismiss={() => handleDismissNotif("newmat:" + r.id)}
                                   title={r.part}
                                   subtitle={`${r.siteName ?? ""} · ${r.engineer} 신청`}
-                                  tag="자재"
                                 />
                               ))}
                               {notifNewQuotes.map((q) => (
@@ -2678,7 +2662,6 @@ export default function App() {
                                   onDismiss={() => handleDismissNotif("newquote:" + q.id)}
                                   title={q.constructionType}
                                   subtitle={`${q.siteName ?? ""} · ${q.engineer} 신청`}
-                                  tag="견적"
                                 />
                               ))}
                             </div>
