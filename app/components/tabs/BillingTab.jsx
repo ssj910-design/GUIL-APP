@@ -3,7 +3,7 @@ import { Receipt, Check, Search, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, handlePhoneInputChange, freeReasonLabel, quoteGrandTotal, quoteMaterialItems, shortDate } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
-import { DDay, PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink, Sheet, PhotoLightbox } from "@/app/components/ui";
+import { PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink, Sheet, PhotoLightbox } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload, SignaturePad } from "@/app/components/formWidgets";
 import { emptyPartRow, formatPartRows, PartsRowsInput, UnitPickGrid } from "@/app/components/tabs/MaterialTab";
@@ -43,7 +43,10 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
   const swipe = useSwipeSubtab(billingSubTabs, subTab, setSubTab);
   const [mode, setMode] = useState(null); // null(대상 선택) | material | manual
   // 자재지급건 청구는 기사가 자재신청/견적요청으로 만든 할일만 대상 — 관리자가 직접 부여한 할일(source: manual)은 제외.
-  const openTodos = todos.filter((t) => !t.done && t.assignee === CURRENT_ENGINEER && t.source !== "manual" && t.source !== "waste_return");
+  // 기한 빠른 순 — 목록에 D-day를 따로 안 보여주는 대신 급한 건이 위로 오게 한다(기한 없는 건은 뒤).
+  const openTodos = todos
+    .filter((t) => !t.done && t.assignee === CURRENT_ENGINEER && t.source !== "manual" && t.source !== "waste_return")
+    .sort((a, b) => (a.dueDate ?? "9999-12-31").localeCompare(b.dueDate ?? "9999-12-31"));
   const [selectedId, setSelectedId] = useState(openTodos[0]?.id ?? "");
   // todos가 마운트 이후 늦게 도착하면 초기 selectedId가 ""로 굳어 제출 불가 → 유효한 첫 건으로 동기화 (P2-8)
   const openIdsKey = openTodos.map((t) => t.id).join(",");
@@ -562,12 +565,9 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                     </span>
                     <span className="block text-[11px] text-slate-400 truncate">{t.part ?? t.title}</span>
                   </span>
-                  <span className="flex items-center gap-1.5 shrink-0">
-                    {draftTodoIds.includes(t.id) && (
-                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 rounded-full px-2 py-0.5">작성 중</span>
-                    )}
-                    <DDay dueDate={t.dueDate} />
-                  </span>
+                  {draftTodoIds.includes(t.id) && (
+                    <span className="text-[10px] font-bold text-amber-700 bg-amber-50 rounded-full px-2 py-0.5 shrink-0">작성 중</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -621,17 +621,12 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
 
               {billStep === 0 && (
                 <>
-                  <Field label="청구 대상 건 (지급완료된 자재)">
-                    <select className={inputCls} value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
-                      {openTodos.map((t) => (
-                        <option key={t.id} value={t.id}>{t.siteName}{t.elevatorNo ? ` · ${t.elevatorNo}` : ""} · {t.part ?? t.title}</option>
-                      ))}
-                    </select>
-                  </Field>
+                  {/* 대상은 앞 화면에서 이미 골랐다 — 여기선 뭘 청구하는지만 보여주고, 바꾸려면
+                      위의 "청구 대상 다시 고르기"로 돌아간다(고르는 방법을 한 가지로 유지). */}
                   {selected && (
-                    <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5 mb-4 flex items-center justify-between">
-                      <span className="text-xs text-blue-700 font-semibold">지급일 {selected.assignedDate} 기준</span>
-                      <DDay dueDate={selected.dueDate} />
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 mb-4">
+                      <p className="text-sm font-bold text-slate-800">{selected.siteName}{selected.elevatorNo ? ` · ${selected.elevatorNo}` : ""}</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">{selected.part ?? selected.title}</p>
                     </div>
                   )}
                   {selected?.isOutsourced && (
