@@ -31,14 +31,17 @@ function isValidPhoneDigits(v) {
   return d.startsWith("0") && d.length >= 9 && d.length <= 11;
 }
 
-export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quoteRequests = [] }) {
+export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quoteRequests = [], billings = [] }) {
   const sites = useContext(SitesContext);
   const allUnits = useContext(UnitsContext);
-  const { name: CURRENT_ENGINEER } = useContext(AuthContext);
+  const { name: CURRENT_ENGINEER, selfId } = useContext(AuthContext);
   const [uploadSession] = useState(() => Date.now());
-  const [mode, setMode] = useState("material"); // material | manual
-  const billingSubTabs = ["material", "manual"];
-  const swipe = useSwipeSubtab(billingSubTabs, mode, setMode);
+  // 청구하기 / 청구 내역 두 화면. 자재 지급건과 직접 입력은 화면을 나누지 않고 "청구하기" 안에서
+  // 대상을 고르게 한다 — 지급건이 없을 때 막다른 길이 되던 것도 여기서 바로 직접 입력으로 간다.
+  const [subTab, setSubTab] = useState("bill"); // bill | history
+  const billingSubTabs = ["bill", "history"];
+  const swipe = useSwipeSubtab(billingSubTabs, subTab, setSubTab);
+  const [mode, setMode] = useState(null); // null(대상 선택) | material | manual
   // 자재지급건 청구는 기사가 자재신청/견적요청으로 만든 할일만 대상 — 관리자가 직접 부여한 할일(source: manual)은 제외.
   const openTodos = todos.filter((t) => !t.done && t.assignee === CURRENT_ENGINEER && t.source !== "manual" && t.source !== "waste_return");
   const [selectedId, setSelectedId] = useState(openTodos[0]?.id ?? "");
@@ -522,9 +525,85 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
     setTimeout(() => setSubmitted(null), 2600);
   }
 
-  // 자재 지급건/직접 입력 각 탭의 패널 — SwipeSubtabTrack이 드래그 중 옆 탭을 함께 렌더링할 때 쓴다.
+  // 청구 내역 탭 — 본인이 낸 청구만(자재 지급건·직접 입력 모두). 옛 데이터는 담당자 id가 없어
+  // 이름으로도 맞춰본다.
+  const myBillings = billings.filter((b) => (selfId && b.engineerId === selfId) || b.engineer === CURRENT_ENGINEER);
+
+  // 작성하다 만 임시저장이 있는 지급건 — 대상 목록에 "작성 중"으로 표시해 이어가기 쉽게 한다.
+  const [draftTodoIds, setDraftTodoIds] = useState([]);
+  useEffect(() => {
+    if (mode !== null) return;
+    try {
+      setDraftTodoIds(openTodos.filter((t) => localStorage.getItem(draftKey(t.id))).map((t) => t.id));
+    } catch { /* localStorage를 못 읽으면 배지만 안 보이면 된다 */ }
+  }, [mode, openIdsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 청구 대상 고르기 — 지급건을 고르거나, 자재 신청 없이 교체한 건은 직접 입력으로 간다.
+  function renderTargetPicker() {
+    return (
+      <div className="px-5 pt-4 space-y-3">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4">
+          <p className="text-sm font-extrabold text-slate-800 mb-2">자재 지급건</p>
+          {openTodos.length === 0 ? (
+            <p className="text-xs text-slate-400 py-2">
+              청구할 수 있는 자재 지급건이 없습니다 — 자재 담당자가 [자재 지급 완료] 처리를 해야 여기에 나타납니다.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {openTodos.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => { setSelectedId(t.id); setMode("material"); setBillStep(0); setBillToast(null); }}
+                  className="w-full flex items-center justify-between gap-2 text-left border border-slate-200 rounded-xl px-3 py-2.5 hover:border-blue-300"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-sm font-bold text-slate-800 truncate">
+                      {t.siteName}{t.elevatorNo ? ` · ${t.elevatorNo}` : ""}
+                    </span>
+                    <span className="block text-[11px] text-slate-400 truncate">{t.part ?? t.title}</span>
+                  </span>
+                  <span className="flex items-center gap-1.5 shrink-0">
+                    {draftTodoIds.includes(t.id) && (
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 rounded-full px-2 py-0.5">작성 중</span>
+                    )}
+                    <DDay dueDate={t.dueDate} />
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <button
+          onClick={() => { setMode("manual"); setBillStep(0); setBillToast(null); }}
+          className="w-full text-left bg-white rounded-2xl border border-slate-200 p-4 hover:border-blue-300"
+        >
+          <p className="text-sm font-extrabold text-slate-800">직접 입력</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">자재 신청 없이 현장에서 바로 교체한 부품(예비 재고 사용 등)</p>
+        </button>
+      </div>
+    );
+  }
+
+  // 흐름 첫 단계에서 대상을 다시 고를 수 있게 — 잘못 고른 채 끝까지 가는 걸 막는다.
+  function renderBackToPicker() {
+    if (billStep !== 0) return null;
+    return (
+      <button
+        type="button"
+        onClick={() => { setMode(null); setBillToast(null); }}
+        className="text-[11px] font-bold text-slate-400 mb-2"
+      >
+        ← 청구 대상 다시 고르기
+      </button>
+    );
+  }
+
+  // 청구하기/청구 내역 각 탭의 패널 — SwipeSubtabTrack이 드래그 중 옆 탭을 함께 렌더링할 때 쓴다.
   function renderBillingPane(tab) {
-    if (tab === "material") return (
+    if (tab === "history") return <BillingHistoryScreen billings={myBillings} embedded />;
+    if (mode === null) return renderTargetPicker();
+    if (mode === "material") return (
         openTodos.length === 0 ? (
           <div className="flex flex-col items-center justify-center px-8 text-center pt-16">
             <Receipt size={32} className="text-slate-300 mb-3" />
@@ -533,6 +612,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
           </div>
         ) : (
           <div className="px-5 pt-4">
+            {renderBackToPicker()}
             <div className="bg-white rounded-2xl border border-slate-200 p-4">
               <div className="flex gap-1 mb-2">
                 {BILL_STEP_TITLES.map((t, i) => <div key={t} className={`flex-1 h-1 rounded-full ${i <= billStep ? "bg-blue-600" : "bg-slate-200"}`} />)}
@@ -814,6 +894,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
 
     return (
         <div className="px-5 pt-4">
+          {renderBackToPicker()}
           <p className="text-[11px] text-slate-400 mb-3 px-1">자재 신청 없이 현장에서 바로 교체한 부품(예비 재고 사용 등)을 직접 입력해 청구합니다.</p>
           <div className="bg-white rounded-2xl border border-slate-200 p-4 overflow-visible">
             <div className="flex gap-1 mb-2">
@@ -1111,16 +1192,16 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="flex border-b border-slate-100 shrink-0 relative">
         <button
-          onClick={() => { setMode("material"); setBillStep(0); setBillToast(null); }}
-          className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${mode === "material" ? "text-blue-700" : "text-slate-400"}`}
+          onClick={() => { setSubTab("bill"); setBillToast(null); }}
+          className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${subTab === "bill" ? "text-blue-700" : "text-slate-400"}`}
         >
-          자재 지급건
+          청구하기
         </button>
         <button
-          onClick={() => { setMode("manual"); setBillStep(0); setBillToast(null); }}
-          className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${mode === "manual" ? "text-blue-700" : "text-slate-400"}`}
+          onClick={() => { setSubTab("history"); setBillToast(null); }}
+          className={`flex-1 py-3 text-xs font-bold whitespace-nowrap px-1.5 ${subTab === "history" ? "text-blue-700" : "text-slate-400"}`}
         >
-          직접 입력
+          청구 내역
         </button>
         <SwipeIndicatorBar swipe={swipe} />
       </div>
@@ -1295,7 +1376,8 @@ function BillingDetailSheet({ b, onClose, onPhotoClick }) {
   );
 }
 
-export function BillingHistoryScreen({ billings, onBack }) {
+// embedded: 탭 안에 박아 쓸 때(청구 탭의 "청구 내역") 뒤로가기 헤더 없이 목록만 그린다.
+export function BillingHistoryScreen({ billings, onBack, embedded = false }) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState("전체");
   const [detailTarget, setDetailTarget] = useState(null);
@@ -1315,10 +1397,10 @@ export function BillingHistoryScreen({ billings, onBack }) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
-      <DrillHeader title="청구 내역" onBack={onBack} onHome={onBack} />
+      {!embedded && <DrillHeader title="청구 내역" onBack={onBack} onHome={onBack} />}
 
       <div className="px-5 py-3 bg-blue-950 shrink-0 flex items-center justify-between">
-        <span className="text-xs text-blue-200">이번 달 총 {filtered.length}건</span>
+        <span className="text-xs text-blue-200">총 {filtered.length}건</span>
         <span className="text-sm font-extrabold text-white">₩{total.toLocaleString()}</span>
       </div>
 

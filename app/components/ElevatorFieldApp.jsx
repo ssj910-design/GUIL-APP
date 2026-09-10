@@ -2699,7 +2699,7 @@ export default function App() {
           {tab === "inspection" && <InspectionTab inspections={inspections} />}
           {tab === "material" && <MaterialTab requests={materialRequests} onAddMaterialRequest={handleAddMaterialRequest} onCancelMaterialRequest={handleCancelMaterialRequest} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} onAddQuoteRequest={handleAddQuoteRequest} onCancelQuoteRequest={handleCancelQuoteRequest} restockRequests={restockRequests} kitStock={kitStock} onReceiveRestock={handleReceiveRestock} focusRestockHistory={focusRestockHistory} onRestockHistoryHandled={() => setFocusRestockHistory(false)} />}
           {tab === "inventory" && <InventoryTab products={inventoryProducts} movements={inventoryStockMovements} onCreateProduct={handleCreateInventoryProduct} onSaveProduct={handleSaveInventoryProduct} onDeleteProduct={handleDeleteInventoryProduct} onAddMovement={handleAddInventoryMovement} />}
-          {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} quoteRequests={quoteRequests} />}
+          {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} quoteRequests={quoteRequests} billings={billings} />}
           {tab === "todo" && (
             <TodoTab
               todos={todos}
