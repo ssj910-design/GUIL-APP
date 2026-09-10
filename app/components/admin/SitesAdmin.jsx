@@ -217,7 +217,7 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
   const liveInfo = liveInspections[0];
   // 검사내역 탭: 최신 상태 1건이 아니라 과거 전체 검사결과(합격·조건부합격·불합격)를 나열한다
   // (모바일 앱 SiteTab "검사" 탭과 동일 — 목록은 즉시 받고, 부적합상세는 클릭 시 지연 조회+캐시).
-  const { history: inspectionHistory, loading: historyLoading } = useInspectionHistory(unitGovNo);
+  const { history: inspectionHistory, loading: historyLoading, reason: historyReason, retry: retryHistory } = useInspectionHistory(unitGovNo);
   const unitFailures = failures
     .filter((f) => (f.unitId ? f.unitId === unit.id : f.siteId === site.id))
     .sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt));
@@ -367,7 +367,14 @@ function UnitDetailModal({ unit, site, failures, inspections, billings, quoteReq
             historyLoading ? (
               <p className="text-xs text-slate-400 text-center py-10">국가승강기정보센터에서 검사이력을 조회하는 중...</p>
             ) : inspectionHistory.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-10">등록된 검사 이력이 없습니다</p>
+              historyReason === "fetch_failed" ? (
+                <div className="text-center py-10">
+                  <p className="text-xs text-slate-400">국가승강기정보센터 응답이 일시적으로 불안정해 조회하지 못했습니다</p>
+                  <button onClick={retryHistory} className="mt-3 text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg">다시 시도</button>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 text-center py-10">등록된 검사 이력이 없습니다</p>
+              )
             ) : (
               <div className="space-y-2">
                 {inspectionHistory.map((h, hi) => {

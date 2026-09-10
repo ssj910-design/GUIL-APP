@@ -84,31 +84,38 @@ export function useLiveInspections(queries) {
 // 승강기 한 대의 과거 전체 검사이력(합격/조건부합격/불합격, 회차별 부적합 상세 포함)을 조회합니다.
 // 승강기정보 상세 "검사" 탭처럼 단건 화면에서만 씁니다 (전수 호출 방지).
 export function useInspectionHistory(govElevatorNo) {
-  const [state, setState] = useState({ loading: false, history: [], error: null });
+  const [retryCount, setRetryCount] = useState(0);
+  const [state, setState] = useState({ loading: false, history: [], reason: null });
 
   useEffect(() => {
     if (!govElevatorNo) {
-      setState({ loading: false, history: [], error: null });
+      setState({ loading: false, history: [], reason: null });
       return;
     }
     let cancelled = false;
     async function load() {
-      setState({ loading: true, history: [], error: null });
+      setState((s) => ({ ...s, loading: true }));
       try {
         const res = await authFetch(`/api/elevator-fail-detail?elevatorNo=${encodeURIComponent(govElevatorNo)}`);
         const data = await res.json();
-        if (!cancelled) setState({ loading: false, history: data.history ?? [], error: data.error ?? null });
+        if (cancelled) return;
+        // route.js가 상위 API(getInspectsafeList) 자체가 실패했을 때 top-level error만 주고
+        // history는 안 채워준다 — 빈 배열만 보고 "검사이력 없음"으로 표시하면 실제론 조회
+        // 자체가 안 된 것을 진짜 빈 이력과 구분할 수 없다(InspectionFailDetailSheet가 이미
+        // 겪은 것과 같은 문제). fetch_failed로 통일해 재시도 버튼이 뜨는 경로를 타게 한다.
+        const history = data.history ?? [];
+        setState({ loading: false, history, reason: history.length === 0 && data.error ? "fetch_failed" : null });
       } catch {
-        if (!cancelled) setState({ loading: false, history: [], error: "조회에 실패했습니다" });
+        if (!cancelled) setState({ loading: false, history: [], reason: "fetch_failed" });
       }
     }
     load();
     return () => {
       cancelled = true;
     };
-  }, [govElevatorNo]);
+  }, [govElevatorNo, retryCount]);
 
-  return state;
+  return { ...state, retry: () => setRetryCount((c) => c + 1) };
 }
 
 
