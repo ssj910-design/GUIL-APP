@@ -21,6 +21,7 @@ import { ScreenHeader, BrandSplash, Sheet } from "@/app/components/ui";
 import { ConfirmHost, confirmAsync } from "@/app/components/ConfirmHost";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { LOCATION_TRACKING } from "@/lib/features";
+import { fetchLatestRelease } from "@/lib/releases";
 import { trackEvent } from "@/lib/uiEvents";
 import { LawQaPanel } from "@/app/components/tabs/LawQaPanel";
 import { LoginScreen } from "@/app/components/LoginScreen";
@@ -210,6 +211,7 @@ export default function App() {
   const [openTodoId, setOpenTodoId] = useState(null); // 알림에서 특정 할일을 눌러 할일 탭의 인라인 상세(카드 펼침)를 바로 연다
   const [openFeedPostId, setOpenFeedPostId] = useState(null); // 알림/푸시에서 특정 게시글을 눌러 게시판 탭에서 바로 그 글 화면으로 들어간다
   const [pushBanner, setPushBanner] = useState(null); // 네이티브 앱 포그라운드 중 도착한 푸시 — 상단 배너로 직접 보여준다 { title, body, url, time }
+  const [updateInfo, setUpdateInfo] = useState(null); // 네이티브 앱 실행 중 설치된 버전보다 새 버전이 있으면 { versionName, url, notes }
   const [materialFocusId, setMaterialFocusId] = useState(null); // 알림/푸시에서 특정 자재신청을 눌러 관리자 모드 자재출하관리에서 바로 상세를 연다
   const [quoteFocusId, setQuoteFocusId] = useState(null); // 알림/푸시에서 특정 견적신청을 눌러 관리자 모드 견적요청관리에서 바로 상세를 연다
   const [focusRestockHistory, setFocusRestockHistory] = useState(false); // 상비부품 지급완료 알림 — 특정 건이 아니라 "나의 상비부품 현황" 화면으로 이동
@@ -245,6 +247,26 @@ export default function App() {
   // enablePush()는 로그인 시점에만 불리는데 로그인 세션이 localStorage에 남아있으면 재로그인 없이 계속 쓰이므로,
   // 이미 로그인된 기존 사용자 기기에도 새로 추가된 채널(예: urgent)이 앱 재실행만으로 만들어지게 하려는 것.
   useEffect(() => { ensureNativeChannels(); }, []);
+
+  // 안드로이드 앱(네이티브 셸) 버전 확인 — APK는 사이드로드라 스토어처럼 자동 업데이트가
+  // 안 되니(docs/APK-PLAN.md), 설치된 버전이 낮으면 배너로 새 버전을 안내한다. 한 번 닫은
+  // 버전은 다시 안 뜨게 localStorage에 남긴다(매번 뜨면 성가시다 — 새 버전이 또 나오면
+  // dismissedBuild가 그 버전보다 낮아 다시 뜬다).
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    (async () => {
+      try {
+        const [info, latest] = await Promise.all([CapacitorApp.getInfo(), fetchLatestRelease()]);
+        if (!latest) return;
+        const installedBuild = Number(info.build);
+        const latestBuild = Number(latest.versionCode);
+        if (!(latestBuild > installedBuild)) return;
+        const dismissedBuild = Number(localStorage.getItem("dismissedUpdateBuild") ?? 0);
+        if (latestBuild <= dismissedBuild) return;
+        setUpdateInfo(latest);
+      } catch {}
+    })();
+  }, []);
 
   // 안드로이드 하드웨어 뒤로가기 — 지금까지 앱 어디서도 안 받아서 눌렀다 하면 그냥 앱이 꺼졌다.
   // useBackHandler 스택에 지금 열려있는 시트·드릴다운·모달이 있으면 그것부터 하나씩 닫고,
@@ -2499,6 +2521,25 @@ export default function App() {
                 {pushBanner.body && <p className="text-sm text-blue-200 truncate mt-1">{pushBanner.body}</p>}
               </div>
             </button>
+          )}
+          {updateInfo && !pushBanner && (
+            <div
+              className="absolute left-2 right-2 z-50 bg-slate-900/90 backdrop-blur-md text-white rounded-2xl shadow-2xl px-4 py-3 flex items-center gap-3"
+              style={{ top: "max(0.5rem, env(safe-area-inset-top))" }}
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold">새 버전이 있어요 (v{updateInfo.versionName})</p>
+                {updateInfo.notes && <p className="text-xs text-slate-300 truncate mt-0.5">{updateInfo.notes}</p>}
+              </div>
+              <a href="/download" className="text-xs font-bold text-white bg-blue-600 rounded-full px-3 py-1.5 shrink-0 active:bg-blue-700">업데이트</a>
+              <button
+                onClick={() => { localStorage.setItem("dismissedUpdateBuild", String(updateInfo.versionCode)); setUpdateInfo(null); }}
+                className="text-slate-400 shrink-0 p-0.5"
+                aria-label="닫기"
+              >
+                <X size={16} />
+              </button>
+            </div>
           )}
           <ScreenHeader
             title={tab === "home" ? BRAND.name : tabTitle}
