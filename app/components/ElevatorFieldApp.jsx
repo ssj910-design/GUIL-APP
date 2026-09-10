@@ -249,9 +249,9 @@ export default function App() {
   useEffect(() => { ensureNativeChannels(); }, []);
 
   // 안드로이드 앱(네이티브 셸) 버전 확인 — APK는 사이드로드라 스토어처럼 자동 업데이트가
-  // 안 되니(docs/APK-PLAN.md), 설치된 버전이 낮으면 배너로 새 버전을 안내한다. 한 번 닫은
-  // 버전은 다시 안 뜨게 localStorage에 남긴다(매번 뜨면 성가시다 — 새 버전이 또 나오면
-  // dismissedBuild가 그 버전보다 낮아 다시 뜬다).
+  // 안 되니(docs/APK-PLAN.md), 설치된 버전이 낮으면 배너로 새 버전을 안내한다. 실제로
+  // 업데이트(재설치)하기 전까진 앱을 켤 때마다 계속 뜬다 — X로 닫아도 그 번 화면에서만
+  // 사라질 뿐, 다음에 앱을 다시 켜면(설치된 버전이 그대로라) 또 뜬다.
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     (async () => {
@@ -261,8 +261,6 @@ export default function App() {
         const installedBuild = Number(info.build);
         const latestBuild = Number(latest.versionCode);
         if (!(latestBuild > installedBuild)) return;
-        const dismissedBuild = Number(localStorage.getItem("dismissedUpdateBuild") ?? 0);
-        if (latestBuild <= dismissedBuild) return;
         setUpdateInfo(latest);
       } catch {}
     })();
@@ -2534,7 +2532,7 @@ export default function App() {
               </div>
               <a href="/download" className="text-xs font-bold text-white bg-blue-600 rounded-full px-3 py-1.5 shrink-0 active:bg-blue-700">업데이트</a>
               <button
-                onClick={() => { localStorage.setItem("dismissedUpdateBuild", String(updateInfo.versionCode)); setUpdateInfo(null); }}
+                onClick={() => setUpdateInfo(null)}
                 className="text-slate-400 shrink-0 p-0.5"
                 aria-label="닫기"
               >
