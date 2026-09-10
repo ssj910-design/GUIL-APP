@@ -585,20 +585,6 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
     );
   }
 
-  // 흐름 첫 단계에서 대상을 다시 고를 수 있게 — 잘못 고른 채 끝까지 가는 걸 막는다.
-  function renderBackToPicker() {
-    if (billStep !== 0) return null;
-    return (
-      <button
-        type="button"
-        onClick={() => { setMode(null); setBillToast(null); }}
-        className="text-[11px] font-bold text-slate-400 mb-2"
-      >
-        ← 청구 대상 다시 고르기
-      </button>
-    );
-  }
-
   // 청구하기/청구 내역 각 탭의 패널 — SwipeSubtabTrack이 드래그 중 옆 탭을 함께 렌더링할 때 쓴다.
   function renderBillingPane(tab) {
     if (tab === "history") return <BillingHistoryScreen billings={myBillings} embedded />;
@@ -612,7 +598,6 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
           </div>
         ) : (
           <div className="px-5 pt-4">
-            {renderBackToPicker()}
             <div className="bg-white rounded-2xl border border-slate-200 p-4">
               <div className="flex gap-1 mb-2">
                 {BILL_STEP_TITLES.map((t, i) => <div key={t} className={`flex-1 h-1 rounded-full ${i <= billStep ? "bg-blue-600" : "bg-slate-200"}`} />)}
@@ -865,9 +850,14 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
               )}
 
               <div className="flex gap-2 mt-2">
-                {billStep > 0 && (
-                  <button type="button" onClick={() => setBillStep(billStep - 1)} className="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200">이전</button>
-                )}
+                {/* 1단계의 "이전"은 청구 대상 선택으로 돌아간다 — 대상을 바꾸는 길을 여기 하나로 둔다. */}
+                <button
+                  type="button"
+                  onClick={() => { setBillToast(null); if (billStep === 0) setMode(null); else setBillStep(billStep - 1); }}
+                  className="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200"
+                >
+                  이전
+                </button>
                 {billStep >= 1 && (
                   <button type="button" onClick={saveDraft} className="px-4 py-3 rounded-xl text-sm font-bold text-blue-700 border border-blue-200 bg-blue-50">임시저장</button>
                 )}
@@ -889,7 +879,6 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
 
     return (
         <div className="px-5 pt-4">
-          {renderBackToPicker()}
           <p className="text-[11px] text-slate-400 mb-3 px-1">자재 신청 없이 현장에서 바로 교체한 부품(예비 재고 사용 등)을 직접 입력해 청구합니다.</p>
           <div className="bg-white rounded-2xl border border-slate-200 p-4 overflow-visible">
             <div className="flex gap-1 mb-2">
@@ -1159,9 +1148,14 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
             )}
 
             <div className="flex gap-2 mt-2">
-              {billStep > 0 && (
-                <button type="button" onClick={() => setBillStep((s) => s - 1)} className="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200">이전</button>
-              )}
+              {/* 1단계의 "이전"은 청구 대상 선택으로 돌아간다 — 대상을 바꾸는 길을 여기 하나로 둔다. */}
+              <button
+                type="button"
+                onClick={() => { setBillToast(null); if (billStep === 0) setMode(null); else setBillStep(billStep - 1); }}
+                className="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200"
+              >
+                이전
+              </button>
               {billStep >= 1 && (
                 <button type="button" onClick={saveManualDraft} className="px-4 py-3 rounded-xl text-sm font-bold text-blue-700 border border-blue-200 bg-blue-50">임시저장</button>
               )}
