@@ -2,12 +2,66 @@
 import { useState, useEffect } from "react";
 import { BRAND } from "@/lib/company";
 import { createPortal } from "react-dom";
-import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Download } from "lucide-react";
+import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Download, FileText, Loader2 } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
+import { Capacitor } from "@capacitor/core";
 import { downloadPhoto, downloadPhotosAsZip, extOf, isVideoUrl, videoPosterUrl } from "@/lib/photos";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
 import { useBackHandler } from "@/app/hooks/useBackHandler";
 
+
+/* ------------------------------------------------------------------ */
+/* 첨부파일 카드 (게시판 — 기사앱·관리자웹 공용)                            */
+/* ------------------------------------------------------------------ */
+
+// Storage 업로드 경로가 "폴더/타임스탬프-원본파일명"이라 타임스탬프 접두어만 떼면 사용자가
+// 올린 원래 파일명이 그대로 나온다.
+export function attachmentFileName(url) {
+  try {
+    return decodeURIComponent(url.split("/").pop().split("?")[0]).replace(/^\d+-/, "");
+  } catch {
+    return "첨부파일";
+  }
+}
+
+// 사진·영상이 아닌 첨부(문서 등)는 미리보기 없이 아이콘+"파일명.확장자" 카드로 보여주고,
+// 누르면 (PDF 등 브라우저가 새 탭에 미리보기로 열어버리는 형식도) 바로 다운로드된다.
+// 누른 뒤 아무 표시가 없어 받아지는지 알 수 없다는 지적이 있어(실제로 웹은 몇 초 걸리고,
+// 앱은 안드로이드 알림으로만 알려준다) 진행·완료 상태를 카드에 직접 보여준다.
+export function FileAttachmentCard({ url, className }) {
+  const name = attachmentFileName(url);
+  const [state, setState] = useState(null); // null | loading | done
+  const native = Capacitor.isNativePlatform();
+
+  async function handleClick(e) {
+    e.stopPropagation();
+    if (state === "loading") return;
+    setState("loading");
+    try {
+      await downloadPhoto(url, name);
+      setState("done");
+      setTimeout(() => setState(null), 2500);
+    } catch (err) {
+      setState(null);
+      alert("다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className={`${className} rounded-lg bg-slate-100 border border-slate-200 flex flex-col items-center justify-center gap-0.5 px-1 text-center`}
+    >
+      {state === "loading" ? <Loader2 size={16} className="text-blue-500 shrink-0 animate-spin" />
+        : state === "done" ? <Check size={16} className="text-emerald-600 shrink-0" />
+        : <FileText size={16} className="text-slate-400 shrink-0" />}
+      <span className={`text-[8px] leading-tight break-all line-clamp-2 ${state === "done" ? "text-emerald-600 font-bold" : "text-slate-500"}`}>
+        {state === "loading" ? "받는 중…" : state === "done" ? (native ? "다운로드함" : "저장함") : name}
+      </span>
+    </button>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /* Small shared bits                                                   */

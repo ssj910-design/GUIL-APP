@@ -6,14 +6,14 @@
 // 중앙 모달(adminShared의 Modal)로 — PC 게시판에 맞는 레이아웃.
 // 작성자는 실제 로그인한 관리자 이름(AdminAuthContext)을 쓴다 — "관리자"로 뭉뚱그리지 않는다.
 import { useContext, useState } from "react";
-import { Image as ImageIcon, Pin, ThumbsUp, MessageCircle, Trash2, X, Send, Search, MoreVertical, ChevronLeft, ChevronRight, Pencil, FileText } from "lucide-react";
+import { Image as ImageIcon, Pin, ThumbsUp, MessageCircle, Trash2, X, Send, Search, MoreVertical, ChevronLeft, ChevronRight, Pencil } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
 import { uploadPhoto, downloadPhoto, downloadPhotosAsZip, extOf, isVideoUrl } from "@/lib/photos";
 import { Modal, inputCls, AdminAuthContext, useBackdropClose } from "@/app/components/admin/adminShared";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { profileIdByName } from "@/lib/utils";
-import { PhotoLightboxPane } from "@/app/components/ui";
+import { PhotoLightboxPane, FileAttachmentCard } from "@/app/components/ui";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
 
 // 작성자 이름 첫 글자로 아바타 원을 만든다 — 네이버밴드처럼 글마다 시각적 기준점을 준다.
@@ -28,31 +28,6 @@ function Avatar({ name, small }) {
 }
 
 const isImageAttachment = (url) => /\.(jpe?g|png|gif|webp|heic|heif|bmp|svg)(\?|$)/i.test(url);
-// 사진·영상이 아닌 첨부(문서 등)는 미리보기 없이 아이콘+"파일명.확장자" 카드로 보여주고,
-// 누르면 (PDF 등 브라우저가 새 탭에 미리보기로 열어버리는 형식도) 바로 다운로드된다 —
-// downloadPhoto가 blob으로 받아 강제 저장하는 방식이라 미리보기로 새지 않는다. 모바일
-// RoomTab.jsx와 동일 규칙(Storage 경로가 "폴더/타임스탬프-원본파일명"이라 타임스탬프
-// 접두어만 떼면 원래 파일명이 나온다).
-function attachmentFileName(url) {
-  try {
-    return decodeURIComponent(url.split("/").pop().split("?")[0]).replace(/^\d+-/, "");
-  } catch {
-    return "첨부파일";
-  }
-}
-function FileAttachmentCard({ url, className }) {
-  const name = attachmentFileName(url);
-  return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); downloadPhoto(url, name).catch((err) => alert("다운로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"))); }}
-      className={`${className} rounded-lg bg-slate-100 border border-slate-200 flex flex-col items-center justify-center gap-0.5 px-1 text-center`}
-    >
-      <FileText size={16} className="text-slate-400 shrink-0" />
-      <span className="text-[8px] text-slate-500 leading-tight break-all line-clamp-2">{name}</span>
-    </button>
-  );
-}
 
 function timeOf(iso) {
   if (!iso) return "";

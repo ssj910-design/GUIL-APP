@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.webkit.GeolocationPermissions;
 import android.webkit.URLUtil;
+import android.widget.Toast;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
@@ -75,7 +76,10 @@ public class MainActivity extends BridgeActivity {
                 DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
                 if (dm != null) dm.enqueue(request);
             } catch (Exception e) {
-                // 다운로드 실패해도 앱 자체는 계속 동작해야 한다 — 조용히 무시.
+                // 예전엔 조용히 무시해서, 눌러도 아무 일도 안 일어나는 것처럼 보였다(실제로
+                // "다운로드가 안 된다"는 제보를 원인 파악조차 못 했다) — 앱은 계속 동작시키되
+                // 실패했다는 사실만은 사용자에게 알린다.
+                Toast.makeText(MainActivity.this, "다운로드에 실패했습니다: " + e.getMessage(), Toast.LENGTH_LONG).show();
             }
         });
     }
