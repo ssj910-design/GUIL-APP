@@ -262,10 +262,18 @@ function PostHeader({ p, canManage, canNotice, menuOpen, onToggleMenu, onCloseMe
 // 게시글 본문(텍스트 수정폼 포함) — 목록 카드/상세화면 공용.
 // ★ 반드시 모듈 최상위에 둘 것: RoomTab 렌더 함수 안에 정의하면 매 렌더마다 새 컴포넌트 타입이 되어
 // 서브트리가 통째로 리마운트된다(수정 textarea가 키 입력마다 포커스를 잃고, 사진·영상이 깜빡임). (P1-3)
-function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEditingId, onOpenPhoto, editPhotos, setEditPhotos, editUploading, pickEditFiles, editFileRef }) {
+function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEditingId, onOpenPhoto, editPhotos, setEditPhotos, editUploading, pickEditFiles, editFileRef, editTitle, setEditTitle }) {
   if (editingId === p.id) {
     return (
       <div className="mb-2">
+        {p.isNotice && (
+          <input
+            className="w-full text-sm font-bold border border-amber-200 bg-amber-50 rounded-lg px-3 py-2 mb-2 focus:outline-none"
+            placeholder="공지 제목을 입력하세요 (필수)"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+          />
+        )}
         <textarea className="w-full text-sm border border-slate-200 rounded-xl p-2.5 resize-none focus:outline-none" rows={3} value={editText} onChange={(e) => setEditText(e.target.value)} />
         {(editPhotos.length > 0 || editUploading) && (
           <div className="flex gap-2 flex-wrap mt-2">
@@ -367,6 +375,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   const [menuFor, setMenuFor] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState("");
+  const [editTitle, setEditTitle] = useState("");
   const [editPhotos, setEditPhotos] = useState([]);
   const [editUploading, setEditUploading] = useState(false);
   const editFileRef = useRef(null);
@@ -517,11 +526,12 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   function startEdit(p) {
     setEditingId(p.id);
     setEditText(p.text ?? "");
+    setEditTitle(p.title ?? "");
     setEditPhotos(p.photoUrls ?? []);
   }
   function saveEdit() {
     if (!editText.trim() && editPhotos.length === 0) return;
-    onUpdatePost?.(editingId, editText.trim(), editPhotos);
+    onUpdatePost?.(editingId, editText.trim(), editPhotos, editTitle.trim() || null);
     setEditingId(null);
   }
   async function pickEditFiles(e) {
@@ -559,6 +569,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   const bodyProps = {
     editingId, editText, setEditText, saveEdit, setEditingId, onOpenPhoto: openPhoto,
     editPhotos, setEditPhotos, editUploading, pickEditFiles, editFileRef,
+    editTitle, setEditTitle,
   };
 
   const openPost = shownPostId ? feed.find((p) => p.id === shownPostId) : null;

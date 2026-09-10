@@ -1508,15 +1508,23 @@ export default function App() {
   }
 
   // ★ 게시판 글 수정 (본인 글만 — RoomTab에서 작성자 확인 후 호출)
-  // photoUrls 생략 시 첨부는 그대로 둔다 — 댓글 수정 등 사진을 다루지 않는 호출부와 호환.
-  async function handleUpdateFeedPost(postId, text, photoUrls) {
+  // photoUrls/title 생략 시 그대로 둔다 — 댓글 수정 등 사진·제목을 다루지 않는 호출부와 호환.
+  async function handleUpdateFeedPost(postId, text, photoUrls, title) {
     const prev = feed.find((p) => p.id === postId);
-    const patch = photoUrls !== undefined ? { text, photoUrls } : { text };
+    const patch = {
+      text,
+      ...(photoUrls !== undefined ? { photoUrls } : {}),
+      ...(title !== undefined && feedTitleReady ? { title } : {}),
+    };
     setFeed((prev2) => prev2.map((p) => (p.id === postId ? { ...p, ...patch } : p)));
     // 실패하면 화면만 바뀐 채 남지 않도록 원래 글로 되돌린다 (P1-7)
-    const dbPatch = photoUrls !== undefined ? { body: text, photo_urls: photoUrls } : { body: text };
+    const dbPatch = {
+      body: text,
+      ...(photoUrls !== undefined ? { photo_urls: photoUrls } : {}),
+      ...(title !== undefined && feedTitleReady ? { title } : {}),
+    };
     if (!(await writeOk(supabase.from("feed_posts").update(dbPatch).eq("id", postId), "글 수정 저장 실패"))) {
-      setFeed((prev2) => prev2.map((p) => (p.id === postId ? { ...p, text: prev?.text, photoUrls: prev?.photoUrls } : p)));
+      setFeed((prev2) => prev2.map((p) => (p.id === postId ? { ...p, text: prev?.text, photoUrls: prev?.photoUrls, title: prev?.title } : p)));
     }
   }
 

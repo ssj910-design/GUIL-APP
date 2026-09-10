@@ -276,9 +276,17 @@ function ComposeBox({ onSubmit, placeholder, compact, members = [] }) {
 
 // 글 수정 폼 — 목록 카드·상세 모달 둘 다에서 공용으로 쓴다. 기존 첨부 미리보기(삭제 가능) +
 // 추가 업로드까지 ComposeBox와 동일하게 다룬다.
-function EditPostForm({ editText, setEditText, editPhotos, setEditPhotos, editUploading, onPickFiles, saveEdit, onCancel }) {
+function EditPostForm({ editText, setEditText, editTitle, setEditTitle, showTitle, editPhotos, setEditPhotos, editUploading, onPickFiles, saveEdit, onCancel }) {
   return (
     <div>
+      {showTitle && (
+        <input
+          className={`${inputCls} font-bold mb-2`}
+          placeholder="공지 제목을 입력하세요 (필수)"
+          value={editTitle}
+          onChange={(e) => setEditTitle(e.target.value)}
+        />
+      )}
       <textarea
         className={`${inputCls} resize-none`}
         rows={3}
@@ -322,7 +330,7 @@ function EditPostForm({ editText, setEditText, editPhotos, setEditPhotos, editUp
 }
 
 // 게시글 카드 — 게시판 목록·공지사항 전체보기 화면 공용(둘 다 같은 스타일로 보이게).
-function PostCard({ p, comments, liked, likes, menuOpen, onToggleMenu, onOpenDetail, onStartEdit, onNoticeClick, onDelete, editingId, editText, setEditText, saveEdit, setEditingId, onToggleLike, onOpenPhoto, editPhotos, setEditPhotos, editUploading, onPickEditFiles }) {
+function PostCard({ p, comments, liked, likes, menuOpen, onToggleMenu, onOpenDetail, onStartEdit, onNoticeClick, onDelete, editingId, editText, setEditText, editTitle, setEditTitle, saveEdit, setEditingId, onToggleLike, onOpenPhoto, editPhotos, setEditPhotos, editUploading, onPickEditFiles }) {
   return (
     <div
       onClick={onOpenDetail}
@@ -364,6 +372,7 @@ function PostCard({ p, comments, liked, likes, menuOpen, onToggleMenu, onOpenDet
             <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
               <EditPostForm
                 editText={editText} setEditText={setEditText}
+                editTitle={editTitle} setEditTitle={setEditTitle} showTitle={p.isNotice}
                 editPhotos={editPhotos} setEditPhotos={setEditPhotos}
                 editUploading={editUploading} onPickFiles={onPickEditFiles}
                 saveEdit={saveEdit} onCancel={() => setEditingId(null)}
@@ -402,6 +411,7 @@ export default function RoomAdmin({ data, setData }) {
   const [menuFor, setMenuFor] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState("");
+  const [editTitle, setEditTitle] = useState("");
   const [editPhotos, setEditPhotos] = useState([]);
   const [editUploading, setEditUploading] = useState(false);
   const [composing, setComposing] = useState(false); // 글쓰기 모달
@@ -503,6 +513,7 @@ export default function RoomAdmin({ data, setData }) {
   function startEdit(p) {
     setEditingId(p.id);
     setEditText(p.text ?? "");
+    setEditTitle(p.title ?? "");
     setEditPhotos(p.photoUrls ?? []);
     setMenuFor(null);
   }
@@ -511,9 +522,10 @@ export default function RoomAdmin({ data, setData }) {
     if (!text && editPhotos.length === 0) return;
     const id = editingId;
     const photoUrls = editPhotos;
+    const title = editTitle.trim() || null;
     setEditingId(null);
-    setData((prev) => ({ ...prev, feed: prev.feed.map((p) => (p.id === id ? { ...p, text, photoUrls } : p)) }));
-    await supabase.from("feed_posts").update({ body: text, photo_urls: photoUrls.length ? photoUrls : null }).eq("id", id);
+    setData((prev) => ({ ...prev, feed: prev.feed.map((p) => (p.id === id ? { ...p, text, photoUrls, ...(titleReady ? { title } : {}) } : p)) }));
+    await supabase.from("feed_posts").update({ body: text, photo_urls: photoUrls.length ? photoUrls : null, ...(titleReady ? { title } : {}) }).eq("id", id);
   }
   async function pickEditFiles(e) {
     const files = [...(e.target.files ?? [])];
@@ -561,7 +573,7 @@ export default function RoomAdmin({ data, setData }) {
       onStartEdit: () => startEdit(p),
       onNoticeClick: () => { handleNoticeClick(p); setMenuFor(null); },
       onDelete: () => { setMenuFor(null); deletePost(p.id); },
-      editingId, editText, setEditText, saveEdit, setEditingId,
+      editingId, editText, setEditText, editTitle, setEditTitle, saveEdit, setEditingId,
       editPhotos, setEditPhotos, editUploading, onPickEditFiles: pickEditFiles,
       onToggleLike: () => toggleLike(p.id),
       onOpenPhoto: (urls, index) => setPhotoViewer({ urls, index }),
@@ -678,6 +690,7 @@ export default function RoomAdmin({ data, setData }) {
                 {editingId === detailPost.id ? (
                   <EditPostForm
                     editText={editText} setEditText={setEditText}
+                    editTitle={editTitle} setEditTitle={setEditTitle} showTitle={detailPost.isNotice}
                     editPhotos={editPhotos} setEditPhotos={setEditPhotos}
                     editUploading={editUploading} onPickFiles={pickEditFiles}
                     saveEdit={saveEdit} onCancel={() => setEditingId(null)}
