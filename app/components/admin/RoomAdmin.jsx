@@ -274,8 +274,55 @@ function ComposeBox({ onSubmit, placeholder, compact, members = [] }) {
   );
 }
 
+// 글 수정 폼 — 목록 카드·상세 모달 둘 다에서 공용으로 쓴다. 기존 첨부 미리보기(삭제 가능) +
+// 추가 업로드까지 ComposeBox와 동일하게 다룬다.
+function EditPostForm({ editText, setEditText, editPhotos, setEditPhotos, editUploading, onPickFiles, saveEdit, onCancel }) {
+  return (
+    <div>
+      <textarea
+        className={`${inputCls} resize-none`}
+        rows={3}
+        value={editText}
+        onChange={(e) => setEditText(e.target.value)}
+        autoFocus
+      />
+      {editPhotos.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {editPhotos.map((url, i) => (
+            <div key={i} className="relative">
+              {isVideoUrl(url)
+                ? <video src={url} className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+                : isImageAttachment(url)
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+                  : <FileAttachmentCard url={url} className="w-16 h-16" />}
+              <button
+                onClick={() => setEditPhotos((p) => p.filter((_, idx) => idx !== i))}
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-800 text-white flex items-center justify-center"
+              >
+                <X size={11} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center justify-between mt-1.5">
+        <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 cursor-pointer">
+          <ImageIcon size={16} />
+          사진·영상·파일
+          <input type="file" multiple className="hidden" onChange={onPickFiles} disabled={editUploading} />
+        </label>
+        <div className="flex gap-2">
+          <button onClick={saveEdit} disabled={editUploading} className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-lg px-3.5 py-1.5">저장</button>
+          <button onClick={onCancel} className="text-xs font-bold text-slate-400 px-2.5 py-1.5">취소</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // 게시글 카드 — 게시판 목록·공지사항 전체보기 화면 공용(둘 다 같은 스타일로 보이게).
-function PostCard({ p, comments, liked, likes, menuOpen, onToggleMenu, onOpenDetail, onStartEdit, onNoticeClick, onDelete, editingId, editText, setEditText, saveEdit, setEditingId, onToggleLike, onOpenPhoto }) {
+function PostCard({ p, comments, liked, likes, menuOpen, onToggleMenu, onOpenDetail, onStartEdit, onNoticeClick, onDelete, editingId, editText, setEditText, saveEdit, setEditingId, onToggleLike, onOpenPhoto, editPhotos, setEditPhotos, editUploading, onPickEditFiles }) {
   return (
     <div
       onClick={onOpenDetail}
@@ -315,17 +362,12 @@ function PostCard({ p, comments, liked, likes, menuOpen, onToggleMenu, onOpenDet
           </div>
           {editingId === p.id ? (
             <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
-              <textarea
-                className={`${inputCls} resize-none`}
-                rows={3}
-                value={editText}
-                onChange={(e) => setEditText(e.target.value)}
-                autoFocus
+              <EditPostForm
+                editText={editText} setEditText={setEditText}
+                editPhotos={editPhotos} setEditPhotos={setEditPhotos}
+                editUploading={editUploading} onPickFiles={onPickEditFiles}
+                saveEdit={saveEdit} onCancel={() => setEditingId(null)}
               />
-              <div className="flex gap-2 mt-1.5">
-                <button onClick={saveEdit} className="text-xs font-bold text-white bg-blue-700 rounded-lg px-3.5 py-1.5">저장</button>
-                <button onClick={() => setEditingId(null)} className="text-xs font-bold text-slate-400 px-2.5 py-1.5">취소</button>
-              </div>
             </div>
           ) : (
             <div className="mt-1.5">
@@ -333,7 +375,7 @@ function PostCard({ p, comments, liked, likes, menuOpen, onToggleMenu, onOpenDet
               <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{p.text}</p>
             </div>
           )}
-          {p.photoUrls?.length > 0 && (
+          {editingId !== p.id && p.photoUrls?.length > 0 && (
             <div className="mt-2">
               <PhotoGrid urls={p.photoUrls} onOpen={onOpenPhoto} compact />
             </div>
@@ -360,6 +402,8 @@ export default function RoomAdmin({ data, setData }) {
   const [menuFor, setMenuFor] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState("");
+  const [editPhotos, setEditPhotos] = useState([]);
+  const [editUploading, setEditUploading] = useState(false);
   const [composing, setComposing] = useState(false); // 글쓰기 모달
   const [showNoticeFeed, setShowNoticeFeed] = useState(false); // 공지사항 전체보기 화면
 
@@ -459,15 +503,30 @@ export default function RoomAdmin({ data, setData }) {
   function startEdit(p) {
     setEditingId(p.id);
     setEditText(p.text ?? "");
+    setEditPhotos(p.photoUrls ?? []);
     setMenuFor(null);
   }
   async function saveEdit() {
     const text = editText.trim();
-    if (!text) return;
+    if (!text && editPhotos.length === 0) return;
     const id = editingId;
+    const photoUrls = editPhotos;
     setEditingId(null);
-    setData((prev) => ({ ...prev, feed: prev.feed.map((p) => (p.id === id ? { ...p, text } : p)) }));
-    await supabase.from("feed_posts").update({ body: text }).eq("id", id);
+    setData((prev) => ({ ...prev, feed: prev.feed.map((p) => (p.id === id ? { ...p, text, photoUrls } : p)) }));
+    await supabase.from("feed_posts").update({ body: text, photo_urls: photoUrls.length ? photoUrls : null }).eq("id", id);
+  }
+  async function pickEditFiles(e) {
+    const files = [...(e.target.files ?? [])];
+    e.target.value = "";
+    if (!files.length) return;
+    setEditUploading(true);
+    try {
+      const urls = await Promise.all(files.map((f) => uploadPhoto(f, "room")));
+      setEditPhotos((p) => [...p, ...urls]);
+    } catch (err) {
+      alert("사진 업로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
+    }
+    setEditUploading(false);
   }
 
   // 등록(isNotice: true)일 때만 title을 받는다 — 호출부(카드 목록·상세 모달)에서 prompt로 미리 받아 넘긴다.
@@ -503,6 +562,7 @@ export default function RoomAdmin({ data, setData }) {
       onNoticeClick: () => { handleNoticeClick(p); setMenuFor(null); },
       onDelete: () => { setMenuFor(null); deletePost(p.id); },
       editingId, editText, setEditText, saveEdit, setEditingId,
+      editPhotos, setEditPhotos, editUploading, onPickEditFiles: pickEditFiles,
       onToggleLike: () => toggleLike(p.id),
       onOpenPhoto: (urls, index) => setPhotoViewer({ urls, index }),
     };
@@ -616,26 +676,19 @@ export default function RoomAdmin({ data, setData }) {
                 </div>
                 <p className="text-[11px] text-slate-400 mb-1">{timeOf(detailPost.createdAt)}</p>
                 {editingId === detailPost.id ? (
-                  <div>
-                    <textarea
-                      className={`${inputCls} resize-none`}
-                      rows={3}
-                      value={editText}
-                      onChange={(e) => setEditText(e.target.value)}
-                      autoFocus
-                    />
-                    <div className="flex gap-2 mt-1.5">
-                      <button onClick={saveEdit} className="text-xs font-bold text-white bg-blue-700 rounded-lg px-3.5 py-1.5">저장</button>
-                      <button onClick={() => setEditingId(null)} className="text-xs font-bold text-slate-400 px-2.5 py-1.5">취소</button>
-                    </div>
-                  </div>
+                  <EditPostForm
+                    editText={editText} setEditText={setEditText}
+                    editPhotos={editPhotos} setEditPhotos={setEditPhotos}
+                    editUploading={editUploading} onPickFiles={pickEditFiles}
+                    saveEdit={saveEdit} onCancel={() => setEditingId(null)}
+                  />
                 ) : (
                   <>
                     {detailPost.title && <p className="text-sm font-extrabold text-slate-800 mb-1">{detailPost.title}</p>}
                     <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">{detailPost.text}</p>
+                    <PhotoGrid urls={detailPost.photoUrls} onOpen={(urls, index) => setPhotoViewer({ urls, index })} />
                   </>
                 )}
-                <PhotoGrid urls={detailPost.photoUrls} onOpen={(urls, index) => setPhotoViewer({ urls, index })} />
               </div>
             </div>
           </div>
