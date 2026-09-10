@@ -145,7 +145,7 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
         <button onClick={onClose} className="p-1" aria-label="닫기"><X size={18} /></button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-3">
         {/* 프로필 */}
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <div className="flex items-center gap-3">

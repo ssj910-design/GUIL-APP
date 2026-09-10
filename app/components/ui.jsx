@@ -437,8 +437,11 @@ export function Sheet({ title, onClose, children, bg = "bg-slate-50", full = fal
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   useBackHandler(true, onClose); // 안드로이드 뒤로가기 — 열려있는 동안 이 시트를 닫는다
+  // overscroll-contain — 안쪽 스크롤이 끝(위/아래)에 닿아도 그 다음 휠·터치스크롤이 뒤 배경으로
+  // 안 넘어가게 막는다(스크롤 체이닝 차단). overflow-y-auto가 없으면 의미가 없어 배경(패딩
+  // 부분)에도 같이 넣어준다 — 관리자웹 모달에서 같은 방식으로 이미 검증된 수정.
   const content = (
-    <div className="fixed inset-0 z-30 flex flex-col bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-30 flex flex-col bg-black/40 overflow-y-auto overscroll-contain" onClick={onClose}>
       {!full && <div className="mt-auto" />}
       <div
         className={`${bg} ${full ? "h-full" : "rounded-t-3xl max-h-[88%]"} flex flex-col shadow-2xl`}
@@ -450,7 +453,7 @@ export function Sheet({ title, onClose, children, bg = "bg-slate-50", full = fal
             <X size={20} />
           </button>
         </div>
-        <div className={flush ? "flex-1 min-h-0 flex flex-col" : "overflow-y-auto px-5 py-5"}>{children}</div>
+        <div className={flush ? "flex-1 min-h-0 flex flex-col" : "overflow-y-auto overscroll-contain px-5 py-5"}>{children}</div>
       </div>
     </div>
   );
