@@ -302,12 +302,12 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <div><p className="text-xs font-bold text-slate-500 mb-1">견적번호(No.)</p>
               <input className={inputCls} value={quoteNumber} onChange={(e) => setQuoteNumber(e.target.value)} /></div>
+            <div><p className="text-xs font-bold text-slate-500 mb-1">견적일</p>
+              <input type="date" className={inputCls} value={quoteDate} onChange={(e) => setQuoteDate(e.target.value)} /></div>
             <div><p className="text-xs font-bold text-slate-500 mb-1">수신자</p>
               <input className={inputCls} placeholder="OO 귀중" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} /></div>
             <div className="col-span-2"><p className="text-xs font-bold text-slate-500 mb-1">견적명</p>
               <input className={inputCls} value={quoteTitle} onChange={(e) => setQuoteTitle(e.target.value)} /></div>
-            <div><p className="text-xs font-bold text-slate-500 mb-1">견적일</p>
-              <input type="date" className={inputCls} value={quoteDate} onChange={(e) => setQuoteDate(e.target.value)} /></div>
           </div>
 
           <div className="flex items-center gap-1.5 mb-1 text-[10px] font-bold text-slate-400 px-0.5">
