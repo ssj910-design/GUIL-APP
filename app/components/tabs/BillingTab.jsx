@@ -1382,16 +1382,10 @@ export function BillingHistoryScreen({ billings, onBack, embedded = false }) {
     (groups[b.replaceDate] ??= []).push(b);
   });
   const dates = Object.keys(groups).sort((a, b) => new Date(b) - new Date(a));
-  const total = filtered.reduce((sum, b) => sum + (Number(b.cost) || 0), 0);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
       {!embedded && <DrillHeader title="청구 내역" onBack={onBack} onHome={onBack} />}
-
-      <div className="px-5 py-3 bg-blue-950 shrink-0 flex items-center justify-between">
-        <span className="text-xs text-blue-200">총 {filtered.length}건</span>
-        <span className="text-sm font-extrabold text-white">₩{total.toLocaleString()}</span>
-      </div>
 
       <div className="px-5 pt-3 pb-2 shrink-0">
         <div className="relative mb-2.5">
