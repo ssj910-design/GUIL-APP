@@ -262,14 +262,45 @@ function PostHeader({ p, canManage, canNotice, menuOpen, onToggleMenu, onCloseMe
 // 게시글 본문(텍스트 수정폼 포함) — 목록 카드/상세화면 공용.
 // ★ 반드시 모듈 최상위에 둘 것: RoomTab 렌더 함수 안에 정의하면 매 렌더마다 새 컴포넌트 타입이 되어
 // 서브트리가 통째로 리마운트된다(수정 textarea가 키 입력마다 포커스를 잃고, 사진·영상이 깜빡임). (P1-3)
-function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEditingId, onOpenPhoto }) {
+function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEditingId, onOpenPhoto, editPhotos, setEditPhotos, editUploading, pickEditFiles, editFileRef }) {
   if (editingId === p.id) {
     return (
       <div className="mb-2">
         <textarea className="w-full text-sm border border-slate-200 rounded-xl p-2.5 resize-none focus:outline-none" rows={3} value={editText} onChange={(e) => setEditText(e.target.value)} />
-        <div className="flex justify-end gap-2 mt-1.5">
-          <button onClick={saveEdit} className="text-xs font-bold text-white bg-blue-700 rounded-full px-3.5 py-1.5">저장</button>
-          <button onClick={() => setEditingId(null)} className="text-xs font-bold text-slate-400 px-2.5 py-1.5">취소</button>
+        {(editPhotos.length > 0 || editUploading) && (
+          <div className="flex gap-2 flex-wrap mt-2">
+            {editPhotos.map((u, i) => (
+              <div key={u} className="relative">
+                {isVideo(u)
+                  ? <video src={u} poster={videoPosterUrl(u)} preload="metadata" className="w-14 h-14 rounded-lg object-cover" />
+                  : isImageAttachment(u)
+                    ? <img src={u} alt="첨부" className="w-14 h-14 rounded-lg object-cover" />
+                    : <FileAttachmentCard url={u} className="w-14 h-14" />}
+                <button
+                  onClick={() => setEditPhotos((prev) => prev.filter((_, idx) => idx !== i))}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-800 text-white flex items-center justify-center"
+                  aria-label="첨부 제거"
+                >
+                  <X size={11} />
+                </button>
+              </div>
+            ))}
+            {editUploading && (
+              <div className="w-14 h-14 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center shrink-0">
+                <Loader2 size={18} className="text-slate-400 animate-spin" />
+              </div>
+            )}
+          </div>
+        )}
+        <div className="flex items-center justify-between mt-1.5">
+          <input ref={editFileRef} type="file" multiple hidden onChange={pickEditFiles} />
+          <button onClick={() => editFileRef.current?.click()} disabled={editUploading} aria-label="사진·영상·파일 첨부" className="w-8 h-8 rounded-full border border-slate-300 text-slate-500 flex items-center justify-center active:bg-slate-100 disabled:opacity-50">
+            <Plus size={14} />
+          </button>
+          <div className="flex gap-2">
+            <button onClick={saveEdit} disabled={editUploading} className="text-xs font-bold text-white bg-blue-700 rounded-full px-3.5 py-1.5 disabled:opacity-50">저장</button>
+            <button onClick={() => setEditingId(null)} className="text-xs font-bold text-slate-400 px-2.5 py-1.5">취소</button>
+          </div>
         </div>
       </div>
     );
@@ -336,6 +367,9 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   const [menuFor, setMenuFor] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState("");
+  const [editPhotos, setEditPhotos] = useState([]);
+  const [editUploading, setEditUploading] = useState(false);
+  const editFileRef = useRef(null);
   const [openPostId, setOpenPostId] = useState(null);
   const [search, setSearch] = useState("");
   const [showNoticeList, setShowNoticeList] = useState(false);
@@ -483,11 +517,28 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   function startEdit(p) {
     setEditingId(p.id);
     setEditText(p.text ?? "");
+    setEditPhotos(p.photoUrls ?? []);
   }
   function saveEdit() {
-    if (!editText.trim()) return;
-    onUpdatePost?.(editingId, editText.trim());
+    if (!editText.trim() && editPhotos.length === 0) return;
+    onUpdatePost?.(editingId, editText.trim(), editPhotos);
     setEditingId(null);
+  }
+  async function pickEditFiles(e) {
+    const files = [...(e.target.files ?? [])];
+    e.target.value = "";
+    if (!files.length) return;
+    if (files.some((f) => f.size > 50 * 1024 * 1024)) return alert("파일당 50MB까지 보낼 수 있어요");
+    setEditUploading(true);
+    try {
+      for (const f of files) {
+        const url = await uploadPhoto(f, "room");
+        setEditPhotos((prev) => [...prev, url]);
+      }
+    } catch (err) {
+      alert("업로드에 실패했습니다: " + err.message);
+    }
+    setEditUploading(false);
   }
   // 알림/푸시로 특정 글이 지정되면(focusPostId) 게시판 탭 안에서 바로 그 글 화면으로 들어간다 —
   // materialFocusId/quoteFocusId와 동일한 방식(effect 없이 렌더 시점에 반영, 로컬 openPostId가 우선).
@@ -505,7 +556,10 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
   }
 
   // 모듈 최상위 PostBody에 넘길 편집·뷰어 상태 묶음 (P1-3)
-  const bodyProps = { editingId, editText, setEditText, saveEdit, setEditingId, onOpenPhoto: openPhoto };
+  const bodyProps = {
+    editingId, editText, setEditText, saveEdit, setEditingId, onOpenPhoto: openPhoto,
+    editPhotos, setEditPhotos, editUploading, pickEditFiles, editFileRef,
+  };
 
   const openPost = shownPostId ? feed.find((p) => p.id === shownPostId) : null;
   useBackHandler(!!openPost, closePost); // 안드로이드 뒤로가기 — 게시글 상세화면에서 목록으로
