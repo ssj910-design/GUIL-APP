@@ -65,16 +65,26 @@ public class MainActivity extends BridgeActivity {
             lastDownloadUrl = url;
             lastDownloadAtMs = now;
             try {
-                String filename = URLUtil.guessFileName(url, contentDisposition, mimetype);
+                String filename = downloadFileName(url, contentDisposition, mimetype);
                 DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
                 request.addRequestHeader("User-Agent", userAgent);
-                request.setMimeType(mimetype);
+                if (mimetype != null && !mimetype.isEmpty()) request.setMimeType(mimetype);
                 request.setTitle(filename);
                 request.setDescription("구일엘리베이터 앱 다운로드");
                 request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename);
+                try {
+                    request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename);
+                } catch (Exception e) {
+                    // 공용 다운로드 폴더를 못 쓰는 기기(외부 저장소 상태·제조사 정책)에서는
+                    // 앱 전용 폴더로라도 받는다 — 아무 일도 안 일어나는 것보다 낫다.
+                    request.setDestinationInExternalFilesDir(MainActivity.this, Environment.DIRECTORY_DOWNLOADS, filename);
+                }
                 DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-                if (dm != null) dm.enqueue(request);
+                if (dm == null) {
+                    Toast.makeText(MainActivity.this, "이 기기에서 다운로드 관리자를 쓸 수 없습니다", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                dm.enqueue(request);
             } catch (Exception e) {
                 // 예전엔 조용히 무시해서, 눌러도 아무 일도 안 일어나는 것처럼 보였다(실제로
                 // "다운로드가 안 된다"는 제보를 원인 파악조차 못 했다) — 앱은 계속 동작시키되
@@ -82,6 +92,24 @@ public class MainActivity extends BridgeActivity {
                 Toast.makeText(MainActivity.this, "다운로드에 실패했습니다: " + e.getMessage(), Toast.LENGTH_LONG).show();
             }
         });
+    }
+
+    /**
+     * 저장할 파일명. lib/photos.js가 붙여준 ?download=<파일명>을 최우선으로 쓴다 — Supabase가
+     * 돌려주는 Content-Disposition은 파일명이 퍼센트 인코딩된 채로 와서(filename=%ED%95%9C...)
+     * URLUtil.guessFileName이 그대로 파일명에 박아버린다. 값이 없거나 이상하면 기존 추측에 맡긴다.
+     */
+    private String downloadFileName(String url, String contentDisposition, String mimetype) {
+        try {
+            String requested = Uri.parse(url).getQueryParameter("download");
+            if (requested != null) {
+                String cleaned = requested.replace('/', '_').replace('\\', '_').trim();
+                if (!cleaned.isEmpty()) return cleaned;
+            }
+        } catch (Exception ignored) {
+            // 쿼리 파싱 실패는 아래 기본 추측으로 넘어간다
+        }
+        return URLUtil.guessFileName(url, contentDisposition, mimetype);
     }
 
     @Override
