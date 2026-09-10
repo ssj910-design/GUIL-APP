@@ -2529,7 +2529,8 @@ export default function App() {
             >
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold">새 버전이 있어요 (v{updateInfo.versionName})</p>
-                {updateInfo.notes && <p className="text-xs text-slate-300 truncate mt-0.5">{updateInfo.notes}</p>}
+                {/* 배너는 좁아서 전체 목록 대신 첫 줄만 — 자세한 내용은 "업데이트" 눌러서 다운로드 페이지에서 본다. */}
+                {updateInfo.notes && <p className="text-xs text-slate-300 truncate mt-0.5">{updateInfo.notes.split("\n")[0]}</p>}
               </div>
               <a href="/download" className="text-xs font-bold text-white bg-blue-600 rounded-full px-3 py-1.5 shrink-0 active:bg-blue-700">업데이트</a>
               <button

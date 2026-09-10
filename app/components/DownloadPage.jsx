@@ -39,12 +39,18 @@ export default function DownloadPage() {
             >
               <Download size={18} /> 다운로드 (v{release.versionName})
             </a>
-            {release.notes && <p className="text-xs text-slate-500 text-center mt-2">{release.notes}</p>}
-            {release.releasedAt && <p className="text-[11px] text-slate-400 text-center mt-0.5">{release.releasedAt} 배포</p>}
+            {release.releasedAt && <p className="text-[11px] text-slate-400 text-center mt-2">{release.releasedAt} 배포</p>}
           </>
         )}
 
-        <div className="bg-white rounded-xl border border-slate-200 p-4 mt-8">
+        {release?.notes && (
+          <div className="bg-white rounded-xl border border-slate-200 p-4 mt-4">
+            <p className="text-xs font-bold text-slate-700 mb-2">이번 업데이트</p>
+            <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">{release.notes}</p>
+          </div>
+        )}
+
+        <div className="bg-white rounded-xl border border-slate-200 p-4 mt-4">
           <p className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5">
             <ShieldCheck size={14} className="text-blue-600" /> 설치 안내
           </p>
