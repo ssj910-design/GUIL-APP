@@ -1210,6 +1210,9 @@ function DetailRow({ label, value }) {
 // 품목별 금액·승인(서명/전화승인)·외주·교체확인서 PDF까지 보여준다. 수정은 PC 관리자
 // 콘솔(BillingsAdmin.jsx)에만 있다 — 여기선 조회만.
 function BillingDetailSheet({ b, onClose, onPhotoClick }) {
+  // 청구방식은 관리자(회계 처리용)만 본다 — 자재담당관리자는 이 화면에선 role이 engineer로
+  // 스코프되므로(ElevatorFieldApp의 isMaterialTierAdmin) 기사 계정과 동일하게 자동으로 숨겨진다.
+  const { role } = useContext(AuthContext);
   const unitLabel = b.elevatorNos?.length ? b.elevatorNos.join(", ") : b.elevatorNo;
   const items = b.partPhotos?.length
     ? b.partPhotos
@@ -1225,7 +1228,7 @@ function BillingDetailSheet({ b, onClose, onPhotoClick }) {
           <DetailRow label="작업자" value={b.engineer || "-"} />
           <DetailRow label="교체일" value={b.replaceDate || "-"} />
           <DetailRow label="금액" value={b.isFree ? "무상" : total ? `₩${total.toLocaleString()}` : "-"} />
-          {b.billingMethod && <DetailRow label="청구방식" value={b.billingMethod} />}
+          {role === "admin" && b.billingMethod && <DetailRow label="청구방식" value={b.billingMethod} />}
           {b.isOutsourced && <DetailRow label="외주업체" value={b.vendorName || "-"} />}
         </div>
 
