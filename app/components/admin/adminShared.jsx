@@ -5,10 +5,10 @@ import { useState, useRef, createContext } from "react";
 import { createPortal } from "react-dom";
 import { X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Pencil, Paperclip, Camera as CameraIcon, Image as ImageIcon, Download, Trash2, Search } from "lucide-react";
 import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
-import { downloadPhoto, downloadPhotosAsZip, extOf } from "@/lib/photos";
+import { downloadPhoto, downloadPhotosAsZip, extOf, isVideoUrl } from "@/lib/photos";
 import { shortDate, parseShortDate, autoFormatShortDate, formatUnitLabel, sortEngineersByDistance, busyStatusOf, handleFormattedInputChange } from "@/lib/utils";
 import { confirmAsync } from "@/app/components/ConfirmHost";
-import { PhotoLightboxPane, Sheet } from "@/app/components/ui";
+import { PhotoLightboxPane, Sheet, VideoThumb } from "@/app/components/ui";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
 
 export const inputCls = "border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
@@ -737,8 +737,10 @@ export function PhotoGrid({ urls = [], cols = 4, emptyText = "등록된 사진�
   return (
     <>
       <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-        {urls.map((url, i) => (
-          <img
+        {urls.map((url, i) => (isVideoUrl(url)
+          // 영상은 목록에서 파일을 받지 않고 첫 프레임 썸네일만 — 누르면 라이트박스에서 재생.
+          ? <VideoThumb key={i} url={url} className="w-full aspect-square rounded-lg border border-slate-200 cursor-pointer" onClick={() => setViewerIndex(i)} />
+          : <img
             key={i}
             src={url}
             alt=""

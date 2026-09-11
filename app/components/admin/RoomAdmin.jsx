@@ -13,7 +13,7 @@ import { uploadPhoto, downloadPhoto, downloadPhotosAsZip, extOf, isVideoUrl } fr
 import { Modal, inputCls, AdminAuthContext, useBackdropClose } from "@/app/components/admin/adminShared";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { profileIdByName } from "@/lib/utils";
-import { PhotoLightboxPane, FileAttachmentCard } from "@/app/components/ui";
+import { PhotoLightboxPane, FileAttachmentCard, VideoThumb } from "@/app/components/ui";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
 
 // 작성자 이름 첫 글자로 아바타 원을 만든다 — 네이버밴드처럼 글마다 시각적 기준점을 준다.
@@ -53,7 +53,7 @@ function PhotoGrid({ urls, onOpen, compact }) {
     return (
       <button onClick={(e) => { e.stopPropagation(); onOpen(urls, 0); }} className="relative shrink-0">
         {isVideoUrl(urls[0])
-          ? <video src={urls[0]} className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
+          ? <VideoThumb url={urls[0]} className="w-16 h-16 rounded-lg border border-slate-200" />
           // eslint-disable-next-line @next/next/no-img-element
           : <img src={urls[0]} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />}
         {urls.length > 1 && (
@@ -66,7 +66,7 @@ function PhotoGrid({ urls, onOpen, compact }) {
     <div className="mt-2 grid grid-cols-4 gap-1.5 max-w-md">
       {urls.map((url, i) =>
         isVideoUrl(url) ? (
-          <video key={i} src={url} onClick={() => onOpen(urls, i)} className="w-full aspect-square object-cover rounded-lg border border-slate-200 cursor-pointer" />
+          <VideoThumb key={i} url={url} onClick={() => onOpen(urls, i)} className="w-full aspect-square rounded-lg border border-slate-200 cursor-pointer" />
         ) : isImageAttachment(url) ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -200,7 +200,7 @@ function ComposeBox({ onSubmit, placeholder, compact, members = [] }) {
           {photos.map((url, i) => (
             <div key={i} className="relative">
               {isVideoUrl(url)
-                ? <video src={url} className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+                ? <VideoThumb url={url} className="w-16 h-16 rounded-lg border border-slate-200" />
                 : isImageAttachment(url)
                   // eslint-disable-next-line @next/next/no-img-element
                   ? <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
@@ -274,7 +274,7 @@ function EditPostForm({ editText, setEditText, editTitle, setEditTitle, showTitl
           {editPhotos.map((url, i) => (
             <div key={i} className="relative">
               {isVideoUrl(url)
-                ? <video src={url} className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+                ? <VideoThumb url={url} className="w-16 h-16 rounded-lg border border-slate-200" />
                 : isImageAttachment(url)
                   // eslint-disable-next-line @next/next/no-img-element
                   ? <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />

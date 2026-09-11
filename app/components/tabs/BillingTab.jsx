@@ -3,7 +3,8 @@ import { Receipt, Check, Search, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, handlePhoneInputChange, freeReasonLabel, quoteGrandTotal, quoteMaterialItems, shortDate } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
-import { PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink, Sheet, PhotoLightbox } from "@/app/components/ui";
+import { isVideoUrl } from "@/lib/photos";
+import { PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink, Sheet, PhotoLightbox, VideoThumb } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload, SignaturePad } from "@/app/components/formWidgets";
 import { emptyPartRow, formatPartRows, PartsRowsInput, UnitPickGrid } from "@/app/components/tabs/MaterialTab";
@@ -697,6 +698,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                         <p className="text-xs font-extrabold text-slate-700 mb-2">{part.name}{part.qty ? ` ${part.qty}` : ""}</p>
                         <Field label="교체 전">
                           <MultiPhotoUpload
+                        allowVideo={false}
                             photos={partPhotos[i]?.before ?? []}
                             uploadFolder={`billings/${uploadSession}/part${i}/before`}
                             onUploaded={(url) => updatePartPhotos(i, "before", (arr) => [...arr, { url }])}
@@ -708,6 +710,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                         </Field>
                         <Field label="교체 후">
                           <MultiPhotoUpload
+                        allowVideo={false}
                             photos={partPhotos[i]?.after ?? []}
                             uploadFolder={`billings/${uploadSession}/part${i}/after`}
                             onUploaded={(url) => updatePartPhotos(i, "after", (arr) => [...arr, { url }])}
@@ -724,6 +727,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                   <>
                     <Field label="교체 전">
                       <MultiPhotoUpload
+                        allowVideo={false}
                         photos={materialPhotos.before}
                         uploadFolder={`billings/${uploadSession}/before`}
                         onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, before: [...p.before, { url }] }))}
@@ -735,6 +739,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                     </Field>
                     <Field label="교체 후">
                       <MultiPhotoUpload
+                        allowVideo={false}
                         photos={materialPhotos.after}
                         uploadFolder={`billings/${uploadSession}/after`}
                         onUploaded={(url) => setMaterialPhotos((p) => ({ ...p, after: [...p.after, { url }] }))}
@@ -989,6 +994,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                       <p className="text-xs font-extrabold text-slate-700 mb-2">{part.name}{part.qty ? ` ${part.qty}개` : ""}</p>
                       <Field label="교체 전">
                         <MultiPhotoUpload
+                        allowVideo={false}
                           photos={manualPartPhotos[i]?.before ?? []}
                           uploadFolder={`billings/${uploadSession}/manualpart${i}/before`}
                           onUploaded={(url) => updateManualPartPhotos(i, "before", (arr) => [...arr, { url }])}
@@ -1000,6 +1006,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                       </Field>
                       <Field label="교체 후">
                         <MultiPhotoUpload
+                        allowVideo={false}
                           photos={manualPartPhotos[i]?.after ?? []}
                           uploadFolder={`billings/${uploadSession}/manualpart${i}/after`}
                           onUploaded={(url) => updateManualPartPhotos(i, "after", (arr) => [...arr, { url }])}
@@ -1016,6 +1023,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                 <>
                   <Field label="교체 전 사진 (필수)">
                     <MultiPhotoUpload
+                        allowVideo={false}
                       photos={manualPhotos.before}
                       uploadFolder={`billings/${uploadSession}/before`}
                       onUploaded={(url) => setManualPhotos((p) => ({ ...p, before: [...p.before, { url }] }))}
@@ -1026,6 +1034,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                   </Field>
                   <Field label="교체 후 사진 (필수)">
                     <MultiPhotoUpload
+                        allowVideo={false}
                       photos={manualPhotos.after}
                       uploadFolder={`billings/${uploadSession}/after`}
                       onUploaded={(url) => setManualPhotos((p) => ({ ...p, after: [...p.after, { url }] }))}
@@ -1253,7 +1262,9 @@ export function BillingCard({ b, onPhotoClick, onClick }) {
             >
               <div className="relative">
                 {/* 화면 밖 카드의 사진은 스크롤해서 보일 때 받는다(무료). 서버 리사이즈 썸네일은 비용 때문에 쓰지 않는다. */}
-                <img src={s.url} loading="lazy" decoding="async" alt="" className="w-12 h-12 rounded-lg object-cover border border-slate-200" />
+                {isVideoUrl(s.url)
+                  ? <VideoThumb url={s.url} className="w-12 h-12 rounded-lg border border-slate-200" />
+                  : <img src={s.url} loading="lazy" decoding="async" alt="" className="w-12 h-12 rounded-lg object-cover border border-slate-200" />}
                 {s.count > 1 && (
                   <span className="absolute -top-1 -right-1 text-[8px] font-bold text-white bg-slate-700 rounded-full px-1 leading-4">+{s.count - 1}</span>
                 )}

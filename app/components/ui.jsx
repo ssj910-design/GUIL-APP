@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { BRAND } from "@/lib/company";
 import { createPortal } from "react-dom";
-import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Download, FileText, Loader2 } from "lucide-react";
+import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Download, FileText, Loader2, Play } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
 import { Capacitor } from "@capacitor/core";
 import { downloadPhoto, downloadPhotosAsZip, extOf, isVideoUrl, videoPosterUrl } from "@/lib/photos";
@@ -178,6 +178,28 @@ export function PhotoThumb({ caption }) {
 }
 
 
+// 영상 썸네일 — 목록에서는 영상 파일을 받지 않고 첫 프레임 이미지(업로드 때 같이 저장한
+// .poster.jpg, 수십 KB)만 보여준다. 예전엔 목록마다 <video preload="metadata">라서 목록을 여는
+// 모든 사람의 앱이 영상 파일을 받았고, 게시판에 영상이 올라와 있던 9/7~9/10에 Storage 전송량이
+// 두 배로 뛰었다. 누르면 부모의 onClick(보통 라이트박스)이 실제 영상을 연다. 포스터가 없는
+// 옛 영상(9/9 이전 업로드)은 ▶ 표시만 있는 어두운 칸으로 보인다.
+export function VideoThumb({ url, className = "", onClick }) {
+  const [noPoster, setNoPoster] = useState(false);
+  return (
+    <div className={`relative overflow-hidden bg-slate-700 flex items-center justify-center ${className}`} onClick={onClick}>
+      {!noPoster && (
+        // eslint-disable-next-line @next/next/no-img-element
+        // 지연 로딩(lazy)은 쓰지 않는다 — 이 배치(absolute+overflow-hidden)에선 화면에 보여도 로드가
+        // 시작되지 않는 경우가 실측으로 확인됐다. 포스터는 수십 KB라 바로 받아도 부담이 없다.
+        <img src={videoPosterUrl(url)} alt="" decoding="async" onError={() => setNoPoster(true)} className="absolute inset-0 w-full h-full object-cover" />
+      )}
+      <span className="relative w-6 h-6 rounded-full bg-black/55 flex items-center justify-center">
+        <Play size={12} className="text-white fill-white ml-0.5" />
+      </span>
+    </div>
+  );
+}
+
 /* 사진 여러 장을 터치하면 전체화면으로 볼 수 있는 그리드 — 2장 이상이면 좌우 넘김, 더블탭/휠로 확대 */
 export function PhotoGrid({ urls = [], cols = 3, className = "" }) {
   const [viewerIndex, setViewerIndex] = useState(null);
@@ -185,9 +207,10 @@ export function PhotoGrid({ urls = [], cols = 3, className = "" }) {
   return (
     <>
       <div className={`grid gap-2 ${className}`} style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-        {urls.map((url, i) => (
+        {urls.map((url, i) => (isVideoUrl(url)
+          ? <VideoThumb key={i} url={url} className="w-full aspect-square rounded-xl border border-slate-200" onClick={() => setViewerIndex(i)} />
           // eslint-disable-next-line @next/next/no-img-element
-          <img
+          : <img
             key={i}
             src={url}
             alt=""
@@ -209,7 +232,7 @@ export function PhotoLightboxPane({ url, active, zoom, pan, isGesturing }) {
   if (isVideoUrl(url)) {
     return (
       <div className="w-full h-full shrink-0 flex items-center justify-center px-4">
-        <video src={url} poster={videoPosterUrl(url)} controls playsInline preload="metadata" className="max-w-full max-h-full object-contain" />
+        <video src={url} poster={videoPosterUrl(url)} controls playsInline preload={active ? "metadata" : "none"} className="max-w-full max-h-full object-contain" />
       </div>
     );
   }

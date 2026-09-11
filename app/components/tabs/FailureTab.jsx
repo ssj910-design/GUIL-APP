@@ -3,10 +3,10 @@ import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame,
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, handlePhoneInputChange, distanceKm, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf, unitBadgeLabel, normalizeModel, normalizeCode, distinctModels, formatListText } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR, FAILURE_CANCEL_REASONS } from "@/lib/constants";
-import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink } from "@/app/components/ui";
+import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink, VideoThumb } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
-import { isVideoUrl, videoPosterUrl } from "@/lib/photos";
+import { isVideoUrl } from "@/lib/photos";
 import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
@@ -628,7 +628,7 @@ export function FailureDetailSheet({ failure, failures = [], nested = false, onC
             {failure.photoUrls.map((url, i) => (
               <button key={i} type="button" onClick={() => setPhotoViewer({ urls: failure.photoUrls, index: i })}>
                 {isVideoUrl(url)
-                  ? <video src={url} poster={videoPosterUrl(url)} preload="metadata" className="w-full aspect-square rounded-xl object-cover border border-slate-200" />
+                  ? <VideoThumb url={url} className="w-full aspect-square rounded-xl border border-slate-200" />
                   : <img src={url} alt="" className="w-full aspect-square rounded-xl object-cover border border-slate-200" />}
               </button>
             ))}

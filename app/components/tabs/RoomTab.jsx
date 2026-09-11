@@ -3,7 +3,7 @@ import { Send, Plus, X, Download, MessageCircle, ThumbsUp, MoreVertical, Chevron
 import { AuthContext } from "@/app/components/context";
 import { uploadPhoto, downloadPhoto, downloadPhotosAsZip, extOf, isVideoUrl, videoPosterUrl } from "@/lib/photos";
 import { confirmAsync } from "@/app/components/ConfirmHost";
-import { PhotoLightboxPane, FileAttachmentCard } from "@/app/components/ui";
+import { PhotoLightboxPane, FileAttachmentCard, VideoThumb } from "@/app/components/ui";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
 import { useBackHandler } from "@/app/hooks/useBackHandler";
 
@@ -174,7 +174,7 @@ function CommentRow({ c, onLike, liked, likeCount, canManage, editingId, editTex
           <div className="flex gap-1.5 flex-wrap mt-1">
             {c.photoUrls.map((u, i) =>
               isVideo(u)
-                ? <video key={u} src={u} poster={videoPosterUrl(u)} preload="metadata" className="w-16 h-16 rounded-lg object-cover" onClick={() => onOpenPhoto(c.photoUrls, i)} />
+                ? <VideoThumb key={u} url={u} className="w-16 h-16 rounded-lg" onClick={() => onOpenPhoto(c.photoUrls, i)} />
                 : isImageAttachment(u)
                   ? <img key={u} src={u} alt="첨부" className="w-16 h-16 rounded-lg object-cover" onClick={() => onOpenPhoto(c.photoUrls, i)} />
                   : <FileAttachmentCard key={u} url={u} className="w-16 h-16" />
@@ -254,7 +254,7 @@ function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEdit
             {editPhotos.map((u, i) => (
               <div key={u} className="relative">
                 {isVideo(u)
-                  ? <video src={u} poster={videoPosterUrl(u)} preload="metadata" className="w-14 h-14 rounded-lg object-cover" />
+                  ? <VideoThumb url={u} className="w-14 h-14 rounded-lg" />
                   : isImageAttachment(u)
                     ? <img src={u} alt="첨부" className="w-14 h-14 rounded-lg object-cover" />
                     : <FileAttachmentCard url={u} className="w-14 h-14" />}
@@ -298,7 +298,7 @@ function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEdit
           <div className="space-y-1.5 mt-2">
             {p.photoUrls.map((u, i) =>
               isVideo(u)
-                ? <video key={u} src={u} poster={videoPosterUrl(u)} controls playsInline preload="metadata" className="rounded-lg w-full" />
+                ? <video key={u} src={u} poster={videoPosterUrl(u)} controls playsInline preload="none" className="rounded-lg w-full" />
                 : isImageAttachment(u)
                   ? <img key={u} src={u} alt="첨부 사진" className="rounded-lg w-full object-cover" onClick={() => onOpenPhoto(p.photoUrls, i)} />
                   : <FileAttachmentCard key={u} url={u} className="w-full h-16" />
@@ -307,7 +307,7 @@ function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEdit
         ) : isImageAttachment(p.photoUrls[0]) || isVideo(p.photoUrls[0]) ? (
           <button onClick={(e) => { e.stopPropagation(); onOpenPhoto(p.photoUrls, 0); }} className="relative shrink-0">
             {isVideo(p.photoUrls[0])
-              ? <video src={p.photoUrls[0]} poster={videoPosterUrl(p.photoUrls[0])} preload="metadata" className="w-16 h-16 rounded-lg object-cover" />
+              ? <VideoThumb url={p.photoUrls[0]} className="w-16 h-16 rounded-lg" />
               : <img src={p.photoUrls[0]} alt="첨부 사진" className="w-16 h-16 rounded-lg object-cover" />}
             {p.photoUrls.length > 1 && (
               <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] font-bold rounded px-1">{p.photoUrls.length}</span>
@@ -668,7 +668,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
               {pendingPhotos.map((u, i) => (
                 <div key={u} className="relative">
                   {isVideo(u)
-                    ? <video src={u} poster={videoPosterUrl(u)} preload="metadata" className="w-14 h-14 rounded-lg object-cover" />
+                    ? <VideoThumb url={u} className="w-14 h-14 rounded-lg" />
                     : isImageAttachment(u)
                       ? <img src={u} alt="첨부" className="w-14 h-14 rounded-lg object-cover" />
                       : <FileAttachmentCard url={u} className="w-14 h-14" />}
@@ -765,7 +765,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
               {(commentPhotos[openPost.id] ?? []).map((u, i) => (
                 <div key={u} className="relative">
                   {isVideo(u)
-                    ? <video src={u} poster={videoPosterUrl(u)} preload="metadata" className="w-12 h-12 rounded-lg object-cover" />
+                    ? <VideoThumb url={u} className="w-12 h-12 rounded-lg" />
                     : isImageAttachment(u)
                       ? <img src={u} alt="첨부" className="w-12 h-12 rounded-lg object-cover" />
                       : <FileAttachmentCard url={u} className="w-12 h-12" />}

@@ -1,8 +1,8 @@
 import { useState, useContext, useRef, useEffect } from "react";
 import { X, Camera as CameraIcon, Search, Image as ImageIcon, Loader2 } from "lucide-react";
 import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
-import { uploadPhoto, dataUrlToBlob, isVideoUrl, videoPosterUrl } from "@/lib/photos";
-import { inputCls, Sheet, PhotoLightbox } from "@/app/components/ui";
+import { uploadPhoto, dataUrlToBlob, isVideoUrl } from "@/lib/photos";
+import { inputCls, Sheet, PhotoLightbox, VideoThumb } from "@/app/components/ui";
 import { SitesContext } from "@/app/components/context";
 import { activeSites } from "@/lib/utils";
 
@@ -54,7 +54,8 @@ export function SiteSearchSelect({ value, onChange, placeholder = "현장명을 
 }
 
 
-export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = true, uploadFolder, onUploaded, compactHint = false, onUploadingChange }) {
+// allowVideo={false}: 사진만 받는 자리(청구 교체 전/후 — 교체확인서 PDF에는 영상이 못 들어간다).
+export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = true, uploadFolder, onUploaded, compactHint = false, onUploadingChange, allowVideo = true }) {
   // iOS Safari는 accept="image/*" 입력칸에 multiple까지 붙으면(여러 장 한꺼번에 선택) 카메라
   // 촬영 옵션을 아예 빼고 곧장 사진 라이브러리 선택 화면으로 건너뛴다 — "촬영하면서 동시에
   // 여러 장 선택"은 말이 안 되기 때문. 그래서 카메라(Capacitor Camera 플러그인, 한 장)와
@@ -68,6 +69,11 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
     setUploading(true);
     onUploadingChange?.(true);
     for (const file of files) {
+      // 갤러리 앱에 따라 accept를 무시하고 영상을 넘겨주기도 해서 여기서 한 번 더 막는다.
+      if (!allowVideo && (file.type?.startsWith("video/") || isVideoUrl(file.name))) {
+        alert("여기에는 사진만 올릴 수 있습니다 (영상은 올릴 수 없어요).");
+        continue;
+      }
       try {
         const url = await uploadPhoto(file, uploadFolder);
         // onUploaded가 서버에 저장까지 끝내고 나서 다음 파일로 넘어가야, 여러 장을 연달아
@@ -112,7 +118,7 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
           <div key={idx} className="relative aspect-square rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden">
             {p?.url ? (
               isVideoUrl(p.url)
-                ? <video src={p.url} poster={videoPosterUrl(p.url)} preload="metadata" className="w-full h-full object-cover" />
+                ? <VideoThumb url={p.url} className="w-full h-full" />
                 : <img src={p.url} alt="" className="w-full h-full object-cover" />
             ) : <ImageIcon size={16} className="text-slate-400" />}
             <button
@@ -131,7 +137,7 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
         )}
         {uploadFolder ? (
           <>
-            <input ref={galleryInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleFiles} />
+            <input ref={galleryInputRef} type="file" accept={allowVideo ? "image/*,video/*" : "image/*"} multiple className="hidden" onChange={handleFiles} />
             <button
               type="button"
               onClick={() => setChoosing(true)}
@@ -173,7 +179,7 @@ export function MultiPhotoUpload({ photos, onAdd, onRemove, label, required = tr
               onClick={() => { setChoosing(false); galleryInputRef.current?.click(); }}
               className="w-full flex items-center gap-2.5 text-sm font-bold text-slate-800 bg-slate-100 rounded-xl px-4 py-3.5 active:bg-slate-200"
             >
-              <ImageIcon size={18} /> 사진·영상첩에서 선택
+              <ImageIcon size={18} /> {allowVideo ? "사진·영상첩에서 선택" : "사진첩에서 선택"}
             </button>
           </div>
         </Sheet>
