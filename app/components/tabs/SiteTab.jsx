@@ -34,7 +34,7 @@ function PartReplacementCard({ r, onPhotoClick }) {
           {previewSlots.map((s, i) => (
             <button key={i} type="button" onClick={() => onPhotoClick(allUrls, s.index)} className="flex flex-col items-center gap-0.5">
               <div className="relative">
-                <img src={s.url} alt="" className="w-12 h-12 rounded-lg object-cover border border-slate-200" />
+                <img loading="lazy" decoding="async" src={s.url} alt="" className="w-12 h-12 rounded-lg object-cover border border-slate-200" />
                 {s.count > 1 && (
                   <span className="absolute -top-1 -right-1 text-[8px] font-bold text-white bg-slate-700 rounded-full px-1 leading-4">+{s.count - 1}</span>
                 )}
@@ -148,7 +148,7 @@ function ElevatorDetailScreen({ site, unit, subTab, setSubTab, failures, inspect
                               onClick={() => setPhotoViewer({ urls: f.photoUrls, index: i, siteName: site.name, date: `2026-${f.reportedAt.replace("/", "-")}` })}
                               className="shrink-0"
                             >
-                              <img src={url} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
+                              <img loading="lazy" decoding="async" src={url} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
                             </button>
                           ))}
                         </div>

@@ -436,7 +436,7 @@ export function FileCarousel({ urls, accept = "image/*,.pdf", uploadLabel = "파
               onClick={() => setViewerIndex(i)}
               className="aspect-square rounded-xl overflow-hidden border border-slate-200"
             >
-              <img src={url} alt="사진" className="w-full h-full object-cover" />
+              <img src={url} loading="lazy" decoding="async" alt="사진" className="w-full h-full object-cover" />
             </button>
           ))}
           <button
@@ -743,6 +743,7 @@ export function PhotoGrid({ urls = [], cols = 4, emptyText = "등록된 사진�
           : <img
             key={i}
             src={url}
+            loading="lazy" decoding="async"
             alt=""
             className="w-full aspect-square rounded-lg object-cover border border-slate-200 cursor-pointer hover:opacity-80 transition"
             onClick={() => setViewerIndex(i)}

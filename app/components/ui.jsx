@@ -213,6 +213,7 @@ export function PhotoGrid({ urls = [], cols = 3, className = "" }) {
           : <img
             key={i}
             src={url}
+            loading="lazy" decoding="async"
             alt=""
             className="w-full aspect-square rounded-xl object-cover border border-slate-200 active:opacity-80"
             onClick={() => setViewerIndex(i)}

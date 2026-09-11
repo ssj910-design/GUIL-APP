@@ -176,7 +176,7 @@ function CommentRow({ c, onLike, liked, likeCount, canManage, editingId, editTex
               isVideo(u)
                 ? <VideoThumb key={u} url={u} className="w-16 h-16 rounded-lg" onClick={() => onOpenPhoto(c.photoUrls, i)} />
                 : isImageAttachment(u)
-                  ? <img key={u} src={u} alt="첨부" className="w-16 h-16 rounded-lg object-cover" onClick={() => onOpenPhoto(c.photoUrls, i)} />
+                  ? <img loading="lazy" decoding="async" key={u} src={u} alt="첨부" className="w-16 h-16 rounded-lg object-cover" onClick={() => onOpenPhoto(c.photoUrls, i)} />
                   : <FileAttachmentCard key={u} url={u} className="w-16 h-16" />
             )}
           </div>
@@ -256,7 +256,7 @@ function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEdit
                 {isVideo(u)
                   ? <VideoThumb url={u} className="w-14 h-14 rounded-lg" />
                   : isImageAttachment(u)
-                    ? <img src={u} alt="첨부" className="w-14 h-14 rounded-lg object-cover" />
+                    ? <img loading="lazy" decoding="async" src={u} alt="첨부" className="w-14 h-14 rounded-lg object-cover" />
                     : <FileAttachmentCard url={u} className="w-14 h-14" />}
                 <button
                   onClick={() => setEditPhotos((prev) => prev.filter((_, idx) => idx !== i))}
@@ -300,7 +300,7 @@ function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEdit
               isVideo(u)
                 ? <video key={u} src={u} poster={videoPosterUrl(u)} controls playsInline preload="none" className="rounded-lg w-full" />
                 : isImageAttachment(u)
-                  ? <img key={u} src={u} alt="첨부 사진" className="rounded-lg w-full object-cover" onClick={() => onOpenPhoto(p.photoUrls, i)} />
+                  ? <img loading="lazy" decoding="async" key={u} src={u} alt="첨부 사진" className="rounded-lg w-full object-cover" onClick={() => onOpenPhoto(p.photoUrls, i)} />
                   : <FileAttachmentCard key={u} url={u} className="w-full h-16" />
             )}
           </div>
@@ -308,7 +308,7 @@ function PostBody({ p, full, editingId, editText, setEditText, saveEdit, setEdit
           <button onClick={(e) => { e.stopPropagation(); onOpenPhoto(p.photoUrls, 0); }} className="relative shrink-0">
             {isVideo(p.photoUrls[0])
               ? <VideoThumb url={p.photoUrls[0]} className="w-16 h-16 rounded-lg" />
-              : <img src={p.photoUrls[0]} alt="첨부 사진" className="w-16 h-16 rounded-lg object-cover" />}
+              : <img loading="lazy" decoding="async" src={p.photoUrls[0]} alt="첨부 사진" className="w-16 h-16 rounded-lg object-cover" />}
             {p.photoUrls.length > 1 && (
               <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] font-bold rounded px-1">{p.photoUrls.length}</span>
             )}
@@ -670,7 +670,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
                   {isVideo(u)
                     ? <VideoThumb url={u} className="w-14 h-14 rounded-lg" />
                     : isImageAttachment(u)
-                      ? <img src={u} alt="첨부" className="w-14 h-14 rounded-lg object-cover" />
+                      ? <img loading="lazy" decoding="async" src={u} alt="첨부" className="w-14 h-14 rounded-lg object-cover" />
                       : <FileAttachmentCard url={u} className="w-14 h-14" />}
                   <button
                     onClick={() => setPendingPhotos((prev) => prev.filter((_, idx) => idx !== i))}
@@ -767,7 +767,7 @@ export function RoomTab({ feed, onSendChat, onToggleLike, onUpdatePost, onDelete
                   {isVideo(u)
                     ? <VideoThumb url={u} className="w-12 h-12 rounded-lg" />
                     : isImageAttachment(u)
-                      ? <img src={u} alt="첨부" className="w-12 h-12 rounded-lg object-cover" />
+                      ? <img loading="lazy" decoding="async" src={u} alt="첨부" className="w-12 h-12 rounded-lg object-cover" />
                       : <FileAttachmentCard url={u} className="w-12 h-12" />}
                   <button
                     onClick={() => setCommentPhotos((p) => ({ ...p, [openPost.id]: (p[openPost.id] ?? []).filter((_, idx) => idx !== i) }))}

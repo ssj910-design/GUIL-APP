@@ -55,7 +55,7 @@ function PhotoGrid({ urls, onOpen, compact }) {
         {isVideoUrl(urls[0])
           ? <VideoThumb url={urls[0]} className="w-16 h-16 rounded-lg border border-slate-200" />
           // eslint-disable-next-line @next/next/no-img-element
-          : <img src={urls[0]} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />}
+          : <img loading="lazy" decoding="async" src={urls[0]} alt="" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />}
         {urls.length > 1 && (
           <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] font-bold rounded px-1">{urls.length}</span>
         )}
@@ -69,7 +69,7 @@ function PhotoGrid({ urls, onOpen, compact }) {
           <VideoThumb key={i} url={url} onClick={() => onOpen(urls, i)} className="w-full aspect-square rounded-lg border border-slate-200 cursor-pointer" />
         ) : isImageAttachment(url) ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <img loading="lazy" decoding="async"
             key={i}
             src={url}
             alt=""
@@ -203,7 +203,7 @@ function ComposeBox({ onSubmit, placeholder, compact, members = [] }) {
                 ? <VideoThumb url={url} className="w-16 h-16 rounded-lg border border-slate-200" />
                 : isImageAttachment(url)
                   // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+                  ? <img loading="lazy" decoding="async" src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
                   : <FileAttachmentCard url={url} className="w-16 h-16" />}
               <button
                 onClick={() => setPhotos((p) => p.filter((_, idx) => idx !== i))}
@@ -277,7 +277,7 @@ function EditPostForm({ editText, setEditText, editTitle, setEditTitle, showTitl
                 ? <VideoThumb url={url} className="w-16 h-16 rounded-lg border border-slate-200" />
                 : isImageAttachment(url)
                   // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+                  ? <img loading="lazy" decoding="async" src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
                   : <FileAttachmentCard url={url} className="w-16 h-16" />}
               <button
                 onClick={() => setEditPhotos((p) => p.filter((_, idx) => idx !== i))}
