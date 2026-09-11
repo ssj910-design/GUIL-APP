@@ -259,7 +259,7 @@ function NewBillingModal({ data, onClose, onCreate }) {
   const [linkedTodoId, setLinkedTodoId] = useState("");
   const [uploadToken] = useState(() => Date.now());
   const [form, setForm] = useState({
-    siteId: "", unitId: "", engineerId: "", replaceDate: TODAY_STR, contactPhone: "",
+    siteId: "", unitIds: [], engineerId: "", replaceDate: TODAY_STR, contactPhone: "",
     vendorName: "", items: [emptyBillingItem()], totalCost: "",
   });
   const [saving, setSaving] = useState(false);
@@ -287,9 +287,13 @@ function NewBillingModal({ data, onClose, onCreate }) {
     // 처리 시점에 채워지도록 고쳤지만, 그 전에 이미 만들어진 옛 할일에 대한 안전망으로 남겨둔다)
     // 견적 품목의 호기 라벨로 추정한다.
     const inferredUnitId = t.unitId || inferQuoteUnitId(units, siteId, quote) || "";
+    // 지급건이 여러 호기를 한 번에 다룬 경우(elevatorNos) 그 호기들을 전부 선택된 채로 채운다.
+    const inferredUnitIds = t.elevatorNos?.length
+      ? units.filter((u) => u.siteId === siteId && t.elevatorNos.includes(u.unitNo)).map((u) => u.id)
+      : (inferredUnitId ? [inferredUnitId] : []);
     setForm({
       siteId,
-      unitId: inferredUnitId,
+      unitIds: inferredUnitIds,
       engineerId: t.assigneeId ?? "",
       replaceDate: TODAY_STR,
       contactPhone: "",
@@ -303,7 +307,7 @@ function NewBillingModal({ data, onClose, onCreate }) {
 
   const filledItems = form.items.filter((i) => i.name.trim());
   const isMultiItem = filledItems.length > 1;
-  const valid = form.siteId && form.unitId && form.engineerId && form.replaceDate && filledItems.length > 0;
+  const valid = form.siteId && form.unitIds.length > 0 && form.engineerId && form.replaceDate && filledItems.length > 0;
 
   async function submit() {
     if (!valid) return;
@@ -351,14 +355,30 @@ function NewBillingModal({ data, onClose, onCreate }) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <p className="text-xs font-bold text-slate-500 mb-1">현장</p>
-            <SiteAutocomplete sites={sites} value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitId: "" })} />
+            <SiteAutocomplete sites={sites} value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitIds: [] })} />
           </div>
           <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">호기</p>
-            <select className={inputCls} value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })} disabled={!form.siteId}>
-              <option value="">선택하세요</option>
-              {siteUnits.map((u) => <option key={u.id} value={u.id}>{u.unitNo}</option>)}
-            </select>
+            <p className="text-xs font-bold text-slate-500 mb-1">호기 (여러 호기 선택 가능)</p>
+            <div className="flex flex-wrap gap-1.5">
+              {siteUnits.map((u) => {
+                const checked = form.unitIds.includes(u.id);
+                return (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => setForm({
+                      ...form,
+                      unitIds: checked ? form.unitIds.filter((id) => id !== u.id) : [...form.unitIds, u.id],
+                    })}
+                    className={`text-xs font-bold rounded-lg px-3 py-1.5 border ${checked ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200"}`}
+                  >
+                    {u.unitNo}
+                  </button>
+                );
+              })}
+            </div>
+            {!form.siteId && <p className="text-xs text-slate-400">현장을 먼저 선택하세요</p>}
+            {form.siteId && siteUnits.length === 0 && <p className="text-xs text-slate-400">이 현장에 등록된 호기가 없습니다</p>}
           </div>
         </div>
 
@@ -389,8 +409,16 @@ function NewBillingModal({ data, onClose, onCreate }) {
         </div>
 
         <div>
-          <p className="text-xs font-bold text-slate-500 mb-2">교체 품목 (사진은 선택, 품목별 금액도 선택)</p>
-          <ItemRowsInput items={form.items} onChange={(items) => setForm({ ...form, items })} uploadFolder={`billings/admin-${uploadToken}`} />
+          <p className="text-xs font-bold text-slate-500 mb-2">
+            교체 품목 (사진은 선택, 품목별 금액도 선택)
+            {form.unitIds.length > 1 && " · 호기를 2개 이상 고르면 품목마다 어느 호기 것인지 지정할 수 있습니다"}
+          </p>
+          <ItemRowsInput
+            items={form.items}
+            onChange={(items) => setForm({ ...form, items })}
+            uploadFolder={`billings/admin-${uploadToken}`}
+            unitOptions={form.unitIds.length > 1 ? siteUnits.filter((u) => form.unitIds.includes(u.id)).map((u) => u.unitNo) : null}
+          />
         </div>
 
         {isMultiItem && (
@@ -1003,7 +1031,8 @@ export default function BillingsAdmin({ data, setData }) {
     const filled = form.items.filter((i) => i.name.trim());
     if (!filled.length) return;
     const isMulti = filled.length > 1;
-    const unit = data.units.find((u) => u.id === form.unitId);
+    // siteUnits와 동일 순서로 걸러서, 여러 호기를 골랐을 때 elevator_nos 순서가 화면과 일치하게 한다.
+    const selectedUnits = data.units.filter((u) => u.siteId === form.siteId && form.unitIds.includes(u.id));
     const site = data.sites.find((s) => s.id === form.siteId);
     const engineer = data.profiles.find((p) => p.id === form.engineerId);
     const linked = form.linkedTodoId ? data.todos.find((t) => t.id === form.linkedTodoId) : null;
@@ -1025,9 +1054,9 @@ export default function BillingsAdmin({ data, setData }) {
       id: "bill-" + crypto.randomUUID(),
       type: linked ? linked.source : "manual",
       site_name: site?.name ?? null,
-      elevator_no: unit?.unitNo ?? null,
-      elevator_nos: linked?.elevatorNos ?? null,
-      unit_id: form.unitId || null,
+      elevator_no: selectedUnits[0]?.unitNo ?? null,
+      elevator_nos: selectedUnits.length > 1 ? selectedUnits.map((u) => u.unitNo) : null,
+      unit_id: selectedUnits[0]?.id ?? null,
       part,
       cost,
       replace_date: form.replaceDate || null,
