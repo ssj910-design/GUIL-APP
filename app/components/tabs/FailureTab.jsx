@@ -1216,8 +1216,9 @@ function FailureResponseCard({ f, dist, history = [], site, onOpenDetail, onDisp
   const { faultType, faultDetail } = parseErrorCode(f.errorCode);
   const { role } = useContext(AuthContext);
   const units = useContext(UnitsContext);
+  const unit = units.find((u) => u.id === f.unitId);
   const unitLabel = formatUnitLabel(f.elevatorNo);
-  const contractBadge = unitBadgeLabel(units.find((u) => u.id === f.unitId));
+  const contractBadge = unitBadgeLabel(unit);
   const fmtDist = (km) => (km == null ? null : km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`);
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
