@@ -771,7 +771,19 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
               </div>
             )}
 
-            {isDraftedQuote && shownDetail.quotePdfUrl ? (
+            {/* 예전엔 견적서 PDF가 생기면 사진 자리를 PDF가 대신해서, 작성 이후(자재 준비·지급완료
+                처리 때)엔 기사가 찍은 현장 사진을 볼 수 없었다. 사진은 늘 PDF 위에 썸네일로 둔다. */}
+            <div>
+              <p className="text-xs font-bold text-slate-500 mb-2">기사가 첨부한 현장 상태 사진 ({shownDetail.photoCount ?? 1}장)</p>
+              {shownDetail.photoUrls?.length > 0
+                ? <PhotoGrid urls={shownDetail.photoUrls} cols={isDraftedQuote ? 5 : 3} />
+                : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {Array.from({ length: shownDetail.photoCount ?? 1 }).map((_, i) => <PhotoThumb key={i} />)}
+                  </div>
+                )}
+            </div>
+            {isDraftedQuote && shownDetail.quotePdfUrl && (
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs font-bold text-slate-500">견적서 PDF 미리보기</p>
@@ -780,17 +792,6 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
                 <button onClick={() => setPdfFullscreen(true)} className="w-full block">
                   <QuotePdfPreview url={shownDetail.quotePdfUrl} height="50vh" />
                 </button>
-              </div>
-            ) : (
-              <div>
-                <p className="text-xs font-bold text-slate-500 mb-2">기사가 첨부한 현장 상태 사진 ({shownDetail.photoCount ?? 1}장)</p>
-                {shownDetail.photoUrls?.length > 0
-                  ? <PhotoGrid urls={shownDetail.photoUrls} />
-                  : (
-                    <div className="grid grid-cols-3 gap-2">
-                      {Array.from({ length: shownDetail.photoCount ?? 1 }).map((_, i) => <PhotoThumb key={i} />)}
-                    </div>
-                  )}
               </div>
             )}
           </div>

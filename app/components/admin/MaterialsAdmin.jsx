@@ -1130,6 +1130,13 @@ function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
   return (
     <Modal title={`${quote.siteName ?? "-"} · ${quote.constructionType} — ${isEdit ? "지급 내역 수정" : "지급완료 처리"}`} onClose={onClose}>
       <div className="space-y-3">
+        {/* 자재를 챙기는 바로 이 화면에서 기사가 찍은 현장 사진(부품 규격·상태)을 같이 본다. */}
+        {quote.photoUrls?.length > 0 && (
+          <div>
+            <p className="text-xs font-bold text-slate-400 mb-1">기사 요청 사진 ({quote.photoUrls.length}장)</p>
+            <PhotoGrid urls={quote.photoUrls} cols={6} />
+          </div>
+        )}
         <div>
           <label className="text-xs font-bold text-slate-400 block mb-1">지급 사진 (선택)</label>
           <div className="flex flex-wrap gap-1.5 mb-1.5">
@@ -1230,7 +1237,6 @@ function RequestDetailModal({ target, data, onClose }) {
       ? (billingCompleteFor(data.todos ?? [], "quoteRequestId", r.id) ? "교체완료" : "지급완료")
       : r.status;
   const tone = (isMaterial ? MATERIAL_TONE : QUOTE_TONE)[displayStatus] ?? "slate";
-  const photos = [...(r.photoUrls ?? []), ...(r.supplyPhotoUrls ?? [])];
 
   return (
     <Modal title={isMaterial ? "자재신청 상세내역" : isDraftedQuote ? "견적 상세내역" : "견적요청 상세내역"} onClose={onClose} wide="2xl">
@@ -1298,17 +1304,27 @@ function RequestDetailModal({ target, data, onClose }) {
         )}
       </div>
 
-      {isDraftedQuote && r.quotePdfUrl ? (
+      {/* 예전엔 견적서 PDF가 생기면 사진 자리를 PDF가 대신해서, 작성 이후(자재 준비 때)엔 기사가
+          찍은 현장 사진을 볼 수 없었다. 사진은 늘 보여주되 PDF(높이가 커서 아래로 밀리는)보다 위에
+          작은 썸네일로 둔다. 요청 사진과 지급 사진은 성격이 달라 따로 나눈다. */}
+      {r.photoUrls?.length > 0 && (
+        <div className="mb-3">
+          <p className="text-xs font-bold text-slate-500 mb-2">기사 요청 사진 ({r.photoUrls.length}장)</p>
+          <PhotoGrid urls={r.photoUrls} cols={6} />
+        </div>
+      )}
+      {r.supplyPhotoUrls?.length > 0 && (
+        <div className="mb-3">
+          <p className="text-xs font-bold text-slate-500 mb-2">지급 사진 ({r.supplyPhotoUrls.length}장)</p>
+          <PhotoGrid urls={r.supplyPhotoUrls} cols={6} />
+        </div>
+      )}
+      {isDraftedQuote && r.quotePdfUrl && (
         <div>
           <p className="text-xs font-bold text-slate-500 mb-2">견적서 PDF 미리보기</p>
           <QuotePdfPreview url={r.quotePdfUrl} />
         </div>
-      ) : photos.length > 0 ? (
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-2">사진 ({photos.length}장)</p>
-          <PhotoGrid urls={photos} />
-        </div>
-      ) : null}
+      )}
     </Modal>
   );
 }
