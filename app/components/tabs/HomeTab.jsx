@@ -709,8 +709,11 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
     if (db == null) return -1;
     return da - db;
   };
+  // 관리자 홈도 기사 홈과 동일하게 진행중(출동중·작업중) 건을 노출한다 — 대신 정렬은
+  // 관리자 고유 우선순위(미배정 → 응답대기)를 유지하면서 진행중만 맨 위로 올린다.
+  const adminRank = (f) => (f.status === "진행중" ? 0 : f.assignee ? 2 : 1);
   const listSource = role === "admin"
-    ? activeMine.filter((f) => f.status === "미처리").sort((a, b) => (a.assignee ? 1 : 0) - (b.assignee ? 1 : 0))
+    ? [...activeMine].sort((a, b) => adminRank(a) - adminRank(b))
     : [...activeMine].sort(byDistance);
   const [showAllFailures, setShowAllFailures] = useState(false);
   const shownFailures = showAllFailures ? listSource : listSource.slice(0, 5);
@@ -734,7 +737,8 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
                 {listSource.some((f) => !f.assignee && f.escalation === "지원요청") && (
                   <span className="text-amber-600 font-bold"> · 지원미배정 {listSource.filter((f) => !f.assignee && f.escalation === "지원요청").length}</span>
                 )}
-                {" · 응답대기 "}{listSource.filter((f) => f.assignee).length}
+                {" · 응답대기 "}{listSource.filter((f) => f.assignee && f.status !== "진행중").length}
+                {" · 진행중 "}{listSource.filter((f) => f.status === "진행중").length}
               </p>
             )}
           </div>

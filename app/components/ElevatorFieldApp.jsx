@@ -170,6 +170,8 @@ export default function App() {
   const feedTitleReady = feed.some((p) => p.title !== undefined);
   // failures.assigned_at 컬럼 존재 여부 — 마이그레이션 074 전엔 컬럼이 없어, 있을 때만 배정 시각을 쓴다(미구현 시 배정이 깨지지 않게).
   const assignedAtReady = failures.some((f) => f.assignedAt !== undefined);
+  // failures.in_progress_at 컬럼 존재 여부 — 마이그레이션 139 전엔 컬럼이 없어, 있을 때만 출동 시각(timestamptz)을 쓴다.
+  const inProgressAtReady = failures.some((f) => f.inProgressAt !== undefined);
   // failures.fault_model 컬럼 존재 여부 — 마이그레이션 131 전엔 컬럼이 없어, 있을 때만 처리등록 시
   // 고른 기종을 저장한다(에러코드집 과거처리이력이 호기의 실제 기종이 아니라 이 값 기준으로 찾게 하기 위함).
   const faultModelReady = failures.some((f) => f.faultModel !== undefined);
@@ -1068,6 +1070,8 @@ export default function App() {
         ...(v2Ready ? { assignee_id: newAssigneeId } : {}),
         // 재배정: 새 기사면 배정시각 갱신(5분 미응답 재판정), 미배정 복귀면 비움. dedup도 리셋해 재알림 허용.
         ...(assignedAtReady ? { assigned_at: engineerName ? new Date().toISOString() : null, no_response_nag_at: null, stale_notified_at: null } : {}),
+        // 재배정은 항상 미처리(출동 전)로 되돌리므로 진행중 관련 타임스탬프도 함께 비운다.
+        ...(inProgressAtReady ? { in_progress_at: null, result_nag_at: null } : {}),
       })
       .eq("id", failure.id).neq("status", "완료");
     query = failure.assignee ? query.eq("assignee", failure.assignee) : query.is("assignee", null);
@@ -1157,6 +1161,7 @@ export default function App() {
           assignee: null, dispatched_at: null, eta_minutes: null, arrival_time: null, status: "미처리",
           escalation: "지원요청", escalated_by: escalatedBy, escalated_by_id: escalatedById, escalated_at: escalatedAt,
           ...(v2Ready ? { assignee_id: null } : {}),
+          ...(inProgressAtReady ? { in_progress_at: null, result_nag_at: null } : {}),
         })
         .eq("id", failure.id).neq("status", "완료")
         .select();
@@ -1195,6 +1200,9 @@ export default function App() {
         eta_minutes: etaMinutes,
         status: "진행중",
         ...(v2Ready ? { assignee_id: profileIdByName(profilesAll, assignee) } : {}),
+        // 처리결과 5시간 미입력 재촉 크론의 기준 시각 — dispatched_at은 "HH:MM" 문자열이라
+        // 날짜가 없어 경과시간 계산에 못 쓴다(자정 넘어가면 깨짐), 그래서 timestamptz로 따로 둔다.
+        ...(inProgressAtReady ? { in_progress_at: new Date().toISOString(), result_nag_at: null } : {}),
       })
       .eq("id", failure.id)
       .eq("status", "미처리");
@@ -1272,7 +1280,7 @@ export default function App() {
     // arrival_time도 같은 이유로 비우기 직전 값을 스냅샷 — 안 그러면 "실제로 언제 도착했었는지"가 사라진다.
     const escalatedArrivalTime = isEscalation ? (failure.arrivalTime || null) : null;
     const statePatch = isClosed
-      ? { status: "완료", complete_time: completeTime }
+      ? { status: "완료", complete_time: completeTime, ...(inProgressAtReady ? { in_progress_at: null, result_nag_at: null } : {}) }
       : isEscalation
       ? {
           status: "미처리", assignee: null, dispatched_at: null, eta_minutes: null, arrival_time: null,
@@ -1281,6 +1289,7 @@ export default function App() {
           ...(v2Ready ? { assignee_id: null } : {}),
           // 미배정 복귀 → 배정시각 비우고 dedup 리셋(다시 미배정 15분·재알림 판정되게).
           ...(assignedAtReady ? { assigned_at: null, no_response_nag_at: null, stale_notified_at: null } : {}),
+          ...(inProgressAtReady ? { in_progress_at: null, result_nag_at: null } : {}),
         }
       : { status: failure.status };
     // 처리결과는 유실되면 재작성이 어렵다 — 저장 실패는 물론, 그 사이 재배정/거부로 담당자·상태가

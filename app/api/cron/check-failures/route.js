@@ -4,6 +4,10 @@
 //     10분 간격으로 최대 3회 → 그 시점 출근중인 기사 전원 + 관리자에게 (stale_notified_at로 간격 관리)
 //  2) 출동 미응답: 배정됐는데 출동응답 없음 → 배정 기사(출근중일 때만)는 3분 간격,
 //     관리자는 15분 간격으로 따로 (배정 후 30분까지, no_response_nag_at·admin_no_response_nag_at)
+//  3) 처리결과 미입력: 출동(진행중) 후 5시간이 지나도 처리결과가 안 들어오면 배정 기사+관리자
+//     동시 발송, 그 뒤 1시간 간격으로 계속 반복(상한 없음 — 완료 처리 전까지 계속 잊지 말라고).
+//     in_progress_at(timestamptz)로 판정한다 — dispatched_at은 "HH:MM" 문자열이라 날짜가
+//     없어 자정을 넘기면 경과시간 계산이 깨진다(result_nag_at으로 간격 관리).
 // 24시간 돈다(야간·주말 포함) — 숙직·당직도 놓치면 안 되는 알림이라 시간대로 거르지 않는다.
 // 기사 쪽 수신자는 그 시점 출근상태(checked_in_at 있고 checked_out_at 없음)인 사람만 —
 // 퇴근한 기사를 밤새 깨우지 않기 위함. 관리자는 출퇴근체크를 안 하는 경우가 많아 항상 보낸다.
@@ -17,6 +21,8 @@ const TEN_MIN = 10 * 60 * 1000;
 const THREE_MIN = 3 * 60 * 1000;
 const FIFTEEN_MIN = 15 * 60 * 1000;
 const THIRTY_MIN = 30 * 60 * 1000; // 10분 간격 재촉 3회(10·20·30분)의 상한 · 3분 간격 재촉의 상한 겸용
+const FIVE_HOURS = 5 * 60 * 60 * 1000;
+const ONE_HOUR = 60 * 60 * 1000;
 
 async function handle(request) {
   // 아무나 못 부르게 — pg_cron이 보내는 시크릿과 일치할 때만. (미설정이면 전부 거부 = 안전)
@@ -109,7 +115,34 @@ async function handle(request) {
       }
     }
 
-    return Response.json({ ok: true, stale: staleSent, noResponse: nagSent });
+    // 3) 처리결과 미입력 — 출동(진행중) 후 5시간 넘었고, 마지막 재촉이 1시간 넘었으면
+    // 배정 기사(출근 여부 무관 — 본인이 처리해야 할 본인 건이라 퇴근했어도 알려야 함) +
+    // 관리자에게 동시 발송. in_progress_at/result_nag_at 컬럼이 없으면(마이그레이션 139 전)
+    // 이 블록만 실패하고 1)·2)는 그대로 돈다 — 한 스텝의 컬럼 미생성이 전체 스윕을 막지 않게.
+    let overdueSent = 0;
+    try {
+      const overdueBefore = new Date(now - FIVE_HOURS).toISOString();
+      const overdueNagBefore = new Date(now - ONE_HOUR).toISOString();
+      const { data: overdue, error: overdueError } = await db
+        .from("failures")
+        .select("id,site_name,elevator_no,assignee,assignee_id,in_progress_at,result_nag_at")
+        .eq("status", "진행중")
+        .lte("in_progress_at", overdueBefore)
+        .or(`result_nag_at.is.null,result_nag_at.lte.${overdueNagBefore}`)
+        .limit(50);
+      if (overdueError) throw overdueError;
+
+      for (const f of overdue ?? []) {
+        const ids = [...new Set([f.assignee_id, ...adminIdsFor("failure_result_overdue")].filter(Boolean))];
+        if (!ids.length) continue;
+        const ok = await send({ key: "failure_result_overdue", profileIds: ids, tag: `failure_result_overdue-${f.id}`, title: "처리결과 미입력 — 출동 후 5시간 경과", body: `${label(f)} — ${f.assignee ?? "배정 기사"}`, url: `/?openFailure=${f.id}` });
+        if (ok) { await db.from("failures").update({ result_nag_at: new Date().toISOString() }).eq("id", f.id); overdueSent++; }
+      }
+    } catch {
+      // 컬럼 미생성 등 — 조용히 건너뛴다(1·2번 스윕 결과는 그대로 반환).
+    }
+
+    return Response.json({ ok: true, stale: staleSent, noResponse: nagSent, overdue: overdueSent });
   } catch (e) {
     // 컬럼 미생성(마이그 074 전) 등 — 재시도 폭주 막으려 200으로 사유만 반환.
     return Response.json({ ok: false, reason: e.message }, { status: 200 });

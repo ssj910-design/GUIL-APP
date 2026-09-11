@@ -1642,10 +1642,13 @@ function FailureStatusOverview({ failures, onReassign, onResult, errorCodes = []
   ];
   const byStatus = filter === "all" ? inRange : inRange.filter((f) => f.status === filter);
   const q = search.trim().toLowerCase();
-  const shown = !q ? byStatus : byStatus.filter((f) => {
+  const filtered = !q ? byStatus : byStatus.filter((f) => {
     const { faultType, faultDetail } = parseErrorCode(f.errorCode);
     return [f.siteName, faultType, faultDetail, f.processContent, f.faultCause].filter(Boolean).join(" ").toLowerCase().includes(q);
   });
+  // "전체" 볼 때만 진행중을 맨 위로 — 이미 한 상태로 걸러 보는 중(미배정/진행중/완료 칩)이면
+  // 다시 섞을 이유가 없다. Array.sort는 안정 정렬이라 같은 순위 안에서는 원래(최신순 등) 순서 유지.
+  const shown = filter === "all" ? [...filtered].sort((a, b) => (a.status === "진행중" ? 0 : 1) - (b.status === "진행중" ? 0 : 1)) : filtered;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
