@@ -339,6 +339,9 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
         .filter((f, i, arr) => arr.findIndex((x) => x.id === f.id) === i)
         .sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt))
     : [];
+  // 제목에도 호기를 밝혀서(뱃지가 이미 호기 단위였다는 게 화면에서 바로 보이게) "현장 · 고장내역"만
+  // 보고 전체 현장 이력인 줄 오해하지 않게 한다.
+  const historyUnitText = [...new Set(historyFailures.map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean))].join(", ");
 
   return (
     <div className="max-w-[100rem] mx-auto">
@@ -603,7 +606,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
 
       {/* 집중관리현장 -> 고장내역 */}
       {historySite && (
-        <Modal title={`${historySite.name} · 고장내역`} onClose={() => setHistorySite(null)} wide>
+        <Modal title={`${historySite.name}${historyUnitText ? ` · ${historyUnitText}` : ""} · 고장내역`} onClose={() => setHistorySite(null)} wide>
           {historyFailures.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-10">고장 이력이 없습니다</p>
           ) : (

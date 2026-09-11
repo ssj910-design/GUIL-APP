@@ -56,10 +56,13 @@ function DueSoonRow({ i, address, govElevatorNo, onOpenFail, priorUnit }) {
 function FailureHistoryDetailScreen({ site, failures, onBack, onOpenResult }) {
   const history = failures;
   const [detailTarget, setDetailTarget] = useState(null);
+  // 현장의 기본 elevatorNo가 아니라 실제로 이 목록을 채운 호기(들)를 밝힌다 — 집중관리
+  // 대상은 호기 단위라 "현장 전체 이력"으로 오해하지 않게.
+  const unitText = [...new Set(history.map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean))].join(", ");
   return (
     <Sheet title="고장처리내역 상세" onClose={onBack}>
       <div className="bg-slate-100 rounded-xl p-3 mb-4">
-        <p className="font-bold text-slate-800">{site.name} · {formatUnitLabel(site.elevatorNo)}</p>
+        <p className="font-bold text-slate-800">{site.name}{unitText ? ` · ${unitText}` : ""}</p>
         <p className="text-xs text-slate-400 mt-0.5">{site.address}</p>
       </div>
       <div className="space-y-2.5">
