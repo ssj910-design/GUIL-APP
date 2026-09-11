@@ -52,8 +52,9 @@ function DueSoonRow({ i, address, govElevatorNo, onOpenFail, priorUnit }) {
 }
 
 
+// failures는 호출부(HomeTab)에서 이미 이 현장의 집중관리 대상 호기로만 걸러서 넘긴다.
 function FailureHistoryDetailScreen({ site, failures, onBack, onOpenResult }) {
-  const history = failures.filter((f) => f.siteId === site.id);
+  const history = failures;
   const [detailTarget, setDetailTarget] = useState(null);
   return (
     <Sheet title="고장처리내역 상세" onClose={onBack}>
@@ -634,7 +635,6 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
   const criticalSites = activeSites(sites).filter((s) =>
     (recentFailuresBySiteId.get(s.id)?.length ?? 0) >= 3 || entrapmentSiteIds.has(s.id)
   );
-
   // 홈의 "할일" 카드 — 할일관리(TodoTab)와 동일 기준(본인 담당·미완료)으로 마감일순 정렬해
   // 상위 5건만 미리보기. 관리자는 여기서 빼고(할일관리에서 전체를 이미 보므로) 기사·자재담당
   // 관리자(둘 다 이 화면에서는 role: "engineer"로 스코프됨)에게만 보여준다.
@@ -647,6 +647,13 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
   const [assignTarget, setAssignTarget] = useState(null);
   const [resultTarget, setResultTarget] = useState(null);
   const [historySite, setHistorySite] = useState(null);
+  // 집중관리현장 배지는 호기별로 임계치를 넘긴 것만 골라 보여주는데(recentFailuresBySiteId가
+  // 이미 호기 단위로 걸러둠), 상세내역을 현장 전체 고장으로 그냥 보여주면 호기 구분 없이
+  // 섞여 나온다 — 배지 계산에 쓴 바로 그 배열(recent+trapped)을 그대로 써서 호기를 맞춘다.
+  const historyFailures = historySite
+    ? [...(recentFailuresBySiteId.get(historySite.id) ?? []), ...(entrapmentSiteIds.get(historySite.id) ?? [])]
+        .filter((f, i, arr) => arr.findIndex((x) => x.id === f.id) === i)
+    : [];
   const [inspectionFailTarget, setInspectionFailTarget] = useState(null);
 
   // 검사유효기간은 units의 DB 캐시를 쓴다 (전 호기 실시간 API 호출 금지 — 트래픽 한도).
@@ -1025,7 +1032,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
         <InspectionFailDetailSheet inspection={inspectionFailTarget} onClose={() => setInspectionFailTarget(null)} />
       )}
       {historySite && (
-        <FailureHistoryDetailScreen site={historySite} failures={failures} onBack={() => setHistorySite(null)} onOpenResult={setResultTarget} />
+        <FailureHistoryDetailScreen site={historySite} failures={historyFailures} onBack={() => setHistorySite(null)} onOpenResult={setResultTarget} />
       )}
       <SmsToast message={toast} />
     </div>

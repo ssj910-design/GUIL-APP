@@ -331,7 +331,14 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
 
   const engineerName = (id, fallback) => profiles.find((p) => p.id === id)?.name ?? fallback ?? "미배정";
 
-  const historyFailures = historySite ? failures.filter((f) => f.siteId === historySite.id).sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt)) : [];
+  // 집중관리현장 배지는 호기별로 임계치를 넘긴 것만 골라 보여주는데(recentFailuresBySite가
+  // 이미 호기 단위로 걸러둠), 상세내역은 현장 전체 고장을 그냥 다 보여주면 호기 구분 없이
+  // 섞여 나온다 — 배지 계산에 쓴 바로 그 배열(recent+trapped)을 그대로 써서 호기를 맞춘다.
+  const historyFailures = historySite
+    ? [...(recentFailuresBySiteId.get(historySite.id) ?? []), ...(entrapmentSiteIds.get(historySite.id) ?? [])]
+        .filter((f, i, arr) => arr.findIndex((x) => x.id === f.id) === i)
+        .sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt))
+    : [];
 
   return (
     <div className="max-w-[100rem] mx-auto">
