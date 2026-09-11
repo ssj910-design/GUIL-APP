@@ -306,7 +306,6 @@ function NewBillingModal({ data, onClose, onCreate }) {
   }
 
   const filledItems = form.items.filter((i) => i.name.trim());
-  const isMultiItem = filledItems.length > 1;
   const valid = form.siteId && form.unitIds.length > 0 && form.engineerId && form.replaceDate && filledItems.length > 0;
 
   async function submit() {
@@ -421,18 +420,16 @@ function NewBillingModal({ data, onClose, onCreate }) {
           />
         </div>
 
-        {isMultiItem && (
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">합계금액</p>
-            <input
-              type="number"
-              className={inputCls}
-              placeholder="품목별 금액을 다 입력하면 자동으로 더해집니다 — 직접 입력해도 됩니다"
-              value={form.totalCost}
-              onChange={(e) => setForm({ ...form, totalCost: e.target.value })}
-            />
-          </div>
-        )}
+        <div>
+          <p className="text-xs font-bold text-slate-500 mb-1">합계금액</p>
+          <input
+            type="number"
+            className={inputCls}
+            placeholder="품목별 금액을 다 입력하면 자동으로 더해집니다 — 직접 입력해도 됩니다"
+            value={form.totalCost}
+            onChange={(e) => setForm({ ...form, totalCost: e.target.value })}
+          />
+        </div>
 
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onClose} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-5 py-2.5">취소</button>
@@ -1041,12 +1038,13 @@ export default function BillingsAdmin({ data, setData }) {
       ? filled.map((i) => ({ name: i.name.trim(), qty: i.qty || null, amount: i.amount === "" ? null : Number(i.amount), beforeUrls: i.beforeUrls, afterUrls: i.afterUrls }))
       : null;
     const part = isMulti ? filled.map((i) => i.name.trim()).join(", ") : `${filled[0].name.trim()}${filled[0].qty ? ` ${filled[0].qty}개` : ""}`;
-    // 품목별 금액을 다 채우면 그 합계를 쓰고, 하나라도 비었으면(개별 단가를 모르는 경우 등)
-    // 합계금액을 직접 입력한 값을 대신 쓴다 — 둘 다 없으면 가격 미정으로 null.
+    // 합계금액을 직접 입력했으면 그 값을 최우선으로 쓴다(품목 1개짜리도 포함 — 개별 단가를
+    // 몰라도 총액만 알면 등록 가능하게). 안 입력했으면 품목별 금액을 채운 만큼 합산하되,
+    // 하나라도 비어 있으면(다품목인데 일부만 아는 경우 등) 가격 미정으로 null.
     const itemsCost = isMulti
       ? (filled.every((i) => i.amount !== "") ? filled.reduce((sum, i) => sum + Number(i.amount || 0), 0) : null)
       : (filled[0].amount === "" ? null : Number(filled[0].amount));
-    const cost = isMulti && form.totalCost !== "" ? Number(form.totalCost) : itemsCost;
+    const cost = form.totalCost !== "" ? Number(form.totalCost) : itemsCost;
     const beforePhotoUrls = isMulti ? partPhotos.flatMap((p) => p.beforeUrls) : filled[0].beforeUrls;
     const afterPhotoUrls = isMulti ? partPhotos.flatMap((p) => p.afterUrls) : filled[0].afterUrls;
 
