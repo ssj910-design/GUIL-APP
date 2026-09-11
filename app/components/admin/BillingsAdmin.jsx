@@ -1172,10 +1172,16 @@ export default function BillingsAdmin({ data, setData }) {
                     </button>
                   </td>
                   <td rowSpan={span} className="px-3 py-2.5 align-middle" onClick={(e) => e.stopPropagation()}>
-                    <EditableDate key={b.billingDate ?? "unset"} value={b.billingDate} onCommit={(v) => updateManualField(b, "billing_date", "billingDate", v)} />
+                    {b.isFree ? (
+                      <span className="text-slate-300">-</span>
+                    ) : (
+                      <EditableDate key={b.billingDate ?? "unset"} value={b.billingDate} onCommit={(v) => updateManualField(b, "billing_date", "billingDate", v)} />
+                    )}
                   </td>
                   <td rowSpan={span} className="px-3 py-2.5 align-middle" onClick={(e) => e.stopPropagation()}>
-                    {receivedPaymentsReady ? (
+                    {b.isFree ? (
+                      <span className="text-slate-300">-</span>
+                    ) : receivedPaymentsReady ? (
                       <ReceivedPaymentsCell
                         key={b.id}
                         b={b}
@@ -1187,11 +1193,15 @@ export default function BillingsAdmin({ data, setData }) {
                     ) : "-"}
                   </td>
                   <td rowSpan={span} className="px-3 py-2.5 align-middle" onClick={(e) => e.stopPropagation()}>
-                    <EditableSelect
-                      value={b.billingMethod ?? ""}
-                      options={BILLING_METHODS}
-                      onCommit={(v) => updateManualField(b, "billing_method", "billingMethod", v)}
-                    />
+                    {b.isFree ? (
+                      <span className="text-slate-300">-</span>
+                    ) : (
+                      <EditableSelect
+                        value={b.billingMethod ?? ""}
+                        options={BILLING_METHODS}
+                        onCommit={(v) => updateManualField(b, "billing_method", "billingMethod", v)}
+                      />
+                    )}
                   </td>
                 </>
               )}
