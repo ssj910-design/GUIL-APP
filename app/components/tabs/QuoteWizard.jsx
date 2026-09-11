@@ -11,7 +11,7 @@ import { SiteSearchSelect } from "@/app/components/formWidgets";
 import { inputCls, Sheet, CheckboxDropdown } from "@/app/components/ui";
 import { supabase } from "@/lib/supabaseClient";
 import { mapQuoteRequest, mapSiteManager } from "@/lib/mappers";
-import { siteUnitList } from "@/lib/utils";
+import { siteUnitList, quoteGrandTotal } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { currentStock } from "@/lib/inventoryStock";
 
@@ -102,6 +102,18 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
   const [transportCost, setTransportCost] = useState(existingQuote?.transportCost || 0);
   const [safetyCost, setSafetyCost] = useState(existingQuote?.safetyCost || 0);
   const [profit, setProfit] = useState(existingQuote?.profit || 0);
+  // QuoteItemsModal.jsx(관리자 콘솔)와 동일한 할인율/할인금액 입력 보조 — 서로의 값을 기준으로
+  // 자동 계산되고, 실제 저장·PDF·합계는 discountAmount(₩) 기준으로 quoteGrandTotal에 반영된다.
+  // "수정하기"로 재편집 시 저장된 할인금액이 있으면 초기값 계산 시점에 바로 할인율도 맞춰둔다
+  // (useEffect로 나중에 맞추면 마운트 시 setState가 한 번 더 도는 걸 피할 수 있어 이쪽이 낫다).
+  const [discountAmount, setDiscountAmount] = useState(() => Number(existingQuote?.discountAmount) || 0);
+  const [discountPercent, setDiscountPercent] = useState(() => {
+    const amt = Number(existingQuote?.discountAmount) || 0;
+    if (!amt) return 0;
+    const itemsSub = (existingQuote?.quoteItems ?? []).reduce((s, it) => s + Number(it.qty || 0) * Number(it.unitPrice || 0), 0);
+    const preDiscount = itemsSub + Number(existingQuote?.transportCost || 0) + Number(existingQuote?.safetyCost || 0) + Number(existingQuote?.profit || 0);
+    return preDiscount > 0 ? Math.round((amt / preDiscount) * 1000) / 10 : 0;
+  });
 
   function addItem() {
     setItems((prev) => {
@@ -126,7 +138,20 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
     setExpandedIdx(-1);
   }
   const itemsSubtotal = items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.unitPrice || 0), 0);
-  const grandTotal = itemsSubtotal + Number(transportCost || 0) + Number(safetyCost || 0) + Number(profit || 0);
+  // 할인 적용 전 소계 — 할인율(%) 계산의 기준값(할인은 이 금액 대비 %, QuoteItemsModal.jsx와 동일).
+  const preDiscountSubtotal = itemsSubtotal + Number(transportCost || 0) + Number(safetyCost || 0) + Number(profit || 0);
+  const grandTotal = quoteGrandTotal(items, transportCost, safetyCost, profit, discountAmount);
+
+  function handleDiscountPercent(value) {
+    const pct = Number(value) || 0;
+    setDiscountPercent(pct);
+    setDiscountAmount(Math.round((preDiscountSubtotal * pct) / 100));
+  }
+  function handleDiscountAmount(value) {
+    const amt = Number(value) || 0;
+    setDiscountAmount(amt);
+    setDiscountPercent(preDiscountSubtotal > 0 ? Math.round((amt / preDiscountSubtotal) * 1000) / 10 : 0);
+  }
 
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
@@ -150,15 +175,17 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
       setSafetyCost(saved.safetyCost ?? 0);
       setProfit(saved.profit ?? 0);
       setQuoteTitleInput(saved.quoteTitleInput ?? "");
+      if (saved.discountAmount) handleDiscountAmount(saved.discountAmount);
       notify("임시저장된 내용을 불러왔습니다");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft?.id]);
 
   function saveDraft() {
     if (!draft?.id) return;
     try {
       localStorage.setItem(draftKey(draft.id), JSON.stringify({
-        step, items, transportCost, safetyCost, profit, quoteTitleInput,
+        step, items, transportCost, safetyCost, profit, quoteTitleInput, discountAmount,
       }));
       notify("임시저장했습니다");
     } catch {
@@ -196,7 +223,7 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
         quoteRequestId: draft.id,
         siteName: site?.name ?? draft.siteName,
         quoteNumber, recipientName: managerName, quoteTitle, quoteDate,
-        items, transportCost, safetyCost, profit, discountAmount: 0,
+        items, transportCost, safetyCost, profit, discountAmount,
       }),
     }).then((r) => r.json()).catch((e) => ({ ok: false, reason: e.message }));
 
@@ -211,6 +238,9 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
       transport_cost: Number(transportCost) || 0,
       safety_cost: Number(safetyCost) || 0,
       profit: Number(profit) || 0,
+      // discount_amount 컬럼은 마이그레이션 103 이후에만 존재 — 할인을 실제로 쓸 때만 써서
+      // 마이그레이션 전 환경에서도(할인 안 쓰는) 기존 저장이 깨지지 않게 한다(QuoteItemsModal.jsx와 동일).
+      ...(Number(discountAmount) > 0 ? { discount_amount: Number(discountAmount) } : {}),
       quote_number: quoteNumber || null,
       recipient_name: managerName || null,
       quote_title: quoteTitle,
@@ -230,7 +260,7 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
     try { localStorage.removeItem(draftKey(draft.id)); } catch { /* 임시저장 정리 실패는 무시 */ }
     onSaved({
       id: draft.id, quoteItems: items, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
-      profit: Number(profit) || 0, quoteNumber, recipientName: managerName, quoteTitle, quoteIssuedDate: quoteDate,
+      profit: Number(profit) || 0, discountAmount: Number(discountAmount) || 0, quoteNumber, recipientName: managerName, quoteTitle, quoteIssuedDate: quoteDate,
       quotePdfUrl: pdfRes.url, status: "작성", recipientEmail: recipientEmail || null, recipientPhone: recipientPhone || null,
     });
     setSaving(false);
@@ -494,6 +524,19 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
                 <input type="number" className={inputCls} value={value} onChange={(e) => setValue(e.target.value)} placeholder="0" />
               </div>
             ))}
+            <div className="bg-white rounded-xl border border-slate-200 p-3.5">
+              <p className="text-xs font-bold text-slate-500 mb-1.5">할인 (입력하면 합계·PDF에 반영됩니다)</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-[11px] text-slate-500 mb-1">할인율(%)</p>
+                  <input type="number" className={inputCls} value={discountPercent} onChange={(e) => handleDiscountPercent(e.target.value)} placeholder="0" />
+                </div>
+                <div>
+                  <p className="text-[11px] text-slate-500 mb-1">할인금액(원)</p>
+                  <input type="number" className={inputCls} value={discountAmount} onChange={(e) => handleDiscountAmount(e.target.value)} placeholder="0" />
+                </div>
+              </div>
+            </div>
             <div className="bg-slate-100 rounded-xl p-3.5 flex items-center justify-between">
               <span className="text-sm font-bold text-slate-600">합계(VAT별도)</span>
               <span className="text-base font-extrabold text-slate-900">{grandTotal.toLocaleString()}원</span>
@@ -521,6 +564,7 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
               {Number(transportCost) > 0 && <div className="flex justify-between text-xs"><span className="text-slate-600">운반비</span><span className="text-slate-500">{Number(transportCost).toLocaleString()}원</span></div>}
               {Number(safetyCost) > 0 && <div className="flex justify-between text-xs"><span className="text-slate-600">안전관리비 및 기타</span><span className="text-slate-500">{Number(safetyCost).toLocaleString()}원</span></div>}
               {Number(profit) > 0 && <div className="flex justify-between text-xs"><span className="text-slate-600">이윤</span><span className="text-slate-500">{Number(profit).toLocaleString()}원</span></div>}
+              {Number(discountAmount) > 0 && <div className="flex justify-between text-xs"><span className="text-slate-600">할인</span><span className="text-red-500">-{Number(discountAmount).toLocaleString()}원</span></div>}
             </div>
             <div className="bg-slate-100 rounded-xl p-3.5 flex items-center justify-between">
               <span className="text-sm font-bold text-slate-600">합계(VAT별도)</span>
