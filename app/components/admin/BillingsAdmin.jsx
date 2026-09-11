@@ -36,11 +36,14 @@ function siteNameOf(b, data) {
 // 열은 청구 한 건 단위 값이라 호기별로 나눌 값이 아니다), "이 호기엔 뭘 교체했는지"가 한
 // 줄에 섞이지 않고 바로 보이게 한다. 품목에 호기 지정이 하나도 없으면(단일 호기 청구 등)
 // 기존처럼 통짜 한 행 그대로.
-function unitPartRowsFor(b) {
+function unitPartRowsFor(b, data) {
   const items = (b.partPhotos ?? []).filter((p) => p.name?.trim());
   const hasPerUnitTags = items.length > 1 && items.some((it) => it.unit);
   if (!hasPerUnitTags) {
-    const label = formatUnitLabel(b.elevatorNos?.length ? b.elevatorNos : b.elevatorNo);
+    // elevatorNo(s)는 옛 텍스트 필드라 견적 연동 청구처럼 unit_id(v2 FK)만 채워진 건에서는
+    // 비어있다 — 그럴 때 data.units에서 실제 호기를 찾아 대신 쓴다(locOf와 동일한 우선순위).
+    const unitNoFromId = data.units.find((u) => u.id === b.unitId)?.unitNo;
+    const label = formatUnitLabel(b.elevatorNos?.length ? b.elevatorNos : (b.elevatorNo || unitNoFromId));
     return [{ unitLabel: label || "-", part: b.part }];
   }
   const groups = new Map();
@@ -1089,7 +1092,7 @@ export default function BillingsAdmin({ data, setData }) {
       </div>
       <AdminTable head={["현장", "작업자", "호기", "교체내역", "금액(VAT별도)", "교체일", "교체확인서", "청구일", "입금일", "청구방식"]}>
         {rows.map((b) => {
-          const unitPartRows = unitPartRowsFor(b);
+          const unitPartRows = unitPartRowsFor(b, data);
           const span = unitPartRows.length;
           return unitPartRows.map((r, i) => (
             <tr
