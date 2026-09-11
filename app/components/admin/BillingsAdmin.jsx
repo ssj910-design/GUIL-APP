@@ -2,10 +2,11 @@
 
 // 부품교체·공사 내역 — 청구 건 조회 + 합계. 각 건 클릭 시 상세보기(사진 포함)에서
 // 내용(관리자 메모) 추가, 담당자 변경, 기한(교체일자) 수정이 가능하다.
-import { useState, useContext } from "react";
-import { Search, Plus, X, Pencil } from "lucide-react";
+import { useState, useContext, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
+import { Search, Plus, X, Pencil, ChevronDown, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { shortDate, formatUnitLabel, quoteGrandTotal, freeReasonOf, freeReasonLabel, isCostPending, quoteMaterialItems, receivedTotalOf, receivedStatusOf, billingDueAmount, inferQuoteUnitId } from "@/lib/utils";
+import { shortDate, formatUnitLabel, quoteGrandTotal, freeReasonOf, freeReasonLabel, isCostPending, quoteMaterialItems, receivedTotalOf, receivedStatusOf, billingPaymentBucket, billingDueAmount, inferQuoteUnitId } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { mapBilling } from "@/lib/mappers";
 import { BRAND } from "@/lib/company";
@@ -925,9 +926,207 @@ function ReceivedPaymentsCell({ b, onSaveDate, onSavePayments }) {
   );
 }
 
+// 목록 헤더 칼럼 필터 — 라벨 옆 화살표를 누르면 아래로 체크박스 드롭다운이 뜬다.
+// 필터가 하나라도 켜져 있으면 화살표가 파란색이 된다.
+// 드롭다운은 body에 포털로 띄운다 — 표가 overflow-x-auto라(가로 스크롤 위해) 그 안에 그냥
+// absolute로 두면 세로로도 같이 잘려서 안 보인다(overflow-x를 auto로 두면 overflow-y도
+// 자동으로 clip되는 CSS 규칙 때문 — 실제로 겪은 버그).
+function FilterHeader({ label, active, children }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef(null);
+  const panelRef = useRef(null);
+
+  function toggleOpen() {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, left: r.left });
+    }
+    setOpen((o) => !o);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e) {
+      if (btnRef.current?.contains(e.target) || panelRef.current?.contains(e.target)) return;
+      setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      {label}
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={toggleOpen}
+        className={`p-0.5 rounded ${active ? "text-blue-600" : "text-slate-400"} hover:text-slate-600`}
+        aria-label={`${label} 필터`}
+      >
+        <ChevronDown size={12} />
+      </button>
+      {open && pos && createPortal(
+        <div
+          ref={panelRef}
+          style={{ position: "fixed", top: pos.top, left: pos.left }}
+          className="z-50 bg-white border border-slate-200 rounded-xl shadow-lg p-2 w-56 max-h-80 overflow-y-auto text-left font-normal normal-case text-slate-700"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>,
+        document.body
+      )}
+    </span>
+  );
+}
+
+function CheckboxFilterList({ options, selected, onChange }) {
+  function toggle(v) {
+    onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
+  }
+  if (!options.length) return <p className="text-xs text-slate-400 px-1.5 py-1">항목 없음</p>;
+  return (
+    <div className="space-y-0.5">
+      {options.map((o) => (
+        <label key={o} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer text-xs font-semibold text-slate-700">
+          <input type="checkbox" checked={selected.includes(o)} onChange={() => toggle(o)} />
+          {o}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+// "YYYY-MM-DD" 문자열 배열을 연도>월>일 트리로 묶는다 (최신 먼저).
+function buildDateTree(dates) {
+  const years = new Map(); // year -> Map(month -> Set(day))
+  for (const d of dates) {
+    if (!d) continue;
+    const [y, m, day] = d.split("-");
+    if (!years.has(y)) years.set(y, new Map());
+    const months = years.get(y);
+    if (!months.has(m)) months.set(m, new Set());
+    months.get(m).add(day);
+  }
+  return [...years.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([y, months]) => ({
+      key: y,
+      label: `${y}년`,
+      months: [...months.entries()]
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .map(([m, days]) => ({
+          key: `${y}-${m}`,
+          label: `${Number(m)}월`,
+          days: [...days]
+            .sort((a, b) => b.localeCompare(a))
+            .map((d) => ({ key: `${y}-${m}-${d}`, label: `${Number(d)}일` })),
+        })),
+    }));
+}
+
+// 선택값은 "2026"/"2026-09"/"2026-09-10"처럼 길이가 다를 수 있다 — 날짜가 그 값으로
+// 시작하면 매치(연도만 고르면 그 해 전체, 일자까지 고르면 그 날만).
+function matchesDateFilter(dateStr, selected) {
+  if (!selected.length) return true;
+  if (!dateStr) return false;
+  return selected.some((k) => dateStr.startsWith(k));
+}
+
+function DateTreeFilter({ dates, selected, onChange }) {
+  const tree = useMemo(() => buildDateTree(dates), [dates]);
+  const [openYears, setOpenYears] = useState(new Set());
+  const [openMonths, setOpenMonths] = useState(new Set());
+  function toggleValue(key) {
+    onChange(selected.includes(key) ? selected.filter((x) => x !== key) : [...selected, key]);
+  }
+  function toggleOpen(setFn, key) {
+    setFn((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+  if (!tree.length) return <p className="text-xs text-slate-400 px-1.5 py-1">날짜 없음</p>;
+  return (
+    <div className="space-y-0.5">
+      {tree.map((y) => (
+        <div key={y.key}>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => toggleOpen(setOpenYears, y.key)} className="text-slate-400 shrink-0 p-0.5">
+              <ChevronRight size={11} className={openYears.has(y.key) ? "rotate-90" : ""} />
+            </button>
+            <label className="flex-1 flex items-center gap-1.5 px-1 py-1 rounded hover:bg-slate-50 cursor-pointer text-xs font-bold text-slate-700">
+              <input type="checkbox" checked={selected.includes(y.key)} onChange={() => toggleValue(y.key)} />
+              {y.label}
+            </label>
+          </div>
+          {openYears.has(y.key) && (
+            <div className="ml-4">
+              {y.months.map((m) => (
+                <div key={m.key}>
+                  <div className="flex items-center gap-1">
+                    <button type="button" onClick={() => toggleOpen(setOpenMonths, m.key)} className="text-slate-400 shrink-0 p-0.5">
+                      <ChevronRight size={11} className={openMonths.has(m.key) ? "rotate-90" : ""} />
+                    </button>
+                    <label className="flex-1 flex items-center gap-1.5 px-1 py-0.5 rounded hover:bg-slate-50 cursor-pointer text-xs font-semibold text-slate-600">
+                      <input type="checkbox" checked={selected.includes(m.key)} onChange={() => toggleValue(m.key)} />
+                      {m.label}
+                    </label>
+                  </div>
+                  {openMonths.has(m.key) && (
+                    <div className="ml-4">
+                      {m.days.map((d) => (
+                        <label key={d.key} className="flex items-center gap-1.5 px-1 py-0.5 rounded hover:bg-slate-50 cursor-pointer text-[11px] text-slate-500">
+                          <input type="checkbox" checked={selected.includes(d.key)} onChange={() => toggleValue(d.key)} />
+                          {d.label}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// 작업자 칼럼에 실제 표시되는 값 — 외주 건은 기사명 대신 업체명이 보이므로 필터 옵션도 그 기준.
+function workerLabelOf(data, b) {
+  return b.isOutsourced ? (b.vendorName || "외주") : personOf(data, b.engineerId, b.engineer);
+}
+
+const BILLING_FILTERS_KEY = "guilBillingFiltersV1";
+const DEFAULT_BILLING_FILTERS = { workers: [], replaceDates: [], billingDates: [], costType: [], paymentStatus: [], billingMethods: [] };
+
 export default function BillingsAdmin({ data, setData }) {
   const { billings } = data;
   const [search, setSearch] = useState("");
+  // 칼럼 필터 — 새로고침해도 유지되게 sessionStorage에 저장(탭 닫으면 사라짐, 메뉴 선택
+  // 기억 방식(AdminApp.jsx의 ADMIN_MENU_KEY)과 동일 패턴). SSR 시점엔 window가 없어
+  // 초기값은 기본값으로 두고, 마운트 후 effect에서 복원한다(하이드레이션 불일치 방지).
+  const [filters, setFilters] = useState(DEFAULT_BILLING_FILTERS);
+  // 마운트 직후 저장 effect가 "복원되기 전 기본값"으로 먼저 한 번 실행돼(복원 setFilters는
+  // 다음 렌더로 미뤄지는데, 저장 effect는 같은 커밋에서 이전 렌더의 filters를 그대로 보고
+  // 실행됨) 방금 복원한 값을 덮어써버리는 경쟁 상태가 있었다 — 저장 effect의 첫 실행만
+  // 건너뛰어서 막는다.
+  const skipNextSave = useRef(true);
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(BILLING_FILTERS_KEY);
+      if (raw) setFilters({ ...DEFAULT_BILLING_FILTERS, ...JSON.parse(raw) });
+    } catch { /* 손상된 저장값은 무시하고 기본값으로 시작 */ }
+  }, []);
+  useEffect(() => {
+    if (skipNextSave.current) { skipNextSave.current = false; return; }
+    try { sessionStorage.setItem(BILLING_FILTERS_KEY, JSON.stringify(filters)); } catch { /* 저장 실패는 무시 — 필터 자체는 정상 동작 */ }
+  }, [filters]);
+  const filtersActive = Object.values(filters).some((v) => v.length > 0);
   // 호기별로 행이 나뉜(다호기) 청구는 어느 행에 마우스를 올려도 그 청구의 행 전체가 같이
   // 밝아지게 해서 "이건 한 청구다"가 보이게 한다 — 안 그러면 행마다 따로 반응해 서로 다른
   // 건처럼 보인다.
@@ -942,14 +1141,31 @@ export default function BillingsAdmin({ data, setData }) {
   // billings.received_payments 컬럼 존재 여부 — 마이그레이션 138 실행 전엔 컬럼이 없다.
   const receivedPaymentsReady = billings.some((b) => b.receivedPayments !== undefined);
 
+  // 필터 드롭다운 옵션 — 다른 필터가 걸려도 목록이 줄어들지 않게 전체 billings 기준으로 뽑는다
+  // (필터를 걸수록 옵션이 사라지면 "방금 있던 항목이 왜 없어졌지" 하고 헷갈리기 쉽다).
+  const workerOptions = [...new Set(billings.map((b) => workerLabelOf(data, b)))].filter(Boolean).sort();
+  const replaceDateOptions = billings.map((b) => b.replaceDate).filter(Boolean);
+  const billingDateOptions = billings.map((b) => b.billingDate).filter(Boolean);
+
   const q = search.trim().toLowerCase();
-  const rows = billings.filter((b) =>
-    !q ||
-    locOf(data, b.unitId, b.siteName, b.elevatorNo).toLowerCase().includes(q) ||
-    (b.part ?? "").toLowerCase().includes(q) ||
-    personOf(data, b.engineerId, b.engineer).toLowerCase().includes(q) ||
-    (b.vendorName ?? "").toLowerCase().includes(q)
-  );
+  const rows = billings.filter((b) => {
+    if (q &&
+      !locOf(data, b.unitId, b.siteName, b.elevatorNo).toLowerCase().includes(q) &&
+      !(b.part ?? "").toLowerCase().includes(q) &&
+      !personOf(data, b.engineerId, b.engineer).toLowerCase().includes(q) &&
+      !(b.vendorName ?? "").toLowerCase().includes(q)
+    ) return false;
+    if (filters.workers.length && !filters.workers.includes(workerLabelOf(data, b))) return false;
+    if (!matchesDateFilter(b.replaceDate, filters.replaceDates)) return false;
+    if (!matchesDateFilter(b.billingDate, filters.billingDates)) return false;
+    if (filters.costType.length && !filters.costType.includes(b.isFree ? "무상" : "유상")) return false;
+    if (filters.paymentStatus.length) {
+      const bucket = billingPaymentBucket(b);
+      if (!bucket || !filters.paymentStatus.includes(bucket)) return false;
+    }
+    if (filters.billingMethods.length && !filters.billingMethods.includes(b.billingMethod)) return false;
+    return true;
+  });
   // 무상 처리된 건은 합계에서 제외한다. 합계는 청구금액(cost) 기준 = VAT 별도다
   // (입금 대조만 부가세 포함으로 본다 — billingDueAmount).
   const total = rows.reduce((sum, b) => sum + (b.isFree ? 0 : Number(b.cost) || 0), 0);
@@ -1105,19 +1321,49 @@ export default function BillingsAdmin({ data, setData }) {
       <div className="flex items-end justify-between mb-4">
         <h1 className="text-xl font-extrabold">부품교체·공사 내역</h1>
         <p className="text-sm text-slate-500">
-          {q && `검색결과 ${rows.length}건 / `}총 {billings.length}건 · <span className="font-extrabold text-slate-900">{total.toLocaleString()}원</span>
+          {(q || filtersActive) && `검색결과 ${rows.length}건 / `}총 {billings.length}건 · <span className="font-extrabold text-slate-900">{total.toLocaleString()}원</span>
         </p>
       </div>
       <div className="flex items-center justify-between mb-3 gap-3">
-        <div className="relative max-w-72 flex-1">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input className={`${inputCls} pl-8`} placeholder="현장·부품·기사명 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className="flex items-center gap-2 flex-1">
+          <div className="relative max-w-72 flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input className={`${inputCls} pl-8`} placeholder="현장·부품·기사명 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          {filtersActive && (
+            <button type="button" onClick={() => setFilters(DEFAULT_BILLING_FILTERS)} className="text-xs font-bold text-slate-500 hover:text-slate-700 whitespace-nowrap">
+              필터 초기화
+            </button>
+          )}
         </div>
         <button onClick={() => setCreating(true)} className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
           <Plus size={15} /> 새 청구 등록
         </button>
       </div>
-      <AdminTable head={["현장", "작업자", "호기", "교체내역", "금액(VAT별도)", "교체일", "교체확인서", "청구일", "입금일", "청구방식"]}>
+      <AdminTable head={[
+        "현장",
+        <FilterHeader key="worker" label="작업자" active={filters.workers.length > 0}>
+          <CheckboxFilterList options={workerOptions} selected={filters.workers} onChange={(v) => setFilters({ ...filters, workers: v })} />
+        </FilterHeader>,
+        "호기",
+        "교체내역",
+        <FilterHeader key="cost" label="금액(VAT별도)" active={filters.costType.length > 0}>
+          <CheckboxFilterList options={["유상", "무상"]} selected={filters.costType} onChange={(v) => setFilters({ ...filters, costType: v })} />
+        </FilterHeader>,
+        <FilterHeader key="replaceDate" label="교체일" active={filters.replaceDates.length > 0}>
+          <DateTreeFilter dates={replaceDateOptions} selected={filters.replaceDates} onChange={(v) => setFilters({ ...filters, replaceDates: v })} />
+        </FilterHeader>,
+        "교체확인서",
+        <FilterHeader key="billingDate" label="청구일" active={filters.billingDates.length > 0}>
+          <DateTreeFilter dates={billingDateOptions} selected={filters.billingDates} onChange={(v) => setFilters({ ...filters, billingDates: v })} />
+        </FilterHeader>,
+        <FilterHeader key="payment" label="입금일" active={filters.paymentStatus.length > 0}>
+          <CheckboxFilterList options={["완납", "미수", "연체"]} selected={filters.paymentStatus} onChange={(v) => setFilters({ ...filters, paymentStatus: v })} />
+        </FilterHeader>,
+        <FilterHeader key="method" label="청구방식" active={filters.billingMethods.length > 0}>
+          <CheckboxFilterList options={BILLING_METHODS} selected={filters.billingMethods} onChange={(v) => setFilters({ ...filters, billingMethods: v })} />
+        </FilterHeader>,
+      ]}>
         {rows.map((b) => {
           const unitPartRows = unitPartRowsFor(b, data);
           const span = unitPartRows.length;
