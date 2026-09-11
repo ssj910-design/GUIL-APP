@@ -1192,7 +1192,7 @@ export default function BillingsAdmin({ data, setData }) {
                       <EditableDate key={b.receivedDate ?? "unset"} value={b.receivedDate} onCommit={(v) => updateManualField(b, "received_date", "receivedDate", v)} />
                     ) : "-"}
                   </td>
-                  <td rowSpan={span} className="px-3 py-2.5 align-middle" onClick={(e) => e.stopPropagation()}>
+                  <td rowSpan={span} className="px-3 py-2.5 whitespace-nowrap align-middle" onClick={(e) => e.stopPropagation()}>
                     {b.isFree ? (
                       <span className="text-slate-300">-</span>
                     ) : (
