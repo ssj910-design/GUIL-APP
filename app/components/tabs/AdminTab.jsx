@@ -2,10 +2,10 @@ import { useState, useContext, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Package, Receipt, ChevronRight, ChevronLeft, ChevronDown, FileText, PackageCheck, RotateCcw, PackageX, Search, Repeat, KeyRound, Check } from "lucide-react";
 import { Badge, PhotoThumb, PhotoGrid, PrimaryButton, Sheet, Field, inputCls, DrillHeader, AccordionRow, PhoneLink } from "@/app/components/ui";
-import { AuthContext, SitesContext } from "@/app/components/context";
+import { AuthContext, SitesContext, UnitsContext } from "@/app/components/context";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
-import { parsePartQty, formatPhone, addDays, quotePartsSummary } from "@/lib/utils";
+import { parsePartQty, formatPhone, addDays, quotePartsSummary, quoteUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { supabase } from "@/lib/supabaseClient";
 import { mapSiteManager } from "@/lib/mappers";
@@ -650,6 +650,7 @@ function MaterialsPanel({ pending, rejected, suppliedCount, engineerNames, onSup
 
 function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, onOpenWizard, onSendQuote, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onOpenHistory, focusId, onFocusHandled }) {
   const sites = useContext(SitesContext);
+  const units = useContext(UnitsContext);
   const [detail, setDetail] = useState(null);
   const [pdfFullscreen, setPdfFullscreen] = useState(false);
   const [query, setQuery] = useState("");
@@ -741,6 +742,12 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
                   })()}
                 </p>
               </div>
+              {quoteUnitLabel(units, shownDetail, shownDetail.unitId) && (
+                <div className="bg-slate-100 rounded-xl p-3">
+                  <p className="text-[11px] text-slate-500">호기</p>
+                  <p className="font-bold text-slate-800">{quoteUnitLabel(units, shownDetail, shownDetail.unitId)}</p>
+                </div>
+              )}
               {(shownDetail.requesterId || shownDetail.engineer) && (
                 <div className="bg-slate-100 rounded-xl p-3">
                   <p className="text-[11px] text-slate-500">신청 기사</p>
