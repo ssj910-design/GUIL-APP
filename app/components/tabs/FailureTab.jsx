@@ -502,7 +502,7 @@ export function FailureDetailSheet({ failure, failures = [], nested = false, onC
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">모델명</span>
-          <span className="font-semibold text-slate-700">{site?.elevatorModel || "-"}</span>
+          <span className="font-semibold text-slate-700">{unit?.model || site?.elevatorModel || "-"}</span>
         </div>
         <div className="flex items-center justify-between gap-2 text-sm">
           <span className="text-slate-400 shrink-0">주소</span>
@@ -1241,10 +1241,10 @@ function FailureResponseCard({ f, dist, history = [], site, onOpenDetail, onDisp
             <span className="truncate">고장 {history.length}회 · 최근 {fmtMD(history[0].createdAt)}{history[0].assignee ? ` · ${history[0].assignee}` : ""}</span>
           </p>
         )}
-        {(site?.address || f.reporterPhone || site?.elevatorModel) && (
+        {(site?.address || f.reporterPhone || unit?.model || site?.elevatorModel) && (
           <div className="text-[12px] text-slate-500 space-y-1">
             {site?.address && <p className="flex items-center gap-1 min-w-0"><MapPin size={12} className="shrink-0 text-slate-400" /><span className="truncate">{site.address}</span></p>}
-            {site?.elevatorModel && <p className="flex items-center gap-1 min-w-0"><Settings size={12} className="shrink-0 text-slate-400" /><span className="truncate">{site.elevatorModel}</span></p>}
+            {(unit?.model || site?.elevatorModel) && <p className="flex items-center gap-1 min-w-0"><Settings size={12} className="shrink-0 text-slate-400" /><span className="truncate">{unit?.model || site.elevatorModel}</span></p>}
             {f.reporterPhone && <p className="flex items-center gap-1"><PhoneCall size={12} className="shrink-0 text-slate-400" />신고자 <PhoneLink phone={f.reporterPhone}>{formatPhone(f.reporterPhone)}</PhoneLink></p>}
           </div>
         )}
