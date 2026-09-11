@@ -238,7 +238,10 @@ export default function AdminApp() {
           fetchAll("sites", "*", { column: "name" }),
           fetchAll("units", "*", { column: "seq" }),
           fetchAll("site_managers"),
-          fetchAll("failures", "*", { column: "created_at", ascending: false }),
+          // 취소된 고장은 불러오지 않는다 — 대시보드·통계·고장다발 판정 등 고장을 세는 모든 화면에서
+          // 자동으로 빠지게 하려고(각 집계마다 조건을 넣으면 하나라도 빠뜨리는 순간 버그). 취소 건은
+          // 고장관리의 "취소" 탭이 필요할 때 따로 조회한다.
+          fetchAll("failures", "*", { column: "created_at", ascending: false }, (q) => q.or("status.is.null,status.neq.취소")),
           fetchAll("inspections", "*", { column: "due_date" }),
           fetchAll("material_requests", "*", { column: "created_at", ascending: false }),
           fetchAll("quote_requests", "*", { column: "created_at", ascending: false }),

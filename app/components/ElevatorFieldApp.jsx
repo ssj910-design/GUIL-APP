@@ -175,6 +175,8 @@ export default function App() {
   // failures.fault_model 컬럼 존재 여부 — 마이그레이션 131 전엔 컬럼이 없어, 있을 때만 처리등록 시
   // 고른 기종을 저장한다(에러코드집 과거처리이력이 호기의 실제 기종이 아니라 이 값 기준으로 찾게 하기 위함).
   const faultModelReady = failures.some((f) => f.faultModel !== undefined);
+  // failures.cancelled_at 등 컬럼 존재 여부 — 마이그레이션 140 전엔 컬럼이 없어 취소 버튼 자체를 숨긴다.
+  const cancelReady = failures.some((f) => f.cancelledAt !== undefined);
   // billings.signature_url 등 컬럼 존재 여부 — 마이그레이션 119 실행 전엔 컬럼이 없어, 있을 때만
   // 서명/전화승인 정보를 같이 쓴다(미실행 시에도 청구 저장 자체는 깨지지 않게).
   // billings.part_photos 컬럼 존재 여부 — 마이그레이션 120 실행 전엔 컬럼이 없어, 있을 때만
@@ -881,7 +883,7 @@ export default function App() {
         // 규모가 작아 안전해서 그대로 둔다.
         fetchAll("sites"),
         fetchAll("site_managers"),
-        fetchAll("failures", "*", { column: "created_at", ascending: false }),
+        fetchAll("failures", "*", { column: "created_at", ascending: false }, (q) => q.or("status.is.null,status.neq.취소")), // 취소 건은 안 불러온다 — 모든 집계에서 자동 제외
         fetchAll("inspections"),
         fetchAll("material_requests", "*", { column: "created_at", ascending: false }),
         fetchAll("todos", "*", { column: "created_at", ascending: false }),
@@ -948,9 +950,12 @@ export default function App() {
     async function tick() {
       const { data } = await supabase.from("failures").select("*").order("created_at", { ascending: false }).limit(100);
       if (!data) return;
-      const recent = data.map(mapFailure);
-      const ids = new Set(recent.map((f) => f.id));
-      setFailures((prev) => [...recent, ...prev.filter((f) => !ids.has(f.id))]);
+      // 취소 건도 같이 받는다 — 안 받으면 다른 기기에서 방금 취소한 건이 새 데이터에 없어서,
+      // 화면에 남아 있던 옛 복사본(미처리)이 그대로 남는다. 받아온 id는 전부 기존 목록에서 걷어내고,
+      // 다시 넣을 땐 취소 아닌 것만 넣는다(= 취소로 바뀐 건은 목록에서 사라진다).
+      const ids = new Set(data.map((r) => r.id));
+      const active = data.filter((r) => r.status !== "취소").map(mapFailure);
+      setFailures((prev) => [...active, ...prev.filter((f) => !ids.has(f.id))]);
     }
     function start() { if (!timer) { tick(); timer = setInterval(tick, 15000); } }
     function stop() { if (timer) { clearInterval(timer); timer = null; } }
@@ -1053,6 +1058,34 @@ export default function App() {
       url: `/?openFailure=${failure.id}`,
     });
     notifyFailure(`${engineerName}에게 배정 완료`);
+  }
+
+  // ★ 고장 접수 취소 — 중복·오접수·고객 철회. 삭제가 아니라 "취소" 상태로 남기고(이력 보존),
+  // 로더가 취소 건을 아예 안 불러오므로 화면·집계에서 자동으로 빠진다.
+  // 기사는 본인이 접수한 출동 전(미처리) 건만, 관리자는 완료 전이면 가능 — 조건부 update라
+  // 그 사이 누가 출동을 눌렀거나 완료했으면 0행이 되어 실패한다(자재·견적 취소와 같은 방식).
+  async function handleCancelFailure(failure, reason) {
+    const isAdmin = profile.role === "admin";
+    const myId = profile.id ?? profileIdByName(profilesAll, profile.name);
+    let q = supabase.from("failures")
+      .update({ status: "취소", cancelled_at: new Date().toISOString(), cancelled_by: profile.name, cancelled_by_id: myId ?? null, cancel_reason: reason })
+      .eq("id", failure.id);
+    q = isAdmin ? q.in("status", ["미처리", "진행중"]) : q.eq("status", "미처리").eq("created_by", myId);
+    const { data, error } = await q.select();
+    if (error) { alert(`취소 실패
+${error.message ?? ""}`); return false; }
+    if (!data?.length) {
+      alert(isAdmin ? "이미 완료됐거나 취소된 건입니다. 새로고침 후 확인해주세요." : "이미 출동했거나 처리된 건이라 취소할 수 없습니다. 관리자에게 요청해주세요.");
+      return false;
+    }
+    setFailures((prev) => prev.filter((x) => x.id !== failure.id));
+    const where = `${failure.siteName} · ${formatUnitLabel(failure.elevatorNo) || "호기 미상"}`;
+    const body = `${where} — ${reason} (${profile.name})`;
+    // 배정돼 있던 기사가 가장 급하다(출동 중 헛걸음). 관리자 전원에게도 알린다.
+    if (failure.assigneeId && failure.assigneeId !== myId) sendPush("failure_cancelled", [failure.assigneeId], { title: "고장 접수가 취소됐습니다", body, url: "/" });
+    notify("failure_cancelled", { title: "고장 접수가 취소됐습니다", body, url: "/" });
+    notifyFailure("접수를 취소했습니다");
+    return true;
   }
 
   // ★ 관리자 재배정 — 잘못 배정·중복 출동 정정용. 진행 상태를 미처리로 되돌리고 새 기사(또는 미배정)로
@@ -2742,6 +2775,7 @@ export default function App() {
               onRefuse={handleRefuseFailure}
               onAssign={handleAssignFailure}
               onReassign={handleReassignFailure}
+              onCancelFailure={cancelReady ? handleCancelFailure : undefined}
               onShowAllFailures={() => { setFailureFocusTab("처리현황"); setTab("failure"); }}
               toast={failureToast}
               todos={todos}
@@ -2763,6 +2797,7 @@ export default function App() {
               onRefuse={handleRefuseFailure}
               onAssign={handleAssignFailure}
               onReassign={handleReassignFailure}
+              onCancelFailure={cancelReady ? handleCancelFailure : undefined}
               focusSubTab={failureFocusTab}
               onFocusHandled={() => setFailureFocusTab(null)}
               toast={failureToast}
@@ -2863,6 +2898,7 @@ export default function App() {
                 onDispatch={setNotifDispatchTarget}
                 onArrive={handleArriveFailure}
                 onOpenResult={setNotifResultTarget}
+                onCancel={cancelReady ? handleCancelFailure : undefined}
               />
             );
           })()}

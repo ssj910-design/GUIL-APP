@@ -2,7 +2,7 @@ import { useState, useContext, useEffect, useRef } from "react";
 import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame, MapPin, Repeat, AlertTriangle, Wrench, ChevronRight, Search, X, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, handlePhoneInputChange, distanceKm, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf, unitBadgeLabel, normalizeModel, normalizeCode, distinctModels, formatListText } from "@/lib/utils";
-import { FAULT_TYPES, TODAY_STR } from "@/lib/constants";
+import { FAULT_TYPES, TODAY_STR, FAILURE_CANCEL_REASONS } from "@/lib/constants";
 import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
@@ -469,8 +469,13 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
 }
 
 
-export function FailureDetailSheet({ failure, failures = [], nested = false, onClose, onDispatch, onArrive, onOpenResult, onAssignOpen }) {
-  const { role, name: myName } = useContext(AuthContext);
+export function FailureDetailSheet({ failure, failures = [], nested = false, onClose, onDispatch, onArrive, onOpenResult, onAssignOpen, onCancel }) {
+  const { role, name: myName, selfId } = useContext(AuthContext);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  // 기사는 본인이 접수한 출동 전 건만, 관리자는 완료 전이면 취소 가능(서버도 같은 조건으로 한 번 더 막는다).
+  const canCancel = !!onCancel && (role === "admin"
+    ? failure.status === "미처리" || failure.status === "진행중"
+    : failure.status === "미처리" && !!failure.createdBy && failure.createdBy === selfId);
   const sites = useContext(SitesContext);
   const units = useContext(UnitsContext);
   const site = sites.find((s) => s.id === failure.siteId);
@@ -682,7 +687,19 @@ export function FailureDetailSheet({ failure, failures = [], nested = false, onC
           </button>
         </div>
       )}
+      {!nested && canCancel && (
+        <button
+          type="button"
+          onClick={() => setCancelOpen(true)}
+          className="w-full mt-3 text-sm font-bold text-red-500 py-2.5 rounded-xl border border-red-200 active:bg-red-50"
+        >
+          접수 취소
+        </button>
+      )}
     </Sheet>
+    {cancelOpen && (
+      <CancelFailureSheet failure={failure} onCancel={onCancel} onClose={() => setCancelOpen(false)} onDone={() => { setCancelOpen(false); onClose(); }} />
+    )}
     {photoViewer && (
       <PhotoViewerSheet
         urls={photoViewer.urls}
@@ -700,6 +717,53 @@ export function FailureDetailSheet({ failure, failures = [], nested = false, onC
   );
 }
 
+
+// 고장 접수 취소 — 사유를 반드시 받는다(중복/오접수/고객 철회/기타). 기타는 직접 입력.
+function CancelFailureSheet({ failure, onCancel, onClose, onDone }) {
+  const [reason, setReason] = useState("");
+  const [etc, setEtc] = useState("");
+  const [saving, setSaving] = useState(false);
+  const finalReason = reason === "기타" ? (etc.trim() ? `기타: ${etc.trim()}` : "") : reason;
+  async function confirm() {
+    if (!finalReason || saving) return;
+    setSaving(true);
+    const ok = await onCancel(failure, finalReason);
+    setSaving(false);
+    if (ok) onDone();
+  }
+  return (
+    <Sheet title="고장 접수 취소" onClose={onClose}>
+      <p className="text-sm font-bold text-slate-800 mb-1">{failure.siteName} · {formatUnitLabel(failure.elevatorNo) || "호기 미상"}</p>
+      <p className="text-[12px] text-slate-500 mb-3">취소 사유를 골라주세요. 취소한 건은 목록과 통계에서 빠집니다.</p>
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        {FAILURE_CANCEL_REASONS.map((r) => (
+          <button
+            key={r}
+            type="button"
+            onClick={() => setReason(r)}
+            className={`py-2.5 rounded-xl text-sm font-bold ${reason === r ? "bg-red-600 text-white" : "bg-slate-100 text-slate-600"}`}
+          >
+            {r}
+          </button>
+        ))}
+      </div>
+      {reason === "기타" && (
+        <textarea className={`${inputCls} mb-3`} rows={2} placeholder="취소 사유를 입력해주세요" value={etc} onChange={(e) => setEtc(e.target.value)} />
+      )}
+      {failure.assignee && (
+        <p className="text-[11px] text-slate-400 mb-3">배정된 {failure.assignee} 기사와 관리자에게 취소 알림이 갑니다.</p>
+      )}
+      <button
+        type="button"
+        disabled={!finalReason || saving}
+        onClick={confirm}
+        className="w-full bg-red-600 disabled:bg-slate-300 text-white text-sm font-bold py-3 rounded-xl active:bg-red-700"
+      >
+        {saving ? "취소하는 중…" : "접수 취소"}
+      </button>
+    </Sheet>
+  );
+}
 
 const ETA_OPTIONS = Array.from({ length: 12 }, (_, i) => (i + 1) * 10);
 
@@ -1375,7 +1439,7 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
 }
 
 
-function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves, errorCodes }) {
+function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onCancel, attendances, todayLeaves, errorCodes }) {
   const [assignTarget, setAssignTarget] = useState(null);
   const [detailTarget, setDetailTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
@@ -1418,6 +1482,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
           onArrive={onArrive}
           onOpenResult={setResultTarget}
           onAssignOpen={setAssignTarget}
+          onCancel={onCancel}
         />
       )}
       {assignTarget && (
@@ -1450,7 +1515,7 @@ function FailureUnassignedList({ failures, onDispatch, onArrive, onResult, onRef
 }
 
 
-function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, attendances, todayLeaves, errorCodes }) {
+function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRefuse, onAssign, onCancel, attendances, todayLeaves, errorCodes }) {
   const [assignTarget, setAssignTarget] = useState(null);
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [showDone, setShowDone] = useState(false);
@@ -1513,6 +1578,7 @@ function FailureProcessRegister({ failures, onDispatch, onArrive, onResult, onRe
           onArrive={onArrive}
           onOpenResult={setResultTarget}
           onAssignOpen={setAssignTarget}
+          onCancel={onCancel}
         />
       )}
       {assignTarget && (
@@ -1611,7 +1677,7 @@ const DATE_RANGES = [
   { key: "3m", label: "3개월", days: 90 },
 ];
 
-function FailureStatusOverview({ failures, onReassign, onResult, errorCodes = [], attendances = [], todayLeaves = [] }) {
+function FailureStatusOverview({ failures, onReassign, onResult, onCancel, errorCodes = [], attendances = [], todayLeaves = [] }) {
   const { name: CURRENT_ENGINEER, role } = useContext(AuthContext);
   const [detailTarget, setDetailTarget] = useState(null);
   const [reassignTarget, setReassignTarget] = useState(null);
@@ -1720,6 +1786,7 @@ function FailureStatusOverview({ failures, onReassign, onResult, errorCodes = []
           failures={failures}
           onClose={() => setDetailTarget(null)}
           onOpenResult={setResultTarget}
+          onCancel={onCancel}
         />
       )}
       {reassignTarget && (
@@ -1825,7 +1892,7 @@ function ErrorCodeBook({ errorCodes, failures }) {
   );
 }
 
-export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [], errorCodes = [], onReported }) {
+export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResult, onRefuse, onAssign, onReassign, onCancelFailure, focusSubTab, onFocusHandled, toast, attendances = [], todayLeaves = [], errorCodes = [], onReported }) {
   const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [subTab, setSubTab] = useState("접수등록");
   // 홈 "모두 보기" 등 외부에서 특정 서브탭으로 진입 (SiteTab focusSiteId와 같은 패턴)
@@ -1844,9 +1911,9 @@ export function FailureTab({ failures, setFailures, onDispatch, onArrive, onResu
   // 옆 탭을 함께 렌더링할 때 쓴다.
   function renderFailurePane(tab) {
     if (tab === "접수등록") return <FailureRegisterForm onReported={onReported} onDispatch={onDispatch} failures={failures} setFailures={setFailures} goToUnassigned={() => setSubTab("미배정")} />;
-    if (tab === "미배정") return <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
-    if (tab === "처리등록") return <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
-    if (tab === "처리현황") return <FailureStatusOverview failures={failures} onReassign={onReassign} onResult={onResult} errorCodes={errorCodes} attendances={attendances} todayLeaves={todayLeaves} />;
+    if (tab === "미배정") return <FailureUnassignedList failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} onCancel={onCancelFailure} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
+    if (tab === "처리등록") return <FailureProcessRegister failures={failures} onDispatch={onDispatch} onArrive={onArrive} onResult={onResult} onRefuse={onRefuse} onAssign={onAssign} onCancel={onCancelFailure} attendances={attendances} todayLeaves={todayLeaves} errorCodes={errorCodes} />;
+    if (tab === "처리현황") return <FailureStatusOverview failures={failures} onReassign={onReassign} onResult={onResult} onCancel={onCancelFailure} errorCodes={errorCodes} attendances={attendances} todayLeaves={todayLeaves} />;
     return <ErrorCodeBook errorCodes={errorCodes} failures={failures} />;
   }
 
