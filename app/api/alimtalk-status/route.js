@@ -4,13 +4,16 @@
 // 조용히 안 올 수 있고, 그러면 화면에는 "확인 중"만 영원히 남는다 — 그 상태면 발송 현황
 // 화면을 만든 이유가 사라진다. 그래서 화면이 열릴 때 이걸 한 번 부른다.
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { fetchAlimtalkStatus } from "@/lib/alimtalk";
+import { fetchAlimtalkStatus, debugListNoFilter } from "@/lib/alimtalk";
 
 export async function POST(request) {
   // TEMP DEBUG
   const debug = new URL(request.url).searchParams.get("debug") === "1";
   if (!process.env.SOLAPI_API_KEY || !process.env.SOLAPI_API_SECRET) {
     return Response.json({ ok: false, reason: "SOLAPI 키 미설정" });
+  }
+  if (new URL(request.url).searchParams.get("debug") === "2") {
+    return Response.json(await debugListNoFilter());
   }
 
   // 아직 결과를 못 받은 카카오 발송 건만 추린다.
