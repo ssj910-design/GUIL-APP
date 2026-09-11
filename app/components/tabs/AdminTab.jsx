@@ -717,7 +717,10 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
             <div className="grid grid-cols-2 gap-2.5">
               <div className="bg-slate-100 rounded-xl p-3">
                 <p className="text-[11px] text-slate-500">현장</p>
-                <p className="font-bold text-slate-800">{shownDetail.siteName}</p>
+                <p className="font-bold text-slate-800">
+                  {shownDetail.siteName}
+                  {quoteUnitLabel(units, shownDetail, shownDetail.unitId) ? ` · ${quoteUnitLabel(units, shownDetail, shownDetail.unitId)}` : ""}
+                </p>
               </div>
               <div className="bg-slate-100 rounded-xl p-3">
                 <p className="text-[11px] text-slate-500">현장 주소</p>
@@ -742,12 +745,6 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
                   })()}
                 </p>
               </div>
-              {quoteUnitLabel(units, shownDetail, shownDetail.unitId) && (
-                <div className="bg-slate-100 rounded-xl p-3">
-                  <p className="text-[11px] text-slate-500">호기</p>
-                  <p className="font-bold text-slate-800">{quoteUnitLabel(units, shownDetail, shownDetail.unitId)}</p>
-                </div>
-              )}
               {(shownDetail.requesterId || shownDetail.engineer) && (
                 <div className="bg-slate-100 rounded-xl p-3">
                   <p className="text-[11px] text-slate-500">신청 기사</p>
