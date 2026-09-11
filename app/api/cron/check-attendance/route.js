@@ -6,6 +6,8 @@
 //  3) 12:01~13:00(KST) 매분: 오전반차인 사람 중 아직 출근체크 안 한 사람에게 리마인드
 //     (오전반차는 정오 무렵부터 근무 시작이라 위 09:01~10:00 리마인드 대상에서는 빠져 있다 —
 //     1번과 동일하게 체크할 때까지 매분 반복되다가 체크하면 다음 스윕부터 빠진다)
+//  4) 금요일은 주4일 근무제(profiles.duty_modes)인 사람을 추가로 제외한다 — 단, 그날 당직·
+//     숙직·정상근무 순번(duty_schedules)이 걸려있으면 실제 출근일이니 대상에 그대로 남긴다.
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { periodOf } from "@/lib/utils";
 import { isKstHoliday } from "@/lib/serverHolidays";
@@ -37,19 +39,29 @@ async function handle(request) {
       body: JSON.stringify(body),
     }).then((r) => r.ok).catch(() => false);
 
-  const [{ data: allEngineers }, { data: attendances }, { data: leaves }] = await Promise.all([
-    db.from("profiles").select("id,name,member_type").eq("role", "engineer").eq("is_active", true),
+  const isFriday = nowKst.getDay() === 5;
+  const [{ data: allEngineers }, { data: attendances }, { data: leaves }, { data: fridayDuty }] = await Promise.all([
+    db.from("profiles").select("id,name,member_type,duty_modes").eq("role", "engineer").eq("is_active", true),
     db.from("attendances").select("profile_id,checked_in_at").eq("work_date", todayStr),
     db.from("leaves").select("profile_id,kind,note").lte("start_date", todayStr).gte("end_date", todayStr),
+    // 주4일 근무제는 평소 금요일이 근무일이 아니다 — 다만 당직·숙직·정상근무 순번이 그날
+    // 걸려있으면 실제로 출근해야 하니, 그 경우만 리마인드 대상에 남긴다.
+    isFriday ? db.from("duty_schedules").select("profile_id").eq("duty_date", todayStr) : Promise.resolve({ data: [] }),
   ]);
   // TEST계정은 실제 출근을 안 하니 출근체크 리마인드·미체크 보고 대상에서 뺀다.
   const engineers = (allEngineers ?? []).filter((e) => e.member_type !== "TEST계정");
 
   const checkedInIds = new Set((attendances ?? []).filter((a) => a.checked_in_at).map((a) => a.profile_id));
   const amHalfDayIds = new Set((leaves ?? []).filter((l) => l.kind === "반차" && periodOf(l.note) === "오전").map((l) => l.profile_id));
+  const fridayDutyIds = new Set((fridayDuty ?? []).map((d) => d.profile_id));
+  const fridayOffIds = new Set(
+    isFriday
+      ? engineers.filter((e) => (e.duty_modes ?? []).includes("주4일") && !fridayDutyIds.has(e.id)).map((e) => e.id)
+      : []
+  );
 
   if (inNoonWindow) {
-    const notCheckedIn = engineers.filter((e) => amHalfDayIds.has(e.id) && !checkedInIds.has(e.id));
+    const notCheckedIn = engineers.filter((e) => amHalfDayIds.has(e.id) && !checkedInIds.has(e.id) && !fridayOffIds.has(e.id));
     let reminded = false;
     if (notCheckedIn.length) {
       reminded = await send({
@@ -65,6 +77,7 @@ async function handle(request) {
 
   const excludedIds = new Set((leaves ?? []).filter((l) => FULL_DAY_EXCLUDE_KINDS.includes(l.kind)).map((l) => l.profile_id));
   for (const id of amHalfDayIds) excludedIds.add(id);
+  for (const id of fridayOffIds) excludedIds.add(id);
 
   const notCheckedIn = engineers.filter((e) => !checkedInIds.has(e.id) && !excludedIds.has(e.id));
 
