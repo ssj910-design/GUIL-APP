@@ -3,6 +3,7 @@ import { Receipt, Check, Search, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, handlePhoneInputChange, freeReasonLabel, quoteGrandTotal, quoteMaterialItems, shortDate } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
+import { thumbUrl } from "@/lib/photos";
 import { PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink, Sheet, PhotoLightbox } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload, SignaturePad } from "@/app/components/formWidgets";
@@ -1252,7 +1253,8 @@ export function BillingCard({ b, onPhotoClick, onClick }) {
               className="flex flex-col items-center gap-0.5"
             >
               <div className="relative">
-                <img src={s.url} alt="" className="w-12 h-12 rounded-lg object-cover border border-slate-200" />
+                {/* 48px 칸이라 원본 대신 서버에서 줄인 썸네일을 받고, 화면 밖 카드는 스크롤해서 보일 때 받는다 */}
+                <img src={thumbUrl(s.url)} loading="lazy" decoding="async" alt="" className="w-12 h-12 rounded-lg object-cover border border-slate-200" />
                 {s.count > 1 && (
                   <span className="absolute -top-1 -right-1 text-[8px] font-bold text-white bg-slate-700 rounded-full px-1 leading-4">+{s.count - 1}</span>
                 )}
