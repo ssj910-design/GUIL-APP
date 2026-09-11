@@ -6,7 +6,9 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { fetchAlimtalkStatus } from "@/lib/alimtalk";
 
-export async function POST() {
+export async function POST(request) {
+  // TEMP DEBUG
+  const debug = new URL(request.url).searchParams.get("debug") === "1";
   if (!process.env.SOLAPI_API_KEY || !process.env.SOLAPI_API_SECRET) {
     return Response.json({ ok: false, reason: "SOLAPI 키 미설정" });
   }
@@ -30,7 +32,8 @@ export async function POST() {
   }
   if (!pendingIds.length) return Response.json({ ok: true, checked: 0, updated: 0 });
 
-  const statuses = await fetchAlimtalkStatus(pendingIds);
+  const statuses = await fetchAlimtalkStatus(pendingIds, { debug });
+  if (debug) return Response.json({ ok: true, pendingIds, statuses });
 
   // 결과가 나온 건만 골라 그 행의 send_log를 통째로 다시 쓴다.
   let updated = 0;
