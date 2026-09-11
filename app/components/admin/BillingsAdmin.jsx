@@ -1104,8 +1104,8 @@ export default function BillingsAdmin({ data, setData }) {
             >
               {i === 0 && (
                 <>
-                  <td rowSpan={span} className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap align-top">{siteNameOf(b, data)}</td>
-                  <td rowSpan={span} className="px-3 py-2.5 whitespace-nowrap align-top">
+                  <td rowSpan={span} className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap align-middle">{siteNameOf(b, data)}</td>
+                  <td rowSpan={span} className="px-3 py-2.5 whitespace-nowrap align-middle">
                     {b.isOutsourced ? (
                       <span className="inline-flex items-center gap-1">
                         <StatusBadge tone="purple">외주</StatusBadge> {b.vendorName || "-"}
@@ -1118,7 +1118,7 @@ export default function BillingsAdmin({ data, setData }) {
               <td className="px-3 py-2.5 text-slate-600 whitespace-pre-line">{r.part}</td>
               {i === 0 && (
                 <>
-                  <td rowSpan={span} className="px-3 py-2.5 whitespace-nowrap align-top">
+                  <td rowSpan={span} className="px-3 py-2.5 whitespace-nowrap align-middle">
                     {isCostPending(b) ? (
                       // 기사가 "견적서 참조"로 낸 건 — 무상이 아니라 관리자가 금액을 넣어야 하는 상태.
                       <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded-lg">금액 입력 필요</span>
@@ -1132,8 +1132,8 @@ export default function BillingsAdmin({ data, setData }) {
                       <span className="font-bold">{Number(b.cost).toLocaleString()}원</span>
                     )}
                   </td>
-                  <td rowSpan={span} className="px-3 py-2.5 text-slate-500 whitespace-nowrap align-top">{shortDate(b.replaceDate)}</td>
-                  <td rowSpan={span} className="px-3 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
+                  <td rowSpan={span} className="px-3 py-2.5 text-slate-500 whitespace-nowrap align-middle">{shortDate(b.replaceDate)}</td>
+                  <td rowSpan={span} className="px-3 py-2.5 align-middle" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
                       onClick={() => setCertTarget(b)}
@@ -1144,10 +1144,10 @@ export default function BillingsAdmin({ data, setData }) {
                       교체확인서 보기
                     </button>
                   </td>
-                  <td rowSpan={span} className="px-3 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
+                  <td rowSpan={span} className="px-3 py-2.5 align-middle" onClick={(e) => e.stopPropagation()}>
                     <EditableDate key={b.billingDate ?? "unset"} value={b.billingDate} onCommit={(v) => updateManualField(b, "billing_date", "billingDate", v)} />
                   </td>
-                  <td rowSpan={span} className="px-3 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
+                  <td rowSpan={span} className="px-3 py-2.5 align-middle" onClick={(e) => e.stopPropagation()}>
                     {receivedPaymentsReady ? (
                       <ReceivedPaymentsCell
                         key={b.id}
@@ -1159,7 +1159,7 @@ export default function BillingsAdmin({ data, setData }) {
                       <EditableDate key={b.receivedDate ?? "unset"} value={b.receivedDate} onCommit={(v) => updateManualField(b, "received_date", "receivedDate", v)} />
                     ) : "-"}
                   </td>
-                  <td rowSpan={span} className="px-3 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
+                  <td rowSpan={span} className="px-3 py-2.5 align-middle" onClick={(e) => e.stopPropagation()}>
                     <EditableSelect
                       value={b.billingMethod ?? ""}
                       options={BILLING_METHODS}
