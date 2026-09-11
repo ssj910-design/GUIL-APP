@@ -2,16 +2,16 @@
 
 // 관리자 대시보드 — 오늘 처리해야 할 일이 한눈에 보이는 화면.
 // 호기·담당자 표기는 v2 FK(unitId/assigneeId)를 우선 쓰고, 옛 라벨은 fallback.
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useContext } from "react";
 import WeekStrip from "@/app/components/admin/WeekStrip";
 import { AlertOctagon, Plus, MapPin } from "lucide-react";
-import { TODAY_STR } from "@/lib/constants";
+import { TODAY_STR, FAILURE_CANCEL_REASONS } from "@/lib/constants";
 import { addDays, unitsToInspections, stripCityPrefix, groupBySite, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, realInstallPlace, shortDate, parseErrorCode, engineerJobsByName } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
-import { Modal, StatusBadge, inputCls, PhotoGrid, ReassignModal } from "@/app/components/admin/adminShared";
+import { Modal, StatusBadge, inputCls, PhotoGrid, ReassignModal, AdminAuthContext } from "@/app/components/admin/adminShared";
 import { RegisterFailureModal } from "@/app/components/admin/FailuresAdmin";
 import { EngineerLocationMap } from "@/app/components/admin/EngineerLocationMap";
 import { LOCATION_TRACKING } from "@/lib/features";
@@ -85,6 +85,61 @@ export function FailureDetailContent({ f, units, sites, profiles = [] }) {
       <div>
         <p className="text-xs font-bold text-slate-500 mb-2">사진 ({f.photoUrls?.length ?? 0}장)</p>
         <PhotoGrid urls={f.photoUrls ?? []} />
+      </div>
+    </div>
+  );
+}
+
+// 고장 접수 취소 — 고장상세 모달 하단(대시보드·고장관리 공용, FailureDetailContent와 짝).
+// 미처리·진행중 건만, 사유 필수. 컬럼(마이그레이션 140)이 없으면 failure.cancelledAt이 undefined라
+// 스스로 숨는다. 조건부 update라 그 사이 완료됐으면 0행으로 실패한다.
+export function FailureCancelPanel({ failure, setData, onDone }) {
+  const { name: adminName, id: adminId } = useContext(AdminAuthContext);
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [etc, setEtc] = useState("");
+  const [saving, setSaving] = useState(false);
+  if (failure.cancelledAt === undefined || (failure.status !== "미처리" && failure.status !== "진행중")) return null;
+  const finalReason = reason === "기타" ? (etc.trim() ? `기타: ${etc.trim()}` : "") : reason;
+
+  async function cancel() {
+    setSaving(true);
+    const { data: ok, error } = await supabase.from("failures")
+      .update({ status: "취소", cancelled_at: new Date().toISOString(), cancelled_by: adminName ?? "관리자", cancelled_by_id: adminId ?? null, cancel_reason: finalReason })
+      .eq("id", failure.id).in("status", ["미처리", "진행중"])
+      .select();
+    setSaving(false);
+    if (error) { alert("취소 실패: " + error.message); return; }
+    if (!ok?.length) { alert("이미 완료됐거나 취소된 건입니다. 새로고침 후 확인해주세요."); return; }
+    setData((prev) => ({ ...prev, failures: prev.failures.filter((x) => x.id !== failure.id) }));
+    const body = `${failure.siteName ?? ""}${failure.elevatorNo ? ` · ${failure.elevatorNo}` : ""} — ${finalReason} (${adminName ?? "관리자"})`;
+    // 배정돼 있던 기사가 가장 급하다(출동 중 헛걸음). 관리자 전원에게도 알린다.
+    if (failure.assigneeId) notify("failure_cancelled", { profileIds: [failure.assigneeId], title: "고장 접수가 취소됐습니다", body, url: "/" });
+    notify("failure_cancelled", { title: "고장 접수가 취소됐습니다", body, url: "/" });
+    onDone?.();
+  }
+
+  if (!open) {
+    return (
+      <div className="flex justify-end mt-4">
+        <button onClick={() => setOpen(true)} className="text-sm font-bold text-red-600 border border-red-200 rounded-xl px-4 py-2 hover:bg-red-50">접수 취소</button>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-4 border border-red-200 bg-red-50/40 rounded-xl p-3">
+      <p className="text-xs font-bold text-slate-600 mb-2">취소 사유 — 취소한 건은 목록·통계에서 빠지고 고장관리의 취소 탭에서만 보입니다</p>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {FAILURE_CANCEL_REASONS.map((r) => (
+          <button key={r} onClick={() => setReason(r)} className={`text-xs font-bold px-3 py-1.5 rounded-lg ${reason === r ? "bg-red-600 text-white" : "bg-white border border-slate-200 text-slate-600"}`}>{r}</button>
+        ))}
+      </div>
+      {reason === "기타" && <input className={`${inputCls} mb-2`} placeholder="취소 사유를 입력해주세요" value={etc} onChange={(e) => setEtc(e.target.value)} />}
+      <div className="flex justify-end gap-2">
+        <button onClick={() => setOpen(false)} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2">닫기</button>
+        <button disabled={!finalReason || saving} onClick={cancel} className="text-sm font-bold text-white bg-red-600 disabled:bg-slate-300 rounded-xl px-4 py-2">
+          {saving ? "취소하는 중…" : "접수 취소"}
+        </button>
       </div>
     </div>
   );
@@ -570,6 +625,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
       {failureDetail && (
         <Modal title="고장상세내역" onClose={() => setFailureDetail(null)}>
           <FailureDetailContent f={failureDetail} units={units} sites={sites} profiles={profiles} />
+          <FailureCancelPanel failure={failureDetail} setData={setData} onDone={() => setFailureDetail(null)} />
         </Modal>
       )}
 

@@ -2,15 +2,15 @@
 
 // 고장관리 — 전체 고장 테이블 + 기사 배정(듀얼라이트) + 고장접수(신규 등록).
 // 출동/도착/처리결과 입력은 현장 기사의 모바일 앱 몫이므로 여기서는 하지 않는다.
-import { useState, useMemo, useContext } from "react";
+import { useState, useMemo } from "react";
 import { Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
-import { TODAY_STR, FAULT_TYPES, FAILURE_CANCEL_REASONS } from "@/lib/constants";
+import { TODAY_STR, FAULT_TYPES } from "@/lib/constants";
 import { mapFailure } from "@/lib/mappers";
 import { handlePhoneInputChange, sortEngineersByDistance, engineerJobsByName } from "@/lib/utils";
-import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls, ReassignModal, SiteAutocomplete, AdminAuthContext } from "@/app/components/admin/adminShared";
-import { FailureDetailContent } from "@/app/components/admin/Dashboard";
+import { locOf, personOf, StatusBadge, AdminTable, Modal, inputCls, ReassignModal, SiteAutocomplete } from "@/app/components/admin/adminShared";
+import { FailureDetailContent, FailureCancelPanel } from "@/app/components/admin/Dashboard";
 import { EngineerLocationMap } from "@/app/components/admin/EngineerLocationMap";
 import { LOCATION_TRACKING } from "@/lib/features";
 import { confirmAsync } from "@/app/components/ConfirmHost";
@@ -319,45 +319,7 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
   );
 }
 
-// 고장 접수 취소 — 상세 모달 하단. 사유를 반드시 고르게 한다(기타는 직접 입력).
-function CancelFailurePanel({ failure, onCancel }) {
-  const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState("");
-  const [etc, setEtc] = useState("");
-  const [saving, setSaving] = useState(false);
-  const finalReason = reason === "기타" ? (etc.trim() ? `기타: ${etc.trim()}` : "") : reason;
-  if (!open) {
-    return (
-      <div className="flex justify-end mt-4">
-        <button onClick={() => setOpen(true)} className="text-sm font-bold text-red-600 border border-red-200 rounded-xl px-4 py-2 hover:bg-red-50">접수 취소</button>
-      </div>
-    );
-  }
-  return (
-    <div className="mt-4 border border-red-200 bg-red-50/40 rounded-xl p-3">
-      <p className="text-xs font-bold text-slate-600 mb-2">취소 사유 — 취소한 건은 목록·통계에서 빠지고 취소 탭에서만 보입니다</p>
-      <div className="flex flex-wrap gap-1.5 mb-2">
-        {FAILURE_CANCEL_REASONS.map((r) => (
-          <button key={r} onClick={() => setReason(r)} className={`text-xs font-bold px-3 py-1.5 rounded-lg ${reason === r ? "bg-red-600 text-white" : "bg-white border border-slate-200 text-slate-600"}`}>{r}</button>
-        ))}
-      </div>
-      {reason === "기타" && <input className={`${inputCls} mb-2`} placeholder="취소 사유를 입력해주세요" value={etc} onChange={(e) => setEtc(e.target.value)} />}
-      <div className="flex justify-end gap-2">
-        <button onClick={() => setOpen(false)} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2">닫기</button>
-        <button
-          disabled={!finalReason || saving}
-          onClick={async () => { setSaving(true); await onCancel(failure, finalReason); setSaving(false); }}
-          className="text-sm font-bold text-white bg-red-600 disabled:bg-slate-300 rounded-xl px-4 py-2"
-        >
-          {saving ? "취소하는 중…" : "접수 취소"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export default function FailuresAdmin({ data, setData, initialStatus }) {
-  const { name: adminName, id: adminId } = useContext(AdminAuthContext);
   const { failures, profiles, units, sites } = data;
   const [status, setStatus] = useState(initialStatus ?? "all");
   const [search, setSearch] = useState("");
@@ -379,22 +341,6 @@ export default function FailuresAdmin({ data, setData, initialStatus }) {
     setCancelledRows((rows ?? []).map(mapFailure));
   }
 
-  // 관리자는 완료 전(미처리·진행중)이면 취소 가능 — 조건부 update라 그 사이 완료됐으면 0행으로 실패.
-  async function cancelFailure(f, reason) {
-    const { data: ok, error } = await supabase.from("failures")
-      .update({ status: "취소", cancelled_at: new Date().toISOString(), cancelled_by: adminName ?? "관리자", cancelled_by_id: adminId ?? null, cancel_reason: reason })
-      .eq("id", f.id).in("status", ["미처리", "진행중"])
-      .select();
-    if (error) { alert("취소 실패: " + error.message); return; }
-    if (!ok?.length) { alert("이미 완료됐거나 취소된 건입니다. 새로고침 후 확인해주세요."); return; }
-    setData((prev) => ({ ...prev, failures: prev.failures.filter((x) => x.id !== f.id) }));
-    setCancelledRows(null); // 다음에 "취소" 탭을 열면 새로 조회
-    setDetail(null);
-    const body = `${f.siteName ?? ""}${f.elevatorNo ? ` · ${f.elevatorNo}` : ""} — ${reason} (${adminName ?? "관리자"})`;
-    // 배정돼 있던 기사가 가장 급하다(출동 중 헛걸음). 관리자 전원에게도 알린다.
-    if (f.assigneeId) notify("failure_cancelled", { profileIds: [f.assigneeId], title: "고장 접수가 취소됐습니다", body, url: "/" });
-    notify("failure_cancelled", { title: "고장 접수가 취소됐습니다", body, url: "/" });
-  }
 
   const rows = (status === "취소" ? cancelledRows ?? [] : failures).filter((f) => {
     if (status !== "all" && f.status !== status) return false;
@@ -554,9 +500,7 @@ export default function FailuresAdmin({ data, setData, initialStatus }) {
       {detail && (
         <Modal title="고장상세보기" onClose={() => setDetail(null)}>
           <FailureDetailContent f={detail} units={units} sites={sites} profiles={profiles} />
-          {cancelReady && (detail.status === "미처리" || detail.status === "진행중") && (
-            <CancelFailurePanel failure={detail} onCancel={cancelFailure} />
-          )}
+          <FailureCancelPanel failure={detail} setData={setData} onDone={() => { setDetail(null); setCancelledRows(null); }} />
         </Modal>
       )}
 
