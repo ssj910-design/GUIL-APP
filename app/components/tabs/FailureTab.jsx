@@ -1713,9 +1713,12 @@ function FailureStatusOverview({ failures, onReassign, onResult, onCancel, error
     const { faultType, faultDetail } = parseErrorCode(f.errorCode);
     return [f.siteName, faultType, faultDetail, f.processContent, f.faultCause].filter(Boolean).join(" ").toLowerCase().includes(q);
   });
-  // "전체" 볼 때만 진행중을 맨 위로 — 이미 한 상태로 걸러 보는 중(미배정/진행중/완료 칩)이면
-  // 다시 섞을 이유가 없다. Array.sort는 안정 정렬이라 같은 순위 안에서는 원래(최신순 등) 순서 유지.
-  const shown = filter === "all" ? [...filtered].sort((a, b) => (a.status === "진행중" ? 0 : 1) - (b.status === "진행중" ? 0 : 1)) : filtered;
+  // "전체" 볼 때만 미완료(미배정·진행중)를 완료 위로 올린다 — 최신순 정렬이라 완료 건이 계속
+  // 쌓이면 미완료 건이 그 밑에 묻혀 놓치는 사고가 있었다. 이미 한 상태로 걸러 보는 중
+  // (미배정/진행중/완료 칩)이면 다시 섞을 이유가 없다. Array.sort는 안정 정렬이라 같은 순위
+  // 안에서는 원래(최신순 등) 순서 유지.
+  const statusRank = (f) => (f.status === "진행중" ? 0 : f.status === "완료" ? 2 : 1);
+  const shown = filter === "all" ? [...filtered].sort((a, b) => statusRank(a) - statusRank(b)) : filtered;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
