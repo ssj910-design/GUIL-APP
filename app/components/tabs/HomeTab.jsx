@@ -58,7 +58,11 @@ function FailureHistoryDetailScreen({ site, failures, onBack, onOpenResult }) {
   const [detailTarget, setDetailTarget] = useState(null);
   // 현장의 기본 elevatorNo가 아니라 실제로 이 목록을 채운 호기(들)를 밝힌다 — 집중관리
   // 대상은 호기 단위라 "현장 전체 이력"으로 오해하지 않게.
-  const unitText = [...new Set(history.map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean))].join(", ");
+  const historyUnits = [...new Set(history.map((f) => formatUnitLabel(f.elevatorNo)).filter(Boolean))];
+  const unitText = historyUnits.join(", ");
+  // 호기가 하나뿐이면 위 헤더에 이미 나오니 각 항목 제목에서 또 반복하지 않는다 — 갇힘사고처럼
+  // 현장 전체(여러 호기)를 함께 모은 경우에만 항목별로 어느 호기인지 구분해서 보여준다.
+  const showUnitPerRow = historyUnits.length > 1;
   return (
     <Sheet title="고장처리내역 상세" onClose={onBack}>
       <div className="bg-slate-100 rounded-xl p-3 mb-4">
@@ -77,7 +81,7 @@ function FailureHistoryDetailScreen({ site, failures, onBack, onOpenResult }) {
               className="w-full text-left border border-slate-200 rounded-xl p-3.5 active:bg-slate-50"
             >
               <div className="flex items-center justify-between mb-1">
-                <p className="font-bold text-slate-800 text-sm">{f.errorCode}{f.elevatorNo ? ` · ${formatUnitLabel(f.elevatorNo)}` : ""}</p>
+                <p className="font-bold text-slate-800 text-sm">{f.errorCode}{showUnitPerRow && f.elevatorNo ? ` · ${formatUnitLabel(f.elevatorNo)}` : ""}</p>
                 <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${f.status === "완료" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{f.status}</span>
               </div>
               <p className="text-xs text-slate-500 mb-1">{f.reportedAt} 접수 · {f.assignee ?? "미배정"}</p>
