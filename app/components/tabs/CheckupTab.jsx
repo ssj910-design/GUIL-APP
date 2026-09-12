@@ -280,8 +280,6 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
           setCheckupDate(draft.checkupDate ?? TODAY_STR);
           setCheckupStartTime(draft.checkupStartTime ?? "09:00");
           setCheckupEndTime(draft.checkupEndTime ?? "09:30");
-          setCheckupCnfirm(draft.checkupCnfirm ?? "");
-          setCheckupCnfirmTel(draft.checkupCnfirmTel ?? "");
           setCheckupSubProfileId(draft.checkupSubProfileId ?? "");
           setCheckupNotes(draft.checkupNotes ?? "");
           setCheckupPhotos(draft.checkupPhotos ?? []);
@@ -298,8 +296,12 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   function saveCheckupDraft() {
     if (!checkupUnitId) return;
     try {
+      // checkupCnfirm/checkupCnfirmTel(관리주체명·전화번호)은 사용자가 직접 입력하는 값이
+      // 아니라 항상 siteManagers에서 그 자리에서 새로 채우는 값이라(위 loadCheckupForUnit) 임시
+      // 저장에 담지 않는다 — 담으면 담당자를 나중에 등록해도 옛 임시저장(그때는 미등록이라 빈
+      // 값)이 되살아나 매번 이 값을 덮어써버려, 담당자를 등록해도 계속 "필요합니다" 오류가 났다.
       localStorage.setItem(checkupDraftKey(checkupUnitId, ym), JSON.stringify({
-        checkupDate, checkupStartTime, checkupEndTime, checkupCnfirm, checkupCnfirmTel,
+        checkupDate, checkupStartTime, checkupEndTime,
         checkupSubProfileId, checkupNotes, checkupPhotos, itemExceptions, checkupStep,
       }));
       toastCheckup("임시저장했습니다");
