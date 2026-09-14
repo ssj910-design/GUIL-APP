@@ -232,7 +232,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
     .filter((f) => f.status === "완료" && f.createdAt && new Date(f.createdAt) >= weekAgo)
     .sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0));
   const pendingMaterials = materialRequests.filter((m) => m.status === "승인대기");
-  const activeQuotes = quoteRequests.filter((q) => q.status !== "자재지급완료");
+  const activeQuotes = quoteRequests.filter((q) => !["자재지급완료", "취소", "반려"].includes(q.status));
   const openTodos = todos.filter((t) => !t.done);
   // 지급됐지만 미청구: 자재·견적 지급일로부터 30일이 지났는데 아직도 안 끝났으면(청구 처리 전).
   // 할일의 마감일(dueDate)은 담당자가 작업 일정에 맞춰 자유롭게 고쳐 쓰는 값이라(예: 급한 건

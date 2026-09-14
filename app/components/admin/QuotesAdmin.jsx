@@ -13,6 +13,7 @@ import { uploadPhoto } from "@/lib/photos";
 import { inferQuoteUnitId, addDays, shortDate, formatUnitLabel, labelToSeq, quoteUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { recordQuoteSupplyStockOut } from "@/lib/inventoryStock";
+import { rejectQuoteRequest, rejectLabelOf, QUOTE_REJECTABLE, QUOTE_REJECT_REASONS } from "@/lib/quoteReject";
 import { locOf, addressOf, personOf, assigneeNames, billingCompleteFor, StatusBadge, AdminTable, FilterPills, inputCls, Modal, PhotoGrid, DateTextInput, lastSentDate, SentHistory, AdminAuthContext } from "@/app/components/admin/adminShared";
 import QuoteItemsModal from "@/app/components/admin/QuoteItemsModal";
 import QuoteSendModal from "@/app/components/admin/QuoteSendModal";
@@ -72,6 +73,7 @@ function quoteStageInfo(q, todos) {
   else if (q.status === "작성") stage = sent ? "발송" : "작성";
   else if (q.status === "승인") stage = "승인";
   else if (q.status === "자재지급완료") stage = billingDone ? "교체" : "출하";
+  else if (q.status === "반려") stage = "반려";
 
   const dates = {
     요청: shortDate(q.requestedDate),
@@ -86,7 +88,7 @@ function quoteStageInfo(q, todos) {
 }
 
 export default function QuotesAdmin({ data, setData }) {
-  const { id: meId } = useContext(AdminAuthContext);
+  const { id: meId, name: meName } = useContext(AdminAuthContext);
   const { quoteRequests: allQuoteRequests } = data;
 
   // 알림톡이 실제로 도착했는지 솔라피에 직접 물어봐 반영한다 — 웹훅 결과가 안 올 때가 있어서다.
@@ -111,6 +113,7 @@ export default function QuotesAdmin({ data, setData }) {
   // 가려 안 보일 수 있음) "됐나?" 싶은 게 당연하다 — 처리 직후 잠깐 토스트를 띄운다.
   const [toast, setToast] = useState(null);
   const [detailTarget, setDetailTarget] = useState(null); // 상세내역 보는 중인 견적요청
+  const [rejectTarget, setRejectTarget] = useState(null); // 반려/취소 사유 입력 중인 견적요청
   const [itemsTarget, setItemsTarget] = useState(null); // 품목편집 중인 견적요청
   const [sendTarget, setSendTarget] = useState(null); // 발송 중인 견적요청
   const [pickingSite, setPickingSite] = useState(false); // 새 견적 발행 — 현장선택 모달
@@ -125,15 +128,29 @@ export default function QuotesAdmin({ data, setData }) {
     !query || locOf(data, q.unitId, q.siteName, q.elevatorNo).toLowerCase().includes(query) || (q.constructionType ?? "").toLowerCase().includes(query) || personOf(data, q.requesterId, q.engineer).toLowerCase().includes(query)
       || (q.quoteItems ?? []).some((it) => (it.spec ?? "").toLowerCase().includes(query))
   );
-  const quoteRequests = quoteRequestsSearched.filter((q) =>
-    quoteStageFilter === "all" || quoteStageInfo(q, data.todos ?? []).stage === quoteStageFilter
-  );
+  // 기사가 요청 후 취소한 건(취소)은 목록에서 뺀다 — 삭제하지 않고 데이터는 그대로 남겨(cancelled_at/
+  // cancelled_by로 감사 기록 보존) 화면에만 안 보이게 한다. 관리자가 반려/취소한 건(반려)은 평소
+  // 목록에서 빼고 "반려·취소" 필터에서만 본다.
+  const liveSearched = quoteRequestsSearched.filter((q) => q.status !== "취소" && q.status !== "반려");
+  const rejectedSearched = quoteRequestsSearched.filter((q) => q.status === "반려");
+  const quoteRequests = quoteStageFilter === "반려"
+    ? rejectedSearched
+    : liveSearched.filter((q) => quoteStageFilter === "all" || quoteStageInfo(q, data.todos ?? []).stage === quoteStageFilter);
   // 아직 견적서를 만들기 전(요청만 들어온 건)과 이미 작성을 시작한 건을 목록에서 바로 구분해 보여준다.
   const pendingQuoteRequests = quoteRequests.filter((q) => q.status === "요청접수");
-  // 기사가 요청 후 취소한 건은 목록에서 뺀다 — 삭제하지 않고 데이터는 그대로 남겨(cancelled_at/
-  // cancelled_by로 감사 기록 보존) 화면에만 안 보이게 한다. quoteStageInfo가 '취소' 상태를
-  // 처리하지 않아(stage: null) 어차피 단계 표시도 못 하고 처리 버튼도 없는 죽은 행이었다.
-  const draftedQuoteRequests = quoteRequests.filter((q) => q.status !== "요청접수" && q.status !== "취소");
+  const draftedQuoteRequests = quoteRequests.filter((q) => q.status !== "요청접수");
+
+  async function handleQuoteReject(quote, { reason, restoreStock }) {
+    const res = await rejectQuoteRequest(supabase, { quote, reason, restoreStock, rejectedBy: meName, createdBy: meId });
+    if (res.error) { alert(res.error); return false; }
+    if (res.warning) alert(res.warning);
+    setData((prev) => ({
+      ...prev,
+      quoteRequests: prev.quoteRequests.map((x) => (x.id === quote.id ? { ...x, ...res.patch } : x)),
+      todos: prev.todos.filter((t) => !res.removedTodoIds.includes(t.id)),
+    }));
+    return true;
+  }
 
   async function handleQuoteAdvance(quote) {
     const isIssue = quote.status === "요청접수";
@@ -358,7 +375,13 @@ export default function QuotesAdmin({ data, setData }) {
           : personOf(data, q.requesterId, q.engineer)}
       </td>
       <td className="px-3 py-2.5 whitespace-nowrap">
-        {(() => {
+        {q.status === "반려" ? (
+          <div className="flex items-center gap-1.5">
+            <StatusBadge tone="red">{rejectLabelOf(q)}</StatusBadge>
+            <span className="text-xs text-slate-500 truncate max-w-64">{q.rejectReason}</span>
+            <span className="text-[10px] text-slate-400">{q.rejectedAt ? shortDate(q.rejectedAt.slice(0, 10)) : ""}</span>
+          </div>
+        ) : (() => {
           const { stage, dates } = quoteStageInfo(q, data.todos ?? []);
           return (
             <div className="flex gap-1">
@@ -432,10 +455,11 @@ export default function QuotesAdmin({ data, setData }) {
   const quoteHead = ["날짜", "현장 · 호기", "내용", "신청 기사", "진행상태", "처리"];
   const mergedRows = [
     ...pendingQuoteRequests.map((q) => renderQuoteRow(q, false)),
-    ...draftedQuoteRequests.map((q) => renderQuoteRow(q, true)),
+    // 요청접수 단계에서 반려된 건은 작성일이 없어 신청일·공사내용으로 보여준다.
+    ...draftedQuoteRequests.map((q) => renderQuoteRow(q, q.status !== "반려" || !!q.quoteIssuedDate)),
   ];
 
-  const stages = quoteRequestsSearched.map((q) => quoteStageInfo(q, data.todos ?? []).stage);
+  const stages = liveSearched.map((q) => quoteStageInfo(q, data.todos ?? []).stage);
   const stageCounts = QUOTE_STAGES.reduce((acc, s) => ({ ...acc, [s]: stages.filter((x) => x === s).length }), {});
 
   return (
@@ -459,8 +483,9 @@ export default function QuotesAdmin({ data, setData }) {
           value={quoteStageFilter}
           onChange={setQuoteStageFilter}
           options={[
-            { value: "all", label: "전체", count: quoteRequestsSearched.length },
+            { value: "all", label: "전체", count: liveSearched.length },
             ...QUOTE_STAGES.map((s) => ({ value: s, label: s, count: stageCounts[s] })),
+            { value: "반려", label: "반려·취소", count: rejectedSearched.length },
           ]}
         />
       </div>
@@ -553,7 +578,22 @@ export default function QuotesAdmin({ data, setData }) {
       )}
 
       {detailTarget && (
-        <QuoteDetailModal quote={detailTarget} data={data} onClose={() => setDetailTarget(null)} />
+        <QuoteDetailModal quote={detailTarget} data={data} onClose={() => setDetailTarget(null)} onReject={() => setRejectTarget(detailTarget)} />
+      )}
+
+      {rejectTarget && (
+        <QuoteRejectModal
+          quote={rejectTarget}
+          onClose={() => setRejectTarget(null)}
+          onSubmit={async (input) => {
+            if (!(await handleQuoteReject(rejectTarget, input))) return;
+            const label = rejectLabelOf(rejectTarget);
+            setRejectTarget(null);
+            setDetailTarget(null);
+            setToast(`${label} 처리했습니다.`);
+            setTimeout(() => setToast(null), 1800);
+          }}
+        />
       )}
 
       {toast && (
@@ -701,7 +741,56 @@ function QuoteSupplyModal({ quote, profiles, todos, onClose, onSubmit }) {
 // 청구내역(BillingsAdmin.jsx의 BillingDetailModal)과 동일한 구성 —
 // 라벨/값 그리드 + 사진 그리드. 실제 수정(담당기사/금액/사진)은 목록의
 // "지급완료 처리"/"수정" 버튼이 여는 전용 모달에서 하므로 여기는 읽기 전용이다.
-function QuoteDetailModal({ quote: r, data, onClose }) {
+// 반려/취소 사유 입력 — 승인 전엔 "반려", 승인 후(고객 취소 등)엔 "견적 취소". 자재지급완료 건은
+// 할일이 삭제되고, 부품마스터 연동 품목이 있으면 재고를 되돌릴지 고른다(자재가 실제로 돌아왔을 때만).
+function QuoteRejectModal({ quote, onClose, onSubmit }) {
+  const [reason, setReason] = useState("");
+  const [restoreStock, setRestoreStock] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const label = rejectLabelOf(quote);
+  const supplied = quote.status === "자재지급완료";
+  const hasStockItems = (quote.quoteItems ?? []).some((it) => it.partId);
+
+  async function submit() {
+    if (!reason.trim() || saving) return;
+    setSaving(true);
+    await onSubmit({ reason: reason.trim(), restoreStock: supplied && restoreStock });
+    setSaving(false);
+  }
+
+  return (
+    <Modal title={`${label} — ${quote.siteName ?? ""}`} onClose={onClose}>
+      <p className="text-xs text-slate-500 mb-3">
+        {supplied ? "담당 기사의 할 일이 삭제되고, 신청 기사·담당 기사에게 사유와 함께 알림이 갑니다." : "신청 기사에게 사유와 함께 알림이 갑니다."}
+      </p>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {QUOTE_REJECT_REASONS.map((r) => (
+          <button key={r} onClick={() => setReason(r)} className={`text-xs font-bold px-3 py-1.5 rounded-full border ${reason === r ? "bg-red-600 text-white border-red-600" : "bg-white text-slate-500 border-slate-200"}`}>
+            {r}
+          </button>
+        ))}
+      </div>
+      <textarea className={inputCls} rows={3} placeholder="사유 (직접 입력 가능)" value={reason} onChange={(e) => setReason(e.target.value)} />
+      {supplied && hasStockItems && (
+        <label className="flex items-center gap-2 mt-3 text-sm font-semibold text-slate-600">
+          <input type="checkbox" checked={restoreStock} onChange={(e) => setRestoreStock(e.target.checked)} />
+          지급한 자재가 창고로 돌아옴 — 재고 되돌리기
+        </label>
+      )}
+      <div className="flex justify-end gap-2 mt-4">
+        <button onClick={onClose} className="text-sm font-bold text-slate-500 px-4 py-2 rounded-lg border border-slate-200">닫기</button>
+        <button onClick={submit} disabled={!reason.trim() || saving} className="text-sm font-bold text-white bg-red-600 hover:bg-red-700 disabled:bg-slate-300 px-4 py-2 rounded-lg">
+          {saving ? "처리 중..." : `${label}하기`}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function QuoteDetailModal({ quote: r, data, onClose, onReject }) {
+  // 청구까지 끝난 건은 견적이 아니라 청구 정리 문제라 반려/취소 버튼을 숨긴다(lib에서도 막음).
+  const billed = (data.todos ?? []).some((t) => t.quoteRequestId === r.id && t.source === "quote" && t.done);
+  const canReject = QUOTE_REJECTABLE.includes(r.status) && !billed;
   // 견적요청은 아직 견적서를 만들기 전(요청접수)과 이미 작성한 이후로 상세내역 구성이 달라진다 —
   // 작성 이후엔 공사내용 대신 견적명, 신청일 대신 작성일, 사진 대신 PDF 미리보기를 보여준다.
   const isDraftedQuote = r.status !== "요청접수";
@@ -739,7 +828,14 @@ function QuoteDetailModal({ quote: r, data, onClose }) {
         </div>
         <div>
           <p className="text-xs font-bold text-slate-400 mb-1">진행상태</p>
-          {(() => {
+          {r.status === "반려" ? (
+            <div className="bg-red-50 border border-red-100 rounded-xl p-3">
+              <p className="text-xs font-bold text-red-600">
+                {rejectLabelOf(r)}{r.rejectedAt ? ` · ${r.rejectedAt.slice(0, 10)}` : ""}{r.rejectedBy ? ` · ${r.rejectedBy}` : ""}
+              </p>
+              <p className="text-sm font-semibold text-red-700 mt-0.5 whitespace-pre-wrap">{r.rejectReason || "-"}</p>
+            </div>
+          ) : (() => {
             const { stage, dates } = quoteStageInfo(r, data.todos ?? []);
             return (
               <div className="flex gap-1">
@@ -778,6 +874,13 @@ function QuoteDetailModal({ quote: r, data, onClose }) {
         <div>
           <p className="text-xs font-bold text-slate-500 mb-2">견적서 PDF 미리보기</p>
           <QuotePdfPreview url={r.quotePdfUrl} />
+        </div>
+      )}
+      {canReject && (
+        <div className="flex justify-end mt-4">
+          <button onClick={onReject} className="text-xs font-bold text-red-600 border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg">
+            {rejectLabelOf(r)}
+          </button>
         </div>
       )}
     </Modal>

@@ -13,6 +13,7 @@ import { BillingHistoryScreen } from "@/app/components/tabs/BillingTab";
 import QuoteWizard from "@/app/components/tabs/QuoteWizard";
 import { sentHistory } from "@/app/components/admin/adminShared";
 import QuotePdfPreview from "@/app/components/admin/QuotePdfPreview";
+import { QUOTE_REJECT_REASONS, rejectLabelOf } from "@/lib/quoteReject";
 import { X } from "lucide-react";
 
 
@@ -406,6 +407,65 @@ function QuoteDetailActions({ q, engineerNames, onAdvanceQuote, onOpenWizard, on
   return null;
 }
 
+// 관리자 견적 반려/취소 — 승인 전엔 "반려", 승인 후(고객 취소 등)엔 "견적 취소". 청구까지 끝난
+// 건은 lib/quoteReject.js가 막는다. Sheet(z-30) 안에서 열리므로 발송 모달처럼 body에 포털한다.
+function QuoteRejectButton({ q, onRejectQuote, onDone }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [restoreStock, setRestoreStock] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const label = rejectLabelOf(q);
+  const supplied = q.status === "자재지급완료";
+  const hasStockItems = (q.quoteItems ?? []).some((it) => it.partId);
+
+  async function submit() {
+    if (!reason.trim() || saving) return;
+    setSaving(true);
+    const ok = await onRejectQuote(q, { reason: reason.trim(), restoreStock: supplied && restoreStock });
+    setSaving(false);
+    if (ok) { setOpen(false); onDone?.(label); }
+  }
+
+  return (
+    <>
+      <button onClick={() => setOpen(true)} className="w-full mt-2 text-xs font-bold py-2.5 rounded-lg border border-red-200 text-red-600 active:bg-red-50">
+        {label}
+      </button>
+      {open && createPortal(
+        <div className="fixed inset-0 z-40 bg-black/50 flex flex-col justify-end" onClick={() => setOpen(false)}>
+          <div className="bg-white rounded-t-3xl p-5 max-h-[85%] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-slate-900 mb-1">{label} — {q.siteName}</h3>
+            <p className="text-[11px] text-slate-500 mb-3">
+              {supplied ? "담당 기사의 할 일이 삭제되고, 신청 기사·담당 기사에게 사유와 함께 알림이 갑니다." : "신청 기사에게 사유와 함께 알림이 갑니다."}
+            </p>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {QUOTE_REJECT_REASONS.map((r) => (
+                <button key={r} onClick={() => setReason(r)} className={`text-[11px] font-bold px-2.5 py-1.5 rounded-full border ${reason === r ? "bg-red-600 text-white border-red-600" : "bg-white text-slate-500 border-slate-200"}`}>
+                  {r}
+                </button>
+              ))}
+            </div>
+            <textarea className={inputCls} rows={2} placeholder="사유 (직접 입력 가능)" value={reason} onChange={(e) => setReason(e.target.value)} />
+            {supplied && hasStockItems && (
+              <label className="flex items-start gap-2 mt-3 text-xs font-bold text-slate-600">
+                <input type="checkbox" className="mt-0.5" checked={restoreStock} onChange={(e) => setRestoreStock(e.target.checked)} />
+                지급한 자재가 창고로 돌아옴 — 재고 되돌리기
+              </label>
+            )}
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setOpen(false)} className="flex-1 py-3 rounded-xl text-sm font-bold text-slate-500 border border-slate-200">닫기</button>
+              <button onClick={submit} disabled={!reason.trim() || saving} className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-red-600 disabled:bg-slate-300">
+                {saving ? "처리 중..." : `${label}하기`}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
 // 발송/재발송 전 수신처 확인·수정 모달 — 현장 담당자(site_managers)에서 고르거나 직접
 // 입력할 수 있다. 기본값은 이 견적의 최근 수신처(q.recipientName/Email/Phone — 보낼 때마다
 // 최신으로 갱신됨, lib/mappers.js의 mapQuoteRequest 참고). Sheet(z-30)보다 위에 떠야 하므로
@@ -648,7 +708,7 @@ function MaterialsPanel({ pending, rejected, suppliedCount, engineerNames, onSup
   );
 }
 
-function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, onOpenWizard, onSendQuote, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onOpenHistory, focusId, onFocusHandled }) {
+function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, onRejectQuote, onOpenWizard, onSendQuote, onCompleteQuoteSupply, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onOpenHistory, focusId, onFocusHandled }) {
   const sites = useContext(SitesContext);
   const units = useContext(UnitsContext);
   const [detail, setDetail] = useState(null);
@@ -810,6 +870,12 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
             onAttachQuotePhoto={onAttachQuotePhoto}
             onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
             onNotify={notify}
+          />
+          <QuoteRejectButton
+            key={`reject-${shownDetail.id}`}
+            q={shownDetail}
+            onRejectQuote={onRejectQuote}
+            onDone={(label) => { closeDetail(); notify(`${label} 처리했습니다`); }}
           />
         </Sheet>
       )}
@@ -1176,7 +1242,7 @@ function QuoteSupplyEditForm({ q, existingTodos, engineerNames, onSubmit, onAtta
 }
 
 // 자재지급완료 내역 전체보기 — SupplyHistoryScreen(자재출하관리)과 동일한 구성.
-function QuoteSupplyHistoryScreen({ completed, todos, engineerNames, onQuoteSupplyEdit, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onBack }) {
+function QuoteSupplyHistoryScreen({ completed, todos, engineerNames, onQuoteSupplyEdit, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onRejectQuote, onBack }) {
   const [query, setQuery] = useState("");
   const [editTarget, setEditTarget] = useState(null);
   const q = query.trim().toLowerCase();
@@ -1232,6 +1298,10 @@ function QuoteSupplyHistoryScreen({ completed, todos, engineerNames, onQuoteSupp
               setEditTarget(null);
             }}
           />
+          {/* 고객이 지급 후 취소한 경우 — 청구까지 끝난 건은 버튼 자체를 숨긴다 */}
+          {!todos.some((t) => t.quoteRequestId === editTarget.id && t.source === "quote" && t.done) && (
+            <QuoteRejectButton key={`reject-${editTarget.id}`} q={editTarget} onRejectQuote={onRejectQuote} onDone={() => setEditTarget(null)} />
+          )}
         </Sheet>
       )}
     </div>
@@ -1250,7 +1320,7 @@ function DashStat({ label, n, tone }) {
 }
 
 
-export function AdminTab({ materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAdvanceQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onClearReassignRequest, onResetEngineerPassword, materialFocusId, onMaterialFocusHandled, quoteFocusId, onQuoteFocusHandled, onQuoteDraftCreated, onQuoteDiscarded, onQuoteWizardSaved, onSendQuote, inventoryProducts, inventoryStockMovements }) {
+export function AdminTab({ materialRequests, billings, quoteRequests, restockRequests, todos, onSupplyComplete, onSupplyEdit, onReprocess, onAttachPhoto, onRemoveSupplyPhoto, onAdvanceQuote, onRejectQuote, onAttachQuotePhoto, onRemoveQuoteSupplyPhoto, onCompleteQuoteSupply, onQuoteSupplyEdit, onAttachRestockPhoto, onRemoveRestockSupplyPhoto, onCompleteRestock, onReassignTodo, onClearReassignRequest, onResetEngineerPassword, materialFocusId, onMaterialFocusHandled, quoteFocusId, onQuoteFocusHandled, onQuoteDraftCreated, onQuoteDiscarded, onQuoteWizardSaved, onSendQuote, inventoryProducts, inventoryStockMovements }) {
   const { engineerNames: ctxEngineerNames, adminTier, profiles } = useContext(AuthContext);
   // 자재담당관리자는 자재출하관리·상비부품보충만 본다 (견적·재배정·비용청구·계정관리는 다른 관리자 담당).
   const isMaterialTier = adminTier === "material";
@@ -1282,7 +1352,8 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
   const materialPending = materialRequests.filter((r) => r.status === "승인대기");
   const materialRejected = materialRequests.filter((r) => r.status === "반려");
   const supplied = materialRequests.filter((r) => r.status === "지급완료");
-  const quoteActive = quoteRequests.filter((q) => q.status !== "자재지급완료");
+  // 기사가 취소한 건(취소)·관리자가 반려/취소한 건(반려)은 진행 목록에서 뺀다.
+  const quoteActive = quoteRequests.filter((q) => !["자재지급완료", "취소", "반려"].includes(q.status));
   const completed = quoteRequests.filter((q) => q.status === "자재지급완료");
   const restockPending = restockRequests.filter((r) => r.status === "대기");
   const restockDone = restockRequests.filter((r) => r.status === "완료");
@@ -1315,6 +1386,7 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
         onQuoteSupplyEdit={onQuoteSupplyEdit}
         onAttachQuotePhoto={onAttachQuotePhoto}
         onRemoveQuoteSupplyPhoto={onRemoveQuoteSupplyPhoto}
+        onRejectQuote={onRejectQuote}
         onBack={() => setPage(null)}
       />
     );
@@ -1336,6 +1408,7 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
             completedCount={completed.length}
             engineerNames={quoteEngineerNames}
             onAdvanceQuote={onAdvanceQuote}
+            onRejectQuote={onRejectQuote}
             onOpenWizard={(q) => { setWizardTarget(q); setPage("quoteWizard"); }}
             onSendQuote={onSendQuote}
             onCompleteQuoteSupply={onCompleteQuoteSupply}

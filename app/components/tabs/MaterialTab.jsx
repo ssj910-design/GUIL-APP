@@ -9,6 +9,7 @@ import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets
 import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 import { confirmAsync } from "@/app/components/ConfirmHost";
+import { rejectLabelOf } from "@/lib/quoteReject";
 
 
 // 자재 신청/견적 요청/상비부품 보충 각각의 상세보기(신청 사진 포함)에 공용으로 쓰는 시트.
@@ -41,6 +42,12 @@ function RequestDetailSheet({ target, onClose, onPhotoClick, todos, onCancelMate
   return (
     <Sheet title={title} onClose={onClose}>
       <div className="space-y-3 mb-4">
+        {type === "quote" && data.status === "반려" && (
+          <div className="bg-red-50 border border-red-100 rounded-xl p-3">
+            <p className="text-[11px] font-bold text-red-600">관리자 {rejectLabelOf(data)}{data.rejectedAt ? ` · ${data.rejectedAt.slice(0, 10)}` : ""}{data.rejectedBy ? ` · ${data.rejectedBy}` : ""}</p>
+            <p className="text-sm font-bold text-red-700 mt-0.5 whitespace-pre-wrap">{data.rejectReason || "-"}</p>
+          </div>
+        )}
         <div className="bg-slate-100 rounded-xl p-3">
           <p className="text-[11px] text-slate-500">현장</p>
           <p className="font-bold text-slate-800">{data.siteName}</p>
@@ -259,14 +266,15 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack, onCancelQuot
   const [stage, setStage] = useState("전체");
   const [detailTarget, setDetailTarget] = useState(null);
   const [photoViewer, setPhotoViewer] = useState(null);
-  const stages = ["전체", "요청접수", "작성", "발송", "승인", "자재지급완료", "비용청구완료"];
+  const stages = ["전체", "요청접수", "작성", "발송", "승인", "자재지급완료", "비용청구완료", "반려"];
 
   // "작성" 상태에서 이메일/카카오로 실제 발송까지 됐으면 관리자웹처럼 "발송"으로 보여준다
   // (status 컬럼 자체는 발송해도 "작성" 그대로라, 여기서 같이 판단해줘야 한다).
-  // 취소한 건은 관리자웹과 동일하게 목록에서 뺀다(데이터는 그대로 남고 화면에만 안 보임).
+  // 기사 본인이 취소한 건은 관리자웹과 동일하게 목록에서 뺀다(데이터는 그대로 남고 화면에만 안 보임).
+  // 관리자가 반려/취소한 건(반려)은 사유를 알아야 하므로 남긴다.
   const withStage = quoteRequests.filter((q) => q.status !== "취소").map((q) => ({
     ...q,
-    displayStage: isQuoteBilled(q.id) ? "비용청구완료" : q.status === "작성" && (q.emailSentAt || q.kakaoSentAt) ? "발송" : q.status,
+    displayStage: q.status === "반려" ? "반려" : isQuoteBilled(q.id) ? "비용청구완료" : q.status === "작성" && (q.emailSentAt || q.kakaoSentAt) ? "발송" : q.status,
   }));
   const filtered = withStage
     .filter((q) => stage === "전체" || q.displayStage === stage)
@@ -303,7 +311,7 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack, onCancelQuot
           <p className="text-xs text-slate-400 text-center py-10">해당 조건의 견적 요청 내역이 없습니다</p>
         ) : (
           filtered.map((q) => {
-            const bar = q.displayStage === "비용청구완료" ? "border-l-slate-400" : q.displayStage === "자재지급완료" ? "border-l-emerald-500" : q.displayStage === "승인" ? "border-l-indigo-500" : q.displayStage === "작성" || q.displayStage === "발송" ? "border-l-blue-500" : "border-l-amber-400";
+            const bar = q.displayStage === "반려" ? "border-l-red-500" : q.displayStage === "비용청구완료" ? "border-l-slate-400" : q.displayStage === "자재지급완료" ? "border-l-emerald-500" : q.displayStage === "승인" ? "border-l-indigo-500" : q.displayStage === "작성" || q.displayStage === "발송" ? "border-l-blue-500" : "border-l-amber-400";
             return (
             <button
               key={q.id}
@@ -325,15 +333,19 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack, onCancelQuot
                 </div>
                 <span
                   className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${
+                    q.displayStage === "반려" ? "bg-red-100 text-red-600" :
                     q.displayStage === "비용청구완료" ? "bg-slate-100 text-slate-500" :
                     q.displayStage === "자재지급완료" ? "bg-emerald-100 text-emerald-700" :
                     q.displayStage === "승인" ? "bg-indigo-100 text-indigo-700" :
                     q.displayStage === "작성" || q.displayStage === "발송" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
                   }`}
                 >
-                  {q.displayStage === "비용청구완료" ? "비용청구 완료" : q.displayStage}
+                  {q.displayStage === "비용청구완료" ? "비용청구 완료" : q.displayStage === "반려" ? rejectLabelOf(q) : q.displayStage}
                 </span>
               </div>
+              {q.status === "반려" && q.rejectReason && (
+                <p className="text-[11px] text-red-600 font-semibold mt-1.5">{rejectLabelOf(q)} 사유: {q.rejectReason}</p>
+              )}
               <div className="flex items-center gap-1 mt-2.5">
                 {QUOTE_STAGES.map((s, idx) => (
                   <Fragment key={s}>
@@ -876,7 +888,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
     if (!quoteValid) return;
     // 같은 현장에 비용청구 전 단계(요청접수~자재지급완료 어디든, 아직 비용청구 안 된 건)인
     // 견적요청이 있으면 경고 — 자재신청과 같은 기준(비용청구 완료 전이면 전부 대상).
-    const pending = quoteRequests.filter((q) => q.siteId === quoteForm.siteId && q.status !== "취소" && !isQuoteBilled(q.id));
+    const pending = quoteRequests.filter((q) => q.siteId === quoteForm.siteId && q.status !== "취소" && q.status !== "반려" && !isQuoteBilled(q.id));
     if (pending.length > 0) { setDupWarning({ items: pending, onConfirm: submitQuoteRequest }); return; }
     submitQuoteRequest();
   }
