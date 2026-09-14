@@ -844,10 +844,9 @@ export default function SitesAdmin({ data, setData }) {
     await syncLegacy(selectedId, nextUnits);
     // 자체점검 출석부는 매월 1일에만 자동 생성돼서, 그 이후 추가한 호기는 다음 달까지
     // 자체점검현황에 안 잡힌다 — 새 호기를 만드는 김에 이번 달 줄도 바로 만들어준다.
-    const lead = profiles.find((p) => p.name === site?.assignedEngineer);
-    await supabase.from("self_checks").insert({
-      unit_id: created.id, ym: TODAY_STR.slice(0, 7), assignee_id: lead?.id ?? null,
-    });
+    // 직접 insert하지 않고 생성 함수를 쓴다 — 계약 시작 전 신규 현장·자체점검 비대상 설비를
+    // 거르는 기준(마이그레이션 143)이 함수 안에 있다. 이미 있는 줄은 건드리지 않는다.
+    await supabase.rpc("generate_self_checks", { p_ym: TODAY_STR.slice(0, 7) });
   }
 
   async function saveSiteInfo() {
