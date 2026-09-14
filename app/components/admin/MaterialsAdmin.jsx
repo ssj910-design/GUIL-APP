@@ -4,7 +4,7 @@
 // 입력이 필요 없는 전환(작성·승인)은 행에서 바로 처리하고, 사진·담당기사·금액처럼
 // 입력이 필요한 전환(자재 지급완료, 견적 자재지급완료)만 모달을 쓴다 (하이브리드 설계 —
 // docs/superpowers/specs/2026-07-21-materials-admin-actions-design.md).
-import { useContext, useEffect, useState } from "react";
+import { useContext, useState } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
@@ -110,192 +110,6 @@ function assigneeNames(data, key, requestId) {
   const linked = (data.todos ?? []).filter((t) => t[key] === requestId && t.source !== "waste_return");
   if (!linked.length) return null;
   return linked.map((t) => personOf(data, t.assigneeId, t.assignee)).join(", ");
-}
-
-// ── 견적 발송 현황 ──────────────────────────────────────────
-// 발송 API 응답은 "접수"까지라 실제 도착 여부는 send_log의 status(웹훅이 채움)에만 있다.
-// 여기서는 그걸 날짜 단위로 넘겨보게 한다: 패널 = 하루치 최대 3건 + ←→ 날짜 이동,
-// 달력 모달 = 월별로 언제 몇 건 보냈는지 + 날짜 클릭 시 그날 전체 목록.
-
-const kstDay = (iso) => new Date(iso).toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
-const todayKst = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
-
-function dayLabel(day) {
-  const today = todayKst();
-  if (day === today) return "오늘";
-  const y = new Date(`${today}T12:00:00`); y.setDate(y.getDate() - 1);
-  if (day === y.toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" })) return "어제";
-  return shortDate(day);
-}
-
-// 발송 한 건 = 한 줄. 패널과 달력 모달이 같은 줄을 쓴다.
-function SendLogRow({ e, onOpen }) {
-  const isKakao = e.channel === "kakao";
-  // "확인 중"이 계속 남아 있으면 이 화면을 만든 이유가 없다. 결과가 나온 건 또렷하게,
-  // 아직 안 나온 건 **얼마나 지났는지**까지 보여줘서 "언제까지 기다려야 하나"를 알 수 있게 한다.
-  // 알림톡은 보통 몇 초~1분이면 결과가 오므로, 10분이 넘으면 정상이 아니다.
-  const mins = Math.floor((Date.now() - new Date(e.sentAt).getTime()) / 60000);
-  const stale = !isKakao ? false : mins >= 10 && e.status !== "delivered" && e.status !== "failed";
-  const tone = !isKakao ? "slate"
-    : e.status === "delivered" ? "green"
-    : e.status === "failed" ? "red"
-    : stale ? "red" : "amber";
-  const label = !isKakao ? "발송됨"
-    : e.status === "delivered" ? "발송 완료"
-    : e.status === "failed" ? "발송 거부"
-    : stale ? "결과 없음" : "확인 중";
-  return (
-    <button onClick={() => onOpen(e.quote)} className="w-full flex items-center gap-3 px-5 py-2.5 hover:bg-slate-50 text-left">
-      <span className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${isKakao ? "bg-yellow-50 text-yellow-700" : "bg-slate-100 text-slate-500"}`}>
-        {isKakao ? "알림톡" : "이메일"}
-      </span>
-      <span className="text-sm font-bold text-slate-800 truncate flex-1 min-w-0">
-        {e.quote.siteName ?? "-"}
-        <span className="ml-2 text-xs font-medium text-slate-400">{e.quote.quoteTitle ?? e.quote.constructionType ?? ""}</span>
-      </span>
-      <span className="text-xs text-slate-500 shrink-0">{e.target}</span>
-      <span className="text-[11px] text-slate-400 shrink-0">{e.sentAt.slice(11, 16)}</span>
-      <StatusBadge tone={tone}>{label}</StatusBadge>
-      {e.status === "failed" && e.statusMessage && (
-        <span className="text-[11px] text-red-500 shrink-0 max-w-40 truncate">{e.statusMessage}</span>
-      )}
-      {stale && (
-        // 카카오에서 결과가 안 오는 경우다 — 보통 웹훅/조회 설정 문제라 사람이 알아야 한다.
-        <span className="text-[11px] text-red-500 shrink-0">{mins}분째</span>
-      )}
-    </button>
-  );
-}
-
-function SendStatusPanel({ quotes, onOpen }) {
-  const [dayIdx, setDayIdx] = useState(0); // 0 = 오늘, 1 = 어제 — 그 이전은 달력에서만
-  const [calOpen, setCalOpen] = useState(false);
-  const [checking, setChecking] = useState(false);
-  const [fresh, setFresh] = useState({});   // { quoteId: send_log } — 방금 조회로 갱신된 것
-
-  // 결과가 아직 안 온 건이 있으면 **솔라피에 직접 물어본다**(웹훅을 기다리지 않는다).
-  // 웹훅은 콘솔 설정·토큰에 의존해 조용히 안 올 수 있고, 그러면 "확인 중"만 남아
-  // 이 화면을 만든 이유가 사라진다. 조회는 API 키만 있으면 되니 발송이 되면 조회도 된다.
-  async function refreshStatus() {
-    if (checking) return;
-    setChecking(true);
-    try {
-      const res = await fetch("/api/alimtalk-status", { method: "POST" });
-      const d = await res.json().catch(() => ({}));
-      if (d.updated > 0) setFresh((prev) => ({ ...prev, ...d.changedRows }));
-    } catch { /* 조회 실패는 조용히 — 기존 표시가 남는다 */ }
-    setChecking(false);
-  }
-
-  // 화면에 들어올 때 한 번. 미결 건이 없으면 서버가 바로 0을 돌려주므로 부담이 없다.
-  useEffect(() => { refreshStatus(); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
-  const entries = quotes
-    .flatMap((q) => (fresh[q.id] ?? q.sendLog ?? []).map((e) => ({ ...e, quote: q })))
-    .sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt));
-  if (!entries.length) return null;
-
-  const byDay = new Map();
-  for (const e of entries) {
-    const d = kstDay(e.sentAt);
-    if (!byDay.has(d)) byDay.set(d, []);
-    byDay.get(d).push(e);
-  }
-  // 패널은 오늘/어제 두 장만 — 과거는 "달력으로 보기"가 담당한다 (넘김이 끝없이 길어지는 걸 방지)
-  const today = todayKst();
-  const yest = new Date(`${today}T12:00:00`); yest.setDate(yest.getDate() - 1);
-  const days = [today, yest.toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" })];
-  const idx = Math.min(dayIdx, days.length - 1);
-  const day = days[idx];
-  const list = byDay.get(day) ?? [];
-  const kakao = list.filter((e) => e.channel === "kakao");
-  const failed = kakao.filter((e) => e.status === "failed").length;
-
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 mb-4 overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
-        <div className="flex items-center gap-2">
-          {/* ← 과거로 / 미래로 → : 발송이 있었던 날짜끼리만 이동 */}
-          <button onClick={() => setDayIdx(Math.min(idx + 1, days.length - 1))} disabled={idx >= days.length - 1}
-            className="w-6 h-6 rounded-lg border border-slate-200 text-slate-500 disabled:opacity-30 flex items-center justify-center">‹</button>
-          <p className="text-sm font-extrabold text-slate-800 w-40 text-center">
-            {dayLabel(day)} 발송 {list.length}건
-            {failed > 0 && <span className="ml-1.5 text-[11px] font-bold text-red-600">실패 {failed}</span>}
-          </p>
-          <button onClick={() => setDayIdx(Math.max(idx - 1, 0))} disabled={idx <= 0}
-            className="w-6 h-6 rounded-lg border border-slate-200 text-slate-500 disabled:opacity-30 flex items-center justify-center">›</button>
-        </div>
-        <div className="flex items-center gap-2.5">
-          <button onClick={refreshStatus} disabled={checking} className="text-[11px] font-bold text-slate-400 disabled:opacity-50 hover:text-blue-700">
-            {checking ? "확인 중…" : "결과 새로고침"}
-          </button>
-          <button onClick={() => setCalOpen(true)} className="text-[11px] font-bold text-blue-700">달력으로 보기</button>
-        </div>
-      </div>
-      <div className="divide-y divide-slate-50">
-        {list.length === 0
-          ? <p className="text-xs text-slate-400 text-center py-4">{dayLabel(day)} 보낸 견적이 없습니다</p>
-          : list.slice(0, 3).map((e, i) => <SendLogRow key={i} e={e} onOpen={onOpen} />)}
-      </div>
-      {list.length > 3 && (
-        <button onClick={() => setCalOpen(true)} className="w-full py-2 text-[11px] font-bold text-slate-400 hover:text-blue-700 border-t border-slate-50">
-          +{list.length - 3}건 더 — 달력에서 보기
-        </button>
-      )}
-      {calOpen && <SendCalendarModal byDay={byDay} initialDay={day} onOpen={onOpen} onClose={() => setCalOpen(false)} />}
-    </div>
-  );
-}
-
-// 달력 모달 — 월 단위로 날짜별 발송 건수를 보여주고, 날짜를 누르면 그날 전체 목록.
-function SendCalendarModal({ byDay, initialDay, onOpen, onClose }) {
-  const [month, setMonth] = useState(initialDay.slice(0, 7)); // "YYYY-MM"
-  const [selected, setSelected] = useState(initialDay);
-  const [y, m] = month.split("-").map(Number);
-  const firstDow = new Date(y, m - 1, 1).getDay();
-  const daysInMonth = new Date(y, m, 0).getDate();
-  const moveMonth = (d) => {
-    const nd = new Date(y, m - 1 + d, 1);
-    setMonth(`${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, "0")}`);
-  };
-  const list = byDay.get(selected) ?? [];
-
-  return (
-    <Modal title="견적 발송 이력" onClose={onClose} wide>
-      <div className="flex items-center justify-center gap-3 mb-3">
-        <button onClick={() => moveMonth(-1)} className="w-7 h-7 rounded-lg border border-slate-200 text-slate-500">‹</button>
-        <p className="text-sm font-extrabold text-slate-800">{y}년 {m}월</p>
-        <button onClick={() => moveMonth(1)} className="w-7 h-7 rounded-lg border border-slate-200 text-slate-500">›</button>
-      </div>
-      <div className="grid grid-cols-7 gap-1 mb-4">
-        {["일", "월", "화", "수", "목", "금", "토"].map((d) => (
-          <p key={d} className="text-center text-[10px] font-bold text-slate-400 py-1">{d}</p>
-        ))}
-        {Array.from({ length: firstDow }).map((_, i) => <div key={`b${i}`} />)}
-        {Array.from({ length: daysInMonth }).map((_, i) => {
-          const dstr = `${month}-${String(i + 1).padStart(2, "0")}`;
-          const cnt = byDay.get(dstr)?.length ?? 0;
-          const hasFail = (byDay.get(dstr) ?? []).some((e) => e.status === "failed");
-          const isSel = dstr === selected;
-          return (
-            <button key={dstr} onClick={() => cnt && setSelected(dstr)} disabled={!cnt}
-              className={`h-12 rounded-lg border text-center flex flex-col items-center justify-center gap-0.5
-                ${isSel ? "border-blue-600 bg-blue-50" : cnt ? "border-slate-200 hover:bg-slate-50" : "border-transparent"}`}>
-              <span className={`text-[11px] ${cnt ? "font-bold text-slate-700" : "text-slate-300"}`}>{i + 1}</span>
-              {cnt > 0 && (
-                <span className={`text-[10px] font-extrabold px-1.5 rounded-full ${hasFail ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-700"}`}>{cnt}</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-      <p className="text-xs font-bold text-slate-500 mb-1">{dayLabel(selected)} · {list.length}건</p>
-      <div className="border border-slate-100 rounded-xl divide-y divide-slate-50 max-h-72 overflow-y-auto">
-        {list.length === 0
-          ? <p className="text-xs text-slate-400 text-center py-6">이 날짜엔 발송이 없습니다</p>
-          : list.map((e, i) => <SendLogRow key={i} e={e} onOpen={onOpen} />)}
-      </div>
-    </Modal>
-  );
 }
 
 export default function MaterialsAdmin({ data, setData, initialTab }) {
@@ -731,7 +545,6 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
       {(tab === "quote" || tab === "all") && (
         <>
         {tab === "all" && <h2 className="text-xs font-bold text-slate-400 mb-2 mt-6">견적요청</h2>}
-        <SendStatusPanel quotes={allQuoteRequests} onOpen={(q) => setDetailTarget({ type: "quote", data: q })} />
         {(() => {
           const stages = quoteRequestsSearched.map((q) => quoteStageInfo(q, data.todos ?? []).stage);
           const stageCounts = QUOTE_STAGES.reduce((acc, s) => ({ ...acc, [s]: stages.filter((x) => x === s).length }), {});
