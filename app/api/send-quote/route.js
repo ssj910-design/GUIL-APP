@@ -72,6 +72,19 @@ export async function POST(request) {
     }
   }
 
+  // 공급자 참조 메일은 늘 가야 한다. 고객 메일이 있으면 위 메일에 참조(cc)로 붙어 같이 가지만,
+  // 고객 메일 없이 알림톡으로만 보낼 땐 그 메일 자체가 안 나가서 공급자도 못 받았다 — 이 경우
+  // 공급자에게 따로 보낸다. 참조인 카카오와 같은 최선노력: 발송 이력(send_log)·발송 시각·결과에
+  // 남기지 않는다(공급자 사본일 뿐 고객에게 간 게 아니므로 "발송" 상태를 바꾸면 안 된다).
+  // 고객 메일·전화가 둘 다 없는 발송은 화면에서 막혀 있고, 여기서도 알림톡 발송이 있을 때만 보낸다.
+  if (!channels?.email && channels?.kakao && senderCcEmail) {
+    try {
+      await sendQuoteEmail({ to: senderCcEmail, cc: [], quote, pdfUrl: quote?.pdfUrl, supplierName, supplierPhone, noticeMessage, attachmentUrls });
+    } catch (err) {
+      console.error(`공급자 참조 메일 발송 실패 (quoteRequestId=${quoteRequestId}):`, err.message);
+    }
+  }
+
   if (newLogEntries.length) {
     const { data: existing } = await supabaseAdmin
       .from("quote_requests")
