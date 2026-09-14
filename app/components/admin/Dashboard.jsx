@@ -51,7 +51,7 @@ export function FailureDetailContent({ f, units, sites, profiles = [] }) {
     { label: "접수자", value: reporter },
     { label: "담당 기사", value: loc.siteObj?.assignedEngineers?.length ? loc.siteObj.assignedEngineers.join(", ") : "미배정" },
     { label: "배정 기사", value: f.assignee || "미배정" },
-    { label: "출동 / 도착시간", value: `${f.dispatchedAt || "-"} / ${f.arrivalTime || "-"}` },
+    { label: "출동 / 도착시간", value: `${f.dispatchedAt || "-"}${f.dispatchedAt && f.etaMinutes ? ` (${f.etaMinutes}분 후 도착예정)` : ""} / ${f.arrivalTime || "-"}` },
     { label: "처리완료시간", value: f.completeTime || "-" },
     { label: "고장분류", value: faultType || "-" },
     { label: "신고내용", value: faultDetail || "-" },
