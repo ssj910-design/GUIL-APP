@@ -4,7 +4,7 @@
 // 입력이 필요 없는 전환(작성·승인)은 행에서 바로 처리하고, 사진·담당기사·금액처럼
 // 입력이 필요한 전환(자재 지급완료, 견적 자재지급완료)만 모달을 쓴다 (하이브리드 설계 —
 // docs/superpowers/specs/2026-07-21-materials-admin-actions-design.md).
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
@@ -115,6 +115,22 @@ function assigneeNames(data, key, requestId) {
 export default function MaterialsAdmin({ data, setData, initialTab }) {
   const { id: meId } = useContext(AdminAuthContext);
   const { materialRequests: allMaterialRequests, quoteRequests: allQuoteRequests } = data;
+
+  // 알림톡이 실제로 도착했는지 솔라피에 직접 물어봐 반영한다 — 웹훅 결과가 안 올 때가 있어서다.
+  // 예전엔 견적 발송 현황 패널이 화면에 뜰 때 하던 일인데, 패널을 없애도 조회는 남긴다.
+  // 화면을 열 때 한 번. 확인 중인 건이 없으면 서버가 바로 0을 돌려줘 부담이 없다.
+  useEffect(() => {
+    fetch("/api/alimtalk-status", { method: "POST" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!(d?.updated > 0) || !d.changedRows) return;
+        setData((prev) => ({
+          ...prev,
+          quoteRequests: prev.quoteRequests.map((q) => (d.changedRows[q.id] ? { ...q, sendLog: d.changedRows[q.id] } : q)),
+        }));
+      })
+      .catch(() => { /* 조회 실패는 조용히 — 기존 표시가 그대로 남는다 */ });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [tab, setTab] = useState(initialTab ?? "all");
   const [search, setSearch] = useState("");
   const [quoteStageFilter, setQuoteStageFilter] = useState("all");
