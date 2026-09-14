@@ -660,17 +660,19 @@ export default function MaterialsAdmin({ data, setData, initialTab }) {
               </td>
             </tr>
           );
-          const pendingHead = ["신청일", "현장 · 호기", "공사 내용", "신청 기사", "진행상태", "처리"];
-          const draftedHead = ["작성일", "현장 · 호기", "견적명", "신청 기사", "진행상태", "처리"];
+          // 요청접수(아직 견적서 없음)와 작성 이후를 한 표로 합치되, 요청건이 항상 맨 위에
+          // 오게 한다 — 각 그룹 내부 정렬(quoteRequestsSearched에서 내려온 순서)은 그대로 유지.
+          // 날짜·내용 칼럼 라벨은 두 케이스를 다 아우르는 공통 이름으로 통일(행 안의 실제 값은
+          // renderQuoteRow가 drafted 여부에 따라 신청일/작성일, 공사내용/견적명 중 알맞게 보여줌).
+          const quoteHead = ["날짜", "현장 · 호기", "내용", "신청 기사", "진행상태", "처리"];
+          const mergedRows = [
+            ...pendingQuoteRequests.map((q) => renderQuoteRow(q, false)),
+            ...draftedQuoteRequests.map((q) => renderQuoteRow(q, true)),
+          ];
           return (
             <>
-              <h3 className="text-xs font-bold text-red-600 mb-2">견적요청만 들어옴 ({pendingQuoteRequests.length})</h3>
-              <AdminTable head={pendingHead}>{pendingQuoteRequests.map((q) => renderQuoteRow(q, false))}</AdminTable>
-              {pendingQuoteRequests.length === 0 && <p className="text-xs text-slate-400 text-center py-6">해당하는 건이 없습니다</p>}
-
-              <h3 className="text-xs font-bold text-slate-400 mb-2 mt-6">견적작성 이후 ({draftedQuoteRequests.length})</h3>
-              <AdminTable head={draftedHead}>{draftedQuoteRequests.map((q) => renderQuoteRow(q, true))}</AdminTable>
-              {draftedQuoteRequests.length === 0 && <p className="text-xs text-slate-400 text-center py-6">해당하는 건이 없습니다</p>}
+              <AdminTable head={quoteHead}>{mergedRows}</AdminTable>
+              {mergedRows.length === 0 && <p className="text-xs text-slate-400 text-center py-6">해당하는 건이 없습니다</p>}
             </>
           );
         })()}
