@@ -145,7 +145,7 @@ export function FailureCancelPanel({ failure, setData, onDone }) {
   );
 }
 
-export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLeaves, onOpenTodos, onOpenMaterials, onOpenBillings, onOpenFailures, onOpenSelfChecks }) {
+export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLeaves, onOpenTodos, onOpenMaterials, onOpenQuotes, onOpenBillings, onOpenFailures, onOpenSelfChecks }) {
   const { sites, units, failures, inspections, materialRequests, quoteRequests, todos, billings, selfChecks, selfCheckItems, profiles } = data;
   const siteById = new Map(sites.map((s) => [s.id, s]));
   // 계약중지(isActive:false) 현장의 호기는 관리 대수에서 제외 — 호기 자체 isActive는 계약과 별개로 그대로 남아있다.
@@ -265,8 +265,8 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
   const todayQueue = [
     { key: "leaves", label: "연차승인", count: pendingLeaves.length, onClick: onOpenLeaves },
     { key: "reassign", label: "재배정요청", count: reassignTodos.length, onClick: () => onOpenTodos?.("reassign") },
-    { key: "materials", label: "자재승인·지급", count: pendingMaterials.length, onClick: () => onOpenMaterials?.("material") },
-    { key: "quotes", label: "견적승인", count: quotesForApproval.length, onClick: () => onOpenMaterials?.("quote") },
+    { key: "materials", label: "자재승인·지급", count: pendingMaterials.length, onClick: () => onOpenMaterials?.() },
+    { key: "quotes", label: "견적승인", count: quotesForApproval.length, onClick: () => onOpenQuotes?.() },
     { key: "billings", label: "청구확인", count: unconfirmedBillings.length, onClick: onOpenBillings },
     { key: "unassigned", label: "미배정 고장", count: unassignedFailures.length, onClick: () => onOpenFailures?.("미처리") },
     { key: "selfcheck", label: "자체점검 B·C 할일배정", count: flaggedSelfCheckItems.length, onClick: () => onOpenSelfChecks?.("flags") },

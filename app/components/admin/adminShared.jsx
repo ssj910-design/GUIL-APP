@@ -70,6 +70,23 @@ export function personOf(data, profileId, fallbackName) {
   return data.profiles.find((p) => p.id === profileId)?.name ?? fallbackName ?? "-";
 }
 
+// 지급완료 처리 시 만들어지는 연결 할 일(todos)의 담당자 — 자재신청·견적요청 둘 다
+// 요청 자체엔 담당기사 컬럼이 없고 todos.assignee(_id)에만 있어서(견적은 담당 기사
+// 여러 명 가능) 여기서 조인해 이름을 뽑는다. MaterialsAdmin.jsx·QuotesAdmin.jsx 공용.
+export function assigneeNames(data, key, requestId) {
+  const linked = (data.todos ?? []).filter((t) => t[key] === requestId && t.source !== "waste_return");
+  if (!linked.length) return null;
+  return linked.map((t) => personOf(data, t.assigneeId, t.assignee)).join(", ");
+}
+
+// 자재/견적 완료 후 실제 "교체완료" 여부 — 정상 완료 경로인 기사 비용청구가 들어오면
+// 연결된 할 일(todos)의 done이 true가 된다(TodosAdmin.jsx 참고). 담당자가 여러 명인
+// 견적은 전원이 청구를 마쳐야 교체완료로 본다. MaterialsAdmin.jsx·QuotesAdmin.jsx 공용.
+export function billingCompleteFor(todos, key, requestId) {
+  const linked = todos.filter((t) => t[key] === requestId && t.source !== "waste_return");
+  return linked.length > 0 && linked.every((t) => t.done);
+}
+
 // 발송 이력(sendLog) 중 가장 최근 발송일만 날짜로 — 목록 표에 쓰는 짧은 표기.
 export function lastSentDate(q) {
   const log = q.sendLog ?? [];

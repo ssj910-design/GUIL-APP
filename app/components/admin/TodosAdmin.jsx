@@ -155,7 +155,7 @@ function TodoDetailModal({ group, data, onClose, onSave, onSaveGroup, onDelete, 
                 </label>
               ))}
             </div>
-            <p className="text-[11px] text-slate-400 mt-1.5">담당자 구성(추가·제외) 변경은 자재·견적관리의 지급완료 처리 화면에서 하세요.</p>
+            <p className="text-[11px] text-slate-400 mt-1.5">담당자 구성(추가·제외) 변경은 견적관리의 지급완료 처리 화면에서 하세요.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">

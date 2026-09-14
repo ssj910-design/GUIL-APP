@@ -5,7 +5,7 @@
 // 각 섹션에 props로 내린다 (모바일 App 셸과 같은 관례).
 import { useState, useEffect } from "react";
 import { BRAND } from "@/lib/company";
-import { Building2, AlertTriangle, ShieldCheck, Package, Receipt, ListTodo, CalendarCheck, Users, LayoutDashboard, BarChart3, Menu , Bell, MessageSquare, BookOpen, Boxes } from "lucide-react";
+import { Building2, AlertTriangle, ShieldCheck, Package, FileText, Receipt, ListTodo, CalendarCheck, Users, LayoutDashboard, BarChart3, Menu , Bell, MessageSquare, BookOpen, Boxes } from "lucide-react";
 import { supabase, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken, onSessionExpired } from "@/lib/supabaseClient";
 import {
   mapSite, mergeAssignedEngineers, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest,
@@ -17,6 +17,7 @@ import SitesAdmin from "@/app/components/admin/SitesAdmin";
 import FailuresAdmin from "@/app/components/admin/FailuresAdmin";
 import InspectionsAdmin from "@/app/components/admin/InspectionsAdmin";
 import MaterialsAdmin from "@/app/components/admin/MaterialsAdmin";
+import QuotesAdmin from "@/app/components/admin/QuotesAdmin";
 import BillingsAdmin from "@/app/components/admin/BillingsAdmin";
 import TodosAdmin from "@/app/components/admin/TodosAdmin";
 import SelfChecksAdmin from "@/app/components/admin/SelfChecksAdmin";
@@ -43,7 +44,8 @@ const MENU = [
   { id: "failures", label: "고장관리", icon: AlertTriangle },
   { id: "errorCodes", label: "에러코드집", icon: BookOpen },
   { id: "inspections", label: "검사관리", icon: ShieldCheck },
-  { id: "materials", label: "자재·견적 신청내역", icon: Package },
+  { id: "materials", label: "자재신청관리", icon: Package },
+  { id: "quotes", label: "견적관리", icon: FileText },
   { id: "billings", label: "부품교체·공사 내역", icon: Receipt },
   { id: "inventory", label: "재고관리", icon: Boxes },
   { id: "todos", label: "할 일 관리", icon: ListTodo },
@@ -84,7 +86,6 @@ export default function AdminApp() {
   const [navOpen, setNavOpen] = useState(false); // 모바일 드로어
   // 대시보드 "오늘 처리할 것" 클릭 시 해당 화면의 하위 탭/필터를 미리 지정해 바로 그 목록이 보이게 한다.
   const [todosInitialView, setTodosInitialView] = useState("open");
-  const [materialsInitialTab, setMaterialsInitialTab] = useState("all");
   const [failuresInitialStatus, setFailuresInitialStatus] = useState("all");
   const [selfChecksInitialView, setSelfChecksInitialView] = useState("progress");
   const [loading, setLoading] = useState(true);
@@ -383,7 +384,8 @@ export default function AdminApp() {
             onOpenWorkCalendar={() => { setHrSub("워크 캘린더"); setMenu("engineers"); }}
             onOpenLeaves={() => { setHrSub("연차관리"); setMenu("engineers"); }}
             onOpenTodos={(view) => { setTodosInitialView(view); setMenu("todos"); }}
-            onOpenMaterials={(tab) => { setMaterialsInitialTab(tab); setMenu("materials"); }}
+            onOpenMaterials={() => setMenu("materials")}
+            onOpenQuotes={() => setMenu("quotes")}
             onOpenBillings={() => setMenu("billings")}
             onOpenFailures={(status) => { setFailuresInitialStatus(status); setMenu("failures"); }}
             onOpenSelfChecks={(view) => { setSelfChecksInitialView(view); setMenu("selfChecks"); }}
@@ -395,7 +397,9 @@ export default function AdminApp() {
         ) : menu === "inspections" ? (
           <InspectionsAdmin data={data} setData={setData} />
         ) : menu === "materials" ? (
-          <MaterialsAdmin data={data} setData={setData} initialTab={materialsInitialTab} />
+          <MaterialsAdmin data={data} setData={setData} />
+        ) : menu === "quotes" ? (
+          <QuotesAdmin data={data} setData={setData} />
         ) : menu === "billings" ? (
           <BillingsAdmin data={data} setData={setData} />
         ) : menu === "inventory" ? (
