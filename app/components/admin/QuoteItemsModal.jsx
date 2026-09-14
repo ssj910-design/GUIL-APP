@@ -20,7 +20,7 @@ import { useState, useEffect } from "react";
 import { Plus, Trash2, ChevronUp, ChevronDown, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
-import { quoteGrandTotal } from "@/lib/utils";
+import { quoteGrandTotal, quoteDisplayTotal } from "@/lib/utils";
 import { currentStock } from "@/lib/inventoryStock";
 import { Modal, inputCls, PhotoGrid } from "@/app/components/admin/adminShared";
 import { COMPANY } from "@/lib/company";
@@ -105,6 +105,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
   const [profit, setProfit] = useState(quote.profit || 0);
   const [discountPercent, setDiscountPercent] = useState(0);
   const [discountAmount, setDiscountAmount] = useState(() => Number(quote.discountAmount) || 0);
+  const [vatIncluded, setVatIncluded] = useState(!!quote.vatIncluded);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -173,6 +174,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
   // PDF(lib/quotePdf.js)의 "소계"와 동일하게 할인을 반영한 값 — 저장·발송 총액(grandTotal)의 기준.
   const subtotal = preDiscountSubtotal - Number(discountAmount || 0);
   const grandTotal = quoteGrandTotal(items, transportCost, safetyCost, profit, discountAmount);
+  const displayTotal = quoteDisplayTotal(grandTotal, vatIncluded);
 
   // 오른쪽 미리보기 카드용 — 자재비/인건비 구분 없이 하나로 합치고, 운반비/안전관리비/이윤/할인은
   // 값이 0보다 클 때(할인은 입력했을 때)만 같은 목록에 끼워 넣는다. 새 계산 없이 기존 값을 다시
@@ -226,6 +228,8 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
       // discount_amount 컬럼은 103 마이그레이션 이후에만 존재 — 할인을 실제로 쓸 때만 써서
       // 마이그레이션 전에도(할인 안 쓰는) 기존 저장이 깨지지 않게 한다.
       ...(Number(discountAmount) > 0 ? { discount_amount: Number(discountAmount) } : {}),
+      // vat_included 컬럼도 141 마이그레이션 이후에만 존재 — 같은 이유로 체크했을 때만 쓴다.
+      ...(vatIncluded ? { vat_included: true } : {}),
       quote_number: quoteNumber || null,
       recipient_name: recipientName || null,
       quote_title: quoteTitle || null,
@@ -249,7 +253,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
         quoteRequestId: quote.id,
         siteName: site?.name ?? quote.siteName,
         quoteNumber, recipientName, quoteTitle, quoteDate,
-        items, transportCost, safetyCost, profit, discountAmount,
+        items, transportCost, safetyCost, profit, discountAmount, vatIncluded,
       }),
     }).then((r) => r.json()).catch((e) => ({ ok: false, reason: e.message }));
 
@@ -270,7 +274,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
 
     onSaved({
       quoteItems: items, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
-      profit: Number(profit) || 0, discountAmount: Number(discountAmount) || 0, quoteNumber, recipientName, quoteTitle,
+      profit: Number(profit) || 0, discountAmount: Number(discountAmount) || 0, vatIncluded, quoteNumber, recipientName, quoteTitle,
       quoteIssuedDate: quoteDate, quotePdfUrl: pdfRes.url, status: "작성",
       recipientEmail: rf.email || null, recipientPhone: rf.phone || null,
       senderCcEmail: rf.senderCcEmail || null, referenceEmail: rf.referenceEmail || null, referencePhone: rf.referencePhone || null,
@@ -465,7 +469,16 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
 
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-4 text-sm space-y-1">
             <div className="flex justify-between"><span className="text-slate-500">소계</span><span className="font-semibold">{subtotal.toLocaleString()}원</span></div>
-            <div className="flex justify-between font-bold"><span>합계(VAT별도, 천단위 절사)</span><span>{grandTotal.toLocaleString()}원</span></div>
+            <div className="flex justify-between items-center font-bold">
+              <span className="flex items-center gap-1.5">
+                합계({vatIncluded ? "VAT포함" : "VAT별도"}, 천단위 절사)
+                <label className="flex items-center gap-1 font-normal text-xs text-slate-500 ml-1">
+                  <input type="checkbox" checked={vatIncluded} onChange={(e) => setVatIncluded(e.target.checked)} />
+                  VAT포함
+                </label>
+              </span>
+              <span>{displayTotal.toLocaleString()}원</span>
+            </div>
           </div>
 
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm">
@@ -504,7 +517,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
             </div>
             <div className="border-t border-slate-100 pt-2 space-y-1 text-xs">
               <div className="flex justify-between"><span className="text-slate-500">소계</span><span className="font-semibold">{subtotal.toLocaleString()}원</span></div>
-              <div className="flex justify-between font-bold"><span>합계(VAT별도)</span><span>{grandTotal.toLocaleString()}원</span></div>
+              <div className="flex justify-between font-bold"><span>합계({vatIncluded ? "VAT포함" : "VAT별도"})</span><span>{displayTotal.toLocaleString()}원</span></div>
             </div>
           </div>
         </div>

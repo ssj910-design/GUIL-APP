@@ -48,6 +48,7 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
           quoteDate: quote.quoteIssuedDate,
           pdfUrl: quote.quotePdfUrl,
           totalAmount: quoteGrandTotal(quote.quoteItems, quote.transportCost, quote.safetyCost, quote.profit, quote.discountAmount),
+          vatIncluded: !!quote.vatIncluded,
         },
       }),
     })

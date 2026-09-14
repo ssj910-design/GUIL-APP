@@ -2041,6 +2041,7 @@ ${error.message ?? ""}`); return false; }
         quote: {
           siteName: q.siteName, quoteTitle: q.quoteTitle, quoteDate: q.quoteIssuedDate, pdfUrl: q.quotePdfUrl,
           totalAmount: quoteGrandTotal(q.quoteItems, q.transportCost, q.safetyCost, q.profit, q.discountAmount),
+          vatIncluded: !!q.vatIncluded,
         },
       }),
     }).then((r) => r.json()).catch((e) => ({ results: {}, reason: e.message }));

@@ -11,7 +11,7 @@ import { SiteSearchSelect } from "@/app/components/formWidgets";
 import { inputCls, Sheet, CheckboxDropdown } from "@/app/components/ui";
 import { supabase } from "@/lib/supabaseClient";
 import { mapQuoteRequest, mapSiteManager } from "@/lib/mappers";
-import { siteUnitList, quoteGrandTotal } from "@/lib/utils";
+import { siteUnitList, quoteGrandTotal, quoteDisplayTotal } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { currentStock } from "@/lib/inventoryStock";
 
@@ -114,6 +114,7 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
     const preDiscount = itemsSub + Number(existingQuote?.transportCost || 0) + Number(existingQuote?.safetyCost || 0) + Number(existingQuote?.profit || 0);
     return preDiscount > 0 ? Math.round((amt / preDiscount) * 1000) / 10 : 0;
   });
+  const [vatIncluded, setVatIncluded] = useState(!!existingQuote?.vatIncluded);
 
   function addItem() {
     setItems((prev) => {
@@ -141,6 +142,7 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
   // 할인 적용 전 소계 — 할인율(%) 계산의 기준값(할인은 이 금액 대비 %, QuoteItemsModal.jsx와 동일).
   const preDiscountSubtotal = itemsSubtotal + Number(transportCost || 0) + Number(safetyCost || 0) + Number(profit || 0);
   const grandTotal = quoteGrandTotal(items, transportCost, safetyCost, profit, discountAmount);
+  const displayTotal = quoteDisplayTotal(grandTotal, vatIncluded);
 
   function handleDiscountPercent(value) {
     const pct = Number(value) || 0;
@@ -176,6 +178,7 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
       setProfit(saved.profit ?? 0);
       setQuoteTitleInput(saved.quoteTitleInput ?? "");
       if (saved.discountAmount) handleDiscountAmount(saved.discountAmount);
+      setVatIncluded(!!saved.vatIncluded);
       notify("임시저장된 내용을 불러왔습니다");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -185,7 +188,7 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
     if (!draft?.id) return;
     try {
       localStorage.setItem(draftKey(draft.id), JSON.stringify({
-        step, items, transportCost, safetyCost, profit, quoteTitleInput, discountAmount,
+        step, items, transportCost, safetyCost, profit, quoteTitleInput, discountAmount, vatIncluded,
       }));
       notify("임시저장했습니다");
     } catch {
@@ -223,7 +226,7 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
         quoteRequestId: draft.id,
         siteName: site?.name ?? draft.siteName,
         quoteNumber, recipientName: managerName, quoteTitle, quoteDate,
-        items, transportCost, safetyCost, profit, discountAmount,
+        items, transportCost, safetyCost, profit, discountAmount, vatIncluded,
       }),
     }).then((r) => r.json()).catch((e) => ({ ok: false, reason: e.message }));
 
@@ -241,6 +244,8 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
       // discount_amount 컬럼은 마이그레이션 103 이후에만 존재 — 할인을 실제로 쓸 때만 써서
       // 마이그레이션 전 환경에서도(할인 안 쓰는) 기존 저장이 깨지지 않게 한다(QuoteItemsModal.jsx와 동일).
       ...(Number(discountAmount) > 0 ? { discount_amount: Number(discountAmount) } : {}),
+      // vat_included 컬럼도 마이그레이션 141 이후에만 존재 — 같은 이유로 체크했을 때만 쓴다.
+      ...(vatIncluded ? { vat_included: true } : {}),
       quote_number: quoteNumber || null,
       recipient_name: managerName || null,
       quote_title: quoteTitle,
@@ -260,7 +265,7 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
     try { localStorage.removeItem(draftKey(draft.id)); } catch { /* 임시저장 정리 실패는 무시 */ }
     onSaved({
       id: draft.id, quoteItems: items, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
-      profit: Number(profit) || 0, discountAmount: Number(discountAmount) || 0, quoteNumber, recipientName: managerName, quoteTitle, quoteIssuedDate: quoteDate,
+      profit: Number(profit) || 0, discountAmount: Number(discountAmount) || 0, vatIncluded, quoteNumber, recipientName: managerName, quoteTitle, quoteIssuedDate: quoteDate,
       quotePdfUrl: pdfRes.url, status: "작성", recipientEmail: recipientEmail || null, recipientPhone: recipientPhone || null,
     });
     setSaving(false);
@@ -537,9 +542,13 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
                 </div>
               </div>
             </div>
+            <label className="flex items-center gap-1.5 text-xs text-slate-500 px-0.5">
+              <input type="checkbox" checked={vatIncluded} onChange={(e) => setVatIncluded(e.target.checked)} />
+              부가세포함으로 발행 (관공서 견적용)
+            </label>
             <div className="bg-slate-100 rounded-xl p-3.5 flex items-center justify-between">
-              <span className="text-sm font-bold text-slate-600">합계(VAT별도)</span>
-              <span className="text-base font-extrabold text-slate-900">{grandTotal.toLocaleString()}원</span>
+              <span className="text-sm font-bold text-slate-600">합계({vatIncluded ? "VAT포함" : "VAT별도"})</span>
+              <span className="text-base font-extrabold text-slate-900">{displayTotal.toLocaleString()}원</span>
             </div>
           </>
         )}
@@ -567,8 +576,8 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
               {Number(discountAmount) > 0 && <div className="flex justify-between text-xs"><span className="text-slate-600">할인</span><span className="text-red-500">-{Number(discountAmount).toLocaleString()}원</span></div>}
             </div>
             <div className="bg-slate-100 rounded-xl p-3.5 flex items-center justify-between">
-              <span className="text-sm font-bold text-slate-600">합계(VAT별도)</span>
-              <span className="text-base font-extrabold text-slate-900">{grandTotal.toLocaleString()}원</span>
+              <span className="text-sm font-bold text-slate-600">합계({vatIncluded ? "VAT포함" : "VAT별도"})</span>
+              <span className="text-base font-extrabold text-slate-900">{displayTotal.toLocaleString()}원</span>
             </div>
           </>
         )}
