@@ -486,7 +486,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
                         재배정
                       </button>
                     </td>
-                    <td className="px-2 py-2.5 whitespace-nowrap text-slate-500">{f.dispatchedAt || "-"}</td>
+                    <td className="px-2 py-2.5 whitespace-nowrap text-slate-500">{f.dispatchedAt || "-"}{f.dispatchedAt && f.etaMinutes ? ` (${f.etaMinutes}분후)` : ""}</td>
                     <td className="px-2 py-2.5 whitespace-nowrap text-slate-500">{f.arrivalTime || "-"}</td>
                     <td className="px-5 py-2.5 text-right">
                       <span className={`text-xs font-bold px-2 py-1 rounded-full ${stateCls}`}>
