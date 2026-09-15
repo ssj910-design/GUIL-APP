@@ -828,6 +828,14 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
               </div>
             )}
 
+            {/* 기사가 입력한 내용은 사진 바로 위에 모아 보여준다 — 작성 이후엔 위 칸이 견적명으로
+                바뀌어 기사가 적은 요청 내역이 안 보였다(작성 전엔 위 칸에 이미 있어 중복 표시 안 함). */}
+            {isDraftedQuote && (shownDetail.requesterId || shownDetail.engineer) && shownDetail.constructionType && (
+              <div className="bg-slate-100 rounded-xl p-3">
+                <p className="text-[11px] text-slate-500">기사 요청 내역 (부품명, 수량)</p>
+                <p className="text-sm text-slate-700 mt-0.5 whitespace-pre-wrap">{shownDetail.constructionType}</p>
+              </div>
+            )}
             {shownDetail.note && (
               <div className="bg-slate-100 rounded-xl p-3">
                 <p className="text-[11px] text-slate-500">기사 의견 (견적 사유 및 특이사항)</p>

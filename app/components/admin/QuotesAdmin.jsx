@@ -850,6 +850,14 @@ function QuoteDetailModal({ quote: r, data, onClose, onReject }) {
           })()}
         </div>
 
+        {/* 기사가 입력한 내용은 사진 바로 위에 모아 보여준다 — 작성 이후엔 위 칸이 견적명으로
+            바뀌어 기사가 적은 요청 내역이 안 보였다(작성 전엔 위 "공사 내용"에 이미 있음). */}
+        {isDraftedQuote && hasRequester && r.constructionType && (
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">기사 요청 내역</p>
+            <p className="text-sm text-slate-700 whitespace-pre-wrap">{r.constructionType}</p>
+          </div>
+        )}
         {r.note && (
           <div>
             <p className="text-xs font-bold text-slate-500 mb-1">기사 의견</p>
