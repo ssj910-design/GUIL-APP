@@ -840,7 +840,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
                             <p className={`text-sm font-bold min-w-0 ${expanded ? "" : "truncate"} text-slate-800`}>{t.title}</p>
                             <ChevronDown size={15} className={`shrink-0 text-slate-300 ml-auto transition-transform ${expanded ? "rotate-180" : ""}`} />
                           </div>
-                          <div className="flex items-center justify-between gap-2 mt-0.5">
+                          <div className="flex items-center gap-1.5 mt-0.5">
                             <p className="text-[11px] text-slate-400 truncate">
                               기한: <span className={dueTextCls}>{formatShortDate(t.dueDate)}</span>
                             </p>
