@@ -1,6 +1,6 @@
 import { useState, useContext, useEffect, useRef } from "react";
 import { Capacitor } from "@capacitor/core";
-import { ShieldCheck, AlertOctagon, X, Map as MapIcon, ChevronDown } from "lucide-react";
+import { ShieldCheck, AlertOctagon, X, Map as MapIcon, ChevronDown, Lock } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR, DUTY_KINDS } from "@/lib/constants";
 import { unitsToInspections, formatMonthDay, stripCityPrefix, groupBySite, findUnitForInspection, govDateToDashed, recentFailuresBySite, entrapmentSitesRecent, formatUnitLabel, distanceKm, activeSites, periodOf, leaveLabel as leaveKindLabel, formatShortDate } from "@/lib/utils";
@@ -794,6 +794,71 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
         </div>
       </div>
 
+      {/* 할일 — 관리자는 할일관리 탭에서 전체를 이미 보므로 여기선 기사·자재담당 관리자에게만.
+          행 디자인·클릭 시 아코디언 펼침은 할일관리(TodoTab) 목록 행과 동일(체크박스·빨간점·
+          "기한: N월 N일" 표기, 클릭하면 그 자리에서 펼쳐져 설명이 보임). 마감일순 상위 5건만
+          미리보고 "전체보기"로 할일관리 탭으로 넘어간다(워크캘린더 미니스트립과 동일 패턴).
+          고장 처리 현황 바로 아래로 배치 — 지금 처리할 일이 뭔지가 집중관리현장보다 먼저 보여야 함. */}
+      {role !== "admin" && (
+        <div className="px-5 pt-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-3">
+            <div className="flex items-center justify-between px-1 mb-1">
+              <h3 className="font-bold text-slate-800 text-sm">할일</h3>
+              {onOpenTodoList && <button onClick={onOpenTodoList} className="text-[11px] font-bold text-blue-700">전체보기 →</button>}
+            </div>
+            {myTodos.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-6">할일이 없습니다</p>
+            ) : (
+              <div className="px-1">
+                {myTodos.slice(0, 5).map((t) => {
+                  const overdue = new Date(t.dueDate) < new Date(TODAY_STR);
+                  const expanded = expandedTodoId === t.id;
+                  // 자재/견적 연동 할일은 비용청구가 완료돼야 자동으로 끝나 본인이 직접 완료 처리할
+                  // 수 없다 — 할일관리(TodoTab)의 TodoCheckbox·"비용청구 시 자동완료" 표기와 동일하게,
+                  // 여기서도 체크 동그라미를 자물쇠로 바꿔 시각적으로 구분한다(둘 다 클릭은 안 됨).
+                  const isManual = t.source === "manual" || t.source === "inspection" || t.source === "selfcheck" || t.source === "waste_return";
+                  return (
+                    <div key={t.id} className="border-b border-slate-50 last:border-0">
+                      <div className="flex items-start gap-2.5 py-2">
+                        <div className="pt-0.5">
+                          {isManual ? (
+                            <div className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full border-2 border-slate-200 flex items-center justify-center shrink-0 text-slate-300">
+                              <Lock size={10} />
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedTodoId(expanded ? null : t.id)}
+                          className="flex-1 min-w-0 text-left"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            {overdue && <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />}
+                            <p className={`text-sm font-bold min-w-0 ${expanded ? "" : "truncate"} text-slate-800`}>{t.title}</p>
+                            <ChevronDown size={15} className={`shrink-0 text-slate-300 ml-auto transition-transform ${expanded ? "rotate-180" : ""}`} />
+                          </div>
+                          <div className="flex items-center justify-between gap-2 mt-0.5">
+                            <p className="text-[11px] text-slate-400 truncate">기한: {formatShortDate(t.dueDate)}</p>
+                            {!isManual && <p className="text-[10px] text-slate-300 shrink-0 whitespace-nowrap">비용청구 시 자동완료</p>}
+                          </div>
+                        </button>
+                      </div>
+                      {expanded && (
+                        <div className="pl-8 pr-0.5 pb-3 pt-1">
+                          <p className="text-sm text-slate-700 whitespace-pre-wrap">{t.description || "등록된 내용이 없습니다"}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 집중 관리 현장 — 기사는 보고 자발 지원, 관리자는 지원자 배정 (담당 무관, 전 현장 기준) */}
       <div className="px-5 pt-4">
         <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
@@ -839,57 +904,6 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
           )}
         </div>
       </div>
-
-      {/* 할일 — 관리자는 할일관리 탭에서 전체를 이미 보므로 여기선 기사·자재담당 관리자에게만.
-          행 디자인·클릭 시 아코디언 펼침은 할일관리(TodoTab) 목록 행과 동일(체크박스·빨간점·
-          "기한: N월 N일" 표기, 클릭하면 그 자리에서 펼쳐져 설명이 보임). 마감일순 상위 5건만
-          미리보고 "전체보기"로 할일관리 탭으로 넘어간다(워크캘린더 미니스트립과 동일 패턴). */}
-      {role !== "admin" && (
-        <div className="px-5 pt-4">
-          <div className="bg-white rounded-2xl border border-slate-200 p-3">
-            <div className="flex items-center justify-between px-1 mb-1">
-              <h3 className="font-bold text-slate-800 text-sm">할일</h3>
-              {onOpenTodoList && <button onClick={onOpenTodoList} className="text-[11px] font-bold text-blue-700">전체보기 →</button>}
-            </div>
-            {myTodos.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-6">할일이 없습니다</p>
-            ) : (
-              <div className="px-1">
-                {myTodos.slice(0, 5).map((t) => {
-                  const overdue = new Date(t.dueDate) < new Date(TODAY_STR);
-                  const expanded = expandedTodoId === t.id;
-                  return (
-                    <div key={t.id} className="border-b border-slate-50 last:border-0">
-                      <div className="flex items-start gap-2.5 py-2">
-                        <div className="pt-0.5">
-                          <div className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setExpandedTodoId(expanded ? null : t.id)}
-                          className="flex-1 min-w-0 text-left"
-                        >
-                          <div className="flex items-center gap-1.5">
-                            {overdue && <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />}
-                            <p className={`text-sm font-bold min-w-0 ${expanded ? "" : "truncate"} text-slate-800`}>{t.title}</p>
-                            <ChevronDown size={15} className={`shrink-0 text-slate-300 ml-auto transition-transform ${expanded ? "rotate-180" : ""}`} />
-                          </div>
-                          <p className="text-[11px] text-slate-400 truncate mt-0.5">기한: {formatShortDate(t.dueDate)}</p>
-                        </button>
-                      </div>
-                      {expanded && (
-                        <div className="pl-8 pr-0.5 pb-3 pt-1">
-                          <p className="text-sm text-slate-700 whitespace-pre-wrap">{t.description || "등록된 내용이 없습니다"}</p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* 공공데이터 실시간 검사 관제 */}
       <div className="px-5 pt-4">
