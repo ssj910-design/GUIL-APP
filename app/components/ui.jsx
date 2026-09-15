@@ -141,8 +141,11 @@ export function Badge({ result }) {
 }
 
 
-export function DDay({ dueDate }) {
-  if (!dueDate) return <span className="text-xs font-extrabold px-2 py-1 rounded-md bg-slate-100 text-slate-400">기한 미정</span>;
+// size="xs" — 할일 카드처럼 기한 날짜 글자와 나란히 붙어 같은 크기여야 하는 자리용
+// (기본 size="sm"은 검사도래현장 등 기존 자리 그대로).
+export function DDay({ dueDate, size = "sm" }) {
+  const sizeCls = size === "xs" ? "text-[11px] px-1.5 py-0.5" : "text-xs px-2 py-1";
+  if (!dueDate) return <span className={`${sizeCls} font-extrabold rounded-md bg-slate-100 text-slate-400`}>기한 미정</span>;
   const today = new Date(TODAY_STR);
   const due = new Date(dueDate);
   const diff = Math.ceil((due - today) / 86400000);
@@ -153,7 +156,7 @@ export function DDay({ dueDate }) {
   else if (diff <= 14) { cls = "bg-amber-100 text-amber-700"; }
   else { cls = "bg-blue-100 text-blue-700"; }
   if (diff === 0) text = "D-DAY";
-  return <span className={`text-xs font-extrabold px-2 py-1 rounded-md ${cls}`}>{text}</span>;
+  return <span className={`${sizeCls} font-extrabold rounded-md ${cls}`}>{text}</span>;
 }
 
 

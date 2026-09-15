@@ -3,7 +3,7 @@ import { ListTodo, Check, CheckCircle2, Search, Lock, Plus, Repeat, ChevronDown 
 import { supabase } from "@/lib/supabaseClient";
 import { addDays, formatShortDate, formatYyMmDd } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
-import { PrimaryButton, Sheet, Field, inputCls, PhotoGrid } from "@/app/components/ui";
+import { PrimaryButton, Sheet, Field, inputCls, PhotoGrid, DDay } from "@/app/components/ui";
 import { SitesContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 import { confirmAsync } from "@/app/components/ConfirmHost";
@@ -217,10 +217,6 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
           const overdue = !groupDone && new Date(t.dueDate) < new Date(TODAY_STR);
           const requester = getRequesterName(t, materialRequests, quoteRequests);
           const expanded = shownExpandedId === t.id;
-          // D-day 표기 — ui.jsx의 DDay(배지형)와 달리 기한 날짜와 같은 자리에 나란히 붙는
-          // 일반 텍스트라 배지 스타일 대신 기한 글자와 동일한 크기·색을 그대로 쓴다.
-          const dDiff = Math.ceil((new Date(t.dueDate) - new Date(TODAY_STR)) / 86400000);
-          const dDayText = dDiff === 0 ? "D-DAY" : dDiff < 0 ? `D+${Math.abs(dDiff)}` : `D-${dDiff}`;
           const dueTextCls = `text-[11px] font-bold ${overdue ? "text-red-600" : "text-slate-700"}`;
           // 지브라 스트라이프 — 짝수줄만 살짝 톤(bg-slate-50), 펼친 행은 제목·내용을 한 박스로 묶어 흰 배경
           return (
@@ -249,13 +245,19 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-0.5">
                     <p className="text-[11px] text-slate-400 truncate">
-                      {role === "admin" ? `담당: ${group.length > 1 ? group.map((m) => m.assignee).join(", ") : t.assignee} · ` : ""}
                       기한: <span className={dueTextCls}>{formatShortDate(t.dueDate)}</span>
                       {requester ? ` · 요청자: ${requester}` : ""}
                     </p>
-                    <span className={`${dueTextCls} shrink-0`}>{dDayText}</span>
+                    <span className="shrink-0"><DDay dueDate={t.dueDate} size="xs" /></span>
                   </div>
-                  {!isManual && !groupDone && <p className="text-[11px] text-slate-400 text-right mt-0.5">비용청구 시 자동완료</p>}
+                  {(role === "admin" || (!isManual && !groupDone)) && (
+                    <div className="flex items-center justify-between gap-2 mt-0.5">
+                      <p className="text-[11px] text-slate-400 truncate">
+                        {role === "admin" ? `담당: ${group.length > 1 ? group.map((m) => m.assignee).join(", ") : t.assignee}` : ""}
+                      </p>
+                      {!isManual && !groupDone && <p className="text-[11px] text-slate-400 shrink-0 whitespace-nowrap">비용청구 시 자동완료</p>}
+                    </div>
+                  )}
                 </button>
               </div>
               {expanded && (

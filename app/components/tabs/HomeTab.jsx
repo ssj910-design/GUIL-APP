@@ -813,10 +813,6 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
                 {myTodos.slice(0, 5).map((t) => {
                   const overdue = new Date(t.dueDate) < new Date(TODAY_STR);
                   const expanded = expandedTodoId === t.id;
-                  // D-day 표기 — ui.jsx의 DDay(배지형)와 달리 기한 날짜와 같은 자리에 나란히
-                  // 붙는 일반 텍스트라 배지 스타일 대신 기한 글자와 동일한 크기·색을 그대로 쓴다.
-                  const dDiff = Math.ceil((new Date(t.dueDate) - new Date(TODAY_STR)) / 86400000);
-                  const dDayText = dDiff === 0 ? "D-DAY" : dDiff < 0 ? `D+${Math.abs(dDiff)}` : `D-${dDiff}`;
                   const dueTextCls = `text-[11px] font-bold ${overdue ? "text-red-600" : "text-slate-700"}`;
                   // 자재/견적 연동 할일은 비용청구가 완료돼야 자동으로 끝나 본인이 직접 완료 처리할
                   // 수 없다 — 할일관리(TodoTab)의 TodoCheckbox·"비용청구 시 자동완료" 표기와 동일하게,
@@ -848,7 +844,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
                             <p className="text-[11px] text-slate-400 truncate">
                               기한: <span className={dueTextCls}>{formatShortDate(t.dueDate)}</span>
                             </p>
-                            <span className={`${dueTextCls} shrink-0`}>{dDayText}</span>
+                            <span className="shrink-0"><DDay dueDate={t.dueDate} size="xs" /></span>
                           </div>
                           {!isManual && <p className="text-[11px] text-slate-400 text-right mt-0.5">비용청구 시 자동완료</p>}
                         </button>
