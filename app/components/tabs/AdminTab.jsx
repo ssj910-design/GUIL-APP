@@ -550,7 +550,7 @@ function RestockPendingCard({ r, onCompleteRestock, onAttachRestockPhoto, onRemo
   const [photosUploading, setPhotosUploading] = useState(false);
   return (
     <div className="bg-white rounded-xl border border-amber-200 p-3.5 mx-0.5">
-      <p className="text-sm font-bold text-slate-800">{r.part}{r.quantity > 1 ? ` × ${r.quantity}` : ""}</p>
+      <p className="text-sm font-bold text-slate-800">{r.part} × {r.quantity}</p>
       <p className="text-[11px] text-slate-500 mt-0.5">{r.engineer} 기사 · {r.siteName}에서 사용 · {r.requestedDate}</p>
       <div className="mt-2.5">
         <MultiPhotoUpload
@@ -931,7 +931,7 @@ function RestockPanel({ pending, done, onCompleteRestock, onAttachRestockPhoto, 
           <div className="space-y-1.5">
             {done.map((r) => (
               <div key={r.id} className="flex items-center justify-between text-xs text-slate-500">
-                <span>{r.engineer} · {r.part}{r.quantity > 1 ? ` × ${r.quantity}` : ""}</span>
+                <span>{r.engineer} · {r.part} × {r.quantity}</span>
                 <span className="text-emerald-600 font-semibold">{r.suppliedDate} 보충완료</span>
               </div>
             ))}
