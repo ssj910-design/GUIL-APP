@@ -394,7 +394,7 @@ function AssignTodoModal({ data, onClose, onCreate }) {
   }
 
   return (
-    <Modal title="할 일 배정" onClose={onClose} wide="2xl">
+    <Modal title="할 일 배정" onClose={onClose} wide="md">
       <div>
         <FieldRow label="제목">
           <input className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="예: 비상통화장치 배터리 교체" />

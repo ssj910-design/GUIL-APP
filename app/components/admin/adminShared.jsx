@@ -283,7 +283,7 @@ export function useBackdropClose(onClose) {
 
 // PC용 중앙 모달 (관리자 콘솔 최초의 상세보기 팝업 패턴 — 모바일 Sheet와 별개).
 export function Modal({ title, onClose, children, wide }) {
-  const widthCls = wide === "2xl" ? "max-w-[88rem]" : wide === "xl" ? "max-w-5xl" : wide ? "max-w-3xl" : "max-w-lg";
+  const widthCls = wide === "2xl" ? "max-w-[88rem]" : wide === "xl" ? "max-w-5xl" : wide === "md" ? "max-w-[44rem]" : wide ? "max-w-3xl" : "max-w-lg";
   // overscroll-contain — 안쪽 스크롤이 끝(위/아래)에 닿아도 그 다음 휠 동작이 뒤 배경으로
   // 안 넘어가게 막는다(스크롤 체이닝 차단). overflow-y-auto가 없으면 이 속성이 의미가 없어
   // 바깥 배경(패딩 부분)에도 같이 넣어준다.
