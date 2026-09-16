@@ -335,15 +335,16 @@ export default function QuotesAdmin({ data, setData }) {
     }));
   }
 
-  async function handleCreateQuote(siteId) {
+  async function handleCreateQuote(siteId, unitId) {
     const site = (data.sites ?? []).find((s) => s.id === siteId);
     if (!site) return;
+    const unit = unitId ? (data.units ?? []).find((u) => u.id === unitId) : null;
     const row = {
       id: "q" + Date.now(),
       site_id: siteId,
       site_name: site.name,
-      elevator_no: null,
-      unit_id: null,
+      elevator_no: unit?.unitNo ?? null,
+      unit_id: unit?.id ?? null,
       construction_type: "관리자 발행",
       contact_phone: null,
       note: null,
@@ -572,6 +573,7 @@ export default function QuotesAdmin({ data, setData }) {
       {pickingSite && (
         <QuoteNewSiteModal
           sites={data.sites ?? []}
+          units={data.units ?? []}
           onClose={() => setPickingSite(false)}
           onSelect={handleCreateQuote}
         />
@@ -898,9 +900,37 @@ function QuoteDetailModal({ quote: r, data, onClose, onReject }) {
 // 관리자가 기사 요청 없이 새 견적을 발행할 때 현장을 고르는 팝업.
 // formWidgets.jsx의 SiteSearchSelect는 SitesContext(모바일 트리 전용)로 현장을 읽어서
 // 관리자 콘솔에서는 목록이 비어 보인다 — 그래서 sites를 prop으로 받는 버전을 따로 둔다.
-function QuoteNewSiteModal({ sites, onClose, onSelect }) {
+function QuoteNewSiteModal({ sites, units, onClose, onSelect }) {
   const [query, setQuery] = useState("");
+  const [site, setSite] = useState(null);
   const filtered = sites.filter((s) => s.name.toLowerCase().includes(query.trim().toLowerCase()));
+
+  if (site) {
+    const siteUnits = (units ?? []).filter((u) => u.siteId === site.id);
+    return (
+      <Modal title={`새 견적 발행 — 호기 선택 (${site.name})`} onClose={onClose}>
+        <div className="h-72 overflow-y-auto space-y-1">
+          {siteUnits.map((u) => (
+            <button
+              key={u.id}
+              type="button"
+              onClick={() => onSelect(site.id, u.id)}
+              className="w-full text-left px-3 py-2.5 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0 rounded-lg"
+            >
+              {formatUnitLabel(u.unitNo)}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => onSelect(site.id, null)}
+            className="w-full text-left px-3 py-2.5 text-sm text-slate-400 hover:bg-slate-50 rounded-lg"
+          >
+            호기 선택 안 함
+          </button>
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal title="새 견적 발행 — 현장 선택" onClose={onClose}>
@@ -922,7 +952,7 @@ function QuoteNewSiteModal({ sites, onClose, onSelect }) {
             <button
               key={s.id}
               type="button"
-              onClick={() => onSelect(s.id)}
+              onClick={() => setSite(s)}
               className="w-full text-left px-3 py-2.5 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0 rounded-lg"
             >
               {s.name}
