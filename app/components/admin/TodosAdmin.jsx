@@ -852,9 +852,11 @@ export default function TodosAdmin({ data, setData, initialView }) {
   }
 
   return (
-    <div className="max-w-[100rem] mx-auto">
-      {/* 카드 테두리·그림자 없이 화면 전체에 꽉 채운다 — 목록·상세 사이 구분은 세로선 하나로만. */}
-      <div className="bg-white flex" style={{ height: "78vh" }}>
+    <div>
+      {/* 카드 테두리·그림자·바깥 여백 없이 화면 전체(사이드바 바로 옆부터)를 채운다 — 목록·상세
+          사이 구분은 세로선 하나로만. 이 여백 제거는 AdminApp.jsx에서 할일관리 화면만 예외
+          처리했다(다른 화면은 기존 공용 여백 그대로). */}
+      <div className="bg-white flex" style={{ height: "calc(100vh - 2.5rem)" }}>
         {/* 목록 — 검색·필터(상태/구분 드롭다운)까지 전부 이 컬럼 안에 있다: 목록을 거르는
             조작이라는 게 시각적으로 바로 보이게(예전엔 목록·상세 위에 걸친 별도 툴바였음).
             상세(38)보다 넓게(62) — 비율 기반이라 창을 넓히면 목록도 같이 넓어진다. */}
@@ -934,7 +936,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
           <div className="flex flex-col items-center justify-center text-sm text-slate-300 border-l border-slate-100" style={{ flex: 38 }}>왼쪽에서 할 일을 선택하세요</div>
         )}
       </div>
-      <p className="text-[10px] text-slate-400 mt-2">* 자재·견적 할일의 정상 완료 경로는 기사 비용청구입니다. 완료하기는 관리자 예외 처리용.</p>
+      <p className="text-[10px] text-slate-400 px-4 py-2">* 자재·견적 할일의 정상 완료 경로는 기사 비용청구입니다. 완료하기는 관리자 예외 처리용.</p>
 
       {assigning && <AssignTodoModal data={data} onClose={() => setAssigning(false)} onCreate={createTodo} />}
       {confirmTarget && (

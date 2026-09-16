@@ -373,8 +373,9 @@ export default function AdminApp() {
         </p>
       </aside>
 
-      {/* 본문 */}
-      <main className="flex-1 min-w-0 p-4 lg:p-8 overflow-y-auto">
+      {/* 본문 — 할일관리만 예외로 여백 없이 사이드바에 바로 붙여 화면 전체를 채운다(요청 사항).
+          다른 화면들은 기존처럼 공용 여백(p-4 lg:p-8)을 그대로 쓴다. */}
+      <main className={`flex-1 min-w-0 overflow-y-auto ${menu === "todos" ? "" : "p-4 lg:p-8"}`}>
         {loading ? (
           <p className="text-sm text-slate-400 pt-20 text-center">데이터를 불러오는 중...</p>
         ) : menu === "dashboard" ? (
