@@ -4,7 +4,7 @@
 // 완료 규칙(DESIGN-v2 §7-2): 자재·견적 할일의 정상 완료 경로는 비용청구지만,
 // 관리자는 예외적으로 임의 토글 가능(모바일 관리자 모드와 동일 권한).
 import { useContext, useState } from "react";
-import { Plus, Search, Repeat } from "lucide-react";
+import { Plus, Search, Repeat, Pencil } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto } from "@/lib/photos";
 import { confirmAsync } from "@/app/components/ConfirmHost";
@@ -13,10 +13,123 @@ import { TODAY_STR } from "@/lib/constants";
 import { addDays, shortDate, formatUnitLabel } from "@/lib/utils";
 import {
   locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills,
-  Modal, SortableTh, sortRows, inputCls, DateTextInput, AdminAuthContext, PhotoGrid, SiteAutocomplete,
+  Modal, SortableTh, sortRows, inputCls, AdminAuthContext, PhotoGrid, SiteAutocomplete,
 } from "@/app/components/admin/adminShared";
 
 const SOURCE_LABEL = { material: "자재", quote: "견적", manual: "수동", inspection: "검사보완", selfcheck: "자체점검지적", waste_return: "반납확인" };
+
+// 라벨(왼쪽 고정폭)·입력칸(오른쪽) 한 줄짜리 폼 행 — 할일배정/할일상세 공용 레이아웃.
+function FieldRow({ label, children }) {
+  return (
+    <div className="flex items-start gap-4 py-2.5 border-b border-slate-50 last:border-0">
+      <p className="w-16 shrink-0 text-xs font-bold text-slate-500 pt-2">{label}</p>
+      <div className="flex-1 min-w-0">{children}</div>
+    </div>
+  );
+}
+
+// 이름 검색 자동완성 + 선택된 사람은 삭제 가능한 태그로 표시 — 요청자(단일)·담당자(복수) 공용.
+// 단일 선택(요청자)은 onAdd를 "기존 선택 교체"로 넘겨주는 쪽(호출부)에서 처리한다.
+function PersonPicker({ candidates, selectedIds, onAdd, onRemove, placeholder }) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const filtered = q ? candidates.filter((p) => !selectedIds.includes(p.id) && p.name.toLowerCase().includes(q)).slice(0, 8) : [];
+  const selected = candidates.filter((p) => selectedIds.includes(p.id));
+  return (
+    <div>
+      <div className="relative">
+        <input
+          className={inputCls}
+          placeholder={placeholder}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onBlur={() => setTimeout(() => setQuery(""), 150)}
+        />
+        {filtered.length > 0 && (
+          <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+            {filtered.map((p) => (
+              <button
+                type="button"
+                key={p.id}
+                onMouseDown={() => { onAdd(p.id); setQuery(""); }}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0"
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-1.5">
+          {selected.map((p) => (
+            <span key={p.id} className="inline-flex items-center gap-1 text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 rounded-full px-2.5 py-1">
+              {p.name}
+              <button type="button" onClick={() => onRemove(p.id)} className="text-slate-400 hover:text-slate-600">×</button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 기한 — 빠른 선택 버튼(없음/오늘/내일/다음 주) + 직접 날짜 선택. 달력은 네이티브 input[type=date]가
+// 클릭하면 바로 뜨는 걸 그대로 쓴다(별도 캘린더 컴포넌트 불필요).
+function DueDateField({ value, onChange }) {
+  const quick = [
+    { key: "none", label: "없음", date: "" },
+    { key: "today", label: "오늘", date: TODAY_STR },
+    { key: "tomorrow", label: "내일", date: addDays(TODAY_STR, 1) },
+    { key: "nextweek", label: "다음 주", date: addDays(TODAY_STR, 7) },
+  ];
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {quick.map((qd) => (
+        <button
+          key={qd.key}
+          type="button"
+          onClick={() => onChange(qd.date)}
+          className={`text-xs font-bold px-3 py-1.5 rounded-lg ${value === qd.date ? "bg-blue-700 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+        >
+          {qd.label}
+        </button>
+      ))}
+      <input type="date" className={`${inputCls} flex-1 min-w-[140px]`} value={value} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+// 파일첨부 — 썸네일 미리보기(×삭제) + "내 PC" 버튼. 할일배정(생성)·할일상세(단건 수정) 공용.
+function PhotoAddSection({ photos, setPhotos, uploading, onFiles }) {
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-1.5">
+        <label className="text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer">
+          내 PC
+          <input type="file" accept="image/*" multiple className="hidden" onChange={onFiles} disabled={uploading} />
+        </label>
+        <span className="text-xs text-slate-400">첨부파일 {photos.length}개</span>
+      </div>
+      {photos.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {photos.map((url, i) => (
+            <div key={i} className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+              <button
+                onClick={() => setPhotos((p) => p.filter((_, idx) => idx !== i))}
+                className="absolute -top-1.5 -right-1.5 bg-slate-800 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // 폐자재/여유부품 반납 할일이 "반납확인대기" 큐에 뜨는 조건: 기사가 사진 올려 완료 처리했지만
 // (Task 5의 사진 잠금) 관리자가 아직 확인수량을 입력해 재고에 반영하지 않은 상태.
@@ -40,20 +153,26 @@ function groupKeyOf(t) {
   return `solo:${t.id}`;
 }
 
+// 평소엔 읽기전용으로 보여주고(오탈자 실수 방지), "수정"을 눌러야 할일배정과 같은 구성의
+// 입력 폼이 뜬다. 담당자 여러 명(그룹)의 완료 체크리스트는 "필드 수정"이 아니라 그때그때
+// 처리하는 상태 액션이라 읽기전용/수정 여부와 무관하게 항상 조작 가능하게 둔다.
 function TodoDetailModal({ group, data, onClose, onSave, onSaveGroup, onDelete, onDeleteGroup, onToggleMember }) {
   const { sites, units, profiles } = data;
   const isGroup = group.length > 1;
   const t = group[0];
   // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 관리자가 자재담당자에게도 배정할 수 있어야 한다.
   const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
+  const admins = profiles.filter((p) => p.role === "admin" && p.is_active !== false);
   const currentUnit = units.find((u) => u.id === t.unitId);
   const initialSiteId = currentUnit?.siteId ?? sites.find((s) => s.name === t.siteName)?.id ?? "";
+  const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     title: t.title ?? "",
     description: t.description ?? "",
     siteId: initialSiteId,
     unitId: t.unitId ?? "",
     assigneeId: t.assigneeId ?? "",
+    requesterId: t.requestedById ?? "",
     assignedDate: t.assignedDate ?? "",
     dueDate: t.dueDate ?? "",
     done: t.done,
@@ -100,122 +219,134 @@ function TodoDetailModal({ group, data, onClose, onSave, onSaveGroup, onDelete, 
     onClose();
   }
 
+  const siteName = sites.find((s) => s.id === form.siteId)?.name || "현장 없음";
+  const unitNo = siteUnits.find((u) => u.id === form.unitId)?.unitNo || "전체(현장 공통)";
+  const requesterName = admins.find((p) => p.id === form.requesterId)?.name || t.requestedByName || "-";
+
+  const memberList = (
+    <div>
+      <p className="text-xs font-bold text-slate-500 mb-1">담당자 ({group.length}명)</p>
+      <div className="space-y-1.5">
+        {group.map((m) => (
+          <label key={m.id} className="flex items-center gap-2 text-sm bg-slate-50 rounded-lg px-3 py-2 cursor-pointer">
+            <input type="checkbox" checked={m.done} onChange={() => onToggleMember(m)} className="w-4 h-4 rounded accent-blue-700" />
+            <span className={m.done ? "line-through text-slate-400" : "text-slate-700 font-semibold"}>{personOf(data, m.assigneeId, m.assignee)}</span>
+            {m.done && <span className="text-[10px] text-emerald-600 font-bold ml-auto">완료</span>}
+          </label>
+        ))}
+      </div>
+      <p className="text-[11px] text-slate-400 mt-1.5">담당자 구성(추가·제외) 변경은 견적관리의 지급완료 처리 화면에서 하세요. 1명만 완료해도 전원 완료로 처리됩니다.</p>
+    </div>
+  );
+
   return (
     <Modal title="할 일 상세내역" onClose={onClose}>
       {t.reassignRequested && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-2">
           <p className="text-xs font-bold text-amber-700 mb-1 flex items-center gap-1"><Repeat size={13} strokeWidth={2.5} /> 담당자 재배정 요청됨</p>
           {t.reassignReason && <p className="text-[13px] text-slate-700">사유: {t.reassignReason}</p>}
           {t.reassignTo && <p className="text-[13px] text-slate-700">희망 담당자: <b>{t.reassignTo}</b></p>}
           <p className="text-[11px] text-slate-400 mt-1">아래 담당자를 변경하면 요청이 자동 해제됩니다.</p>
         </div>
       )}
-      <div className="space-y-3 mb-4">
+
+      {!editing ? (
         <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">구분</p>
-          <p className="text-sm font-semibold text-slate-700">{SOURCE_LABEL[t.source] ?? t.source}</p>
+          <FieldRow label="구분"><p className="text-sm font-semibold text-slate-700 pt-0.5">{SOURCE_LABEL[t.source] ?? t.source}</p></FieldRow>
+          <FieldRow label="제목"><p className="text-sm font-semibold text-slate-700 pt-0.5">{form.title}</p></FieldRow>
+          <FieldRow label="현장"><p className="text-sm font-semibold text-slate-700 pt-0.5">{siteName}</p></FieldRow>
+          <FieldRow label="호기"><p className="text-sm font-semibold text-slate-700 pt-0.5">{unitNo}</p></FieldRow>
+          <FieldRow label="내용"><p className="text-sm text-slate-700 whitespace-pre-wrap pt-0.5">{form.description || "-"}</p></FieldRow>
+          <FieldRow label="기한"><p className="text-sm font-semibold text-slate-700 pt-0.5">{form.dueDate ? shortDate(form.dueDate) : "없음"}</p></FieldRow>
+          <FieldRow label="요청자"><p className="text-sm font-semibold text-slate-700 pt-0.5">{requesterName}</p></FieldRow>
+          {isGroup ? <FieldRow label="담당자">{memberList}</FieldRow> : (
+            <>
+              <FieldRow label="담당자"><p className="text-sm font-semibold text-slate-700 pt-0.5">{personOf(data, form.assigneeId, t.assignee)}</p></FieldRow>
+              <FieldRow label="상태"><p className="text-sm font-semibold text-slate-700 pt-0.5">{form.done ? "완료" : "진행"}</p></FieldRow>
+            </>
+          )}
+          <FieldRow label="배정일"><p className="text-sm font-semibold text-slate-700 pt-0.5">{shortDate(form.assignedDate)}</p></FieldRow>
+          {!isGroup && (
+            <FieldRow label="파일첨부">
+              <PhotoGrid urls={photos} cols={4} />
+            </FieldRow>
+          )}
         </div>
+      ) : (
         <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">할일 제목</p>
-          <input className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">현장</p>
+          <FieldRow label="제목">
+            <input className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+          </FieldRow>
+          <FieldRow label="현장">
             <select className={inputCls} value={form.siteId} onChange={(e) => setForm({ ...form, siteId: e.target.value, unitId: "" })}>
               <option value="">현장 없음</option>
               {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-          </div>
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">호기</p>
+          </FieldRow>
+          <FieldRow label="호기">
             <select className={inputCls} value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })} disabled={!form.siteId}>
               <option value="">전체(현장 공통)</option>
               {siteUnits.map((u) => <option key={u.id} value={u.id}>{u.unitNo}</option>)}
             </select>
-          </div>
-        </div>
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">현장 주소</p>
-          <p className="text-sm font-semibold text-slate-700">{sites.find((s) => s.id === form.siteId)?.address || "-"}</p>
-        </div>
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">내용</p>
-          <textarea className={inputCls} rows={10} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-        </div>
-        {isGroup ? (
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">담당자 ({group.length}명)</p>
-            <div className="space-y-1.5">
-              {group.map((m) => (
-                <label key={m.id} className="flex items-center gap-2 text-sm bg-slate-50 rounded-lg px-3 py-2 cursor-pointer">
-                  <input type="checkbox" checked={m.done} onChange={() => onToggleMember(m)} className="w-4 h-4 rounded accent-blue-700" />
-                  <span className={m.done ? "line-through text-slate-400" : "text-slate-700 font-semibold"}>{personOf(data, m.assigneeId, m.assignee)}</span>
-                  {m.done && <span className="text-[10px] text-emerald-600 font-bold ml-auto">완료</span>}
-                </label>
-              ))}
-            </div>
-            <p className="text-[11px] text-slate-400 mt-1.5">담당자 구성(추가·제외) 변경은 견적관리의 지급완료 처리 화면에서 하세요.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-xs font-bold text-slate-500 mb-1">담당자</p>
-              <select className={inputCls} value={form.assigneeId} onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}>
-                <option value="">미배정</option>
-                {engineers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <p className="text-xs font-bold text-slate-500 mb-1">상태</p>
-              <select className={inputCls} value={form.done ? "done" : "open"} onChange={(e) => setForm({ ...form, done: e.target.value === "done" })}>
-                <option value="open">진행</option>
-                <option value="done">완료</option>
-              </select>
-            </div>
-          </div>
-        )}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">배정일</p>
-            <DateTextInput key={form.assignedDate} value={form.assignedDate} onChange={(v) => setForm({ ...form, assignedDate: v })} />
-          </div>
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">기한</p>
-            <DateTextInput key={form.dueDate} value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
-          </div>
-        </div>
-      </div>
-      {!isGroup && (
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-2">사진 ({photos.length}장)</p>
-          <div className="flex flex-wrap gap-1.5 mb-1.5">
-            {photos.map((url, i) => (
-              <div key={i} className="relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
-                <button
-                  onClick={() => setPhotos((p) => p.filter((_, idx) => idx !== i))}
-                  className="absolute -top-1.5 -right-1.5 bg-slate-800 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-          <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 cursor-pointer">
-            사진 추가
-            <input type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} disabled={uploading} />
-          </label>
+          </FieldRow>
+          <FieldRow label="내용">
+            <textarea className={inputCls} rows={5} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          </FieldRow>
+          <FieldRow label="기한">
+            <DueDateField value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
+          </FieldRow>
+          <FieldRow label="요청자">
+            <PersonPicker
+              candidates={admins}
+              selectedIds={form.requesterId ? [form.requesterId] : []}
+              onAdd={(id) => setForm((f) => ({ ...f, requesterId: id }))}
+              onRemove={() => setForm((f) => ({ ...f, requesterId: "" }))}
+              placeholder="관리자 이름 검색"
+            />
+          </FieldRow>
+          {isGroup ? <FieldRow label="담당자">{memberList}</FieldRow> : (
+            <>
+              <FieldRow label="담당자">
+                <select className={inputCls} value={form.assigneeId} onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}>
+                  <option value="">미배정</option>
+                  {engineers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </FieldRow>
+              <FieldRow label="상태">
+                <select className={inputCls} value={form.done ? "done" : "open"} onChange={(e) => setForm({ ...form, done: e.target.value === "done" })}>
+                  <option value="open">진행</option>
+                  <option value="done">완료</option>
+                </select>
+              </FieldRow>
+            </>
+          )}
+          <FieldRow label="배정일">
+            <input type="date" className={inputCls} value={form.assignedDate} onChange={(e) => setForm({ ...form, assignedDate: e.target.value })} />
+          </FieldRow>
+          {!isGroup && (
+            <FieldRow label="파일첨부">
+              <PhotoAddSection photos={photos} setPhotos={setPhotos} uploading={uploading} onFiles={handleFiles} />
+            </FieldRow>
+          )}
         </div>
       )}
+
       <div className="flex justify-between mt-4">
         <button disabled={deleting} onClick={handleDelete} className="text-sm font-bold text-red-600 border border-red-200 disabled:opacity-50 rounded-xl px-5 py-2.5">
           {deleting ? "삭제 중..." : isGroup ? `전체 삭제 (${group.length}명)` : "삭제"}
         </button>
-        <button disabled={saving || !form.title.trim()} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
-          저장
-        </button>
+        {!editing ? (
+          <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-5 py-2.5">
+            <Pencil size={14} /> 수정
+          </button>
+        ) : (
+          <div className="flex gap-2">
+            <button onClick={() => setEditing(false)} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-5 py-2.5">취소</button>
+            <button disabled={saving || !form.title.trim()} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
+              저장
+            </button>
+          </div>
+        )}
       </div>
     </Modal>
   );
@@ -223,9 +354,14 @@ function TodoDetailModal({ group, data, onClose, onSave, onSaveGroup, onDelete, 
 
 function AssignTodoModal({ data, onClose, onCreate }) {
   const { sites, units, profiles } = data;
+  const { name: adminName, id: adminId } = useContext(AdminAuthContext);
   // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 관리자가 자재담당자에게도 배정할 수 있어야 한다.
   const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
-  const [form, setForm] = useState({ siteId: "", unitId: "", title: "", description: "", assigneeIds: [], dueDate: addDays(TODAY_STR, 7) });
+  const admins = profiles.filter((p) => p.role === "admin" && p.is_active !== false);
+  const [form, setForm] = useState({
+    siteId: "", unitId: "", title: "", description: "", assigneeIds: [],
+    requesterId: adminId ?? "", dueDate: addDays(TODAY_STR, 7),
+  });
   const [photos, setPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [folderToken] = useState(() => Date.now());
@@ -259,71 +395,47 @@ function AssignTodoModal({ data, onClose, onCreate }) {
 
   return (
     <Modal title="할 일 배정" onClose={onClose} wide="2xl">
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">현장</p>
-            <SiteAutocomplete sites={sites} value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitId: "" })} />
-          </div>
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">호기</p>
-            <select className={inputCls} value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })} disabled={!form.siteId}>
-              <option value="">전체(현장 공통)</option>
-              {siteUnits.map((u) => <option key={u.id} value={u.id}>{u.unitNo}</option>)}
-            </select>
-          </div>
-        </div>
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">할일 제목</p>
+      <div>
+        <FieldRow label="제목">
           <input className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="예: 비상통화장치 배터리 교체" />
-        </div>
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">내용</p>
-          <textarea className={inputCls} rows={10} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-        </div>
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">담당자 (2명 이상 선택 가능 — 선택한 인원 각각에게 별도로 배정됩니다)</p>
-          <div className="border border-slate-200 rounded-lg max-h-48 overflow-y-auto p-2 grid grid-cols-4 gap-x-3">
-            {engineers.map((p) => (
-              <label key={p.id} className="flex items-center gap-1.5 text-sm px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
-                <input type="checkbox" checked={form.assigneeIds.includes(p.id)} onChange={() => toggleAssignee(p.id)} />
-                {p.name}
-              </label>
-            ))}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">기한</p>
-            <DateTextInput key={form.dueDate} value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
-          </div>
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">사진 (선택)</p>
-            <div className="flex flex-wrap gap-1.5 mb-1.5">
-              {photos.map((url, i) => (
-                <div key={i} className="relative">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
-                  <button
-                    onClick={() => setPhotos((p) => p.filter((_, idx) => idx !== i))}
-                    className="absolute -top-1.5 -right-1.5 bg-slate-800 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-            <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 cursor-pointer">
-              사진 추가
-              <input type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} disabled={uploading} />
-            </label>
-          </div>
-        </div>
-        <div className="flex justify-end pt-2">
-          <button disabled={!valid || uploading} onClick={submit} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
-            배정하기
-          </button>
-        </div>
+        </FieldRow>
+        <FieldRow label="현장">
+          <SiteAutocomplete sites={sites} value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitId: "" })} />
+        </FieldRow>
+        <FieldRow label="호기">
+          <select className={inputCls} value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })} disabled={!form.siteId}>
+            <option value="">전체(현장 공통)</option>
+            {siteUnits.map((u) => <option key={u.id} value={u.id}>{u.unitNo}</option>)}
+          </select>
+        </FieldRow>
+        <FieldRow label="내용">
+          <textarea className={inputCls} rows={5} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+        </FieldRow>
+        <FieldRow label="기한">
+          <DueDateField value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
+        </FieldRow>
+        <FieldRow label="요청자">
+          <PersonPicker
+            candidates={admins}
+            selectedIds={form.requesterId ? [form.requesterId] : []}
+            onAdd={(id) => setForm((f) => ({ ...f, requesterId: id }))}
+            onRemove={() => setForm((f) => ({ ...f, requesterId: "" }))}
+            placeholder="관리자 이름 검색"
+          />
+        </FieldRow>
+        <FieldRow label="담당자">
+          <PersonPicker candidates={engineers} selectedIds={form.assigneeIds} onAdd={toggleAssignee} onRemove={toggleAssignee} placeholder="이름 검색" />
+          <p className="text-[10px] text-slate-400 mt-1">2명 이상 선택 가능 — 각자에게 별도로 배정, 1명만 완료해도 전원 완료 처리됩니다.</p>
+        </FieldRow>
+        <FieldRow label="파일첨부">
+          <PhotoAddSection photos={photos} setPhotos={setPhotos} uploading={uploading} onFiles={handleFiles} />
+        </FieldRow>
+      </div>
+      <div className="flex justify-end gap-2 pt-4">
+        <button onClick={onClose} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-5 py-2.5">취소</button>
+        <button disabled={!valid || uploading} onClick={submit} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
+          배정하기
+        </button>
       </div>
     </Modal>
   );
@@ -449,6 +561,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
     const unit = units.find((u) => u.id === form.unitId);
     const site = sites.find((s) => s.id === form.siteId);
     const engineer = profiles.find((p) => p.id === form.assigneeId);
+    const requester = profiles.find((p) => p.id === form.requesterId);
     const photoUrls = form.photoUrls ?? [];
     // 재배정 요청 중인 할일의 담당자를 여기서 바꾸면 요청은 처리된 것이므로 자동 해제한다 (모바일 담당자 변경과 동일 규칙).
     const reassigned = form.assigneeId !== (t.assigneeId ?? "");
@@ -456,6 +569,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
       title: form.title.trim(), description: form.description || null,
       site_name: site?.name ?? null, elevator_no: unit?.unitNo ?? null, unit_id: form.unitId || null,
       assignee: engineer?.name ?? null, assignee_id: form.assigneeId || null,
+      requested_by_id: form.requesterId || null, requested_by_name: requester?.name ?? null,
       assigned_date: form.assignedDate || null, due_date: form.dueDate || null, done: form.done,
       photo_count: photoUrls.length, photo_urls: photoUrls.length ? photoUrls : null,
       ...(reassigned ? { reassign_requested: false, reassign_reason: null, reassign_to: null } : {}),
@@ -469,6 +583,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
         title: patch.title, description: patch.description ?? "",
         siteName: patch.site_name, elevatorNo: patch.elevator_no, unitId: patch.unit_id,
         assignee: patch.assignee, assigneeId: patch.assignee_id,
+        requestedById: patch.requested_by_id, requestedByName: patch.requested_by_name,
         assignedDate: patch.assigned_date, dueDate: patch.due_date, done: patch.done,
         photoCount: patch.photo_count, photoUrls,
         ...(reassigned ? { reassignRequested: false, reassignReason: null, reassignTo: null } : {}),
@@ -476,15 +591,17 @@ export default function TodosAdmin({ data, setData, initialView }) {
     }));
   }
 
-  // 담당자 여러 명(그룹)의 할 일 상세 저장 — 공통 필드(제목·현장·호기·내용·배정일·기한)만
+  // 담당자 여러 명(그룹)의 할 일 상세 저장 — 공통 필드(제목·현장·호기·내용·배정일·기한·요청자)만
   // 그룹 전원에게 동일하게 적용한다. 담당자 구성·완료 여부는 개별 처리(onToggleMember)로 따로 다룬다.
   async function saveGroupDetail(group, form) {
     const unit = units.find((u) => u.id === form.unitId);
     const site = sites.find((s) => s.id === form.siteId);
+    const requester = profiles.find((p) => p.id === form.requesterId);
     const ids = group.map((t) => t.id);
     const patch = {
       title: form.title.trim(), description: form.description || null,
       site_name: site?.name ?? null, elevator_no: unit?.unitNo ?? null, unit_id: form.unitId || null,
+      requested_by_id: form.requesterId || null, requested_by_name: requester?.name ?? null,
       assigned_date: form.assignedDate || null, due_date: form.dueDate || null,
     };
     const { error } = await supabase.from("todos").update(patch).in("id", ids);
@@ -495,6 +612,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
         ...x,
         title: patch.title, description: patch.description ?? "",
         siteName: patch.site_name, elevatorNo: patch.elevator_no, unitId: patch.unit_id,
+        requestedById: patch.requested_by_id, requestedByName: patch.requested_by_name,
         assignedDate: patch.assigned_date, dueDate: patch.due_date,
       } : x)),
     }));
@@ -570,9 +688,17 @@ export default function TodosAdmin({ data, setData, initialView }) {
     return { ok: true, movementsInserted: true };
   }
 
+  // 담당자 여러 명이 한 팀으로 묶인 수동 할일(관리자 배정)은 1명만 완료해도 전원 완료 처리한다
+  // — 표에서도 이미 groupKeyOf로 한 행으로 묶어 보여주므로 완료 처리도 그룹 단위로 맞춘다.
+  // 완료 취소는 그룹 단위로 묶지 않는다(자체점검 지적사항과 동일한 비대칭 규칙).
   async function toggle(t) {
-    await supabase.from("todos").update({ done: !t.done }).eq("id", t.id);
-    setData((prev) => ({ ...prev, todos: prev.todos.map((x) => (x.id === t.id ? { ...x, done: !x.done } : x)) }));
+    const done = !t.done;
+    const ids = done && t.source === "manual"
+      ? todos.filter((x) => groupKeyOf(x) === groupKeyOf(t)).map((x) => x.id)
+      : [t.id];
+    const { error } = await supabase.from("todos").update({ done }).in("id", ids);
+    if (error) { alert("완료 처리 실패: " + error.message); return; }
+    setData((prev) => ({ ...prev, todos: prev.todos.map((x) => (ids.includes(x.id) ? { ...x, done } : x)) }));
   }
 
   // 담당자를 2명 이상 고르면(AssignTodoModal), DB에 담당자 배열 컬럼이 없어(단일 assignee_id)
@@ -581,6 +707,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
   async function createTodo(form) {
     const unit = units.find((u) => u.id === form.unitId);
     const site = sites.find((s) => s.id === form.siteId);
+    const requester = profiles.find((p) => p.id === form.requesterId);
     const photoUrls = form.photoUrls ?? [];
     const batchId = Date.now(); // 담당자마다 부르면 ms가 달라져 같은 배정이 한 건으로 안 묶인다
     const rows = form.assigneeIds.map((assigneeId, i) => {
@@ -591,7 +718,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
         assignee: engineer?.name ?? null, assignee_id: assigneeId,
         assigned_date: TODAY_STR, due_date: form.dueDate || null, done: false,
         photo_count: photoUrls.length, photo_urls: photoUrls.length ? photoUrls : null,
-        requested_by_id: adminId ?? null, requested_by_name: adminName,
+        requested_by_id: form.requesterId || adminId || null, requested_by_name: requester?.name ?? adminName,
       };
     });
     const { error } = await supabase.from("todos").insert(rows);
