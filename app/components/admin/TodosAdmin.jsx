@@ -4,16 +4,15 @@
 // 완료 규칙(DESIGN-v2 §7-2): 자재·견적 할일의 정상 완료 경로는 비용청구지만,
 // 관리자는 예외적으로 임의 토글 가능(모바일 관리자 모드와 동일 권한).
 import { useContext, useState } from "react";
-import { Plus, Search, Repeat, Pencil } from "lucide-react";
+import { Plus, Search, Repeat, Pencil, ChevronDown, Check } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto } from "@/lib/photos";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { mapInventoryStockMovement } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, shortDate, formatUnitLabel } from "@/lib/utils";
+import { addDays, shortDate } from "@/lib/utils";
 import {
-  locOf, addressOf, personOf, StatusBadge, AdminTable, FilterPills,
-  Modal, SortableTh, sortRows, inputCls, AdminAuthContext, PhotoGrid, SiteAutocomplete,
+  locOf, personOf, Modal, sortRows, inputCls, AdminAuthContext, PhotoGrid, SiteAutocomplete,
 } from "@/app/components/admin/adminShared";
 
 const SOURCE_LABEL = { material: "자재", quote: "견적", manual: "수동", inspection: "검사보완", selfcheck: "자체점검지적", waste_return: "반납확인" };
@@ -131,6 +130,40 @@ function PhotoAddSection({ photos, setPhotos, uploading, onFiles }) {
   );
 }
 
+// 상태·구분 필터 — 평소엔 접힌 한 줄("상태: 미완료 (36)")로 있다가 눌러야 목록이 펼쳐진다.
+// 예전엔 FilterPills로 옵션 전부를 펼쳐뒀는데, 상태(3)+구분(7) 총 10개 버튼이 늘 떠 있으니
+// 목록 컬럼(340px)에선 너무 붐벼서 드롭다운으로 접었다.
+function FilterDropdown({ label, options, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const current = options.find((o) => o.value === value);
+  return (
+    <div className="relative flex-1 min-w-0" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false); }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-1 text-xs font-bold text-slate-700 border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"
+      >
+        <span className="truncate">{label}: {current?.label}{current?.count != null ? ` (${current.count})` : ""}</span>
+        <ChevronDown size={12} className={`text-slate-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+          {options.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              onMouseDown={() => { onChange(o.value); setOpen(false); }}
+              className={`w-full text-left text-xs font-semibold px-3 py-2 hover:bg-slate-50 ${value === o.value ? "text-blue-700 bg-blue-50" : "text-slate-600"}`}
+            >
+              {o.label}{o.count != null ? ` (${o.count})` : ""}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // 폐자재/여유부품 반납 할일이 "반납확인대기" 큐에 뜨는 조건: 기사가 사진 올려 완료 처리했지만
 // (Task 5의 사진 잠금) 관리자가 아직 확인수량을 입력해 재고에 반영하지 않은 상태.
 function wasteReturnPending(t) {
@@ -153,10 +186,41 @@ function groupKeyOf(t) {
   return `solo:${t.id}`;
 }
 
+// 목록 한 줄 — 완료 토글(원)은 그룹 전원에게 같이 적용한다(기존 표의 체크박스와 동일 규칙).
+function TodoListRow({ group, data, selected, onSelect, onToggleGroup }) {
+  const t = group[0];
+  const effectiveDone = (m) => (wasteReturnPending(m) ? false : m.done);
+  const groupDone = group.every(effectiveDone);
+  const overdue = !groupDone && t.dueDate && new Date(t.dueDate) < new Date(TODAY_STR);
+  return (
+    <div
+      onClick={() => onSelect(group)}
+      className={`flex items-start gap-2.5 px-3.5 py-3 border-b border-slate-50 cursor-pointer ${selected ? "bg-blue-50/60" : "hover:bg-slate-50"} ${groupDone ? "opacity-60" : ""}`}
+    >
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onToggleGroup(group, groupDone); }}
+        className={`w-4 h-4 mt-0.5 rounded-full border-2 shrink-0 flex items-center justify-center ${groupDone ? "bg-emerald-500 border-emerald-500" : "border-slate-300"}`}
+      >
+        {groupDone && <Check size={10} className="text-white" strokeWidth={3} />}
+      </button>
+      <div className="min-w-0 flex-1">
+        <p className={`text-sm font-bold truncate ${groupDone ? "line-through text-slate-400" : "text-slate-800"}`}>{t.title}</p>
+        <p className="text-[11px] text-slate-400 truncate">{locOf(data, t.unitId, t.siteName, t.elevatorNo)}</p>
+        <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+          기한 : <span className={`font-semibold ${overdue ? "text-red-600" : "text-slate-600"}`}>{t.dueDate ? shortDate(t.dueDate) : "없음"}</span>
+          {" · "}담당자 : {group.map((m) => personOf(data, m.assigneeId, m.assignee)).join(", ")}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // 평소엔 읽기전용으로 보여주고(오탈자 실수 방지), "수정"을 눌러야 할일배정과 같은 구성의
 // 입력 폼이 뜬다. 담당자 여러 명(그룹)의 완료 체크리스트는 "필드 수정"이 아니라 그때그때
-// 처리하는 상태 액션이라 읽기전용/수정 여부와 무관하게 항상 조작 가능하게 둔다.
-function TodoDetailModal({ group, data, onClose, onSave, onSaveGroup, onDelete, onDeleteGroup, onToggleMember }) {
+// 처리하는 상태 액션이라 읽기전용/수정 여부와 무관하게 항상 조작 가능하게 둔다. 팝업 모달이
+// 아니라 목록 오른쪽에 항상 떠 있는 패널이라 onClose 대신 onDeleted(삭제 시 선택 해제)를 받는다.
+function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onDelete, onDeleteGroup, onToggleMember, onToggleGroup, onOpenWasteReturn }) {
   const { sites, units, profiles } = data;
   const isGroup = group.length > 1;
   const t = group[0];
@@ -204,7 +268,7 @@ function TodoDetailModal({ group, data, onClose, onSave, onSaveGroup, onDelete, 
     if (isGroup) await onSaveGroup(group, form);
     else await onSave(t, { ...form, photoUrls: photos });
     setSaving(false);
-    onClose();
+    setEditing(false);
   }
 
   async function handleDelete() {
@@ -216,12 +280,20 @@ function TodoDetailModal({ group, data, onClose, onSave, onSaveGroup, onDelete, 
     if (isGroup) await onDeleteGroup(group);
     else await onDelete(t);
     setDeleting(false);
-    onClose();
+    onDeleted();
+  }
+
+  // 완료하기 — 그룹이든 단건이든 한 번에 전원(1명이면 본인) 완료 처리. 목록의 원형 토글과 같은 동작.
+  async function completeNow() {
+    await onToggleGroup(group);
+    setForm((f) => ({ ...f, done: true }));
   }
 
   const siteName = sites.find((s) => s.id === form.siteId)?.name || "현장 없음";
   const unitNo = siteUnits.find((u) => u.id === form.unitId)?.unitNo || "전체(현장 공통)";
   const requesterName = admins.find((p) => p.id === form.requesterId)?.name || t.requestedByName || "-";
+  const effectiveDone = (m) => (wasteReturnPending(m) ? false : m.done);
+  const groupDone = group.every(effectiveDone);
 
   const memberList = (
     <div>
@@ -240,9 +312,34 @@ function TodoDetailModal({ group, data, onClose, onSave, onSaveGroup, onDelete, 
   );
 
   return (
-    <Modal title="할 일 상세내역" onClose={onClose}>
+    <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+        {!editing ? (
+          <>
+            <span className="text-sm font-bold text-slate-700">
+              {SOURCE_LABEL[t.source] ?? t.source} · {groupDone ? "완료된 할 일" : "미완료된 할 일"}
+            </span>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setEditing(true)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50">
+                <Pencil size={15} />
+              </button>
+              <button disabled={deleting} onClick={handleDelete} className="text-[11px] font-bold text-red-500 hover:bg-red-50 disabled:opacity-50 rounded-lg px-2 py-1.5">
+                {deleting ? "삭제 중..." : isGroup ? `전체 삭제 (${group.length}명)` : "삭제"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <button onClick={() => setEditing(false)} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2">취소</button>
+            <button disabled={saving || !form.title.trim()} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2">
+              {saving ? "저장 중..." : "저장"}
+            </button>
+          </>
+        )}
+      </div>
+      <div className="flex-1 overflow-y-auto px-5 py-4">
       {t.reassignRequested && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-2">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
           <p className="text-xs font-bold text-amber-700 mb-1 flex items-center gap-1"><Repeat size={13} strokeWidth={2.5} /> 담당자 재배정 요청됨</p>
           {t.reassignReason && <p className="text-[13px] text-slate-700">사유: {t.reassignReason}</p>}
           {t.reassignTo && <p className="text-[13px] text-slate-700">희망 담당자: <b>{t.reassignTo}</b></p>}
@@ -252,24 +349,30 @@ function TodoDetailModal({ group, data, onClose, onSave, onSaveGroup, onDelete, 
 
       {!editing ? (
         <div>
-          <FieldRow label="구분"><p className="text-sm font-semibold text-slate-700 pt-0.5">{SOURCE_LABEL[t.source] ?? t.source}</p></FieldRow>
-          <FieldRow label="제목"><p className="text-sm font-semibold text-slate-700 pt-0.5">{form.title}</p></FieldRow>
-          <FieldRow label="현장"><p className="text-sm font-semibold text-slate-700 pt-0.5">{siteName}</p></FieldRow>
-          <FieldRow label="호기"><p className="text-sm font-semibold text-slate-700 pt-0.5">{unitNo}</p></FieldRow>
-          <FieldRow label="내용"><p className="text-sm text-slate-700 whitespace-pre-wrap pt-0.5">{form.description || "-"}</p></FieldRow>
-          <FieldRow label="기한"><p className="text-sm font-semibold text-slate-700 pt-0.5">{form.dueDate ? shortDate(form.dueDate) : "없음"}</p></FieldRow>
-          <FieldRow label="요청자"><p className="text-sm font-semibold text-slate-700 pt-0.5">{requesterName}</p></FieldRow>
-          {isGroup ? <FieldRow label="담당자">{memberList}</FieldRow> : (
-            <>
+          <h2 className="text-lg font-bold text-slate-800 mb-1">{form.title}</h2>
+          <p className="text-sm font-semibold text-slate-500 mb-3">{siteName} · {unitNo}</p>
+          <p className="text-sm text-slate-700 whitespace-pre-wrap mb-4">{form.description || "-"}</p>
+          <div className="border-t border-slate-100">
+            <FieldRow label="기한"><p className="text-sm font-semibold text-slate-700 pt-0.5">{form.dueDate ? shortDate(form.dueDate) : "없음"}</p></FieldRow>
+            <FieldRow label="배정일"><p className="text-sm font-semibold text-slate-700 pt-0.5">{shortDate(form.assignedDate)}</p></FieldRow>
+            <FieldRow label="요청자"><p className="text-sm font-semibold text-slate-700 pt-0.5">{requesterName}</p></FieldRow>
+            {isGroup ? <FieldRow label="담당자">{memberList}</FieldRow> : (
               <FieldRow label="담당자"><p className="text-sm font-semibold text-slate-700 pt-0.5">{personOf(data, form.assigneeId, t.assignee)}</p></FieldRow>
-              <FieldRow label="상태"><p className="text-sm font-semibold text-slate-700 pt-0.5">{form.done ? "완료" : "진행"}</p></FieldRow>
-            </>
-          )}
-          <FieldRow label="배정일"><p className="text-sm font-semibold text-slate-700 pt-0.5">{shortDate(form.assignedDate)}</p></FieldRow>
-          {!isGroup && (
-            <FieldRow label="파일첨부">
-              <PhotoGrid urls={photos} cols={4} />
-            </FieldRow>
+            )}
+            {!isGroup && (
+              <FieldRow label="파일첨부">
+                <PhotoGrid urls={photos} cols={4} />
+              </FieldRow>
+            )}
+          </div>
+          {!isGroup && wasteReturnPending(t) ? (
+            <button onClick={() => onOpenWasteReturn(t)} className="w-full mt-4 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-xl py-3">
+              반납확인
+            </button>
+          ) : !isGroup && (
+            <button onClick={completeNow} disabled={groupDone} className="w-full mt-4 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:bg-slate-300 rounded-xl py-3">
+              {groupDone ? "완료됨" : "완료하기"}
+            </button>
           )}
         </div>
       ) : (
@@ -330,25 +433,8 @@ function TodoDetailModal({ group, data, onClose, onSave, onSaveGroup, onDelete, 
           )}
         </div>
       )}
-
-      <div className="flex justify-between mt-4">
-        <button disabled={deleting} onClick={handleDelete} className="text-sm font-bold text-red-600 border border-red-200 disabled:opacity-50 rounded-xl px-5 py-2.5">
-          {deleting ? "삭제 중..." : isGroup ? `전체 삭제 (${group.length}명)` : "삭제"}
-        </button>
-        {!editing ? (
-          <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-5 py-2.5">
-            <Pencil size={14} /> 수정
-          </button>
-        ) : (
-          <div className="flex gap-2">
-            <button onClick={() => setEditing(false)} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-5 py-2.5">취소</button>
-            <button disabled={saving || !form.title.trim()} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
-              저장
-            </button>
-          </div>
-        )}
       </div>
-    </Modal>
+    </div>
   );
 }
 
@@ -509,8 +595,10 @@ export default function TodosAdmin({ data, setData, initialView }) {
   const [view, setView] = useState(initialView ?? "open");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState(null);
-  const [detail, setDetail] = useState(null);
+  // 선택된 항목은 모달이 아니라 오른쪽 패널에 계속 떠 있어야 해서, group 배열 자체가 아니라
+  // groupKeyOf 값만 들고 있다가 매 렌더마다 최신 목록에서 다시 찾는다 — 다른 경로(목록의 원형
+  // 토글 등)로 done이 바뀌어도 패널이 그 변화를 바로 반영한다.
+  const [selectedKey, setSelectedKey] = useState(null);
   const [assigning, setAssigning] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState(null);
 
@@ -541,6 +629,8 @@ export default function TodosAdmin({ data, setData, initialView }) {
     groupsMap.get(key).push(t);
   }
   const groups = [...groupsMap.values()];
+  // 현재 필터·검색에 안 걸리면(예: 완료 처리해서 "미완료" 뷰에서 빠짐) 선택도 자연히 사라진다.
+  const selectedGroup = selectedKey ? groups.find((g) => groupKeyOf(g[0]) === selectedKey) ?? null : null;
 
   const getVal = (group, key) => {
     const t = group[0];
@@ -555,7 +645,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
       default: return "";
     }
   };
-  const sortedGroups = sortRows(groups, sort, getVal);
+  const sortedGroups = sortRows(groups, null, getVal);
 
   async function saveTodoDetail(t, form) {
     const unit = units.find((u) => u.id === form.unitId);
@@ -701,6 +791,14 @@ export default function TodosAdmin({ data, setData, initialView }) {
     setData((prev) => ({ ...prev, todos: prev.todos.map((x) => (ids.includes(x.id) ? { ...x, done } : x)) }));
   }
 
+  // 목록의 원형 토글·상세패널의 "완료하기" 버튼 공용 — 자재/견적처럼 요청 하나를 공유하는
+  // 그룹(group.length > 1)도 한 번에 다 같이 뒤집는다(기존 표 체크박스와 동일 규칙).
+  async function toggleGroupDone(group) {
+    const effectiveDone = (m) => (wasteReturnPending(m) ? false : m.done);
+    const groupDone = group.every(effectiveDone);
+    await Promise.all(group.filter((m) => effectiveDone(m) === groupDone).map((m) => toggle(m)));
+  }
+
   // 담당자를 2명 이상 고르면(AssignTodoModal), DB에 담당자 배열 컬럼이 없어(단일 assignee_id)
   // 각자에게 같은 내용으로 할일을 하나씩 따로 만든다 — 재배정·완료 처리도 사람별로 독립적이어야 하므로
   // 오히려 이 편이 자연스럽다.
@@ -755,12 +853,25 @@ export default function TodosAdmin({ data, setData, initialView }) {
 
   return (
     <div className="max-w-[100rem] mx-auto">
-      <h1 className="text-xl font-extrabold mb-4">할 일 관리</h1>
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-bold text-slate-400">상태</span>
-            <FilterPills
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex" style={{ height: "78vh" }}>
+        {/* 목록 — 검색·필터(상태/구분 드롭다운)까지 전부 이 컬럼 안에 있다: 목록을 거르는
+            조작이라는 게 시각적으로 바로 보이게(예전엔 목록·상세 위에 걸친 별도 툴바였음). */}
+        <div className="w-[340px] shrink-0 border-r border-slate-100 flex flex-col">
+          <div className="px-3.5 pt-3.5 pb-2.5 flex items-center justify-between">
+            <h1 className="text-base font-extrabold text-slate-900">할 일 관리</h1>
+            <button onClick={() => setAssigning(true)} className="flex items-center gap-1 text-xs font-bold text-white bg-blue-700 rounded-lg px-2.5 py-1.5 whitespace-nowrap">
+              <Plus size={13} /> 배정
+            </button>
+          </div>
+          <div className="px-3.5 pb-2.5">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input className={`${inputCls} pl-7 py-1.5 text-xs`} placeholder="내용·현장·담당자 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+          </div>
+          <div className="px-3.5 pb-3 flex items-center gap-1.5">
+            <FilterDropdown
+              label="상태"
               value={view}
               onChange={setView}
               options={[
@@ -769,10 +880,8 @@ export default function TodosAdmin({ data, setData, initialView }) {
                 { value: "reassign", label: "재배정요청", count: todos.filter((t) => t.reassignRequested && !t.done).length },
               ]}
             />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-bold text-slate-400">구분</span>
-            <FilterPills
+            <FilterDropdown
+              label="구분"
               value={sourceFilter}
               onChange={handleSourceFilterChange}
               options={[
@@ -786,84 +895,45 @@ export default function TodosAdmin({ data, setData, initialView }) {
               ]}
             />
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input className={`${inputCls} pl-7 max-w-64`} placeholder="내용·현장·담당자 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <div className="flex-1 overflow-y-auto border-t border-slate-100">
+            {sortedGroups.length === 0 ? (
+              <p className="text-xs text-slate-300 text-center py-10">해당하는 할 일이 없습니다</p>
+            ) : (
+              sortedGroups.map((group) => (
+                <TodoListRow
+                  key={groupKeyOf(group[0])}
+                  group={group}
+                  data={data}
+                  selected={selectedKey === groupKeyOf(group[0])}
+                  onSelect={(g) => setSelectedKey(groupKeyOf(g[0]))}
+                  onToggleGroup={toggleGroupDone}
+                />
+              ))
+            )}
           </div>
-          <button onClick={() => setAssigning(true)} className="flex items-center gap-1.5 text-sm font-bold text-white bg-blue-700 rounded-xl px-4 py-2.5 whitespace-nowrap">
-            <Plus size={15} /> 할 일 배정
-          </button>
         </div>
-      </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-        <table className="w-full min-w-[52rem] text-sm">
-          <thead>
-            <tr className="text-xs text-slate-400 border-b border-slate-100">
-              <th className="pl-5 w-8" />
-              <SortableTh label="구분" sortKey="source" sort={sort} setSort={setSort} />
-              <SortableTh label="현장 · 호기" sortKey="loc" sort={sort} setSort={setSort} />
-              <SortableTh label="할일" sortKey="title" sort={sort} setSort={setSort} />
-              <SortableTh label="담당자" sortKey="person" sort={sort} setSort={setSort} />
-              <SortableTh label="배정일" sortKey="assignedDate" sort={sort} setSort={setSort} />
-              <SortableTh label="기한" sortKey="dueDate" sort={sort} setSort={setSort} />
-              <SortableTh label="상태" sortKey="done" sort={sort} setSort={setSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {sortedGroups.map((group) => {
-              const t = group[0];
-              // 반납확인 할일은 기사가 완료 처리해도(t.done) 관리자가 수량을 확인하기 전까진
-              // 관리자 입장에선 "미완료"다 — 체크박스·행 흐림 표시는 실제 확인 여부(stockConfirmedAt)를 본다.
-              const effectiveDone = (m) => (wasteReturnPending(m) ? false : m.done);
-              const groupDone = group.every(effectiveDone);
-              return (
-              <tr key={t.id} className={`border-b border-slate-50 ${groupDone ? "opacity-50" : ""} cursor-pointer hover:bg-slate-50`} onClick={() => setDetail(group)}>
-                <td className="pl-5 pr-2 py-2.5" onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="checkbox"
-                    checked={groupDone}
-                    onChange={() => group.forEach((m) => { if (effectiveDone(m) !== !groupDone) toggle(m); })}
-                    className="w-4 h-4 rounded border-slate-300 cursor-pointer accent-blue-700"
-                  />
-                </td>
-                <td className="px-3 py-2.5"><StatusBadge tone={t.source === "manual" ? "slate" : "blue"}>{SOURCE_LABEL[t.source] ?? t.source}</StatusBadge></td>
-                <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{locOf(data, t.unitId, t.siteName, t.elevatorNo)}</td>
-                <td className="px-3 py-2.5 font-semibold">{t.title}</td>
-                <td className="px-3 py-2.5">{group.map((m) => personOf(data, m.assigneeId, m.assignee)).join(", ")}</td>
-                <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(t.assignedDate)}</td>
-                <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(t.dueDate)}</td>
-                <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                  {group.length === 1 && wasteReturnPending(t) ? (
-                    <button onClick={() => setConfirmTarget(t)} className="text-xs font-bold text-white bg-blue-700 rounded-lg px-2.5 py-1">반납확인</button>
-                  ) : groupDone ? (
-                    <StatusBadge tone="green">완료</StatusBadge>
-                  ) : (
-                    <StatusBadge tone="amber">진행</StatusBadge>
-                  )}
-                </td>
-              </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        {/* 상세 — 팝업 대신 항상 떠 있는 패널. 선택 없으면 안내만. */}
+        {selectedGroup ? (
+          <DetailPanel
+            key={selectedKey}
+            group={selectedGroup}
+            data={data}
+            onDeleted={() => setSelectedKey(null)}
+            onSave={saveTodoDetail}
+            onSaveGroup={saveGroupDetail}
+            onDelete={deleteTodo}
+            onDeleteGroup={deleteTodoGroup}
+            onToggleMember={toggle}
+            onToggleGroup={toggleGroupDone}
+            onOpenWasteReturn={setConfirmTarget}
+          />
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-sm text-slate-300">왼쪽에서 할 일을 선택하세요</div>
+        )}
       </div>
-      <p className="text-[10px] text-slate-400 mt-2">* 자재·견적 할일의 정상 완료 경로는 기사 비용청구입니다. 체크박스는 관리자 예외 처리용.</p>
+      <p className="text-[10px] text-slate-400 mt-2">* 자재·견적 할일의 정상 완료 경로는 기사 비용청구입니다. 완료하기는 관리자 예외 처리용.</p>
 
-      {detail && (
-        <TodoDetailModal
-          group={detail}
-          data={data}
-          onClose={() => setDetail(null)}
-          onSave={saveTodoDetail}
-          onSaveGroup={saveGroupDetail}
-          onDelete={deleteTodo}
-          onDeleteGroup={deleteTodoGroup}
-          onToggleMember={toggle}
-        />
-      )}
       {assigning && <AssignTodoModal data={data} onClose={() => setAssigning(false)} onCreate={createTodo} />}
       {confirmTarget && (
         <WasteReturnConfirmModal
