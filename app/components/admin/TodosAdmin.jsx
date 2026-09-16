@@ -312,7 +312,7 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onDelete, on
   );
 
   return (
-    <div className="flex-1 flex flex-col min-w-0">
+    <div className="flex flex-col min-w-0 border-l border-slate-100" style={{ flex: 38 }}>
       <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
         {!editing ? (
           <>
@@ -853,10 +853,12 @@ export default function TodosAdmin({ data, setData, initialView }) {
 
   return (
     <div className="max-w-[100rem] mx-auto">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex" style={{ height: "78vh" }}>
+      {/* 카드 테두리·그림자 없이 화면 전체에 꽉 채운다 — 목록·상세 사이 구분은 세로선 하나로만. */}
+      <div className="bg-white flex" style={{ height: "78vh" }}>
         {/* 목록 — 검색·필터(상태/구분 드롭다운)까지 전부 이 컬럼 안에 있다: 목록을 거르는
-            조작이라는 게 시각적으로 바로 보이게(예전엔 목록·상세 위에 걸친 별도 툴바였음). */}
-        <div className="w-[340px] shrink-0 border-r border-slate-100 flex flex-col">
+            조작이라는 게 시각적으로 바로 보이게(예전엔 목록·상세 위에 걸친 별도 툴바였음).
+            상세(38)보다 넓게(62) — 비율 기반이라 창을 넓히면 목록도 같이 넓어진다. */}
+        <div className="flex flex-col" style={{ flex: 62 }}>
           <div className="px-3.5 pt-3.5 pb-2.5 flex items-center justify-between">
             <h1 className="text-base font-extrabold text-slate-900">할 일 관리</h1>
             <button onClick={() => setAssigning(true)} className="flex items-center gap-1 text-xs font-bold text-white bg-blue-700 rounded-lg px-2.5 py-1.5 whitespace-nowrap">
@@ -929,7 +931,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
             onOpenWasteReturn={setConfirmTarget}
           />
         ) : (
-          <div className="flex-1 flex items-center justify-center text-sm text-slate-300">왼쪽에서 할 일을 선택하세요</div>
+          <div className="flex flex-col items-center justify-center text-sm text-slate-300 border-l border-slate-100" style={{ flex: 38 }}>왼쪽에서 할 일을 선택하세요</div>
         )}
       </div>
       <p className="text-[10px] text-slate-400 mt-2">* 자재·견적 할일의 정상 완료 경로는 기사 비용청구입니다. 완료하기는 관리자 예외 처리용.</p>
