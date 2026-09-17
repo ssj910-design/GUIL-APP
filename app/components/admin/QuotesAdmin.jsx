@@ -88,7 +88,8 @@ function quoteStageInfo(q, todos) {
 }
 
 export default function QuotesAdmin({ data, setData }) {
-  const { id: meId, name: meName } = useContext(AdminAuthContext);
+  const { id: meId, name: meName, tier } = useContext(AdminAuthContext);
+  const isSuper = tier === "super";
   const { quoteRequests: allQuoteRequests } = data;
 
   // 알림톡이 실제로 도착했는지 솔라피에 직접 물어봐 반영한다 — 웹훅 결과가 안 올 때가 있어서다.
@@ -427,6 +428,14 @@ export default function QuotesAdmin({ data, setData }) {
             <button onClick={(e) => { e.stopPropagation(); setQuoteSupplyTarget(q); }} className="text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors px-2.5 py-1.5 rounded-lg">
               지급하기
             </button>
+            {/* 승인·자재지급완료 이후 견적서 정정은 재승인·재지급 절차가 다시 필요할 수 있어
+                최고관리자만 — QuoteItemsModal은 이미 진행된 상태를 "작성"으로 되돌리지 않고
+                품목·금액·PDF만 갱신한다. */}
+            {isSuper && (
+              <button onClick={(e) => { e.stopPropagation(); setItemsTarget(q); }} className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-lg">
+                견적서 수정
+              </button>
+            )}
             {q.quotePdfUrl && (
               <a href={q.quotePdfUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs font-bold text-blue-700 border border-blue-200 px-2.5 py-1.5 rounded-lg">
                 PDF 보기
@@ -439,6 +448,11 @@ export default function QuotesAdmin({ data, setData }) {
             <button onClick={(e) => { e.stopPropagation(); setQuoteSupplyTarget(q); }} className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors px-2.5 py-1.5 rounded-lg">
               수정
             </button>
+            {isSuper && (
+              <button onClick={(e) => { e.stopPropagation(); setItemsTarget(q); }} className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-lg">
+                견적서 수정
+              </button>
+            )}
             {q.quotePdfUrl && (
               <a href={q.quotePdfUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs font-bold text-blue-700 border border-blue-200 px-2.5 py-1.5 rounded-lg">
                 PDF 보기

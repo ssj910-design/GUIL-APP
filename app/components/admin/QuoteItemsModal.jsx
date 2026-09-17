@@ -263,7 +263,12 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
       return;
     }
     patch.quote_pdf_url = pdfRes.url;
-    patch.status = "작성";
+    // 최초 작성(요청접수 → 작성)일 때만 상태를 넘긴다 — 이미 승인·자재지급완료까지 진행된
+    // 견적을 최고관리자가 사후 수정할 때는(오탈자·품목 정정 등) 상태를 "작성"으로 되돌리면
+    // 안 되고(재승인·재지급을 처음부터 다시 밟게 됨), 품목·금액·PDF만 갱신하고 진행상태는
+    // 그대로 둔다.
+    const nextStatus = quote.status === "요청접수" ? "작성" : quote.status;
+    patch.status = nextStatus;
 
     const { error: dbError } = await supabase.from("quote_requests").update(patch).eq("id", quote.id);
     if (dbError) {
@@ -275,7 +280,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
     onSaved({
       quoteItems: items, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
       profit: Number(profit) || 0, discountAmount: Number(discountAmount) || 0, vatIncluded, quoteNumber, recipientName, quoteTitle,
-      quoteIssuedDate: quoteDate, quotePdfUrl: pdfRes.url, status: "작성",
+      quoteIssuedDate: quoteDate, quotePdfUrl: pdfRes.url, status: nextStatus,
       recipientEmail: rf.email || null, recipientPhone: rf.phone || null,
       senderCcEmail: rf.senderCcEmail || null, referenceEmail: rf.referenceEmail || null, referencePhone: rf.referencePhone || null,
       noticeMessage: rf.noticeMessage || null, attachmentUrls: rf.attachments,
