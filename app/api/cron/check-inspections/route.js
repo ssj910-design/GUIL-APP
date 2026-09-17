@@ -1,6 +1,8 @@
 // 금일 정기검사 알림 — pg_cron이 매분 호출, 08:00(KST)에만 동작.
-// 오늘이 검사 유효기간 만료일(정기검사일)인 담당현장이 있으면 담당 기사에게 리스트로 알림.
+// 오늘이 검사도래현장 일정(inspections.due_date, 관리자 수기입력)인 담당현장이 있으면 담당 기사에게 리스트로 알림.
 // 없으면 그날은 아무것도 안 보낸다. (기존 D-7 사전예고는 폐지 — 당일 알림으로 대체)
+// 공단 API의 units.inspection_end(검사유효기간)는 관리자가 일정을 등록하지 않아도 채워지므로
+// 알림 기준으로 쓰지 않는다 — 화면(검사관리 > 검사도래현장)과 같은 inspections 테이블만 본다.
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 async function handle(request) {
@@ -23,8 +25,13 @@ async function handle(request) {
       body: JSON.stringify(body),
     }).then((r) => r.ok).catch(() => false);
 
+  const { data: dueInspections } = await db.from("inspections").select("unit_id")
+    .eq("due_date", todayStr).is("result", null).not("unit_id", "is", null);
+  const dueUnitIds = [...new Set((dueInspections ?? []).map((r) => r.unit_id))];
+  if (!dueUnitIds.length) return Response.json({ ok: true, sites: 0 });
+
   const { data: units } = await db.from("units").select("id,site_id,seq")
-    .eq("is_active", true).eq("inspection_end", todayStr);
+    .eq("is_active", true).in("id", dueUnitIds);
   if (!units?.length) return Response.json({ ok: true, sites: 0 });
 
   const siteIds = [...new Set(units.map((u) => u.site_id))];
