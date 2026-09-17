@@ -888,14 +888,14 @@ function ReceivedPaymentsCell({ b, onSaveDate, onSavePayments }) {
     return (
       <span className="inline-flex items-center gap-1.5">
         <EditableDate key={b.receivedDate ?? "unset"} value={b.receivedDate} onCommit={onSaveDate} />
-        <button
+        {receivedStatusOf(b) !== "완납" && <button
           type="button"
           onClick={() => { setRows([{ date: b.receivedDate ?? "", amount: "" }]); setJustAddedIndex(0); setSplitMode(true); }}
           className="text-slate-300 hover:text-blue-600 shrink-0"
           title="분할납부로 나눠 입력"
         >
           <Plus size={12} />
-        </button>
+        </button>}
       </span>
     );
   }
@@ -919,9 +919,12 @@ function ReceivedPaymentsCell({ b, onSaveDate, onSavePayments }) {
           {status} ({receivedTotalOf(b).toLocaleString()}/{billingDueAmount(b).toLocaleString()}원)
         </p>
       )}
-      <button type="button" onClick={addRow} className="text-[11px] font-bold text-blue-600">
-        + 입금 추가
-      </button>
+      {/* 완납이면 더 받을 돈이 없으니 입금 추가를 숨긴다 */}
+      {status !== "완납" && (
+        <button type="button" onClick={addRow} className="text-[11px] font-bold text-blue-600">
+          + 입금 추가
+        </button>
+      )}
     </div>
   );
 }
