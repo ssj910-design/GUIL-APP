@@ -23,7 +23,7 @@ export async function POST(request) {
   if (cert.billingId) {
     // 경로의 v2 = 렌더러 버전 표시. 뷰어는 v2가 아닌 옛 URL을 캐시로 안 쓰고 다시 그린다
     // ("견적서 참조" 건이 합계에 "무상"으로 찍히던 시절 PDF가 그대로 남아 있어서다).
-    const path = `certificates/${cert.billingId}/v2/${Date.now()}.pdf`;
+    const path = `certificates/${cert.billingId}/v3/${Date.now()}.pdf`;
     const { error: uploadError } = await supabase.storage
       .from("photos")
       .upload(path, Buffer.from(bytes), { contentType: "application/pdf", upsert: true });
