@@ -311,6 +311,13 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
   const siteName = sites.find((s) => s.id === form.siteId)?.name || "현장 없음";
   const unitNo = siteUnits.find((u) => u.id === form.unitId)?.unitNo || "전체(현장 공통)";
   const requesterName = admins.find((p) => p.id === form.requesterId)?.name || t.requestedByName || "-";
+  // 자재·견적 지급 때 올린 사진은 할일이 아니라 요청(material/quote_requests.supply_photo_urls)에
+  // 저장된다 — 기사 앱 할일 상세(TodoTab getSupplyPhotos)와 같은 기준으로 가져와 보여준다.
+  const supplyPhotos = t.source === "quote"
+    ? (data.quoteRequests ?? []).find((q) => q.id === t.quoteRequestId)?.supplyPhotoUrls ?? []
+    : t.source === "material"
+      ? (data.materialRequests ?? []).find((r) => r.id === t.materialRequestId)?.supplyPhotoUrls ?? []
+      : [];
   const effectiveDone = (m) => (wasteReturnPending(m) ? false : m.done);
   const groupDone = group.every(effectiveDone);
 
@@ -377,6 +384,11 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
             <FieldRow label="요청자"><p className="text-sm font-semibold text-slate-700 pt-0.5">{requesterName}</p></FieldRow>
             {isGroup ? <FieldRow label="담당자">{memberList}</FieldRow> : (
               <FieldRow label="담당자"><p className="text-sm font-semibold text-slate-700 pt-0.5">{personOf(data, t.assigneeId, t.assignee)}</p></FieldRow>
+            )}
+            {supplyPhotos.length > 0 && (
+              <FieldRow label="지급사진">
+                <PhotoGrid urls={supplyPhotos} cols={4} />
+              </FieldRow>
             )}
             {!isGroup && (
               <FieldRow label="파일첨부">
