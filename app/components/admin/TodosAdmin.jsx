@@ -8,7 +8,8 @@ import { Plus, Search, Repeat, Pencil, ChevronDown, Check } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto } from "@/lib/photos";
 import { confirmAsync } from "@/app/components/ConfirmHost";
-import { mapInventoryStockMovement } from "@/lib/mappers";
+import { mapInventoryStockMovement, mapTodo } from "@/lib/mappers";
+import { notify } from "@/lib/push";
 import { TODAY_STR } from "@/lib/constants";
 import { addDays, shortDate } from "@/lib/utils";
 import {
@@ -186,6 +187,14 @@ function groupKeyOf(t) {
   return `solo:${t.id}`;
 }
 
+// 담당자를 여러 명으로 늘릴 수 있는 할일 — 새로 만든 담당자 행이 groupKeyOf로 같은 건에 계속
+// 묶여야 한다. 요청 연결이 없는 검사보완·자체점검지적·반납 등(1건짜리)은 담당자 교체만 된다.
+function canHaveMultipleAssignees(t) {
+  return (t.source === "quote" && !!t.quoteRequestId)
+    || (t.source === "material" && !!t.materialRequestId)
+    || (t.source === "manual" && typeof t.id === "string" && /^todo-manual-\d+-\d+$/.test(t.id));
+}
+
 // 목록 한 줄 — 완료 토글(원)은 그룹 전원에게 같이 적용한다(기존 표의 체크박스와 동일 규칙).
 function TodoListRow({ group, data, selected, onSelect, onToggleGroup }) {
   const t = group[0];
@@ -220,10 +229,11 @@ function TodoListRow({ group, data, selected, onSelect, onToggleGroup }) {
 // 입력 폼이 뜬다. 담당자 여러 명(그룹)의 완료 체크리스트는 "필드 수정"이 아니라 그때그때
 // 처리하는 상태 액션이라 읽기전용/수정 여부와 무관하게 항상 조작 가능하게 둔다. 팝업 모달이
 // 아니라 목록 오른쪽에 항상 떠 있는 패널이라 onClose 대신 onDeleted(삭제 시 선택 해제)를 받는다.
-function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onDelete, onDeleteGroup, onToggleMember, onToggleGroup, onOpenWasteReturn }) {
+function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssignees, onDelete, onDeleteGroup, onToggleMember, onToggleGroup, onOpenWasteReturn }) {
   const { sites, units, profiles } = data;
   const isGroup = group.length > 1;
   const t = group[0];
+  const multi = canHaveMultipleAssignees(t);
   // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 관리자가 자재담당자에게도 배정할 수 있어야 한다.
   const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다
   const admins = profiles.filter((p) => p.role === "admin" && p.is_active !== false);
@@ -236,6 +246,7 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onDelete, on
     siteId: initialSiteId,
     unitId: t.unitId ?? "",
     assigneeId: t.assigneeId ?? "",
+    assigneeIds: group.map((m) => m.assigneeId).filter(Boolean),
     requesterId: t.requestedById ?? "",
     assignedDate: t.assignedDate ?? "",
     dueDate: t.dueDate ?? "",
@@ -266,9 +277,17 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onDelete, on
     if (!form.title.trim()) return;
     setSaving(true);
     if (isGroup) await onSaveGroup(group, form);
-    else await onSave(t, { ...form, photoUrls: photos });
+    // 여러 명 가능한 할일은 담당자 구성을 아래 onChangeAssignees가 따로 처리한다(여기선 담당자 유지).
+    else await onSave(t, { ...form, assigneeId: multi ? (t.assigneeId ?? "") : (form.assigneeIds[0] ?? ""), photoUrls: photos });
+    if (multi) await onChangeAssignees(group, form.assigneeIds);
     setSaving(false);
     setEditing(false);
+  }
+
+  // 이미 완료한 담당자를 빼면 그 사람의 완료 기록(행)이 지워지므로 막는다.
+  function removeAssignee(id) {
+    if (group.some((m) => m.assigneeId === id && m.done)) { alert("이미 완료한 담당자는 뺄 수 없습니다."); return; }
+    setForm((f) => ({ ...f, assigneeIds: f.assigneeIds.filter((x) => x !== id) }));
   }
 
   async function handleDelete() {
@@ -307,7 +326,7 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onDelete, on
           </label>
         ))}
       </div>
-      <p className="text-[11px] text-slate-400 mt-1.5">담당자 구성(추가·제외) 변경은 견적관리의 지급완료 처리 화면에서 하세요. 1명만 완료해도 전원 완료로 처리됩니다.</p>
+      <p className="text-[11px] text-slate-400 mt-1.5">담당자 추가·제외는 연필(수정) 버튼에서 할 수 있습니다. 1명만 완료해도 전원 완료로 처리됩니다.</p>
     </div>
   );
 
@@ -331,7 +350,7 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onDelete, on
         ) : (
           <>
             <button onClick={() => setEditing(false)} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2">취소</button>
-            <button disabled={saving || !form.title.trim()} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2">
+            <button disabled={saving || !form.title.trim() || (multi && form.assigneeIds.length === 0)} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2">
               {saving ? "저장 중..." : "저장"}
             </button>
           </>
@@ -407,21 +426,29 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onDelete, on
               placeholder="관리자 이름 검색"
             />
           </FieldRow>
-          {isGroup ? <FieldRow label="담당자">{memberList}</FieldRow> : (
-            <>
-              <FieldRow label="담당자">
-                <select className={inputCls} value={form.assigneeId} onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}>
-                  <option value="">미배정</option>
-                  {engineers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </FieldRow>
-              <FieldRow label="상태">
-                <select className={inputCls} value={form.done ? "done" : "open"} onChange={(e) => setForm({ ...form, done: e.target.value === "done" })}>
-                  <option value="open">진행</option>
-                  <option value="done">완료</option>
-                </select>
-              </FieldRow>
-            </>
+          {/* 할일 배정(AssignTodoModal)과 같은 이름 검색·태그 방식 — 여러 명 가능한 할일은 추가·제외,
+              1건짜리 할일(검사보완·반납 등)은 새로 고르면 교체된다. */}
+          <FieldRow label="담당자">
+            <PersonPicker
+              candidates={engineers}
+              selectedIds={form.assigneeIds}
+              onAdd={(id) => setForm((f) => ({ ...f, assigneeIds: multi ? [...f.assigneeIds, id] : [id] }))}
+              onRemove={removeAssignee}
+              placeholder="이름 검색으로 추가"
+            />
+            <p className="text-[11px] text-slate-400 mt-1.5">
+              {multi
+                ? "추가한 담당자에게도 같은 할일이 생기고 알림이 갑니다. 이미 완료한 담당자는 뺄 수 없습니다."
+                : "이 할일은 담당자 1명만 지정할 수 있습니다 (새로 고르면 교체)."}
+            </p>
+          </FieldRow>
+          {!isGroup && (
+            <FieldRow label="상태">
+              <select className={inputCls} value={form.done ? "done" : "open"} onChange={(e) => setForm({ ...form, done: e.target.value === "done" })}>
+                <option value="open">진행</option>
+                <option value="done">완료</option>
+              </select>
+            </FieldRow>
           )}
           <FieldRow label="배정일">
             <input type="date" className={inputCls} value={form.assignedDate} onChange={(e) => setForm({ ...form, assignedDate: e.target.value })} />
@@ -708,6 +735,72 @@ export default function TodosAdmin({ data, setData, initialView }) {
     }));
   }
 
+  // 담당자 구성 변경(추가·제외·교체) — 빠진 사람과 새 사람을 짝지어 기존 행의 담당자만 바꾸고,
+  // 남는 빠진 사람 행은 삭제, 남는 새 사람은 기존 행을 복제해 새로 만든다. 새 행 id는 목록에서
+  // 같은 건으로 계속 묶이도록(groupKeyOf) 출처별 규칙을 따른다. 새로 배정된 사람에게만 알림.
+  async function changeAssignees(group, assigneeIds) {
+    const removed = group.filter((m) => m.assigneeId && !assigneeIds.includes(m.assigneeId));
+    const addedIds = assigneeIds.filter((id) => !group.some((m) => m.assigneeId === id));
+    if (!removed.length && !addedIds.length) return;
+    const nameOf = (id) => profiles.find((p) => p.id === id)?.name ?? null;
+    const clearReassign = { reassign_requested: false, reassign_reason: null, reassign_to: null };
+    const swaps = removed.slice(0, addedIds.length).map((m, i) => ({ m, assigneeId: addedIds[i] }));
+    const toDelete = removed.slice(addedIds.length);
+    const toAdd = addedIds.slice(removed.length);
+
+    for (const { m, assigneeId } of swaps) {
+      const { error } = await supabase.from("todos").update({ assignee: nameOf(assigneeId), assignee_id: assigneeId, ...clearReassign }).eq("id", m.id);
+      if (error) { alert("담당자 변경 실패: " + error.message); return; }
+    }
+    if (toDelete.length) {
+      const { error } = await supabase.from("todos").delete().in("id", toDelete.map((m) => m.id));
+      if (error) { alert("담당자 제외 실패: " + error.message); return; }
+    }
+    let insertedRows = [];
+    if (toAdd.length) {
+      // 사람별 값(완료·청구금액·재고확인·재배정 요청)은 비우고 나머지(제목·현장·기한·내용·첨부 등)는 그대로 복제.
+      const base = group.find((m) => !m.done) ?? group[0];
+      const { data: baseRow, error: baseError } = await supabase.from("todos").select("*").eq("id", base.id).single();
+      if (baseError) { alert("담당자 추가 실패: " + baseError.message); return; }
+      const { created_at: _createdAt, ...copy } = baseRow;
+      const manualPrefix = base.id.replace(/-\d+$/, "");
+      let nextIdx = Math.max(...group.map((m) => Number(m.id.match(/-(\d+)$/)?.[1] ?? 0))) + 1;
+      const rows = toAdd.map((assigneeId) => ({
+        ...copy,
+        id: base.source === "manual"
+          ? `${manualPrefix}-${nextIdx++}`
+          : `todo-${base.source}-${base.quoteRequestId ?? base.materialRequestId}-${crypto.randomUUID()}`,
+        assignee: nameOf(assigneeId), assignee_id: assigneeId,
+        done: false, billing_amount: null, billing_part: null, billing_part_rows: null, stock_confirmed_at: null,
+        ...clearReassign,
+      }));
+      const { data: inserted, error } = await supabase.from("todos").insert(rows).select();
+      if (error) { alert("담당자 추가 실패: " + error.message); return; }
+      insertedRows = inserted ?? [];
+    }
+
+    const swapTo = new Map(swaps.map(({ m, assigneeId }) => [m.id, assigneeId]));
+    const deletedIds = new Set(toDelete.map((m) => m.id));
+    setData((prev) => ({
+      ...prev,
+      todos: [
+        ...insertedRows.map(mapTodo),
+        ...prev.todos.filter((x) => !deletedIds.has(x.id)).map((x) => (swapTo.has(x.id)
+          ? { ...x, assignee: nameOf(swapTo.get(x.id)), assigneeId: swapTo.get(x.id), reassignRequested: false, reassignReason: null, reassignTo: null }
+          : x)),
+      ],
+    }));
+    const newlyAssigned = [...swaps.map(({ m, assigneeId }) => ({ id: m.id, assigneeId })), ...insertedRows.map((r) => ({ id: r.id, assigneeId: r.assignee_id }))];
+    for (const n of newlyAssigned) {
+      notify("todo_assigned", {
+        profileIds: [n.assigneeId],
+        title: "할 일이 배정되었습니다",
+        body: `${group[0].siteName ? `${group[0].siteName} · ` : ""}${group[0].title}`,
+        url: `/?openTodo=${n.id}`,
+      });
+    }
+  }
+
   // 할 일 삭제 — 확인 대화상자는 TodoDetailModal에서 이미 거쳤다.
   async function deleteTodo(t) {
     const { error } = await supabase.from("todos").delete().eq("id", t.id);
@@ -926,6 +1019,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
             onDeleted={() => setSelectedKey(null)}
             onSave={saveTodoDetail}
             onSaveGroup={saveGroupDetail}
+            onChangeAssignees={changeAssignees}
             onDelete={deleteTodo}
             onDeleteGroup={deleteTodoGroup}
             onToggleMember={toggle}
