@@ -376,7 +376,7 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
             <FieldRow label="배정일"><p className="text-sm font-semibold text-slate-700 pt-0.5">{shortDate(form.assignedDate)}</p></FieldRow>
             <FieldRow label="요청자"><p className="text-sm font-semibold text-slate-700 pt-0.5">{requesterName}</p></FieldRow>
             {isGroup ? <FieldRow label="담당자">{memberList}</FieldRow> : (
-              <FieldRow label="담당자"><p className="text-sm font-semibold text-slate-700 pt-0.5">{personOf(data, form.assigneeId, t.assignee)}</p></FieldRow>
+              <FieldRow label="담당자"><p className="text-sm font-semibold text-slate-700 pt-0.5">{personOf(data, t.assigneeId, t.assignee)}</p></FieldRow>
             )}
             {!isGroup && (
               <FieldRow label="파일첨부">
