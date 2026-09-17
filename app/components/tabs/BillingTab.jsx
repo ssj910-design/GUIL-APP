@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { Receipt, Check, Search, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnitList, handlePhoneInputChange, freeReasonLabel, quoteGrandTotal, quoteMaterialItems, shortDate } from "@/lib/utils";
+import { siteUnitList, handlePhoneInputChange, freeReasonLabel, quoteGrandTotal, quoteMaterialItems, shortDate, formatUnitLabel } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
 import { isVideoUrl } from "@/lib/photos";
 import { PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink, Sheet, PhotoLightbox, VideoThumb } from "@/app/components/ui";
@@ -562,7 +562,8 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                 >
                   <span className="min-w-0">
                     <span className="block text-sm font-bold text-slate-800 truncate">
-                      {t.siteName}{t.elevatorNo ? ` · ${t.elevatorNo}` : ""}
+                      {/* 여러 호기를 한 건으로 묶은 할일은 호기 목록 전체를 보여준다 */}
+                      {t.siteName}{(t.elevatorNos?.length || t.elevatorNo) ? ` · ${formatUnitLabel(t.elevatorNos?.length ? t.elevatorNos : t.elevatorNo)}` : ""}
                     </span>
                     <span className="block text-[11px] text-slate-400 truncate">{t.part ?? t.title}</span>
                   </span>

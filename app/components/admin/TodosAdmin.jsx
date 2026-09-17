@@ -11,7 +11,7 @@ import { confirmAsync } from "@/app/components/ConfirmHost";
 import { mapInventoryStockMovement, mapTodo } from "@/lib/mappers";
 import { notify } from "@/lib/push";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, shortDate } from "@/lib/utils";
+import { addDays, shortDate, formatUnitLabel } from "@/lib/utils";
 import {
   locOf, personOf, Modal, sortRows, inputCls, AdminAuthContext, PhotoGrid, SiteAutocomplete,
 } from "@/app/components/admin/adminShared";
@@ -195,6 +195,16 @@ function canHaveMultipleAssignees(t) {
     || (t.source === "manual" && typeof t.id === "string" && /^todo-manual-\d+-\d+$/.test(t.id));
 }
 
+// 할일의 "현장 · 호기" — 여러 호기를 한 건으로 묶은 자재·견적 할일은 unit_id가 대표 호기 하나뿐이라
+// 그대로 쓰면 "1호기"로만 보인다. 호기 목록(elevator_nos)이 2개 이상이면 그걸 보여준다.
+function todoLocOf(data, t) {
+  if (t.elevatorNos?.length > 1) {
+    const siteName = data.sites.find((s) => s.id === data.units.find((u) => u.id === t.unitId)?.siteId)?.name ?? t.siteName ?? "-";
+    return `${siteName} · ${formatUnitLabel(t.elevatorNos)}`;
+  }
+  return locOf(data, t.unitId, t.siteName, t.elevatorNo);
+}
+
 // 목록 한 줄 — 완료 토글(원)은 그룹 전원에게 같이 적용한다(기존 표의 체크박스와 동일 규칙).
 function TodoListRow({ group, data, selected, onSelect, onToggleGroup }) {
   const t = group[0];
@@ -215,7 +225,7 @@ function TodoListRow({ group, data, selected, onSelect, onToggleGroup }) {
       </button>
       <div className="min-w-0 flex-1">
         <p className={`text-sm font-bold truncate ${groupDone ? "line-through text-slate-400" : "text-slate-800"}`}>{t.title}</p>
-        <p className="text-[11px] text-slate-400 truncate">{locOf(data, t.unitId, t.siteName, t.elevatorNo)}</p>
+        <p className="text-[11px] text-slate-400 truncate">{todoLocOf(data, t)}</p>
         <p className="text-[11px] text-slate-400 mt-0.5 truncate">
           기한 : <span className={`font-semibold ${overdue ? "text-red-600" : "text-slate-600"}`}>{t.dueDate ? shortDate(t.dueDate) : "없음"}</span>
           {" · "}담당자 : {group.map((m) => personOf(data, m.assigneeId, m.assignee)).join(", ")}
@@ -309,7 +319,10 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
   }
 
   const siteName = sites.find((s) => s.id === form.siteId)?.name || "현장 없음";
-  const unitNo = siteUnits.find((u) => u.id === form.unitId)?.unitNo || "전체(현장 공통)";
+  // 여러 호기 할일은 호기를 따로 바꾸지 않은 동안 호기 목록 전체를 보여준다(todoLocOf와 같은 기준).
+  const unitNo = t.elevatorNos?.length > 1 && form.unitId === (t.unitId ?? "")
+    ? formatUnitLabel(t.elevatorNos)
+    : siteUnits.find((u) => u.id === form.unitId)?.unitNo || "전체(현장 공통)";
   const requesterName = admins.find((p) => p.id === form.requesterId)?.name || t.requestedByName || "-";
   // 자재·견적 지급 때 올린 사진은 할일이 아니라 요청(material/quote_requests.supply_photo_urls)에
   // 저장된다 — 기사 앱 할일 상세(TodoTab getSupplyPhotos)와 같은 기준으로 가져와 보여준다.
@@ -646,7 +659,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
   // "반납확인대기"는 완료된(done=true) 할일을 보여주는 큐라, 위 상태(진행/완료) 필터를 그대로
   // 태우면 기본값인 "미완료" 뷰에서 항상 0건으로 보인다 — 이 필터만 view를 건너뛰고 todos 전체에서 뽑는다.
   const rows = (sourceFilter === "waste_return" ? todos.filter(wasteReturnPending) : viewFiltered.filter((t) => sourceFilter === "all" || t.source === sourceFilter))
-    .filter((t) => !q || (t.description ?? "").toLowerCase().includes(q) || (t.title ?? "").toLowerCase().includes(q) || locOf(data, t.unitId, t.siteName, t.elevatorNo).toLowerCase().includes(q) || personOf(data, t.assigneeId, t.assignee).toLowerCase().includes(q));
+    .filter((t) => !q || (t.description ?? "").toLowerCase().includes(q) || (t.title ?? "").toLowerCase().includes(q) || todoLocOf(data, t).toLowerCase().includes(q) || personOf(data, t.assigneeId, t.assignee).toLowerCase().includes(q));
 
   // "반납확인대기" 필터를 고르면 "상태" 필터도 전체로 맞춰준다 — 안 그러면 기본값 "미완료"가
   // 계속 선택된 채로 보여, 완료된 항목들이 나오는 게 시각적으로 앞뒤가 안 맞아 보인다.
@@ -676,7 +689,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
     switch (key) {
       case "source": return SOURCE_LABEL[t.source] ?? t.source ?? "";
       case "title": return t.title ?? "";
-      case "loc": return locOf(data, t.unitId, t.siteName, t.elevatorNo);
+      case "loc": return todoLocOf(data, t);
       case "person": return group.map((m) => personOf(data, m.assigneeId, m.assignee)).join(", ");
       case "assignedDate": return t.assignedDate ?? "";
       case "dueDate": return t.dueDate ?? "";
