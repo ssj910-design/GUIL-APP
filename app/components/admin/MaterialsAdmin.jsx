@@ -13,6 +13,7 @@ import { TODAY_STR } from "@/lib/constants";
 import { locOf, addressOf, personOf, assigneeNames, billingCompleteFor, StatusBadge, AdminTable, inputCls, Modal, PhotoGrid } from "@/app/components/admin/adminShared";
 
 const MATERIAL_TONE = { 승인대기: "blue", 지급완료: "green", 반려: "red", 교체완료: "indigo" };
+const MATERIAL_REJECT_REASONS = ["중복 요청", "현장 확인 필요", "내용 부족", "재고 보유"];
 
 // 부품별 금액 필수 입력값을 지급 문자열("부품명(₩1,000)")에서 되찾아 수정 모달 기본값으로 쓴다.
 function parseAmountFromBillingPart(billingPart, part) {
@@ -30,6 +31,7 @@ export default function MaterialsAdmin({ data, setData }) {
   // 가려 안 보일 수 있음) "됐나?" 싶은 게 당연하다 — 처리 직후 잠깐 토스트를 띄운다.
   const [toast, setToast] = useState(null);
   const [detailTarget, setDetailTarget] = useState(null); // 상세내역 보는 중인 자재신청
+  const [rejectTarget, setRejectTarget] = useState(null); // 반려 사유 입력 중인 자재신청
   // todos.billing_part_rows 컬럼 존재 여부 — 마이그레이션 112 실행 전엔 컬럼이 없어, 있을 때만
   // 부품별 구조화 행(이름·수량·금액)을 같이 쓴다.
   const billingPartRowsReady = (data.todos ?? []).some((t) => t.billingPartRows !== undefined);
@@ -41,6 +43,29 @@ export default function MaterialsAdmin({ data, setData }) {
     m.status !== "취소" &&
     (!query || locOf(data, m.unitId, m.siteName, m.elevatorNo).toLowerCase().includes(query) || (m.part ?? "").toLowerCase().includes(query) || personOf(data, m.requesterId, m.engineer).toLowerCase().includes(query))
   );
+
+  // 지급 전(승인대기) 신청만 반려한다 — 지급 후 잘못 나간 건은 기사가 모바일에서 반려(재지급 흐름)하므로
+  // 그 목록("기사 반려")과 섞이지 않게 지급 전 건으로 한정한다.
+  async function handleMaterialReject(request, reason) {
+    const { data: rows, error } = await supabase.from("material_requests")
+      .update({ status: "반려", reject_reason: reason, rejected_date: TODAY_STR })
+      .eq("id", request.id).eq("status", "승인대기").select("id");
+    if (error) { alert("반려 처리 실패: " + error.message); return false; }
+    if (!rows?.length) { alert("그 사이 신청 상태가 바뀌었습니다. 새로고침 후 다시 확인해주세요."); return false; }
+    if (request.requesterId) {
+      notify("material_rejected", {
+        profileIds: [request.requesterId],
+        title: "자재 신청이 반려됐어요",
+        body: `${request.siteName ?? ""} · ${request.part} — ${reason}`,
+        url: "/",
+      });
+    }
+    setData((prev) => ({
+      ...prev,
+      materialRequests: prev.materialRequests.map((r) => (r.id === request.id ? { ...r, status: "반려", rejectReason: reason, rejectedDate: TODAY_STR } : r)),
+    }));
+    return true;
+  }
 
   async function handleMaterialSupplyComplete(request, { assigneeId, billingPart, billingAmount, billingPartRows, photoUrls }) {
     const engineer = (data.profiles ?? []).find((p) => p.id === assigneeId);
@@ -195,7 +220,7 @@ export default function MaterialsAdmin({ data, setData }) {
         ))}
       </AdminTable>
       {materialRequests.length === 0 && <p className="text-xs text-slate-400 text-center py-6">해당하는 건이 없습니다</p>}
-      <p className="text-[10px] text-slate-400 mt-2">* 반려 처리는 기사 전용 기능으로, 모바일 관리자 모드에서 진행합니다.</p>
+      <p className="text-[10px] text-slate-400 mt-2">* 지급 전 신청은 상세내역에서 반려할 수 있습니다. 지급 후 잘못 나간 자재의 반려는 기사가 모바일에서 진행합니다.</p>
 
       {payTarget && (
         <MaterialSupplyModal
@@ -215,7 +240,21 @@ export default function MaterialsAdmin({ data, setData }) {
       )}
 
       {detailTarget && (
-        <MaterialDetailModal request={detailTarget} data={data} onClose={() => setDetailTarget(null)} />
+        <MaterialDetailModal request={detailTarget} data={data} onClose={() => setDetailTarget(null)} onReject={() => setRejectTarget(detailTarget)} />
+      )}
+
+      {rejectTarget && (
+        <MaterialRejectModal
+          request={rejectTarget}
+          onClose={() => setRejectTarget(null)}
+          onSubmit={async (reason) => {
+            if (!(await handleMaterialReject(rejectTarget, reason))) return;
+            setRejectTarget(null);
+            setDetailTarget(null);
+            setToast("반려 처리했습니다.");
+            setTimeout(() => setToast(null), 1800);
+          }}
+        />
       )}
 
       {toast && (
@@ -346,7 +385,39 @@ function MaterialSupplyModal({ request, profiles, todos, onClose, onSubmit }) {
 // 청구내역(BillingsAdmin.jsx의 BillingDetailModal)과 동일한 구성 —
 // 라벨/값 그리드 + 사진 그리드. 실제 수정(담당기사/금액/사진)은 목록의
 // "지급완료 처리"/"수정" 버튼이 여는 전용 모달에서 하므로 여기는 읽기 전용이다.
-function MaterialDetailModal({ request: r, data, onClose }) {
+function MaterialRejectModal({ request, onClose, onSubmit }) {
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function submit() {
+    if (!reason.trim() || saving) return;
+    setSaving(true);
+    await onSubmit(reason.trim());
+    setSaving(false);
+  }
+
+  return (
+    <Modal title={`반려 — ${request.siteName ?? ""} · ${request.part}`} onClose={onClose}>
+      <p className="text-xs text-slate-500 mb-3">신청 기사에게 사유와 함께 알림이 갑니다.</p>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {MATERIAL_REJECT_REASONS.map((r) => (
+          <button key={r} onClick={() => setReason(r)} className={`text-xs font-bold px-3 py-1.5 rounded-full border ${reason === r ? "bg-red-600 text-white border-red-600" : "bg-white text-slate-500 border-slate-200"}`}>
+            {r}
+          </button>
+        ))}
+      </div>
+      <textarea className={inputCls} rows={3} placeholder="사유 (직접 입력 가능)" value={reason} onChange={(e) => setReason(e.target.value)} />
+      <div className="flex justify-end gap-2 mt-4">
+        <button onClick={onClose} className="text-sm font-bold text-slate-500 px-4 py-2 rounded-lg border border-slate-200">닫기</button>
+        <button onClick={submit} disabled={!reason.trim() || saving} className="text-sm font-bold text-white bg-red-600 hover:bg-red-700 disabled:bg-slate-300 px-4 py-2 rounded-lg">
+          {saving ? "처리 중..." : "반려하기"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function MaterialDetailModal({ request: r, data, onClose, onReject }) {
   const assignee = assigneeNames(data, "materialRequestId", r.id);
   const displayStatus = r.status === "지급완료"
     ? (billingCompleteFor(data.todos ?? [], "materialRequestId", r.id) ? "교체완료" : "지급완료")
@@ -394,6 +465,13 @@ function MaterialDetailModal({ request: r, data, onClose }) {
         <div>
           <p className="text-xs font-bold text-slate-500 mb-2">지급 사진 ({r.supplyPhotoUrls.length}장)</p>
           <PhotoGrid urls={r.supplyPhotoUrls} cols={6} />
+        </div>
+      )}
+      {r.status === "승인대기" && (
+        <div className="flex justify-end mt-4">
+          <button onClick={onReject} className="text-xs font-bold text-red-600 border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg">
+            반려
+          </button>
         </div>
       )}
     </Modal>

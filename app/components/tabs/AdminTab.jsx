@@ -1358,7 +1358,8 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
   }, [quoteFocusId, isMaterialTier]);
 
   const materialPending = materialRequests.filter((r) => r.status === "승인대기");
-  const materialRejected = materialRequests.filter((r) => r.status === "반려");
+  // 기사 반려(지급 후 반려)만 — 관리자웹에서 지급 전에 반려한 건(suppliedDate 없음)은 재지급 대상이 아니다.
+  const materialRejected = materialRequests.filter((r) => r.status === "반려" && r.suppliedDate);
   const supplied = materialRequests.filter((r) => r.status === "지급완료");
   // 기사가 취소한 건(취소)·관리자가 반려/취소한 건(반려)은 진행 목록에서 뺀다.
   const quoteActive = quoteRequests.filter((q) => !["자재지급완료", "취소", "반려"].includes(q.status));
