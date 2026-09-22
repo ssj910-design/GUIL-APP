@@ -1182,8 +1182,9 @@ ${error.message ?? ""}`); return false; }
     if (refusingFailureIdsRef.current.has(failure.id)) return; // 처리 중 중복 클릭 무시
     refusingFailureIdsRef.current.add(failure.id);
     try {
-      const reason = window.prompt("출동을 거부하고 미배정으로 돌립니다.\n사유를 입력하세요 (선택)");
+      const reason = window.prompt("출동을 거부하고 미배정으로 돌립니다.\n사유를 입력하세요 (필수)");
       if (reason === null) return; // 취소
+      if (!reason.trim()) { alert("사유를 입력해주세요"); return; }
       // 출동 후 취소도 지원 — 출동 기록을 초기화하고 미처리·미배정으로 되돌린다 (완료 건은 불가).
       // escalation은 handleFailureResult의 지원요청·운행정지와 같은 컬럼·의미로 재사용한다 —
       // 그래야 FailureMiniCard 등 기존 카드의 "지원미배정" 강조 배지가 그대로 뜬다.
