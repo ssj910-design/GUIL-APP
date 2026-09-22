@@ -37,13 +37,13 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
   const isFlagged = i.result === "conditional" || i.result === "fail";
 
   return (
-    <tr className="border-b border-slate-50">
+    <tr className={`border-b border-slate-50 ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`} onClick={clickable ? () => onOpenFail(i) : undefined}>
       <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{i.siteName} · {i.unitLabel}{i.govNo ? `(${i.govNo})` : ""}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{i.unitKind || "-"}</td>
-      <td className="px-3 py-2.5 whitespace-nowrap">
+      <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
         <EditableSelect value={i.manualType || ""} options={INSPECTION_TYPES} onCommit={(v) => v && save({ type: v })} />
       </td>
-      <td className="px-3 py-2.5 whitespace-nowrap">
+      <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
         <div className="flex gap-3 items-center">
           <EditableDate value={i.dueDate} onCommit={(v) => save({ date: v ?? "" })} emptyText="미입력" />
           <EditableText value={cur.time} inputType="time" onCommit={(v) => save({ time: v })} emptyText="시간" />
@@ -54,21 +54,14 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
           </p>
         )}
       </td>
-      {/* 직전검사 결과 — 실시간 연동 호기는 현재 검사유효기간을 만든 검사의 판정(공단 API 캐시).
-          조건부합격·불합격이면 배지를 눌러 부적합 내용을 본다. */}
+      {/* 직전검사 결과 — 실시간 연동 호기는 현재 검사유효기간을 만든 검사의 판정(공단 API 캐시). */}
       <td className="px-3 py-2.5 whitespace-nowrap">
-        {!i.result ? (
-          <span className="text-slate-400">-</span>
-        ) : clickable ? (
-          <button type="button" onClick={() => onOpenFail(i)} className="inline-flex items-center gap-1.5" title="부적합 내용 보기">
-            <Badge result={i.result} />
-            <span className="text-[10px] font-semibold text-blue-600 underline">내용 보기</span>
-          </button>
-        ) : (
-          <Badge result={i.result} />
-        )}
+        {i.result ? <Badge result={i.result} /> : <span className="text-slate-400">-</span>}
       </td>
-      <td className="px-3 py-2.5 text-xs text-slate-500 max-w-[10rem] truncate" title={i.notes || ""}>{i.notes || "-"}</td>
+      <td className="px-3 py-2.5 text-xs text-slate-500 max-w-[10rem] truncate" title={i.notes || ""}>
+        {i.notes || "-"}
+        {clickable && <span className="ml-2 text-[10px] text-blue-600 font-semibold">클릭해서 부적합 상세</span>}
+      </td>
     </tr>
   );
 }
