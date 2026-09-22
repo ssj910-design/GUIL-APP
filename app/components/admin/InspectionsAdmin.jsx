@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { unitsToInspections, shortDate, groupBySite } from "@/lib/utils";
 import { mapInspection } from "@/lib/mappers";
-import { Badge, DDay } from "@/app/components/ui";
+import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { useInspectionFailItems } from "@/app/hooks/useLiveInspections";
 import { StatusBadge, AdminTable, FilterPills, SortableTh, sortRows, inputCls, Modal, EditableDate, EditableSelect, EditableText } from "@/app/components/admin/adminShared";
@@ -28,16 +28,14 @@ const INSPECTION_TYPES = ["정기검사", "정밀검사", "수시검사"];
 // 부품교체·공사내역의 청구일·청구방식과 같은 방식 — 입력한 값은 읽기전용 글자로 보이고 연필(또는
 // 드롭다운)을 눌러야 고칠 수 있다. 칸마다 입력 즉시 저장한다(예전의 행 끝 "저장" 버튼 없음).
 function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
-  const cur = { date: i.dueDate ?? "", time: (i.dueTime ?? "").slice(0, 5), type: i.type || INSPECTION_TYPES[0] };
+  // 검사종류는 관리자가 직접 고른 값만 저장한다 — 일정만 먼저 넣어도 검사종류는 비워 둬서 드롭다운이 유지된다.
+  const cur = { date: i.dueDate ?? "", time: (i.dueTime ?? "").slice(0, 5), type: i.manualType || "" };
   function save(patch) {
     const next = { ...cur, ...patch };
     if (next.date === cur.date && next.time === cur.time && next.type === cur.type) return;
-    onSaveDueDate(i, next.date, next.time, next.type);
+    onSaveDueDate(i, next.date, next.time, next.type || null);
   }
   const isFlagged = i.result === "conditional" || i.result === "fail";
-  // 조건부/불합격의 보완기한은 관리자 수기입력(다음 검사 예정일)이 아니라
-  // 국가승강기정보센터 검사 유효기간(유효기간종료일)을 기준으로 본다.
-  const ddayDate = isFlagged ? (i.apiDueDate || i.dueDate) : i.dueDate;
 
   return (
     <tr className={`border-b border-slate-50 ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`} onClick={clickable ? () => onOpenFail(i) : undefined}>
@@ -56,9 +54,6 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
             {isFlagged ? "보완기한 " : "검사유효기간 "}~{shortDate(i.apiDueDate)}
           </p>
         )}
-      </td>
-      <td className="px-3 py-2.5 whitespace-nowrap">
-        {ddayDate ? <DDay dueDate={ddayDate} /> : <span className="text-[10px] text-slate-400">미입력</span>}
       </td>
       <td className="px-3 py-2.5 whitespace-nowrap">
         {i.result ? <Badge result={i.result} /> : <StatusBadge tone="slate">예정</StatusBadge>}
@@ -167,13 +162,13 @@ export default function InspectionsAdmin({ data, setData }) {
         // 주기 때문. 관리자가 수기입력으로 정밀검사 등을 지정해뒀으면 그걸 우선한다.
         type: manual?.type || li.type,
         // 검사종류를 관리자가 직접 넣은 적이 있는지 — 없으면(API 기본값만 있음) 드롭다운으로 보여준다.
-        manualType: manual?.type ?? null,
+        manualType: manual?.typeChosen ? manual.type : null,
         notes: manual?.notes ?? "",
       };
     }),
     ...inspections
       .filter((i) => !liveSiteIds.has(i.siteId))
-      .map((i) => ({ ...i, isLive: false, manualId: i.id, manualType: i.type ?? null, apiDueDate: null })),
+      .map((i) => ({ ...i, isLive: false, manualId: i.id, manualType: i.typeChosen ? i.type : null, apiDueDate: null })),
   ];
 
   // 현장·호기는 이름만 두고, 승강기고유번호·승강기종류는 주소·담당자처럼 별도 열로 뺀다.
@@ -239,7 +234,7 @@ export default function InspectionsAdmin({ data, setData }) {
       if (error) { alert("저장 실패: " + error.message); return; }
       setData((prev) => ({
         ...prev,
-        inspections: prev.inspections.map((x) => (x.id === i.manualId ? { ...x, dueDate: newDate, dueTime: newTime, type: newType } : x)),
+        inspections: prev.inspections.map((x) => (x.id === i.manualId ? { ...x, dueDate: newDate, dueTime: newTime, type: newType || "정기검사", typeChosen: !!newType } : x)),
       }));
       return;
     }
@@ -302,7 +297,7 @@ export default function InspectionsAdmin({ data, setData }) {
           </table>
         </div>
       ) : (
-        <AdminTable head={["현장 · 호기(승강기번호)", "종류", "검사종류", "검사일정", "D-day", "결과", "비고"]}>
+        <AdminTable head={["현장 · 호기(승강기번호)", "종류", "검사종류", "검사일정", "결과", "비고"]}>
           {rows.map((i) => {
             const clickable = i.isLive && (i.result === "conditional" || i.result === "fail");
             return <InspectionRow key={i.id} i={i} onSaveDueDate={saveDueDate} onOpenFail={setFailTarget} clickable={clickable} />;
