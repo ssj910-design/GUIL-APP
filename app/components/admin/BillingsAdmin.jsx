@@ -71,6 +71,7 @@ function signerLabel(b) {
 function buildCertificateData(b, data) {
   const items = (b.partPhotos?.length > 1 ? b.partPhotos : null)?.map((p) => ({
     name: p.name,
+    unit: p.unit ?? null,
     qty: p.qty,
     amount: p.amount ?? null,
     beforeUrls: p.beforeUrls ?? [],
