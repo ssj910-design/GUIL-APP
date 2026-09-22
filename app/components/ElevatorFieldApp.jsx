@@ -43,7 +43,7 @@ import { RoomTab } from "@/app/components/tabs/RoomTab";
 // 원래 순서를 유지한다 — 기사들이 익숙한 자리다. 2026-08-20에 열람 로그를 근거로 재배치했다가
 // "순서가 바뀌었다"는 지적을 받고 되돌렸다. **데이터가 가리키는 최적 배치보다 몸에 익은 자리가
 // 우선**이라는 판단(할일관리·청구가 뒤에 있어도 기사들은 이미 그 위치를 외우고 있다).
-// 챗봇은 재고관리 우측에 끼워 넣었다 — 표시는 다른 탭과 똑같이 간다.
+// 챗봇은 워크캘린더 우측(맨 끝)에 끼워 넣었다 — 표시는 다른 탭과 똑같이 간다.
 // 알림(푸시·종)에서 특정 화면·모달로 바로 보내는 URL 파라미터들 — 존재 여부 판정과
 // 처리 후 URL 정리에서 같은 목록을 쓴다.
 const OPEN_PARAM_KEYS = [
@@ -60,10 +60,10 @@ const TABS = [
   { id: "inspection", label: "검사관리", icon: ShieldCheck },
   { id: "material", label: "자재·견적", icon: Package },
   { id: "inventory", label: "재고관리", icon: Boxes },
-  { id: "lawqa", label: "챗봇", icon: Bot },
   { id: "billing", label: "청구", icon: Receipt },
   { id: "todo", label: "할일관리", icon: ListTodo },
   { id: "workcalendar", label: "워크캘린더", icon: CalendarClock },
+  { id: "lawqa", label: "챗봇", icon: Bot },
   // 관리자 모드는 하단 탭에서 제외 — 관리자 전용 퀵버튼(게시판 FAB 위)으로만 진입
 ];
 
