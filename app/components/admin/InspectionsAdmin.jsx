@@ -28,12 +28,11 @@ const INSPECTION_TYPES = ["정기검사", "정밀검사", "수시검사"];
 // 부품교체·공사내역의 청구일·청구방식과 같은 방식 — 입력한 값은 읽기전용 글자로 보이고 연필(또는
 // 드롭다운)을 눌러야 고칠 수 있다. 칸마다 입력 즉시 저장한다(예전의 행 끝 "저장" 버튼 없음).
 function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
-  // 검사종류는 관리자가 직접 고른 값만 저장한다 — 일정만 먼저 넣어도 검사종류는 비워 둬서 드롭다운이 유지된다.
-  const cur = { date: i.dueDate ?? "", time: (i.dueTime ?? "").slice(0, 5), type: i.manualType || "" };
+  const cur = { date: i.dueDate ?? "", time: (i.dueTime ?? "").slice(0, 5), type: i.type || INSPECTION_TYPES[0] };
   function save(patch) {
     const next = { ...cur, ...patch };
     if (next.date === cur.date && next.time === cur.time && next.type === cur.type) return;
-    onSaveDueDate(i, next.date, next.time, next.type || null);
+    onSaveDueDate(i, next.date, next.time, next.type);
   }
   const isFlagged = i.result === "conditional" || i.result === "fail";
 
@@ -162,13 +161,13 @@ export default function InspectionsAdmin({ data, setData }) {
         // 주기 때문. 관리자가 수기입력으로 정밀검사 등을 지정해뒀으면 그걸 우선한다.
         type: manual?.type || li.type,
         // 검사종류를 관리자가 직접 넣은 적이 있는지 — 없으면(API 기본값만 있음) 드롭다운으로 보여준다.
-        manualType: manual?.typeChosen ? manual.type : null,
+        manualType: manual?.type ?? null,
         notes: manual?.notes ?? "",
       };
     }),
     ...inspections
       .filter((i) => !liveSiteIds.has(i.siteId))
-      .map((i) => ({ ...i, isLive: false, manualId: i.id, manualType: i.typeChosen ? i.type : null, apiDueDate: null })),
+      .map((i) => ({ ...i, isLive: false, manualId: i.id, manualType: i.type ?? null, apiDueDate: null })),
   ];
 
   // 현장·호기는 이름만 두고, 승강기고유번호·승강기종류는 주소·담당자처럼 별도 열로 뺀다.
@@ -234,7 +233,7 @@ export default function InspectionsAdmin({ data, setData }) {
       if (error) { alert("저장 실패: " + error.message); return; }
       setData((prev) => ({
         ...prev,
-        inspections: prev.inspections.map((x) => (x.id === i.manualId ? { ...x, dueDate: newDate, dueTime: newTime, type: newType || "정기검사", typeChosen: !!newType } : x)),
+        inspections: prev.inspections.map((x) => (x.id === i.manualId ? { ...x, dueDate: newDate, dueTime: newTime, type: newType } : x)),
       }));
       return;
     }
