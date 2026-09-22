@@ -23,7 +23,12 @@ export default function QuotePdfPreview({ url, height = "70vh" }) {
     (async () => {
       try {
         const pdfjsLib = await import("pdfjs-dist");
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+        // CDN(jsdelivr)에서 워커를 그때그때 받아오면 네트워크 차단·CDN 장애 시 PDF 미리보기
+        // 전체가 막힌다(실사고: "Failed to fetch dynamically imported module") — public/에
+        // 같이 커밋해둔 워커를 우리 서버에서 바로 서빙한다. pdfjs-dist 버전을 올리면 이 파일도
+        // node_modules/pdfjs-dist/build/pdf.worker.min.mjs로 다시 복사해야 한다(버전 안 맞으면
+        // pdf.js가 에러를 던진다).
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
         const doc = await pdfjsLib.getDocument(url).promise;
         const images = [];
         for (let i = 1; i <= doc.numPages; i++) {

@@ -21,7 +21,10 @@ export default function QuoteViewer({ url }) {
     (async () => {
       try {
         const pdfjsLib = await import("pdfjs-dist");
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+        // CDN(jsdelivr) 대신 public/에 같이 커밋해둔 워커를 우리 서버에서 서빙한다 —
+        // QuotePdfPreview.jsx 참고(실사고: CDN 차단·장애 시 미리보기 전체가 막혔다).
+        // 버전 올리면 이 파일도 다시 복사해야 함.
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
         const doc = await pdfjsLib.getDocument(url).promise;
         const images = [];
         for (let i = 1; i <= doc.numPages; i++) {
