@@ -45,8 +45,8 @@ function InspectionRow({ i, site, onSaveDueDate, onOpenFail, clickable }) {
         : i) : undefined}
     >
       <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{i.siteName} · {i.unitLabel}{i.govNo ? `(${i.govNo})` : ""}</td>
-      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{site?.assignedEngineers?.length ? site.assignedEngineers.join(", ") : "미배정"}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{i.unitKind || "-"}</td>
+      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{site?.assignedEngineers?.length ? site.assignedEngineers.join(", ") : "미배정"}</td>
       <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
         <EditableSelect value={i.manualType || ""} options={INSPECTION_TYPES} onCommit={(v) => v && save({ type: v })} />
       </td>
@@ -305,7 +305,7 @@ export default function InspectionsAdmin({ data, setData }) {
           </table>
         </div>
       ) : (
-        <AdminTable head={["현장 · 호기(승강기번호)", "담당자", "종류", "검사종류", "검사일정", "직전검사 결과"]}>
+        <AdminTable head={["현장 · 호기(승강기번호)", "종류", "담당자", "검사종류", "검사일정", "직전검사 결과"]}>
           {rows.map((i) => {
             const clickable = i.isLive && (i.result === "conditional" || i.result === "fail" || i.afterConditional);
             return <InspectionRow key={i.id} i={i} site={sites.find((s) => s.id === i.siteId)} onSaveDueDate={saveDueDate} onOpenFail={setFailTarget} clickable={clickable} />;
