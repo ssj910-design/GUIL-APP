@@ -27,7 +27,7 @@ const INSPECTION_TYPES = ["정기검사", "정밀검사", "수시검사"];
 // 검사예정일(수기입력)을 인라인으로 수정할 수 있는 행. 실시간 연동 현장이어도 수기입력 기한은 항상 편집 가능하다.
 // 부품교체·공사내역의 청구일·청구방식과 같은 방식 — 입력한 값은 읽기전용 글자로 보이고 연필(또는
 // 드롭다운)을 눌러야 고칠 수 있다. 칸마다 입력 즉시 저장한다(예전의 행 끝 "저장" 버튼 없음).
-function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
+function InspectionRow({ i, site, onSaveDueDate, onOpenFail, clickable }) {
   const cur = { date: i.dueDate ?? "", time: (i.dueTime ?? "").slice(0, 5), type: i.type || INSPECTION_TYPES[0] };
   function save(patch) {
     const next = { ...cur, ...patch };
@@ -37,13 +37,15 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
   const isFlagged = i.result === "conditional" || i.result === "fail";
 
   return (
-    <tr className={`border-b border-slate-50 ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`} onClick={clickable ? () => onOpenFail(i) : undefined}>
+    <tr className="border-b border-slate-50">
       <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{i.siteName} · {i.unitLabel}{i.govNo ? `(${i.govNo})` : ""}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{i.unitKind || "-"}</td>
-      <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{addressWithoutSido(site?.address)}</td>
+      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{site?.assignedEngineers?.length ? site.assignedEngineers.join(", ") : "미배정"}</td>
+      <td className="px-3 py-2.5 whitespace-nowrap">
         <EditableSelect value={i.manualType || ""} options={INSPECTION_TYPES} onCommit={(v) => v && save({ type: v })} />
       </td>
-      <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+      <td className="px-3 py-2.5 whitespace-nowrap">
         <div className="flex gap-3 items-center">
           <EditableDate value={i.dueDate} onCommit={(v) => save({ date: v ?? "" })} emptyText="미입력" />
           <EditableText value={cur.time} inputType="time" onCommit={(v) => save({ time: v })} emptyText="시간" />
@@ -54,12 +56,19 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
           </p>
         )}
       </td>
+      {/* 직전검사 결과 — 실시간 연동 호기는 현재 검사유효기간을 만든 검사의 판정(공단 API 캐시).
+          조건부합격·불합격이면 배지를 눌러 부적합 내용을 본다. */}
       <td className="px-3 py-2.5 whitespace-nowrap">
-        {i.result ? <Badge result={i.result} /> : <StatusBadge tone="slate">예정</StatusBadge>}
-      </td>
-      <td className="px-3 py-2.5 text-xs text-slate-500 max-w-[10rem] truncate" title={i.notes || ""}>
-        {i.notes || "-"}
-        {clickable && <span className="ml-2 text-[10px] text-blue-600 font-semibold">클릭해서 부적합 상세</span>}
+        {!i.result ? (
+          <span className="text-slate-400">-</span>
+        ) : clickable ? (
+          <button type="button" onClick={() => onOpenFail(i)} className="inline-flex items-center gap-1.5" title="부적합 내용 보기">
+            <Badge result={i.result} />
+            <span className="text-[10px] font-semibold text-blue-600 underline">내용 보기</span>
+          </button>
+        ) : (
+          <Badge result={i.result} />
+        )}
       </td>
     </tr>
   );
@@ -296,10 +305,10 @@ export default function InspectionsAdmin({ data, setData }) {
           </table>
         </div>
       ) : (
-        <AdminTable head={["현장 · 호기(승강기번호)", "종류", "검사종류", "검사일정", "결과", "비고"]}>
+        <AdminTable head={["현장 · 호기(승강기번호)", "종류", "주소", "담당자", "검사종류", "검사일정", "직전검사 결과"]}>
           {rows.map((i) => {
             const clickable = i.isLive && (i.result === "conditional" || i.result === "fail");
-            return <InspectionRow key={i.id} i={i} onSaveDueDate={saveDueDate} onOpenFail={setFailTarget} clickable={clickable} />;
+            return <InspectionRow key={i.id} i={i} site={sites.find((s) => s.id === i.siteId)} onSaveDueDate={saveDueDate} onOpenFail={setFailTarget} clickable={clickable} />;
           })}
         </AdminTable>
       )}
