@@ -44,16 +44,16 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
       <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{i.siteName} · {i.unitLabel}{i.govNo ? `(${i.govNo})` : ""}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{i.unitKind || "-"}</td>
       <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-        <EditableSelect value={i.type || ""} options={INSPECTION_TYPES} onCommit={(v) => v && save({ type: v })} className="w-24" />
+        <EditableSelect value={i.manualType || ""} options={INSPECTION_TYPES} onCommit={(v) => v && save({ type: v })} />
       </td>
       <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
         <div className="flex gap-3 items-center">
           <EditableDate value={i.dueDate} onCommit={(v) => save({ date: v ?? "" })} emptyText="미입력" />
-          <EditableText value={cur.time} inputType="time" onCommit={(v) => save({ time: v })} emptyText="시간" className="w-24" />
+          <EditableText value={cur.time} inputType="time" onCommit={(v) => save({ time: v })} emptyText="시간" />
         </div>
         {i.apiDueDate && (
           <p className="text-[9px] text-emerald-600 mt-0.5 whitespace-nowrap">
-            {isFlagged ? "보완기한 " : "API 유효 "}~{shortDate(i.apiDueDate)}
+            {isFlagged ? "보완기한 " : "검사유효기간 "}~{shortDate(i.apiDueDate)}
           </p>
         )}
       </td>
@@ -166,12 +166,14 @@ export default function InspectionsAdmin({ data, setData }) {
         // 실시간 연동 호기는 li.type이 항상 "정기검사"로 고정돼 있다 — 공단 API가 검사종류를 안
         // 주기 때문. 관리자가 수기입력으로 정밀검사 등을 지정해뒀으면 그걸 우선한다.
         type: manual?.type || li.type,
+        // 검사종류를 관리자가 직접 넣은 적이 있는지 — 없으면(API 기본값만 있음) 드롭다운으로 보여준다.
+        manualType: manual?.type ?? null,
         notes: manual?.notes ?? "",
       };
     }),
     ...inspections
       .filter((i) => !liveSiteIds.has(i.siteId))
-      .map((i) => ({ ...i, isLive: false, manualId: i.id, apiDueDate: null })),
+      .map((i) => ({ ...i, isLive: false, manualId: i.id, manualType: i.type ?? null, apiDueDate: null })),
   ];
 
   // 현장·호기는 이름만 두고, 승강기고유번호·승강기종류는 주소·담당자처럼 별도 열로 뺀다.
@@ -300,7 +302,7 @@ export default function InspectionsAdmin({ data, setData }) {
           </table>
         </div>
       ) : (
-        <AdminTable head={["현장 · 호기(승강기번호)", "종류", "검사종류", "기한(수기입력)", "D-day", "결과", "비고"]}>
+        <AdminTable head={["현장 · 호기(승강기번호)", "종류", "검사종류", "검사일정", "D-day", "결과", "비고"]}>
           {rows.map((i) => {
             const clickable = i.isLive && (i.result === "conditional" || i.result === "fail");
             return <InspectionRow key={i.id} i={i} onSaveDueDate={saveDueDate} onOpenFail={setFailTarget} clickable={clickable} />;
