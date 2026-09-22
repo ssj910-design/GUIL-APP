@@ -27,7 +27,7 @@ const INSPECTION_TYPES = ["정기검사", "정밀검사", "수시검사"];
 // 검사예정일(수기입력)을 인라인으로 수정할 수 있는 행. 실시간 연동 현장이어도 수기입력 기한은 항상 편집 가능하다.
 // 부품교체·공사내역의 청구일·청구방식과 같은 방식 — 입력한 값은 읽기전용 글자로 보이고 연필(또는
 // 드롭다운)을 눌러야 고칠 수 있다. 칸마다 입력 즉시 저장한다(예전의 행 끝 "저장" 버튼 없음).
-function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
+function InspectionRow({ i, site, onSaveDueDate, onOpenFail, clickable }) {
   const cur = { date: i.dueDate ?? "", time: (i.dueTime ?? "").slice(0, 5), type: i.type || INSPECTION_TYPES[0] };
   function save(patch) {
     const next = { ...cur, ...patch };
@@ -45,17 +45,18 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
         : i) : undefined}
     >
       <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{i.siteName} · {i.unitLabel}{i.govNo ? `(${i.govNo})` : ""}</td>
+      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{site?.assignedEngineers?.length ? site.assignedEngineers.join(", ") : "미배정"}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{i.unitKind || "-"}</td>
       <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
         <EditableSelect value={i.manualType || ""} options={INSPECTION_TYPES} onCommit={(v) => v && save({ type: v })} />
       </td>
       <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
         <div className="flex gap-3 items-center">
-          <EditableDate value={i.dueDate} onCommit={(v) => save({ date: v ?? "" })} emptyText="미입력" />
-          <EditableText value={cur.time} inputType="time" onCommit={(v) => save({ time: v })} emptyText="시간" />
+          <EditableDate value={i.dueDate} onCommit={(v) => save({ date: v ?? "" })} emptyText="검사일자" />
+          <EditableText value={cur.time} inputType="time" onCommit={(v) => save({ time: v })} emptyText="검사시간" />
         </div>
         {i.apiDueDate && (
-          <p className="text-[9px] text-emerald-600 mt-0.5 whitespace-nowrap">
+          <p className="text-xs text-emerald-600 mt-0.5 whitespace-nowrap">
             {isFlagged ? "보완기한 " : "검사유효기간 "}~{shortDate(i.apiDueDate)}
           </p>
         )}
@@ -304,10 +305,10 @@ export default function InspectionsAdmin({ data, setData }) {
           </table>
         </div>
       ) : (
-        <AdminTable head={["현장 · 호기(승강기번호)", "종류", "검사종류", "검사일정", "직전검사 결과"]}>
+        <AdminTable head={["현장 · 호기(승강기번호)", "담당자", "종류", "검사종류", "검사일정", "직전검사 결과"]}>
           {rows.map((i) => {
             const clickable = i.isLive && (i.result === "conditional" || i.result === "fail" || i.afterConditional);
-            return <InspectionRow key={i.id} i={i} onSaveDueDate={saveDueDate} onOpenFail={setFailTarget} clickable={clickable} />;
+            return <InspectionRow key={i.id} i={i} site={sites.find((s) => s.id === i.siteId)} onSaveDueDate={saveDueDate} onOpenFail={setFailTarget} clickable={clickable} />;
           })}
         </AdminTable>
       )}
