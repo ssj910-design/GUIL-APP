@@ -37,7 +37,13 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
   const isFlagged = i.result === "conditional" || i.result === "fail";
 
   return (
-    <tr className={`border-b border-slate-50 ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`} onClick={clickable ? () => onOpenFail(i) : undefined}>
+    <tr
+      className={`border-b border-slate-50 ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`}
+      // 조건후합격은 그 회차 자체엔 부적합 내역이 없어, 앞의 조건부합격 회차(검사일) 기준으로 연다(기사앱과 동일).
+      onClick={clickable ? () => onOpenFail(i.afterConditional
+        ? { ...i, result: "after_conditional", startDate: i.afterConditionalAnchor, failItems: undefined, failReason: undefined }
+        : i) : undefined}
+    >
       <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{i.siteName} · {i.unitLabel}{i.govNo ? `(${i.govNo})` : ""}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{i.unitKind || "-"}</td>
       <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
@@ -56,11 +62,7 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
       </td>
       {/* 직전검사 결과 — 실시간 연동 호기는 현재 검사유효기간을 만든 검사의 판정(공단 API 캐시). */}
       <td className="px-3 py-2.5 whitespace-nowrap">
-        {i.result ? <Badge result={i.result} /> : <span className="text-slate-400">-</span>}
-      </td>
-      <td className="px-3 py-2.5 text-xs text-slate-500 max-w-[10rem] truncate" title={i.notes || ""}>
-        {i.notes || "-"}
-        {clickable && <span className="ml-2 text-[10px] text-blue-600 font-semibold">클릭해서 부적합 상세</span>}
+        {i.result ? <Badge result={i.afterConditional ? "after_conditional" : i.result} /> : <span className="text-slate-400">-</span>}
       </td>
     </tr>
   );
@@ -182,6 +184,11 @@ export default function InspectionsAdmin({ data, setData }) {
       govNo: u?.govNo ?? i.govElevatorNo ?? null,
       unitKind: u?.kind ?? null,
       daysLeft: daysLeftOf(i.dueDate, TODAY_STR),
+      // 직전검사가 조건부합격 뒤 보완 합격(조건후합격)인지 — sync-inspection-cache 크론이 캐싱한 검사이력
+      // 기준. 마지막 확인 뒤 새 검사를 받았으면(유효기간 시작일이 더 늦음) 낡은 기록이라 쓰지 않는다.
+      afterConditional: i.isLive && i.result === "pass" && u?.priorFlaggedLabel === "조건후합격"
+        && !(u.inspectionStart && (u.priorFlaggedCheckedAt ?? "").slice(0, 10) < u.inspectionStart),
+      afterConditionalAnchor: u?.priorFlaggedAnchorDate ?? null,
     };
   });
 
@@ -297,9 +304,9 @@ export default function InspectionsAdmin({ data, setData }) {
           </table>
         </div>
       ) : (
-        <AdminTable head={["현장 · 호기(승강기번호)", "종류", "검사종류", "검사일정", "직전검사 결과", "비고"]}>
+        <AdminTable head={["현장 · 호기(승강기번호)", "종류", "검사종류", "검사일정", "직전검사 결과"]}>
           {rows.map((i) => {
-            const clickable = i.isLive && (i.result === "conditional" || i.result === "fail");
+            const clickable = i.isLive && (i.result === "conditional" || i.result === "fail" || i.afterConditional);
             return <InspectionRow key={i.id} i={i} onSaveDueDate={saveDueDate} onOpenFail={setFailTarget} clickable={clickable} />;
           })}
         </AdminTable>

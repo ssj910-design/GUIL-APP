@@ -129,6 +129,8 @@ export function Badge({ result }) {
   const map = {
     pass: { label: "합격", cls: "bg-emerald-100 text-emerald-700 border-emerald-300" },
     conditional: { label: "조건부합격", cls: "bg-amber-100 text-amber-700 border-amber-300" },
+    // 조건부합격 뒤 보완을 마쳐 합격한 회차 — 조건부합격과 같은 계열이되 한 톤 연하게.
+    after_conditional: { label: "조건후합격", cls: "bg-amber-50 text-amber-600 border-amber-200" },
     fail: { label: "불합격", cls: "bg-red-100 text-red-700 border-red-300" },
   };
   const v = map[result];

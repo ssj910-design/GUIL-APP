@@ -70,7 +70,7 @@ export async function GET(request) {
 
   const { data: units, error } = await supabase
     .from("units")
-    .select("id, site_id, gov_no, unit_no")
+    .select("id, site_id, gov_no, unit_no, inspection_start, inspection_result, prior_flagged_label, prior_flagged_checked_at")
     .eq("is_active", true)
     .not("gov_no", "is", null);
   if (error) {
@@ -178,26 +178,45 @@ export async function GET(request) {
   const dueSoonUnitIds = new Set((dueSoonInspections ?? []).map((r) => r.unit_id));
   const dueSoonUnits = units.filter((u) => dueSoonUnitIds.has(u.id));
 
-  let priorFlaggedChecked = 0;
-  for (let i = 0; i < dueSoonUnits.length; i += CONCURRENCY) {
-    const batch = dueSoonUnits.slice(i, i + CONCURRENCY);
-    await Promise.all(
-      batch.map(async (u) => {
-        const records = await fetchInspectionHistory(u.gov_no);
-        const latest = records?.[0];
-        const patch = { prior_flagged_checked_at: new Date().toISOString(), prior_flagged_label: null, prior_flagged_anchor_date: null };
-        if (latest && PRIOR_FLAGGED_WORDS.includes(latest.dispWords)) {
-          const detailRecord = latest.dispWords === "조건후합격"
-            ? (records.slice(1).find((r) => r.dispWords === "조건부합격" || r.dispWords === "불합격") ?? latest)
-            : latest;
-          patch.prior_flagged_label = latest.dispWords;
-          patch.prior_flagged_anchor_date = govDateToDashed(detailRecord.inspctDe);
-        }
-        const { error: updateError } = await supabase.from("units").update(patch).eq("id", u.id);
-        if (!updateError) priorFlaggedChecked++;
-      })
-    );
+  async function checkPriorFlagged(u) {
+    const records = await fetchInspectionHistory(u.gov_no);
+    const latest = records?.[0];
+    const patch = { prior_flagged_checked_at: new Date().toISOString(), prior_flagged_label: null, prior_flagged_anchor_date: null };
+    if (latest && PRIOR_FLAGGED_WORDS.includes(latest.dispWords)) {
+      const detailRecord = latest.dispWords === "조건후합격"
+        ? (records.slice(1).find((r) => r.dispWords === "조건부합격" || r.dispWords === "불합격") ?? latest)
+        : latest;
+      patch.prior_flagged_label = latest.dispWords;
+      patch.prior_flagged_anchor_date = govDateToDashed(detailRecord.inspctDe);
+    }
+    const { error: updateError } = await supabase.from("units").update(patch).eq("id", u.id);
+    return !updateError;
   }
+  async function checkPriorFlaggedAll(list) {
+    let n = 0;
+    for (let i = 0; i < list.length; i += CONCURRENCY) {
+      const results = await Promise.all(list.slice(i, i + CONCURRENCY).map(checkPriorFlagged));
+      n += results.filter(Boolean).length;
+    }
+    return n;
+  }
+
+  const priorFlaggedChecked = await checkPriorFlaggedAll(dueSoonUnits);
+
+  // 관리자웹 검사관리 "직전검사 결과"의 조건후합격 표시용 — 도래현장이 아닌 호기도 확인한다.
+  // 대상: 한 번도 확인 안 한 호기, 마지막 확인 뒤 새 검사를 받은(검사유효기간 시작일이 더 늦은) 호기,
+  // 조건부합격으로 기록됐는데 지금 판정이 합격으로 바뀐(보완 후 합격 = 조건후합격일 수 있는) 호기.
+  // 하루 PRIOR_BACKFILL_PER_RUN대까지만 — 처음 며칠은 밀린 호기를 채우고, 이후엔 새로 검사받은 몇 대뿐이다.
+  // 이미 확인했는데 기록이 낡은 호기(화면에 틀린 값이 떠 있는 쪽)를 먼저 한다.
+  const PRIOR_BACKFILL_PER_RUN = 100;
+  const needsPriorCheck = (u) => !u.prior_flagged_checked_at
+    || (u.inspection_start && u.prior_flagged_checked_at.slice(0, 10) < u.inspection_start)
+    || (u.prior_flagged_label === "조건부합격" && u.inspection_result === "합격");
+  const backfillUnits = units
+    .filter((u) => !dueSoonUnitIds.has(u.id) && needsPriorCheck(u))
+    .sort((a, b) => (a.prior_flagged_checked_at ? 0 : 1) - (b.prior_flagged_checked_at ? 0 : 1))
+    .slice(0, PRIOR_BACKFILL_PER_RUN);
+  const priorBackfilled = await checkPriorFlaggedAll(backfillUnits);
 
   return Response.json({
     totalUnits: units.length,
@@ -206,5 +225,6 @@ export async function GET(request) {
     unitsUpdated,
     failItemsCached,
     priorFlaggedChecked,
+    priorBackfilled,
   });
 }
