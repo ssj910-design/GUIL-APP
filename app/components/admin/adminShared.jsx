@@ -721,13 +721,14 @@ export function EditableSelect({ value, options, onCommit, placeholder = "선택
 }
 
 // 일반 텍스트용 연필-수정 칸 (휴대폰·아이디(민원24) 등) — EditableDate와 동일한 방식.
-export function EditableText({ value, onCommit, placeholder = "", format, emptyText = "-", className = "" }) {
+export function EditableText({ value, onCommit, placeholder = "", format, emptyText = "-", className = "", inputType = "text" }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value ?? "");
   if (editing) {
     return (
       <input
         autoFocus
+        type={inputType}
         className={`${inputCls} min-w-24 ${className}`}
         placeholder={placeholder}
         value={text}

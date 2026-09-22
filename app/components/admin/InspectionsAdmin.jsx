@@ -8,10 +8,10 @@ import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { unitsToInspections, shortDate, groupBySite } from "@/lib/utils";
 import { mapInspection } from "@/lib/mappers";
-import { Badge, DDay, inputCls as mobileInputCls } from "@/app/components/ui";
+import { Badge, DDay } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { useInspectionFailItems } from "@/app/hooks/useLiveInspections";
-import { StatusBadge, AdminTable, FilterPills, SortableTh, sortRows, inputCls, Modal, DateTextInput } from "@/app/components/admin/adminShared";
+import { StatusBadge, AdminTable, FilterPills, SortableTh, sortRows, inputCls, Modal, EditableDate, EditableSelect, EditableText } from "@/app/components/admin/adminShared";
 
 function daysLeftOf(dueDate, today) {
   return Math.ceil((new Date(dueDate) - new Date(today)) / 86400000);
@@ -25,12 +25,15 @@ function addressWithoutSido(address) {
 const INSPECTION_TYPES = ["정기검사", "정밀검사", "수시검사"];
 
 // 검사예정일(수기입력)을 인라인으로 수정할 수 있는 행. 실시간 연동 현장이어도 수기입력 기한은 항상 편집 가능하다.
+// 부품교체·공사내역의 청구일·청구방식과 같은 방식 — 입력한 값은 읽기전용 글자로 보이고 연필(또는
+// 드롭다운)을 눌러야 고칠 수 있다. 칸마다 입력 즉시 저장한다(예전의 행 끝 "저장" 버튼 없음).
 function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
-  const [date, setDate] = useState(i.dueDate ?? "");
-  const [time, setTime] = useState(i.dueTime ?? "");
-  const [type, setType] = useState(i.type || INSPECTION_TYPES[0]);
-  const [saving, setSaving] = useState(false);
-  const dirty = date !== (i.dueDate ?? "") || time !== (i.dueTime ?? "") || type !== (i.type || INSPECTION_TYPES[0]);
+  const cur = { date: i.dueDate ?? "", time: (i.dueTime ?? "").slice(0, 5), type: i.type || INSPECTION_TYPES[0] };
+  function save(patch) {
+    const next = { ...cur, ...patch };
+    if (next.date === cur.date && next.time === cur.time && next.type === cur.type) return;
+    onSaveDueDate(i, next.date, next.time, next.type);
+  }
   const isFlagged = i.result === "conditional" || i.result === "fail";
   // 조건부/불합격의 보완기한은 관리자 수기입력(다음 검사 예정일)이 아니라
   // 국가승강기정보센터 검사 유효기간(유효기간종료일)을 기준으로 본다.
@@ -41,14 +44,12 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
       <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{i.siteName} · {i.unitLabel}{i.govNo ? `(${i.govNo})` : ""}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{i.unitKind || "-"}</td>
       <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-        <select className={`${mobileInputCls} w-24`} value={type} onChange={(e) => setType(e.target.value)}>
-          {INSPECTION_TYPES.map((t) => <option key={t}>{t}</option>)}
-        </select>
+        <EditableSelect value={i.type || ""} options={INSPECTION_TYPES} onCommit={(v) => v && save({ type: v })} className="w-24" />
       </td>
       <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-        <div className="flex gap-1 items-center">
-          <DateTextInput value={date} onChange={setDate} className="w-24" />
-          <input type="time" className={`${mobileInputCls} w-20`} value={time} onChange={(e) => setTime(e.target.value)} />
+        <div className="flex gap-3 items-center">
+          <EditableDate value={i.dueDate} onCommit={(v) => save({ date: v ?? "" })} emptyText="미입력" />
+          <EditableText value={cur.time} inputType="time" onCommit={(v) => save({ time: v })} emptyText="시간" className="w-24" />
         </div>
         {i.apiDueDate && (
           <p className="text-[9px] text-emerald-600 mt-0.5 whitespace-nowrap">
@@ -65,15 +66,6 @@ function InspectionRow({ i, onSaveDueDate, onOpenFail, clickable }) {
       <td className="px-3 py-2.5 text-xs text-slate-500 max-w-[10rem] truncate" title={i.notes || ""}>
         {i.notes || "-"}
         {clickable && <span className="ml-2 text-[10px] text-blue-600 font-semibold">클릭해서 부적합 상세</span>}
-      </td>
-      <td className="px-3 py-2.5 text-right pr-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-        <button
-          disabled={!dirty || saving}
-          onClick={async () => { setSaving(true); await onSaveDueDate(i, date, time, type); setSaving(false); }}
-          className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-3 py-1.5"
-        >
-          저장
-        </button>
       </td>
     </tr>
   );
@@ -308,7 +300,7 @@ export default function InspectionsAdmin({ data, setData }) {
           </table>
         </div>
       ) : (
-        <AdminTable head={["현장 · 호기(승강기번호)", "종류", "검사종류", "기한(수기입력)", "D-day", "결과", "비고", ""]}>
+        <AdminTable head={["현장 · 호기(승강기번호)", "종류", "검사종류", "기한(수기입력)", "D-day", "결과", "비고"]}>
           {rows.map((i) => {
             const clickable = i.isLive && (i.result === "conditional" || i.result === "fail");
             return <InspectionRow key={i.id} i={i} onSaveDueDate={saveDueDate} onOpenFail={setFailTarget} clickable={clickable} />;
