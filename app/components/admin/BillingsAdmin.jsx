@@ -454,11 +454,6 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
   // 못 바꾼다, 현장 자체를 옮기는 기능이 아니라 그 현장 안에서 호기를 다시 고르는 것).
   const billingSiteId = data.units.find((u) => u.id === b.unitId)?.siteId ?? data.sites.find((s) => s.name === b.siteName)?.id ?? null;
   const siteUnits = data.units.filter((u) => u.siteId === billingSiteId);
-  const [form, setForm] = useState({
-    notes: b.notes ?? "",
-    engineerId: b.engineerId ?? "",
-    replaceDate: b.replaceDate ?? "",
-  });
   const [saving, setSaving] = useState(false);
   const photos = [...(b.beforePhotoUrls ?? []), ...(b.afterPhotoUrls ?? [])];
   if (b.confirmPhotoUrl) photos.push(b.confirmPhotoUrl);
@@ -484,14 +479,26 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
       confirmPhotoUrl: b.confirmPhotoUrl ?? null,
       partPhotos: seededItems,
       unitIds: initialUnitIds,
+      notes: b.notes ?? "",
+      engineerId: b.engineerId ?? "",
+      replaceDate: b.replaceDate ?? "",
     });
     setEditing(true);
   }
 
   async function saveEdit() {
     setSaving(true);
-    const dbPatch = { contact_phone: editForm.contactPhone || null, confirm_photo_url: editForm.confirmPhotoUrl || null };
-    const localPatch = { contactPhone: editForm.contactPhone || null, confirmPhotoUrl: editForm.confirmPhotoUrl || null };
+    const engineerName = engineers.find((p) => p.id === editForm.engineerId)?.name ?? b.engineer;
+    const dbPatch = {
+      contact_phone: editForm.contactPhone || null, confirm_photo_url: editForm.confirmPhotoUrl || null,
+      engineer_id: editForm.engineerId || null, engineer: engineerName, replace_date: editForm.replaceDate || null,
+      ...(notesReady ? { notes: editForm.notes || null } : {}),
+    };
+    const localPatch = {
+      contactPhone: editForm.contactPhone || null, confirmPhotoUrl: editForm.confirmPhotoUrl || null,
+      engineerId: dbPatch.engineer_id, engineer: dbPatch.engineer, replaceDate: dbPatch.replace_date,
+      ...(notesReady ? { notes: dbPatch.notes } : {}),
+    };
     if (b.isOutsourced) {
       dbPatch.vendor_name = editForm.vendorName || null;
       localPatch.vendorName = editForm.vendorName || null;
@@ -535,23 +542,6 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
     await onSave(b, dbPatch, localPatch);
     setSaving(false);
     setEditing(false);
-    onClose();
-  }
-
-  async function save() {
-    setSaving(true);
-    const engineerName = engineers.find((p) => p.id === form.engineerId)?.name ?? b.engineer;
-    const patch = {
-      engineer_id: form.engineerId || null,
-      engineer: engineerName,
-      replace_date: form.replaceDate || null,
-      ...(notesReady ? { notes: form.notes || null } : {}),
-    };
-    await onSave(b, patch, {
-      engineerId: patch.engineer_id, engineer: patch.engineer, replaceDate: patch.replace_date,
-      ...(notesReady ? { notes: patch.notes } : {}),
-    });
-    setSaving(false);
     onClose();
   }
 
@@ -636,30 +626,42 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">담당자 변경</p>
-            <select className={inputCls} value={form.engineerId} onChange={(e) => setForm({ ...form, engineerId: e.target.value })}>
-              <option value="">{b.engineer ?? "미배정"}</option>
-              {engineers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <p className="text-xs font-bold text-slate-500 mb-1">기한(교체일자) 수정</p>
-            <DateTextInput key={form.replaceDate ?? "unset"} value={form.replaceDate} onChange={(v) => setForm({ ...form, replaceDate: v })} />
-          </div>
+          {!editing ? (
+            <div><p className="text-xs font-bold text-slate-400 mb-1">담당자</p><p className="font-semibold text-slate-800">{b.engineer ?? "미배정"}</p></div>
+          ) : (
+            <div>
+              <p className="text-xs font-bold text-slate-500 mb-1">담당자 변경</p>
+              <select className={inputCls} value={editForm.engineerId} onChange={(e) => setEditForm({ ...editForm, engineerId: e.target.value })}>
+                <option value="">{b.engineer ?? "미배정"}</option>
+                {engineers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+          )}
+          {!editing ? (
+            <div><p className="text-xs font-bold text-slate-400 mb-1">기한(교체일자)</p><p className="font-semibold text-slate-800">{shortDate(b.replaceDate) || "-"}</p></div>
+          ) : (
+            <div>
+              <p className="text-xs font-bold text-slate-500 mb-1">기한(교체일자) 수정</p>
+              <DateTextInput key={editForm.replaceDate ?? "unset"} value={editForm.replaceDate} onChange={(v) => setEditForm({ ...editForm, replaceDate: v })} />
+            </div>
+          )}
         </div>
 
-        <div>
-          <p className="text-xs font-bold text-slate-500 mb-1">내용{!notesReady && " (마이그레이션 대기)"}</p>
-          <textarea
-            className={inputCls}
-            rows={3}
-            disabled={!notesReady}
-            placeholder={notesReady ? "관리자 메모를 입력하세요" : "011 마이그레이션 실행 후 사용 가능합니다"}
-            value={form.notes}
-            onChange={(e) => setForm({ ...form, notes: e.target.value })}
-          />
-        </div>
+        {!editing ? (
+          <div><p className="text-xs font-bold text-slate-400 mb-1">내용</p><p className="font-semibold text-slate-800 whitespace-pre-wrap">{b.notes || "-"}</p></div>
+        ) : (
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-1">내용{!notesReady && " (마이그레이션 대기)"}</p>
+            <textarea
+              className={inputCls}
+              rows={3}
+              disabled={!notesReady}
+              placeholder={notesReady ? "관리자 메모를 입력하세요" : "011 마이그레이션 실행 후 사용 가능합니다"}
+              value={editForm.notes}
+              onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+            />
+          </div>
+        )}
       </div>
 
       {!editing ? (
@@ -773,14 +775,9 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
               </button>
             </>
           ) : (
-            <>
-              <button onClick={startEdit} className="text-sm font-bold text-blue-700 bg-white border border-blue-200 rounded-xl px-5 py-2.5">
-                수정
-              </button>
-              <button disabled={saving} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-5 py-2.5">
-                저장
-              </button>
-            </>
+            <button onClick={startEdit} className="text-sm font-bold text-blue-700 bg-white border border-blue-200 rounded-xl px-5 py-2.5">
+              수정
+            </button>
           )}
         </div>
       </div>
