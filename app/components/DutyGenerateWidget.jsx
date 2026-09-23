@@ -49,10 +49,16 @@ export function DutyGenerateWidget({ schedules, onSchedulesChange, onEngineersCh
     if (!roster.length) { groups.forEach((g) => (cursors[g] = -1)); return cursors; }
     const { data: recent } = await supabase.from("duty_schedules").select("*")
       .lt("duty_date", `${ym}-01`).order("duty_date", { ascending: false }).limit(120);
+    // 같은 날 칸이 여러 개(숙직→당직→금요일 정상근무)라 날짜만 보면 그날 마지막 사람을 못 집는다
+    // — 배정 순서(숙직→당직→정상근무)까지 같이 보고 그 그룹의 마지막 사람을 찾아 그 다음부터 이어간다.
+    const KIND_ORDER = { 숙직: 0, 당직: 1, 정상근무: 2 };
     for (const g of groups) {
-      // 금요일(주4일 전용)은 이전 달 기록을 이어받지 않고 매달 순번1부터 다시 시작한다.
-      if (g === "금요일") { cursors[g] = -1; continue; }
-      const match = (recent ?? []).find((r) => dayGroup(mode, new Date(`${r.duty_date}T00:00:00`).getDay()) === g);
+      const match = (recent ?? [])
+        // 순번표에 없는 사람(수동 배정·다른 근무제)은 로테이션을 소비하지 않으므로 기준에서 뺀다 —
+        // 그 사람이 마지막 칸이면 순번을 못 찾아 다시 1번부터 시작해버린다.
+        .filter((r) => roster.some((e) => e.id === r.profile_id))
+        .filter((r) => dayGroup(mode, new Date(`${r.duty_date}T00:00:00`).getDay()) === g)
+        .sort((a, b) => b.duty_date.localeCompare(a.duty_date) || (KIND_ORDER[b.kind] ?? 0) - (KIND_ORDER[a.kind] ?? 0))[0];
       cursors[g] = match ? roster.findIndex((e) => e.id === match.profile_id) : -1;
     }
     return cursors;
