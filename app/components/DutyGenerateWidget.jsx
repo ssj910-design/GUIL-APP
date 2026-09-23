@@ -40,9 +40,16 @@ export function DutyGenerateWidget({ schedules, onSchedulesChange, onEngineersCh
   // 미리보기에서 특정 칸만 손으로 바꾼 것 — "iso|kind" -> profileId(수동 지정) | null(수동 비움)
   const [manualOverrides, setManualOverrides] = useState({});
   const [pickerTarget, setPickerTarget] = useState(null); // { iso, kind }
+  // 요일그룹별 시작 순번 지정 — 비우면 지난달 순번을 자동으로 이어받는다. { 평일|금요일|주말: profileId }
+  const [startOverrides, setStartOverrides] = useState({});
+  // duty_schedules.auto_profile_id 컬럼 존재 여부 — 마이그레이션 144 실행 전엔 컬럼이 없다.
+  const autoColReady = schedules.some((d) => d.autoProfileId !== undefined);
 
-  // 대상 월 시작 전, 각 요일그룹이 마지막으로 배정된 날짜의 담당자를 찾아 그 다음 사람부터
-  // 이어가게 한다 — 그룹별로 독립된 커서이므로 그룹별로 따로 찾는다.
+  // 대상 월 시작 전, 각 요일그룹의 마지막 순번을 찾아 그 다음 사람부터 이어가게 한다
+  // — 그룹별로 독립된 커서이므로 그룹별로 따로 찾는다. 기준 우선순위:
+  //   1) 관리자가 이 화면에서 지정한 시작 순번(startOverrides)
+  //   2) 순번이 뽑았던 사람(auto_profile_id) — 교환·대신서기·수동변경이 있어도 순번은 안 흔들린다
+  //   3) (144 마이그레이션 전 기록) 실제 담당자(profile_id)
   async function initCursors(ym, mode, roster) {
     const groups = groupsOf(mode);
     const cursors = {};
@@ -52,14 +59,21 @@ export function DutyGenerateWidget({ schedules, onSchedulesChange, onEngineersCh
     // 같은 날 칸이 여러 개(숙직→당직→금요일 정상근무)라 날짜만 보면 그날 마지막 사람을 못 집는다
     // — 배정 순서(숙직→당직→정상근무)까지 같이 보고 그 그룹의 마지막 사람을 찾아 그 다음부터 이어간다.
     const KIND_ORDER = { 숙직: 0, 당직: 1, 정상근무: 2 };
+    // 그 그룹의 마지막 칸 — 같은 날 여러 칸(숙직→당직→정상근무)이라 칸 순서까지 보고 고른다.
+    // pick(값 꺼내는 함수): 순번 기록이 있는 칸이 하나라도 있으면 그것만 보고, 없으면 실제 담당자로 대신한다.
+    const lastOf = (g, pick) => (recent ?? [])
+      .filter((r) => pick(r) && roster.some((e) => e.id === pick(r)))
+      .filter((r) => dayGroup(mode, new Date(`${r.duty_date}T00:00:00`).getDay()) === g)
+      .sort((a, b) => b.duty_date.localeCompare(a.duty_date) || (KIND_ORDER[b.kind] ?? 0) - (KIND_ORDER[a.kind] ?? 0))[0];
     for (const g of groups) {
-      const match = (recent ?? [])
-        // 순번표에 없는 사람(수동 배정·다른 근무제)은 로테이션을 소비하지 않으므로 기준에서 뺀다 —
-        // 그 사람이 마지막 칸이면 순번을 못 찾아 다시 1번부터 시작해버린다.
-        .filter((r) => roster.some((e) => e.id === r.profile_id))
-        .filter((r) => dayGroup(mode, new Date(`${r.duty_date}T00:00:00`).getDay()) === g)
-        .sort((a, b) => b.duty_date.localeCompare(a.duty_date) || (KIND_ORDER[b.kind] ?? 0) - (KIND_ORDER[a.kind] ?? 0))[0];
-      cursors[g] = match ? roster.findIndex((e) => e.id === match.profile_id) : -1;
+      // 관리자가 시작 순번을 고른 그룹은 그 사람부터 시작한다(커서는 한 칸 앞).
+      const startId = startOverrides[g];
+      if (startId) {
+        const startIdx = roster.findIndex((e) => e.id === startId);
+        if (startIdx >= 0) { cursors[g] = startIdx - 1; continue; }
+      }
+      const match = lastOf(g, (r) => r.auto_profile_id) ?? lastOf(g, (r) => r.profile_id);
+      cursors[g] = match ? roster.findIndex((e) => e.id === (match.auto_profile_id ?? match.profile_id)) : -1;
     }
     return cursors;
   }
@@ -92,12 +106,13 @@ export function DutyGenerateWidget({ schedules, onSchedulesChange, onEngineersCh
         if (existing.has(`${iso}|${kind}`)) continue;
         const auto = next(g);
         const ov = manualOverrides[`${iso}|${kind}`];
-        rows.push({ duty_date: iso, kind, profile_id: ov !== undefined ? ov : auto });
+        // 순번이 뽑은 사람(auto)은 따로 남긴다 — 이 칸을 나중에 누가 대신 서더라도 다음 달 순번은 이걸 본다.
+        rows.push({ duty_date: iso, kind, profile_id: ov !== undefined ? ov : auto, ...(autoColReady ? { auto_profile_id: auto } : {}) });
       }
       if (g === "금요일" && fridayAutoAssignsNormalWork(iso) && !existing.has(`${iso}|정상근무`)) {
         const auto = next(g);
         const ov = manualOverrides[`${iso}|정상근무`];
-        rows.push({ duty_date: iso, kind: "정상근무", profile_id: ov !== undefined ? ov : auto });
+        rows.push({ duty_date: iso, kind: "정상근무", profile_id: ov !== undefined ? ov : auto, ...(autoColReady ? { auto_profile_id: auto } : {}) });
       }
     }
     if (!rows.length) return;
@@ -219,7 +234,7 @@ export function DutyGenerateWidget({ schedules, onSchedulesChange, onEngineersCh
     });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [genYm, genMode, engineers, profiles, schedules, manualOverrides]);
+  }, [genYm, genMode, engineers, profiles, schedules, manualOverrides, startOverrides]);
 
   function shiftGenMonth(delta) {
     const [gy, gm] = genYm.split("-").map(Number);
@@ -272,6 +287,27 @@ export function DutyGenerateWidget({ schedules, onSchedulesChange, onEngineersCh
           ? "평일(월~금)과 주말이 서로 다른 순번으로 돕니다."
           : "평일(월~목)·금요일(숙직·당직·정상근무)·주말이 각각 다른 순번으로 돕니다."}
       </p>
+
+      {/* 시작 순번 — 비우면 지난달 순번을 이어받는다. 순번 기록이 없는 달(144 마이그레이션 직후)이나
+          순번표를 바꿔 이어받기가 어긋날 때 관리자가 직접 첫 사람을 지정한다. */}
+      <div className="border border-slate-100 rounded-lg p-3 mb-3">
+        <p className="text-[11px] font-bold text-slate-500 mb-2">시작 순번 (비우면 지난달에서 이어받음)</p>
+        <div className="space-y-2">
+          {groupsOf(genMode).map((g) => (
+            <div key={g} className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-slate-500 w-12 shrink-0">{g}</span>
+              <select
+                className={inputCls}
+                value={startOverrides[g] ?? ""}
+                onChange={(e) => setStartOverrides((prev) => ({ ...prev, [g]: e.target.value || undefined }))}
+              >
+                <option value="">이어받기(자동)</option>
+                {rosterOf(genMode).map((e) => <option key={e.id} value={e.id}>{e.duty_order}. {e.name}</option>)}
+              </select>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* 순번표 — 선택된 근무제 전용. 카드를 누르면 포함/제외, 숫자칸은 순번(따로 클릭해도 카드는 안 바뀐다). */}
       <div className="border border-slate-100 rounded-lg p-3 mb-3">
