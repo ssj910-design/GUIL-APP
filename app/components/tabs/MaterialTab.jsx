@@ -85,7 +85,10 @@ function RequestDetailSheet({ target, onClose, onPhotoClick, todos, onCancelMate
           {type === "quote" && (
             <div className="bg-slate-100 rounded-xl p-3">
               <p className="text-[11px] text-slate-500">현장 담당자 연락처</p>
+              {/* 전화 아래에 이메일·팩스를 각각 한 줄씩 — 입력한 것만 보여준다 */}
               <p className="font-bold text-slate-800">{data.contactPhone ? <PhoneLink phone={data.contactPhone} /> : "-"}</p>
+              {data.contactEmail && <p className="font-bold text-slate-800 break-all">{data.contactEmail}</p>}
+              {data.contactFax && <p className="font-bold text-slate-800">fax.{data.contactFax}</p>}
             </div>
           )}
           {type === "restock" && (
@@ -724,7 +727,9 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
   const materialSubTabs = ["material", "quote"];
   const swipe = useSwipeSubtab(materialSubTabs, sub, setSub);
   const [form, setForm] = useState({ siteId: "", units: [], parts: [emptyPartRow()], partsByUnit: {}, urgency: "일반", photos: [], note: "" });
-  const [quoteForm, setQuoteForm] = useState({ siteId: "", units: [], parts: [emptyPartRow(), emptyPartRow(), emptyPartRow()], partsByUnit: {}, contactPhone: "", photos: [], note: "" });
+  const [quoteForm, setQuoteForm] = useState({ siteId: "", units: [], parts: [emptyPartRow(), emptyPartRow(), emptyPartRow()], partsByUnit: {}, contactPhone: "", contactEmail: "", contactFax: "", photos: [], note: "" });
+  // quote_requests.contact_email/contact_fax 컬럼 존재 여부 — 마이그레이션 145 실행 전엔 컬럼이 없다.
+  const quoteContactExtraReady = quoteRequests.some((q) => q.contactEmail !== undefined);
   const [matStep, setMatStep] = useState(0);
   const [quoteStep, setQuoteStep] = useState(0);
   const [formToast, setFormToast] = useState(null); // { msg, ok } — 경고(기본)/성공(ok)
@@ -911,6 +916,8 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
       elevatorNos: quoteForm.units.length > 1 ? units_ : null,
       constructionType: quoteFormText,
       contactPhone: quoteForm.contactPhone,
+      contactEmail: quoteForm.contactEmail.trim() || null,
+      contactFax: quoteForm.contactFax.trim() || null,
       note: quoteForm.note,
       photoCount: quoteForm.photos.length,
       photoUrls: quoteForm.photos.map((p) => p.url),
@@ -929,6 +936,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
       elevator_no: newQuote.elevatorNo,
       construction_type: newQuote.constructionType,
       contact_phone: newQuote.contactPhone,
+      ...(quoteContactExtraReady ? { contact_email: newQuote.contactEmail, contact_fax: newQuote.contactFax } : {}),
       note: newQuote.note,
       photo_count: newQuote.photoCount,
       photo_urls: newQuote.photoUrls,
@@ -942,7 +950,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
       } : {}),
     };
     if (!(await onAddQuoteRequest([newQuote], [dbRow]))) return;
-    setQuoteForm({ siteId: "", units: [], parts: [emptyPartRow(), emptyPartRow(), emptyPartRow()], partsByUnit: {}, contactPhone: "", photos: [], note: "" });
+    setQuoteForm({ siteId: "", units: [], parts: [emptyPartRow(), emptyPartRow(), emptyPartRow()], partsByUnit: {}, contactPhone: "", contactEmail: "", contactFax: "", photos: [], note: "" });
     setQuoteStep(0);
     toastForm("견적 요청이 접수되었습니다", true);
   }
@@ -1301,6 +1309,27 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
                     onChange={(e) => handlePhoneInputChange(e, (v) => setQuoteForm({ ...quoteForm, contactPhone: v }))}
                   />
                 </Field>
+                {quoteContactExtraReady && (
+                  <>
+                    <Field label="현장 견적 담당자 이메일 (선택)">
+                      <input
+                        className={inputCls}
+                        type="email"
+                        placeholder="예: manager@email.com"
+                        value={quoteForm.contactEmail}
+                        onChange={(e) => setQuoteForm({ ...quoteForm, contactEmail: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="현장 견적 담당자 팩스 (선택)">
+                      <input
+                        className={inputCls}
+                        placeholder="예: 02-588-2475"
+                        value={quoteForm.contactFax}
+                        onChange={(e) => handlePhoneInputChange(e, (v) => setQuoteForm({ ...quoteForm, contactFax: v }))}
+                      />
+                    </Field>
+                  </>
+                )}
               </>
             )}
 

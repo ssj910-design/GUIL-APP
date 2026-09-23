@@ -796,14 +796,21 @@ function QuotesPanel({ active, completedCount, engineerNames, onAdvanceQuote, on
                 <p className="text-[11px] text-slate-500">현장 견적 담당자</p>
                 <p className="font-bold text-slate-800">{(isDraftedQuote ? shownDetail.recipientName : null) || "-"}</p>
               </div>
+              {/* 전화(작성 후엔 발송 수신처 우선) 아래에 이메일·팩스를 한 줄씩 — 팩스는 수신처에 없는
+                  값이라 항상 기사가 입력한 값을 쓴다. 없는 항목은 줄을 만들지 않는다. */}
               <div className="bg-slate-100 rounded-xl p-3">
                 <p className="text-[11px] text-slate-500">담당자 연락처</p>
-                <p className="font-bold text-slate-800">
-                  {(() => {
-                    const p = isDraftedQuote ? shownDetail.recipientPhone : shownDetail.contactPhone;
-                    return p ? <PhoneLink phone={p} /> : "-";
-                  })()}
-                </p>
+                {(() => {
+                  const phone = (isDraftedQuote ? shownDetail.recipientPhone : null) || shownDetail.contactPhone;
+                  const email = (isDraftedQuote ? shownDetail.recipientEmail : null) || shownDetail.contactEmail;
+                  return (
+                    <>
+                      <p className="font-bold text-slate-800">{phone ? <PhoneLink phone={phone} /> : "-"}</p>
+                      {email && <p className="font-bold text-slate-800 break-all">{email}</p>}
+                      {shownDetail.contactFax && <p className="font-bold text-slate-800">fax.{shownDetail.contactFax}</p>}
+                    </>
+                  );
+                })()}
               </div>
               {(shownDetail.requesterId || shownDetail.engineer) && (
                 <div className="bg-slate-100 rounded-xl p-3">

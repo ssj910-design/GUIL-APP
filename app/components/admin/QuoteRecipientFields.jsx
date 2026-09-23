@@ -16,8 +16,9 @@ const MAX_ATTACHMENT_MB = 25;
 
 export function useQuoteRecipientFields(quote, siteManagers, profiles) {
   const primaryManager = (siteManagers ?? []).find((m) => m.isPrimary) ?? (siteManagers ?? [])[0];
-  const [email, setEmail] = useState(quote.recipientEmail || primaryManager?.email || "");
-  const [phone, setPhone] = useState(quote.recipientPhone || primaryManager?.phone || "");
+  // 기본값 우선순위: 이미 저장된 수신처 > 기사가 견적 신청에 적은 현장 담당자 > 현장 대표 담당자.
+  const [email, setEmail] = useState(quote.recipientEmail || quote.contactEmail || primaryManager?.email || "");
+  const [phone, setPhone] = useState(quote.recipientPhone || quote.contactPhone || primaryManager?.phone || "");
   const [referenceEmail, setReferenceEmail] = useState(quote.referenceEmail || "");
   const [referencePhone, setReferencePhone] = useState(quote.referencePhone || "");
   const [noticeMessage, setNoticeMessage] = useState(quote.noticeMessage || "");

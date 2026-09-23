@@ -828,7 +828,11 @@ function QuoteDetailModal({ quote: r, data, onClose, onReject }) {
           ) : (
             <div><p className="text-xs font-bold text-slate-400 mb-1">공사 내용</p><p className="font-semibold text-slate-800">{r.constructionType}</p></div>
           )}
-          <div><p className="text-xs font-bold text-slate-400 mb-1">현장 담당자 연락처</p><p className="font-semibold text-slate-800">{r.contactPhone || (primaryManager?.phone ? `${primaryManager.phone}${otherManagers.length ? ` 외 ${otherManagers.length}명` : ""}` : "-")}</p></div>
+          {/* 기사가 입력한 전화·이메일·팩스를 한 줄에 이어서 — 아무것도 없으면 현장 대표 담당자 연락처 */}
+          <div><p className="text-xs font-bold text-slate-400 mb-1">현장 담당자 연락처</p><p className="font-semibold text-slate-800 break-all">
+            {[r.contactPhone, r.contactEmail, r.contactFax ? `fax.${r.contactFax}` : null].filter(Boolean).join(", ")
+              || (primaryManager?.phone ? `${primaryManager.phone}${otherManagers.length ? ` 외 ${otherManagers.length}명` : ""}` : "-")}
+          </p></div>
           <div><p className="text-xs font-bold text-slate-400 mb-1">{isDraftedQuote ? "작성일" : "신청일"}</p><p className="font-semibold text-slate-800">{shortDate(isDraftedQuote ? r.quoteIssuedDate : r.requestedDate)}</p></div>
           {hasRequester && (
             <div><p className="text-xs font-bold text-slate-400 mb-1">신청 기사</p><p className="font-semibold text-slate-800">{personOf(data, r.requesterId, r.engineer)}</p></div>
