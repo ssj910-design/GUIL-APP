@@ -14,6 +14,7 @@ import { DutyGenerateWidget } from "@/app/components/DutyGenerateWidget";
 import { Sheet, SwipeSubtabTrack, SwipeIndicatorBar } from "@/app/components/ui";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
+import { useHolidays } from "@/app/hooks/useHolidays";
 import { notify } from "@/lib/push";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
@@ -29,6 +30,7 @@ function LeaveCalendarTab({ schedules = [] }) {
   const me = profiles.find((p) => p.id === selfId) ?? {};
   const today = new Date(`${TODAY_STR}T00:00:00`);
   const [cursor, setCursor] = useState({ y: today.getFullYear(), m: today.getMonth() });
+  const { days: HOLIDAY } = useHolidays(cursor.y);
   const [leaves, setLeaves] = useState([]);
   const [onlyMine, setOnlyMine] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -287,10 +289,16 @@ function LeaveCalendarTab({ schedules = [] }) {
               const iso = `${ym}-${String(d).padStart(2, "0")}`;
               const dow = (startDow + d - 1) % 7;
               const isToday = iso === TODAY_STR;
+              const isHoliday = !!HOLIDAY[iso];
               const dayLeaves = leavesOf(iso);
               return (
-                <div key={d} className={`border-b border-r border-slate-100 min-h-[76px] p-1 ${isToday ? "bg-blue-50" : ""}`}>
-                  <p className={`text-[10px] font-bold text-right pr-0.5 ${dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-slate-400"}`}>{d}</p>
+                <div key={d} className={`border-b border-r border-slate-100 min-h-[76px] p-1 ${isToday ? "bg-blue-50" : isHoliday ? "bg-red-50/40" : ""}`}>
+                  <p className={`text-[10px] font-bold text-right pr-0.5 truncate ${
+                    HOLIDAY[iso] || dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-slate-400"
+                  }`} title={HOLIDAY[iso] ?? ""}>
+                    {HOLIDAY[iso] && <span className="float-left text-[8.5px] text-red-400 font-bold max-w-[70%] truncate">{HOLIDAY[iso]}</span>}
+                    {d}
+                  </p>
                   <div className="space-y-0.5">
                     {dayLeaves.slice(0, 3).map((l) => {
                       const period = l.kind === "반차" ? periodOf(l.note) : null;

@@ -12,6 +12,7 @@ import { usePriorFlaggedBadge } from "@/app/hooks/useLiveInspections";
 import { FailureDetailSheet, DispatchEtaModal, ArrivalResultModal, FailureMiniCard, AssignEngineerSheet } from "@/app/components/tabs/FailureTab";
 import { EngineerLocationMap } from "@/app/components/admin/EngineerLocationMap";
 import { useBackHandler } from "@/app/hooks/useBackHandler";
+import { useHolidays } from "@/app/hooks/useHolidays";
 
 
 // 검사도래현장 한 줄: 직전 검사가 조건부합격/조건후합격이면 현장명을 눌러 당시 부적합내역을 볼 수 있다.
@@ -417,6 +418,7 @@ const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const CAL_PAST_DAYS = 7;
 const CAL_FUTURE_DAYS = 7;
 function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
+  const { days: HOLIDAY } = useHolidays();
   const [duties, setDuties] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [dayDetail, setDayDetail] = useState(null); // 날짜 카드 클릭 시 당직·숙직·휴가 인원 모아보기
@@ -497,7 +499,7 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
                 d === TODAY_STR ? "border-blue-300 bg-blue-50" : "border-slate-100"
               }`}
             >
-              <p className={`text-[10px] font-bold text-center ${dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-slate-400"}`}>
+              <p className={`text-[10px] font-bold text-center ${HOLIDAY[d] || dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-slate-400"}`}>
                 {DOW[dow]} {Number(d.slice(8))}
               </p>
               <div className="mt-1 space-y-0.5">
