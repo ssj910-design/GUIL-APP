@@ -71,13 +71,15 @@ function signerLabel(b) {
 function buildCertificateData(b, data) {
   const items = (b.partPhotos?.length > 1 ? b.partPhotos : null)?.map((p) => ({
     name: p.name,
-    unit: p.unit ?? null,
+    unit: p.unit ?? (b.elevatorNos?.length ? null : b.elevatorNo),
     qty: p.qty,
     amount: p.amount ?? null,
     beforeUrls: p.beforeUrls ?? [],
     afterUrls: p.afterUrls ?? [],
   })) ?? [{
     name: b.part,
+    // 품목별 호기가 따로 없는 건(직접입력 등)은 이 청구의 호기를 그대로 쓴다 — 여러 호기면 특정 못 하니 비움.
+    unit: b.elevatorNos?.length ? null : b.elevatorNo,
     qty: null,
     amount: b.isFree ? null : b.cost,
     beforeUrls: b.beforePhotoUrls ?? [],
