@@ -478,8 +478,10 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
           const dow = new Date(`${d}T00:00:00`).getDay();
           // DB에서 온 순서 그대로 쓰면 요청/수정 이력에 따라 날짜마다 숙직·당직 순서가 들쭉날쭉해진다
           // (오늘 날짜만 뒤바뀌어 보이던 원인) — 근무표·근무조정과 같은 순서(DUTY_KINDS)로 강제 정렬한다.
+          // 관리자가 배정을 지우면 행 자체가 삭제되지 않고 profile_id만 null로 남는다(DutyAdmin.jsx의
+          // upsert 방식) — profile_id 없는 행은 "미배정 자리"일 뿐이라 점으로 보여줄 대상이 아니다.
           const dutyDay = duties
-            .filter((x) => x.duty_date === d && (x.kind === "당직" || x.kind === "숙직" || x.kind === "정상근무"))
+            .filter((x) => x.duty_date === d && x.profile_id && (x.kind === "당직" || x.kind === "숙직" || x.kind === "정상근무"))
             .sort((a, b) => DUTY_KINDS.indexOf(a.kind) - DUTY_KINDS.indexOf(b.kind));
           const leaveDay = leaves.filter((l) => l.start_date <= d && d <= l.end_date);
           // 카드 폭이 좁아 이름을 3명까지만 보여주고, 나머지는 "+N"으로 요약한다 (자세히는 카드 클릭 시 팝업).
@@ -527,7 +529,9 @@ function WorkCalendarMiniStrip({ profiles, onOpen, swapCount = 0 }) {
             </div>
             <div className="space-y-2.5">
               {DUTY_KINDS.map((kind) => {
-                const person = duties.find((x) => x.duty_date === dayDetail && x.kind === kind);
+                // 배정을 지워도 행 자체는 안 지워지고 profile_id만 null로 남는다(DutyAdmin.jsx) —
+                // profile_id 없는 행은 "미배정 자리"와 같은 뜻이라 배정된 것으로 치지 않는다.
+                const person = duties.find((x) => x.duty_date === dayDetail && x.kind === kind && x.profile_id);
                 // 정상근무(주4일제 금요일 전용 자리)는 이 날짜에 배치가 없으면 칸 자체를 숨긴다
                 // (주5일제 달엔 애초에 레코드가 없어 매일 "미배정"만 뜨는 걸 막는다 — DutyRoster와 동일 규칙).
                 if (kind === "정상근무" && !person) return null;
