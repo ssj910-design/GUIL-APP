@@ -155,11 +155,13 @@ export function SiteMapModal({ sites, units = [], onClose }) {
       const withCoords = activeSites.filter((s) => s.lat != null && s.lng != null);
 
       const map = L.map(containerRef.current).setView([37.5665, 126.978], 11);
-      // CARTO Voyager — Google 지도처럼 옅고 깔끔해서 컬러 마커가 두드러진다 (키 발급 불필요).
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-        attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
-        maxZoom: 20,
-        subdomains: "abcd",
+      // CARTO Voyager(키 발급 불필요라 썼던 무료 타일)가 이제 API 키를 요구해서 전부
+      // "API KEY REQUIRED" 워터마크로 깨짐 — EngineerLocationMap.jsx와 같은 순정 OSM
+      // 타일로 교체(계속 무료·무키, 이미 이 앱에서 검증된 경로).
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 19,
+        subdomains: "abc",
       }).addTo(map);
 
       withCoords.forEach((s) => {
