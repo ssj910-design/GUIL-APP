@@ -11,7 +11,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { usePhotoLightboxGestures } from "@/app/hooks/usePhotoLightboxGestures";
 import { PhotoLightboxPane } from "@/app/components/ui";
 
-export default function QuoteViewer({ url }) {
+export default function QuoteViewer({ url, label = "견적서" }) {
   const [pages, setPages] = useState(null); // null=로딩중, []=실패
   const [index, setIndex] = useState(0);
   const [error, setError] = useState("");
@@ -54,13 +54,13 @@ export default function QuoteViewer({ url }) {
     usePhotoLightboxGestures(pageCount, index, setIndex, { wheelZoom: false });
 
   if (pages === null) {
-    return <div className="flex-1 flex items-center justify-center text-sm text-slate-400">견적서 불러오는 중...</div>;
+    return <div className="flex-1 flex items-center justify-center text-sm text-slate-400">{label} 불러오는 중...</div>;
   }
 
   if (pageCount === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 text-sm text-slate-500 px-6 text-center">
-        <p>견적서를 불러오지 못했습니다{error ? ` (${error})` : ""}.</p>
+        <p>{label}를 불러오지 못했습니다{error ? ` (${error})` : ""}.</p>
         <a href={url} className="text-blue-600 font-bold underline">PDF 파일 다운로드</a>
       </div>
     );
