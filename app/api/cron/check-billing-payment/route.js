@@ -1,12 +1,16 @@
 // 무자료 청구서 자동 독촉 — pg_cron이 매분 호출, 09:00(KST)에만 동작.
-// reminder_enabled=true이고 아직 입금(received_date) 확인이 안 된 결제기한 경과 건을
-// 7일 간격으로 재발송한다. 결제기한으로부터 60일이 지나면 자동 재발송을 멈추고 관리자에게만
+// reminder_enabled=true이고 아직 완납 확인이 안 된 결제기한 경과 건을 7일 간격으로
+// 재발송한다. 결제기한으로부터 60일이 지나면 자동 재발송을 멈추고 관리자에게만
 // "독촉 만료" 알림을 보낸다(N=2달, M=7일 — 사용자 확정값).
+// 완납 여부는 received_date 하나로 안 본다 — 분할납부(receivedPayments)로 전액을 다 낸
+// 건은 received_date가 끝까지 안 채워질 수 있어(ReceivedPaymentsCell이 그 컬럼을 안 건드림),
+// billingDueAmount/receivedTotalOf(입금 현황 판정에 이미 쓰는 기준, lib/utils.js)로 직접 비교한다.
 // 최초 발송 PDF(billings.invoice_pdf_url)를 그대로 재사용한다 — 청구 내용은 안 바뀌므로
 // 재발송 때마다 새로 만들 필요가 없다.
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { mapBilling, mapUnit, mapSite } from "@/lib/mappers";
 import { buildBillingInvoiceData } from "@/lib/billingInvoiceData";
+import { billingDueAmount, receivedTotalOf } from "@/lib/utils";
 import { sendBillingInvoiceEmail } from "@/lib/email";
 import { sendBillingInvoiceAlimtalk } from "@/lib/alimtalk";
 
@@ -37,7 +41,6 @@ async function handle(request) {
   const { data: rows } = await db.from("billings").select("*")
     .eq("billing_method", "무자료")
     .eq("reminder_enabled", true)
-    .is("received_date", null)
     .not("payment_due_date", "is", null)
     .lte("payment_due_date", todayStr);
   if (!rows?.length) return Response.json({ ok: true, targets: 0 });
@@ -49,9 +52,17 @@ async function handle(request) {
   const units = (unitRows ?? []).map(mapUnit);
   const sites = (siteRows ?? []).map(mapSite);
 
-  let sent = 0, expired = 0;
+  let sent = 0, expired = 0, paid = 0;
   for (const row of rows) {
     const billing = mapBilling(row);
+
+    // 완납이면(분할납부 전액 포함) 자동 독촉을 그냥 끄고 넘어간다 — 다음 날부터는 쿼리에도 안 걸림.
+    if (billingDueAmount(billing) - receivedTotalOf(billing) <= 0) {
+      await db.from("billings").update({ reminder_enabled: false }).eq("id", billing.id);
+      paid++;
+      continue;
+    }
+
     const daysOverdue = Math.floor(
       (new Date(`${todayStr}T00:00:00+09:00`) - new Date(`${billing.paymentDueDate}T00:00:00+09:00`)) / DAY_MS
     );
@@ -90,7 +101,7 @@ async function handle(request) {
     }
   }
 
-  return Response.json({ ok: true, targets: rows.length, sent, expired });
+  return Response.json({ ok: true, targets: rows.length, sent, expired, paid });
 }
 
 export async function GET(request) { return handle(request); }
