@@ -123,6 +123,9 @@ export default function QuotesAdmin({ data, setData }) {
   // todos.elevator_nos 컬럼 존재 여부 — 마이그레이션 131 실행 전엔 컬럼이 없어, 있을 때만
   // 한 견적이 다루는 호기 전체 목록을 할 일에도 같이 담는다.
   const todoElevatorNosReady = (data.todos ?? []).some((t) => t.elevatorNos !== undefined);
+  // quote_requests.elevator_nos 컬럼 존재 여부 — 마이그레이션 131 실행 전엔 컬럼이 없어, 있을 때만
+  // 새 견적 발행 시 여러 호기를 한 번에 골라 담는다.
+  const quoteElevatorNosReady = allQuoteRequests.some((q) => q.elevatorNos !== undefined);
 
   const query = search.trim().toLowerCase();
   const quoteRequestsSearched = allQuoteRequests.filter((q) =>
@@ -336,16 +339,18 @@ export default function QuotesAdmin({ data, setData }) {
     }));
   }
 
-  async function handleCreateQuote(siteId, unitId) {
+  async function handleCreateQuote(siteId, unitIds) {
     const site = (data.sites ?? []).find((s) => s.id === siteId);
     if (!site) return;
-    const unit = unitId ? (data.units ?? []).find((u) => u.id === unitId) : null;
+    // siteUnits와 동일 순서로 걸러서, 여러 호기를 골랐을 때 elevator_nos 순서가 화면과 일치하게 한다.
+    const selectedUnits = (data.units ?? []).filter((u) => u.siteId === siteId && (unitIds ?? []).includes(u.id));
     const row = {
       id: "q" + Date.now(),
       site_id: siteId,
       site_name: site.name,
-      elevator_no: unit?.unitNo ?? null,
-      unit_id: unit?.id ?? null,
+      elevator_no: selectedUnits[0]?.unitNo ?? null,
+      unit_id: selectedUnits[0]?.id ?? null,
+      ...(quoteElevatorNosReady ? { elevator_nos: selectedUnits.length > 1 ? selectedUnits.map((u) => u.unitNo) : null } : {}),
       construction_type: "관리자 발행",
       contact_phone: null,
       note: null,
@@ -921,29 +926,44 @@ function QuoteDetailModal({ quote: r, data, onClose, onReject }) {
 function QuoteNewSiteModal({ sites, units, onClose, onSelect }) {
   const [query, setQuery] = useState("");
   const [site, setSite] = useState(null);
+  const [selectedUnitIds, setSelectedUnitIds] = useState([]);
   const filtered = sites.filter((s) => s.name.toLowerCase().includes(query.trim().toLowerCase()));
 
   if (site) {
     const siteUnits = (units ?? []).filter((u) => u.siteId === site.id);
     return (
-      <Modal title={`새 견적 발행 — 호기 선택 (${site.name})`} onClose={onClose}>
-        <div className="h-72 overflow-y-auto space-y-1">
-          {siteUnits.map((u) => (
-            <button
-              key={u.id}
-              type="button"
-              onClick={() => onSelect(site.id, u.id)}
-              className="w-full text-left px-3 py-2.5 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0 rounded-lg"
-            >
-              {formatUnitLabel(u.unitNo)}
-            </button>
-          ))}
+      <Modal title={`새 견적 발행 — 호기 선택 (${site.name}, 여러 호기 선택 가능)`} onClose={onClose}>
+        <div className="h-72 overflow-y-auto flex flex-wrap content-start gap-1.5">
+          {siteUnits.map((u) => {
+            const checked = selectedUnitIds.includes(u.id);
+            return (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => setSelectedUnitIds((prev) => (checked ? prev.filter((id) => id !== u.id) : [...prev, u.id]))}
+                className={`text-xs font-bold rounded-lg px-3 py-1.5 border ${checked ? "bg-blue-700 text-white border-blue-700" : "text-slate-600 border-slate-200"}`}
+              >
+                {formatUnitLabel(u.unitNo)}
+              </button>
+            );
+          })}
+          {siteUnits.length === 0 && <p className="text-xs text-slate-400">이 현장에 등록된 호기가 없습니다</p>}
+        </div>
+        <div className="flex justify-end gap-2 mt-3">
           <button
             type="button"
-            onClick={() => onSelect(site.id, null)}
-            className="w-full text-left px-3 py-2.5 text-sm text-slate-400 hover:bg-slate-50 rounded-lg"
+            onClick={() => onSelect(site.id, [])}
+            className="text-xs font-bold text-slate-500 border border-slate-200 rounded-lg px-3.5 py-2"
           >
             호기 선택 안 함
+          </button>
+          <button
+            type="button"
+            onClick={() => onSelect(site.id, selectedUnitIds)}
+            disabled={selectedUnitIds.length === 0}
+            className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-lg px-3.5 py-2"
+          >
+            선택 완료{selectedUnitIds.length > 0 ? ` (${selectedUnitIds.length})` : ""}
           </button>
         </div>
       </Modal>
