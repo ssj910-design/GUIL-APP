@@ -1,6 +1,6 @@
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect } from "react";
 import { BRAND } from "@/lib/company";
-import { Search, MapPin, AlertTriangle } from "lucide-react";
+import { Search, MapPin, AlertTriangle, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { useHolidays } from "@/app/hooks/useHolidays";
@@ -9,9 +9,10 @@ import { siteUnitList, distanceKm, formatMonthDay, activeSites } from "@/lib/uti
 import { selfCheckNotStarted } from "@/lib/selfCheckStart";
 import { mapSelfCheck, mapSelfCheckItem, mapSelfCheckItemState } from "@/lib/mappers";
 import { notify } from "@/lib/push";
-import { PrimaryButton, Sheet, Field, inputCls, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, Badge } from "@/app/components/ui";
+import { PrimaryButton, Sheet, Field, inputCls, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, Badge, PhotoGrid } from "@/app/components/ui";
 import { MultiPhotoUpload } from "@/app/components/formWidgets";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
+import { confirmAsync } from "@/app/components/ConfirmHost";
 import SELF_CHECK_ITEM_CODES from "@/lib/data/selfCheckItemCodes.json";
 
 /* ------------------------------------------------------------------ */
@@ -123,6 +124,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   const [checkupToast, setCheckupToast] = useState(""); // 필수 미입력 안내 토스트
 
   const [dayPopup, setDayPopup] = useState(null); // 클릭한 날짜(iso)
+  const [checkDetail, setCheckDetail] = useState(null); // 처리 탭에서 열람 중인 등록 내역
 
   const ym = TODAY_STR.slice(0, 7);
   const unitById = new Map(units.map((u) => [u.id, u]));
@@ -574,7 +576,11 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
           ) : (
             <div className="space-y-2.5">
               {doneChecks.map((c) => (
-                <div key={c.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
+                <div
+                  key={c.id}
+                  onClick={() => setCheckDetail(c)}
+                  className="bg-white rounded-xl border border-slate-200 p-3.5 cursor-pointer active:bg-slate-50"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p className="font-bold text-slate-800 text-sm">{locOfCheck(c)}</p>
@@ -883,6 +889,104 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
           )}
         </Sheet>
       )}
+
+      {checkDetail && (
+        <SelfCheckDetailModal
+          check={checkDetail}
+          title={locOfCheck(checkDetail)}
+          profilesAll={profilesAll}
+          onClose={() => setCheckDetail(null)}
+          onDeleted={(id) => {
+            setSelfChecks((prev) => prev.filter((c) => c.id !== id));
+            setCheckDetail(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function SelfCheckDetailModal({ check, title, profilesAll, onClose, onDeleted }) {
+  const [items, setItems] = useState(null); // null = 로딩중
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    supabase.from("self_check_items").select("*").eq("self_check_id", check.id).then(({ data }) => {
+      if (!cancelled) setItems((data ?? []).map(mapSelfCheckItem));
+    });
+    return () => { cancelled = true; };
+  }, [check.id]);
+
+  const assignee = profilesAll.find((p) => p.id === check.assigneeId)?.name ?? "-";
+  const exceptions = (items ?? []).filter((it) => it.result !== "A");
+
+  async function handleDelete() {
+    if (!(await confirmAsync(`${title} 자체점검 등록 내역을 삭제할까요? 되돌릴 수 없습니다.`))) return;
+    setDeleting(true);
+    await supabase.from("self_check_items").delete().eq("self_check_id", check.id);
+    const { error } = await supabase.from("self_checks").delete().eq("id", check.id);
+    if (error) { alert("삭제 실패: " + error.message); setDeleting(false); return; }
+    onDeleted(check.id);
+  }
+
+  return (
+    <Sheet title={title} onClose={onClose}>
+      <div className="space-y-3 text-sm">
+        <div className="flex justify-between">
+          <span className="text-slate-400">완료일</span>
+          <span className="font-semibold text-slate-800">{check.doneDate}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-slate-400">담당자</span>
+          <span className="font-semibold text-slate-800">{assignee}</span>
+        </div>
+        {check.notes && (
+          <div>
+            <p className="text-slate-400 mb-1">특이사항</p>
+            <p className="text-slate-800 whitespace-pre-wrap bg-slate-50 rounded-lg p-2.5">{check.notes}</p>
+          </div>
+        )}
+        {check.photos?.length > 0 && (
+          <div>
+            <p className="text-slate-400 mb-1">사진</p>
+            <PhotoGrid urls={check.photos} />
+          </div>
+        )}
+        <div>
+          <p className="text-slate-400 mb-1">점검항목</p>
+          {items === null ? (
+            <p className="text-xs text-slate-400">불러오는 중...</p>
+          ) : exceptions.length === 0 ? (
+            <p className="text-xs text-slate-400">전 항목 양호</p>
+          ) : (
+            <div className="space-y-1.5">
+              {exceptions.map((it) => (
+                <div key={it.itemCd} className="flex justify-between bg-slate-50 rounded-lg px-2.5 py-1.5">
+                  <span className="text-slate-700">{SELF_CHECK_ITEM_CODES.find((i) => i.code === it.itemCd)?.name ?? it.itemCd}</span>
+                  <span className="font-semibold text-red-600">{RESULT_OPTIONS.find((o) => o.v === it.result)?.label ?? it.result}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        {check.govSubmittedAt && (
+          <div>
+            <p className="text-slate-400 mb-1">공단 제출</p>
+            <p className="text-slate-800">
+              {check.govResultCode === "000" ? "제출 성공" : `제출 실패 ${check.govResultCode ?? ""} ${check.govResultMsg ?? ""}`}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-0.5">전송 {formatDateTime(check.govSubmittedAt)}</p>
+          </div>
+        )}
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="w-full mt-2 flex items-center justify-center gap-1.5 text-sm font-semibold text-red-600 border border-red-200 rounded-xl py-2.5"
+        >
+          <Trash2 size={15} /> {deleting ? "삭제 중..." : "등록 내역 삭제"}
+        </button>
+      </div>
+    </Sheet>
   );
 }
