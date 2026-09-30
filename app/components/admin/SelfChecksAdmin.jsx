@@ -43,12 +43,14 @@ function GovBadge({ code, msg }) {
 }
 
 // 자체점검일지 — 이번 달 기록 중 기본값(양호)과 다른 예외 항목 + 특이사항 + 점검사진.
+// "없음(E)"은 해당 설비가 없다는 뜻이라 지적사항이 아니다 — 목록에서 뺀다(관리자 콘솔 지적사항
+// 목록도 AdminApp에서 B·C만 불러온다).
 function SelfCheckLogModal({ c, onClose }) {
   const [items, setItems] = useState(null);
 
   useEffect(() => {
     let alive = true;
-    supabase.from("self_check_items").select("*").eq("self_check_id", c.id).then(({ data }) => {
+    supabase.from("self_check_items").select("*").eq("self_check_id", c.id).in("result", ["B", "C"]).then(({ data }) => {
       if (alive) setItems((data ?? []).map(mapSelfCheckItem));
     });
     return () => { alive = false; };
@@ -58,11 +60,11 @@ function SelfCheckLogModal({ c, onClose }) {
     <Modal title={`${c.loc} · 자체점검일지`} onClose={onClose} wide="xl">
       <div className="space-y-4">
         <div>
-          <p className="text-xs font-bold text-slate-500 mb-2">점검 결과 (기본값과 다른 예외 항목만 표시 · 나머지는 전부 양호)</p>
+          <p className="text-xs font-bold text-slate-500 mb-2">점검 결과 (주의관찰·긴급수리만 표시 · 양호·없음은 제외)</p>
           {items == null ? (
             <p className="text-xs text-slate-400">불러오는 중...</p>
           ) : items.length === 0 ? (
-            <p className="text-xs text-slate-400">전 항목 양호(기본값)</p>
+            <p className="text-xs text-slate-400">지적사항 없음</p>
           ) : (
             <div className="border border-slate-200 rounded-xl divide-y divide-slate-100">
               {items.map((it) => {
