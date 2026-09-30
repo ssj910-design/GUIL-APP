@@ -973,18 +973,24 @@ export default function App() {
   useEffect(() => {
     if (!skipLogin && !session) return;
     const refresh = async () => {
-      // feed_posts·duty_swaps는 계속 쌓이기만 하는 테이블이라 select("*")만 쓰면 언젠가
-      // PostgREST 기본 1000행 한도에 걸린다 — 실사고: 게시판이 1000행을 넘은 뒤로 이 30초
-      // 폴링이 매번 "오래된 글 1000개"만 받아와 최신 글을 지워버렸다(당겨서 새로고침을 할
-      // 때만 fetchAll을 쓰는 loadData가 다시 돌아 정상으로 보였다가, 30초 뒤 다시 깨짐).
-      // duty_schedules(이번 달부터만)·leaves(오늘 것만)는 원래도 행수가 작아 그대로 둔다.
+      // feed_posts는 계속 쌓이기만 하는 테이블이라, 30초마다 전체를 다시 받으면(fetchAll)
+      // 게시글이 쌓일수록 폴링 한 번당 전송량이 계속 늘어난다 — 접속 인원수만큼 곱해지니
+      // 무시 못할 수준이 된다. 최근 7일치만 받아 그 구간을 통째로 교체하는 걸로 바꿨다
+      // (오래된 글의 좋아요·수정·삭제는 거의 없고, 전체 이력은 이미 loadData가 한 번 다
+      // 받아둔 상태라 굳이 매번 다시 받을 필요가 없다). duty_swaps는 행수가 적어 그대로 둔다.
+      const feedCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const [feedRes, swapRes, dutyRes, leaveRes] = await Promise.all([
-        fetchAll("feed_posts", "*", { column: "created_at", ascending: true }),
+        supabase.from("feed_posts").select("*").gte("created_at", feedCutoff).order("created_at", { ascending: true }),
         fetchAll("duty_swaps"),
         supabase.from("duty_schedules").select("*").gte("duty_date", TODAY_STR.slice(0, 8) + "01").order("duty_date"),
         supabase.from("leaves").select("*").lte("start_date", TODAY_STR).gte("end_date", TODAY_STR),
       ]);
-      if (feedRes.data) setFeed(feedRes.data.map(mapFeedPost));
+      if (feedRes.data) {
+        const recent = feedRes.data.map(mapFeedPost);
+        // 최근 구간(7일 이내)은 이 결과가 최신 진실이다 — 그 구간의 기존 항목은 통째로 교체해
+        // 수정·삭제(더 이상 안 옴)까지 반영하고, 그보다 오래된 항목은 그대로 둔다.
+        setFeed((prev) => [...prev.filter((p) => p.createdAt < feedCutoff), ...recent]);
+      }
       if (swapRes.data) setDutySwaps(swapRes.data.map(mapDutySwap));
       if (dutyRes.data) setDutySchedules(dutyRes.data.map(mapDutySchedule));
       if (leaveRes.data) setTodayLeaves(leaveRes.data.filter((l) => (l.status ?? "승인") === "승인"));
