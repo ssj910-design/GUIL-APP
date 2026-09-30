@@ -973,9 +973,14 @@ export default function App() {
   useEffect(() => {
     if (!skipLogin && !session) return;
     const refresh = async () => {
+      // feed_posts·duty_swaps는 계속 쌓이기만 하는 테이블이라 select("*")만 쓰면 언젠가
+      // PostgREST 기본 1000행 한도에 걸린다 — 실사고: 게시판이 1000행을 넘은 뒤로 이 30초
+      // 폴링이 매번 "오래된 글 1000개"만 받아와 최신 글을 지워버렸다(당겨서 새로고침을 할
+      // 때만 fetchAll을 쓰는 loadData가 다시 돌아 정상으로 보였다가, 30초 뒤 다시 깨짐).
+      // duty_schedules(이번 달부터만)·leaves(오늘 것만)는 원래도 행수가 작아 그대로 둔다.
       const [feedRes, swapRes, dutyRes, leaveRes] = await Promise.all([
-        supabase.from("feed_posts").select("*").order("created_at", { ascending: true }),
-        supabase.from("duty_swaps").select("*"),
+        fetchAll("feed_posts", "*", { column: "created_at", ascending: true }),
+        fetchAll("duty_swaps"),
         supabase.from("duty_schedules").select("*").gte("duty_date", TODAY_STR.slice(0, 8) + "01").order("duty_date"),
         supabase.from("leaves").select("*").lte("start_date", TODAY_STR).gte("end_date", TODAY_STR),
       ]);
