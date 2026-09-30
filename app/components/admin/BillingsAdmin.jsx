@@ -1413,7 +1413,12 @@ export default function BillingsAdmin({ data, setData }) {
   // 밝아지게 해서 "이건 한 청구다"가 보이게 한다 — 안 그러면 행마다 따로 반응해 서로 다른
   // 건처럼 보인다.
   const [hoveredBillingId, setHoveredBillingId] = useState(null);
-  const [detail, setDetail] = useState(null);
+  // id만 들고 있다가 매 렌더 billings에서 다시 찾는다 — 예전엔 클릭 시점의 행 객체를
+  // 그대로 들고 있어서, 상세모달을 안 닫고 청구서 모달만 열고닫으며 값을 바꾸면(자동재발송
+  // 체크 등) 그 변경이 data.billings엔 반영돼도 이 상세모달엔 안 보였다(닫았다 다시 열어야
+  // 최신값이 보임) — 사용자 보고 버그.
+  const [detailId, setDetailId] = useState(null);
+  const detail = detailId ? billings.find((b) => b.id === detailId) ?? null : null;
   const [certTarget, setCertTarget] = useState(null);
   const [creating, setCreating] = useState(false);
   // billings.certificate_pdf_url 컬럼 존재 여부 — 마이그레이션 122 실행 전엔 컬럼이 없다.
@@ -1659,7 +1664,7 @@ export default function BillingsAdmin({ data, setData }) {
             <tr
               key={`${b.id}-${i}`}
               className={`border-b border-slate-50 cursor-pointer ${hoveredBillingId === b.id ? "bg-slate-50" : ""}`}
-              onClick={() => setDetail(b)}
+              onClick={() => setDetailId(b.id)}
               onMouseEnter={() => setHoveredBillingId(b.id)}
               onMouseLeave={() => setHoveredBillingId((id) => (id === b.id ? null : id))}
             >
@@ -1744,7 +1749,7 @@ export default function BillingsAdmin({ data, setData }) {
         })}
       </AdminTable>
 
-      {detail && <BillingDetailModal b={detail} data={data} onClose={() => setDetail(null)} onSave={saveBilling} onToggleFree={toggleFree} onAdjustPrice={adjustPrice} onInvoiceSent={applyInvoiceSentLocal} />}
+      {detail && <BillingDetailModal b={detail} data={data} onClose={() => setDetailId(null)} onSave={saveBilling} onToggleFree={toggleFree} onAdjustPrice={adjustPrice} onInvoiceSent={applyInvoiceSentLocal} />}
       {creating && <NewBillingModal data={data} onClose={() => setCreating(false)} onCreate={createBilling} />}
       {certTarget && (
         <ReplacementCertificateViewer
