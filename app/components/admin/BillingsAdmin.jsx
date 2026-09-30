@@ -746,7 +746,7 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
         <div className="flex items-center gap-2">
           {!editing && b.billingMethod === "무자료" && (
             <button onClick={() => setSendingInvoice(true)} className="text-sm font-bold text-blue-700 bg-white border border-blue-200 rounded-xl px-5 py-2.5">
-              {b.invoiceSentAt ? "청구서 재발송" : "청구서 발송"}
+              청구서
             </button>
           )}
           {isSuper ? (
@@ -864,13 +864,15 @@ function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
     setPreviewLoading(false);
   }
 
-  async function stopAutomation() {
+  // 체크박스도 이 함수로 즉시 저장한다 — 저장을 발송(handleSend)에만 묶어두면 체크만 해놓고
+  // 닫기를 눌렀을 때 반영이 안 된 채 사라져버린다(사용자 보고 버그).
+  async function setReminderAutomation(next) {
     setStoppingAutomation(true);
-    const { error } = await supabase.from("billings").update({ reminder_enabled: false }).eq("id", b.id);
+    const { error } = await supabase.from("billings").update({ reminder_enabled: next }).eq("id", b.id);
     setStoppingAutomation(false);
-    if (error) { alert("자동화 중지 실패: " + error.message); return; }
-    setReminderEnabled(false);
-    onInvoiceSent(b, { reminderEnabled: false });
+    if (error) { alert("자동화 설정 실패: " + error.message); return; }
+    setReminderEnabled(next);
+    onInvoiceSent(b, { reminderEnabled: next });
   }
 
   async function handleSend() {
@@ -963,7 +965,7 @@ function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
                 <p className="text-xs font-bold text-emerald-700">자동화 중</p>
                 <p className="text-[11px] text-emerald-600 mt-0.5">{nextResendLabel ?? "다음 재발송 계산 중"}</p>
                 <button
-                  onClick={stopAutomation}
+                  onClick={() => setReminderAutomation(false)}
                   disabled={stoppingAutomation}
                   className="mt-2 w-full text-xs font-bold text-red-600 bg-white border border-red-200 rounded-lg py-1.5 disabled:opacity-40"
                 >
@@ -1006,7 +1008,12 @@ function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
             <input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="비우면 알림톡은 발송 안 함" />
           </div>
           <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
-            <input type="checkbox" checked={reminderEnabled} onChange={(e) => setReminderEnabled(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={reminderEnabled}
+              disabled={stoppingAutomation}
+              onChange={(e) => setReminderAutomation(e.target.checked)}
+            />
             결제기한이 지나도 입금 확인이 안 되면 7일 간격으로 최대 2달간 자동 재발송
           </label>
 
