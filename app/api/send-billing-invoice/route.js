@@ -22,13 +22,15 @@ export async function POST(request) {
 
   const {
     billingId, channels, recipientEmail, recipientPhone,
-    invoice, pdfUrl, reminder,
+    invoice, pdfUrl, reminder, test,
     paymentDueDate, reminderEnabled,
   } = body;
   const results = {};
   const now = new Date().toISOString();
   const newLogEntries = [];
-  const patch = {
+  // 나에게 보내보기(test)는 실제 청구 발송이 아니므로 billings 행을 전혀 건드리지 않는다
+  // (발송이력·재발송 스케줄에 안 섞이게).
+  const patch = test ? null : {
     recipient_email: recipientEmail || null,
     recipient_phone: recipientPhone || null,
     invoice_pdf_url: pdfUrl || null,
@@ -56,20 +58,22 @@ export async function POST(request) {
     }
   }
 
-  const anyOk = results.email?.ok || results.kakao?.ok;
-  if (anyOk) {
-    if (reminder) patch.last_reminder_sent_at = now;
-    else patch.invoice_sent_at = now;
-  }
+  if (!test) {
+    const anyOk = results.email?.ok || results.kakao?.ok;
+    if (anyOk) {
+      if (reminder) patch.last_reminder_sent_at = now;
+      else patch.invoice_sent_at = now;
+    }
 
-  if (newLogEntries.length) {
-    const { data: existing } = await supabaseAdmin.from("billings").select("send_log").eq("id", billingId).single();
-    patch.send_log = [...(existing?.send_log ?? []), ...newLogEntries];
-  }
+    if (newLogEntries.length) {
+      const { data: existing } = await supabaseAdmin.from("billings").select("send_log").eq("id", billingId).single();
+      patch.send_log = [...(existing?.send_log ?? []), ...newLogEntries];
+    }
 
-  const { error } = await supabaseAdmin.from("billings").update(patch).eq("id", billingId);
-  if (error) {
-    console.error(`Failed to update billings id=${billingId}:`, error.message);
+    const { error } = await supabaseAdmin.from("billings").update(patch).eq("id", billingId);
+    if (error) {
+      console.error(`Failed to update billings id=${billingId}:`, error.message);
+    }
   }
 
   return Response.json({ results });
