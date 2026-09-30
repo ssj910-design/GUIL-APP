@@ -20,14 +20,7 @@ function fmtLoginAttempt(iso) {
   return `${String(kst.getFullYear()).slice(2)}.${p2(kst.getMonth() + 1)}.${p2(kst.getDate())} ${p2(kst.getHours())}:${p2(kst.getMinutes())}`;
 }
 
-function EngineerRow({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContract, onResetPassword, canSuper, dragProps }) {
-  const [form, setForm] = useState({
-    phone: p.phone ?? "", minwonId: p.minwon_id ?? "", hireDate: p.hire_date ?? "",
-    address: p.address ?? "", vehicleNo: p.vehicle_no ?? "", memberType: p.member_type ?? "",
-  });
-  const dirty = form.phone !== (p.phone ?? "") || form.minwonId !== (p.minwon_id ?? "")
-    || form.hireDate !== (p.hire_date ?? "") || form.address !== (p.address ?? "") || form.vehicleNo !== (p.vehicle_no ?? "")
-    || form.memberType !== (p.member_type ?? "");
+function EngineerRow({ p, onSave, onDelete, onOpenLedger, onOpenContract, onResetPassword, canSuper, dragProps }) {
   return (
     <tr
       onDragOver={dragProps.onDragOver}
@@ -47,23 +40,25 @@ function EngineerRow({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContr
         <p className="font-bold">{p.name}</p>
       </td>
       <td className="px-3 py-2.5 w-28">
-        <EditableText value={form.memberType} placeholder="직급" onCommit={(v) => setForm({ ...form, memberType: v })} />
+        <EditableText value={p.member_type} placeholder="직급" onCommit={(v) => onSave(p, { memberType: v })} />
       </td>
       <td className="px-3 py-2.5 w-32">
-        <EditableDate value={form.hireDate} onCommit={(v) => setForm({ ...form, hireDate: v })} />
+        <EditableDate value={p.hire_date} onCommit={(v) => onSave(p, { hireDate: v })} />
       </td>
       <td className="px-3 py-2.5 w-48">
-        <EditableText value={form.address} placeholder="주소" onCommit={(v) => setForm({ ...form, address: v })} />
+        <EditableText value={p.address} placeholder="주소" onCommit={(v) => onSave(p, { address: v })} />
       </td>
       <td className="px-3 py-2.5 w-36">
-        <EditableText value={form.phone} placeholder="연락처" format={formatPhone} onCommit={(v) => setForm({ ...form, phone: v })} />
+        <EditableText value={p.phone} placeholder="연락처" format={formatPhone} onCommit={(v) => onSave(p, { phone: v })} />
       </td>
       <td className="px-3 py-2.5 w-32">
-        <EditableText value={form.vehicleNo} placeholder="차량번호" onCommit={(v) => setForm({ ...form, vehicleNo: v })} />
+        <EditableText value={p.vehicle_no} placeholder="차량번호" onCommit={(v) => onSave(p, { vehicleNo: v })} />
       </td>
-      <td className="px-3 py-2.5 text-center whitespace-nowrap text-slate-600 font-semibold">{unitCount}대</td>
+      <td className="px-3 py-2.5 w-44">
+        <EditableText value={p.email} placeholder="이메일" inputType="email" onCommit={(v) => onSave(p, { email: v })} />
+      </td>
       <td className="px-3 py-2.5 w-32">
-        <EditableText value={form.minwonId} placeholder="민원24 점검자 ID" onCommit={(v) => setForm({ ...form, minwonId: v })} />
+        <EditableText value={p.minwon_id} placeholder="민원24 점검자 ID" onCommit={(v) => onSave(p, { minwonId: v })} />
       </td>
       <td className="px-3 py-2.5 text-right pr-4 whitespace-nowrap">
         <button onClick={() => onOpenLedger(p)}
@@ -80,10 +75,6 @@ function EngineerRow({ p, unitCount, onSave, onDelete, onOpenLedger, onOpenContr
             비번초기화
           </button>
         )}
-        <button disabled={!dirty} onClick={() => onSave(p, form)}
-          className="ml-1.5 text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-3 py-1.5">
-          저장
-        </button>
         {canSuper && (
           <button onClick={() => onDelete(p)}
             className="ml-1.5 text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">
@@ -318,9 +309,9 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
   const isSuper = tier === "super"; // 최고관리자만: 관리자 등록·직원 제외·비번초기화
   // 표시 순서(staff_order)대로 정렬 — 순서 없는 사람은 뒤로. 당직 순번(duty_order)과는
   // 별개 컬럼이라 여기서 드래그로 바꿔도 당직 근무표 로직에 영향이 없다.
-  // 중간관리자 이하는 최고관리자를 뺀 관리자 계정 — 기사와 똑같이 이 표에서 입사일·주소·연락처·
-  // 차량번호 등록·비번초기화가 되게 기사 목록에 합친다. 최고관리자만 보호 대상으로 제외.
-  const engineers = profiles.filter((p) => (p.role === "engineer" || (p.role === "admin" && p.admin_tier !== "super")) && p.is_active !== false)
+  // 관리자 계정(최고관리자 포함)도 기사와 똑같이 이 표에서 입사일·주소·연락처·이메일·
+  // 차량번호 등록·비번초기화가 되게 기사 목록에 합친다.
+  const engineers = profiles.filter((p) => (p.role === "engineer" || p.role === "admin") && p.is_active !== false)
     .slice().sort((a, b) => (a.staff_order ?? 999) - (b.staff_order ?? 999));
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
@@ -464,19 +455,25 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
     if (ok) alert(`${p.name} 님의 비밀번호가 1234로 초기화됐습니다.`);
   }
 
-  async function save(p, form) {
-    const patch = {
-      phone: form.phone || null,
+  // 연필로 필드 하나 고치면 그 자리에서 바로 저장한다 — 예전엔 행 전체를 로컬에 모아뒀다가
+  // 별도 "저장" 버튼을 눌러야 반영됐는데, 필드별 즉시저장(EditableDate·EditableSelect와 동일
+  // 패턴)으로 바꿔 버튼을 없앴다. patch는 바뀐 필드만 담아서 넘어온다.
+  async function save(p, patch) {
+    const dbPatch = {};
+    if ("phone" in patch) dbPatch.phone = patch.phone || null;
+    if ("minwonId" in patch) {
       // 민원24 아이디 = 로그인 아이디 (둘을 항상 동일하게 유지 — 표에서 이 칸만 관리)
-      minwon_id: form.minwonId || null,
-      login_id: form.minwonId || null,
-      hire_date: form.hireDate || null,
-      address: form.address || null,
-      vehicle_no: form.vehicleNo || null,
-      member_type: form.memberType || null,
-    };
-    await supabase.from("profiles").update(patch).eq("id", p.id);
-    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, ...patch } : x)) }));
+      dbPatch.minwon_id = patch.minwonId || null;
+      dbPatch.login_id = patch.minwonId || null;
+    }
+    if ("hireDate" in patch) dbPatch.hire_date = patch.hireDate || null;
+    if ("address" in patch) dbPatch.address = patch.address || null;
+    if ("vehicleNo" in patch) dbPatch.vehicle_no = patch.vehicleNo || null;
+    if ("memberType" in patch) dbPatch.member_type = patch.memberType || null;
+    if ("email" in patch) dbPatch.email = patch.email || null;
+    const { error } = await supabase.from("profiles").update(dbPatch).eq("id", p.id);
+    if (error) { alert("저장 실패: " + error.message); return; }
+    setData((prev) => ({ ...prev, profiles: prev.profiles.map((x) => (x.id === p.id ? { ...x, ...dbPatch } : x)) }));
   }
 
   async function saveContract(p, urls) {
@@ -615,12 +612,11 @@ export default function EngineersAdmin({ data, setData, sub: subProp, onSub }) {
         ))}
       </div>
       <div className="hidden lg:block">
-      <AdminTable minWidth="76rem" head={["", "이름", "직급", "입사일", "주소", "연락처", "차량번호", "담당대수", "아이디(민원24)", ""]}>
+      <AdminTable minWidth="76rem" head={["", "이름", "직급", "입사일", "주소", "연락처", "차량번호", "이메일", "아이디(민원24)", ""]}>
         {engineers.map((p, i) => (
           <EngineerRow
             key={p.id}
             p={p}
-            unitCount={unitCountOf(p)}
             onSave={save}
             onDelete={remove}
             onOpenLedger={setLedgerTarget}
