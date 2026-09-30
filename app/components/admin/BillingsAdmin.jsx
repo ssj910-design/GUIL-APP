@@ -1481,19 +1481,38 @@ export default function BillingsAdmin({ data, setData }) {
     setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, ...localPatch } : x)) }));
   }
 
+  // 입금 등록으로 완납 상태가 바뀌면 자동재발송도 같이 맞춘다 — 완납되면 즉시 끄고(cron이
+  // 하루 뒤에나 끄는 걸 기다릴 필요 없이), 오입력해서 다시 지워 완납이 풀리면 자동화도
+  // 다시 켠다. 원래 자동화가 꺼져있던 건(완납과 무관하게 admin이 그냥 안 켰던 경우)엔
+  // 손대지 않는다 — reminderEnabled 현재값을 조건에 넣어 그 경우만 스킵.
+  function reminderPatchFor(prevB, nextB) {
+    if (!nextB.paymentDueDate) return {};
+    const wasPaid = receivedStatusOf(prevB) === "완납";
+    const isPaid = receivedStatusOf(nextB) === "완납";
+    if (isPaid && !wasPaid && nextB.reminderEnabled) return { reminder_enabled: false };
+    if (!isPaid && wasPaid && !nextB.reminderEnabled) return { reminder_enabled: true };
+    return {};
+  }
+
   // 청구일·청구방식 — 목록에서 바로 수기입력하는 필드라 저장도 즉시 처리한다.
   async function updateManualField(b, column, key, value) {
-    const { error } = await supabase.from("billings").update({ [column]: value || null }).eq("id", b.id);
+    const nextB = { ...b, [key]: value || null };
+    const patch = { [column]: value || null, ...(key === "receivedDate" ? reminderPatchFor(b, nextB) : {}) };
+    const { error } = await supabase.from("billings").update(patch).eq("id", b.id);
     if (error) { alert("저장 실패: " + error.message); return; }
-    setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, [key]: value || null } : x)) }));
+    const localPatch = { [key]: value || null, ...(patch.reminder_enabled !== undefined ? { reminderEnabled: patch.reminder_enabled } : {}) };
+    setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, ...localPatch } : x)) }));
   }
 
   // 분할납부 목록 저장 — 빈 배열/null이면 컬럼도 비워서 다음에 열 때 단일 날짜 입력으로 돌아간다.
   async function updateReceivedPayments(b, payments) {
     const next = payments?.length ? payments : null;
-    const { error } = await supabase.from("billings").update({ received_payments: next }).eq("id", b.id);
+    const nextB = { ...b, receivedPayments: next };
+    const patch = { received_payments: next, ...reminderPatchFor(b, nextB) };
+    const { error } = await supabase.from("billings").update(patch).eq("id", b.id);
     if (error) { alert("저장 실패: " + error.message); return; }
-    setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, receivedPayments: next } : x)) }));
+    const localPatch = { receivedPayments: next, ...(patch.reminder_enabled !== undefined ? { reminderEnabled: patch.reminder_enabled } : {}) };
+    setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, ...localPatch } : x)) }));
   }
 
   // 무상 처리 — 청구 상세내역에서만 지원(모바일 앱엔 없음). 금액은 그대로 두고 표시·합계에서만
