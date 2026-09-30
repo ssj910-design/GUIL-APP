@@ -641,7 +641,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
   const stoppedSiteIds = new Set(openEscalations.filter((f) => f.escalation === "운행정지").map((f) => f.siteId));
   // 최근 14일 고장 목록은 실시간 계산 — 처리완료 여부와 무관하게 누적. 3회↑ 재발 배지·집중관리 판정에 쓴다.
   const recentFailuresBySiteId = recentFailuresBySite(failures);
-  // 갇힘사고는 재발 횟수와 무관하게 최근 14일 내 1건만 있어도 집중관리 대상 — 14일 지나면 자동으로 빠진다.
+  // 갇힘사고는 재발 횟수와 무관하게 최근 7일 내 1건만 있어도 집중관리 대상 — 7일 지나면 자동으로 빠진다.
   const entrapmentSiteIds = entrapmentSitesRecent(failures);
   // 집중관리현장: 3회 이상 고장 또는 갇힘사고 걸린 현장 (담당 무관 — 기사도 회사 전체 위험 현장을 봄).
   // 계약종료 현장은 대응 대상이 아니므로 뺀다.
