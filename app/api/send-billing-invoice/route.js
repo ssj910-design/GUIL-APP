@@ -50,9 +50,11 @@ export async function POST(request) {
 
   if (channels?.kakao) {
     try {
-      await sendBillingInvoiceAlimtalk({ to: recipientPhone, invoice, pdfUrl, reminder });
+      const sent = await sendBillingInvoiceAlimtalk({ to: recipientPhone, invoice, pdfUrl, reminder });
       results.kakao = { ok: true };
-      newLogEntries.push({ channel: "kakao", sentAt: now, target: recipientPhone, reminder: !!reminder });
+      // messageId를 남겨야 웹훅(app/api/solapi-webhook)이나 상태 새로고침(app/api/alimtalk-status)이
+      // "이 발송의 결과"를 찾아 수신완료/실패 상태를 채울 수 있다 — 없으면 화면에 영원히 "결과 없음".
+      newLogEntries.push({ channel: "kakao", sentAt: now, target: recipientPhone, reminder: !!reminder, messageId: sent?.messageId ?? null, status: "pending" });
     } catch (err) {
       results.kakao = { ok: false, reason: err.message };
     }

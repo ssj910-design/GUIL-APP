@@ -1408,6 +1408,21 @@ export default function BillingsAdmin({ data, setData }) {
     if (skipNextSave.current) { skipNextSave.current = false; return; }
     try { sessionStorage.setItem(BILLING_FILTERS_KEY, JSON.stringify(filters)); } catch { /* 저장 실패는 무시 — 필터 자체는 정상 동작 */ }
   }, [filters]);
+
+  // 알림톡이 실제로 도착했는지 솔라피에 직접 물어봐 반영한다 — 웹훅 결과가 안 올 때가 있어서다
+  // (QuotesAdmin.jsx의 동일 패턴). 화면을 열 때 한 번. 확인 중인 건이 없으면 부담 없이 바로 끝난다.
+  useEffect(() => {
+    fetch("/api/alimtalk-status", { method: "POST" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!(d?.updated > 0) || !d.billingChangedRows) return;
+        setData((prev) => ({
+          ...prev,
+          billings: prev.billings.map((b) => (d.billingChangedRows[b.id] ? { ...b, sendLog: d.billingChangedRows[b.id] } : b)),
+        }));
+      })
+      .catch(() => {});
+  }, []);
   const filtersActive = Object.values(filters).some((v) => v.length > 0);
   // 호기별로 행이 나뉜(다호기) 청구는 어느 행에 마우스를 올려도 그 청구의 행 전체가 같이
   // 밝아지게 해서 "이건 한 청구다"가 보이게 한다 — 안 그러면 행마다 따로 반응해 서로 다른
