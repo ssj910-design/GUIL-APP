@@ -247,8 +247,16 @@ export default function SelfChecksAdmin({ data, setData, initialView }) {
   const [engineerKey, setEngineerKey] = useState(null);
   const [mapOpen, setMapOpen] = useState(false);
 
-  const rows = selfChecks
-    .filter((c) => c.ym === ym)
+  // 월 2회 이상 도는 현장은 같은 호기에 회차(round)별로 행이 여러 개일 수 있다 — 집계·배지는
+  // 호기당 최근 회차 하나만 대표로 쓴다(안 그러면 총대수·완료대수가 중복 집계된다). 예전 회차
+  // 기록은 남아 있지만(청구내역·감사 목적) 이 현황판에는 최신 것만 노출.
+  const latestSelfCheckByUnit = new Map();
+  for (const c of selfChecks) {
+    if (c.ym !== ym) continue;
+    const prev = latestSelfCheckByUnit.get(c.unitId);
+    if (!prev || c.round > prev.round) latestSelfCheckByUnit.set(c.unitId, c);
+  }
+  const rows = [...latestSelfCheckByUnit.values()]
     .map((c) => {
       const u = data.units.find((x) => x.id === c.unitId);
       const s = u ? data.sites.find((x) => x.id === u.siteId) : null;

@@ -81,7 +81,7 @@ function siteDueSoonLabel(site, inspections, todayStr) {
 
 const CHECKUP_STEP_TITLES = ["점검 정보", "점검 항목", "특이사항·제출"];
 // 호기·이번 달 단위로 임시저장 — 청구 화면(BillingTab)의 임시저장과 동일 패턴(기기 로컬).
-const checkupDraftKey = (unitId, ym) => `guilCheckupDraftV1:${unitId}:${ym}`;
+const checkupDraftKey = (unitId, ym, round) => `guilCheckupDraftV1:${unitId}:${ym}:${round}`;
 const fmtMD = (d) => (d ? `${d.slice(5, 7)}/${d.slice(8, 10)}` : ""); // "2026-07-25" → "07/25"
 const fmtDist = (km) => (km == null ? null : km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`);
 
@@ -100,6 +100,9 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
 
   const [checkupTarget, setCheckupTarget] = useState(null); // 자체점검 등록 대상 현장
   const [checkupUnitId, setCheckupUnitId] = useState(null);
+  // 같은 호기·같은 달 안에서 몇 번째 방문인지 — 월 2회 이상 도는 현장은 이미 완료된(공단
+  // 제출까지 성공한) 최근 회차를 다시 열면 그 기록을 덮어쓰지 않고 새 회차로 시작한다.
+  const [checkupRound, setCheckupRound] = useState(1);
   const [checkupDate, setCheckupDate] = useState(TODAY_STR);
   const [checkupStartTime, setCheckupStartTime] = useState("09:00");
   const [checkupEndTime, setCheckupEndTime] = useState("09:30");
@@ -136,8 +139,15 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   const checksThisMonth = selfChecks.filter((c) => c.ym === ym && visibleUnitIds.has(c.unitId));
 
   // 상단 진행률은 "모든 현장보기" 토글과 무관하게 항상 내 담당현장 기준으로만 본다.
+  // 호기당 최근 회차 하나만 대표로 세서, 월 2회 이상 도는 현장이 총대수를 부풀리지 않게 한다.
   const myUnitIds = new Set(units.filter((u) => sites.some((s) => s.id === u.siteId && s.assignedEngineers?.includes(CURRENT_ENGINEER))).map((u) => u.id));
-  const myChecksThisMonth = selfChecks.filter((c) => c.ym === ym && myUnitIds.has(c.unitId));
+  const myLatestByUnit = new Map();
+  for (const c of selfChecks) {
+    if (c.ym !== ym || !myUnitIds.has(c.unitId)) continue;
+    const prev = myLatestByUnit.get(c.unitId);
+    if (!prev || c.round > prev.round) myLatestByUnit.set(c.unitId, c);
+  }
+  const myChecksThisMonth = [...myLatestByUnit.values()];
   const myDoneChecks = myChecksThisMonth.filter((c) => c.status === "완료");
   const myGovSubmittedChecks = myChecksThisMonth.filter((c) => c.govResultCode === "000");
 
@@ -187,7 +197,8 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
   function locOfCheck(c) {
     const u = unitById.get(c.unitId);
     const s = u ? siteById.get(u.siteId) : null;
-    return s ? `${s.name} · ${u.unitNo}` : "-";
+    if (!s) return "-";
+    return `${s.name} · ${u.unitNo}${c.round > 1 ? ` (${c.round}차)` : ""}`;
   }
 
   function setItemResult(code, result) {
@@ -229,17 +240,28 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     const { error: genError } = await supabase.rpc("generate_self_checks", { p_ym: ym });
     if (genError) { alert("일정 등록 실패: " + genError.message); setSavingSchedule(false); return; }
     const unitIds = targetUnits.map((u) => u.id);
-    const { error } = await supabase.from("self_checks").update({ planned_date: scheduleDate }).eq("ym", ym).in("unit_id", unitIds);
+    // 일정 등록은 이번 달 첫 방문(1차) 기준 — 월 2회 이상 도는 현장의 2차 기록은 건드리지 않는다.
+    const { error } = await supabase.from("self_checks").update({ planned_date: scheduleDate }).eq("ym", ym).eq("round", 1).in("unit_id", unitIds);
     if (error) { alert("일정 등록 실패: " + error.message); setSavingSchedule(false); return; }
-    const { data: fresh } = await supabase.from("self_checks").select("*").eq("ym", ym).in("unit_id", unitIds);
-    setSelfChecks((prev) => [...prev.filter((c) => !(c.ym === ym && unitIds.includes(c.unitId))), ...(fresh ?? []).map(mapSelfCheck)]);
+    const { data: fresh } = await supabase.from("self_checks").select("*").eq("ym", ym).eq("round", 1).in("unit_id", unitIds);
+    setSelfChecks((prev) => [...prev.filter((c) => !(c.ym === ym && c.round === 1 && unitIds.includes(c.unitId))), ...(fresh ?? []).map(mapSelfCheck)]);
     setSavingSchedule(false);
     setScheduleTarget(null);
   }
 
   // 이미 이번 달 행이 있으면(등록된 결과·사진·특이사항·점검항목 예외·공단 제출 결과) 불러와 폼에 채운다.
+  // 같은 달에 여러 번 방문하는 현장은 회차(round)로 구분한다 — 최근 회차가 로컬 완료+공단
+  // 제출 성공까지 다 끝났으면(isSiteDoneThisMonth와 동일 기준) 그 기록은 그대로 두고 다음
+  // 회차를 새로 시작, 아직 진행 중(미완료 또는 공단 제출 실패)이면 그 회차를 이어서 연다.
   async function loadCheckupForUnit(unitId, s) {
+    const existingForUnit = selfChecks.filter((c) => c.unitId === unitId && c.ym === ym).sort((a, b) => b.round - a.round);
+    const latest = existingForUnit[0] ?? null;
+    const latestFullyDone = latest && latest.status === "완료" && latest.govResultCode === "000";
+    const existing = latestFullyDone ? null : latest;
+    const round = existing ? existing.round : (latest ? latest.round + 1 : 1);
+
     setCheckupUnitId(unitId);
+    setCheckupRound(round);
     setCheckupDate(TODAY_STR);
     setCheckupStartTime("09:00");
     setCheckupEndTime("09:30");
@@ -262,7 +284,6 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     (stateRows ?? []).map(mapSelfCheckItemState).forEach((st) => { stateMap[st.itemCd] = { applicable: st.applicable }; });
     setItemStates(stateMap);
 
-    const existing = selfChecks.find((c) => c.unitId === unitId && c.ym === ym);
     if (existing) {
       if (existing.doneDate) setCheckupDate(existing.doneDate);
       setCheckupNotes(existing.notes ?? "");
@@ -277,7 +298,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     // 내용을 DB에서 보여주는 게 맞고, 남아있는 옛 임시저장이 있으면 오히려 헷갈린다.
     if (!existing?.doneDate) {
       try {
-        const raw = localStorage.getItem(checkupDraftKey(unitId, ym));
+        const raw = localStorage.getItem(checkupDraftKey(unitId, ym, round));
         if (raw) {
           const draft = JSON.parse(raw);
           setCheckupDate(draft.checkupDate ?? TODAY_STR);
@@ -303,7 +324,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
       // 아니라 항상 siteManagers에서 그 자리에서 새로 채우는 값이라(위 loadCheckupForUnit) 임시
       // 저장에 담지 않는다 — 담으면 담당자를 나중에 등록해도 옛 임시저장(그때는 미등록이라 빈
       // 값)이 되살아나 매번 이 값을 덮어써버려, 담당자를 등록해도 계속 "필요합니다" 오류가 났다.
-      localStorage.setItem(checkupDraftKey(checkupUnitId, ym), JSON.stringify({
+      localStorage.setItem(checkupDraftKey(checkupUnitId, ym, checkupRound), JSON.stringify({
         checkupDate, checkupStartTime, checkupEndTime,
         checkupSubProfileId, checkupNotes, checkupPhotos, itemExceptions, checkupStep,
       }));
@@ -357,21 +378,24 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
 
     const { error: genError } = await supabase.rpc("generate_self_checks", { p_ym: ym });
     if (genError) { alert("자체점검 등록 실패: " + genError.message); setSavingCheckup(false); return; }
+    // generate_self_checks는 1차(round=1)만 만들어둔다 — 2차 이상은 아직 행 자체가 없을 수
+    // 있어 update 대신 upsert로 (없으면 만들고, 있으면 갱신).
     const { error } = await supabase
       .from("self_checks")
-      .update({
+      .upsert({
+        unit_id: checkupUnitId,
+        ym,
+        round: checkupRound,
         status: "완료",
         done_date: checkupDate,
         photos: checkupPhotos.map((p) => p.url),
         notes: checkupNotes || null,
         assignee_id: selfId,
-      })
-      .eq("unit_id", checkupUnitId)
-      .eq("ym", ym);
+      }, { onConflict: "unit_id,ym,round" });
     if (error) { alert("자체점검 등록 실패: " + error.message); setSavingCheckup(false); return; }
     // 사내 기록까지 저장됐으니(공단 제출 성공 여부와 무관) 임시저장은 더 필요 없다.
-    try { localStorage.removeItem(checkupDraftKey(checkupUnitId, ym)); } catch { /* 임시저장 정리 실패는 무시 */ }
-    const { data: freshRow } = await supabase.from("self_checks").select("*").eq("unit_id", checkupUnitId).eq("ym", ym).single();
+    try { localStorage.removeItem(checkupDraftKey(checkupUnitId, ym, checkupRound)); } catch { /* 임시저장 정리 실패는 무시 */ }
+    const { data: freshRow } = await supabase.from("self_checks").select("*").eq("unit_id", checkupUnitId).eq("ym", ym).eq("round", checkupRound).single();
     const mapped = mapSelfCheck(freshRow);
 
     // 점검항목 예외를 통째로 다시 쓴다 (기존 행 삭제 후 현재 예외만 insert).
@@ -383,7 +407,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
       const { error: itemsError } = await supabase.from("self_check_items").insert(exceptionRows);
       if (itemsError) { alert("점검항목 저장 실패: " + itemsError.message); setSavingCheckup(false); return; }
     }
-    setSelfChecks((prev) => [...prev.filter((c) => !(c.unitId === checkupUnitId && c.ym === ym)), mapped]);
+    setSelfChecks((prev) => [...prev.filter((c) => !(c.unitId === checkupUnitId && c.ym === ym && c.round === checkupRound)), mapped]);
 
     // 184개 항목 전체를 채운다: 예외 우선 → 해당없음(E) → 이번 달 대상이면 A, 아니면 D.
     const resultList = SELF_CHECK_ITEM_CODES.map((item) => {
@@ -681,7 +705,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
       )}
 
       {checkupTarget && (
-        <Sheet title={`${checkupTarget.name} 자체점검 등록`} onClose={() => setCheckupTarget(null)} full>
+        <Sheet title={`${checkupTarget.name} 자체점검 등록${checkupRound > 1 ? ` (${checkupRound}차)` : ""}`} onClose={() => setCheckupTarget(null)} full>
           {selfCheckUnitList(checkupTarget, units).length > 1 && (
             <Field label="호기">
               <select className={inputCls} value={checkupUnitId ?? ""} onChange={(e) => loadCheckupForUnit(e.target.value, checkupTarget)}>
