@@ -22,13 +22,15 @@ export async function POST(request) {
 
   const {
     billingId, channels, recipientEmail, recipientPhone,
-    invoice, pdfUrl, reminder,
+    invoice, pdfUrl, reminder, test,
     paymentDueDate, reminderEnabled,
   } = body;
   const results = {};
   const now = new Date().toISOString();
   const newLogEntries = [];
-  const patch = {
+  // 나에게 보내보기(test)는 실제 청구 발송이 아니므로 billings 행을 전혀 건드리지 않는다
+  // (발송이력·재발송 스케줄에 안 섞이게).
+  const patch = test ? null : {
     recipient_email: recipientEmail || null,
     recipient_phone: recipientPhone || null,
     invoice_pdf_url: pdfUrl || null,
@@ -48,28 +50,32 @@ export async function POST(request) {
 
   if (channels?.kakao) {
     try {
-      await sendBillingInvoiceAlimtalk({ to: recipientPhone, invoice, pdfUrl, reminder });
+      const sent = await sendBillingInvoiceAlimtalk({ to: recipientPhone, invoice, pdfUrl, reminder });
       results.kakao = { ok: true };
-      newLogEntries.push({ channel: "kakao", sentAt: now, target: recipientPhone, reminder: !!reminder });
+      // messageId를 남겨야 웹훅(app/api/solapi-webhook)이나 상태 새로고침(app/api/alimtalk-status)이
+      // "이 발송의 결과"를 찾아 수신완료/실패 상태를 채울 수 있다 — 없으면 화면에 영원히 "결과 없음".
+      newLogEntries.push({ channel: "kakao", sentAt: now, target: recipientPhone, reminder: !!reminder, messageId: sent?.messageId ?? null, status: "pending" });
     } catch (err) {
       results.kakao = { ok: false, reason: err.message };
     }
   }
 
-  const anyOk = results.email?.ok || results.kakao?.ok;
-  if (anyOk) {
-    if (reminder) patch.last_reminder_sent_at = now;
-    else patch.invoice_sent_at = now;
-  }
+  if (!test) {
+    const anyOk = results.email?.ok || results.kakao?.ok;
+    if (anyOk) {
+      if (reminder) patch.last_reminder_sent_at = now;
+      else patch.invoice_sent_at = now;
+    }
 
-  if (newLogEntries.length) {
-    const { data: existing } = await supabaseAdmin.from("billings").select("send_log").eq("id", billingId).single();
-    patch.send_log = [...(existing?.send_log ?? []), ...newLogEntries];
-  }
+    if (newLogEntries.length) {
+      const { data: existing } = await supabaseAdmin.from("billings").select("send_log").eq("id", billingId).single();
+      patch.send_log = [...(existing?.send_log ?? []), ...newLogEntries];
+    }
 
-  const { error } = await supabaseAdmin.from("billings").update(patch).eq("id", billingId);
-  if (error) {
-    console.error(`Failed to update billings id=${billingId}:`, error.message);
+    const { error } = await supabaseAdmin.from("billings").update(patch).eq("id", billingId);
+    if (error) {
+      console.error(`Failed to update billings id=${billingId}:`, error.message);
+    }
   }
 
   return Response.json({ results });

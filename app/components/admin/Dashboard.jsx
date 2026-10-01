@@ -322,7 +322,7 @@ export default function Dashboard({ data, setData, onOpenWorkCalendar, onOpenLea
   // 최근 14일 고장 목록은 실시간 계산 — 처리완료 여부와 무관하게 누적되어야 하므로
   // 현장에 수동 저장된 failures30d 대신 실제 failures 레코드에서 직접 센다.
   const recentFailuresBySiteId = recentFailuresBySite(failures);
-  // 갇힘사고는 재발 횟수와 무관하게 최근 14일 내 1건만 있어도 집중관리 대상 — 14일이 지나면 자동으로 빠진다.
+  // 갇힘사고는 재발 횟수와 무관하게 최근 10일 내 1건만 있어도 집중관리 대상 — 10일이 지나면 자동으로 빠진다.
   const entrapmentSiteIds = entrapmentSitesRecent(failures);
   // 집중관리현장: 3회 이상 고장 또는 갇힘사고 걸린 현장 (모바일 홈탭과 동일 기준).
   const criticalSites = sites.filter((s) =>

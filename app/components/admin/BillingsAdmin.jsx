@@ -13,7 +13,7 @@ import { BRAND } from "@/lib/company";
 import { uploadPhoto } from "@/lib/photos";
 import { buildBillingInvoiceData } from "@/lib/billingInvoiceData";
 import { authFetch } from "@/lib/apiFetch";
-import { locOf, addressOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate, EditableSelect, AdminAuthContext, SiteAutocomplete } from "@/app/components/admin/adminShared";
+import { locOf, addressOf, personOf, StatusBadge, AdminTable, Modal, inputCls, PhotoGrid, DateTextInput, EditableDate, EditableSelect, AdminAuthContext, SiteAutocomplete, SentHistory } from "@/app/components/admin/adminShared";
 import ReplacementCertificateViewer from "@/app/components/admin/ReplacementCertificateViewer";
 
 const BILLING_METHODS = ["계좌이체", "CMS", "지로", "무자료"];
@@ -746,7 +746,7 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
         <div className="flex items-center gap-2">
           {!editing && b.billingMethod === "무자료" && (
             <button onClick={() => setSendingInvoice(true)} className="text-sm font-bold text-blue-700 bg-white border border-blue-200 rounded-xl px-5 py-2.5">
-              {b.invoiceSentAt ? "청구서 재발송" : "청구서 발송"}
+              청구서
             </button>
           )}
           {isSuper ? (
@@ -799,9 +799,15 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
   );
 }
 
-// 청구서(무자료) 발송/재발송 — 결제기한 입력 + 자동독촉 켬/끔 + 이메일·알림톡 발송.
+const BILLING_REMINDER_INTERVAL_DAYS = 7;
+const BILLING_REMINDER_EXPIRE_DAYS = 60;
+
+// 청구서(무자료) 발송/재발송 — 미리보기 + 발송내역 + 자동화 상태를 한 화면에서 보고
+// 결제기한 입력 + 자동독촉 켬/끔 + 이메일·알림톡 발송(+ 나에게 테스트 발송)까지 처리한다.
 // PDF는 보낼 때마다 새로 만든다(청구 내역이 수정됐을 수 있어 캐시를 믿지 않음).
 function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
+  const { id: meId } = useContext(AdminAuthContext);
+  const me = (data.profiles ?? []).find((p) => p.id === meId);
   const billingSiteId = data.units.find((u) => u.id === b.unitId)?.siteId ?? data.sites.find((s) => s.name === b.siteName)?.id ?? null;
   const primaryManager = (data.siteManagers ?? []).filter((m) => m.siteId === billingSiteId).find((m) => m.isPrimary)
     ?? (data.siteManagers ?? []).find((m) => m.siteId === billingSiteId);
@@ -809,19 +815,38 @@ function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
   const [phone, setPhone] = useState(b.recipientPhone || primaryManager?.phone || "");
   const [dueDate, setDueDate] = useState(b.paymentDueDate || "");
   const [reminderEnabled, setReminderEnabled] = useState(b.reminderEnabled ?? false);
+  const [stoppingAutomation, setStoppingAutomation] = useState(false);
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState(null);
+  const [testSending, setTestSending] = useState(false);
+  const [testResults, setTestResults] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(b.invoicePdfUrl || null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const isSent = !!b.invoiceSentAt;
   const isOverdue = dueDate ? new Date(`${dueDate}T23:59:59+09:00`) < new Date() : false;
   const reminder = isSent && isOverdue; // 이미 한 번 보냈고 결제기한이 지났으면 독촉 문구/템플릿 사용
   const actionLabel = isSent ? "재발송" : "발송";
   const canSend = !!dueDate && (email.trim() || phone.trim()) && !sending;
+  const canTestSend = !!(me?.email || me?.phone) && !testSending;
 
-  async function handleSend() {
-    setSending(true);
-    setResults(null);
+  // 다음 자동 재발송 예정일 — 크론(app/api/cron/check-billing-payment)과 같은 공식으로
+  // 클라이언트에서 계산한다(별도 저장 컬럼 없음). 결제기한 60일 초과분은 크론이 자동화를
+  // 꺼버리므로 그 이후로 계산되면 예정일 없음으로 처리.
+  const nextResendAt = (() => {
+    if (!reminderEnabled || !b.paymentDueDate) return null;
+    const dueMs = new Date(`${b.paymentDueDate}T00:00:00+09:00`).getTime();
+    const base = b.lastReminderSentAt
+      ? new Date(b.lastReminderSentAt).getTime() + BILLING_REMINDER_INTERVAL_DAYS * 86400000
+      : dueMs;
+    const expireAt = dueMs + BILLING_REMINDER_EXPIRE_DAYS * 86400000;
+    return base > expireAt ? null : new Date(Math.max(base, dueMs));
+  })();
+  const nextResendLabel = nextResendAt
+    ? `${nextResendAt.toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" })} 09:00 예정`
+    : null;
 
+  async function buildInvoiceAndPdf() {
     const invoice = buildBillingInvoiceData({ ...b, paymentDueDate: dueDate }, data.units, data.sites);
     const genRes = await fetch("/api/generate-billing-invoice-pdf", {
       method: "POST",
@@ -829,11 +854,38 @@ function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
       body: JSON.stringify(invoice),
     });
     const pdfUrl = genRes.headers.get("x-invoice-url");
-    if (!genRes.ok || !pdfUrl) {
+    return { invoice, pdfUrl, ok: genRes.ok && !!pdfUrl };
+  }
+
+  async function refreshPreview() {
+    setPreviewLoading(true);
+    const { ok, pdfUrl } = await buildInvoiceAndPdf();
+    if (ok) setPreviewUrl(pdfUrl);
+    setPreviewLoading(false);
+  }
+
+  // 체크박스도 이 함수로 즉시 저장한다 — 저장을 발송(handleSend)에만 묶어두면 체크만 해놓고
+  // 닫기를 눌렀을 때 반영이 안 된 채 사라져버린다(사용자 보고 버그).
+  async function setReminderAutomation(next) {
+    setStoppingAutomation(true);
+    const { error } = await supabase.from("billings").update({ reminder_enabled: next }).eq("id", b.id);
+    setStoppingAutomation(false);
+    if (error) { alert("자동화 설정 실패: " + error.message); return; }
+    setReminderEnabled(next);
+    onInvoiceSent(b, { reminderEnabled: next });
+  }
+
+  async function handleSend() {
+    setSending(true);
+    setResults(null);
+
+    const { invoice, pdfUrl, ok } = await buildInvoiceAndPdf();
+    if (!ok) {
       setResults({ email: { ok: false, reason: "PDF 생성 실패" }, kakao: { ok: false, reason: "PDF 생성 실패" } });
       setSending(false);
       return;
     }
+    setPreviewUrl(pdfUrl);
 
     const res = await authFetch("/api/send-billing-invoice", {
       method: "POST",
@@ -866,47 +918,149 @@ function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
     }
   }
 
+  // 나에게 보내보기 — 실제 발송이 아니라 내용 확인용이라 발송내역(send_log)·발송시각 등
+  // billings 행에는 전혀 기록하지 않는다(test:true, 서버가 DB 갱신을 건너뜀).
+  async function handleTestSend() {
+    if (!me) return;
+    setTestSending(true);
+    setTestResults(null);
+
+    const { invoice, pdfUrl, ok } = await buildInvoiceAndPdf();
+    if (!ok) {
+      setTestResults({ email: { ok: false, reason: "PDF 생성 실패" } });
+      setTestSending(false);
+      return;
+    }
+    setPreviewUrl(pdfUrl);
+
+    const res = await authFetch("/api/send-billing-invoice", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        billingId: b.id,
+        channels: { email: !!me.email, kakao: !!me.phone },
+        recipientEmail: me.email || null,
+        recipientPhone: me.phone || null,
+        invoice, pdfUrl, reminder, test: true,
+      }),
+    })
+      .then((r) => r.json())
+      .catch((e) => ({ results: { email: { ok: false, reason: e.message }, kakao: { ok: false, reason: e.message } } }));
+
+    setTestResults(res.results ?? {});
+    setTestSending(false);
+  }
+
   return (
-    <Modal title={`${b.siteName ?? "-"} 청구서 ${actionLabel}`} onClose={onClose}>
-      <div className="space-y-3">
-        <div>
-          <label className="text-xs font-bold text-slate-400 block mb-1">결제기한</label>
-          <DateTextInput key={dueDate || "unset"} value={dueDate} onChange={setDueDate} />
+    <Modal title={`${b.siteName ?? "-"} 청구서 ${actionLabel}`} onClose={onClose} wide="2xl">
+      <div className="flex flex-col lg:flex-row gap-5">
+        <div className="lg:w-64 shrink-0 space-y-4">
+          <div>
+            <p className="text-xs font-bold text-slate-400 mb-1.5">발송내역</p>
+            <SentHistory log={b} />
+          </div>
+          <div className={`rounded-xl border p-3 ${reminderEnabled ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-200"}`}>
+            {reminderEnabled ? (
+              <>
+                <p className="text-xs font-bold text-emerald-700">자동화 중</p>
+                <p className="text-[11px] text-emerald-600 mt-0.5">{nextResendLabel ?? "다음 재발송 계산 중"}</p>
+                <button
+                  onClick={() => setReminderAutomation(false)}
+                  disabled={stoppingAutomation}
+                  className="mt-2 w-full text-xs font-bold text-red-600 bg-white border border-red-200 rounded-lg py-1.5 disabled:opacity-40"
+                >
+                  {stoppingAutomation ? "중지 중..." : "자동화 중지"}
+                </button>
+              </>
+            ) : (
+              <p className="text-xs font-semibold text-slate-400">자동화 꺼짐</p>
+            )}
+          </div>
         </div>
-        <div>
-          <label className="text-xs font-bold text-slate-400 block mb-1">받는 이메일</label>
-          <input className={inputCls} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="비우면 이메일은 발송 안 함" />
-        </div>
-        <div>
-          <label className="text-xs font-bold text-slate-400 block mb-1">받는 전화번호</label>
-          <input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="비우면 알림톡은 발송 안 함" />
-        </div>
-        <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
-          <input type="checkbox" checked={reminderEnabled} onChange={(e) => setReminderEnabled(e.target.checked)} />
-          결제기한이 지나도 입금 확인이 안 되면 7일 간격으로 최대 2달간 자동 재발송
-        </label>
-      </div>
 
-      {results && (
-        <div className="space-y-1.5 my-4 text-sm">
-          {!!email.trim() && (
-            <p className={results.email?.ok ? "text-green-700" : "text-red-600"}>
-              이메일: {results.email?.ok ? "✅ 발송 완료" : `❌ 실패 - ${results.email?.reason}`}
-            </p>
-          )}
-          {!!phone.trim() && (
-            <p className={results.kakao?.ok ? "text-green-700" : "text-red-600"}>
-              카카오 알림톡: {results.kakao?.ok ? "✅ 발송 완료" : `❌ 실패 - ${results.kakao?.reason}`}
-            </p>
-          )}
-        </div>
-      )}
+        <div className="flex-1 min-w-0 space-y-3">
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs font-bold text-slate-400">청구서 미리보기</p>
+              <button onClick={refreshPreview} disabled={previewLoading} className="text-[11px] font-bold text-blue-700 disabled:opacity-40">
+                {previewLoading ? "생성 중..." : "새로고침"}
+              </button>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden h-[50vh] flex items-center justify-center">
+              {previewUrl ? (
+                <iframe src={previewUrl} className="w-full h-full" title="청구서 미리보기" />
+              ) : (
+                <p className="text-xs text-slate-400">{previewLoading ? "생성 중..." : "미리보기가 없습니다 — 새로고침을 눌러 생성하세요"}</p>
+              )}
+            </div>
+          </div>
 
-      <div className="flex justify-end gap-2 mt-4">
-        <button onClick={onClose} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5">닫기</button>
-        <button onClick={handleSend} disabled={!canSend} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2.5">
-          {sending ? "발송 중..." : actionLabel}
-        </button>
+          <div>
+            <label className="text-xs font-bold text-slate-400 block mb-1">결제기한</label>
+            <DateTextInput key={dueDate || "unset"} value={dueDate} onChange={setDueDate} />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-400 block mb-1">받는 이메일</label>
+            <input className={inputCls} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="비우면 이메일은 발송 안 함" />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-400 block mb-1">받는 전화번호</label>
+            <input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="비우면 알림톡은 발송 안 함" />
+          </div>
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+            <input
+              type="checkbox"
+              checked={reminderEnabled}
+              disabled={stoppingAutomation}
+              onChange={(e) => setReminderAutomation(e.target.checked)}
+            />
+            결제기한이 지나도 입금 확인이 안 되면 7일 간격으로 최대 2달간 자동 재발송
+          </label>
+
+          {results && (
+            <div className="space-y-1.5 text-sm">
+              {!!email.trim() && (
+                <p className={results.email?.ok ? "text-green-700" : "text-red-600"}>
+                  이메일: {results.email?.ok ? "✅ 발송 완료" : `❌ 실패 - ${results.email?.reason}`}
+                </p>
+              )}
+              {!!phone.trim() && (
+                <p className={results.kakao?.ok ? "text-green-700" : "text-red-600"}>
+                  카카오 알림톡: {results.kakao?.ok ? "✅ 발송 완료" : `❌ 실패 - ${results.kakao?.reason}`}
+                </p>
+              )}
+            </div>
+          )}
+
+          {testResults && (
+            <div className="space-y-1 text-xs bg-slate-50 rounded-lg p-2.5">
+              <p className="font-bold text-slate-500">나에게 보내보기 결과</p>
+              {!!me?.email && (
+                <p className={testResults.email?.ok ? "text-green-700" : "text-red-600"}>
+                  이메일: {testResults.email?.ok ? "발송 완료" : `실패 - ${testResults.email?.reason}`}
+                </p>
+              )}
+              {!!me?.phone && (
+                <p className={testResults.kakao?.ok ? "text-green-700" : "text-red-600"}>
+                  알림톡: {testResults.kakao?.ok ? "발송 완료" : `실패 - ${testResults.kakao?.reason}`}
+                </p>
+              )}
+            </div>
+          )}
+          {!me?.email && !me?.phone && (
+            <p className="text-[11px] text-slate-400">내 프로필에 이메일·전화번호가 없어 나에게 보내보기를 쓸 수 없습니다.</p>
+          )}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button onClick={onClose} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5">닫기</button>
+            <button onClick={handleTestSend} disabled={!canTestSend} className="text-sm font-bold text-blue-700 bg-white border border-blue-200 disabled:opacity-40 rounded-xl px-4 py-2.5">
+              {testSending ? "발송 중..." : "나에게 보내보기"}
+            </button>
+            <button onClick={handleSend} disabled={!canSend} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2.5">
+              {sending ? "발송 중..." : actionLabel}
+            </button>
+          </div>
+        </div>
       </div>
     </Modal>
   );
@@ -1254,12 +1408,32 @@ export default function BillingsAdmin({ data, setData }) {
     if (skipNextSave.current) { skipNextSave.current = false; return; }
     try { sessionStorage.setItem(BILLING_FILTERS_KEY, JSON.stringify(filters)); } catch { /* 저장 실패는 무시 — 필터 자체는 정상 동작 */ }
   }, [filters]);
+
+  // 알림톡이 실제로 도착했는지 솔라피에 직접 물어봐 반영한다 — 웹훅 결과가 안 올 때가 있어서다
+  // (QuotesAdmin.jsx의 동일 패턴). 화면을 열 때 한 번. 확인 중인 건이 없으면 부담 없이 바로 끝난다.
+  useEffect(() => {
+    fetch("/api/alimtalk-status", { method: "POST" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!(d?.updated > 0) || !d.billingChangedRows) return;
+        setData((prev) => ({
+          ...prev,
+          billings: prev.billings.map((b) => (d.billingChangedRows[b.id] ? { ...b, sendLog: d.billingChangedRows[b.id] } : b)),
+        }));
+      })
+      .catch(() => {});
+  }, []);
   const filtersActive = Object.values(filters).some((v) => v.length > 0);
   // 호기별로 행이 나뉜(다호기) 청구는 어느 행에 마우스를 올려도 그 청구의 행 전체가 같이
   // 밝아지게 해서 "이건 한 청구다"가 보이게 한다 — 안 그러면 행마다 따로 반응해 서로 다른
   // 건처럼 보인다.
   const [hoveredBillingId, setHoveredBillingId] = useState(null);
-  const [detail, setDetail] = useState(null);
+  // id만 들고 있다가 매 렌더 billings에서 다시 찾는다 — 예전엔 클릭 시점의 행 객체를
+  // 그대로 들고 있어서, 상세모달을 안 닫고 청구서 모달만 열고닫으며 값을 바꾸면(자동재발송
+  // 체크 등) 그 변경이 data.billings엔 반영돼도 이 상세모달엔 안 보였다(닫았다 다시 열어야
+  // 최신값이 보임) — 사용자 보고 버그.
+  const [detailId, setDetailId] = useState(null);
+  const detail = detailId ? billings.find((b) => b.id === detailId) ?? null : null;
   const [certTarget, setCertTarget] = useState(null);
   const [creating, setCreating] = useState(false);
   // billings.certificate_pdf_url 컬럼 존재 여부 — 마이그레이션 122 실행 전엔 컬럼이 없다.
@@ -1322,19 +1496,38 @@ export default function BillingsAdmin({ data, setData }) {
     setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, ...localPatch } : x)) }));
   }
 
+  // 입금 등록으로 완납 상태가 바뀌면 자동재발송도 같이 맞춘다 — 완납되면 즉시 끄고(cron이
+  // 하루 뒤에나 끄는 걸 기다릴 필요 없이), 오입력해서 다시 지워 완납이 풀리면 자동화도
+  // 다시 켠다. 원래 자동화가 꺼져있던 건(완납과 무관하게 admin이 그냥 안 켰던 경우)엔
+  // 손대지 않는다 — reminderEnabled 현재값을 조건에 넣어 그 경우만 스킵.
+  function reminderPatchFor(prevB, nextB) {
+    if (!nextB.paymentDueDate) return {};
+    const wasPaid = receivedStatusOf(prevB) === "완납";
+    const isPaid = receivedStatusOf(nextB) === "완납";
+    if (isPaid && !wasPaid && nextB.reminderEnabled) return { reminder_enabled: false };
+    if (!isPaid && wasPaid && !nextB.reminderEnabled) return { reminder_enabled: true };
+    return {};
+  }
+
   // 청구일·청구방식 — 목록에서 바로 수기입력하는 필드라 저장도 즉시 처리한다.
   async function updateManualField(b, column, key, value) {
-    const { error } = await supabase.from("billings").update({ [column]: value || null }).eq("id", b.id);
+    const nextB = { ...b, [key]: value || null };
+    const patch = { [column]: value || null, ...(key === "receivedDate" ? reminderPatchFor(b, nextB) : {}) };
+    const { error } = await supabase.from("billings").update(patch).eq("id", b.id);
     if (error) { alert("저장 실패: " + error.message); return; }
-    setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, [key]: value || null } : x)) }));
+    const localPatch = { [key]: value || null, ...(patch.reminder_enabled !== undefined ? { reminderEnabled: patch.reminder_enabled } : {}) };
+    setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, ...localPatch } : x)) }));
   }
 
   // 분할납부 목록 저장 — 빈 배열/null이면 컬럼도 비워서 다음에 열 때 단일 날짜 입력으로 돌아간다.
   async function updateReceivedPayments(b, payments) {
     const next = payments?.length ? payments : null;
-    const { error } = await supabase.from("billings").update({ received_payments: next }).eq("id", b.id);
+    const nextB = { ...b, receivedPayments: next };
+    const patch = { received_payments: next, ...reminderPatchFor(b, nextB) };
+    const { error } = await supabase.from("billings").update(patch).eq("id", b.id);
     if (error) { alert("저장 실패: " + error.message); return; }
-    setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, receivedPayments: next } : x)) }));
+    const localPatch = { receivedPayments: next, ...(patch.reminder_enabled !== undefined ? { reminderEnabled: patch.reminder_enabled } : {}) };
+    setData((prev) => ({ ...prev, billings: prev.billings.map((x) => (x.id === b.id ? { ...x, ...localPatch } : x)) }));
   }
 
   // 무상 처리 — 청구 상세내역에서만 지원(모바일 앱엔 없음). 금액은 그대로 두고 표시·합계에서만
@@ -1505,7 +1698,7 @@ export default function BillingsAdmin({ data, setData }) {
             <tr
               key={`${b.id}-${i}`}
               className={`border-b border-slate-50 cursor-pointer ${hoveredBillingId === b.id ? "bg-slate-50" : ""}`}
-              onClick={() => setDetail(b)}
+              onClick={() => setDetailId(b.id)}
               onMouseEnter={() => setHoveredBillingId(b.id)}
               onMouseLeave={() => setHoveredBillingId((id) => (id === b.id ? null : id))}
             >
@@ -1590,7 +1783,7 @@ export default function BillingsAdmin({ data, setData }) {
         })}
       </AdminTable>
 
-      {detail && <BillingDetailModal b={detail} data={data} onClose={() => setDetail(null)} onSave={saveBilling} onToggleFree={toggleFree} onAdjustPrice={adjustPrice} onInvoiceSent={applyInvoiceSentLocal} />}
+      {detail && <BillingDetailModal b={detail} data={data} onClose={() => setDetailId(null)} onSave={saveBilling} onToggleFree={toggleFree} onAdjustPrice={adjustPrice} onInvoiceSent={applyInvoiceSentLocal} />}
       {creating && <NewBillingModal data={data} onClose={() => setCreating(false)} onCreate={createBilling} />}
       {certTarget && (
         <ReplacementCertificateViewer

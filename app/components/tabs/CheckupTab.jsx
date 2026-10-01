@@ -919,7 +919,8 @@ function SelfCheckDetailModal({ check, title, profilesAll, onClose, onDeleted })
   }, [check.id]);
 
   const assignee = profilesAll.find((p) => p.id === check.assigneeId)?.name ?? "-";
-  const exceptions = (items ?? []).filter((it) => it.result !== "A");
+  // "없음(E)"은 그 호기에 해당 설비가 없다는 뜻이라 지적사항이 아니다 — 양호(A)와 같이 목록에서 뺀다.
+  const exceptions = (items ?? []).filter((it) => it.result !== "A" && it.result !== "E");
 
   async function handleDelete() {
     if (!(await confirmAsync(`${title} 자체점검 등록 내역을 삭제할까요? 되돌릴 수 없습니다.`))) return;
