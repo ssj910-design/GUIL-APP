@@ -1547,7 +1547,10 @@ ${error.message ?? ""}`); return false; }
     const mentionIds = tags.includes("모두")
       ? profilesAll.filter((p) => p.is_active !== false && p.id !== myId).map((p) => p.id)
       : profilesAll.filter((p) => tags.includes(p.name) && p.id !== myId).map((p) => p.id);
-    if (mentionIds.length) sendPush("room_mention", mentionIds, { title: `${profile.name}님이 회원님을 언급했어요`, body: text.slice(0, 60), url: `/?openPost=${newPost.id}` });
+    // 댓글 안에서 멘션된 경우도 newPost.id(댓글 자체)가 아니라 원글 id로 보내야 한다 —
+    // RoomTab은 openPost를 feed.find(p => p.id === shownPostId)로 평면 조회해서 바로 "게시글 상세"로
+    // 띄우므로, 댓글 id를 넘기면 그 댓글이 독립된 글처럼 떠버린다(원글·다른 댓글이 안 보임).
+    if (mentionIds.length) sendPush("room_mention", mentionIds, { title: `${profile.name}님이 회원님을 언급했어요`, body: text.slice(0, 60), url: `/?openPost=${newPost.replyToId ?? newPost.id}` });
     if (newPost.isNotice) {
       notify("room_notice", { title: "새 공지가 등록됐어요", body: newPost.title || text.slice(0, 60), url: `/?openPost=${newPost.id}` });
     } else if (!newPost.replyToId) {
