@@ -17,6 +17,7 @@ export default function QuoteApproveClient({ id }) {
   const [state, setState] = useState("loading"); // loading | notfound | wrongStatus | ready | done
   const [quote, setQuote] = useState(null);
   const [order, setOrder] = useState(null); // buildPurchaseOrderData() 결과 — 화면 표시용으로도 재사용
+  const [quotePdfUrl, setQuotePdfUrl] = useState(null); // 원본 견적서(회사 양식 PDF) — 요약과 별개로 그대로 볼 수 있어야 함
   const [amountInput, setAmountInput] = useState("");
   const [amountOk, setAmountOk] = useState(null); // null=미입력, true/false
   const [signatureUrl, setSignatureUrl] = useState(null);
@@ -37,6 +38,7 @@ export default function QuoteApproveClient({ id }) {
         return;
       }
       setOrder(res.order);
+      setQuotePdfUrl(res.quotePdfUrl ?? null);
       setState("ready");
     })();
     return () => { cancelled = true; };
@@ -133,6 +135,14 @@ export default function QuoteApproveClient({ id }) {
             <span className="text-xs font-bold text-slate-400">합계{order.vatIncluded ? " (VAT포함)" : " (VAT별도)"}</span>
             <span className="text-xl font-extrabold text-blue-700">{fmtWon(order.totalCost)}</span>
           </div>
+          {quotePdfUrl && (
+            <a
+              href={`/quote-view?url=${encodeURIComponent(quotePdfUrl)}`}
+              className="mt-3.5 flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl border border-blue-200 text-blue-700 text-xs font-bold bg-blue-50"
+            >
+              견적서 PDF 전체보기
+            </a>
+          )}
         </section>
 
         <section className="bg-white rounded-2xl border border-slate-200 p-[18px]">

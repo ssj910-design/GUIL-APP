@@ -32,7 +32,7 @@ export async function GET(request) {
   const sites = (siteRows ?? []).map(mapSite);
   const order = buildPurchaseOrderData(quote, units, sites, { approvedAmount: null, approvedAt: new Date().toISOString(), signatureUrl: null });
 
-  return Response.json({ ok: true, status: quote.status, order });
+  return Response.json({ ok: true, status: quote.status, order, quotePdfUrl: quote.quotePdfUrl ?? null });
 }
 
 export async function POST(request) {
