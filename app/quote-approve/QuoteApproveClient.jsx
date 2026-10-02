@@ -4,10 +4,10 @@
 // quote_requests/units/sites는 RLS가 막혀 있어 로그인 없는 anon key로는 직접 못 읽는다(실측
 // 확인) — 화면에 보여줄 요약은 app/api/approve-quote(GET)가 service role로 대신 조회해 내려준다.
 // 1) 금액을 고객이 직접 입력해 확인("그 금액인 줄 몰랐다" 분쟁 방지, 청구서 알림톡과 같은 이유)
-// → 2) 서명(SignaturePad 재사용, 기사앱 청구 승인과 동일 컴포넌트 — Storage 업로드는 anon으로도 됨)
+// → 2) 이름 석자를 손가락으로 정자 입력(NameSignaturePad — Storage 업로드는 anon으로도 됨)
 // → 3) 제출 시 app/api/approve-quote(POST)가 서버에서 금액을 다시 계산해 대조하고 발주서를 발급한다.
 import { useEffect, useState } from "react";
-import { SignaturePad } from "@/app/components/formWidgets";
+import { NameSignaturePad } from "./NameSignaturePad";
 
 function fmtWon(n) {
   return `${Math.round(Number(n) || 0).toLocaleString("ko-KR")}원`;
@@ -20,7 +20,6 @@ export default function QuoteApproveClient({ id }) {
   const [quotePdfUrl, setQuotePdfUrl] = useState(null); // 원본 견적서(회사 양식 PDF) — 요약과 별개로 그대로 볼 수 있어야 함
   const [amountInput, setAmountInput] = useState("");
   const [amountOk, setAmountOk] = useState(null); // null=미입력, true/false
-  const [approverName, setApproverName] = useState("");
   const [signatureUrl, setSignatureUrl] = useState(null);
   const [agree, setAgree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -54,14 +53,14 @@ export default function QuoteApproveClient({ id }) {
   }
 
   async function handleSubmit() {
-    if (submitting || !signatureUrl || amountOk !== true || !approverName.trim() || !agree) return;
+    if (submitting || !signatureUrl || amountOk !== true || !agree) return;
     setSubmitting(true);
     setError("");
     try {
       const res = await fetch("/api/approve-quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quoteId: id, signatureUrl, approvedAmountInput: order.totalCost, approverName: approverName.trim() }),
+        body: JSON.stringify({ quoteId: id, signatureUrl, approvedAmountInput: order.totalCost }),
       });
       const json = await res.json().catch(() => null);
       if (!json?.ok) throw new Error(json?.reason || "승인 처리에 실패했습니다");
@@ -114,7 +113,7 @@ export default function QuoteApproveClient({ id }) {
   }
 
   // state === "ready"
-  const canSubmit = amountOk === true && !!approverName.trim() && !!signatureUrl && agree && !submitting;
+  const canSubmit = amountOk === true && !!signatureUrl && agree && !submitting;
   return (
     <div className="flex-1 p-4">
       <div className="max-w-md mx-auto flex flex-col gap-3.5">
@@ -176,7 +175,7 @@ export default function QuoteApproveClient({ id }) {
           <label className="text-xs font-bold text-slate-600 block mb-1.5">위 합계 금액을 그대로 입력해주세요</label>
           <div className="flex items-center gap-2">
             <input
-              className="flex-1 min-w-0 border border-slate-200 rounded-xl px-3.5 py-2.5 text-base font-bold focus:outline-none focus:border-blue-600"
+              className={`flex-1 min-w-0 border-2 rounded-xl px-3.5 py-2.5 text-base font-bold focus:outline-none focus:border-blue-600 ${amountOk === true ? "border-slate-200" : "border-red-400"}`}
               inputMode="numeric"
               placeholder={Math.round(order.totalCost).toLocaleString("ko-KR")}
               value={amountInput}
@@ -190,15 +189,14 @@ export default function QuoteApproveClient({ id }) {
         </section>
 
         <section className={`bg-white rounded-2xl border border-slate-200 p-[18px] transition-opacity ${amountOk === true ? "" : "opacity-50 pointer-events-none"}`}>
-          <p className="text-[11px] font-bold text-slate-600 mb-3">2 · 서명</p>
-          <label className="text-xs font-bold text-slate-600 block mb-1.5">발주자 성함</label>
-          <input
-            className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold mb-3 focus:outline-none focus:border-blue-600"
-            placeholder="성함을 입력해주세요"
-            value={approverName}
-            onChange={(e) => setApproverName(e.target.value)}
+          <p className="text-[11px] font-bold text-slate-600 mb-3">2 · 발주자 성함</p>
+          <NameSignaturePad
+            url={signatureUrl}
+            uploadFolder={`quotes/${id}/approval-signature`}
+            onSigned={setSignatureUrl}
+            onClear={() => setSignatureUrl(null)}
+            highlight={!signatureUrl}
           />
-          <SignaturePad url={signatureUrl} uploadFolder={`quotes/${id}/approval-signature`} onSigned={setSignatureUrl} onClear={() => setSignatureUrl(null)} />
         </section>
 
         <section className={`bg-white rounded-2xl border border-slate-200 p-[18px] transition-opacity ${signatureUrl ? "" : "opacity-50 pointer-events-none"}`}>
