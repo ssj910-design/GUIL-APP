@@ -201,7 +201,7 @@ export default function QuoteApproveClient({ id }) {
 
         <section className={`bg-white rounded-2xl border border-slate-200 p-[18px] transition-opacity ${signatureUrl ? "" : "opacity-50 pointer-events-none"}`}>
           <p className="text-[11px] font-bold text-slate-600 mb-3">3 · 발주 확정</p>
-          <label className={`flex items-start gap-2 text-xs text-slate-500 leading-relaxed mb-3.5 p-2.5 rounded-xl border-2 ${!!signatureUrl && !agree ? "border-red-400" : "border-transparent"}`}>
+          <label className={`flex items-start gap-2 text-xs font-bold text-slate-700 leading-relaxed mb-3.5 p-2.5 rounded-xl border-2 ${!!signatureUrl && !agree ? "border-red-400" : "border-transparent"}`}>
             <input type="checkbox" className="mt-0.5 shrink-0" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
             위 견적 내용과 금액을 확인했으며, 이 서명으로 발주를 확정하는 데 동의합니다.
           </label>
