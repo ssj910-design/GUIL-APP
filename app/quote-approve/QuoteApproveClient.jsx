@@ -133,7 +133,7 @@ export default function QuoteApproveClient({ id }) {
           </div>
           {order.noticeMessage && (
             <div className="mt-3 bg-amber-50 border border-amber-100 rounded-xl p-3">
-              <p className="text-[11px] font-bold text-amber-700 mb-1">특이사항</p>
+              <p className="text-[11px] font-bold text-amber-700 mb-1">전달사항</p>
               <p className="text-xs text-amber-800 whitespace-pre-wrap">{order.noticeMessage}</p>
             </div>
           )}
@@ -150,6 +150,20 @@ export default function QuoteApproveClient({ id }) {
             </a>
           )}
         </section>
+
+        {order.quoteNotes?.length > 0 && (
+          <section className="bg-white rounded-2xl border border-slate-200 p-[18px]">
+            <p className="text-[11px] font-bold text-slate-400 mb-3">견적서 특이사항</p>
+            <div className="space-y-2.5">
+              {order.quoteNotes.map((note, i) => (
+                <div key={i} className="flex gap-2">
+                  <span className="shrink-0 w-[18px] h-[18px] rounded-full bg-amber-400 text-white text-[10px] font-extrabold flex items-center justify-center mt-0.5">{i + 1}</span>
+                  <p className={`text-xs leading-relaxed ${note.emphasis ? "font-bold text-red-600" : "text-slate-600"}`}>{note.text}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="bg-white rounded-2xl border border-slate-200 p-[18px]">
           <p className="text-[11px] font-bold text-slate-400 mb-3">1 · 승인 금액 확인</p>
