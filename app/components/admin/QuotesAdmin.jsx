@@ -909,6 +909,20 @@ function QuoteDetailModal({ quote: r, data, onClose, onReject }) {
           <QuotePdfPreview url={r.quotePdfUrl} />
         </div>
       )}
+      {r.approvalSignatureUrl && (
+        <div className="mt-3 bg-emerald-50 border border-emerald-100 rounded-xl p-3">
+          <p className="text-xs font-bold text-emerald-700 mb-2">고객 직접 승인 (전화 없이 승인페이지에서 서명)</p>
+          <div className="grid grid-cols-2 gap-3 text-sm mb-2">
+            <div><p className="text-xs font-bold text-slate-400 mb-1">승인 금액</p><p className="font-semibold text-slate-800">{r.approvedAmount != null ? `${Number(r.approvedAmount).toLocaleString()}원` : "-"}</p></div>
+            <div><p className="text-xs font-bold text-slate-400 mb-1">승인 일시</p><p className="font-semibold text-slate-800">{r.approvedAt ? r.approvedAt.slice(0, 16).replace("T", " ") : "-"}</p></div>
+          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={r.approvalSignatureUrl} alt="고객 서명" className="w-full max-w-[220px] h-24 object-contain bg-white rounded-lg border border-slate-200 mb-2" />
+          {r.purchaseOrderPdfUrl && (
+            <a href={r.purchaseOrderPdfUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-700 underline">발주서 PDF 보기</a>
+          )}
+        </div>
+      )}
       {canReject && (
         <div className="flex justify-end mt-4">
           <button onClick={onReject} className="text-xs font-bold text-red-600 border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg">
