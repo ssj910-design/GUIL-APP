@@ -37,10 +37,10 @@ export async function GET(request) {
 
 export async function POST(request) {
   const body = await request.json().catch(() => null);
-  if (!body?.quoteId || !body?.signatureUrl || body?.approvedAmountInput == null) {
+  if (!body?.quoteId || !body?.signatureUrl || body?.approvedAmountInput == null || !body?.approverName?.trim()) {
     return Response.json({ ok: false, reason: "잘못된 요청입니다" }, { status: 200 });
   }
-  const { quoteId, signatureUrl, approvedAmountInput } = body;
+  const { quoteId, signatureUrl, approvedAmountInput, approverName } = body;
   const db = supabaseAdmin;
 
   const { data: row } = await db.from("quote_requests").select("*").eq("id", quoteId).single();
@@ -64,7 +64,7 @@ export async function POST(request) {
   const sites = (siteRows ?? []).map(mapSite);
 
   const now = new Date().toISOString();
-  const order = buildPurchaseOrderData(quote, units, sites, { approvedAmount: displayTotal, approvedAt: now, signatureUrl });
+  const order = buildPurchaseOrderData(quote, units, sites, { approvedAmount: displayTotal, approvedAt: now, signatureUrl, approverName: approverName.trim() });
 
   let bytes;
   try {
@@ -85,6 +85,7 @@ export async function POST(request) {
     approved_amount: displayTotal,
     approval_signature_url: signatureUrl,
     purchase_order_pdf_url: pdfUrl,
+    approver_name: approverName.trim(),
   }).eq("id", quoteId);
   if (updateError) return Response.json({ ok: false, reason: "승인 처리 실패: " + updateError.message }, { status: 200 });
 

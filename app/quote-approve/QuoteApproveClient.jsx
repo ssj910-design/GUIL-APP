@@ -20,6 +20,7 @@ export default function QuoteApproveClient({ id }) {
   const [quotePdfUrl, setQuotePdfUrl] = useState(null); // 원본 견적서(회사 양식 PDF) — 요약과 별개로 그대로 볼 수 있어야 함
   const [amountInput, setAmountInput] = useState("");
   const [amountOk, setAmountOk] = useState(null); // null=미입력, true/false
+  const [approverName, setApproverName] = useState("");
   const [signatureUrl, setSignatureUrl] = useState(null);
   const [agree, setAgree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -53,14 +54,14 @@ export default function QuoteApproveClient({ id }) {
   }
 
   async function handleSubmit() {
-    if (submitting || !signatureUrl || amountOk !== true || !agree) return;
+    if (submitting || !signatureUrl || amountOk !== true || !approverName.trim() || !agree) return;
     setSubmitting(true);
     setError("");
     try {
       const res = await fetch("/api/approve-quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quoteId: id, signatureUrl, approvedAmountInput: order.totalCost }),
+        body: JSON.stringify({ quoteId: id, signatureUrl, approvedAmountInput: order.totalCost, approverName: approverName.trim() }),
       });
       const json = await res.json().catch(() => null);
       if (!json?.ok) throw new Error(json?.reason || "승인 처리에 실패했습니다");
@@ -113,7 +114,7 @@ export default function QuoteApproveClient({ id }) {
   }
 
   // state === "ready"
-  const canSubmit = amountOk === true && !!signatureUrl && agree && !submitting;
+  const canSubmit = amountOk === true && !!approverName.trim() && !!signatureUrl && agree && !submitting;
   return (
     <div className="flex-1 p-4">
       <div className="max-w-md mx-auto flex flex-col gap-3.5">
@@ -190,6 +191,13 @@ export default function QuoteApproveClient({ id }) {
 
         <section className={`bg-white rounded-2xl border border-slate-200 p-[18px] transition-opacity ${amountOk === true ? "" : "opacity-50 pointer-events-none"}`}>
           <p className="text-[11px] font-bold text-slate-600 mb-3">2 · 서명</p>
+          <label className="text-xs font-bold text-slate-600 block mb-1.5">본인 성함</label>
+          <input
+            className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold mb-3 focus:outline-none focus:border-blue-600"
+            placeholder="성함을 입력해주세요"
+            value={approverName}
+            onChange={(e) => setApproverName(e.target.value)}
+          />
           <SignaturePad url={signatureUrl} uploadFolder={`quotes/${id}/approval-signature`} onSigned={setSignatureUrl} onClear={() => setSignatureUrl(null)} />
         </section>
 

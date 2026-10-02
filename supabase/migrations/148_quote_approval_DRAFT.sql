@@ -7,8 +7,9 @@ alter table public.quote_requests add column if not exists approved_amount numer
 alter table public.quote_requests add column if not exists approved_at timestamptz;
 alter table public.quote_requests add column if not exists approval_signature_url text;
 alter table public.quote_requests add column if not exists purchase_order_pdf_url text;
+alter table public.quote_requests add column if not exists approver_name text;
 
 -- 확인:
 -- select column_name from information_schema.columns
 -- where table_schema = 'public' and table_name = 'quote_requests'
---   and column_name in ('approved_amount','approved_at','approval_signature_url','purchase_order_pdf_url');
+--   and column_name in ('approved_amount','approved_at','approval_signature_url','purchase_order_pdf_url','approver_name');
