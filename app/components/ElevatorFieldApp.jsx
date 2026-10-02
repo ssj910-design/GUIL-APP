@@ -178,6 +178,12 @@ export default function App() {
   const faultModelReady = failures.some((f) => f.faultModel !== undefined);
   // failures.cancelled_at 등 컬럼 존재 여부 — 마이그레이션 140 전엔 컬럼이 없어 취소 버튼 자체를 숨긴다.
   const cancelReady = failures.some((f) => f.cancelledAt !== undefined);
+  // failures.responses 컬럼 존재 여부 — 마이그레이션 149 전엔 컬럼이 없다. 있을 때만 처리입력을
+  // 누적 이력(jsonb 배열)에 쌓는다 — 지원요청으로 넘어간 뒤 지원자가 또 처리입력을 하면 기존
+  // 증상·원인·처리내용·사진이 통째로 덮어써지던 버그를 고치는 핵심 컬럼(한 티켓 = 여러 응답 누적).
+  // 기존 fault_symptom 등 단일 스냅샷 컬럼은 그대로 유지 — 목록·통계·알림 등 기존 코드가 계속
+  // "최신 처리결과"를 그 컬럼에서 읽으므로 건드리지 않는다.
+  const responsesReady = failures.some((f) => f.responses !== undefined);
   // billings.signature_url 등 컬럼 존재 여부 — 마이그레이션 119 실행 전엔 컬럼이 없어, 있을 때만
   // 서명/전화승인 정보를 같이 쓴다(미실행 시에도 청구 저장 자체는 깨지지 않게).
   // billings.part_photos 컬럼 존재 여부 — 마이그레이션 120 실행 전엔 컬럼이 없어, 있을 때만
@@ -1338,6 +1344,24 @@ ${error.message ?? ""}`); return false; }
           ...(inProgressAtReady ? { in_progress_at: null, result_nag_at: null } : {}),
         }
       : { status: failure.status };
+    // 지원요청으로 티켓이 넘어간 뒤 지원자가 다시 처리입력을 하면, 아래 fault_symptom 등 단일
+    // 스냅샷 컬럼은 이번 제출 값으로 덮어써진다 — 그래서 누가 제출하든 그 내용이 통째로
+    // responses(누적 이력)에도 같이 남게 한다. 수정(isEdit)은 새 방문이 아니라 직전 응답을
+    // 고친 것뿐이라 추가하지 않고 마지막 항목을 교체한다.
+    const responseEntry = {
+      id: `${Date.now()}`,
+      submittedAt: new Date().toISOString(),
+      engineer: failure.assignee,
+      engineerId: failure.assigneeId ?? profileIdByName(profilesAll, failure.assignee) ?? null,
+      result, symptom: symptom || null, errorCode: errorCode || null, cause: cause || null,
+      processContent: processContent || null, note: note || null,
+      photoUrls: photoUrls?.length ? photoUrls : [],
+      model: model || null,
+    };
+    const prevResponses = failure.responses ?? [];
+    const nextResponses = isEdit && prevResponses.length
+      ? [...prevResponses.slice(0, -1), responseEntry]
+      : [...prevResponses, responseEntry];
     // 처리결과는 유실되면 재작성이 어렵다 — 저장 실패는 물론, 그 사이 재배정/거부로 담당자·상태가
     // 바뀐 경우(동시성 충돌)에도 낙관적 반영을 막는다. 배정 갱신과 동일한 조건부 update 패턴.
     // 수정(isEdit)일 땐 원래 조건(진행중+같은 담당자)이 이미 안 맞으므로 완료 상태 기준으로 건다.
@@ -1355,6 +1379,7 @@ ${error.message ?? ""}`); return false; }
         photo_count: photoCount || 0,
         photo_urls: photoUrls?.length ? photoUrls : null,
         ...(faultModelReady ? { fault_model: model || null } : {}),
+        ...(responsesReady ? { responses: nextResponses } : {}),
       })
       .eq("id", failure.id);
     resultQuery = isEdit ? resultQuery.eq("status", "완료") : resultQuery.eq("status", "진행중").eq("assignee", failure.assignee);
@@ -1384,6 +1409,7 @@ ${error.message ?? ""}`); return false; }
               photoCount: photoCount || 0,
               photoUrls: photoUrls ?? [],
               ...(faultModelReady ? { faultModel: model || null } : {}),
+              ...(responsesReady ? { responses: nextResponses } : {}),
             }
           : x
       )

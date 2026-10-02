@@ -469,6 +469,51 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
 }
 
 
+// "MM/DD HH:MM" — 같은 티켓에 여러 응답이 쌓이면(지원요청 후 지원자가 또 처리입력 등) 날짜만으론
+// 구분이 안 돼 시각까지 보여준다(ResponseHistory 전용, 목록 카드의 fmtMD(날짜만)와는 다름).
+function fmtDateTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const p2 = (n) => String(n).padStart(2, "0");
+  return `${p2(d.getMonth() + 1)}/${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+}
+
+// 한 티켓에 쌓인 처리입력 이력(responses, 마이그레이션 149) — 지원요청으로 넘어간 뒤 지원자가
+// 또 처리입력을 해도 이전 응답(증상·원인·처리내용·사진)이 안 사라지고 여기 그대로 남는다.
+// 고장상세(전체 이력)와 처리입력 모달(직전까지의 이력만 미리보기) 양쪽에서 같이 쓴다.
+function ResponseHistory({ responses, onPhotoClick }) {
+  if (!responses?.length) return null;
+  return (
+    <div className="space-y-2">
+      {responses.map((r, i) => (
+        <div key={r.id ?? i} className="rounded-xl bg-slate-50 border border-slate-200/70 px-3 py-2.5">
+          <div className="flex items-center justify-between gap-2 text-[13px]">
+            <span className="font-semibold text-slate-700">{r.engineer || "담당자 미상"}</span>
+            <span className="text-[11px] text-slate-400 shrink-0">{fmtDateTime(r.submittedAt)} · {r.result}</span>
+          </div>
+          <div className="space-y-0.5 mt-1 text-[12px] text-slate-600">
+            {r.symptom && <p><span className="text-slate-400">증상</span> {r.symptom}</p>}
+            {r.cause && <p><span className="text-slate-400">원인</span> {r.cause}</p>}
+            {r.processContent && <p><span className="text-slate-400">처리내용</span> {r.processContent}</p>}
+            {r.note && <p><span className="text-slate-400">비고</span> {r.note}</p>}
+          </div>
+          {r.photoUrls?.length > 0 && (
+            <div className="grid grid-cols-4 gap-1.5 mt-2">
+              {r.photoUrls.map((url, j) => (
+                <button key={j} type="button" onClick={() => onPhotoClick?.(r.photoUrls, j)}>
+                  {isVideoUrl(url)
+                    ? <VideoThumb url={url} className="w-full aspect-square rounded-lg border border-slate-200" />
+                    : <img src={url} alt="" className="w-full aspect-square rounded-lg object-cover border border-slate-200" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function FailureDetailSheet({ failure, failures = [], nested = false, onClose, onDispatch, onArrive, onOpenResult, onAssignOpen, onCancel }) {
   const { role, name: myName, selfId } = useContext(AuthContext);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -633,6 +678,14 @@ export function FailureDetailSheet({ failure, failures = [], nested = false, onC
               </button>
             ))}
           </div>
+        </div>
+      )}
+      {/* 이 티켓에 응답이 2건 이상(지원요청 후 지원자가 또 처리입력 등) 쌓인 경우만 — 1건이면
+          위의 증상/원인/처리내용/사진이 이미 그 하나를 보여주고 있어 중복이라 생략한다. */}
+      {failure.responses?.length > 1 && (
+        <div className="mb-4">
+          <p className="text-xs font-bold text-slate-500 mb-2">처리 이력 ({failure.responses.length}건)</p>
+          <ResponseHistory responses={failure.responses} onPhotoClick={(urls, index) => setPhotoViewer({ urls, index })} />
         </div>
       )}
       {/* 티맵·카카오를 주 액션 버튼 좌측에 붙인다 (미배정 카드와 동일 레이아웃).
@@ -1094,9 +1147,20 @@ export function ArrivalResultModal({ failure, failures = [], errorCodes = [], on
   }
   const errorCodeText = noErrorCode ? "" : codeRows.map((r) => r.code.trim()).filter(Boolean).join(", ");
 
+  // 수정(isEdit)이 아닐 때만 보여준다 — isEdit은 방금 그 응답 자체를 고치는 중이라 "이전 이력"이
+  // 바로 지금 입력 중인 내용과 같아 보여줄 게 없다. 신규 제출(지원요청 후 지원자가 여는 경우 등)만
+  // 이전 응답이 남아있으면 미리 보여줘서, 증상·원인·처리내용·사진이 안 사라졌다는 걸 확인시킨다.
+  const priorResponses = !isEdit ? (failure.responses ?? []) : [];
+
   return (
     <Sheet title={isEdit ? "고장처리결과 수정" : "고장처리결과 입력"} onClose={onClose}>
       <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {formatUnitLabel(failure.elevatorNo)}</p>
+      {priorResponses.length > 0 && (
+        <div className="mb-4">
+          <p className="text-xs font-bold text-slate-500 mb-2">이전 처리 이력 ({priorResponses.length}건) — 아래 새로 입력해도 안 지워집니다</p>
+          <ResponseHistory responses={priorResponses} />
+        </div>
+      )}
       <div className="space-y-3.5">
         <div>
           <label className="text-xs font-bold text-slate-600 mb-1 block">처리결과</label>
