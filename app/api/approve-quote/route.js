@@ -89,7 +89,9 @@ export async function POST(request) {
   if (updateError) return Response.json({ ok: false, reason: "승인 처리 실패: " + updateError.message }, { status: 200 });
 
   const secret = process.env.CRON_SECRET;
-  if (secret) {
+  if (!secret) {
+    console.error("quote_approved_by_customer 푸시 스킵: CRON_SECRET 환경변수가 없습니다");
+  } else {
     const origin = new URL(request.url).origin;
     fetch(`${origin}/api/push/send`, {
       method: "POST",
@@ -100,7 +102,14 @@ export async function POST(request) {
         body: `${quote.siteName ?? ""} · ${quote.quoteTitle || quote.constructionType || ""} · ${displayTotal.toLocaleString()}원`,
         url: "/",
       }),
-    }).catch(() => {});
+    })
+      .then(async (r) => {
+        const json = await r.json().catch(() => null);
+        if (!r.ok || !json?.ok || !json?.sent) {
+          console.error("quote_approved_by_customer 푸시 발송 안 됨:", r.status, json);
+        }
+      })
+      .catch((err) => console.error("quote_approved_by_customer 푸시 요청 실패:", err.message));
   }
 
   return Response.json({ ok: true, approvedAt: now, pdfUrl });
