@@ -8,6 +8,7 @@
 // → 3) 제출 시 app/api/approve-quote(POST)가 서버에서 금액을 다시 계산해 대조하고 발주서를 발급한다.
 import { useEffect, useState } from "react";
 import { SignaturePad } from "@/app/components/formWidgets";
+import QuoteViewer from "@/app/quote-view/QuoteViewer";
 
 function fmtWon(n) {
   return `${Math.round(Number(n) || 0).toLocaleString("ko-KR")}원`;
@@ -117,37 +118,32 @@ export default function QuoteApproveClient({ id }) {
   return (
     <div className="flex-1 p-4">
       <div className="max-w-md mx-auto flex flex-col gap-3.5">
-        <section className="bg-white rounded-2xl border border-slate-200 p-4.5 p-[18px]">
-          <h1 className="text-lg font-extrabold text-slate-800">{order.siteUnit}</h1>
-          <p className="text-xs text-slate-400 mb-3.5">{order.quoteTitle} · 문서번호 {order.quoteDocNumber}</p>
-          <div className="text-sm space-y-1.5 border-b border-slate-100 pb-3 mb-3">
-            <div className="flex justify-between gap-2"><span className="text-slate-400">현장 주소</span><span className="font-semibold text-right">{order.address}</span></div>
+        <section className="bg-white rounded-2xl border border-slate-200 p-[14px]">
+          <div className="flex items-baseline justify-between mb-2 px-1">
+            <h1 className="text-base font-extrabold text-slate-800">{order.siteUnit}</h1>
+            <span className="text-[11px] text-slate-400">{order.quoteDocNumber}</span>
           </div>
-          <div className="space-y-1.5">
-            {order.items.map((it, i) => (
-              <div key={i} className="flex justify-between text-xs gap-2">
-                <span className="text-slate-700">{it.name}</span>
-                <span className="text-slate-400">{fmtWon(it.amount)}</span>
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-between items-baseline mt-3.5 pt-3.5 border-t-2 border-slate-800">
-            <span className="text-xs font-bold text-slate-400">합계{order.vatIncluded ? " (VAT포함)" : " (VAT별도)"}</span>
-            <span className="text-xl font-extrabold text-blue-700">{fmtWon(order.totalCost)}</span>
-          </div>
-          {quotePdfUrl && (
-            <a
-              href={`/quote-view?url=${encodeURIComponent(quotePdfUrl)}`}
-              className="mt-3.5 flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl border border-blue-200 text-blue-700 text-xs font-bold bg-blue-50"
-            >
-              견적서 PDF 전체보기
-            </a>
+          {quotePdfUrl ? (
+            <div className="h-[65vh] rounded-xl overflow-hidden border border-slate-100 flex flex-col">
+              <QuoteViewer url={quotePdfUrl} label="견적서" />
+            </div>
+          ) : (
+            <div className="space-y-1.5 px-1">
+              {order.items.map((it, i) => (
+                <div key={i} className="flex justify-between text-xs gap-2">
+                  <span className="text-slate-700">{it.name}</span>
+                  <span className="text-slate-400">{fmtWon(it.amount)}</span>
+                </div>
+              ))}
+            </div>
           )}
         </section>
 
         <section className="bg-white rounded-2xl border border-slate-200 p-[18px]">
           <p className="text-[11px] font-bold text-slate-400 mb-3">1 · 승인 금액 확인</p>
-          <label className="text-xs font-bold text-slate-400 block mb-1.5">위 합계 금액을 그대로 입력해주세요</label>
+          <label className="text-xs font-bold text-slate-400 block mb-1.5">
+            위 견적서의 합계 금액{order.vatIncluded ? "(VAT포함)" : "(VAT별도)"} <span className="text-blue-700">{fmtWon(order.totalCost)}</span>을 그대로 입력해주세요
+          </label>
           <div className="flex items-center gap-2">
             <input
               className="flex-1 min-w-0 border border-slate-200 rounded-xl px-3.5 py-2.5 text-base font-bold focus:outline-none focus:border-blue-600"
