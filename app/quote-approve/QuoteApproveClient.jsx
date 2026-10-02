@@ -73,10 +73,10 @@ export default function QuoteApproveClient({ id }) {
   }
 
   if (state === "loading") {
-    return <p className="flex-1 flex items-center justify-center text-sm text-slate-400">불러오는 중...</p>;
+    return <p className="flex-1 flex items-center justify-center text-sm text-slate-600">불러오는 중...</p>;
   }
   if (state === "notfound") {
-    return <p className="flex-1 flex items-center justify-center text-sm text-slate-400 px-6 text-center">견적을 찾을 수 없습니다.</p>;
+    return <p className="flex-1 flex items-center justify-center text-sm text-slate-600 px-6 text-center">견적을 찾을 수 없습니다.</p>;
   }
   if (state === "wrongStatus") {
     const msg = quote.status === "요청접수" ? "아직 견적서가 발행되지 않았습니다."
@@ -99,10 +99,10 @@ export default function QuoteApproveClient({ id }) {
         <div className="max-w-md mx-auto bg-white rounded-2xl border border-slate-200 p-6 text-center">
           <div className="w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-4 text-2xl">✓</div>
           <p className="text-base font-extrabold text-slate-800 mb-1">발주 승인이 완료됐습니다</p>
-          <p className="text-xs text-slate-400 mb-5">발주서가 자동으로 발급됐습니다</p>
+          <p className="text-xs text-slate-600 mb-5">발주서가 자동으로 발급됐습니다</p>
           <div className="text-left border border-slate-200 rounded-xl p-3.5 text-xs space-y-1.5 mb-5">
-            <p><span className="text-slate-400">승인 금액</span><br /><span className="font-bold">{fmtWon(order.totalCost)}</span></p>
-            <p><span className="text-slate-400">승인 일시</span><br /><span className="font-bold">{doneInfo.approvedAt.slice(0, 16).replace("T", " ")}</span></p>
+            <p><span className="text-slate-600">승인 금액</span><br /><span className="font-bold">{fmtWon(order.totalCost)}</span></p>
+            <p><span className="text-slate-600">승인 일시</span><br /><span className="font-bold">{doneInfo.approvedAt.slice(0, 16).replace("T", " ")}</span></p>
           </div>
           <a href={doneInfo.pdfUrl} className="block w-full py-3 rounded-xl border border-slate-200 text-sm font-bold text-slate-700">
             발주서 PDF 확인
@@ -119,15 +119,20 @@ export default function QuoteApproveClient({ id }) {
       <div className="max-w-md mx-auto flex flex-col gap-3.5">
         <section className="bg-white rounded-2xl border border-slate-200 p-[18px]">
           <h1 className="text-lg font-extrabold text-slate-800">{order.siteUnit}</h1>
-          <p className="text-xs text-slate-400 mb-3.5">{order.quoteTitle} · 문서번호 {order.quoteDocNumber}</p>
+          <p className="text-xs text-slate-600 mb-3.5">{order.quoteTitle} · 문서번호 {order.quoteDocNumber}</p>
           <div className="text-sm space-y-1.5 border-b border-slate-100 pb-3 mb-3">
-            <div className="flex justify-between gap-2"><span className="text-slate-400">현장 주소</span><span className="font-semibold text-right">{order.address}</span></div>
+            <div className="flex justify-between gap-2"><span className="text-slate-600">현장 주소</span><span className="font-semibold text-right">{order.address}</span></div>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {order.items.map((it, i) => (
-              <div key={i} className="flex justify-between text-xs gap-2">
-                <span className="text-slate-700">{it.name}</span>
-                <span className="text-slate-400">{fmtWon(it.amount)}</span>
+              <div key={i} className="flex justify-between items-start text-xs gap-2">
+                <div className="min-w-0">
+                  <p className="text-slate-800 font-semibold">{it.name}</p>
+                  {it.qty != null && it.unitPrice != null && (
+                    <p className="text-slate-600 mt-0.5">{it.qty}{it.unit || ""} × {fmtWon(it.unitPrice)}</p>
+                  )}
+                </div>
+                <span className="text-slate-800 font-semibold shrink-0">{fmtWon(it.amount)}</span>
               </div>
             ))}
           </div>
@@ -138,7 +143,7 @@ export default function QuoteApproveClient({ id }) {
             </div>
           )}
           <div className="flex justify-between items-baseline mt-3.5 pt-3.5 border-t-2 border-slate-800">
-            <span className="text-xs font-bold text-slate-400">합계{order.vatIncluded ? " (VAT포함)" : " (VAT별도)"}</span>
+            <span className="text-xs font-bold text-slate-600">합계{order.vatIncluded ? " (VAT포함)" : " (VAT별도)"}</span>
             <span className="text-xl font-extrabold text-blue-700">{fmtWon(order.totalCost)}</span>
           </div>
           {quotePdfUrl && (
@@ -153,7 +158,7 @@ export default function QuoteApproveClient({ id }) {
 
         {order.quoteNotes?.length > 0 && (
           <section className="bg-white rounded-2xl border border-slate-200 p-[18px]">
-            <p className="text-[11px] font-bold text-slate-400 mb-3">견적서 특이사항</p>
+            <p className="text-[11px] font-bold text-slate-600 mb-3">견적서 특이사항</p>
             <div className="space-y-2.5">
               {order.quoteNotes.map((note, i) => (
                 <div key={i} className="flex gap-2">
@@ -166,8 +171,8 @@ export default function QuoteApproveClient({ id }) {
         )}
 
         <section className="bg-white rounded-2xl border border-slate-200 p-[18px]">
-          <p className="text-[11px] font-bold text-slate-400 mb-3">1 · 승인 금액 확인</p>
-          <label className="text-xs font-bold text-slate-400 block mb-1.5">위 합계 금액을 그대로 입력해주세요</label>
+          <p className="text-[11px] font-bold text-slate-600 mb-3">1 · 승인 금액 확인</p>
+          <label className="text-xs font-bold text-slate-600 block mb-1.5">위 합계 금액을 그대로 입력해주세요</label>
           <div className="flex items-center gap-2">
             <input
               className="flex-1 min-w-0 border border-slate-200 rounded-xl px-3.5 py-2.5 text-base font-bold focus:outline-none focus:border-blue-600"
@@ -176,20 +181,20 @@ export default function QuoteApproveClient({ id }) {
               value={amountInput}
               onChange={handleAmountChange}
             />
-            <span className="text-sm font-semibold text-slate-400">원</span>
+            <span className="text-sm font-semibold text-slate-600">원</span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">숫자만 입력하면 됩니다(쉼표 없이). 직접 입력해 확인한 기록은 발주서에 같이 남습니다.</p>
+          <p className="text-[11px] text-slate-600 mt-1.5 leading-relaxed">숫자만 입력하면 됩니다(쉼표 없이). 직접 입력해 확인한 기록은 발주서에 같이 남습니다.</p>
           {amountOk === false && <p className="text-xs font-bold text-red-600 bg-red-50 rounded-lg px-2.5 py-2 mt-2">금액이 일치하지 않습니다. 다시 확인해주세요.</p>}
           {amountOk === true && <p className="text-xs font-bold text-emerald-700 bg-emerald-50 rounded-lg px-2.5 py-2 mt-2">금액이 확인됐습니다.</p>}
         </section>
 
         <section className={`bg-white rounded-2xl border border-slate-200 p-[18px] transition-opacity ${amountOk === true ? "" : "opacity-50 pointer-events-none"}`}>
-          <p className="text-[11px] font-bold text-slate-400 mb-3">2 · 서명</p>
+          <p className="text-[11px] font-bold text-slate-600 mb-3">2 · 서명</p>
           <SignaturePad url={signatureUrl} uploadFolder={`quotes/${id}/approval-signature`} onSigned={setSignatureUrl} onClear={() => setSignatureUrl(null)} />
         </section>
 
         <section className={`bg-white rounded-2xl border border-slate-200 p-[18px] transition-opacity ${signatureUrl ? "" : "opacity-50 pointer-events-none"}`}>
-          <p className="text-[11px] font-bold text-slate-400 mb-3">3 · 발주 확정</p>
+          <p className="text-[11px] font-bold text-slate-600 mb-3">3 · 발주 확정</p>
           <label className="flex items-start gap-2 text-xs text-slate-500 leading-relaxed mb-3.5">
             <input type="checkbox" className="mt-0.5 shrink-0" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
             위 견적 내용과 금액을 확인했으며, 이 서명으로 발주를 확정하는 데 동의합니다.
