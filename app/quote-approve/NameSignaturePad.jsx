@@ -157,8 +157,8 @@ function FullscreenCapture({ uploadFolder, onCancel, onDone }) {
       <div className="flex-1 flex items-center justify-center p-4">
         <div
           ref={padRef}
-          className="relative w-full max-w-sm border-2 border-slate-300 rounded-2xl bg-slate-50"
-          style={{ touchAction: "none", aspectRatio: "3 / 1.3" }}
+          className="relative w-full max-w-lg border-2 border-slate-300 rounded-2xl bg-slate-50"
+          style={{ touchAction: "none", aspectRatio: "3 / 2.2" }}
           onTouchStart={(e) => e.stopPropagation()}
           onTouchMove={(e) => e.stopPropagation()}
           onTouchEnd={(e) => e.stopPropagation()}
