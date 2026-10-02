@@ -50,7 +50,7 @@ export async function POST(request) {
 
   if (channels?.kakao) {
     try {
-      const sent = await sendQuoteAlimtalk({ to: recipientPhone, quote, pdfUrl: quote?.pdfUrl, noticeMessage });
+      const sent = await sendQuoteAlimtalk({ to: recipientPhone, quote, pdfUrl: quote?.pdfUrl, noticeMessage, quoteId: quoteRequestId });
       results.kakao = { ok: true };
       patch.kakao_sent_at = now;
       // messageId를 남겨야 웹훅이 "이 발송의 결과"를 찾아 상태(수신완료/실패)를 채울 수 있다.
@@ -65,7 +65,7 @@ export async function POST(request) {
     // 이력만 추적한다.
     if (referencePhone) {
       try {
-        await sendQuoteAlimtalk({ to: referencePhone, quote, pdfUrl: quote?.pdfUrl, noticeMessage });
+        await sendQuoteAlimtalk({ to: referencePhone, quote, pdfUrl: quote?.pdfUrl, noticeMessage, quoteId: quoteRequestId });
       } catch (err) {
         console.error(`참조인 카카오 발송 실패 (quoteRequestId=${quoteRequestId}):`, err.message);
       }

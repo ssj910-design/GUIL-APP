@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { BRAND } from "@/lib/company";
 import { SplashRemover } from "./SplashRemover";
 import QuoteViewer from "./QuoteViewer";
@@ -13,8 +14,15 @@ export const metadata = { title: `견적서 확인 — ${BRAND.name}` };
 // pdfjs-dist로 PDF를 직접 이미지로 렌더링해 사진처럼 스와이프로 보여준다 — 인앱 브라우저에
 // PDF 뷰어가 없어도(대부분 없음) 캔버스·자바스크립트만 있으면 되므로 훨씬 안정적이다.
 // 알림톡 버튼 링크(URL 형태)는 그대로라 카카오 템플릿 재검수는 필요 없다.
+//
+// "qid:<견적ID>"로 시작하면 고객 직접 승인 페이지(app/quote-approve)로 보낸다 — 승인 플로우로
+// 바꾸면서 버튼을 그대로(/quote-view?url=#{link}) 쓰고 #{link} 값만 PDF URL 대신 이 마커로
+// 바꿔서, 카카오 템플릿 재심사 없이 승인 페이지로 연결한다 (lib/alimtalk.js 참고).
 export default async function QuoteViewPage({ searchParams }) {
   const { url } = await searchParams;
+  if (typeof url === "string" && url.startsWith("qid:")) {
+    redirect(`/quote-approve?id=${encodeURIComponent(url.slice(4))}`);
+  }
   const valid = typeof url === "string" && url.startsWith("https://kdptzotxnzpuwzdguzgh.supabase.co/storage/");
 
   return (
