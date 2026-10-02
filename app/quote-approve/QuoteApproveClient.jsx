@@ -191,7 +191,7 @@ export default function QuoteApproveClient({ id }) {
 
         <section className={`bg-white rounded-2xl border border-slate-200 p-[18px] transition-opacity ${amountOk === true ? "" : "opacity-50 pointer-events-none"}`}>
           <p className="text-[11px] font-bold text-slate-600 mb-3">2 · 서명</p>
-          <label className="text-xs font-bold text-slate-600 block mb-1.5">발주자 성함</label>
+          <label className="text-xs font-bold text-slate-600 block mb-1.5">본인 성함</label>
           <input
             className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold mb-3 focus:outline-none focus:border-blue-600"
             placeholder="성함을 입력해주세요"
