@@ -100,7 +100,7 @@ export async function POST(request) {
         key: "quote_approved_by_customer",
         title: "고객이 견적을 승인했어요",
         body: `${quote.siteName ?? ""} · ${quote.quoteTitle || quote.constructionType || ""} · ${displayTotal.toLocaleString()}원`,
-        url: "/",
+        url: `/?openQuote=${quoteId}`,
       }),
     })
       .then(async (r) => {
