@@ -178,7 +178,7 @@ export default function QuoteApproveClient({ id }) {
             <input
               className="flex-1 min-w-0 border border-slate-200 rounded-xl px-3.5 py-2.5 text-base font-bold focus:outline-none focus:border-blue-600"
               inputMode="numeric"
-              placeholder={`예: ${Math.round(order.totalCost).toLocaleString("ko-KR")}`}
+              placeholder={Math.round(order.totalCost).toLocaleString("ko-KR")}
               value={amountInput}
               onChange={handleAmountChange}
             />

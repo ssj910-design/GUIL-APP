@@ -39,7 +39,7 @@ export async function POST(request) {
   if (channels?.email) {
     try {
       const cc = [senderCcEmail, referenceEmail].filter(Boolean);
-      await sendQuoteEmail({ to: recipientEmail, cc, quote, pdfUrl: quote?.pdfUrl, supplierName, supplierPhone, noticeMessage, attachmentUrls, quoteId: quoteRequestId });
+      await sendQuoteEmail({ to: recipientEmail, cc, quote, pdfUrl: quote?.pdfUrl, supplierName, supplierPhone, noticeMessage, attachmentUrls });
       results.email = { ok: true };
       patch.email_sent_at = now;
       newLogEntries.push({ channel: "email", sentAt: now, target: recipientEmail });
