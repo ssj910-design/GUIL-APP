@@ -375,7 +375,12 @@ export default function QuotesAdmin({ data, setData }) {
     >
       <td className="pl-5 pr-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(drafted ? q.quoteIssuedDate : q.requestedDate)}</td>
       <td className="px-3 py-2.5 font-semibold whitespace-nowrap">{quoteLocLabel(data, q)}</td>
-      <td className="px-3 py-2.5 text-slate-600">{drafted ? (q.quoteTitle || "-") : q.constructionType}</td>
+      <td className="px-3 py-2.5 text-slate-600">
+        {drafted ? (q.quoteTitle || "-") : q.constructionType}
+        {q.attachmentUrls?.length > 0 && (
+          <span className="ml-1.5 inline-flex items-center text-[10px] font-bold text-blue-700 bg-blue-50 rounded-full px-1.5 py-0.5 align-middle" title="첨부 서류">첨부 {q.attachmentUrls.length}</span>
+        )}
+      </td>
       <td className="px-3 py-2.5 whitespace-nowrap">
         {!q.requesterId && !q.engineer
           ? <StatusBadge tone="slate">관리자발행</StatusBadge>
@@ -851,6 +856,25 @@ function QuoteDetailModal({ quote: r, data, onClose, onReject }) {
           <p className="text-xs font-bold text-slate-400 mb-1">발송일</p>
           <SentHistory log={r} />
         </div>
+        {r.attachmentUrls?.length > 0 && (
+          <div>
+            <p className="text-xs font-bold text-slate-400 mb-1">첨부 서류 ({r.attachmentUrls.length})</p>
+            <div className="flex flex-wrap gap-1.5">
+              {r.attachmentUrls.map((att, i) => (
+                <a
+                  key={i}
+                  href={/\.pdf($|\?)/i.test(att.name || att.url) ? `/quote-view?url=${encodeURIComponent(att.url)}` : att.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 max-w-full text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 hover:bg-slate-100"
+                >
+                  <span className="truncate">{att.name || `첨부파일 ${i + 1}`}</span>
+                  <span className="text-blue-700 shrink-0">열기</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
         <div>
           <p className="text-xs font-bold text-slate-400 mb-1">진행상태</p>
           {r.status === "반려" ? (

@@ -32,7 +32,9 @@ export async function GET(request) {
   const sites = (siteRows ?? []).map(mapSite);
   const order = buildPurchaseOrderData(quote, units, sites, { approvedAmount: null, approvedAt: new Date().toISOString(), signatureUrl: null });
 
-  return Response.json({ ok: true, status: quote.status, order, quotePdfUrl: quote.quotePdfUrl ?? null });
+  // 견적서와 같이 보낸 소견서·공문 등 첨부 서류 — 이메일엔 파일로 붙지만 알림톡엔 못 붙으므로
+  // 승인 페이지에서 볼 수 있게 이름·URL만 내려준다.
+  return Response.json({ ok: true, status: quote.status, order, quotePdfUrl: quote.quotePdfUrl ?? null, attachments: quote.attachmentUrls ?? [] });
 }
 
 export async function POST(request) {

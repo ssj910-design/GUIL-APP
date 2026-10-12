@@ -18,6 +18,7 @@ export default function QuoteApproveClient({ id }) {
   const [quote, setQuote] = useState(null);
   const [order, setOrder] = useState(null); // buildPurchaseOrderData() 결과 — 화면 표시용으로도 재사용
   const [quotePdfUrl, setQuotePdfUrl] = useState(null); // 원본 견적서(회사 양식 PDF) — 요약과 별개로 그대로 볼 수 있어야 함
+  const [attachments, setAttachments] = useState([]); // 견적서와 같이 보낸 소견서·공문 등 [{ name, url }]
   const [amountInput, setAmountInput] = useState("");
   const [amountOk, setAmountOk] = useState(null); // null=미입력, true/false
   const [signatureUrl, setSignatureUrl] = useState(null);
@@ -39,6 +40,7 @@ export default function QuoteApproveClient({ id }) {
       }
       setOrder(res.order);
       setQuotePdfUrl(res.quotePdfUrl ?? null);
+      setAttachments(res.attachments ?? []);
       setState("ready");
     })();
     return () => { cancelled = true; };
@@ -155,6 +157,27 @@ export default function QuoteApproveClient({ id }) {
             </a>
           )}
         </section>
+
+        {attachments.length > 0 && (
+          <section className="bg-white rounded-2xl border border-slate-200 p-[18px]">
+            <p className="text-[11px] font-bold text-slate-600 mb-1">첨부 서류 ({attachments.length})</p>
+            <p className="text-[11px] text-slate-500 mb-3">승인 전에 확인해주세요.</p>
+            <div className="space-y-2">
+              {attachments.map((att, i) => (
+                <a
+                  key={i}
+                  href={/\.pdf($|\?)/i.test(att.name || att.url) ? `/quote-view?url=${encodeURIComponent(att.url)}` : att.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-between gap-2 w-full px-3.5 py-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50"
+                >
+                  <span className="truncate min-w-0">{att.name || `첨부파일 ${i + 1}`}</span>
+                  <span className="shrink-0 text-blue-700">열기</span>
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
 
         {order.quoteNotes?.length > 0 && (
           <section className="bg-white rounded-2xl border border-slate-200 p-[18px]">
