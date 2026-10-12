@@ -5,6 +5,7 @@
 // 파일을 바로 열어서 몇 초씩 걸리던 재생성(특히 한글 폰트 임베딩)을 건너뛸 수 있다.
 import { buildReplacementCertificatePdfBytes } from "@/lib/replacementCertificatePdf";
 import { supabase } from "@/lib/supabaseClient";
+import { certFingerprint } from "@/lib/certificateFingerprint";
 
 export async function POST(request) {
   const cert = await request.json().catch(() => null);
@@ -23,7 +24,9 @@ export async function POST(request) {
   if (cert.billingId) {
     // 경로의 v5 = 렌더러 버전 표시. 뷰어는 v5가 아닌 옛 URL을 캐시로 안 쓰고 다시 그린다
     // (부품명 옆 호기 표시가 없던 시절 PDF가 그대로 남아 있어서다).
-    const path = `certificates/${cert.billingId}/v6/${Date.now()}.pdf`;
+    // 파일명 앞의 지문 = 이 PDF를 만든 입력값. 뷰어가 지금 내용의 지문과 비교해 안 맞으면
+    // 저장본을 안 쓰고 다시 만든다(lib/certificateFingerprint.js 참고).
+    const path = `certificates/${cert.billingId}/v6/${certFingerprint(cert)}-${Date.now()}.pdf`;
     const { error: uploadError } = await supabase.storage
       .from("photos")
       .upload(path, Buffer.from(bytes), { contentType: "application/pdf", upsert: true });
