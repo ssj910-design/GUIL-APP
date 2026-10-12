@@ -160,9 +160,12 @@ function MaterialPendingCard({ r, engineerNames, onSupplyComplete, onAttachPhoto
     .join(", ");
   // billingPartText(표시용 문자열)와 별도로, 나중에 부품별 사진 등에 그대로 다시 쓸 수 있도록
   // 구조화된 행도 같이 남긴다 — 문자열을 역파싱할 필요가 없게.
+  // amount는 줄 합계(단가 × 수량) — 교체확인서·청구 화면이 이 값을 "금액"으로 쓰고 단가는
+  // 금액 ÷ 수량으로 역산한다. 입력칸 값(amounts[i], 개당 단가)을 그대로 넣으면 수량 2개 이상
+  // 부품의 금액이 단가로 찍혀 합계와 안 맞는다.
   const billingPartRows = parts.map((part, i) => {
     const { name, qty } = parsePartQty(part);
-    return { name: name || part, qty: qty || null, amount: Number(amounts[i]) || 0 };
+    return { name: name || part, qty: qty || null, amount: lineTotal(part, i) };
   });
   return (
     <div className="bg-white rounded-xl border border-amber-200 p-3.5 mx-0.5">
