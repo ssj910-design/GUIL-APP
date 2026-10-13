@@ -90,13 +90,13 @@ begin
       jsonb_build_object('from', old.due_date, 'to', new.due_date));
   end if;
 
-  if new.title is distinct from old.title then v_fields := v_fields || '제목'; end if;
-  if new.description is distinct from old.description then v_fields := v_fields || '내용'; end if;
+  if new.title is distinct from old.title then v_fields := array_append(v_fields, '제목'::text); end if;
+  if new.description is distinct from old.description then v_fields := array_append(v_fields, '내용'::text); end if;
   if new.site_name is distinct from old.site_name
      or new.elevator_no is distinct from old.elevator_no
-     or new.unit_id is distinct from old.unit_id then v_fields := v_fields || '현장·호기'; end if;
-  if new.requested_by_id is distinct from old.requested_by_id then v_fields := v_fields || '요청자'; end if;
-  if new.assigned_date is distinct from old.assigned_date then v_fields := v_fields || '배정일'; end if;
+     or new.unit_id is distinct from old.unit_id then v_fields := array_append(v_fields, '현장·호기'::text); end if;
+  if new.requested_by_id is distinct from old.requested_by_id then v_fields := array_append(v_fields, '요청자'::text); end if;
+  if new.assigned_date is distinct from old.assigned_date then v_fields := array_append(v_fields, '배정일'::text); end if;
   if array_length(v_fields, 1) > 0 then
     insert into public.todo_history (todo_id, action, actor_id, actor_name, summary, detail)
     values (new.id, 'edited', v_actor_id, v_actor,
