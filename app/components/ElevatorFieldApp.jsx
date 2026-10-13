@@ -2373,11 +2373,12 @@ ${error.message ?? ""}`); return false; }
   // ★ 할 일 담당자 재지정 — 신청자와 실제 교체 기사가 지급 시점엔 다르게 정해졌거나
   // 나중에 배차가 바뀐 경우의 안전망입니다. 관리자 화면과 기사 본인 화면 양쪽에서 호출됩니다.
   async function handleReassignTodo(todoId, newAssignee) {
-    // 재배정하면 걸려 있던 재배정 요청도 함께 해제한다.
-    if (!(await writeOk(supabase.from("todos").update({ assignee: newAssignee, reassign_requested: false, reassign_reason: null, reassign_to: null }).eq("id", todoId), "재배정 실패"))) return;
-    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, assignee: newAssignee, reassignRequested: false, reassignReason: null, reassignTo: null } : t)));
-    const t = todos.find((x) => x.id === todoId);
     const newAssigneeId = profileIdByName(profilesAll, newAssignee);
+    // 재배정하면 걸려 있던 재배정 요청도 함께 해제한다. 이름과 assignee_id를 같이 바꿔야 한다 —
+    // 관리자 콘솔은 assignee_id 기준으로 담당자를 표시해서, 이름만 바꾸면 옛 담당자로 보인다.
+    if (!(await writeOk(supabase.from("todos").update({ assignee: newAssignee, ...(v2Ready ? { assignee_id: newAssigneeId } : {}), reassign_requested: false, reassign_reason: null, reassign_to: null }).eq("id", todoId), "재배정 실패"))) return;
+    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, assignee: newAssignee, assigneeId: newAssigneeId, reassignRequested: false, reassignReason: null, reassignTo: null } : t)));
+    const t = todos.find((x) => x.id === todoId);
     if (newAssigneeId) sendPush("todo_assigned", [newAssigneeId], {
       title: "할 일이 배정되었습니다",
       body: `${t?.siteName ? `${t.siteName} · ` : ""}${t?.title ?? ""}`,
