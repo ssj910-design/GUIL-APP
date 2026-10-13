@@ -7,6 +7,7 @@ import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken, onSessionExpired } from "@/lib/supabaseClient";
 import { authFetch } from "@/lib/apiFetch";
 import { mapSite, mergeAssignedEngineers, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode, mapUnitPartPhoto, mapInventoryProduct, mapInventoryStockMovement } from "@/lib/mappers";
+import { canHaveMultipleAssignees, saveSingleTodo, saveGroupCommon, changeTodoAssignees, applyAssigneeChange, deleteTodoRows } from "@/lib/todoEdit";
 import { addDays, profileIdByName, unitIdFor, inferQuoteUnitId, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent, quoteGrandTotal, quotePartsSummary, quoteUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { recordQuoteSupplyStockOut } from "@/lib/inventoryStock";
@@ -2364,10 +2365,44 @@ ${error.message ?? ""}`); return false; }
     setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, done: !t.done } : t)));
   }
 
-  // ★ 관리자 권한: 할 일을 완전히 삭제한다. 확인 대화상자는 호출 쪽(TodoTab)에서 이미 거쳤다.
-  async function handleDeleteTodo(todoId) {
-    if (!(await writeOk(supabase.from("todos").delete().eq("id", todoId), "삭제 실패"))) return;
-    setTodos((prev) => prev.filter((t) => t.id !== todoId));
+  // ★ 관리자 권한: 할 일을 완전히 삭제한다 — 담당자 여러 명이 한 건으로 묶인 할일은 전원 행을 함께 지운다
+  // (관리자웹과 동일). 확인 대화상자는 호출 쪽(TodoDetailScreen)에서 이미 거쳤다.
+  async function handleDeleteTodoGroup(group) {
+    const ids = group.map((t) => t.id);
+    const res = await deleteTodoRows(supabase, ids);
+    if (res.error) { alert(res.error); return; }
+    setTodos((prev) => prev.filter((t) => !ids.includes(t.id)));
+  }
+
+  // ★ 관리자 권한: 할 일 상세 "수정" 저장 — 관리자웹 할일 상세와 같은 규칙(lib/todoEdit.js 공용).
+  // 단건은 그 행, 담당자 여러 명 건은 공통 필드를 전원에게 적용하고 담당자 구성은 따로 바꾼다.
+  // 실패는 { error }로 돌려줘 화면(수정 모드)이 알리고 편집 상태를 유지한다.
+  async function handleSaveTodoEdit(group, form) {
+    const ctx = { profiles: profilesAll, units, sites };
+    const base = group[0];
+    const isGroup = group.length > 1;
+    const multi = canHaveMultipleAssignees(base);
+    const res = isGroup
+      ? await saveGroupCommon(supabase, { group, form, ...ctx })
+      // 여러 명 가능한 건은 담당자 구성을 아래 changeTodoAssignees가 따로 처리한다(여기선 담당자 유지).
+      : await saveSingleTodo(supabase, { todo: base, form: multi ? { ...form, assigneeIds: [base.assigneeId ?? ""].filter(Boolean) } : form, ...ctx });
+    if (res.error) return { error: res.error };
+    setTodos((prev) => prev.map((x) => (res.ids.includes(x.id) ? { ...x, ...res.local } : x)));
+
+    const where = `${form.title.trim()}`;
+    if (multi) {
+      const ch = await changeTodoAssignees(supabase, { group, assigneeIds: form.assigneeIds, profiles: profilesAll });
+      if (ch.error) return { error: ch.error };
+      if (ch.changed) {
+        setTodos((prev) => applyAssigneeChange(prev, ch, profilesAll));
+        for (const n of ch.newlyAssigned) {
+          sendPush("todo_assigned", [n.assigneeId], { title: "할 일이 배정되었습니다", body: where, url: `/?openTodo=${n.id}` });
+        }
+      }
+    } else if (!isGroup && res.local.assigneeId && res.local.assigneeId !== (base.assigneeId ?? null)) {
+      sendPush("todo_assigned", [res.local.assigneeId], { title: "할 일이 배정되었습니다", body: where, url: `/?openTodo=${base.id}` });
+    }
+    return {};
   }
 
   // ★ 할 일 담당자 재지정 — 신청자와 실제 교체 기사가 지급 시점엔 다르게 정해졌거나
@@ -2419,18 +2454,6 @@ ${error.message ?? ""}`); return false; }
     if (error) { alert("처리 실패: " + error.message); return; }
     if (data) { alert(data); return; } // 인증 실패 사유
     alert("비밀번호가 1234로 초기화됐습니다. 다음 로그인 때 새 비밀번호를 정하게 됩니다.");
-  }
-
-  // ★ 관리자가 할 일에 설명(내용)을 추가/수정합니다.
-  async function handleUpdateTodoDescription(todoId, description) {
-    await supabase.from("todos").update({ description }).eq("id", todoId);
-    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, description } : t)));
-  }
-
-  // ★ 관리자가 마감일을 직접 수정합니다 (사유 기록 없이 바로 반영).
-  async function handleUpdateTodoDueDate(todoId, dueDate) {
-    await supabase.from("todos").update({ due_date: dueDate }).eq("id", todoId);
-    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, dueDate } : t)));
   }
 
   // ★ 기사의 마감일 연장 — 승인 절차 없이 바로 반영하되, 언제·왜 늦춰졌는지 나중에 볼 수 있도록
@@ -2868,15 +2891,13 @@ ${error.message ?? ""}`); return false; }
             <TodoTab
               todos={todos}
               setTodos={setTodos}
-              onReassignTodo={handleReassignTodo}
-              onUpdateTodoDescription={handleUpdateTodoDescription}
-              onUpdateTodoDueDate={handleUpdateTodoDueDate}
               onExtendTodoDueDate={handleExtendTodoDueDate}
               onRequestReassignTodo={handleRequestReassignTodo}
               onClearReassignRequest={handleClearReassignRequest}
               onAssignTodo={handleAssignTodo}
               onAdminToggle={handleAdminToggleTodo}
-              onDeleteTodo={handleDeleteTodo}
+              onSaveTodoEdit={handleSaveTodoEdit}
+              onDeleteTodoGroup={handleDeleteTodoGroup}
               materialRequests={materialRequests}
               quoteRequests={quoteRequests}
               focusTodoId={openTodoId}
