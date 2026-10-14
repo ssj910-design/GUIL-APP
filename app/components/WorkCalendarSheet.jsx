@@ -158,18 +158,27 @@ function LeaveCalendarTab({ schedules = [] }) {
 
   // 반차는 0.5일, 그 외는 시작~종료 일수 (주말 제외는 회사 규정이 갈려 자동 계산하지 않는다)
   const reqDays = form.kind === "반차" ? 0.5 : Math.max(1, Math.floor((new Date(form.end) - new Date(form.start)) / 86400000) + 1);
-  // 신청 기간에 내 당직·숙직이 끼면 신청을 막는다 — 근무를 먼저 교환한 뒤 연차를 써야 한다.
-  // 단, 병가·공가는 본인 뜻과 무관하게 갑자기 생기는 경우가 많아 막지 않고 경고만 하고 통과시킨다
-  // (관리자가 승인 대기 목록에서 겹치는 근무를 보고 따로 재배정하면 된다).
+  // 신청 기간에 내 당직·숙직이 끼면 신청을 막는다 — 근무를 먼저 교환한 뒤 연차·병가·공가를 써야 한다.
+  // 단, 반차는 근무가 있는 날에도 쓸 수 있어야 해서 막지 않고, 제출할 때 확인창만 한 번 띄운다
+  // (관리자가 승인 대기 목록에서 겹치는 근무를 보고 필요하면 따로 조정한다).
   const dutyConflicts = schedules.filter((d) => d.profileId === selfId && d.dutyDate >= form.start && d.dutyDate <= form.end);
-  const isSoftKind = form.kind === "병가" || form.kind === "공가";
-  const blockingConflicts = isSoftKind ? [] : dutyConflicts;
-  // 관리자용 — 승인 대기 목록의 각 신청 건이 그 사람의 근무와 겹치는지 (병가·공가처럼 막지 않고
-  // 통과된 신청이 여기 걸린다).
+  const isHalfDay = form.kind === "반차";
+  const blockingConflicts = isHalfDay ? [] : dutyConflicts;
+  // 관리자용 — 승인 대기 목록의 각 신청 건이 그 사람의 근무와 겹치는지 (막지 않고 통과된 반차 신청이
+  // 여기 걸린다).
   const pendingConflictsOf = (l) => schedules.filter((d) => d.profileId === l.profile_id && d.dutyDate >= l.start_date && d.dutyDate <= l.end_date);
 
   async function submitLeave() {
     if (blockingConflicts.length) return;
+    if (isHalfDay && dutyConflicts.length) {
+      const day = form.start.slice(5).replace("-", "/");
+      const kinds = dutyConflicts.map((d) => d.kind).join(", ");
+      const ok = await confirmAsync(`${day} ${kinds} 근무가 있는 날이에요.
+${form.period} 반차를 신청할까요?
+
+근무 조정은 관리자가 확인합니다.`);
+      if (!ok) return;
+    }
     setBusy(true);
     const finalNote = form.kind === "반차" ? `${form.period}${form.note ? " · " + form.note : ""}` : (form.note || null);
     const { data, error } = await supabase.from("leaves").insert({
@@ -435,10 +444,15 @@ function LeaveCalendarTab({ schedules = [] }) {
               className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-xs text-slate-800"
             />
             {dutyConflicts.length > 0 && (
-              <p className="text-[11px] font-bold text-red-500 leading-relaxed">
-                {dutyConflicts.map((d) => `${d.dutyDate.slice(5).replace("-", "/")} ${d.kind}`).join(", ")} 근무가 있습니다.
-                {isSoftKind ? " 신청은 되지만, 관리자가 그 근무를 다시 배정해야 해요." : " 먼저 근무 교환을 한 뒤 신청하세요."}
-              </p>
+              isHalfDay ? (
+                <p className="text-[11px] font-bold text-amber-600 leading-relaxed">
+                  {form.start.slice(5).replace("-", "/")} {dutyConflicts.map((d) => d.kind).join(", ")} 근무가 있는 날이에요. 반차는 신청할 수 있어요.
+                </p>
+              ) : (
+                <p className="text-[11px] font-bold text-red-500 leading-relaxed">
+                  {dutyConflicts.map((d) => `${d.dutyDate.slice(5).replace("-", "/")} ${d.kind}`).join(", ")} 근무가 있습니다. 먼저 근무 교환을 한 뒤 신청하세요.
+                </p>
+              )
             )}
             <button
               onClick={submitLeave}
