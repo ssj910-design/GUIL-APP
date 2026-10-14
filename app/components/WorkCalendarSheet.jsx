@@ -159,7 +159,7 @@ function LeaveCalendarTab({ schedules = [] }) {
   // 반차는 0.5일, 그 외는 시작~종료 일수 (주말 제외는 회사 규정이 갈려 자동 계산하지 않는다)
   const reqDays = form.kind === "반차" ? 0.5 : Math.max(1, Math.floor((new Date(form.end) - new Date(form.start)) / 86400000) + 1);
   // 신청 기간에 내 당직·숙직이 끼면 신청을 막는다 — 근무를 먼저 교환한 뒤 연차·병가·공가를 써야 한다.
-  // 단, 반차는 근무가 있는 날에도 쓸 수 있어야 해서 막지 않고, 제출할 때 확인창만 한 번 띄운다
+  // 단, 반차는 근무가 있는 날에도 쓸 수 있어야 해서 막지 않고 안내문만 보여준다
   // (관리자가 승인 대기 목록에서 겹치는 근무를 보고 필요하면 따로 조정한다).
   const dutyConflicts = schedules.filter((d) => d.profileId === selfId && d.dutyDate >= form.start && d.dutyDate <= form.end);
   const isHalfDay = form.kind === "반차";
@@ -170,15 +170,6 @@ function LeaveCalendarTab({ schedules = [] }) {
 
   async function submitLeave() {
     if (blockingConflicts.length) return;
-    if (isHalfDay && dutyConflicts.length) {
-      const day = form.start.slice(5).replace("-", "/");
-      const kinds = dutyConflicts.map((d) => d.kind).join(", ");
-      const ok = await confirmAsync(`${day} ${kinds} 근무가 있는 날이에요.
-${form.period} 반차를 신청할까요?
-
-근무 조정은 관리자가 확인합니다.`);
-      if (!ok) return;
-    }
     setBusy(true);
     const finalNote = form.kind === "반차" ? `${form.period}${form.note ? " · " + form.note : ""}` : (form.note || null);
     const { data, error } = await supabase.from("leaves").insert({
