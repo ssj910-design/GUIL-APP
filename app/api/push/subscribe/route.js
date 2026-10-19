@@ -1,13 +1,18 @@
 // 푸시 구독 저장·삭제. 구독은 기기 단위라 한 사람이 여러 행을 가질 수 있다.
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { verifyAuthToken } from "@/lib/verifyToken";
 
 const db = () => supabaseAdmin;
 
 export async function POST(request) {
+  const auth = verifyAuthToken(request);
+  if (!auth) return Response.json({ ok: false, reason: "unauthorized" }, { status: 401 });
   const { profileId, subscription, userAgent } = await request.json().catch(() => ({}));
   if (!profileId || !subscription?.endpoint) {
     return Response.json({ ok: false, reason: "잘못된 요청" }, { status: 400 });
   }
+  // 남의 profileId로 내 기기를 등록해 그 사람의 알림을 가로채는 걸 막는다 — 본인(또는 관리자)만.
+  if (auth.profileId !== profileId && auth.appRole !== "admin") return Response.json({ ok: false, reason: "forbidden" }, { status: 403 });
   const { error } = await db().from("push_subscriptions").upsert({
     endpoint: subscription.endpoint,
     profile_id: profileId,
@@ -29,6 +34,7 @@ export async function GET(request) {
 }
 
 export async function DELETE(request) {
+  if (!verifyAuthToken(request)) return Response.json({ ok: false, reason: "unauthorized" }, { status: 401 });
   const { endpoint } = await request.json().catch(() => ({}));
   if (!endpoint) return Response.json({ ok: false }, { status: 400 });
   await db().from("push_subscriptions").delete().eq("endpoint", endpoint);
