@@ -8,7 +8,7 @@
 -- 하나만 빠져도 이력이 새고(담당자 변경 때 assignee_id 누락 같은 어긋남의 재발 위험),
 -- 트리거는 어떤 경로로 바뀌어도 빠짐없이 남긴다.
 --
--- 행위자: auth.uid() → profiles.auth_user_id로 이름을 찾는다. 서버(service role)·크론이 바꾼
+-- 행위자: auth.uid() → profiles.id(로그인 JWT sub) 또는 auth_user_id로 이름을 찾는다. 서버(service role)·크론이 바꾼
 -- 건 auth.uid()가 없어 "시스템"으로 남는다.
 -- 이력은 쓰기 정책을 일부러 열지 않았다 — 트리거(security definer)만 쓸 수 있어 앱이 위조·삭제 못 함.
 -- 그룹(같은 견적/자재 요청을 공유하는 여러 담당자 행)은 화면에서 todo_id들을 묶어 조회한다.
@@ -57,9 +57,11 @@ begin
 
   -- 이력 기록이 실패해도 할 일 저장 자체는 막지 않는다(운영 테이블 트리거라 안전장치).
   begin
+  -- 로그인 JWT의 sub는 profiles.id다(app/api/login). auth_user_id(옛 Supabase Auth 연결)는 신석주만 있어서
+  -- 그것만 보면 나머지 전원이 "시스템"으로 남는다 — 둘 다 본다.
   select p.id, p.name into v_actor_id, v_actor
   from public.profiles p
-  where p.auth_user_id = auth.uid()
+  where p.id = auth.uid() or p.auth_user_id = auth.uid()
   limit 1;
   v_who := coalesce(v_actor, '시스템');
 
