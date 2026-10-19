@@ -13,7 +13,7 @@ function fmtWon(n) {
   return `${Math.round(Number(n) || 0).toLocaleString("ko-KR")}원`;
 }
 
-export default function QuoteApproveClient({ id }) {
+export default function QuoteApproveClient({ id, token }) {
   const [state, setState] = useState("loading"); // loading | notfound | wrongStatus | ready | done
   const [quote, setQuote] = useState(null);
   const [order, setOrder] = useState(null); // buildPurchaseOrderData() 결과 — 화면 표시용으로도 재사용
@@ -30,7 +30,7 @@ export default function QuoteApproveClient({ id }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const res = await fetch(`/api/approve-quote?id=${encodeURIComponent(id)}`).then((r) => r.json()).catch(() => null);
+      const res = await fetch(`/api/approve-quote?id=${encodeURIComponent(id)}&t=${encodeURIComponent(token)}`).then((r) => r.json()).catch(() => null);
       if (cancelled) return;
       if (!res?.ok) { setState("notfound"); return; }
       if (res.status !== "작성") {
@@ -62,7 +62,7 @@ export default function QuoteApproveClient({ id }) {
       const res = await fetch("/api/approve-quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quoteId: id, signatureUrl, approvedAmountInput: order.totalCost }),
+        body: JSON.stringify({ quoteId: id, token, signatureUrl, approvedAmountInput: order.totalCost }),
       });
       const json = await res.json().catch(() => null);
       if (!json?.ok) throw new Error(json?.reason || "승인 처리에 실패했습니다");

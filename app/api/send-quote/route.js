@@ -4,6 +4,18 @@ import { sendQuoteEmail } from "@/lib/email";
 import { sendQuoteAlimtalk } from "@/lib/alimtalk";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { verifyAuthToken } from "@/lib/verifyToken";
+import crypto from "crypto";
+
+// 견적별 승인 링크 토큰 — 이미 있으면 그대로 써서 재발송해도 앞서 보낸 링크가 계속 유효하다(마이그레이션 153).
+async function ensureApproveToken(quoteId) {
+  const { data, error } = await supabaseAdmin.from("quote_requests").select("approve_token").eq("id", quoteId).single();
+  if (error) { console.error("approve_token 조회 실패(마이그레이션 153 필요?):", error.message); return null; }
+  if (data?.approve_token) return data.approve_token;
+  const token = crypto.randomBytes(16).toString("hex");
+  const { error: upErr } = await supabaseAdmin.from("quote_requests").update({ approve_token: token }).eq("id", quoteId).is("approve_token", null);
+  if (upErr) { console.error("approve_token 저장 실패:", upErr.message); return null; }
+  return token;
+}
 
 export async function POST(request) {
   const auth = verifyAuthToken(request);
@@ -49,8 +61,9 @@ export async function POST(request) {
   }
 
   if (channels?.kakao) {
+    const approveToken = await ensureApproveToken(quoteRequestId);
     try {
-      const sent = await sendQuoteAlimtalk({ to: recipientPhone, quote, pdfUrl: quote?.pdfUrl, noticeMessage, quoteId: quoteRequestId });
+      const sent = await sendQuoteAlimtalk({ to: recipientPhone, quote, pdfUrl: quote?.pdfUrl, noticeMessage, quoteId: quoteRequestId, approveToken });
       results.kakao = { ok: true };
       patch.kakao_sent_at = now;
       // messageId를 남겨야 웹훅이 "이 발송의 결과"를 찾아 상태(수신완료/실패)를 채울 수 있다.
@@ -65,7 +78,7 @@ export async function POST(request) {
     // 이력만 추적한다.
     if (referencePhone) {
       try {
-        await sendQuoteAlimtalk({ to: referencePhone, quote, pdfUrl: quote?.pdfUrl, noticeMessage, quoteId: quoteRequestId });
+        await sendQuoteAlimtalk({ to: referencePhone, quote, pdfUrl: quote?.pdfUrl, noticeMessage, quoteId: quoteRequestId, approveToken });
       } catch (err) {
         console.error(`참조인 카카오 발송 실패 (quoteRequestId=${quoteRequestId}):`, err.message);
       }

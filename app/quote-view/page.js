@@ -21,7 +21,9 @@ export const metadata = { title: `견적서 확인 — ${BRAND.name}` };
 export default async function QuoteViewPage({ searchParams }) {
   const { url } = await searchParams;
   if (typeof url === "string" && url.startsWith("qid:")) {
-    redirect(`/quote-approve?id=${encodeURIComponent(url.slice(4))}`);
+    // "qid:<견적ID>.<승인토큰>" — 토큰이 없는 옛 링크는 승인 페이지가 거부한다.
+    const [qid, token] = url.slice(4).split(".");
+    redirect(`/quote-approve?id=${encodeURIComponent(qid)}${token ? `&t=${encodeURIComponent(token)}` : ""}`);
   }
   const valid = typeof url === "string" && url.startsWith("https://kdptzotxnzpuwzdguzgh.supabase.co/storage/");
 
