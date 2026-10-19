@@ -1447,6 +1447,7 @@ export function AdminTab({ materialRequests, billings, quoteRequests, restockReq
         existingQuote={wizardTarget}
         inventoryProducts={inventoryProducts}
         inventoryStockMovements={inventoryStockMovements}
+        quoteHistory={quoteRequests}
         onDraftCreated={onQuoteDraftCreated}
         onDiscarded={onQuoteDiscarded}
         onSaved={(patch) => { onQuoteWizardSaved(patch); setPage("quoteManagement"); setWizardTarget(null); }}
