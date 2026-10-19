@@ -35,7 +35,7 @@ function FieldRow({ label, children }) {
 
 // 이름 검색 자동완성 + 선택된 사람은 삭제 가능한 태그로 표시 — 요청자(단일)·담당자(복수) 공용.
 // 단일 선택(요청자)은 onAdd를 "기존 선택 교체"로 넘겨주는 쪽(호출부)에서 처리한다.
-function PersonPicker({ candidates, selectedIds, onAdd, onRemove, placeholder }) {
+export function PersonPicker({ candidates, selectedIds, onAdd, onRemove, placeholder }) {
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
   const filtered = q ? candidates.filter((p) => !selectedIds.includes(p.id) && p.name.toLowerCase().includes(q)).slice(0, 8) : [];
@@ -562,11 +562,8 @@ function AssignTodoModal({ data, onClose, onCreate }) {
         <FieldRow label="기한">
           <DueDateField value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
         </FieldRow>
-        {billingReady && (
-          <FieldRow label="청구">
-            <BillingSetupFields form={form} setForm={setForm} siteUnits={siteUnits} siteSelected={!!form.siteId} />
-          </FieldRow>
-        )}
+        {/* 부품 교체+청구 업무는 자재신청관리의 "직접 지급"으로 일원화했다 — 새 배정에서는 청구 설정을 숨긴다
+            (이미 청구 필수로 만든 할일의 수정 폼에서는 그대로 보인다). */}
         <FieldRow label="요청자">
           <PersonPicker
             candidates={admins}

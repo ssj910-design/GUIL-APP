@@ -12,7 +12,8 @@ export function emptyBillingRow() {
   return { name: "", qty: "", amount: "" };
 }
 
-export function BillingSetupFields({ form, setForm, siteUnits, siteSelected }) {
+// alwaysOn: 토글 없이 항상 펼쳐 보여준다(관리자 직접 자재지급 — 청구 필수가 전제).
+export function BillingSetupFields({ form, setForm, siteUnits, siteSelected, alwaysOn = false }) {
   const rows = form.billingRows?.length ? form.billingRows : [emptyBillingRow()];
   const unitIds = form.unitIds ?? [];
   const total = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
@@ -32,8 +33,8 @@ export function BillingSetupFields({ form, setForm, siteUnits, siteSelected }) {
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-      <label className="flex items-start gap-2.5 cursor-pointer">
+    <div className={alwaysOn ? "" : "rounded-xl border border-slate-200 bg-slate-50/60 p-3"}>
+      {!alwaysOn && (<label className="flex items-start gap-2.5 cursor-pointer">
         <input
           type="checkbox"
           className="mt-0.5 w-4 h-4 accent-blue-700 shrink-0"
@@ -51,10 +52,10 @@ export function BillingSetupFields({ form, setForm, siteUnits, siteSelected }) {
             자재지급건처럼 기사가 비용청구를 제출해야 완료됩니다. 체크로는 완료할 수 없고, 청구가 접수되면 담당자 전원이 자동 완료됩니다.
           </span>
         </span>
-      </label>
+      </label>)}
 
-      {form.billingRequired && (
-        <div className="mt-3 space-y-3">
+      {(alwaysOn || form.billingRequired) && (
+        <div className={alwaysOn ? "space-y-3" : "mt-3 space-y-3"}>
           <div>
             <p className="text-xs font-bold text-slate-500 mb-1.5">호기 (여러 개 선택하면 청구 1건으로 접수)</p>
             {!siteSelected ? (

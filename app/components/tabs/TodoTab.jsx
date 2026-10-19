@@ -8,7 +8,7 @@ import { SitesContext, UnitsContext, AuthContext } from "@/app/components/contex
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 import { groupKeyOf, completionGroupIds } from "@/lib/todoEdit";
 import { TodoDetailScreen } from "@/app/components/tabs/TodoDetailScreen";
-import { BillingSetupFields, billingSetupValid } from "@/app/components/BillingSetupFields";
+import { billingSetupValid } from "@/app/components/BillingSetupFields";
 
 
 /* ------------------------------------------------------------------ */
@@ -19,7 +19,11 @@ import { BillingSetupFields, billingSetupValid } from "@/app/components/BillingS
 // 자재/견적 신청 시점의 신청자 이름을 찾아옵니다. 지급완료 시 실제 담당자를 신청자와
 // 다르게 지정할 수 있어(★ 담당자 재배정 기능), 요청자와 담당자가 다를 수 있습니다.
 export function getRequesterName(todo, materialRequests, quoteRequests) {
-  if (todo.source === "material") return materialRequests?.find((r) => r.id === todo.materialRequestId)?.engineer ?? null;
+  if (todo.source === "material") {
+    const req = materialRequests?.find((r) => r.id === todo.materialRequestId);
+    // 관리자 직접 지급 건은 신청자가 기사가 아니라 지급한 관리자다
+    return req?.createdByAdmin ? (todo.requestedByName ?? "관리자") : (req?.engineer ?? null);
+  }
   if (todo.source === "quote") return quoteRequests?.find((q) => q.id === todo.quoteRequestId)?.engineer ?? null;
   // 수동 등록 할일 — 097 마이그레이션 이전 행(requestedByName 없음)은 "관리자"로 표시.
   return todo.requestedByName ?? "관리자";
@@ -346,11 +350,7 @@ export function TodoAssignSheet({ engineerNames, onSubmit, onClose, billingReady
       <Field label="현장 (선택)">
         <SiteSearchSelect value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitIds: [], unitId: "" })} />
       </Field>
-      {billingReady && (
-        <div className="mb-3">
-          <BillingSetupFields form={form} setForm={setForm} siteUnits={siteUnits} siteSelected={!!form.siteId} />
-        </div>
-      )}
+      {/* 부품 교체+청구 업무는 관리자웹 자재신청관리의 "직접 지급"으로 일원화 — 새 배정에서는 청구 설정을 숨긴다 */}
       <Field label="할 일 제목">
         <input
           className={inputCls}
