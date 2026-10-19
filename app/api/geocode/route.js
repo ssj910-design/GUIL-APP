@@ -1,6 +1,9 @@
 // 주소 → 좌표 (티맵 fullAddrGeo) — 엑셀 검증 도구의 "주소 좌표로 대조"용.
 // 구주소·신주소 어느 쪽을 넣어도 좌표를 돌려준다. appKey는 서버에서만 쓴다(tmap-route와 동일 원칙).
+import { authGuard } from "@/lib/verifyToken";
+
 export async function GET(request) {
+  const denied = authGuard(request); if (denied) return denied;
   const key = process.env.TMAP_APP_KEY;
   if (!key) return Response.json({ ok: false, reason: "TMAP_APP_KEY 미설정" }, { status: 200 });
   const addr = new URL(request.url).searchParams.get("addr")?.trim();

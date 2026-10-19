@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import { Modal } from "@/app/components/admin/adminShared";
+import { authFetch } from "@/lib/apiFetch";
 
 // 주소에서 "구/군"만 추출 — 예: "서울특별시 강남구 학동로 120" -> "강남구".
 // 경기도는 도-시-구 3단 구조라 "안양시 만안구"처럼 구가 세 번째 토큰에 온다 — 두 번째·세 번째를 모두 확인한다.
@@ -129,7 +130,7 @@ export function SiteMapModal({ sites, units = [], onClose }) {
 
     // 담당 현장이 아니어도 위치를 확인할 수 있어야 하므로, 못 찾으면 임의 주소로 지오코딩한다.
     try {
-      const res = await fetch(`/api/geocode-address?q=${encodeURIComponent(q)}`);
+      const res = await authFetch(`/api/geocode-address?q=${encodeURIComponent(q)}`);
       const json = await res.json();
       if (json.ok) {
         const marker = L.marker([json.lat, json.lng], { icon: pinIcon(L, "#0f172a") })

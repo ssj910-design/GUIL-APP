@@ -2,7 +2,10 @@
 // appKey는 서버에서만 쓴다 (클라이언트로 내려보내면 키가 노출된다).
 const ROUTE_URL = "https://apis.openapi.sk.com/tmap/routes?version=1";
 
+import { authGuard } from "@/lib/verifyToken";
+
 export async function POST(request) {
+  const denied = authGuard(request); if (denied) return denied;
   const key = process.env.TMAP_APP_KEY;
   if (!key) return Response.json({ ok: false, reason: "TMAP_APP_KEY 미설정" }, { status: 200 });
 

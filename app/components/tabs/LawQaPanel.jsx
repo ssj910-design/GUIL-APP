@@ -14,6 +14,7 @@ import { Search, ExternalLink, Copy, Check, ThumbsUp, ThumbsDown, History, X, Tr
 import { SUGGESTIONS, EXAMPLES } from "@/lib/lawQaSuggestions";
 import { AnswerMarkdown } from "@/lib/answerMarkdown";
 import { addHistory, getHistory, clearHistory } from "@/lib/lawQaHistory";
+import { authFetch } from "@/lib/apiFetch";
 
 // 추천 질문 351개는 법령 자료에서 생성했다 — lib/lawQaSuggestions.js 주석 참고.
 
@@ -42,7 +43,7 @@ export function LawQaPanel({ entryPoint = "tab" }) {
     setLog((L) => [...L, { role: "user", text }]);
     setBusy(true);
     try {
-      const res = await fetch("/api/law-qa", {
+      const res = await authFetch("/api/law-qa", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // 앞선 문답을 같이 보낸다 — "그럼 18년 이전은?" 같은 꼬리 질문은 이게 없으면 무슨 말인지 알 수 없다.
@@ -77,7 +78,7 @@ export function LawQaPanel({ entryPoint = "tab" }) {
     setRatings((r) => ({ ...r, [i]: value }));
     if (!logId) return;
     try {
-      await fetch("/api/law-qa", {
+      await authFetch("/api/law-qa", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ logId, rating: value }),

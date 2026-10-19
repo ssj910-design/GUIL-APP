@@ -4,6 +4,7 @@
 // 마커 모양(물방울 핀)·타일은 SiteMapModal(자체점검현황 현장지도)과 동일하게 맞춘다.
 import { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
+import { authFetch } from "@/lib/apiFetch";
 
 const ENGINEER_COLOR = "#2563eb"; // 파랑 — 기사 위치
 const SITE_COLOR = "#dc2626";     // 빨강 — 고장 현장 위치
@@ -211,7 +212,7 @@ export function EngineerLocationMap({ engineers, site, engineerJobs, onEngineerC
         if (!site?.lat || !site?.lng) return;
         if (routeLineRef.current) { map.removeLayer(routeLineRef.current); routeLineRef.current = null; }
         try {
-          const res = await fetch("/api/tmap-route", {
+          const res = await authFetch("/api/tmap-route", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

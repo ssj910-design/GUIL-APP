@@ -10,6 +10,7 @@ import { isVideoUrl } from "@/lib/photos";
 import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
+import { authFetch } from "@/lib/apiFetch";
 
 
 /* ------------------------------------------------------------------ */
@@ -94,7 +95,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
     if (!selfDispatching || selfLoc?.last_lat == null || site?.lat == null) { setDriveMin(null); setDriveLoading(false); return; }
     let cancelled = false;
     setDriveLoading(true);
-    fetch("/api/tmap-route", {
+    authFetch("/api/tmap-route", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -951,7 +952,7 @@ export function DispatchEtaModal({ failure, onConfirm, onClose }) {
     if (selfLoc?.last_lat == null || site?.lat == null) { setDriveLoading(false); return; }
     let cancelled = false;
     setDriveLoading(true);
-    fetch("/api/tmap-route", {
+    authFetch("/api/tmap-route", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
