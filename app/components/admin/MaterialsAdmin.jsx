@@ -92,7 +92,7 @@ export default function MaterialsAdmin({ data, setData }) {
     const { data: reqRow, error: reqError } = await supabase.from("material_requests").insert({
       id: requestId, site_id: site.id, site_name: site.name,
       elevator_no: patch.elevator_no ?? null, elevator_nos: patch.elevator_nos ?? null, unit_id: patch.unit_id ?? null,
-      part: patch.part, urgency: "보통", note: form.description || null, photo_count: 0,
+      part: patch.part, urgency: "일반", note: form.description || null, photo_count: 0,
       engineer: first.name, requester_id: first.id, requested_date: TODAY_STR, status: "승인대기", created_by_admin: true,
     }).select().single();
     if (reqError) { alert("직접 지급 등록 실패: " + reqError.message); return false; }
