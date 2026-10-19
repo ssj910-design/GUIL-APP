@@ -12,7 +12,7 @@ import { mapInventoryStockMovement } from "@/lib/mappers";
 import { notify } from "@/lib/push";
 import { TodoHistory } from "@/app/components/TodoHistory";
 import {
-  groupKeyOf, canHaveMultipleAssignees, saveSingleTodo, saveGroupCommon, changeTodoAssignees, applyAssigneeChange,
+  groupKeyOf, completionGroupIds, canHaveMultipleAssignees, saveSingleTodo, saveGroupCommon, changeTodoAssignees, applyAssigneeChange,
 } from "@/lib/todoEdit";
 import { TODAY_STR } from "@/lib/constants";
 import { addDays, shortDate, formatUnitLabel } from "@/lib/utils";
@@ -796,14 +796,12 @@ export default function TodosAdmin({ data, setData, initialView }) {
     return { ok: true, movementsInserted: true };
   }
 
-  // 담당자 여러 명이 한 팀으로 묶인 수동 할일(관리자 배정)은 1명만 완료해도 전원 완료 처리한다
-  // — 표에서도 이미 groupKeyOf로 한 행으로 묶어 보여주므로 완료 처리도 그룹 단위로 맞춘다.
-  // 완료 취소는 그룹 단위로 묶지 않는다(자체점검 지적사항과 동일한 비대칭 규칙).
+  // 담당자 여러 명이 한 팀으로 묶인 수동 할일(관리자 배정)·자체점검 지적사항은 1명이 완료하면 전원 완료,
+  // 완료 취소도 전원 취소한다(lib/todoEdit.js completionGroupIds) — 표에서도 한 행으로 묶어 보여주므로
+  // 완료·취소 둘 다 그룹 단위로 맞춘다. 자재·견적 연동은 담당자별 개별 처리.
   async function toggle(t) {
     const done = !t.done;
-    const ids = done && t.source === "manual"
-      ? todos.filter((x) => groupKeyOf(x) === groupKeyOf(t)).map((x) => x.id)
-      : [t.id];
+    const ids = completionGroupIds(todos, t);
     const { error } = await supabase.from("todos").update({ done }).in("id", ids);
     if (error) { alert("완료 처리 실패: " + error.message); return; }
     setData((prev) => ({ ...prev, todos: prev.todos.map((x) => (ids.includes(x.id) ? { ...x, done } : x)) }));
@@ -814,7 +812,13 @@ export default function TodosAdmin({ data, setData, initialView }) {
   async function toggleGroupDone(group) {
     const effectiveDone = (m) => (wasteReturnPending(m) ? false : m.done);
     const groupDone = group.every(effectiveDone);
-    await Promise.all(group.filter((m) => effectiveDone(m) === groupDone).map((m) => toggle(m)));
+    // 한 번 토글이 같이 바뀌는 행(completionGroupIds)을 이미 처리했으면 다시 보내지 않는다.
+    const handled = new Set();
+    for (const m of group.filter((x) => effectiveDone(x) === groupDone)) {
+      if (handled.has(m.id)) continue;
+      completionGroupIds(todos, m).forEach((id) => handled.add(id));
+      await toggle(m);
+    }
   }
 
   // 담당자를 2명 이상 고르면(AssignTodoModal), DB에 담당자 배열 컬럼이 없어(단일 assignee_id)
