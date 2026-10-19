@@ -898,7 +898,7 @@ function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
 
   async function buildInvoiceAndPdf() {
     const invoice = buildBillingInvoiceData({ ...b, paymentDueDate: dueDate }, data.units, data.sites);
-    const genRes = await fetch("/api/generate-billing-invoice-pdf", {
+    const genRes = await authFetch("/api/generate-billing-invoice-pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(invoice),
@@ -1462,7 +1462,7 @@ export default function BillingsAdmin({ data, setData }) {
   // 알림톡이 실제로 도착했는지 솔라피에 직접 물어봐 반영한다 — 웹훅 결과가 안 올 때가 있어서다
   // (QuotesAdmin.jsx의 동일 패턴). 화면을 열 때 한 번. 확인 중인 건이 없으면 부담 없이 바로 끝난다.
   useEffect(() => {
-    fetch("/api/alimtalk-status", { method: "POST" })
+    authFetch("/api/alimtalk-status", { method: "POST" })
       .then((r) => r.json())
       .then((d) => {
         if (!(d?.updated > 0) || !d.billingChangedRows) return;

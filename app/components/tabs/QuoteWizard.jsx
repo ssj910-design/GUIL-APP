@@ -14,6 +14,7 @@ import { mapQuoteRequest, mapSiteManager } from "@/lib/mappers";
 import { siteUnitList, quoteGrandTotal, quoteDisplayTotal } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { currentStock } from "@/lib/inventoryStock";
+import { authFetch } from "@/lib/apiFetch";
 
 const STEP_TITLES = ["현장·담당자", "품목 입력", "부대비용", "확인·작성"];
 const draftKey = (id) => `guilQuoteWizardDraftV1:${id}`;
@@ -219,7 +220,7 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
     const quoteTitle = quoteTitleInput.trim() || items[0]?.name || "견적서";
     const quoteDate = TODAY_STR;
 
-    const pdfRes = await fetch("/api/generate-quote-pdf", {
+    const pdfRes = await authFetch("/api/generate-quote-pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

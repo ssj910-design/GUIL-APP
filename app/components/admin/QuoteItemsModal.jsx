@@ -25,6 +25,7 @@ import { currentStock } from "@/lib/inventoryStock";
 import { Modal, inputCls, PhotoGrid } from "@/app/components/admin/adminShared";
 import { COMPANY } from "@/lib/company";
 import { useQuoteRecipientFields, QuoteRecipientInfo, QuoteRecipientExtras } from "@/app/components/admin/QuoteRecipientFields";
+import { authFetch } from "@/lib/apiFetch";
 
 const CATEGORIES = ["자재비", "인건비"];
 const VAT_RATE = 0.1;
@@ -246,7 +247,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
       attachment_urls: rf.attachments,
     };
 
-    const pdfRes = await fetch("/api/generate-quote-pdf", {
+    const pdfRes = await authFetch("/api/generate-quote-pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

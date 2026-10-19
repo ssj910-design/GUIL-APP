@@ -7,7 +7,10 @@ import { buildReplacementCertificatePdfBytes } from "@/lib/replacementCertificat
 import { supabase } from "@/lib/supabaseClient";
 import { certFingerprint } from "@/lib/certificateFingerprint";
 
+import { authGuard } from "@/lib/verifyToken";
+
 export async function POST(request) {
+  const denied = authGuard(request, { adminOnly: true }); if (denied) return denied;
   const cert = await request.json().catch(() => null);
   if (!cert) {
     return Response.json({ ok: false, reason: "요청 본문이 올바르지 않습니다" }, { status: 200 });

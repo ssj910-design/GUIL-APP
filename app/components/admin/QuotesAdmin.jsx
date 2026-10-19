@@ -18,6 +18,7 @@ import { locOf, addressOf, personOf, assigneeNames, billingCompleteFor, StatusBa
 import QuoteItemsModal from "@/app/components/admin/QuoteItemsModal";
 import QuoteSendModal from "@/app/components/admin/QuoteSendModal";
 import QuotePdfPreview from "@/app/components/admin/QuotePdfPreview";
+import { authFetch } from "@/lib/apiFetch";
 
 // 할 일 제목에 쓸 호기 — v2 unit_id가 있으면 그걸 우선하고(관리자 콘솔은 v2 네이티브),
 // 없으면 견적 요청 자체의 elevatorNo, 그것도 없으면(관리자가 새로 작성한 견적) 품목에
@@ -96,7 +97,7 @@ export default function QuotesAdmin({ data, setData }) {
   // 예전엔 견적 발송 현황 패널이 화면에 뜰 때 하던 일인데, 패널을 없애도 조회는 남긴다.
   // 화면을 열 때 한 번. 확인 중인 건이 없으면 서버가 바로 0을 돌려줘 부담이 없다.
   useEffect(() => {
-    fetch("/api/alimtalk-status", { method: "POST" })
+    authFetch("/api/alimtalk-status", { method: "POST" })
       .then((r) => r.json())
       .then((d) => {
         if (!(d?.updated > 0) || !d.changedRows) return;

@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Download, Loader2 } from "lucide-react";
 import { certFingerprint } from "@/lib/certificateFingerprint";
+import { authFetch } from "@/lib/apiFetch";
 
 async function renderPdfToCanvases(blobUrl) {
   const pdfjsLib = await import("pdfjs-dist");
@@ -86,7 +87,7 @@ export default function ReplacementCertificateViewer({ cert, filenameBase, cache
           setStatus("ready");
           return;
         }
-        const res = await fetch("/api/generate-replacement-certificate-pdf", {
+        const res = await authFetch("/api/generate-replacement-certificate-pdf", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(cert),
