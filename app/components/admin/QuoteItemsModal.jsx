@@ -16,8 +16,8 @@
 //
 // 오른쪽 미리보기 카드는 실제 PDF 서식을 재현하지 않는 간단한 요약이다 — 새 계산 없이
 // 이미 있는 값을 다시 보여줄 뿐이다.
-import { useState, useEffect } from "react";
-import { Plus, Trash2, ChevronUp, ChevronDown, Search } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Plus, Trash2, ChevronUp, ChevronDown, Search, History } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { quoteGrandTotal, quoteDisplayTotal } from "@/lib/utils";
@@ -26,6 +26,7 @@ import { Modal, inputCls, PhotoGrid } from "@/app/components/admin/adminShared";
 import { COMPANY } from "@/lib/company";
 import { useQuoteRecipientFields, QuoteRecipientInfo, QuoteRecipientExtras } from "@/app/components/admin/QuoteRecipientFields";
 import { authFetch } from "@/lib/apiFetch";
+import { historyQuotes, buildItemIndex, suggestItems, priceRangeLabel, rankPastQuotes, shortDateLabel, quoteDate, normName } from "@/lib/quoteHistory";
 
 const CATEGORIES = ["자재비", "인건비"];
 const VAT_RATE = 0.1;
@@ -90,8 +91,192 @@ function InventoryPickerModal({ products, movements, onClose, onSelect }) {
   );
 }
 
-export default function QuoteItemsModal({ quote, site, siteManagers, profiles, inventoryProducts, inventoryStockMovements, onClose, onSaved }) {
+// 품명 입력칸 + 자동완성 — 과거 견적에서 쓴 이름(횟수·단가 범위 표시)과 재고 품목을 후보로 보여준다.
+// 과거 견적 후보를 고르면 이름·규격·단위와(자재비일 때, 단가가 비어 있으면) 최근 단가를 채우고,
+// 재고 후보는 기존 "재고 연동"과 똑같이 partId까지 연결한다. 인건비는 단가를 자동으로 안 채운다
+// (같은 이름이어도 공사 규모에 따라 매번 다르게 나오기 때문).
+function ItemNameInput({ item, index, itemIndex, inventoryProducts, onChange, onPick }) {
+  const [focused, setFocused] = useState(false);
+  const text = item.name ?? "";
+  const hist = useMemo(() => (focused ? suggestItems(itemIndex, text, item.category, 6) : []), [focused, itemIndex, text, item.category]);
+  const inv = useMemo(() => {
+    const q = normName(text);
+    if (!focused || !q || item.category !== "자재비") return [];
+    return (inventoryProducts ?? []).filter((p) => p.active !== false && normName(p.name).includes(q)).slice(0, 3);
+  }, [focused, text, item.category, inventoryProducts]);
+  const exact = hist.length === 1 && normName(hist[0].name) === normName(text) && hist[0].normSpec === normName(item.spec) && inv.length === 0;
+  const open = focused && !exact && (hist.length > 0 || inv.length > 0);
+  return (
+    <div className="relative">
+      <input
+        className={inputCls}
+        placeholder="품명"
+        value={text}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        autoComplete="off"
+      />
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-30 w-[24rem] max-w-[80vw] bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+          {hist.map((e) => (
+            <button
+              key={e.key}
+              type="button"
+              onMouseDown={(ev) => { ev.preventDefault(); onPick(index, { kind: "history", entry: e }); setFocused(false); }}
+              className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left hover:bg-blue-50 border-b border-slate-100 last:border-0"
+            >
+              <span className="min-w-0 truncate">
+                <span className="text-sm font-semibold text-slate-800">{e.name}</span>
+                {e.spec && <span className="ml-1.5 text-xs text-slate-500">{e.spec}</span>}
+              </span>
+              <span className="text-[11px] text-slate-500 shrink-0">{priceRangeLabel(e)}</span>
+            </button>
+          ))}
+          {inv.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onMouseDown={(ev) => { ev.preventDefault(); onPick(index, { kind: "inventory", product: p }); setFocused(false); }}
+              className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left hover:bg-emerald-50 border-b border-slate-100 last:border-0"
+            >
+              <span className="text-sm font-semibold text-slate-800 truncate">
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 rounded px-1 py-0.5 mr-1.5 align-middle">재고</span>{p.name}
+                {p.spec && <span className="ml-1.5 text-xs font-normal text-slate-500">{p.spec}</span>}
+              </span>
+              {p.salePrice != null && <span className="text-[11px] text-slate-500 shrink-0">{Number(p.salePrice).toLocaleString()}원</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 이전 견적 불러오기 — 현재 현장·호기와 요청문구를 기준으로 비슷한 과거 견적을 위로 정렬해 보여주고,
+// 고르면 품목별로 체크해 가져온다. 인건비와 운반비·안전관리비는 매번 판단이 달라지는 값이라
+// 기본은 해제 상태(필요하면 사람이 체크). 할인·특이사항은 가져오지 않는다.
+function PastQuotePickerModal({ quotes, site, quote, onClose, onApply }) {
+  const [scope, setScope] = useState("site"); // site | all
+  const [search, setSearch] = useState("");
+  const [picked, setPicked] = useState(null); // 선택한 과거 견적
+  const [checked, setChecked] = useState({}); // idx -> bool
+  const [withTransport, setWithTransport] = useState(false);
+  const [withSafety, setWithSafety] = useState(false);
+
+  const ranked = useMemo(
+    () => rankPastQuotes(quotes, { siteId: quote.siteId ?? site?.id, unitId: quote.unitId, text: `${search} ${quote.part ?? ""} ${quote.constructionType ?? ""}` }),
+    [quotes, quote, site, search]
+  );
+  const siteCount = ranked.filter((r) => r.sameSite).length;
+  const q = normName(search);
+  const rows = ranked
+    .filter((r) => scope === "all" || r.sameSite || siteCount === 0)
+    .filter((r) => !q || normName(`${r.q.quoteTitle ?? ""} ${(r.q.quoteItems ?? []).map((it) => it.name).join(" ")} ${r.q.siteName ?? ""}`).includes(q))
+    .slice(0, 40);
+
+  function pick(pq) {
+    const init = {};
+    (pq.quoteItems ?? []).forEach((it, i) => { init[i] = !!it.name?.trim() && (it.category ?? "자재비") === "자재비"; });
+    setChecked(init);
+    setWithTransport(false);
+    setWithSafety(false);
+    setPicked(pq);
+  }
+
+  if (picked) {
+    const items = (picked.quoteItems ?? []).map((it, i) => ({ it, i })).filter(({ it }) => it.name?.trim());
+    const label = shortDateLabel(quoteDate(picked));
+    const count = items.filter(({ i }) => checked[i]).length;
+    return (
+      <Modal title="이전 견적에서 가져올 항목 선택" onClose={onClose}>
+        <button onClick={() => setPicked(null)} className="text-xs font-bold text-slate-500 mb-2">← 목록으로</button>
+        <p className="text-sm font-bold text-slate-800">{picked.quoteTitle || picked.constructionType || "-"}</p>
+        <p className="text-[11px] text-slate-400 mb-3">{label} · {picked.siteName}{picked.elevatorNo ? ` ${picked.elevatorNo}` : ""}</p>
+        <div className="space-y-1.5 mb-3">
+          {items.map(({ it, i }) => (
+            <label key={i} className="flex items-center gap-2 p-2 rounded-lg border border-slate-200 text-sm cursor-pointer">
+              <input type="checkbox" checked={!!checked[i]} onChange={(e) => setChecked((c) => ({ ...c, [i]: e.target.checked }))} />
+              <span className="flex-1 min-w-0 truncate">
+                <span className="font-semibold text-slate-800">{it.name}</span>
+                {it.spec && <span className="ml-1.5 text-xs text-slate-500">{it.spec}</span>}
+              </span>
+              <span className="text-[11px] text-slate-400 shrink-0">{it.category ?? "자재비"}</span>
+              <span className="text-xs text-slate-600 shrink-0">{it.qty ?? 1}{it.unit || ""} × {Number(it.unitPrice || 0).toLocaleString()}원</span>
+            </label>
+          ))}
+        </div>
+        {(Number(picked.transportCost) > 0 || Number(picked.safetyCost) > 0) && (
+          <div className="flex flex-wrap gap-4 mb-3 text-xs text-slate-600">
+            {Number(picked.transportCost) > 0 && (
+              <label className="flex items-center gap-1.5"><input type="checkbox" checked={withTransport} onChange={(e) => setWithTransport(e.target.checked)} />운반비 {Number(picked.transportCost).toLocaleString()}원</label>
+            )}
+            {Number(picked.safetyCost) > 0 && (
+              <label className="flex items-center gap-1.5"><input type="checkbox" checked={withSafety} onChange={(e) => setWithSafety(e.target.checked)} />안전관리비 {Number(picked.safetyCost).toLocaleString()}원</label>
+            )}
+          </div>
+        )}
+        <p className="text-[11px] text-slate-400 mb-3">단가는 그때 견적 값 그대로 가져옵니다 — 가져온 뒤 현재 단가에 맞게 고쳐주세요. 인건비·운반비·안전관리비는 기본 해제입니다.</p>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5">취소</button>
+          <button
+            disabled={count === 0 && !withTransport && !withSafety}
+            onClick={() => onApply({
+              items: items.filter(({ i }) => checked[i]).map(({ it }) => ({ ...it, _src: label })),
+              transportCost: withTransport ? Number(picked.transportCost) : null,
+              safetyCost: withSafety ? Number(picked.safetyCost) : null,
+            })}
+            className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2.5"
+          >
+            선택 항목 추가{count > 0 ? ` (${count})` : ""}
+          </button>
+        </div>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal title="이전 견적에서 불러오기" onClose={onClose}>
+      <input className={inputCls + " mb-2"} placeholder="견적명·품목·현장 검색" value={search} onChange={(e) => setSearch(e.target.value)} autoFocus />
+      <div className="flex items-center gap-3 mb-3 text-xs font-semibold text-slate-600">
+        <label className="flex items-center gap-1"><input type="radio" checked={scope === "site"} onChange={() => setScope("site")} />같은 현장{siteCount > 0 ? ` (${siteCount})` : ""}</label>
+        <label className="flex items-center gap-1"><input type="radio" checked={scope === "all"} onChange={() => setScope("all")} />전체</label>
+        {scope === "site" && siteCount === 0 && <span className="text-[11px] text-slate-400">이 현장 이력이 없어 전체를 보여줍니다</span>}
+      </div>
+      <div className="space-y-1.5 max-h-[26rem] overflow-y-auto">
+        {rows.length === 0 && <p className="text-xs text-slate-400 text-center py-8">불러올 이전 견적이 없습니다</p>}
+        {rows.map(({ q: pq, matched }) => {
+          const named = (pq.quoteItems ?? []).filter((it) => it.name?.trim());
+          const total = named.reduce((s, it) => s + Number(it.qty || 0) * Number(it.unitPrice || 0), 0);
+          return (
+            <button
+              key={pq.id}
+              type="button"
+              onClick={() => pick(pq)}
+              className="w-full text-left p-2.5 rounded-lg border border-slate-200 hover:bg-blue-50 hover:border-blue-300"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-slate-400">{shortDateLabel(quoteDate(pq))} · {pq.siteName}{pq.elevatorNo ? ` ${pq.elevatorNo}` : ""}</p>
+                <span className="flex items-center gap-1 shrink-0">
+                  {matched > 0 && <span className="text-[10px] font-bold text-blue-700 bg-blue-50 rounded-full px-1.5 py-0.5">요청과 유사</span>}
+                  {(pq.status === "승인" || pq.status === "자재지급완료") && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 rounded-full px-1.5 py-0.5">승인됨</span>}
+                </span>
+              </div>
+              <p className="text-sm font-bold text-slate-800 truncate">{pq.quoteTitle || pq.constructionType || "-"}</p>
+              <p className="text-[11px] text-slate-500 truncate">{named[0]?.name}{named.length > 1 ? ` 외 ${named.length - 1}건` : ""} · 품목합계 {total.toLocaleString()}원</p>
+            </button>
+          );
+        })}
+      </div>
+    </Modal>
+  );
+}
+
+export default function QuoteItemsModal({ quote, site, siteManagers, profiles, inventoryProducts, inventoryStockMovements, quoteHistory, onClose, onSaved }) {
   const [inventoryPickerOpen, setInventoryPickerOpen] = useState(false); // 재고 연동 모달 — 고르면 자재비 품목을 새로 하나 추가
+  const [pastPickerOpen, setPastPickerOpen] = useState(false); // 이전 견적 불러오기
+  const pastQuotes = useMemo(() => historyQuotes(quoteHistory, quote.id), [quoteHistory, quote.id]);
+  const itemIndex = useMemo(() => buildItemIndex(pastQuotes), [pastQuotes]);
   const [items, setItems] = useState(() => {
     if (quote.quoteItems?.length) return quote.quoteItems.map((it) => ({ ...emptyItem(it.category), ...it }));
     // 처음 여는 경우 기사 원본(부품명+수량)을 자재비 1행에 프리필
@@ -147,8 +332,37 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
   function addItem(category) {
     setItems((prev) => [...prev, emptyItem(category)]);
   }
+  // 수량·단가를 고치면 "이전 견적에서 불러옴" 표시(_src)를 뗀다 — 이제 그대로 가져온 값이 아니다.
   function updateItem(idx, patch) {
-    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+    const edited = "qty" in patch || "unitPrice" in patch;
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch, ...(edited ? { _src: null } : {}) } : it)));
+  }
+  // 품명 자동완성에서 후보를 골랐을 때 — 과거 견적 후보는 이름·규격·단위(+단가가 비었을 때 자재비 최근 단가),
+  // 재고 후보는 기존 "재고 연동"과 같은 필드로 채운다.
+  function pickSuggestion(idx, s) {
+    setItems((prev) => prev.map((it, i) => {
+      if (i !== idx) return it;
+      if (s.kind === "inventory") {
+        return { ...it, partId: s.product.id, name: s.product.name, spec: s.product.spec ?? it.spec, unitPrice: s.product.salePrice ?? it.unitPrice, _src: null };
+      }
+      const e = s.entry;
+      const fillPrice = it.category === "자재비" && !Number(it.unitPrice) && e.last?.unitPrice > 0;
+      return {
+        ...it,
+        name: e.name,
+        spec: e.spec || it.spec || "",
+        unit: it.unit || e.last?.unit || "",
+        ...(fillPrice ? { unitPrice: e.last.unitPrice, _src: `${shortDateLabel(e.lastDate)} 단가` } : {}),
+      };
+    }));
+  }
+  // 이전 견적에서 고른 항목은 현재 품목 목록 아래에 추가한다(덮어쓰지 않음). 운반비·안전관리비는
+  // 지금 값이 비어 있을 때만 채워서 이미 입력해 둔 값을 건드리지 않는다.
+  function applyPastQuote({ items: picked, transportCost: t, safetyCost: sc }) {
+    setItems((prev) => [...prev, ...picked.map((it) => ({ ...emptyItem(it.category ?? "자재비"), ...it }))]);
+    if (t != null && !Number(transportCost)) setTransportCost(t);
+    if (sc != null && !Number(safetyCost)) setSafetyCost(sc);
+    setPastPickerOpen(false);
   }
   function removeItem(idx) {
     setItems((prev) => prev.filter((_, i) => i !== idx));
@@ -218,11 +432,13 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
   // 그대로 남게 한다).
   async function handleSave() {
     if (items.length === 0) return;
+    // _src는 화면 표시용 임시 표시라 저장·PDF에는 넣지 않는다.
+    const cleanItems = items.map(({ _src, ...rest }) => rest);
     setSaving(true);
     setError("");
 
     const patch = {
-      quote_items: items,
+      quote_items: cleanItems,
       transport_cost: Number(transportCost) || 0,
       safety_cost: Number(safetyCost) || 0,
       profit: Number(profit) || 0,
@@ -254,7 +470,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
         quoteRequestId: quote.id,
         siteName: site?.name ?? quote.siteName,
         quoteNumber, recipientName, quoteTitle, quoteDate,
-        items, transportCost, safetyCost, profit, discountAmount, vatIncluded,
+        items: cleanItems, transportCost, safetyCost, profit, discountAmount, vatIncluded,
       }),
     }).then((r) => r.json()).catch((e) => ({ ok: false, reason: e.message }));
 
@@ -279,7 +495,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
     }
 
     onSaved({
-      quoteItems: items, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
+      quoteItems: cleanItems, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
       profit: Number(profit) || 0, discountAmount: Number(discountAmount) || 0, vatIncluded, quoteNumber, recipientName, quoteTitle,
       quoteIssuedDate: quoteDate, quotePdfUrl: pdfRes.url, status: nextStatus,
       recipientEmail: rf.email || null, recipientPhone: rf.phone || null,
@@ -337,6 +553,11 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
                 <p className="text-xs font-bold text-slate-600">{category === "자재비" ? "1.자재비" : "2.인건비"}</p>
                 <div className="flex items-center gap-1.5">
                   {category === "자재비" && (
+                    <button onClick={() => setPastPickerOpen(true)} className="flex items-center gap-1 text-xs font-bold text-amber-700 border border-amber-200 rounded-lg px-2.5 py-1">
+                      <History size={12} /> 이전 견적 불러오기
+                    </button>
+                  )}
+                  {category === "자재비" && (
                     <button onClick={() => setInventoryPickerOpen(true)} className="flex items-center gap-1 text-xs font-bold text-emerald-700 border border-emerald-200 rounded-lg px-2.5 py-1">
                       <Search size={12} /> 재고 연동
                     </button>
@@ -364,7 +585,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
                           </button>
                         </div>
                         <div className="flex-[11] min-w-0">
-                          <input className={inputCls} placeholder="품명" value={it.name} onChange={(e) => updateItem(idx, { name: e.target.value })} />
+                          <ItemNameInput item={it} index={idx} itemIndex={itemIndex} inventoryProducts={inventoryProducts} onChange={(v) => updateItem(idx, { name: v })} onPick={pickSuggestion} />
                         </div>
                         <div className="flex-[5] min-w-0">
                           <input className={inputCls} placeholder="호기" value={it.unitNo} onChange={(e) => updateItem(idx, { unitNo: e.target.value })} />
@@ -426,11 +647,14 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
                           </label>
                         </div>
                       )}
-                      <div className="flex justify-end items-center gap-3 text-xs text-slate-500">
-                        <span className="font-bold text-slate-400">소계</span>
-                        <span>공급가액 <b className="text-slate-700 font-semibold">{supply.toLocaleString()}</b></span>
-                        <span>세액 <b className="text-slate-700 font-semibold">{vat.toLocaleString()}</b></span>
-                        <span>합계 <b className="text-slate-800 font-bold">{total.toLocaleString()}</b></span>
+                      <div className="flex justify-between items-center gap-3 text-xs text-slate-500">
+                        {it._src ? <span className="ml-5 text-[11px] font-semibold text-amber-700 bg-amber-50 rounded px-1.5 py-0.5">↳ {it._src}{it._src.endsWith("단가") ? "" : " 견적에서 불러옴"} — 단가 확인</span> : <span />}
+                        <span className="flex items-center gap-3">
+                          <span className="font-bold text-slate-400">소계</span>
+                          <span>공급가액 <b className="text-slate-700 font-semibold">{supply.toLocaleString()}</b></span>
+                          <span>세액 <b className="text-slate-700 font-semibold">{vat.toLocaleString()}</b></span>
+                          <span>합계 <b className="text-slate-800 font-bold">{total.toLocaleString()}</b></span>
+                        </span>
                       </div>
                     </div>
                   );
@@ -544,6 +768,9 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
         </button>
       </div>
     </Modal>
+    {pastPickerOpen && (
+      <PastQuotePickerModal quotes={pastQuotes} site={site} quote={quote} onClose={() => setPastPickerOpen(false)} onApply={applyPastQuote} />
+    )}
     {inventoryPickerOpen && (
       <InventoryPickerModal
         products={inventoryProducts}
