@@ -1434,7 +1434,8 @@ function workerLabelOf(data, b) {
 }
 
 const BILLING_FILTERS_KEY = "guilBillingFiltersV1";
-const DEFAULT_BILLING_FILTERS = { workers: [], replaceDates: [], billingDates: [], costType: [], paymentStatus: [], billingMethods: [] };
+const UNBILLED = "미청구";
+const DEFAULT_BILLING_FILTERS ={ workers: [], replaceDates: [], billingDates: [], costType: [], paymentStatus: [], billingMethods: [] };
 
 export default function BillingsAdmin({ data, setData }) {
   const { billings } = data;
@@ -1509,7 +1510,9 @@ export default function BillingsAdmin({ data, setData }) {
     ) return false;
     if (filters.workers.length && !filters.workers.includes(workerLabelOf(data, b))) return false;
     if (!matchesDateFilter(b.replaceDate, filters.replaceDates)) return false;
-    if (!matchesDateFilter(b.billingDate, filters.billingDates)) return false;
+    // "미청구" = 청구일이 비어 있는 건. 날짜 선택과 함께 걸면 합집합으로 본다.
+    const dateSel = filters.billingDates.filter((k) => k !== UNBILLED);
+    if (filters.billingDates.length && !(filters.billingDates.includes(UNBILLED) && !b.billingDate) && !(dateSel.length && matchesDateFilter(b.billingDate, dateSel))) return false;
     if (filters.costType.length && !filters.costType.includes(b.isFree ? "무상" : "유상")) return false;
     if (filters.paymentStatus.length) {
       const bucket = billingPaymentBucket(b);
@@ -1771,7 +1774,10 @@ export default function BillingsAdmin({ data, setData }) {
         </FilterHeader>,
         "교체확인서",
         <FilterHeader key="billingDate" label="청구일" active={filters.billingDates.length > 0}>
-          <DateTreeFilter dates={billingDateOptions} selected={filters.billingDates} onChange={(v) => setFilters({ ...filters, billingDates: v })} />
+          <CheckboxFilterList options={[UNBILLED]} selected={filters.billingDates.filter((k) => k === UNBILLED)}
+            onChange={(v) => setFilters({ ...filters, billingDates: [...v, ...filters.billingDates.filter((k) => k !== UNBILLED)] })} />
+          <DateTreeFilter dates={billingDateOptions} selected={filters.billingDates.filter((k) => k !== UNBILLED)}
+            onChange={(v) => setFilters({ ...filters, billingDates: [...filters.billingDates.filter((k) => k === UNBILLED), ...v] })} />
         </FilterHeader>,
         <FilterHeader key="payment" label="입금일" active={filters.paymentStatus.length > 0}>
           <CheckboxFilterList options={["완납", "미수", "연체"]} selected={filters.paymentStatus} onChange={(v) => setFilters({ ...filters, paymentStatus: v })} />
