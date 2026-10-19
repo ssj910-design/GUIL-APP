@@ -9,6 +9,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { shortDate, formatUnitLabel, quoteGrandTotal, freeReasonOf, freeReasonLabel, isCostPending, quoteMaterialItems, receivedTotalOf, receivedStatusOf, billingPaymentBucket, billingDueAmount, inferQuoteUnitId } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { mapBilling } from "@/lib/mappers";
+import { notify } from "@/lib/push";
+import { completionGroupIds, billingKeyOf } from "@/lib/todoEdit";
 import { BRAND } from "@/lib/company";
 import { uploadPhoto } from "@/lib/photos";
 import { buildBillingInvoiceData } from "@/lib/billingInvoiceData";
@@ -261,7 +263,7 @@ function NewBillingModal({ data, onClose, onCreate }) {
   const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false);
   const [mode, setMode] = useState("material"); // material | manual
   // 자재 지급건 연동 대상 — 기사어플 청구 화면과 같은 조건(완료 안 된, 수동배정·반납확인 아닌 할일). 기사 제한 없이 전체.
-  const linkableTodos = todos.filter((t) => !t.done && t.source !== "manual" && t.source !== "waste_return");
+  const linkableTodos = todos.filter((t) => !t.done && (t.source !== "manual" || t.billingRequired) && t.source !== "waste_return");
   const [linkedTodoId, setLinkedTodoId] = useState("");
   const [uploadToken] = useState(() => Date.now());
   const [form, setForm] = useState({
@@ -448,8 +450,20 @@ function NewBillingModal({ data, onClose, onCreate }) {
   );
 }
 
-function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPrice, onInvoiceSent }) {
+function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPrice, onInvoiceSent, onCancelBilling }) {
   const [sendingInvoice, setSendingInvoice] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelNote, setCancelNote] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+  const finalCancelReason = cancelReason === "기타" ? cancelNote.trim() : cancelReason;
+  async function doCancelBilling() {
+    if (!finalCancelReason || cancelling) return;
+    setCancelling(true);
+    const ok = await onCancelBilling(b, finalCancelReason);
+    setCancelling(false);
+    if (ok) onClose();
+  }
   const { profiles } = data;
   const isSuper = useContext(AdminAuthContext).tier === "super"; // 무상처리·가격조정은 최고관리자만
   // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 관리자가 자재담당자에게도 배정할 수 있어야 한다.
@@ -791,6 +805,42 @@ function BillingDetailModal({ b, data, onClose, onSave, onToggleFree, onAdjustPr
           )}
         </div>
       </div>
+
+      {onCancelBilling && (
+        <div className="mt-4 pt-4 border-t border-slate-100">
+          {cancelOpen ? (
+            <div className="border border-red-200 bg-red-50/50 rounded-xl p-3">
+              <p className="text-sm font-bold text-red-600">이 청구를 취소할까요?</p>
+              <p className="text-[11px] text-slate-500 leading-relaxed mt-1 mb-2.5">
+                청구가 삭제되고(원본은 취소 기록으로 보관) 연결된 할일이 다시 열려 담당 기사가 다시 청구해야 합니다.
+                {(b.invoiceSentAt || b.receivedDate || b.receivedPayments?.length) ? " ⚠️ 청구서 발송·입금 기록이 있는 청구입니다." : ""}
+              </p>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {["금액 오입력", "사진·서명 오류", "중복 청구", "내용 잘못 입력", "기타"].map((r) => (
+                  <button type="button" key={r} onClick={() => setCancelReason(r)}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-full border ${cancelReason === r ? "bg-red-600 text-white border-red-600" : "bg-white text-slate-500 border-slate-200"}`}>
+                    {r}
+                  </button>
+                ))}
+              </div>
+              {cancelReason === "기타" && (
+                <input className={`${inputCls} mb-2`} placeholder="사유를 입력해주세요" value={cancelNote} onChange={(e) => setCancelNote(e.target.value)} />
+              )}
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setCancelOpen(false)} className="text-sm font-bold text-slate-500 border border-slate-200 bg-white rounded-xl px-4 py-2">닫기</button>
+                <button type="button" onClick={doCancelBilling} disabled={!finalCancelReason || cancelling}
+                  className="text-sm font-bold text-white bg-red-600 disabled:bg-slate-300 rounded-xl px-4 py-2">
+                  {cancelling ? "취소 중..." : "청구 취소"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setCancelOpen(true)} className="text-sm font-bold text-red-600 border border-red-200 rounded-xl px-4 py-2 hover:bg-red-50">
+              청구 취소
+            </button>
+          )}
+        </div>
+      )}
 
       {sendingInvoice && (
         <BillingInvoiceSendModal b={b} data={data} onClose={() => setSendingInvoice(false)} onInvoiceSent={onInvoiceSent} />
@@ -1567,6 +1617,30 @@ export default function BillingsAdmin({ data, setData }) {
 
   // 새 청구 등록 — 자재 지급건 연동이면 관련 할일(같은 견적·자재신청·자체점검 건을 공유하는
   // 미완료 할일 전부, 담당자가 여럿이면 그만큼)을 기사어플 청구 제출과 동일한 규칙으로 완료 처리한다.
+  // 청구 취소 — 원본은 billing_cancel_log에 남기고 청구를 삭제하며 연결 할일을 다시 연다(DB 함수 cancel_billing,
+  // 마이그레이션 151). 관리자는 청구서 발송·입금 이후에도 취소할 수 있다. 담당 기사에게 다시 청구하라고 알린다.
+  async function cancelBilling(b, reason) {
+    const { data: res, error } = await supabase.rpc("cancel_billing", { p_billing_id: b.id, p_reason: reason });
+    if (error) { alert(error.message || "청구 취소에 실패했습니다"); return false; }
+    const reopened = res?.reopenedTodoIds ?? [];
+    setData((prev) => ({
+      ...prev,
+      billings: prev.billings.filter((x) => x.id !== b.id),
+      todos: prev.todos
+        .filter((t) => !(res?.wasteTodoDeleted && t.id === `todo-wastereturn-${b.id}`))
+        .map((t) => (reopened.includes(t.id) ? { ...t, done: false } : t)),
+    }));
+    if (reopened.length && b.engineerId) {
+      notify("todo_assigned", {
+        profileIds: [b.engineerId],
+        title: "청구가 취소되어 할일이 다시 열렸어요",
+        body: `${b.siteName ?? ""} · ${b.part ?? ""} — 다시 청구해주세요 (${reason})`,
+        url: `/?openTodo=${reopened[0]}`,
+      });
+    }
+    return true;
+  }
+
   async function createBilling(form) {
     const filled = form.items.filter((i) => i.name.trim());
     if (!filled.length) return;
@@ -1591,9 +1665,22 @@ export default function BillingsAdmin({ data, setData }) {
     const beforePhotoUrls = isMulti ? partPhotos.flatMap((p) => p.beforeUrls) : filled[0].beforeUrls;
     const afterPhotoUrls = isMulti ? partPhotos.flatMap((p) => p.afterUrls) : filled[0].afterUrls;
 
+    // 같은 자재신청·견적요청·할일(묶음)에 이미 청구가 있으면 막는다(기사 앱과 같은 규칙, DB도 유니크 인덱스로 막는다).
+    const billingTodoIdReady = data.billings.some((x) => x.todoId !== undefined);
+    const dupMsg = "이미 비용청구가 접수된 건이에요. 잘못 청구했다면 청구내역에서 취소한 뒤 다시 등록해주세요.";
+    for (const [col, val] of [
+      ["material_request_id", linked?.materialRequestId],
+      ["quote_request_id", linked?.quoteRequestId],
+      ["todo_id", billingTodoIdReady && linked ? billingKeyOf(linked) : null],
+    ]) {
+      if (!val) continue;
+      const { data: already } = await supabase.from("billings").select("id").eq(col, val).limit(1);
+      if (already?.length) { alert(dupMsg); return; }
+    }
+
     const row = {
       id: "bill-" + crypto.randomUUID(),
-      type: linked ? linked.source : "manual",
+      type: linked ? (linked.source === "manual" ? "material" : linked.source) : "manual",
       site_name: site?.name ?? null,
       elevator_no: selectedUnits[0]?.unitNo ?? null,
       elevator_nos: selectedUnits.length > 1 ? selectedUnits.map((u) => u.unitNo) : null,
@@ -1614,9 +1701,10 @@ export default function BillingsAdmin({ data, setData }) {
       is_free: cost === 0,
       material_request_id: linked?.materialRequestId ?? null,
       quote_request_id: linked?.quoteRequestId ?? null,
+      ...(billingTodoIdReady && linked ? { todo_id: billingKeyOf(linked) } : {}),
     };
     const { data: inserted, error } = await supabase.from("billings").insert(row).select().single();
-    if (error) { alert("등록 실패: " + error.message); return; }
+    if (error) { alert(error.code === "23505" ? dupMsg : "등록 실패: " + error.message); return; }
 
     let doneIds = [];
     if (linked) {
@@ -1625,6 +1713,7 @@ export default function BillingsAdmin({ data, setData }) {
           (linked.quoteRequestId && t.quoteRequestId === linked.quoteRequestId) ||
           (linked.materialRequestId && t.materialRequestId === linked.materialRequestId) ||
           (linked.selfCheckItemId && t.selfCheckItemId === linked.selfCheckItemId) ||
+          (linked.billingRequired && completionGroupIds(data.todos, linked).includes(t.id)) ||
           (!linked.quoteRequestId && !linked.materialRequestId && !linked.selfCheckItemId && t.id === linked.id)
         ))
         .map((t) => t.id);
@@ -1783,7 +1872,7 @@ export default function BillingsAdmin({ data, setData }) {
         })}
       </AdminTable>
 
-      {detail && <BillingDetailModal b={detail} data={data} onClose={() => setDetailId(null)} onSave={saveBilling} onToggleFree={toggleFree} onAdjustPrice={adjustPrice} onInvoiceSent={applyInvoiceSentLocal} />}
+      {detail && <BillingDetailModal b={detail} data={data} onClose={() => setDetailId(null)} onSave={saveBilling} onToggleFree={toggleFree} onAdjustPrice={adjustPrice} onInvoiceSent={applyInvoiceSentLocal} onCancelBilling={cancelBilling} />}
       {creating && <NewBillingModal data={data} onClose={() => setCreating(false)} onCreate={createBilling} />}
       {certTarget && (
         <ReplacementCertificateViewer

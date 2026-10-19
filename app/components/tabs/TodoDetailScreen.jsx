@@ -13,7 +13,8 @@ import { TodoHistory } from "@/app/components/TodoHistory";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { useBackHandler } from "@/app/hooks/useBackHandler";
 import { TODAY_STR } from "@/lib/constants";
-import { canHaveMultipleAssignees, todoFormFrom } from "@/lib/todoEdit";
+import { canHaveMultipleAssignees, canSetBilling, todoFormFrom } from "@/lib/todoEdit";
+import { BillingSetupFields, billingSetupValid } from "@/app/components/BillingSetupFields";
 
 const SOURCE_LABEL = {
   manual: "관리자 부여", quote: "견적 연동", material: "자재 연동",
@@ -82,7 +83,7 @@ export function TodoDetailScreen({
   canToggle, photoLocked, onToggle, onBack,
   onAddPhoto, onRemovePhoto,
   onRequestReassign, onClearReassignRequest, onExtendDueDate,
-  onSaveEdit, onDeleteGroup,
+  onSaveEdit, onDeleteGroup, billingReady,
 }) {
   const { profiles = [] } = useContext(AuthContext);
   const sites = useContext(SitesContext);
@@ -107,7 +108,7 @@ export function TodoDetailScreen({
   const overdue = !groupDone && todo.dueDate && new Date(todo.dueDate) < new Date(TODAY_STR);
   const reqRow = group.find((m) => m.reassignRequested);
   const doneCount = group.filter((m) => m.done).length;
-  const isManualLike = todo.source === "manual" || todo.source === "inspection" || todo.source === "selfcheck" || todo.source === "waste_return";
+  const isManualLike = (todo.source === "manual" && !todo.billingRequired) || todo.source === "inspection" || todo.source === "selfcheck" || todo.source === "waste_return";
 
   function closeEdit() { setNavDir("back"); setEditing(false); }
   function openEdit() {
@@ -129,6 +130,7 @@ export function TodoDetailScreen({
 
   async function save() {
     if (!form.title.trim() || saving || uploading) return;
+    if (canSetBilling(todo) && billingReady && !billingSetupValid(form, units.filter((u) => u.siteId === form.siteId && u.isActive !== false))) return;
     setSaving(true);
     const res = await onSaveEdit(group, form);
     setSaving(false);
@@ -164,7 +166,7 @@ export function TodoDetailScreen({
           <button type="button" onClick={closeEdit} className="text-sm font-bold text-slate-500 px-2 py-1.5">취소</button>
           <h2 className="text-base font-extrabold text-slate-900">할 일 수정</h2>
           <button
-            type="button" onClick={save} disabled={!form.title.trim() || saving || uploading}
+            type="button" onClick={save} disabled={!form.title.trim() || saving || uploading || (canSetBilling(todo) && billingReady && !billingSetupValid(form, siteUnits))}
             className="text-sm font-extrabold text-blue-700 px-2 py-1.5 disabled:text-slate-300"
           >
             {saving ? "저장 중" : "저장"}
@@ -177,15 +179,23 @@ export function TodoDetailScreen({
           </div>
           <div>
             <label className={label}>현장</label>
-            <SiteSearchSelect value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitId: "" })} />
+            <SiteSearchSelect value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitId: "", unitIds: [] })} />
           </div>
-          <div>
-            <label className={label}>호기</label>
-            <select className={inputCls} value={form.unitId} disabled={!form.siteId} onChange={(e) => setForm({ ...form, unitId: e.target.value })}>
-              <option value="">전체(현장 공통)</option>
-              {siteUnits.map((u) => <option key={u.id} value={u.id}>{u.unitNo}</option>)}
-            </select>
-          </div>
+          {!form.billingRequired && (
+            <div>
+              <label className={label}>호기</label>
+              <select className={inputCls} value={form.unitId} disabled={!form.siteId} onChange={(e) => setForm({ ...form, unitId: e.target.value })}>
+                <option value="">전체(현장 공통)</option>
+                {siteUnits.map((u) => <option key={u.id} value={u.id}>{u.unitNo}</option>)}
+              </select>
+            </div>
+          )}
+          {canSetBilling(todo) && billingReady && (
+            <div>
+              <label className={label}>청구</label>
+              <BillingSetupFields form={form} setForm={setForm} siteUnits={siteUnits} siteSelected={!!form.siteId} />
+            </div>
+          )}
           <div>
             <label className={label}>내용</label>
             <textarea className={inputCls} rows={5} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
@@ -349,7 +359,7 @@ export function TodoDetailScreen({
                 </span>
               ))}
             </div>
-            {todo.source !== "manual" && todo.source !== "waste_return" && (
+            {((todo.source !== "manual" && todo.source !== "waste_return") || todo.billingRequired) && (
               <p className="text-[11px] text-slate-400 mt-2">
                 완료 조건: {isGroup ? "담당자 중 1명 비용청구" : "비용청구 시 자동완료"}
               </p>

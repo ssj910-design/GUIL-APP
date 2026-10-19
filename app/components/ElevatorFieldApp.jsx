@@ -7,7 +7,7 @@ import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken, onSessionExpired } from "@/lib/supabaseClient";
 import { authFetch } from "@/lib/apiFetch";
 import { mapSite, mergeAssignedEngineers, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode, mapUnitPartPhoto, mapInventoryProduct, mapInventoryStockMovement } from "@/lib/mappers";
-import { canHaveMultipleAssignees, saveSingleTodo, saveGroupCommon, changeTodoAssignees, applyAssigneeChange, deleteTodoRows } from "@/lib/todoEdit";
+import { billingPatchOf, billingLocalOf, canHaveMultipleAssignees, saveSingleTodo, saveGroupCommon, changeTodoAssignees, applyAssigneeChange, deleteTodoRows } from "@/lib/todoEdit";
 import { addDays, profileIdByName, unitIdFor, inferQuoteUnitId, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent, quoteGrandTotal, quotePartsSummary, quoteUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { recordQuoteSupplyStockOut } from "@/lib/inventoryStock";
@@ -199,6 +199,8 @@ export default function App() {
   const quoteElevatorNosReady = quoteRequests.some((q) => q.elevatorNos !== undefined);
   const todoElevatorNosReady = todos.some((t) => t.elevatorNos !== undefined);
   const billingElevatorNosReady = billings.some((b) => b.elevatorNos !== undefined);
+  // billings.todo_id 컬럼 존재 여부 — 마이그레이션 151 실행 전엔 컬럼이 없다.
+  const billingTodoIdReady = billings.some((b) => b.todoId !== undefined);
   // todos.billing_part_rows 컬럼 존재 여부 — 마이그레이션 112 실행 전엔 컬럼이 없어, 있을 때만
   // 관리자가 지급 확정한 부품별 구조화 행(이름·수량·금액)을 같이 쓴다.
   const billingPartRowsReady = todos.some((t) => t.billingPartRows !== undefined);
@@ -1439,15 +1441,38 @@ ${error.message ?? ""}`); return false; }
     }
   }
 
-  async function handleSubmitBilling({ type, siteName, elevatorNo, elevatorNos, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId, quoteRequestId, signatureUrl, approvalMethod, approverName, approverPhone, approvedAt, partPhotos, isOutsourced, vendorName, isFree, freeReason, quoteRef }) {
-    // 같은 자재신청 건에 이미 청구기록이 있으면 막는다 — 할 일 완료 처리가 실패해 재시도하는
-    // 과정에서 청구 자체는 또 저장돼버리는(중복청구) 경로를 막기 위함.
-    if (materialRequestId) {
-      const { data: already } = await supabase.from("billings").select("id").eq("material_request_id", materialRequestId).limit(1);
-      if (already?.length) {
-        alert("이 신청은 이미 비용청구가 접수됐어요. 화면을 새로고침해주세요.");
-        return false;
-      }
+  // ★ 청구 취소 — 잘못 낸 청구를 취소한다. 원본은 billing_cancel_log에 남고, 청구가 삭제되며 연결 할일이
+  // 다시 열린다(다시 청구해야만 사라진다). 한 번에 처리하는 DB 함수(cancel_billing, 마이그레이션 151)가
+  // 권한·조건(기사: 청구서 발송·입금·폐자재 확인 전까지)까지 검사한다. 실패 사유는 그 메시지 그대로 보여준다.
+  async function handleCancelBilling(billing, reason) {
+    const { data, error } = await supabase.rpc("cancel_billing", { p_billing_id: billing.id, p_reason: reason });
+    if (error) { alert(error.message || "청구 취소에 실패했습니다"); return { ok: false }; }
+    const reopened = data?.reopenedTodoIds ?? [];
+    setBillings((prev) => prev.filter((b) => b.id !== billing.id));
+    setTodos((prev) => prev
+      .filter((t) => !(data?.wasteTodoDeleted && t.id === `todo-wastereturn-${billing.id}`))
+      .map((t) => (reopened.includes(t.id) ? { ...t, done: false } : t)));
+    sendPush("billing_cancelled", adminIds(), {
+      title: "청구가 취소됐어요",
+      body: `${billing.siteName ?? ""} · ${billing.part ?? ""} — ${profile.name} (${reason})`,
+      url: "/",
+    });
+    return { ok: true, reopenedCount: reopened.length };
+  }
+
+  async function handleSubmitBilling({ type, siteName, elevatorNo, elevatorNos, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId, quoteRequestId, todoId, signatureUrl, approvalMethod, approverName, approverPhone, approvedAt, partPhotos, isOutsourced, vendorName, isFree, freeReason, quoteRef }) {
+    // 같은 자재신청·견적요청·할일(묶음)에 이미 청구기록이 있으면 막는다 — 할 일 완료 처리가 실패해 재시도하거나
+    // 관리자가 완료를 취소(재오픈)한 뒤 다시 청구하는 중복청구 경로를 막기 위함(DB도 유니크 인덱스로 막는다,
+    // 마이그레이션 151). 잘못 낸 청구는 청구내역에서 "청구 취소"를 한 뒤 다시 청구해야 한다.
+    const dupMsg = "이미 비용청구가 접수된 건이에요. 잘못 청구했다면 청구내역에서 취소한 뒤 다시 청구해주세요. (화면을 새로고침해주세요)";
+    for (const [col, val, ready] of [
+      ["material_request_id", materialRequestId, true],
+      ["quote_request_id", quoteRequestId, billingQuoteRequestIdReady],
+      ["todo_id", todoId, billingTodoIdReady],
+    ]) {
+      if (!val || !ready) continue;
+      const { data: already } = await supabase.from("billings").select("id").eq(col, val).limit(1);
+      if (already?.length) { alert(dupMsg); return false; }
     }
     // v2: 호기 확정 — 직접 전달받거나(자재건), siteId 또는 유일한 현장명으로 찾는다
     const billSite = siteId
@@ -1478,6 +1503,7 @@ ${error.message ?? ""}`); return false; }
       approverPhone: approverPhone || null,
       approvedAt: approvedAt || null,
       partPhotos: partPhotos?.length ? partPhotos : null,
+      todoId: todoId ?? null,
       isOutsourced: !!isOutsourced,
       vendorName: isOutsourced ? (vendorName || null) : null,
       // FM 계약 등 부품 무상 — 0원 청구 사유. 관리자웹의 기존 "무상 처리"(is_free)와 같은
@@ -1516,6 +1542,7 @@ ${error.message ?? ""}`); return false; }
       ...(newBilling.notes ? { notes: newBilling.notes } : {}),
       ...(billingQuoteRequestIdReady ? { quote_request_id: quoteRequestId ?? null } : {}),
       ...(billingElevatorNosReady ? { elevator_nos: newBilling.elevatorNos } : {}),
+      ...(billingTodoIdReady && todoId ? { todo_id: todoId } : {}),
       ...(v2Ready ? {
         unit_id: billUnitId,
         engineer_id: profileIdByName(profilesAll, profile.name),
@@ -1524,7 +1551,8 @@ ${error.message ?? ""}`); return false; }
     });
     // ★ 실패 시 유령 청구(낙관적 표시 후 새로고침에 사라짐)를 막고 호출부에 성공여부를 알린다 (P1-1/P1-2)
     if (error) {
-      alert("비용청구 저장에 실패했습니다. 네트워크 상태를 확인하고 다시 시도해주세요.");
+      // 동시 제출·오래 열린 탭 — DB 유니크 인덱스(마이그레이션 151)가 막은 중복 청구
+      alert(error.code === "23505" ? dupMsg : "비용청구 저장에 실패했습니다. 네트워크 상태를 확인하고 다시 시도해주세요.");
       return false;
     }
     // 이 청구가 견적건이고, 그 견적의 부품마스터 연동 항목 중 폐자재 회수 필요이거나
@@ -2309,9 +2337,12 @@ ${error.message ?? ""}`); return false; }
   }
 
   // ★ 관리자가 직원(1명 이상)에게 할 일을 직접 부여 — 담당자마다 할 일을 하나씩 만듭니다
-  async function handleAssignTodo({ assignees, siteName, title, description, dueDate, photoCount, photoUrls }) {
+  async function handleAssignTodo({ assignees, siteName, title, description, dueDate, photoCount, photoUrls, billingRequired, unitIds, billingRows }) {
+    const batchId = Date.now(); // 담당자마다 부르면 ms가 달라져 같은 배정이 한 건으로 안 묶인다
+    // "비용청구 후 완료" — 켜면 billing_* 컬럼과 고른 호기(여러 개면 elevator_nos)가 채워진다(마이그레이션 151 이후).
+    const billingPatch = billingRequired ? billingPatchOf({ billingRequired, unitIds, billingRows }, units) : {};
     const newTodos = assignees.map((assignee, idx) => ({
-      id: "todo-manual-" + Date.now() + "-" + idx,
+      id: `todo-manual-${batchId}-${idx}`,
       materialRequestId: null,
       source: "manual",
       title,
@@ -2341,10 +2372,11 @@ ${error.message ?? ""}`); return false; }
         requested_by_id: profile.id ?? null,
         requested_by_name: profile.name,
         ...(v2Ready ? { assignee_id: profileIdByName(profilesAll, t.assignee) } : {}),
+        ...billingPatch,
       }))
     ), "할 일 부여 실패");
     if (!assigned) return; // 부여했다고 보이는데 실제로는 없는 상황 방지 (P1-7)
-    setTodos((prev) => [...newTodos.map((t) => ({ ...t, requestedById: profile.id ?? null, requestedByName: profile.name })), ...prev]);
+    setTodos((prev) => [...newTodos.map((t) => ({ ...t, requestedById: profile.id ?? null, requestedByName: profile.name, ...billingLocalOf(billingPatch) })), ...prev]);
     // 각자 다른 할일 id를 받으므로(assignees 수만큼 별도 행), 딥링크 url이 정확하도록 한 명씩 보낸다.
     for (const t of newTodos) {
       const assigneeId = profileIdByName(profilesAll, t.assignee);
@@ -2886,7 +2918,7 @@ ${error.message ?? ""}`); return false; }
           {tab === "inspection" && <InspectionTab inspections={inspections} />}
           {tab === "material" && <MaterialTab requests={materialRequests} onAddMaterialRequest={handleAddMaterialRequest} onCancelMaterialRequest={handleCancelMaterialRequest} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} onAddQuoteRequest={handleAddQuoteRequest} onCancelQuoteRequest={handleCancelQuoteRequest} restockRequests={restockRequests} kitStock={kitStock} onReceiveRestock={handleReceiveRestock} focusRestockHistory={focusRestockHistory} onRestockHistoryHandled={() => setFocusRestockHistory(false)} />}
           {tab === "inventory" && <InventoryTab products={inventoryProducts} movements={inventoryStockMovements} onCreateProduct={handleCreateInventoryProduct} onSaveProduct={handleSaveInventoryProduct} onDeleteProduct={handleDeleteInventoryProduct} onAddMovement={handleAddInventoryMovement} />}
-          {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} quoteRequests={quoteRequests} billings={billings} />}
+          {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} onCancelBilling={handleCancelBilling} quoteRequests={quoteRequests} billings={billings} />}
           {tab === "todo" && (
             <TodoTab
               todos={todos}
@@ -2928,7 +2960,7 @@ ${error.message ?? ""}`); return false; }
             />
           )}
           {tab === "lawqa" && <LawQaPanel />}
-          {tab === "admin" && profile.role === "admin" && <AdminTab materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAdvanceQuote={handleAdvanceQuote} onRejectQuote={handleRejectQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onClearReassignRequest={handleClearReassignRequest} onAssignTodo={handleAssignTodo} onResetEngineerPassword={handleResetEngineerPassword} materialFocusId={materialFocusId} onMaterialFocusHandled={() => setMaterialFocusId(null)} quoteFocusId={quoteFocusId} onQuoteFocusHandled={() => setQuoteFocusId(null)} onQuoteDraftCreated={handleQuoteDraftCreated} onQuoteDiscarded={handleQuoteDiscarded} onQuoteWizardSaved={handleQuoteWizardSaved} onSendQuote={handleSendQuote} inventoryProducts={inventoryProducts} inventoryStockMovements={inventoryStockMovements} />}
+          {tab === "admin" && profile.role === "admin" && <AdminTab materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAdvanceQuote={handleAdvanceQuote} onRejectQuote={handleRejectQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onClearReassignRequest={handleClearReassignRequest} onAssignTodo={handleAssignTodo} onResetEngineerPassword={handleResetEngineerPassword} materialFocusId={materialFocusId} onMaterialFocusHandled={() => setMaterialFocusId(null)} quoteFocusId={quoteFocusId} onQuoteFocusHandled={() => setQuoteFocusId(null)} onQuoteDraftCreated={handleQuoteDraftCreated} onQuoteDiscarded={handleQuoteDiscarded} onQuoteWizardSaved={handleQuoteWizardSaved} onSendQuote={handleSendQuote} onCancelBilling={handleCancelBilling} inventoryProducts={inventoryProducts} inventoryStockMovements={inventoryStockMovements} />}
           </PullToRefresh>
 
           {/* 게시판 플로팅 버튼 — 어느 탭에서든 즉시 게시판으로 이동

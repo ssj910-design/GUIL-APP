@@ -823,7 +823,7 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
                   // 자재/견적 연동 할일은 비용청구가 완료돼야 자동으로 끝나 본인이 직접 완료 처리할
                   // 수 없다 — 할일관리(TodoTab)의 TodoCheckbox·"비용청구 시 자동완료" 표기와 동일하게,
                   // 여기서도 체크 동그라미를 자물쇠로 바꿔 시각적으로 구분한다(둘 다 클릭은 안 됨).
-                  const isManual = t.source === "manual" || t.source === "inspection" || t.source === "selfcheck" || t.source === "waste_return";
+                  const isManual = (t.source === "manual" && !t.billingRequired) || t.source === "inspection" || t.source === "selfcheck" || t.source === "waste_return";
                   return (
                     <div key={t.id} className="border-b border-slate-50 last:border-0">
                       <div className="flex items-start gap-2.5 py-2">

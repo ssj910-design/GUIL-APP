@@ -9,6 +9,7 @@ import { SitesContext, UnitsContext, AuthContext } from "@/app/components/contex
 import { SiteSearchSelect, MultiPhotoUpload, SignaturePad } from "@/app/components/formWidgets";
 import { emptyPartRow, formatPartRows, PartsRowsInput, UnitPickGrid } from "@/app/components/tabs/MaterialTab";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
+import { completionGroupIds, billingKeyOf } from "@/lib/todoEdit";
 
 
 /* ------------------------------------------------------------------ */
@@ -32,7 +33,7 @@ function isValidPhoneDigits(v) {
   return d.startsWith("0") && d.length >= 9 && d.length <= 11;
 }
 
-export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quoteRequests = [], billings = [] }) {
+export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, onCancelBilling, quoteRequests = [], billings = [] }) {
   const sites = useContext(SitesContext);
   const allUnits = useContext(UnitsContext);
   const { name: CURRENT_ENGINEER, selfId } = useContext(AuthContext);
@@ -43,10 +44,11 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
   const billingSubTabs = ["bill", "history"];
   const swipe = useSwipeSubtab(billingSubTabs, subTab, setSubTab);
   const [mode, setMode] = useState(null); // null(대상 선택) | material | manual
-  // 자재지급건 청구는 기사가 자재신청/견적요청으로 만든 할일만 대상 — 관리자가 직접 부여한 할일(source: manual)은 제외.
+  // 자재지급건 청구는 기사가 자재신청/견적요청으로 만든 할일이 대상 — 관리자가 직접 부여한 할일(source: manual)은
+  // 제외하되, 배정할 때 "비용청구 후 완료"로 설정한 할일(billingRequired)은 자재지급건처럼 대상에 넣는다.
   // 기한 빠른 순 — 목록에 D-day를 따로 안 보여주는 대신 급한 건이 위로 오게 한다(기한 없는 건은 뒤).
   const openTodos = todos
-    .filter((t) => !t.done && t.assignee === CURRENT_ENGINEER && t.source !== "manual" && t.source !== "waste_return")
+    .filter((t) => !t.done && t.assignee === CURRENT_ENGINEER && (t.source !== "manual" || t.billingRequired) && t.source !== "waste_return")
     .sort((a, b) => (a.dueDate ?? "9999-12-31").localeCompare(b.dueDate ?? "9999-12-31"));
   const [selectedId, setSelectedId] = useState(openTodos[0]?.id ?? "");
   // todos가 마운트 이후 늦게 도착하면 초기 selectedId가 ""로 굳어 제출 불가 → 유효한 첫 건으로 동기화 (P2-8)
@@ -362,6 +364,8 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
                 (selected.selfCheckItemId && t.selfCheckItemId === selected.selfCheckItemId))
           )
           .map((t) => t.id)
+      : selected.billingRequired
+      ? completionGroupIds(todos, selected).filter((id) => todos.find((t) => t.id === id && !t.done))
       : [selected.id];
     // 부품이 여러 개면 부품별 전/후 사진을 따로 묶어 보내고, 어떤 사진이든 다 볼 수 있게
     // 통합 배열(beforePhotoUrls/afterPhotoUrls)에도 전체를 합쳐 같이 남긴다(기존 화면 호환).
@@ -388,6 +392,8 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
       unitId: selected.unitId ?? null,
       materialRequestId: selected.materialRequestId ?? null,
       quoteRequestId: selected.quoteRequestId ?? null,
+      // 청구가 어느 할일(묶음)의 것인지 — 취소 시 그 할일을 다시 열고, 같은 할일에 중복 청구를 막는다(마이그레이션 151).
+      todoId: billingKeyOf(selected),
       part: selected.part,
       // billings.cost는 숫자 컬럼이라 "견적서 참조" 같은 문자열은 넣을 수 없습니다(넣으면 insert가
       // 조용히 실패합니다). 견적 연동 건은 실제 비용을 이 시스템에 남기지 않는다는 의미로 null 처리합니다.
@@ -589,7 +595,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, quo
 
   // 청구하기/청구 내역 각 탭의 패널 — SwipeSubtabTrack이 드래그 중 옆 탭을 함께 렌더링할 때 쓴다.
   function renderBillingPane(tab) {
-    if (tab === "history") return <BillingHistoryScreen billings={myBillings} embedded />;
+    if (tab === "history") return <BillingHistoryScreen billings={myBillings} embedded onCancelBilling={onCancelBilling} />;
     if (mode === null) return renderTargetPicker();
     if (mode === "material") return (
         openTodos.length === 0 ? (
@@ -1292,7 +1298,7 @@ function DetailRow({ label, value }) {
 // 관리자 모드 청구내역 목록에서 카드를 탭하면 뜨는 읽기 전용 상세 — 목록 카드엔 없는
 // 품목별 금액·승인(서명/전화승인)·외주·교체확인서 PDF까지 보여준다. 수정은 PC 관리자
 // 콘솔(BillingsAdmin.jsx)에만 있다 — 여기선 조회만.
-function BillingDetailSheet({ b, onClose, onPhotoClick }) {
+function BillingDetailSheet({ b, onClose, onPhotoClick, onCancel }) {
   // 청구방식은 관리자(회계 처리용)만 본다 — 자재담당관리자는 이 화면에선 role이 engineer로
   // 스코프되므로(ElevatorFieldApp의 isMaterialTierAdmin) 기사 계정과 동일하게 자동으로 숨겨진다.
   const { role } = useContext(AuthContext);
@@ -1301,6 +1307,22 @@ function BillingDetailSheet({ b, onClose, onPhotoClick }) {
     ? b.partPhotos
     : [{ name: b.part, qty: null, amount: b.cost, beforeUrls: b.beforePhotoUrls ?? [], afterUrls: b.afterPhotoUrls ?? [] }];
   const total = b.partPhotos?.length ? b.partPhotos.reduce((sum, it) => sum + (Number(it.amount) || 0), 0) : Number(b.cost) || 0;
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelNote, setCancelNote] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+  // 기사는 관리자가 청구서를 보냈거나 입금을 기록하기 전까지만 취소할 수 있다(관리자는 언제든). 서버도 같은 조건을 검사한다.
+  const processed = !!b.invoiceSentAt || !!b.receivedDate || (Array.isArray(b.receivedPayments) && b.receivedPayments.length > 0);
+  const canCancel = !!onCancel && (role === "admin" || !processed);
+  const finalReason = cancelReason === "기타" ? cancelNote.trim() : cancelReason;
+
+  async function doCancel() {
+    if (!finalReason || cancelling) return;
+    setCancelling(true);
+    const res = await onCancel(b, finalReason);
+    setCancelling(false);
+    if (res?.ok) onClose();
+  }
 
   return (
     <Sheet title={`${b.siteName} · 청구 상세`} onClose={onClose}>
@@ -1373,13 +1395,53 @@ function BillingDetailSheet({ b, onClose, onPhotoClick }) {
             교체확인서 PDF 보기
           </a>
         )}
+
+        {onCancel && !canCancel && (
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            청구서 발송·입금 처리가 시작된 청구라 직접 취소할 수 없어요. 취소가 필요하면 관리자에게 요청해주세요.
+          </p>
+        )}
+        {canCancel && (cancelOpen ? (
+          <div className="border border-red-200 bg-red-50/50 rounded-xl p-3">
+            <p className="text-sm font-bold text-red-600">이 청구를 취소할까요?</p>
+            <p className="text-[11px] text-slate-500 leading-relaxed mt-1 mb-2.5">
+              청구가 삭제되고(원본은 기록으로 보관), 연결된 할일이 다시 열려요. 처음부터 다시 청구해야 할일이 사라집니다.
+            </p>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {["금액 오입력", "사진·서명 오류", "중복 청구", "내용 잘못 입력", "기타"].map((r) => (
+                <button
+                  type="button" key={r} onClick={() => setCancelReason(r)}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-full border ${cancelReason === r ? "bg-red-600 text-white border-red-600" : "bg-white text-slate-500 border-slate-200"}`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            {cancelReason === "기타" && (
+              <input className={`${inputCls} mb-2`} placeholder="사유를 입력해주세요" value={cancelNote} onChange={(e) => setCancelNote(e.target.value)} />
+            )}
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setCancelOpen(false)} className="flex-1 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl py-2.5">닫기</button>
+              <button
+                type="button" onClick={doCancel} disabled={!finalReason || cancelling}
+                className="flex-1 text-sm font-bold text-white bg-red-600 disabled:bg-slate-300 rounded-xl py-2.5"
+              >
+                {cancelling ? "취소 중..." : "청구 취소"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button type="button" onClick={() => setCancelOpen(true)} className="w-full text-sm font-bold text-red-600 border border-red-200 rounded-xl py-2.5 active:bg-red-50">
+            청구 취소
+          </button>
+        ))}
       </div>
     </Sheet>
   );
 }
 
 // embedded: 탭 안에 박아 쓸 때(청구 탭의 "청구 내역") 뒤로가기 헤더 없이 목록만 그린다.
-export function BillingHistoryScreen({ billings, onBack, embedded = false }) {
+export function BillingHistoryScreen({ billings, onBack, embedded = false, onCancelBilling }) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState("전체");
   const [detailTarget, setDetailTarget] = useState(null);
@@ -1442,6 +1504,7 @@ export function BillingHistoryScreen({ billings, onBack, embedded = false }) {
           b={detailTarget}
           onClose={() => setDetailTarget(null)}
           onPhotoClick={(urls, index) => setLightbox({ urls, index })}
+          onCancel={onCancelBilling}
         />
       )}
       {lightbox && (

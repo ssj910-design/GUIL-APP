@@ -11,8 +11,9 @@ import { confirmAsync } from "@/app/components/ConfirmHost";
 import { mapInventoryStockMovement } from "@/lib/mappers";
 import { notify } from "@/lib/push";
 import { TodoHistory } from "@/app/components/TodoHistory";
+import { BillingSetupFields, billingSetupValid } from "@/app/components/BillingSetupFields";
 import {
-  groupKeyOf, completionGroupIds, canHaveMultipleAssignees, saveSingleTodo, saveGroupCommon, changeTodoAssignees, applyAssigneeChange,
+  groupKeyOf, completionGroupIds, canHaveMultipleAssignees, canSetBilling, billingFormFrom, billingPatchOf, billingLocalOf, saveSingleTodo, saveGroupCommon, changeTodoAssignees, applyAssigneeChange,
 } from "@/lib/todoEdit";
 import { TODAY_STR } from "@/lib/constants";
 import { addDays, shortDate, formatUnitLabel } from "@/lib/utils";
@@ -204,7 +205,10 @@ function TodoListRow({ group, data, selected, onSelect, onToggleGroup }) {
         {groupDone && <Check size={10} className="text-white" strokeWidth={3} />}
       </button>
       <div className="min-w-0 flex-1">
-        <p className={`text-sm font-bold truncate ${groupDone ? "line-through text-slate-400" : "text-slate-800"}`}>{t.title}</p>
+        <p className={`text-sm font-bold truncate ${groupDone ? "line-through text-slate-400" : "text-slate-800"}`}>
+          {t.billingRequired && <span className="mr-1.5 align-middle text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 rounded px-1 py-0.5">청구</span>}
+          {t.title}
+        </p>
         <p className="text-[11px] text-slate-400 truncate">{todoLocOf(data, t)}</p>
         <p className="text-[11px] text-slate-400 mt-0.5 truncate">
           기한 : <span className={`font-semibold ${overdue ? "text-red-600" : "text-slate-600"}`}>{t.dueDate ? shortDate(t.dueDate) : "없음"}</span>
@@ -241,6 +245,7 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
     assignedDate: t.assignedDate ?? "",
     dueDate: t.dueDate ?? "",
     done: t.done,
+    ...billingFormFrom(t, { units, sites }),
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -350,7 +355,7 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
         ) : (
           <>
             <button onClick={() => setEditing(false)} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2">취소</button>
-            <button disabled={saving || !form.title.trim() || (multi && form.assigneeIds.length === 0)} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2">
+            <button disabled={saving || !form.title.trim() || (multi && form.assigneeIds.length === 0) || (canSetBilling(t) && t.billingRequired !== undefined && !billingSetupValid(form, siteUnits))} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2">
               {saving ? "저장 중..." : "저장"}
             </button>
           </>
@@ -376,6 +381,12 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
             <FieldRow label="기한"><p className="text-sm font-semibold text-slate-700 pt-0.5">{form.dueDate ? shortDate(form.dueDate) : "없음"}</p></FieldRow>
             <FieldRow label="배정일"><p className="text-sm font-semibold text-slate-700 pt-0.5">{shortDate(form.assignedDate)}</p></FieldRow>
             <FieldRow label="요청자"><p className="text-sm font-semibold text-slate-700 pt-0.5">{requesterName}</p></FieldRow>
+            {t.billingRequired && (
+              <FieldRow label="비용청구">
+                <p className="text-sm font-semibold text-blue-700 pt-0.5">청구 후 완료 · 예정금액 ₩{Number(t.billingAmount ?? 0).toLocaleString("ko-KR")}</p>
+                {t.billingPart && <p className="text-[11px] text-slate-500 mt-0.5 break-keep">{t.billingPart}</p>}
+              </FieldRow>
+            )}
             {isGroup ? <FieldRow label="담당자">{memberList}</FieldRow> : (
               <FieldRow label="담당자"><p className="text-sm font-semibold text-slate-700 pt-0.5">{personOf(data, t.assigneeId, t.assignee)}</p></FieldRow>
             )}
@@ -412,23 +423,30 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
             <input className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           </FieldRow>
           <FieldRow label="현장">
-            <select className={inputCls} value={form.siteId} onChange={(e) => setForm({ ...form, siteId: e.target.value, unitId: "" })}>
+            <select className={inputCls} value={form.siteId} onChange={(e) => setForm({ ...form, siteId: e.target.value, unitId: "", unitIds: [] })}>
               <option value="">현장 없음</option>
               {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </FieldRow>
-          <FieldRow label="호기">
-            <select className={inputCls} value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })} disabled={!form.siteId}>
-              <option value="">전체(현장 공통)</option>
-              {siteUnits.map((u) => <option key={u.id} value={u.id}>{u.unitNo}</option>)}
-            </select>
-          </FieldRow>
+          {!form.billingRequired && (
+            <FieldRow label="호기">
+              <select className={inputCls} value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })} disabled={!form.siteId}>
+                <option value="">전체(현장 공통)</option>
+                {siteUnits.map((u) => <option key={u.id} value={u.id}>{u.unitNo}</option>)}
+              </select>
+            </FieldRow>
+          )}
           <FieldRow label="내용">
             <textarea className={inputCls} rows={5} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </FieldRow>
           <FieldRow label="기한">
             <DueDateField value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
           </FieldRow>
+          {canSetBilling(t) && t.billingRequired !== undefined && (
+            <FieldRow label="청구">
+              <BillingSetupFields form={form} setForm={setForm} siteUnits={siteUnits} siteSelected={!!form.siteId} />
+            </FieldRow>
+          )}
           <FieldRow label="요청자">
             <PersonPicker
               candidates={admins}
@@ -486,12 +504,15 @@ function AssignTodoModal({ data, onClose, onCreate }) {
   const [form, setForm] = useState({
     siteId: "", unitId: "", title: "", description: "", assigneeIds: [],
     requesterId: adminId ?? "", dueDate: addDays(TODAY_STR, 7),
+    billingRequired: false, unitIds: [], billingRows: [],
   });
   const [photos, setPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [folderToken] = useState(() => Date.now());
   const siteUnits = units.filter((u) => u.siteId === form.siteId);
-  const valid = form.siteId && form.title.trim() && form.assigneeIds.length > 0;
+  // todos.billing_required 컬럼(마이그레이션 151)이 있을 때만 "비용청구 후 완료" 설정을 보여준다.
+  const billingReady = (data.todos ?? []).some((x) => x.billingRequired !== undefined);
+  const valid = form.siteId && form.title.trim() && form.assigneeIds.length > 0 && billingSetupValid(form, siteUnits);
 
   function toggleAssignee(id) {
     setForm((f) => ({ ...f, assigneeIds: f.assigneeIds.includes(id) ? f.assigneeIds.filter((x) => x !== id) : [...f.assigneeIds, id] }));
@@ -525,20 +546,27 @@ function AssignTodoModal({ data, onClose, onCreate }) {
           <input className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="예: 비상통화장치 배터리 교체" />
         </FieldRow>
         <FieldRow label="현장">
-          <SiteAutocomplete sites={sites} value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitId: "" })} />
+          <SiteAutocomplete sites={sites} value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitId: "", unitIds: [] })} />
         </FieldRow>
-        <FieldRow label="호기">
-          <select className={inputCls} value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })} disabled={!form.siteId}>
-            <option value="">전체(현장 공통)</option>
-            {siteUnits.map((u) => <option key={u.id} value={u.id}>{u.unitNo}</option>)}
-          </select>
-        </FieldRow>
+        {!form.billingRequired && (
+          <FieldRow label="호기">
+            <select className={inputCls} value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })} disabled={!form.siteId}>
+              <option value="">전체(현장 공통)</option>
+              {siteUnits.map((u) => <option key={u.id} value={u.id}>{u.unitNo}</option>)}
+            </select>
+          </FieldRow>
+        )}
         <FieldRow label="내용">
           <textarea className={inputCls} rows={5} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </FieldRow>
         <FieldRow label="기한">
           <DueDateField value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
         </FieldRow>
+        {billingReady && (
+          <FieldRow label="청구">
+            <BillingSetupFields form={form} setForm={setForm} siteUnits={siteUnits} siteSelected={!!form.siteId} />
+          </FieldRow>
+        )}
         <FieldRow label="요청자">
           <PersonPicker
             candidates={admins}
@@ -830,6 +858,8 @@ export default function TodosAdmin({ data, setData, initialView }) {
     const requester = profiles.find((p) => p.id === form.requesterId);
     const photoUrls = form.photoUrls ?? [];
     const batchId = Date.now(); // 담당자마다 부르면 ms가 달라져 같은 배정이 한 건으로 안 묶인다
+    // "비용청구 후 완료" — 켜면 billing_* 컬럼과 고른 호기(여러 개면 elevator_nos)가 채워진다(마이그레이션 151 이후).
+    const billingPatch = form.billingRequired ? billingPatchOf(form, units) : {};
     const rows = form.assigneeIds.map((assigneeId, i) => {
       const engineer = profiles.find((p) => p.id === assigneeId);
       return {
@@ -839,6 +869,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
         assigned_date: TODAY_STR, due_date: form.dueDate || null, done: false,
         photo_count: photoUrls.length, photo_urls: photoUrls.length ? photoUrls : null,
         requested_by_id: form.requesterId || adminId || null, requested_by_name: requester?.name ?? adminName,
+        ...billingPatch,
       };
     });
     const { error } = await supabase.from("todos").insert(rows);
@@ -853,6 +884,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
           assignedDate: row.assigned_date, dueDate: row.due_date, done: false,
           photoCount: photoUrls.length, photoUrls, part: null, materialRequestId: null, quoteRequestId: null,
           requestedById: row.requested_by_id, requestedByName: row.requested_by_name,
+          ...billingLocalOf(billingPatch),
         })),
         ...prev.todos,
       ],

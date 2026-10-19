@@ -4,10 +4,11 @@ import { supabase } from "@/lib/supabaseClient";
 import { addDays, formatShortDate } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { PrimaryButton, Sheet, Field, inputCls, DDay } from "@/app/components/ui";
-import { SitesContext, AuthContext } from "@/app/components/context";
+import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 import { groupKeyOf, completionGroupIds } from "@/lib/todoEdit";
 import { TodoDetailScreen } from "@/app/components/tabs/TodoDetailScreen";
+import { BillingSetupFields, billingSetupValid } from "@/app/components/BillingSetupFields";
 
 
 /* ------------------------------------------------------------------ */
@@ -68,6 +69,8 @@ export function TodoTab({ todos, setTodos, onExtendTodoDueDate, onRequestReassig
   // todo.photoUrls를 기준으로 계산될 수 있어(경쟁 상태 — 마지막 한 장만 저장되는 버그) —
   // ElevatorFieldApp의 supplyPhotoUrlsRef와 동일한 패턴으로 ref에 최신 배열을 동기적으로 보관한다.
   const photoUrlsRef = useRef({});
+  // todos.billing_required 컬럼(마이그레이션 151)이 있을 때만 "비용청구 후 완료" 설정을 보여준다.
+  const billingReady = todos.some((x) => x.billingRequired !== undefined);
 
   // 알림/푸시로 특정 할일을 지목하면(?openTodo=) 목록이 아니라 그 할일 상세를 바로 연다 —
   // 지목된 id를 렌더 중에 상태로 옮기고(이전 값과 다를 때만) 부모의 focus 값은 비운다.
@@ -131,7 +134,8 @@ export function TodoTab({ todos, setTodos, onExtendTodoDueDate, onRequestReassig
   // 할 일과 정기검사 보완조치·자체점검 지적사항 할 일은 그런 연결고리가 없어 본인이 직접 완료 처리해야 한다.
   // 반납 할일은 반납사진을 최소 1장 올려야만 잠금이 풀린다. 재오픈 후에는 기존 사진이 누적 보존되므로
   // "재오픈 시점 기준선(photoCount)보다 사진이 늘었으면"으로 판정 — 새 사진을 추가해야 잠금이 풀린다.
-  const isManualSource = (t) => t.source === "manual" || t.source === "inspection" || t.source === "selfcheck" || t.source === "waste_return";
+  // 관리자 배정이라도 "비용청구 후 완료"로 설정된 할일은 자재지급건처럼 청구해야 완료된다(체크 잠금).
+  const isManualSource = (t) => (t.source === "manual" && !t.billingRequired) || t.source === "inspection" || t.source === "selfcheck" || t.source === "waste_return";
   const wasteLocked = (t) => t.source === "waste_return" && !((t.photoUrls?.length ?? 0) > (t.photoCount ?? 0));
 
   /* ------------------------------ 상세 화면 ------------------------------ */
@@ -167,6 +171,7 @@ export function TodoTab({ todos, setTodos, onExtendTodoDueDate, onRequestReassig
         onExtendDueDate={role !== "admin" ? onExtendTodoDueDate : null}
         onSaveEdit={role === "admin" ? onSaveTodoEdit : null}
         onDeleteGroup={role === "admin" ? onDeleteTodoGroup : null}
+        billingReady={billingReady}
       />
     );
   }
@@ -282,17 +287,18 @@ export function TodoTab({ todos, setTodos, onExtendTodoDueDate, onRequestReassig
       </div>
 
       {assignOpen && (
-        <TodoAssignSheet engineerNames={engineerNames} onSubmit={onAssignTodo} onClose={() => setAssignOpen(false)} />
+        <TodoAssignSheet engineerNames={engineerNames} onSubmit={onAssignTodo} onClose={() => setAssignOpen(false)} billingReady={billingReady} />
       )}
     </div>
   );
 }
 
 
-export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
+export function TodoAssignSheet({ engineerNames, onSubmit, onClose, billingReady }) {
   const sites = useContext(SitesContext);
+  const units = useContext(UnitsContext);
   const [uploadSession] = useState(() => Date.now());
-  const [form, setForm] = useState({ assignees: [], siteId: "", title: "", description: "", dueDate: addDays(TODAY_STR, 7), photos: [] });
+  const [form, setForm] = useState({ assignees: [], siteId: "", title: "", description: "", dueDate: addDays(TODAY_STR, 7), photos: [], billingRequired: false, unitIds: [], unitId: "", billingRows: [] });
   // 사진 업로드가 끝나기 전에 부여 버튼을 누르면 그 사진이 빠진 채로 저장될 수 있어 막는다.
   const [photosUploading, setPhotosUploading] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
@@ -306,7 +312,9 @@ export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
 
   const site = sites.find((s) => s.id === form.siteId);
   // 현장은 필수가 아니다 — 현장과 무관한 일반 할일도 부여할 수 있어야 한다.
-  const canSubmit = form.assignees.length > 0 && form.title.trim().length > 0 && !photosUploading;
+  const siteUnits = units.filter((u) => u.siteId === form.siteId && u.isActive !== false);
+  const canSubmit = form.assignees.length > 0 && form.title.trim().length > 0 && !photosUploading
+    && (!form.billingRequired || (!!form.siteId && billingSetupValid(form, siteUnits)));
 
   return (
     <Sheet title="할 일 부여" onClose={onClose}>
@@ -336,8 +344,13 @@ export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
         </div>
       </Field>
       <Field label="현장 (선택)">
-        <SiteSearchSelect value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id })} />
+        <SiteSearchSelect value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitIds: [], unitId: "" })} />
       </Field>
+      {billingReady && (
+        <div className="mb-3">
+          <BillingSetupFields form={form} setForm={setForm} siteUnits={siteUnits} siteSelected={!!form.siteId} />
+        </div>
+      )}
       <Field label="할 일 제목">
         <input
           className={inputCls}
@@ -375,6 +388,9 @@ export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
           onSubmit({
             assignees: form.assignees,
             siteName: site?.name ?? null,
+            billingRequired: form.billingRequired,
+            unitIds: form.unitIds,
+            billingRows: form.billingRows,
             title: form.title.trim(),
             description: form.description.trim() || null,
             dueDate: form.dueDate,
