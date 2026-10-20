@@ -194,7 +194,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, onC
   }, [manualForm.siteId]); // eslint-disable-line react-hooks/exhaustive-deps
   // 관리자가 지급 확정한 부품이 2개 이상이면 부품별로 전/후 사진을 따로 받는다 — 1개면
   // 나눌 이유가 없어 지금처럼 통합 업로더를 그대로 쓴다. 외주 견적건은 견적 품목을 우선한다.
-  const billingParts = quoteBillingItems?.length > 1 ? quoteBillingItems : selected?.billingPartRows?.length > 1 ? selected.billingPartRows : null;
+  const billingParts = quoteBillingItems?.length > 1 || quoteBillingItems?.[0]?.grouped ? quoteBillingItems : selected?.billingPartRows?.length > 1 ? selected.billingPartRows : null;
   // 직접입력도 부품을 2개 이상 적으면(부품명+수량 둘 다 채운 행 기준) 부품별로 전/후 사진을 따로 받는다.
   const manualFilledParts = manualForm.parts.filter((r) => r.name.trim() && r.qty);
   const manualBillingParts = manualFilledParts.length > 1 ? manualFilledParts : null;

@@ -288,7 +288,7 @@ function NewBillingModal({ data, onClose, onCreate }) {
     const quoteTotal = quote
       ? quoteGrandTotal(quote.quoteItems, quote.transportCost, quote.safetyCost, quote.profit, quote.discountAmount)
       : null;
-    const parts = quoteItems?.length > 1 ? quoteItems : t.billingPartRows?.length > 1 ? t.billingPartRows : null;
+    const parts = quoteItems?.length > 1 || quoteItems?.[0]?.grouped ? quoteItems : t.billingPartRows?.length > 1 ? t.billingPartRows : null;
     const siteId = unit?.siteId ?? sites.find((s) => s.name === t.siteName)?.id ?? "";
     // 지급건 자체에 호기가 없으면(관리자가 호기 선택 없이 발행한 견적 등 — 이젠 지급완료
     // 처리 시점에 채워지도록 고쳤지만, 그 전에 이미 만들어진 옛 할일에 대한 안전망으로 남겨둔다)
