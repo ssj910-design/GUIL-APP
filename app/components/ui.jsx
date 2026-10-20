@@ -68,9 +68,9 @@ export function FileAttachmentCard({ url, className }) {
 /* ------------------------------------------------------------------ */
 
 /**
- * 카카오맵/티맵 길안내 버튼 — 현장 좌표(sites.lat/lng, 지오코딩으로 캐시)로 경로안내를 띄운다.
+ * 네이버지도/티맵 길안내 버튼 — 현장 좌표(sites.lat/lng, 지오코딩으로 캐시)로 경로안내를 띄운다.
  * 좌표가 없으면 아무것도 그리지 않는다(주소만으로는 앱이 엉뚱한 곳을 잡는 경우가 있어서).
- * 아이콘은 public/icons/tmap.png·kakaomap.png (실제 앱 아이콘).
+ * 아이콘은 public/icons/tmap.png(실제 앱 아이콘)·네이버는 인라인 SVG.
  * 반드시 window.open(새 창/앱 전환)으로만 열고 현재 탭은 절대 이동시키지 않는다 —
  * 예전엔 window.location.href로 스킴을 직접 호출해서, 지도 앱에 갔다 뒤로가기로
  * 돌아오면 브라우저 히스토리가 꼬여 화면이 먹통이 되는 문제가 있었다.
@@ -78,9 +78,10 @@ export function FileAttachmentCard({ url, className }) {
 export function MapLinkButtons({ site, className = "", size = 30 }) {
   if (!site || site.lat == null || site.lng == null) return null;
   const name = encodeURIComponent(site.name ?? "현장");
-  const openKakao = (e) => {
+  // 네이버지도 앱 스킴 — appname은 네이버가 요구하는 호출 앱 식별자(임의 문자열).
+  const openNaver = (e) => {
     e.stopPropagation();
-    window.open(`https://map.kakao.com/link/to/${name},${site.lat},${site.lng}`, "_blank");
+    window.open(`nmap://route/car?dlat=${site.lat}&dlng=${site.lng}&dname=${name}&appname=guil-app-pi.vercel.app`, "_blank");
   };
   const openTmap = (e) => {
     e.stopPropagation();
@@ -93,9 +94,11 @@ export function MapLinkButtons({ site, className = "", size = 30 }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/icons/tmap.png" alt="" className="w-full h-full rounded-[7px]" />
       </button>
-      <button type="button" onClick={openKakao} aria-label="카카오맵으로 길찾기" style={boxStyle} className="active:opacity-70">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/icons/kakaomap.png" alt="" className="w-full h-full rounded-[7px]" />
+      <button type="button" onClick={openNaver} aria-label="네이버지도로 길찾기" style={boxStyle} className="active:opacity-70">
+        <svg viewBox="0 0 30 30" className="w-full h-full rounded-[7px]" aria-hidden="true">
+          <rect width="30" height="30" fill="#03C75A" />
+          <path d="M9 8h4l4 6.2V8h4v14h-4l-4-6.2V22H9z" fill="#fff" />
+        </svg>
       </button>
     </span>
   );
