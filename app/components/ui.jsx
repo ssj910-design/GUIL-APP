@@ -96,7 +96,7 @@ export function MapLinkButtons({ site, className = "", size = 30 }) {
       </button>
       <button type="button" onClick={openNaver} aria-label="네이버지도로 길찾기" style={boxStyle} className="active:opacity-70">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/icons/navermap.png" alt="" className="w-full h-full rounded-[7px]" />
+        <img src="/icons/navermap.png" alt="" className="w-full h-full object-contain" />
       </button>
     </span>
   );
