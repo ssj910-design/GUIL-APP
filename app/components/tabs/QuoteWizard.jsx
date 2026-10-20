@@ -294,6 +294,10 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
 
     const quoteTitle = quoteTitleInput.trim() || items[0]?.name || "견적서";
     const quoteDate = TODAY_STR;
+    // 견적서 "수신자" 칸 문구 — 관리자 콘솔(QuoteItemsModal.jsx)과 같은 "현장명 대표 귀중". 예전엔 고른
+    // 담당자 이름(예: "사장")만 저장돼 견적서에 이름만 찍혔다. 이미 저장된 문구가 있으면(콘솔에서
+    // 고쳤거나 이어서 수정하는 견적) 그대로 유지한다.
+    const recipientLabel = existingQuote?.recipientName?.trim() || `${site?.name ?? draft.siteName} 대표 귀중`;
     // _src는 화면 표시용 임시 표시라 저장·PDF에는 넣지 않는다.
     const cleanItems = items.map(({ _src, _sel, ...rest }) => rest);
 
@@ -303,7 +307,7 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
       body: JSON.stringify({
         quoteRequestId: draft.id,
         siteName: site?.name ?? draft.siteName,
-        quoteNumber, recipientName: managerName, quoteTitle, quoteDate,
+        quoteNumber, recipientName: recipientLabel, quoteTitle, quoteDate,
         items: cleanItems, transportCost, safetyCost, profit, discountAmount, vatIncluded,
       }),
     }).then((r) => r.json()).catch((e) => ({ ok: false, reason: e.message }));
@@ -325,7 +329,7 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
       // vat_included 컬럼도 마이그레이션 141 이후에만 존재 — 같은 이유로 체크했을 때만 쓴다.
       ...(vatIncluded ? { vat_included: true } : {}),
       quote_number: quoteNumber || null,
-      recipient_name: managerName || null,
+      recipient_name: recipientLabel,
       quote_title: quoteTitle,
       quote_issued_date: quoteDate,
       recipient_email: recipientEmail || null,
@@ -343,7 +347,7 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
     try { localStorage.removeItem(draftKey(draft.id)); } catch { /* 임시저장 정리 실패는 무시 */ }
     onSaved({
       id: draft.id, quoteItems: cleanItems, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
-      profit: Number(profit) || 0, discountAmount: Number(discountAmount) || 0, vatIncluded, quoteNumber, recipientName: managerName, quoteTitle, quoteIssuedDate: quoteDate,
+      profit: Number(profit) || 0, discountAmount: Number(discountAmount) || 0, vatIncluded, quoteNumber, recipientName: recipientLabel, quoteTitle, quoteIssuedDate: quoteDate,
       quotePdfUrl: pdfRes.url, status: "작성", recipientEmail: recipientEmail || null, recipientPhone: recipientPhone || null,
     });
     setSaving(false);
