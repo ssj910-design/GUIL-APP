@@ -3,7 +3,7 @@ import { X, Camera as CameraIcon, Search, Image as ImageIcon, Loader2, FileText 
 import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { uploadPhoto, dataUrlToBlob, isVideoUrl, isFileUrl, attachmentNameOf } from "@/lib/photos";
 import { inputCls, Sheet, PhotoLightbox, VideoThumb } from "@/app/components/ui";
-import { SitesContext } from "@/app/components/context";
+import { SitesContext, UnitsContext } from "@/app/components/context";
 import { activeSites } from "@/lib/utils";
 
 
@@ -18,7 +18,13 @@ export function SiteSearchSelect({ value, onChange, placeholder = "현장명을 
   const selected = sites.find((s) => s.id === value);
   // 계약종료 현장은 새 고장접수·자재·견적 신청 대상이 아니므로 검색 목록에서 뺀다
   // (단, 이미 선택된 값이 계약종료 현장이어도 selected 표시는 원본 sites 기준으로 그대로 유지).
-  const filtered = activeSites(sites).filter((s) => s.name.toLowerCase().includes(query.trim().toLowerCase()));
+  // 현장명·주소·비상통화장치 번호(현장 대표 + 호기별)로 검색한다. 번호는 하이픈·공백을 빼고 숫자만 비교한다.
+  const units = useContext(UnitsContext);
+  const q = query.trim().toLowerCase();
+  const qDigits = q.replace(/\D/g, "");
+  const phonesOf = (s) => [s.emergencyPhone, ...units.filter((u) => u.siteId === s.id).map((u) => u.emergencyPhone)].filter(Boolean);
+  const phoneHit = (s) => (qDigits.length >= 3 ? phonesOf(s).find((p) => String(p).replace(/\D/g, "").includes(qDigits)) : null);
+  const filtered = activeSites(sites).filter((s) => !q || s.name.toLowerCase().includes(q) || (s.address ?? "").toLowerCase().includes(q) || phoneHit(s));
 
   return (
     <div className="relative">
@@ -44,6 +50,7 @@ export function SiteSearchSelect({ value, onChange, placeholder = "현장명을 
             >
               <span className="font-semibold text-slate-700">{s.name}</span>
               <span className="text-slate-400 text-xs ml-1.5">{s.address}</span>
+              {phoneHit(s) && <span className="block text-[11px] text-blue-600 mt-0.5">비상통화 {phoneHit(s)}</span>}
             </button>
           ))}
           {filtered.length === 0 && <p className="text-xs text-slate-400 text-center py-3">검색 결과가 없습니다</p>}

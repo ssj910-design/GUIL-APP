@@ -211,7 +211,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
         {step === 0 && (
           <>
             <div>
-              <p className="text-xs font-bold text-slate-500 mb-1.5">현장명 *</p>
+              <p className="text-xs font-bold text-slate-500 mb-1.5">현장 *</p>
               <SiteSearchSelect
                 value={form.siteId}
                 onChange={(id) => {
@@ -220,7 +220,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                   const us = s ? siteUnitList(s, units) : [];
                   setForm({ ...form, siteId: id, units: us.length === 1 ? [us[0].unitNo] : [] });
                 }}
-                placeholder="현장명 검색"
+                placeholder="현장명, 주소, 비상통화번호 검색"
               />
             </div>
             {site && (
