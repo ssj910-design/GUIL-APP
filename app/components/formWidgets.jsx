@@ -11,7 +11,8 @@ import { activeSites } from "@/lib/utils";
 /* MATERIAL (자재·견적)                                                  */
 /* ------------------------------------------------------------------ */
 
-export function SiteSearchSelect({ value, onChange, placeholder = "현장명을 검색하세요" }) {
+// extendedSearch: 주소·비상통화장치 번호로도 검색(고장접수). 기본은 현장명만.
+export function SiteSearchSelect({ value, onChange, placeholder = "현장명을 검색하세요", extendedSearch = false }) {
   const sites = useContext(SitesContext);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -21,10 +22,10 @@ export function SiteSearchSelect({ value, onChange, placeholder = "현장명을 
   // 현장명·주소·비상통화장치 번호(현장 대표 + 호기별)로 검색한다. 번호는 하이픈·공백을 빼고 숫자만 비교한다.
   const units = useContext(UnitsContext);
   const q = query.trim().toLowerCase();
-  const qDigits = q.replace(/\D/g, "");
+  const qDigits = extendedSearch ? q.replace(/\D/g, "") : "";
   const phonesOf = (s) => [s.emergencyPhone, ...units.filter((u) => u.siteId === s.id).map((u) => u.emergencyPhone)].filter(Boolean);
   const phoneHit = (s) => (qDigits.length >= 3 ? phonesOf(s).find((p) => String(p).replace(/\D/g, "").includes(qDigits)) : null);
-  const filtered = activeSites(sites).filter((s) => !q || s.name.toLowerCase().includes(q) || (s.address ?? "").toLowerCase().includes(q) || phoneHit(s));
+  const filtered = activeSites(sites).filter((s) => !q || s.name.toLowerCase().includes(q) || (extendedSearch && ((s.address ?? "").toLowerCase().includes(q) || phoneHit(s))));
 
   return (
     <div className="relative">
