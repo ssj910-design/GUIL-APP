@@ -220,7 +220,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                   const us = s ? siteUnitList(s, units) : [];
                   setForm({ ...form, siteId: id, units: us.length === 1 ? [us[0].unitNo] : [] });
                 }}
-                placeholder="현장명, 주소, 비상통화번호 검색"
+                placeholder="현장명, 주소, 비상통화장치번호 검색"
                 extendedSearch
               />
             </div>

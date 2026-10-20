@@ -51,7 +51,7 @@ export function SiteSearchSelect({ value, onChange, placeholder = "현장명을 
             >
               <span className="font-semibold text-slate-700">{s.name}</span>
               <span className="text-slate-400 text-xs ml-1.5">{s.address}</span>
-              {phoneHit(s) && <span className="block text-[11px] text-blue-600 mt-0.5">비상통화 {phoneHit(s)}</span>}
+              {phoneHit(s) && <span className="block text-[11px] text-blue-600 mt-0.5">비상통화장치 {phoneHit(s)}</span>}
             </button>
           ))}
           {filtered.length === 0 && <p className="text-xs text-slate-400 text-center py-3">검색 결과가 없습니다</p>}
