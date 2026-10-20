@@ -13,7 +13,7 @@ import { TodoHistory } from "@/app/components/TodoHistory";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { useBackHandler } from "@/app/hooks/useBackHandler";
 import { TODAY_STR } from "@/lib/constants";
-import { canHaveMultipleAssignees, canSetBilling, todoFormFrom } from "@/lib/todoEdit";
+import { canHaveMultipleAssignees, canSetBilling, todoFormFrom, billingQuoteRef } from "@/lib/todoEdit";
 import { BillingSetupFields, billingSetupValid } from "@/app/components/BillingSetupFields";
 
 const SOURCE_LABEL = {
@@ -365,10 +365,10 @@ export function TodoDetailScreen({
               </p>
             )}
           </Section>
-          {todo.billingAmount != null && (
+          {(todo.billingAmount != null || billingQuoteRef(todo)) && (
             <Section label="청구 부품·금액">
               <p className="text-sm font-bold text-blue-700">
-                {todo.billingPart ? `${todo.billingPart} · ` : ""}합계 ₩{Number(todo.billingAmount).toLocaleString()}
+                {todo.billingPart ? `${todo.billingPart} · ` : ""}{todo.billingAmount != null ? `합계 ₩${Number(todo.billingAmount).toLocaleString()}` : "금액 견적서 참조"}
               </p>
             </Section>
           )}

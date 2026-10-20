@@ -9,7 +9,7 @@ import { SitesContext, UnitsContext, AuthContext } from "@/app/components/contex
 import { SiteSearchSelect, MultiPhotoUpload, SignaturePad } from "@/app/components/formWidgets";
 import { emptyPartRow, formatPartRows, PartsRowsInput, UnitPickGrid } from "@/app/components/tabs/MaterialTab";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
-import { completionGroupIds, billingKeyOf } from "@/lib/todoEdit";
+import { completionGroupIds, billingKeyOf, billingQuoteRef } from "@/lib/todoEdit";
 
 
 /* ------------------------------------------------------------------ */
@@ -147,8 +147,11 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, onC
       toastBill("임시저장된 내용을 불러왔습니다", true);
     } else {
       // 견적 연동 건은 견적 승인 금액으로 채운다 — 자재 품목합이 아니다(인건비·운반비 등 포함 총액).
-      setMaterialCost(quoteApprovedTotal != null ? String(quoteApprovedTotal) : selected?.billingAmount != null ? String(selected.billingAmount) : "");
-      setFreeReason("");
+      // 관리자가 지급 때 부품 금액을 "-"(견적서 참조)로 둔 건은 금액이 정해지지 않았으니 "견적서 참조"를
+      // 기본 선택한다 — 기사가 수리비를 입력할 수 없고, 관리자가 나중에 금액을 입력해 청구한다.
+      const quoteRefSupply = !isQuoteBilling && selected?.billingAmount == null && billingQuoteRef(selected);
+      setMaterialCost(quoteApprovedTotal != null ? String(quoteApprovedTotal) : selected?.billingAmount != null ? String(selected.billingAmount) : quoteRefSupply ? "0" : "");
+      setFreeReason(quoteRefSupply ? QUOTE_REF : "");
       setSignerName("");
       setSignerPhone("");
       setVendorNameInput(selected?.vendorName ?? "");

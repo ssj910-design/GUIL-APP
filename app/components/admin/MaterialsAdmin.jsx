@@ -10,7 +10,7 @@ import { notify } from "@/lib/push";
 import { uploadPhoto } from "@/lib/photos";
 import { unitIdFor, addDays, shortDate, parsePartQty, formatUnitLabel } from "@/lib/utils";
 import { mapMaterialRequest, mapTodo } from "@/lib/mappers";
-import { billingPatchOf } from "@/lib/todoEdit";
+import { billingPatchOf, isQuoteRefInput, rowAmountOf, amountTextOf, sumAmounts } from "@/lib/todoEdit";
 import { BillingSetupFields, billingSetupValid } from "@/app/components/BillingSetupFields";
 import { PersonPicker } from "@/app/components/admin/TodosAdmin";
 import { TODAY_STR } from "@/lib/constants";
@@ -23,6 +23,7 @@ const MATERIAL_REJECT_REASONS = ["중복 요청", "현장 확인 필요", "내�
 function parseAmountFromBillingPart(billingPart, part) {
   if (!billingPart) return "";
   const escaped = part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp(`${escaped}\\(견적서 참조\\)`).test(billingPart)) return "-";
   const m = billingPart.match(new RegExp(`${escaped}\\(₩([0-9,]+)\\)`));
   return m ? m[1].replace(/,/g, "") : "";
 }
@@ -467,13 +468,14 @@ function MaterialSupplyModal({ request, profiles, todos, onClose, onSubmit }) {
     return initial;
   });
   const total = parts.reduce((sum, _, i) => sum + (Number(amounts[i]) || 0), 0);
+  const refCount = parts.filter((_, i) => isQuoteRefInput(amounts[i])).length;
   const billingPartText = parts
-    .map((part, i) => (amounts[i] ? `${part}(₩${Number(amounts[i]).toLocaleString()})` : part))
+    .map((part, i) => (isQuoteRefInput(amounts[i]) ? `${part}(${amountTextOf(null)})` : amounts[i] ? `${part}(₩${Number(amounts[i]).toLocaleString()})` : part))
     .join(", ");
   const allAmountsFilled = parts.every((_, i) => amounts[i] !== undefined && amounts[i] !== "");
   const billingPartRows = parts.map((part, i) => {
     const { name, qty } = parsePartQty(part);
-    return { name: name || part, qty: qty || null, amount: Number(amounts[i]) || 0 };
+    return { name: name || part, qty: qty || null, amount: rowAmountOf(amounts[i]) };
   });
 
   async function handleFiles(e) {
@@ -493,7 +495,7 @@ function MaterialSupplyModal({ request, profiles, todos, onClose, onSubmit }) {
 
   async function submit() {
     setSaving(true);
-    await onSubmit({ assigneeId, billingPart: billingPartText || null, billingAmount: total || null, billingPartRows, photoUrls: photos });
+    await onSubmit({ assigneeId, billingPart: billingPartText || null, billingAmount: sumAmounts(billingPartRows.map((r) => r.amount)), billingPartRows, photoUrls: photos });
     setSaving(false);
   }
 
@@ -537,17 +539,17 @@ function MaterialSupplyModal({ request, profiles, todos, onClose, onSubmit }) {
               <div key={i} className="flex items-center gap-1.5">
                 <span className="text-xs text-slate-700 flex-1 truncate">{part}</span>
                 <input
-                  type="number"
                   className={`${inputCls} w-28`}
-                  placeholder="금액"
+                  placeholder="금액 (-)"
                   value={amounts[i] ?? ""}
-                  onChange={(e) => setAmounts((m) => ({ ...m, [i]: e.target.value }))}
+                  onChange={(e) => setAmounts((m) => ({ ...m, [i]: isQuoteRefInput(e.target.value) ? "-" : e.target.value.replace(/\D/g, "") }))}
                 />
               </div>
             ))}
           </div>
-          {parts.length > 1 && <p className="text-[10px] text-slate-400 text-right mt-1">합계 ₩{total.toLocaleString()}</p>}
-          {!allAmountsFilled && <p className="text-[10px] text-red-500 mt-1">모든 부품의 금액을 입력해주세요</p>}
+          {parts.length > 1 && <p className="text-[10px] text-slate-400 text-right mt-1">{refCount > 0 ? `견적서 참조 ${refCount}건 · 확정 금액 합 ` : "합계 "}₩{total.toLocaleString()}</p>}
+          {!allAmountsFilled && <p className="text-[10px] text-red-500 mt-1">모든 부품의 금액을 입력해주세요 (금액 미정이면 -)</p>}
+          <p className="text-[10px] text-slate-400 mt-1">금액 칸에 <b>-</b>를 입력하면 견적서 참조(금액 미정)로 표시되고, 관리자가 나중에 금액을 입력해 청구합니다.</p>
         </div>
 
         <button

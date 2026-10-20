@@ -1,5 +1,7 @@
 "use client";
 
+import { isQuoteRefInput } from "@/lib/todoEdit";
+
 // "비용청구 후 완료" 설정 입력 — 관리자가 기사의 자재·견적 신청 없이 직접 배정하는 부품 교체 할일을
 // 자재지급건처럼 기사가 비용청구를 제출해야 완료되게 만든다. 할일 배정(앱·관리자웹)과 수정 모드 공용.
 // 자재 지급 확정 화면과 같은 구성: 청구 부품(이름·수량)별 예정(사전승인) 금액 — 기사 청구 화면에
@@ -17,6 +19,7 @@ export function BillingSetupFields({ form, setForm, siteUnits, siteSelected, alw
   const rows = form.billingRows?.length ? form.billingRows : [emptyBillingRow()];
   const unitIds = form.unitIds ?? [];
   const total = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  const refCount = rows.filter((r) => r.name?.trim() && isQuoteRefInput(r.amount)).length;
 
   function setRow(i, patch) {
     setForm((f) => {
@@ -87,7 +90,7 @@ export function BillingSetupFields({ form, setForm, siteUnits, siteSelected, alw
                 <div key={i} className="flex items-center gap-1.5">
                   <input className={`${cellCls} flex-1`} placeholder="부품명" value={r.name} onChange={(e) => setRow(i, { name: e.target.value })} />
                   <input className={`${cellCls} w-14 shrink-0 text-center`} inputMode="numeric" placeholder="수량" value={r.qty} onChange={(e) => setRow(i, { qty: e.target.value.replace(/\D/g, "") })} />
-                  <input className={`${cellCls} w-24 shrink-0`} inputMode="numeric" placeholder="금액" value={r.amount} onChange={(e) => setRow(i, { amount: e.target.value.replace(/\D/g, "") })} />
+                  <input className={`${cellCls} w-24 shrink-0`} placeholder="금액 (-)" value={r.amount} onChange={(e) => setRow(i, { amount: isQuoteRefInput(e.target.value) ? "-" : e.target.value.replace(/\D/g, "") })} />
                   {rows.length > 1 && (
                     <button
                       type="button" aria-label="부품 삭제"
@@ -102,9 +105,10 @@ export function BillingSetupFields({ form, setForm, siteUnits, siteSelected, alw
             </div>
             <div className="flex items-center justify-between mt-1.5">
               <button type="button" onClick={() => setForm((f) => ({ ...f, billingRows: [...rows, emptyBillingRow()] }))} className="text-xs font-bold text-blue-700">+ 부품 추가</button>
-              <span className="text-[11px] font-bold text-slate-500">합계 ₩{total.toLocaleString("ko-KR")}</span>
+              <span className="text-[11px] font-bold text-slate-500">{refCount > 0 ? `견적서 참조 ${refCount}건 · 확정 금액 합 ` : "합계 "}₩{total.toLocaleString("ko-KR")}</span>
             </div>
-            {!billingRowsValid(form) && <p className="text-[11px] text-red-500 mt-1">부품명과 금액(무상이면 0)을 모두 입력해주세요</p>}
+            {!billingRowsValid(form) && <p className="text-[11px] text-red-500 mt-1">부품명과 금액(무상이면 0, 금액 미정이면 -)을 모두 입력해주세요</p>}
+            <p className="text-[10px] text-slate-400 mt-1">금액 칸에 <b>-</b>를 입력하면 견적서 참조(금액 미정)로 표시되고, 관리자가 나중에 금액을 입력해 청구합니다.</p>
           </div>
         </div>
       )}

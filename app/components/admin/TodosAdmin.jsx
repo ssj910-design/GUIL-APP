@@ -13,7 +13,7 @@ import { notify } from "@/lib/push";
 import { TodoHistory } from "@/app/components/TodoHistory";
 import { BillingSetupFields, billingSetupValid } from "@/app/components/BillingSetupFields";
 import {
-  groupKeyOf, completionGroupIds, canHaveMultipleAssignees, canSetBilling, billingFormFrom, billingPatchOf, billingLocalOf, saveSingleTodo, saveGroupCommon, changeTodoAssignees, applyAssigneeChange,
+  groupKeyOf, completionGroupIds, canHaveMultipleAssignees, canSetBilling, billingFormFrom, billingPatchOf, billingLocalOf, billingQuoteRef, saveSingleTodo, saveGroupCommon, changeTodoAssignees, applyAssigneeChange,
 } from "@/lib/todoEdit";
 import { TODAY_STR } from "@/lib/constants";
 import { addDays, shortDate, formatUnitLabel } from "@/lib/utils";
@@ -383,7 +383,7 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
             <FieldRow label="요청자"><p className="text-sm font-semibold text-slate-700 pt-0.5">{requesterName}</p></FieldRow>
             {t.billingRequired && (
               <FieldRow label="비용청구">
-                <p className="text-sm font-semibold text-blue-700 pt-0.5">청구 후 완료 · 예정금액 ₩{Number(t.billingAmount ?? 0).toLocaleString("ko-KR")}</p>
+                <p className="text-sm font-semibold text-blue-700 pt-0.5">청구 후 완료 · 예정금액 {billingQuoteRef(t) ? "견적서 참조" : `₩${Number(t.billingAmount ?? 0).toLocaleString("ko-KR")}`}</p>
                 {t.billingPart && <p className="text-[11px] text-slate-500 mt-0.5 break-keep">{t.billingPart}</p>}
               </FieldRow>
             )}

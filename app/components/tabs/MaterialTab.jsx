@@ -10,6 +10,7 @@ import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { rejectLabelOf } from "@/lib/quoteReject";
+import { billingQuoteRef } from "@/lib/todoEdit";
 
 
 // 자재 신청/견적 요청/상비부품 보충 각각의 상세보기(신청 사진 포함)에 공용으로 쓰는 시트.
@@ -62,7 +63,7 @@ function RequestDetailSheet({ target, onClose, onPhotoClick, todos, onCancelMate
             </p>
           </div>
         )}
-        {linkedTodo?.billingAmount != null && (
+        {(linkedTodo?.billingAmount != null || billingQuoteRef(linkedTodo)) && (
           <div className="bg-slate-100 rounded-xl p-3">
             <p className="text-[11px] text-slate-500 mb-1">관리자 지급 부품·수량·금액</p>
             {linkedTodo.billingPart && (
@@ -72,7 +73,7 @@ function RequestDetailSheet({ target, onClose, onPhotoClick, todos, onCancelMate
                 ))}
               </div>
             )}
-            <p className="text-sm font-bold text-blue-700 mt-1">합계 ₩{Number(linkedTodo.billingAmount).toLocaleString()}</p>
+            <p className="text-sm font-bold text-blue-700 mt-1">{linkedTodo.billingAmount != null ? `합계 ₩${Number(linkedTodo.billingAmount).toLocaleString()}` : "금액 견적서 참조"}</p>
           </div>
         )}
         <div className="grid grid-cols-2 gap-2.5">
@@ -229,9 +230,9 @@ function MaterialHistoryScreen({ requests, todos, isBilled, onBack, onCancelMate
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">{r.urgency} · 신청일 {r.requestedDate}{r.suppliedDate ? ` · 지급일 ${r.suppliedDate}` : ""}</p>
-                {linkedTodo?.billingAmount != null && (
+                {(linkedTodo?.billingAmount != null || billingQuoteRef(linkedTodo)) && (
                   <p className="text-[11px] font-bold text-blue-700 mt-1">
-                    교체부품·청구금액 · {linkedTodo.billingPart ? `${linkedTodo.billingPart} · ` : ""}₩{Number(linkedTodo.billingAmount).toLocaleString()}
+                    교체부품·청구금액 · {linkedTodo.billingPart ? `${linkedTodo.billingPart} · ` : ""}{linkedTodo.billingAmount != null ? `₩${Number(linkedTodo.billingAmount).toLocaleString()}` : "견적서 참조"}
                   </p>
                 )}
                 {r.status === "반려" && r.rejectReason && (
