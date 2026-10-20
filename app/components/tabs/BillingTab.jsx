@@ -393,7 +393,9 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, onC
       quoteRequestId: selected.quoteRequestId ?? null,
       // 청구가 어느 할일(묶음)의 것인지 — 취소 시 그 할일을 다시 열고, 같은 할일에 중복 청구를 막는다(마이그레이션 151).
       todoId: billingKeyOf(selected),
-      part: selected.part,
+      // 묶음이 1줄이면(예: "인버터 수리") 부품명은 그 묶음명 — 다른 화면·PDF가 부품이 2개 이상일 때만
+      // partPhotos를 쓰므로 1줄은 part + 통합 사진 배열로 저장한다.
+      part: billingParts?.length === 1 ? billingParts[0].name : selected.part,
       // billings.cost는 숫자 컬럼이라 "견적서 참조" 같은 문자열은 넣을 수 없습니다(넣으면 insert가
       // 조용히 실패합니다). 견적 연동 건은 실제 비용을 이 시스템에 남기지 않는다는 의미로 null 처리합니다.
       // 견적 연동 건은 견적 승인 금액을 그대로 저장한다(기사 화면엔 계속 "견적서 참조"만 보인다).
@@ -408,7 +410,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, onC
       contactPhone: absentMode ? approverPhone.trim() : signerPhone.trim(),
       beforePhotoUrls,
       afterPhotoUrls,
-      partPhotos: partPhotosPayload,
+      partPhotos: partPhotosPayload?.length > 1 ? partPhotosPayload : null,
       // 지류 교체확인서 대신: 서명했으면 서명 이미지, 고객 부재중이면 전화승인자 정보.
       signatureUrl: absentMode ? null : signatureUrl,
       approvalMethod: absentMode ? "전화승인" : "서명",
@@ -429,7 +431,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, onC
     } else {
       setTodos((prev) => prev.map((t) => (idsToComplete.includes(t.id) ? { ...t, done: true } : t)));
     }
-    setSubmitted({ siteName: selected.siteName, part: selected.part, manual: false });
+    setSubmitted({ siteName: selected.siteName, part: billingParts?.length === 1 ? billingParts[0].name : selected.part, manual: false });
     setSelectedId(openTodos.find((t) => t.id !== selected.id)?.id ?? "");
     setMaterialCost("");
     setFreeReason("");
