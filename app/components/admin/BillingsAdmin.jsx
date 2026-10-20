@@ -6,7 +6,7 @@ import { useState, useContext, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Search, Plus, X, Pencil, ChevronDown, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { shortDate, formatUnitLabel, quoteGrandTotal, freeReasonOf, freeReasonLabel, isCostPending, quoteMaterialItems, receivedTotalOf, receivedStatusOf, billingPaymentBucket, billingDueAmount, inferQuoteUnitId } from "@/lib/utils";
+import { shortDate, formatUnitLabel, quoteGrandTotal, freeReasonOf, freeReasonLabel, isCostPending, quoteBillingLines, receivedTotalOf, receivedStatusOf, billingPaymentBucket, billingDueAmount, inferQuoteUnitId } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { mapBilling } from "@/lib/mappers";
 import { notify } from "@/lib/push";
@@ -283,8 +283,7 @@ function NewBillingModal({ data, onClose, onCreate }) {
     // 청구 품목은 실제 교체한 자재만 — 인건비·운반비·안전관리비·이윤·할인은 품목이 아니라
     // 금액 구성요소라, 합계금액(견적 승인 금액)에만 반영한다.
     const quoteItems = quote
-      ? quoteMaterialItems(quote.quoteItems)
-          .map((it) => ({ name: it.name, qty: it.qty || null, amount: Math.round(Number(it.qty || 0) * Number(it.unitPrice || 0)) }))
+      ? quoteBillingLines(quote.quoteItems)
       : null;
     const quoteTotal = quote
       ? quoteGrandTotal(quote.quoteItems, quote.transportCost, quote.safetyCost, quote.profit, quote.discountAmount)

@@ -214,6 +214,17 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
   function addItem(category) {
     setItems((prev) => [...prev, emptyItem(category)]);
   }
+  // 청구 묶음 — 체크한 자재 줄들을 같은 묶음명으로 묶는다. 견적서에는 줄이 그대로 나가고,
+  // 기사 증빙사진·청구서·교체확인서에서만 한 줄로 합쳐진다(lib/utils.js quoteBillingLines).
+  const [groupName, setGroupName] = useState("");
+  const selCount = items.filter((it) => it._sel).length;
+  function toggleSel(idx) {
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, _sel: !it._sel } : it)));
+  }
+  function applyGroup(name) {
+    setItems((prev) => prev.map((it) => (it._sel ? { ...it, billingGroup: name || undefined, _sel: false } : it)));
+    setGroupName("");
+  }
   // 수량·단가를 고치면 "이전 견적에서 불러옴" 표시(_src)를 뗀다 — 이제 그대로 가져온 값이 아니다.
   function updateItem(idx, patch) {
     const edited = "qty" in patch || "unitPrice" in patch;
@@ -301,7 +312,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
   async function handleSave() {
     if (items.length === 0) return;
     // _src는 화면 표시용 임시 표시라 저장·PDF에는 넣지 않는다.
-    const cleanItems = items.map(({ _src, ...rest }) => rest);
+    const cleanItems = items.map(({ _src, _sel, ...rest }) => rest);
     setSaving(true);
     setError("");
 
@@ -435,6 +446,15 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
                   </button>
                 </div>
               </div>
+              {category === "자재비" && selCount > 0 && (
+                <div className="flex flex-wrap items-center gap-2 mb-2 p-2 rounded-lg bg-indigo-50 border border-indigo-200 text-xs">
+                  <b className="text-indigo-700">{selCount}개 선택</b>
+                  <input className="border border-indigo-200 rounded px-2 py-1 w-40" placeholder="묶음명 (예: 인버터 수리)" value={groupName} onChange={(e) => setGroupName(e.target.value)} />
+                  <button type="button" disabled={!groupName.trim()} onClick={() => applyGroup(groupName.trim())} className="px-2.5 py-1 rounded bg-indigo-600 text-white font-bold disabled:opacity-40">묶기</button>
+                  <button type="button" onClick={() => applyGroup("")} className="px-2.5 py-1 rounded border border-indigo-300 text-indigo-700 font-bold">묶음 해제</button>
+                  <span className="text-slate-400">청구서·증빙사진에서만 한 줄로 합쳐집니다. 견적서는 그대로입니다.</span>
+                </div>
+              )}
               <div className="space-y-2">
                 {items.map((it, idx) => {
                   if (it.category !== category) return null;
@@ -516,7 +536,15 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
                         </div>
                       )}
                       <div className="flex justify-between items-center gap-3 text-xs text-slate-500">
-                        {it._src ? <span className="ml-5 text-[11px] font-semibold text-amber-700 bg-amber-50 rounded px-1.5 py-0.5">↳ {it._src}{it._src.endsWith("단가") ? "" : " 견적에서 불러옴"} — 단가 확인</span> : <span />}
+                        <span className="flex items-center gap-2 ml-5">
+                          {category === "자재비" && (
+                            <label className="flex items-center gap-1 text-[11px] text-slate-500">
+                              <input type="checkbox" checked={!!it._sel} onChange={() => toggleSel(idx)} /> 묶음 선택
+                            </label>
+                          )}
+                          {it.billingGroup && <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">묶음: {it.billingGroup}</span>}
+                          {it._src && <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 rounded px-1.5 py-0.5">↳ {it._src}{it._src.endsWith("단가") ? "" : " 견적에서 불러옴"} — 단가 확인</span>}
+                        </span>
                         <span className="flex items-center gap-3">
                           <span className="font-bold text-slate-400">소계</span>
                           <span>공급가액 <b className="text-slate-700 font-semibold">{supply.toLocaleString()}</b></span>

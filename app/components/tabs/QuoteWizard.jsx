@@ -200,6 +200,16 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
     if (sc != null && !Number(safetyCost)) setSafetyCost(sc);
     setPastPickerOpen(false);
   }
+  // 청구 묶음 — 체크한 자재 줄을 같은 묶음명으로 묶는다(견적서는 그대로, 청구 쪽에서만 한 줄로 합쳐짐).
+  const [groupName, setGroupName] = useState("");
+  const selCount = items.filter((it) => it._sel).length;
+  function toggleSel(idx) {
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, _sel: !it._sel } : it)));
+  }
+  function applyGroup(name) {
+    setItems((prev) => prev.map((it) => (it._sel ? { ...it, billingGroup: name || undefined, _sel: false } : it)));
+    setGroupName("");
+  }
   function removeItem(idx) {
     setItems((prev) => prev.filter((_, i) => i !== idx));
     setExpandedIdx(-1);
@@ -285,7 +295,7 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
     const quoteTitle = quoteTitleInput.trim() || items[0]?.name || "견적서";
     const quoteDate = TODAY_STR;
     // _src는 화면 표시용 임시 표시라 저장·PDF에는 넣지 않는다.
-    const cleanItems = items.map(({ _src, ...rest }) => rest);
+    const cleanItems = items.map(({ _src, _sel, ...rest }) => rest);
 
     const pdfRes = await authFetch("/api/generate-quote-pdf", {
       method: "POST",
@@ -479,21 +489,35 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
                 <p className="font-semibold text-slate-700">{existingQuote.constructionType} · {existingQuote.quantity ?? "-"}개</p>
               </div>
             )}
+            {selCount > 0 && (
+              <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-indigo-50 border border-indigo-200 text-xs">
+                <b className="text-indigo-700">{selCount}개 선택</b>
+                <input className="flex-1 min-w-[8rem] border border-indigo-200 rounded px-2 py-1.5" placeholder="묶음명 (예: 인버터 수리)" value={groupName} onChange={(e) => setGroupName(e.target.value)} />
+                <button type="button" disabled={!groupName.trim()} onClick={() => applyGroup(groupName.trim())} className="px-3 py-1.5 rounded bg-indigo-600 text-white font-bold disabled:opacity-40">묶기</button>
+                <button type="button" onClick={() => applyGroup("")} className="px-3 py-1.5 rounded border border-indigo-300 text-indigo-700 font-bold">묶음 해제</button>
+              </div>
+            )}
             {items.map((it, idx) => {
               const expanded = idx === expandedIdx;
               const lineTotal = Number(it.qty || 0) * Number(it.unitPrice || 0);
               return (
                 <div key={idx} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                   {!expanded ? (
-                    <button onClick={() => setExpandedIdx(idx)} className="w-full flex items-center justify-between px-3.5 py-3 text-left">
+                    <div className="flex items-center">
+                      {it.category === "자재비" && (
+                        <label className="pl-3.5 py-3 pr-1 shrink-0"><input type="checkbox" checked={!!it._sel} onChange={() => toggleSel(idx)} aria-label="묶음 선택" /></label>
+                      )}
+                    <button onClick={() => setExpandedIdx(idx)} className="flex-1 min-w-0 flex items-center justify-between px-3.5 py-3 text-left">
                       <span className="min-w-0">
                         <span className="block text-sm font-semibold text-slate-700 truncate">
                           {it.name || "(품명 없음)"} · {it.qty}{it.unit} × {Number(it.unitPrice || 0).toLocaleString()}원 = {lineTotal.toLocaleString()}원
                         </span>
+                        {it.billingGroup && <span className="block text-[11px] font-semibold text-indigo-700 truncate">묶음: {it.billingGroup}</span>}
                         {it._src && <span className="block text-[11px] font-semibold text-amber-700 truncate">↳ {it._src}{it._src.endsWith("단가") ? "" : " 견적에서 불러옴"} — 단가 확인</span>}
                       </span>
                       <ChevronRight size={15} className="text-slate-300 shrink-0 ml-2" />
                     </button>
+                    </div>
                   ) : (
                     <div className="p-3.5 space-y-2.5">
                       <div className="flex gap-2">

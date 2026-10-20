@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { Receipt, Check, Search, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnitList, handlePhoneInputChange, freeReasonLabel, quoteGrandTotal, quoteMaterialItems, shortDate, formatUnitLabel } from "@/lib/utils";
+import { siteUnitList, handlePhoneInputChange, freeReasonLabel, quoteGrandTotal, quoteBillingLines, shortDate, formatUnitLabel } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
 import { isVideoUrl } from "@/lib/photos";
 import { PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink, Sheet, PhotoLightbox, VideoThumb } from "@/app/components/ui";
@@ -108,8 +108,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, onC
   // 증빙사진·확인서 품목은 실제 교체한 자재만 — 인건비(승강기숙련공 N인 등)와 운반비·
   // 안전관리비·이윤·할인은 청구 품목이 아니다(금액은 아래 견적 승인 금액에 이미 다 들어있다).
   const quoteBillingItems = selected?.source === "quote"
-    ? quoteMaterialItems(quoteRequests.find((q) => q.id === selected.quoteRequestId)?.quoteItems)
-        .map((it) => ({ name: it.name, qty: it.qty || null, amount: Math.round(Number(it.qty || 0) * Number(it.unitPrice || 0)) }))
+    ? quoteBillingLines(quoteRequests.find((q) => q.id === selected.quoteRequestId)?.quoteItems)
     : null;
   // 견적 연동 건의 청구 금액 = 견적 승인 금액(견적서 PDF와 같은 계산식 — 운반비·안전관리비·
   // 이윤·할인과 천단위 절사까지 반영). 제출 시점에 스냅샷으로 저장해, 나중에 견적서를 손봐도
