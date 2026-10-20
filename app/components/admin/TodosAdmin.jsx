@@ -6,7 +6,8 @@
 import { useContext, useState } from "react";
 import { Plus, Search, Repeat, Pencil, ChevronDown, Check } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { uploadPhoto } from "@/lib/photos";
+import { uploadPhoto, isFileUrl } from "@/lib/photos";
+import FileChips, { splitAttachments } from "@/app/components/FileChips";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { mapInventoryStockMovement } from "@/lib/mappers";
 import { notify } from "@/lib/push";
@@ -112,13 +113,13 @@ function PhotoAddSection({ photos, setPhotos, uploading, onFiles }) {
       <div className="flex items-center gap-2 mb-1.5">
         <label className="text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer">
           내 PC
-          <input type="file" accept="image/*" multiple className="hidden" onChange={onFiles} disabled={uploading} />
+          <input type="file" multiple className="hidden" onChange={onFiles} disabled={uploading} />
         </label>
-        <span className="text-xs text-slate-400">첨부파일 {photos.length}개</span>
+        <span className="text-xs text-slate-400">첨부파일 {photos.length}개 (사진·영상·PDF·문서)</span>
       </div>
-      {photos.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {photos.map((url, i) => (
+      {photos.some((u) => !isFileUrl(u)) && (
+        <div className="flex flex-wrap gap-1.5 mb-1.5">
+          {photos.map((url, i) => (isFileUrl(url) ? null : (
             <div key={i} className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
@@ -129,9 +130,10 @@ function PhotoAddSection({ photos, setPhotos, uploading, onFiles }) {
                 ×
               </button>
             </div>
-          ))}
+          )))}
         </div>
       )}
+      <FileChips urls={photos.filter((u) => isFileUrl(u))} onRemove={(url) => setPhotos((p) => p.filter((u) => u !== url))} />
     </div>
   );
 }
@@ -258,7 +260,7 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
     if (!files.length) return;
     setUploading(true);
     try {
-      const urls = await Promise.all(files.map((f) => uploadPhoto(f, `todos/${t.id}`)));
+      const urls = await Promise.all(files.map((f) => uploadPhoto(f, `todos/${t.id}`, { keepName: true })));
       setPhotos((p) => [...p, ...urls]);
     } catch (err) {
       alert("사진 업로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
@@ -271,7 +273,7 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
   async function save() {
     if (!form.title.trim()) return;
     setSaving(true);
-    if (isGroup) await onSaveGroup(group, form);
+    if (isGroup) await onSaveGroup(group, { ...form, photoUrls: photos });
     // 여러 명 가능한 할일은 담당자 구성을 아래 onChangeAssignees가 따로 처리한다(여기선 담당자 유지).
     else await onSave(t, { ...form, assigneeId: multi ? (t.assigneeId ?? "") : (form.assigneeIds[0] ?? ""), photoUrls: photos });
     if (multi) await onChangeAssignees(group, form.assigneeIds);
@@ -395,11 +397,14 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
                 <PhotoGrid urls={supplyPhotos} cols={4} />
               </FieldRow>
             )}
-            {!isGroup && (
-              <FieldRow label="파일첨부">
-                <PhotoGrid urls={photos} cols={4} />
-              </FieldRow>
-            )}
+            <FieldRow label="파일첨부">
+              {photos.length ? (
+                <div className="space-y-1.5">
+                  {splitAttachments(photos).media.length > 0 && <PhotoGrid urls={splitAttachments(photos).media} cols={4} />}
+                  <FileChips urls={splitAttachments(photos).files} />
+                </div>
+              ) : <p className="text-sm text-slate-400 pt-0.5">-</p>}
+            </FieldRow>
           </div>
           <div className="mt-5 pt-4 border-t border-slate-100">
             <TodoHistory
@@ -483,11 +488,9 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
           <FieldRow label="배정일">
             <input type="date" className={inputCls} value={form.assignedDate} onChange={(e) => setForm({ ...form, assignedDate: e.target.value })} />
           </FieldRow>
-          {!isGroup && (
-            <FieldRow label="파일첨부">
-              <PhotoAddSection photos={photos} setPhotos={setPhotos} uploading={uploading} onFiles={handleFiles} />
-            </FieldRow>
-          )}
+          <FieldRow label="파일첨부">
+            <PhotoAddSection photos={photos} setPhotos={setPhotos} uploading={uploading} onFiles={handleFiles} />
+          </FieldRow>
         </div>
       )}
       </div>
@@ -523,7 +526,7 @@ function AssignTodoModal({ data, onClose, onCreate }) {
     if (!files.length) return;
     setUploading(true);
     try {
-      const urls = await Promise.all(files.map((f) => uploadPhoto(f, `todos/assign-${folderToken}`)));
+      const urls = await Promise.all(files.map((f) => uploadPhoto(f, `todos/assign-${folderToken}`, { keepName: true })));
       setPhotos((p) => [...p, ...urls]);
     } catch (err) {
       alert("사진 업로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));

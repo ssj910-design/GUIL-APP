@@ -13,6 +13,7 @@ import { TodoHistory } from "@/app/components/TodoHistory";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { useBackHandler } from "@/app/hooks/useBackHandler";
 import { TODAY_STR } from "@/lib/constants";
+import FileChips, { splitAttachments } from "@/app/components/FileChips";
 import { canHaveMultipleAssignees, canSetBilling, todoFormFrom, billingQuoteRef } from "@/lib/todoEdit";
 import { BillingSetupFields, billingSetupValid } from "@/app/components/BillingSetupFields";
 
@@ -235,17 +236,18 @@ export function TodoDetailScreen({
                 : "이 할일은 담당자 1명만 지정할 수 있습니다 (새로 고르면 교체)."}
             </p>
           </div>
-          {!isGroup && (
+          {(
             <div>
               <label className={label}>{todo.source === "waste_return" ? "반납 사진" : "파일 첨부"}</label>
               <MultiPhotoUpload
                 required={false}
+                allowFiles={todo.source !== "waste_return"}
                 photos={form.photoUrls.map((url) => ({ url }))}
                 uploadFolder={`todos/${todo.id}`}
                 onUploaded={(url) => setForm((f) => ({ ...f, photoUrls: [...f.photoUrls, url] }))}
                 onRemove={(idx) => setForm((f) => ({ ...f, photoUrls: f.photoUrls.filter((_, i) => i !== idx) }))}
                 onUploadingChange={setUploading}
-                label="첨부 사진·영상"
+                label="첨부 사진·영상·파일"
               />
             </div>
           )}
@@ -394,7 +396,12 @@ export function TodoDetailScreen({
             </Section>
           ) : (
             <Section label={`파일 첨부${attachUrls.length ? ` (${attachUrls.length})` : ""}`}>
-              {attachUrls.length ? <PhotoGrid urls={attachUrls} cols={3} /> : <p className="text-xs text-slate-400">첨부된 파일이 없습니다</p>}
+              {attachUrls.length ? (
+                <div className="space-y-2">
+                  {splitAttachments(attachUrls).media.length > 0 && <PhotoGrid urls={splitAttachments(attachUrls).media} cols={3} />}
+                  <FileChips urls={splitAttachments(attachUrls).files} />
+                </div>
+              ) : <p className="text-xs text-slate-400">첨부된 파일이 없습니다</p>}
             </Section>
           )}
 
