@@ -4,6 +4,18 @@ import { sendQuoteEmail } from "@/lib/email";
 import { sendQuoteAlimtalk } from "@/lib/alimtalk";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { verifyAuthToken } from "@/lib/verifyToken";
+import crypto from "crypto";
+
+// 견적별 승인 링크 토큰 — 이미 있으면 그대로 써서 재발송해도 앞서 보낸 링크가 계속 유효하다(마이그레이션 153).
+async function ensureApproveToken(quoteId) {
+  const { data, error } = await supabaseAdmin.from("quote_requests").select("approve_token").eq("id", quoteId).single();
+  if (error) { console.error("approve_token 조회 실패(마이그레이션 153 필요?):", error.message); return null; }
+  if (data?.approve_token) return data.approve_token;
+  const token = crypto.randomBytes(16).toString("hex");
+  const { error: upErr } = await supabaseAdmin.from("quote_requests").update({ approve_token: token }).eq("id", quoteId).is("approve_token", null);
+  if (upErr) { console.error("approve_token 저장 실패:", upErr.message); return null; }
+  return token;
+}
 
 export async function POST(request) {
   const auth = verifyAuthToken(request);
@@ -15,7 +27,7 @@ export async function POST(request) {
   }
 
   const {
-    quoteRequestId, channels, recipientName, recipientEmail, recipientPhone,
+    quoteRequestId, channels, recipientEmail, recipientPhone,
     senderCcEmail, referenceEmail, referencePhone, quote,
     supplierName, supplierPhone, noticeMessage, attachmentUrls,
   } = body;
@@ -30,10 +42,9 @@ export async function POST(request) {
     reference_phone: referencePhone || null,
     notice_message: noticeMessage || null,
     attachment_urls: attachmentUrls && attachmentUrls.length ? attachmentUrls : [],
-    // recipientName은 선택 필드 — 보낸 쪽(지금은 폰 앱)이 담당자 이름을 같이 넘기면 그 이름도
-    // "최근 발송 담당자"로 저장한다. 안 보내는 호출(데스크탑 QuoteSendModal 등)은 기존처럼
-    // recipient_name을 건드리지 않는다(빈 문자열로 지우지 않도록 undefined면 patch에서 뺀다).
-    ...(recipientName !== undefined ? { recipient_name: recipientName || null } : {}),
+    // recipient_name은 여기서 저장하지 않는다 — 견적서 PDF "수신자" 칸에 찍히는 문구(예: "OO 대표 귀중")라서,
+    // 폰앱 발송 확인창에서 고른 담당자 이름(예: "사장")이 들어가면 다음에 견적서를 수정·재생성할 때
+    // 수신자가 이름만으로 바뀐다. 발송 때 쓰는 연락처는 recipient_email/recipient_phone으로 충분하다.
   };
 
   if (channels?.email) {
@@ -49,8 +60,9 @@ export async function POST(request) {
   }
 
   if (channels?.kakao) {
+    const approveToken = await ensureApproveToken(quoteRequestId);
     try {
-      const sent = await sendQuoteAlimtalk({ to: recipientPhone, quote, pdfUrl: quote?.pdfUrl, noticeMessage });
+      const sent = await sendQuoteAlimtalk({ to: recipientPhone, quote, pdfUrl: quote?.pdfUrl, noticeMessage, quoteId: quoteRequestId, approveToken });
       results.kakao = { ok: true };
       patch.kakao_sent_at = now;
       // messageId를 남겨야 웹훅이 "이 발송의 결과"를 찾아 상태(수신완료/실패)를 채울 수 있다.
@@ -65,7 +77,7 @@ export async function POST(request) {
     // 이력만 추적한다.
     if (referencePhone) {
       try {
-        await sendQuoteAlimtalk({ to: referencePhone, quote, pdfUrl: quote?.pdfUrl, noticeMessage });
+        await sendQuoteAlimtalk({ to: referencePhone, quote, pdfUrl: quote?.pdfUrl, noticeMessage, quoteId: quoteRequestId, approveToken });
       } catch (err) {
         console.error(`참조인 카카오 발송 실패 (quoteRequestId=${quoteRequestId}):`, err.message);
       }

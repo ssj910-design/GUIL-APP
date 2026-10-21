@@ -7,6 +7,7 @@ import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken, onSessionExpired } from "@/lib/supabaseClient";
 import { authFetch } from "@/lib/apiFetch";
 import { mapSite, mergeAssignedEngineers, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode, mapUnitPartPhoto, mapInventoryProduct, mapInventoryStockMovement } from "@/lib/mappers";
+import { billingPatchOf, billingLocalOf, canHaveMultipleAssignees, saveSingleTodo, saveGroupCommon, changeTodoAssignees, applyAssigneeChange, deleteTodoRows } from "@/lib/todoEdit";
 import { addDays, profileIdByName, unitIdFor, inferQuoteUnitId, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent, quoteGrandTotal, quotePartsSummary, quoteUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { recordQuoteSupplyStockOut } from "@/lib/inventoryStock";
@@ -178,6 +179,12 @@ export default function App() {
   const faultModelReady = failures.some((f) => f.faultModel !== undefined);
   // failures.cancelled_at 등 컬럼 존재 여부 — 마이그레이션 140 전엔 컬럼이 없어 취소 버튼 자체를 숨긴다.
   const cancelReady = failures.some((f) => f.cancelledAt !== undefined);
+  // failures.responses 컬럼 존재 여부 — 마이그레이션 149 전엔 컬럼이 없다. 있을 때만 처리입력을
+  // 누적 이력(jsonb 배열)에 쌓는다 — 지원요청으로 넘어간 뒤 지원자가 또 처리입력을 하면 기존
+  // 증상·원인·처리내용·사진이 통째로 덮어써지던 버그를 고치는 핵심 컬럼(한 티켓 = 여러 응답 누적).
+  // 기존 fault_symptom 등 단일 스냅샷 컬럼은 그대로 유지 — 목록·통계·알림 등 기존 코드가 계속
+  // "최신 처리결과"를 그 컬럼에서 읽으므로 건드리지 않는다.
+  const responsesReady = failures.some((f) => f.responses !== undefined);
   // billings.signature_url 등 컬럼 존재 여부 — 마이그레이션 119 실행 전엔 컬럼이 없어, 있을 때만
   // 서명/전화승인 정보를 같이 쓴다(미실행 시에도 청구 저장 자체는 깨지지 않게).
   // billings.part_photos 컬럼 존재 여부 — 마이그레이션 120 실행 전엔 컬럼이 없어, 있을 때만
@@ -192,6 +199,8 @@ export default function App() {
   const quoteElevatorNosReady = quoteRequests.some((q) => q.elevatorNos !== undefined);
   const todoElevatorNosReady = todos.some((t) => t.elevatorNos !== undefined);
   const billingElevatorNosReady = billings.some((b) => b.elevatorNos !== undefined);
+  // billings.todo_id 컬럼 존재 여부 — 마이그레이션 151 실행 전엔 컬럼이 없다.
+  const billingTodoIdReady = billings.some((b) => b.todoId !== undefined);
   // todos.billing_part_rows 컬럼 존재 여부 — 마이그레이션 112 실행 전엔 컬럼이 없어, 있을 때만
   // 관리자가 지급 확정한 부품별 구조화 행(이름·수량·금액)을 같이 쓴다.
   const billingPartRowsReady = todos.some((t) => t.billingPartRows !== undefined);
@@ -1338,6 +1347,24 @@ ${error.message ?? ""}`); return false; }
           ...(inProgressAtReady ? { in_progress_at: null, result_nag_at: null } : {}),
         }
       : { status: failure.status };
+    // 지원요청으로 티켓이 넘어간 뒤 지원자가 다시 처리입력을 하면, 아래 fault_symptom 등 단일
+    // 스냅샷 컬럼은 이번 제출 값으로 덮어써진다 — 그래서 누가 제출하든 그 내용이 통째로
+    // responses(누적 이력)에도 같이 남게 한다. 수정(isEdit)은 새 방문이 아니라 직전 응답을
+    // 고친 것뿐이라 추가하지 않고 마지막 항목을 교체한다.
+    const responseEntry = {
+      id: `${Date.now()}`,
+      submittedAt: new Date().toISOString(),
+      engineer: failure.assignee,
+      engineerId: failure.assigneeId ?? profileIdByName(profilesAll, failure.assignee) ?? null,
+      result, symptom: symptom || null, errorCode: errorCode || null, cause: cause || null,
+      processContent: processContent || null, note: note || null,
+      photoUrls: photoUrls?.length ? photoUrls : [],
+      model: model || null,
+    };
+    const prevResponses = failure.responses ?? [];
+    const nextResponses = isEdit && prevResponses.length
+      ? [...prevResponses.slice(0, -1), responseEntry]
+      : [...prevResponses, responseEntry];
     // 처리결과는 유실되면 재작성이 어렵다 — 저장 실패는 물론, 그 사이 재배정/거부로 담당자·상태가
     // 바뀐 경우(동시성 충돌)에도 낙관적 반영을 막는다. 배정 갱신과 동일한 조건부 update 패턴.
     // 수정(isEdit)일 땐 원래 조건(진행중+같은 담당자)이 이미 안 맞으므로 완료 상태 기준으로 건다.
@@ -1355,6 +1382,7 @@ ${error.message ?? ""}`); return false; }
         photo_count: photoCount || 0,
         photo_urls: photoUrls?.length ? photoUrls : null,
         ...(faultModelReady ? { fault_model: model || null } : {}),
+        ...(responsesReady ? { responses: nextResponses } : {}),
       })
       .eq("id", failure.id);
     resultQuery = isEdit ? resultQuery.eq("status", "완료") : resultQuery.eq("status", "진행중").eq("assignee", failure.assignee);
@@ -1384,6 +1412,7 @@ ${error.message ?? ""}`); return false; }
               photoCount: photoCount || 0,
               photoUrls: photoUrls ?? [],
               ...(faultModelReady ? { faultModel: model || null } : {}),
+              ...(responsesReady ? { responses: nextResponses } : {}),
             }
           : x
       )
@@ -1412,15 +1441,38 @@ ${error.message ?? ""}`); return false; }
     }
   }
 
-  async function handleSubmitBilling({ type, siteName, elevatorNo, elevatorNos, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId, quoteRequestId, signatureUrl, approvalMethod, approverName, approverPhone, approvedAt, partPhotos, isOutsourced, vendorName, isFree, freeReason, quoteRef }) {
-    // 같은 자재신청 건에 이미 청구기록이 있으면 막는다 — 할 일 완료 처리가 실패해 재시도하는
-    // 과정에서 청구 자체는 또 저장돼버리는(중복청구) 경로를 막기 위함.
-    if (materialRequestId) {
-      const { data: already } = await supabase.from("billings").select("id").eq("material_request_id", materialRequestId).limit(1);
-      if (already?.length) {
-        alert("이 신청은 이미 비용청구가 접수됐어요. 화면을 새로고침해주세요.");
-        return false;
-      }
+  // ★ 청구 취소 — 잘못 낸 청구를 취소한다. 원본은 billing_cancel_log에 남고, 청구가 삭제되며 연결 할일이
+  // 다시 열린다(다시 청구해야만 사라진다). 한 번에 처리하는 DB 함수(cancel_billing, 마이그레이션 151)가
+  // 권한·조건(기사: 청구서 발송·입금·폐자재 확인 전까지)까지 검사한다. 실패 사유는 그 메시지 그대로 보여준다.
+  async function handleCancelBilling(billing, reason) {
+    const { data, error } = await supabase.rpc("cancel_billing", { p_billing_id: billing.id, p_reason: reason });
+    if (error) { alert(error.message || "청구 취소에 실패했습니다"); return { ok: false }; }
+    const reopened = data?.reopenedTodoIds ?? [];
+    setBillings((prev) => prev.filter((b) => b.id !== billing.id));
+    setTodos((prev) => prev
+      .filter((t) => !(data?.wasteTodoDeleted && t.id === `todo-wastereturn-${billing.id}`))
+      .map((t) => (reopened.includes(t.id) ? { ...t, done: false } : t)));
+    sendPush("billing_cancelled", adminIds(), {
+      title: "청구가 취소됐어요",
+      body: `${billing.siteName ?? ""} · ${billing.part ?? ""} — ${profile.name} (${reason})`,
+      url: "/",
+    });
+    return { ok: true, reopenedCount: reopened.length };
+  }
+
+  async function handleSubmitBilling({ type, siteName, elevatorNo, elevatorNos, part, cost, replaceDate, contactPhone, beforePhotoUrls, afterPhotoUrls, confirmPhotoUrl, siteId, unitId, materialRequestId, quoteRequestId, todoId, signatureUrl, approvalMethod, approverName, approverPhone, approvedAt, partPhotos, isOutsourced, vendorName, isFree, freeReason, quoteRef }) {
+    // 같은 자재신청·견적요청·할일(묶음)에 이미 청구기록이 있으면 막는다 — 할 일 완료 처리가 실패해 재시도하거나
+    // 관리자가 완료를 취소(재오픈)한 뒤 다시 청구하는 중복청구 경로를 막기 위함(DB도 유니크 인덱스로 막는다,
+    // 마이그레이션 151). 잘못 낸 청구는 청구내역에서 "청구 취소"를 한 뒤 다시 청구해야 한다.
+    const dupMsg = "이미 비용청구가 접수된 건이에요. 잘못 청구했다면 청구내역에서 취소한 뒤 다시 청구해주세요. (화면을 새로고침해주세요)";
+    for (const [col, val, ready] of [
+      ["material_request_id", materialRequestId, true],
+      ["quote_request_id", quoteRequestId, billingQuoteRequestIdReady],
+      ["todo_id", todoId, billingTodoIdReady],
+    ]) {
+      if (!val || !ready) continue;
+      const { data: already } = await supabase.from("billings").select("id").eq(col, val).limit(1);
+      if (already?.length) { alert(dupMsg); return false; }
     }
     // v2: 호기 확정 — 직접 전달받거나(자재건), siteId 또는 유일한 현장명으로 찾는다
     const billSite = siteId
@@ -1451,6 +1503,7 @@ ${error.message ?? ""}`); return false; }
       approverPhone: approverPhone || null,
       approvedAt: approvedAt || null,
       partPhotos: partPhotos?.length ? partPhotos : null,
+      todoId: todoId ?? null,
       isOutsourced: !!isOutsourced,
       vendorName: isOutsourced ? (vendorName || null) : null,
       // FM 계약 등 부품 무상 — 0원 청구 사유. 관리자웹의 기존 "무상 처리"(is_free)와 같은
@@ -1489,6 +1542,7 @@ ${error.message ?? ""}`); return false; }
       ...(newBilling.notes ? { notes: newBilling.notes } : {}),
       ...(billingQuoteRequestIdReady ? { quote_request_id: quoteRequestId ?? null } : {}),
       ...(billingElevatorNosReady ? { elevator_nos: newBilling.elevatorNos } : {}),
+      ...(billingTodoIdReady && todoId ? { todo_id: todoId } : {}),
       ...(v2Ready ? {
         unit_id: billUnitId,
         engineer_id: profileIdByName(profilesAll, profile.name),
@@ -1497,7 +1551,8 @@ ${error.message ?? ""}`); return false; }
     });
     // ★ 실패 시 유령 청구(낙관적 표시 후 새로고침에 사라짐)를 막고 호출부에 성공여부를 알린다 (P1-1/P1-2)
     if (error) {
-      alert("비용청구 저장에 실패했습니다. 네트워크 상태를 확인하고 다시 시도해주세요.");
+      // 동시 제출·오래 열린 탭 — DB 유니크 인덱스(마이그레이션 151)가 막은 중복 청구
+      alert(error.code === "23505" ? dupMsg : "비용청구 저장에 실패했습니다. 네트워크 상태를 확인하고 다시 시도해주세요.");
       return false;
     }
     // 이 청구가 견적건이고, 그 견적의 부품마스터 연동 항목 중 폐자재 회수 필요이거나
@@ -2282,9 +2337,12 @@ ${error.message ?? ""}`); return false; }
   }
 
   // ★ 관리자가 직원(1명 이상)에게 할 일을 직접 부여 — 담당자마다 할 일을 하나씩 만듭니다
-  async function handleAssignTodo({ assignees, siteName, title, description, dueDate, photoCount, photoUrls }) {
+  async function handleAssignTodo({ assignees, siteName, title, description, dueDate, photoCount, photoUrls, billingRequired, unitIds, billingRows }) {
+    const batchId = Date.now(); // 담당자마다 부르면 ms가 달라져 같은 배정이 한 건으로 안 묶인다
+    // "비용청구 후 완료" — 켜면 billing_* 컬럼과 고른 호기(여러 개면 elevator_nos)가 채워진다(마이그레이션 151 이후).
+    const billingPatch = billingRequired ? billingPatchOf({ billingRequired, unitIds, billingRows }, units) : {};
     const newTodos = assignees.map((assignee, idx) => ({
-      id: "todo-manual-" + Date.now() + "-" + idx,
+      id: `todo-manual-${batchId}-${idx}`,
       materialRequestId: null,
       source: "manual",
       title,
@@ -2314,10 +2372,11 @@ ${error.message ?? ""}`); return false; }
         requested_by_id: profile.id ?? null,
         requested_by_name: profile.name,
         ...(v2Ready ? { assignee_id: profileIdByName(profilesAll, t.assignee) } : {}),
+        ...billingPatch,
       }))
     ), "할 일 부여 실패");
     if (!assigned) return; // 부여했다고 보이는데 실제로는 없는 상황 방지 (P1-7)
-    setTodos((prev) => [...newTodos.map((t) => ({ ...t, requestedById: profile.id ?? null, requestedByName: profile.name })), ...prev]);
+    setTodos((prev) => [...newTodos.map((t) => ({ ...t, requestedById: profile.id ?? null, requestedByName: profile.name, ...billingLocalOf(billingPatch) })), ...prev]);
     // 각자 다른 할일 id를 받으므로(assignees 수만큼 별도 행), 딥링크 url이 정확하도록 한 명씩 보낸다.
     for (const t of newTodos) {
       const assigneeId = profileIdByName(profilesAll, t.assignee);
@@ -2338,20 +2397,55 @@ ${error.message ?? ""}`); return false; }
     setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, done: !t.done } : t)));
   }
 
-  // ★ 관리자 권한: 할 일을 완전히 삭제한다. 확인 대화상자는 호출 쪽(TodoTab)에서 이미 거쳤다.
-  async function handleDeleteTodo(todoId) {
-    if (!(await writeOk(supabase.from("todos").delete().eq("id", todoId), "삭제 실패"))) return;
-    setTodos((prev) => prev.filter((t) => t.id !== todoId));
+  // ★ 관리자 권한: 할 일을 완전히 삭제한다 — 담당자 여러 명이 한 건으로 묶인 할일은 전원 행을 함께 지운다
+  // (관리자웹과 동일). 확인 대화상자는 호출 쪽(TodoDetailScreen)에서 이미 거쳤다.
+  async function handleDeleteTodoGroup(group) {
+    const ids = group.map((t) => t.id);
+    const res = await deleteTodoRows(supabase, ids);
+    if (res.error) { alert(res.error); return; }
+    setTodos((prev) => prev.filter((t) => !ids.includes(t.id)));
+  }
+
+  // ★ 관리자 권한: 할 일 상세 "수정" 저장 — 관리자웹 할일 상세와 같은 규칙(lib/todoEdit.js 공용).
+  // 단건은 그 행, 담당자 여러 명 건은 공통 필드를 전원에게 적용하고 담당자 구성은 따로 바꾼다.
+  // 실패는 { error }로 돌려줘 화면(수정 모드)이 알리고 편집 상태를 유지한다.
+  async function handleSaveTodoEdit(group, form) {
+    const ctx = { profiles: profilesAll, units, sites };
+    const base = group[0];
+    const isGroup = group.length > 1;
+    const multi = canHaveMultipleAssignees(base);
+    const res = isGroup
+      ? await saveGroupCommon(supabase, { group, form, ...ctx })
+      // 여러 명 가능한 건은 담당자 구성을 아래 changeTodoAssignees가 따로 처리한다(여기선 담당자 유지).
+      : await saveSingleTodo(supabase, { todo: base, form: multi ? { ...form, assigneeIds: [base.assigneeId ?? ""].filter(Boolean) } : form, ...ctx });
+    if (res.error) return { error: res.error };
+    setTodos((prev) => prev.map((x) => (res.ids.includes(x.id) ? { ...x, ...res.local } : x)));
+
+    const where = `${form.title.trim()}`;
+    if (multi) {
+      const ch = await changeTodoAssignees(supabase, { group, assigneeIds: form.assigneeIds, profiles: profilesAll });
+      if (ch.error) return { error: ch.error };
+      if (ch.changed) {
+        setTodos((prev) => applyAssigneeChange(prev, ch, profilesAll));
+        for (const n of ch.newlyAssigned) {
+          sendPush("todo_assigned", [n.assigneeId], { title: "할 일이 배정되었습니다", body: where, url: `/?openTodo=${n.id}` });
+        }
+      }
+    } else if (!isGroup && res.local.assigneeId && res.local.assigneeId !== (base.assigneeId ?? null)) {
+      sendPush("todo_assigned", [res.local.assigneeId], { title: "할 일이 배정되었습니다", body: where, url: `/?openTodo=${base.id}` });
+    }
+    return {};
   }
 
   // ★ 할 일 담당자 재지정 — 신청자와 실제 교체 기사가 지급 시점엔 다르게 정해졌거나
   // 나중에 배차가 바뀐 경우의 안전망입니다. 관리자 화면과 기사 본인 화면 양쪽에서 호출됩니다.
   async function handleReassignTodo(todoId, newAssignee) {
-    // 재배정하면 걸려 있던 재배정 요청도 함께 해제한다.
-    if (!(await writeOk(supabase.from("todos").update({ assignee: newAssignee, reassign_requested: false, reassign_reason: null, reassign_to: null }).eq("id", todoId), "재배정 실패"))) return;
-    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, assignee: newAssignee, reassignRequested: false, reassignReason: null, reassignTo: null } : t)));
-    const t = todos.find((x) => x.id === todoId);
     const newAssigneeId = profileIdByName(profilesAll, newAssignee);
+    // 재배정하면 걸려 있던 재배정 요청도 함께 해제한다. 이름과 assignee_id를 같이 바꿔야 한다 —
+    // 관리자 콘솔은 assignee_id 기준으로 담당자를 표시해서, 이름만 바꾸면 옛 담당자로 보인다.
+    if (!(await writeOk(supabase.from("todos").update({ assignee: newAssignee, ...(v2Ready ? { assignee_id: newAssigneeId } : {}), reassign_requested: false, reassign_reason: null, reassign_to: null }).eq("id", todoId), "재배정 실패"))) return;
+    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, assignee: newAssignee, assigneeId: newAssigneeId, reassignRequested: false, reassignReason: null, reassignTo: null } : t)));
+    const t = todos.find((x) => x.id === todoId);
     if (newAssigneeId) sendPush("todo_assigned", [newAssigneeId], {
       title: "할 일이 배정되었습니다",
       body: `${t?.siteName ? `${t.siteName} · ` : ""}${t?.title ?? ""}`,
@@ -2392,18 +2486,6 @@ ${error.message ?? ""}`); return false; }
     if (error) { alert("처리 실패: " + error.message); return; }
     if (data) { alert(data); return; } // 인증 실패 사유
     alert("비밀번호가 1234로 초기화됐습니다. 다음 로그인 때 새 비밀번호를 정하게 됩니다.");
-  }
-
-  // ★ 관리자가 할 일에 설명(내용)을 추가/수정합니다.
-  async function handleUpdateTodoDescription(todoId, description) {
-    await supabase.from("todos").update({ description }).eq("id", todoId);
-    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, description } : t)));
-  }
-
-  // ★ 관리자가 마감일을 직접 수정합니다 (사유 기록 없이 바로 반영).
-  async function handleUpdateTodoDueDate(todoId, dueDate) {
-    await supabase.from("todos").update({ due_date: dueDate }).eq("id", todoId);
-    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, dueDate } : t)));
   }
 
   // ★ 기사의 마감일 연장 — 승인 절차 없이 바로 반영하되, 언제·왜 늦춰졌는지 나중에 볼 수 있도록
@@ -2836,20 +2918,18 @@ ${error.message ?? ""}`); return false; }
           {tab === "inspection" && <InspectionTab inspections={inspections} />}
           {tab === "material" && <MaterialTab requests={materialRequests} onAddMaterialRequest={handleAddMaterialRequest} onCancelMaterialRequest={handleCancelMaterialRequest} todos={todos} onReject={handleReject} quoteRequests={quoteRequests} onAddQuoteRequest={handleAddQuoteRequest} onCancelQuoteRequest={handleCancelQuoteRequest} restockRequests={restockRequests} kitStock={kitStock} onReceiveRestock={handleReceiveRestock} focusRestockHistory={focusRestockHistory} onRestockHistoryHandled={() => setFocusRestockHistory(false)} />}
           {tab === "inventory" && <InventoryTab products={inventoryProducts} movements={inventoryStockMovements} onCreateProduct={handleCreateInventoryProduct} onSaveProduct={handleSaveInventoryProduct} onDeleteProduct={handleDeleteInventoryProduct} onAddMovement={handleAddInventoryMovement} />}
-          {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} quoteRequests={quoteRequests} billings={billings} />}
+          {tab === "billing" && <BillingTab todos={todos} setTodos={setTodos} onSubmitBilling={handleSubmitBilling} onUseKitPart={handleUseKitPart} onCancelBilling={handleCancelBilling} quoteRequests={quoteRequests} billings={billings} />}
           {tab === "todo" && (
             <TodoTab
               todos={todos}
               setTodos={setTodos}
-              onReassignTodo={handleReassignTodo}
-              onUpdateTodoDescription={handleUpdateTodoDescription}
-              onUpdateTodoDueDate={handleUpdateTodoDueDate}
               onExtendTodoDueDate={handleExtendTodoDueDate}
               onRequestReassignTodo={handleRequestReassignTodo}
               onClearReassignRequest={handleClearReassignRequest}
               onAssignTodo={handleAssignTodo}
               onAdminToggle={handleAdminToggleTodo}
-              onDeleteTodo={handleDeleteTodo}
+              onSaveTodoEdit={handleSaveTodoEdit}
+              onDeleteTodoGroup={handleDeleteTodoGroup}
               materialRequests={materialRequests}
               quoteRequests={quoteRequests}
               focusTodoId={openTodoId}
@@ -2880,7 +2960,7 @@ ${error.message ?? ""}`); return false; }
             />
           )}
           {tab === "lawqa" && <LawQaPanel />}
-          {tab === "admin" && profile.role === "admin" && <AdminTab materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAdvanceQuote={handleAdvanceQuote} onRejectQuote={handleRejectQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onClearReassignRequest={handleClearReassignRequest} onAssignTodo={handleAssignTodo} onResetEngineerPassword={handleResetEngineerPassword} materialFocusId={materialFocusId} onMaterialFocusHandled={() => setMaterialFocusId(null)} quoteFocusId={quoteFocusId} onQuoteFocusHandled={() => setQuoteFocusId(null)} onQuoteDraftCreated={handleQuoteDraftCreated} onQuoteDiscarded={handleQuoteDiscarded} onQuoteWizardSaved={handleQuoteWizardSaved} onSendQuote={handleSendQuote} inventoryProducts={inventoryProducts} inventoryStockMovements={inventoryStockMovements} />}
+          {tab === "admin" && profile.role === "admin" && <AdminTab materialRequests={materialRequests} billings={billings} quoteRequests={quoteRequests} restockRequests={restockRequests} todos={todos} onSupplyComplete={handleSupplyComplete} onSupplyEdit={handleSupplyEdit} onReprocess={handleReprocess} onAttachPhoto={handleAttachPhoto} onRemoveSupplyPhoto={handleRemoveSupplyPhoto} onAdvanceQuote={handleAdvanceQuote} onRejectQuote={handleRejectQuote} onAttachQuotePhoto={handleAttachQuotePhoto} onRemoveQuoteSupplyPhoto={handleRemoveQuoteSupplyPhoto} onCompleteQuoteSupply={handleCompleteQuoteSupply} onQuoteSupplyEdit={handleQuoteSupplyEdit} onAttachRestockPhoto={handleAttachRestockPhoto} onRemoveRestockSupplyPhoto={handleRemoveRestockSupplyPhoto} onCompleteRestock={handleCompleteRestock} onReassignTodo={handleReassignTodo} onClearReassignRequest={handleClearReassignRequest} onAssignTodo={handleAssignTodo} onResetEngineerPassword={handleResetEngineerPassword} materialFocusId={materialFocusId} onMaterialFocusHandled={() => setMaterialFocusId(null)} quoteFocusId={quoteFocusId} onQuoteFocusHandled={() => setQuoteFocusId(null)} onQuoteDraftCreated={handleQuoteDraftCreated} onQuoteDiscarded={handleQuoteDiscarded} onQuoteWizardSaved={handleQuoteWizardSaved} onSendQuote={handleSendQuote} onCancelBilling={handleCancelBilling} inventoryProducts={inventoryProducts} inventoryStockMovements={inventoryStockMovements} />}
           </PullToRefresh>
 
           {/* 게시판 플로팅 버튼 — 어느 탭에서든 즉시 게시판으로 이동

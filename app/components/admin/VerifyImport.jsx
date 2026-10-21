@@ -17,6 +17,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { Modal } from "@/app/components/admin/adminShared";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { nameSimilarity } from "@/lib/siteMatch";
+import { authFetch } from "@/lib/apiFetch";
 
 // 실데이터(1,088개) 분석으로 확장: 0시작 정식번호 + 대표번호(15XX·16XX·18XX) + 지역번호 생략 유선(303-4040 등, 02 생략 관행)
 const PHONE_RE = /(?:0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4})|(?:1[5-9]\d{2}[-.\s]?\d{4})|(?:(?<![\d-])\d{3,4}-\d{4}(?![\d-]))/g;
@@ -847,7 +848,7 @@ export default function VerifyImport({ data, setData, onClose }) {
       // 내부 엑셀 주소는 시/도가 생략됨 — 구로 시작하면 서울, 시로 시작하면 그대로(티맵이 알아서 찾음)
       const addr = /^[가-힣]{1,4}구\s/.test(a) ? `서울특별시 ${a}` : a;
       try {
-        const j = await fetch(`/api/geocode?addr=${encodeURIComponent(addr)}`).then((x) => x.json());
+        const j = await authFetch(`/api/geocode?addr=${encodeURIComponent(addr)}`).then((x) => x.json());
         if (!j.ok) { fail++; firstFailReason ??= j.reason; continue; }
         let best = null;
         for (const s of sitesWithCoord) { const d = distM(j.lat, j.lng, s.lat, s.lng); if (!best || d < best.d) best = { s, d }; }

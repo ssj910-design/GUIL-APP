@@ -7,7 +7,10 @@ import crypto from "crypto";
 
 const REGIST_URL = "https://minwon.koelsa.or.kr/openapi/service/RegistInspectionService.do";
 
+import { authGuard } from "@/lib/verifyToken";
+
 export async function POST(request) {
+  const denied = authGuard(request); if (denied) return denied;
   const certKey = process.env.MINWON24_CERT_KEY;
   const cryptKey = process.env.MINWON24_CRYPT_KEY;
   if (!certKey || !cryptKey) {

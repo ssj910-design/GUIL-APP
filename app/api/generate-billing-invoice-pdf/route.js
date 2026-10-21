@@ -5,7 +5,10 @@
 import { buildBillingInvoicePdfBytes } from "@/lib/billingInvoicePdf";
 import { supabase } from "@/lib/supabaseClient";
 
+import { authGuard } from "@/lib/verifyToken";
+
 export async function POST(request) {
+  const denied = authGuard(request, { adminOnly: true }); if (denied) return denied;
   const invoice = await request.json().catch(() => null);
   if (!invoice) {
     return Response.json({ ok: false, reason: "요청 본문이 올바르지 않습니다" }, { status: 200 });

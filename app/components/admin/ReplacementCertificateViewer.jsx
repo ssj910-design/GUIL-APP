@@ -11,6 +11,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Download, Loader2 } from "lucide-react";
+import { certFingerprint } from "@/lib/certificateFingerprint";
+import { authFetch } from "@/lib/apiFetch";
 
 async function renderPdfToCanvases(blobUrl) {
   const pdfjsLib = await import("pdfjs-dist");
@@ -79,12 +81,13 @@ export default function ReplacementCertificateViewer({ cert, filenameBase, cache
     (async () => {
       try {
         // v2 이전에 만들어 둔 PDF는 캐시로 쓰지 않고 새로 그린다(생성 라우트 주석 참고).
-        if (cachedUrl?.includes("/v6/")) {
+        // 지문까지 맞아야 저장본을 쓴다 — 고친 사진·금액이 반영 안 된 옛 PDF를 그대로 보여주지 않게.
+        if (cachedUrl?.includes("/v6/") && cachedUrl.includes(`/${certFingerprint(cert)}-`)) {
           setPreviewUrl(namedPdfUrl(cachedUrl, filenameBase) ?? cachedUrl);
           setStatus("ready");
           return;
         }
-        const res = await fetch("/api/generate-replacement-certificate-pdf", {
+        const res = await authFetch("/api/generate-replacement-certificate-pdf", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(cert),

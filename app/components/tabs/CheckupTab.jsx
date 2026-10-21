@@ -14,6 +14,7 @@ import { MultiPhotoUpload } from "@/app/components/formWidgets";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import SELF_CHECK_ITEM_CODES from "@/lib/data/selfCheckItemCodes.json";
+import { authFetch } from "@/lib/apiFetch";
 
 /* ------------------------------------------------------------------ */
 /* CHECKUP (자체점검) — self_checks(자체점검 출석부) 실데이터 연동             */
@@ -449,7 +450,7 @@ export function CheckupTab({ selfChecks, setSelfChecks, siteManagers = [], profi
     };
 
     try {
-      const res = await fetch("/api/self-check-submit", {
+      const res = await authFetch("/api/self-check-submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(contents),

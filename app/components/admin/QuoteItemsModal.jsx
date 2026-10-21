@@ -16,8 +16,8 @@
 //
 // 오른쪽 미리보기 카드는 실제 PDF 서식을 재현하지 않는 간단한 요약이다 — 새 계산 없이
 // 이미 있는 값을 다시 보여줄 뿐이다.
-import { useState, useEffect } from "react";
-import { Plus, Trash2, ChevronUp, ChevronDown, Search } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Plus, Trash2, ChevronUp, ChevronDown, Search, History } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { quoteGrandTotal, quoteDisplayTotal } from "@/lib/utils";
@@ -25,6 +25,9 @@ import { currentStock } from "@/lib/inventoryStock";
 import { Modal, inputCls, PhotoGrid } from "@/app/components/admin/adminShared";
 import { COMPANY } from "@/lib/company";
 import { useQuoteRecipientFields, QuoteRecipientInfo, QuoteRecipientExtras } from "@/app/components/admin/QuoteRecipientFields";
+import { authFetch } from "@/lib/apiFetch";
+import { historyQuotes, buildItemIndex, suggestItems, priceRangeLabel, shortDateLabel, normName, applySuggestion } from "@/lib/quoteHistory";
+import PastQuotePicker from "@/app/components/PastQuotePicker";
 
 const CATEGORIES = ["자재비", "인건비"];
 const VAT_RATE = 0.1;
@@ -89,8 +92,73 @@ function InventoryPickerModal({ products, movements, onClose, onSelect }) {
   );
 }
 
-export default function QuoteItemsModal({ quote, site, siteManagers, profiles, inventoryProducts, inventoryStockMovements, onClose, onSaved }) {
+// 품명 입력칸 + 자동완성 — 과거 견적에서 쓴 이름(횟수·단가 범위 표시)과 재고 품목을 후보로 보여준다.
+// 과거 견적 후보를 고르면 이름·규격·단위와(자재비일 때, 단가가 비어 있으면) 최근 단가를 채우고,
+// 재고 후보는 기존 "재고 연동"과 똑같이 partId까지 연결한다. 인건비는 단가를 자동으로 안 채운다
+// (같은 이름이어도 공사 규모에 따라 매번 다르게 나오기 때문).
+function ItemNameInput({ item, index, itemIndex, inventoryProducts, onChange, onPick }) {
+  const [focused, setFocused] = useState(false);
+  const text = item.name ?? "";
+  const hist = useMemo(() => (focused ? suggestItems(itemIndex, text, item.category, 6) : []), [focused, itemIndex, text, item.category]);
+  const inv = useMemo(() => {
+    const q = normName(text);
+    if (!focused || !q || item.category !== "자재비") return [];
+    return (inventoryProducts ?? []).filter((p) => p.active !== false && normName(p.name).includes(q)).slice(0, 3);
+  }, [focused, text, item.category, inventoryProducts]);
+  const exact = hist.length === 1 && normName(hist[0].name) === normName(text) && hist[0].normSpec === normName(item.spec) && inv.length === 0;
+  const open = focused && !exact && (hist.length > 0 || inv.length > 0);
+  return (
+    <div className="relative">
+      <input
+        className={inputCls}
+        placeholder="품명"
+        value={text}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        autoComplete="off"
+      />
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-30 w-[24rem] max-w-[80vw] bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+          {hist.map((e) => (
+            <button
+              key={e.key}
+              type="button"
+              onMouseDown={(ev) => { ev.preventDefault(); onPick(index, { kind: "history", entry: e }); setFocused(false); }}
+              className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left hover:bg-blue-50 border-b border-slate-100 last:border-0"
+            >
+              <span className="min-w-0 truncate">
+                <span className="text-sm font-semibold text-slate-800">{e.name}</span>
+                {e.spec && <span className="ml-1.5 text-xs text-slate-500">{e.spec}</span>}
+              </span>
+              <span className="text-[11px] text-slate-500 shrink-0">{priceRangeLabel(e)}</span>
+            </button>
+          ))}
+          {inv.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onMouseDown={(ev) => { ev.preventDefault(); onPick(index, { kind: "inventory", product: p }); setFocused(false); }}
+              className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left hover:bg-emerald-50 border-b border-slate-100 last:border-0"
+            >
+              <span className="text-sm font-semibold text-slate-800 truncate">
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 rounded px-1 py-0.5 mr-1.5 align-middle">재고</span>{p.name}
+                {p.spec && <span className="ml-1.5 text-xs font-normal text-slate-500">{p.spec}</span>}
+              </span>
+              {p.salePrice != null && <span className="text-[11px] text-slate-500 shrink-0">{Number(p.salePrice).toLocaleString()}원</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function QuoteItemsModal({ quote, site, siteManagers, profiles, inventoryProducts, inventoryStockMovements, quoteHistory, onClose, onSaved }) {
   const [inventoryPickerOpen, setInventoryPickerOpen] = useState(false); // 재고 연동 모달 — 고르면 자재비 품목을 새로 하나 추가
+  const [pastPickerOpen, setPastPickerOpen] = useState(false); // 이전 견적 불러오기
+  const pastQuotes = useMemo(() => historyQuotes(quoteHistory, quote.id), [quoteHistory, quote.id]);
+  const itemIndex = useMemo(() => buildItemIndex(pastQuotes), [pastQuotes]);
   const [items, setItems] = useState(() => {
     if (quote.quoteItems?.length) return quote.quoteItems.map((it) => ({ ...emptyItem(it.category), ...it }));
     // 처음 여는 경우 기사 원본(부품명+수량)을 자재비 1행에 프리필
@@ -146,8 +214,34 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
   function addItem(category) {
     setItems((prev) => [...prev, emptyItem(category)]);
   }
+  // 청구 묶음 — 체크한 자재 줄들을 같은 묶음명으로 묶는다. 견적서에는 줄이 그대로 나가고,
+  // 기사 증빙사진·청구서·교체확인서에서만 한 줄로 합쳐진다(lib/utils.js quoteBillingLines).
+  const [groupName, setGroupName] = useState("");
+  const selCount = items.filter((it) => it._sel).length;
+  function toggleSel(idx) {
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, _sel: !it._sel } : it)));
+  }
+  function applyGroup(name) {
+    setItems((prev) => prev.map((it) => (it._sel ? { ...it, billingGroup: name || undefined, _sel: false } : it)));
+    setGroupName("");
+  }
+  // 수량·단가를 고치면 "이전 견적에서 불러옴" 표시(_src)를 뗀다 — 이제 그대로 가져온 값이 아니다.
   function updateItem(idx, patch) {
-    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+    const edited = "qty" in patch || "unitPrice" in patch;
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch, ...(edited ? { _src: null } : {}) } : it)));
+  }
+  // 품명 자동완성에서 후보를 골랐을 때 — 과거 견적 후보는 이름·규격·단위(+단가가 비었을 때 자재비 최근 단가),
+  // 재고 후보는 기존 "재고 연동"과 같은 필드로 채운다.
+  function pickSuggestion(idx, s) {
+    setItems((prev) => prev.map((it, i) => (i === idx ? applySuggestion(it, s) : it)));
+  }
+  // 이전 견적에서 고른 항목은 현재 품목 목록 아래에 추가한다(덮어쓰지 않음). 운반비·안전관리비는
+  // 지금 값이 비어 있을 때만 채워서 이미 입력해 둔 값을 건드리지 않는다.
+  function applyPastQuote({ items: picked, transportCost: t, safetyCost: sc }) {
+    setItems((prev) => [...prev, ...picked.map((it) => ({ ...emptyItem(it.category ?? "자재비"), ...it }))]);
+    if (t != null && !Number(transportCost)) setTransportCost(t);
+    if (sc != null && !Number(safetyCost)) setSafetyCost(sc);
+    setPastPickerOpen(false);
   }
   function removeItem(idx) {
     setItems((prev) => prev.filter((_, i) => i !== idx));
@@ -217,11 +311,13 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
   // 그대로 남게 한다).
   async function handleSave() {
     if (items.length === 0) return;
+    // _src는 화면 표시용 임시 표시라 저장·PDF에는 넣지 않는다.
+    const cleanItems = items.map(({ _src, _sel, ...rest }) => rest);
     setSaving(true);
     setError("");
 
     const patch = {
-      quote_items: items,
+      quote_items: cleanItems,
       transport_cost: Number(transportCost) || 0,
       safety_cost: Number(safetyCost) || 0,
       profit: Number(profit) || 0,
@@ -246,14 +342,14 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
       attachment_urls: rf.attachments,
     };
 
-    const pdfRes = await fetch("/api/generate-quote-pdf", {
+    const pdfRes = await authFetch("/api/generate-quote-pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         quoteRequestId: quote.id,
         siteName: site?.name ?? quote.siteName,
         quoteNumber, recipientName, quoteTitle, quoteDate,
-        items, transportCost, safetyCost, profit, discountAmount, vatIncluded,
+        items: cleanItems, transportCost, safetyCost, profit, discountAmount, vatIncluded,
       }),
     }).then((r) => r.json()).catch((e) => ({ ok: false, reason: e.message }));
 
@@ -278,7 +374,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
     }
 
     onSaved({
-      quoteItems: items, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
+      quoteItems: cleanItems, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
       profit: Number(profit) || 0, discountAmount: Number(discountAmount) || 0, vatIncluded, quoteNumber, recipientName, quoteTitle,
       quoteIssuedDate: quoteDate, quotePdfUrl: pdfRes.url, status: nextStatus,
       recipientEmail: rf.email || null, recipientPhone: rf.phone || null,
@@ -336,6 +432,11 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
                 <p className="text-xs font-bold text-slate-600">{category === "자재비" ? "1.자재비" : "2.인건비"}</p>
                 <div className="flex items-center gap-1.5">
                   {category === "자재비" && (
+                    <button onClick={() => setPastPickerOpen(true)} className="flex items-center gap-1 text-xs font-bold text-amber-700 border border-amber-200 rounded-lg px-2.5 py-1">
+                      <History size={12} /> 이전 견적 불러오기
+                    </button>
+                  )}
+                  {category === "자재비" && (
                     <button onClick={() => setInventoryPickerOpen(true)} className="flex items-center gap-1 text-xs font-bold text-emerald-700 border border-emerald-200 rounded-lg px-2.5 py-1">
                       <Search size={12} /> 재고 연동
                     </button>
@@ -345,6 +446,15 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
                   </button>
                 </div>
               </div>
+              {category === "자재비" && selCount > 0 && (
+                <div className="flex flex-wrap items-center gap-2 mb-2 p-2 rounded-lg bg-indigo-50 border border-indigo-200 text-xs">
+                  <b className="text-indigo-700">{selCount}개 선택</b>
+                  <input className="border border-indigo-200 rounded px-2 py-1 w-40" placeholder="묶음명 (예: 인버터 수리)" value={groupName} onChange={(e) => setGroupName(e.target.value)} />
+                  <button type="button" disabled={!groupName.trim()} onClick={() => applyGroup(groupName.trim())} className="px-2.5 py-1 rounded bg-indigo-600 text-white font-bold disabled:opacity-40">묶기</button>
+                  <button type="button" onClick={() => applyGroup("")} className="px-2.5 py-1 rounded border border-indigo-300 text-indigo-700 font-bold">묶음 해제</button>
+                  <span className="text-slate-400">청구서·증빙사진에서만 한 줄로 합쳐집니다. 견적서는 그대로입니다.</span>
+                </div>
+              )}
               <div className="space-y-2">
                 {items.map((it, idx) => {
                   if (it.category !== category) return null;
@@ -363,7 +473,7 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
                           </button>
                         </div>
                         <div className="flex-[11] min-w-0">
-                          <input className={inputCls} placeholder="품명" value={it.name} onChange={(e) => updateItem(idx, { name: e.target.value })} />
+                          <ItemNameInput item={it} index={idx} itemIndex={itemIndex} inventoryProducts={inventoryProducts} onChange={(v) => updateItem(idx, { name: v })} onPick={pickSuggestion} />
                         </div>
                         <div className="flex-[5] min-w-0">
                           <input className={inputCls} placeholder="호기" value={it.unitNo} onChange={(e) => updateItem(idx, { unitNo: e.target.value })} />
@@ -425,11 +535,22 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
                           </label>
                         </div>
                       )}
-                      <div className="flex justify-end items-center gap-3 text-xs text-slate-500">
-                        <span className="font-bold text-slate-400">소계</span>
-                        <span>공급가액 <b className="text-slate-700 font-semibold">{supply.toLocaleString()}</b></span>
-                        <span>세액 <b className="text-slate-700 font-semibold">{vat.toLocaleString()}</b></span>
-                        <span>합계 <b className="text-slate-800 font-bold">{total.toLocaleString()}</b></span>
+                      <div className="flex justify-between items-center gap-3 text-xs text-slate-500">
+                        <span className="flex items-center gap-2 ml-5">
+                          {category === "자재비" && (
+                            <label className="flex items-center gap-1 text-[11px] text-slate-500">
+                              <input type="checkbox" checked={!!it._sel} onChange={() => toggleSel(idx)} /> 묶음 선택
+                            </label>
+                          )}
+                          {it.billingGroup && <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">묶음: {it.billingGroup}</span>}
+                          {it._src && <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 rounded px-1.5 py-0.5">↳ {it._src}{it._src.endsWith("단가") ? "" : " 견적에서 불러옴"} — 단가 확인</span>}
+                        </span>
+                        <span className="flex items-center gap-3">
+                          <span className="font-bold text-slate-400">소계</span>
+                          <span>공급가액 <b className="text-slate-700 font-semibold">{supply.toLocaleString()}</b></span>
+                          <span>세액 <b className="text-slate-700 font-semibold">{vat.toLocaleString()}</b></span>
+                          <span>합계 <b className="text-slate-800 font-bold">{total.toLocaleString()}</b></span>
+                        </span>
                       </div>
                     </div>
                   );
@@ -543,6 +664,9 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
         </button>
       </div>
     </Modal>
+    {pastPickerOpen && (
+      <PastQuotePicker Shell={Modal} inputCls={inputCls} quotes={pastQuotes} site={site} quote={quote} onClose={() => setPastPickerOpen(false)} onApply={applyPastQuote} />
+    )}
     {inventoryPickerOpen && (
       <InventoryPickerModal
         products={inventoryProducts}

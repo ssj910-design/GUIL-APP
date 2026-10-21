@@ -4,7 +4,10 @@ import nodemailer from "nodemailer";
 
 const FEEDBACK_TO = process.env.FEEDBACK_TO || "non.expert.cha.ssi@gmail.com";
 
+import { authGuard } from "@/lib/verifyToken";
+
 export async function POST(request) {
+  const denied = authGuard(request); if (denied) return denied;
   const body = await request.json().catch(() => null);
   const message = (body?.message ?? "").toString().trim();
   if (!message) return Response.json({ ok: false, reason: "내용을 입력해주세요" }, { status: 200 });

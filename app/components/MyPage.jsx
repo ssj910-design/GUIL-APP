@@ -8,6 +8,7 @@ import { yearsOfService } from "@/lib/leave";
 import { forRole, GROUPS, LEVELS, isEnabled, levelOf } from "@/lib/notifications";
 import { pushSupported, pushPermission, enablePush, disablePush, isSubscribed, notify } from "@/lib/push";
 import { useBackHandler } from "@/app/hooks/useBackHandler";
+import { authFetch } from "@/lib/apiFetch";
 
 const KIND_TONE = { 당직: "bg-emerald-50 text-emerald-700", 숙직: "bg-blue-50 text-blue-700", 정상근무: "bg-violet-50 text-violet-500" };
 
@@ -63,7 +64,7 @@ export function MyPage({ attendances, dutySchedules, onClose }) {
       if (data) { setFbThreads((t) => [...t, data]); saved = true; }
     }
     try {
-      const res = await fetch("/api/feedback", {
+      const res = await authFetch("/api/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, role: role === "admin" ? "관리자" : "기사", message: fbMsg.trim() }),

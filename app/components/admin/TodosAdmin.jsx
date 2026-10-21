@@ -6,10 +6,16 @@
 import { useContext, useState } from "react";
 import { Plus, Search, Repeat, Pencil, ChevronDown, Check } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { uploadPhoto } from "@/lib/photos";
+import { uploadPhoto, isFileUrl } from "@/lib/photos";
+import FileChips, { splitAttachments } from "@/app/components/FileChips";
 import { confirmAsync } from "@/app/components/ConfirmHost";
-import { mapInventoryStockMovement, mapTodo } from "@/lib/mappers";
+import { mapInventoryStockMovement } from "@/lib/mappers";
 import { notify } from "@/lib/push";
+import { TodoHistory } from "@/app/components/TodoHistory";
+import { BillingSetupFields, billingSetupValid } from "@/app/components/BillingSetupFields";
+import {
+  groupKeyOf, completionGroupIds, canHaveMultipleAssignees, canSetBilling, billingFormFrom, billingPatchOf, billingLocalOf, billingQuoteRef, saveSingleTodo, saveGroupCommon, changeTodoAssignees, applyAssigneeChange,
+} from "@/lib/todoEdit";
 import { TODAY_STR } from "@/lib/constants";
 import { addDays, shortDate, formatUnitLabel } from "@/lib/utils";
 import {
@@ -30,7 +36,7 @@ function FieldRow({ label, children }) {
 
 // 이름 검색 자동완성 + 선택된 사람은 삭제 가능한 태그로 표시 — 요청자(단일)·담당자(복수) 공용.
 // 단일 선택(요청자)은 onAdd를 "기존 선택 교체"로 넘겨주는 쪽(호출부)에서 처리한다.
-function PersonPicker({ candidates, selectedIds, onAdd, onRemove, placeholder }) {
+export function PersonPicker({ candidates, selectedIds, onAdd, onRemove, placeholder }) {
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
   const filtered = q ? candidates.filter((p) => !selectedIds.includes(p.id) && p.name.toLowerCase().includes(q)).slice(0, 8) : [];
@@ -107,13 +113,13 @@ function PhotoAddSection({ photos, setPhotos, uploading, onFiles }) {
       <div className="flex items-center gap-2 mb-1.5">
         <label className="text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer">
           내 PC
-          <input type="file" accept="image/*" multiple className="hidden" onChange={onFiles} disabled={uploading} />
+          <input type="file" multiple className="hidden" onChange={onFiles} disabled={uploading} />
         </label>
-        <span className="text-xs text-slate-400">첨부파일 {photos.length}개</span>
+        <span className="text-xs text-slate-400">첨부파일 {photos.length}개 (사진·영상·PDF·문서)</span>
       </div>
-      {photos.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {photos.map((url, i) => (
+      {photos.some((u) => !isFileUrl(u)) && (
+        <div className="flex flex-wrap gap-1.5 mb-1.5">
+          {photos.map((url, i) => (isFileUrl(url) ? null : (
             <div key={i} className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
@@ -124,9 +130,10 @@ function PhotoAddSection({ photos, setPhotos, uploading, onFiles }) {
                 ×
               </button>
             </div>
-          ))}
+          )))}
         </div>
       )}
+      <FileChips urls={photos.filter((u) => isFileUrl(u))} onRemove={(url) => setPhotos((p) => p.filter((u) => u !== url))} />
     </div>
   );
 }
@@ -171,30 +178,6 @@ function wasteReturnPending(t) {
   return t.source === "waste_return" && t.done && !t.stockConfirmedAt;
 }
 
-// 자재/견적 연동 할일은 담당자 수만큼 각자 별도 행으로 저장돼 있다 —
-// 목록에서는 같은 요청을 공유하는 행을 한 건으로 묶어서 보여준다. 요청 연결이 없는(수동·검사보완 등)
-// 할일은 원래도 1건뿐이라 그대로 둔다.
-function groupKeyOf(t) {
-  if (t.source === "quote" && t.quoteRequestId) return `quote:${t.quoteRequestId}`;
-  if (t.source === "material" && t.materialRequestId) return `material:${t.materialRequestId}`;
-  // 관리자 직접 할일부여(복수 담당자)도 담당자 수만큼 행이 생기는데, 요청 id가 없어 위와 같은
-  // 방식으로 묶을 수 없다 — 대신 id가 "todo-manual-<생성시각>-<순번>" 형태로 배정 배치마다
-  // 같은 시각을 공유하므로 순번만 떼어 배치 키로 쓴다.
-  if (t.source === "manual" && typeof t.id === "string" && /^todo-manual-\d+-\d+$/.test(t.id)) {
-    // 생성시각(ms)이 우연히 겹친 다른 배정까지 한 건으로 묶이지 않게 제목·현장도 키에 넣는다.
-    return `${t.id.replace(/-\d+$/, "")}|${t.title ?? ""}|${t.siteName ?? ""}`;
-  }
-  return `solo:${t.id}`;
-}
-
-// 담당자를 여러 명으로 늘릴 수 있는 할일 — 새로 만든 담당자 행이 groupKeyOf로 같은 건에 계속
-// 묶여야 한다. 요청 연결이 없는 검사보완·자체점검지적·반납 등(1건짜리)은 담당자 교체만 된다.
-function canHaveMultipleAssignees(t) {
-  return (t.source === "quote" && !!t.quoteRequestId)
-    || (t.source === "material" && !!t.materialRequestId)
-    || (t.source === "manual" && typeof t.id === "string" && /^todo-manual-\d+-\d+$/.test(t.id));
-}
-
 // 할일의 "현장 · 호기" — 여러 호기를 한 건으로 묶은 자재·견적 할일은 unit_id가 대표 호기 하나뿐이라
 // 그대로 쓰면 "1호기"로만 보인다. 호기 목록(elevator_nos)이 2개 이상이면 그걸 보여준다.
 function todoLocOf(data, t) {
@@ -224,7 +207,10 @@ function TodoListRow({ group, data, selected, onSelect, onToggleGroup }) {
         {groupDone && <Check size={10} className="text-white" strokeWidth={3} />}
       </button>
       <div className="min-w-0 flex-1">
-        <p className={`text-sm font-bold truncate ${groupDone ? "line-through text-slate-400" : "text-slate-800"}`}>{t.title}</p>
+        <p className={`text-sm font-bold truncate ${groupDone ? "line-through text-slate-400" : "text-slate-800"}`}>
+          {t.billingRequired && <span className="mr-1.5 align-middle text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 rounded px-1 py-0.5">청구</span>}
+          {t.title}
+        </p>
         <p className="text-[11px] text-slate-400 truncate">{todoLocOf(data, t)}</p>
         <p className="text-[11px] text-slate-400 mt-0.5 truncate">
           기한 : <span className={`font-semibold ${overdue ? "text-red-600" : "text-slate-600"}`}>{t.dueDate ? shortDate(t.dueDate) : "없음"}</span>
@@ -261,6 +247,7 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
     assignedDate: t.assignedDate ?? "",
     dueDate: t.dueDate ?? "",
     done: t.done,
+    ...billingFormFrom(t, { units, sites }),
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -273,7 +260,7 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
     if (!files.length) return;
     setUploading(true);
     try {
-      const urls = await Promise.all(files.map((f) => uploadPhoto(f, `todos/${t.id}`)));
+      const urls = await Promise.all(files.map((f) => uploadPhoto(f, `todos/${t.id}`, { keepName: true })));
       setPhotos((p) => [...p, ...urls]);
     } catch (err) {
       alert("사진 업로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
@@ -286,7 +273,7 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
   async function save() {
     if (!form.title.trim()) return;
     setSaving(true);
-    if (isGroup) await onSaveGroup(group, form);
+    if (isGroup) await onSaveGroup(group, { ...form, photoUrls: photos });
     // 여러 명 가능한 할일은 담당자 구성을 아래 onChangeAssignees가 따로 처리한다(여기선 담당자 유지).
     else await onSave(t, { ...form, assigneeId: multi ? (t.assigneeId ?? "") : (form.assigneeIds[0] ?? ""), photoUrls: photos });
     if (multi) await onChangeAssignees(group, form.assigneeIds);
@@ -370,7 +357,7 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
         ) : (
           <>
             <button onClick={() => setEditing(false)} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2">취소</button>
-            <button disabled={saving || !form.title.trim() || (multi && form.assigneeIds.length === 0)} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2">
+            <button disabled={saving || !form.title.trim() || (multi && form.assigneeIds.length === 0) || (canSetBilling(t) && t.billingRequired !== undefined && !billingSetupValid(form, siteUnits))} onClick={save} className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2">
               {saving ? "저장 중..." : "저장"}
             </button>
           </>
@@ -389,12 +376,19 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
       {!editing ? (
         <div>
           <h2 className="text-lg font-bold text-slate-800 mb-1">{form.title}</h2>
-          <p className="text-sm font-semibold text-slate-500 mb-3">{siteName} · {unitNo}</p>
+          <p className="text-sm font-semibold text-slate-500">{siteName} · {unitNo}</p>
+          <p className="text-xs text-slate-400 mb-3">{sites.find((s) => s.id === form.siteId)?.address || ""}</p>
           <p className="text-sm text-slate-700 whitespace-pre-wrap mb-4">{form.description || "-"}</p>
           <div className="border-t border-slate-100">
             <FieldRow label="기한"><p className="text-sm font-semibold text-slate-700 pt-0.5">{form.dueDate ? shortDate(form.dueDate) : "없음"}</p></FieldRow>
             <FieldRow label="배정일"><p className="text-sm font-semibold text-slate-700 pt-0.5">{shortDate(form.assignedDate)}</p></FieldRow>
             <FieldRow label="요청자"><p className="text-sm font-semibold text-slate-700 pt-0.5">{requesterName}</p></FieldRow>
+            {t.billingRequired && (
+              <FieldRow label="비용청구">
+                <p className="text-sm font-semibold text-blue-700 pt-0.5">청구 후 완료 · 예정금액 {billingQuoteRef(t) ? "견적서 참조" : `₩${Number(t.billingAmount ?? 0).toLocaleString("ko-KR")}`}</p>
+                {t.billingPart && <p className="text-[11px] text-slate-500 mt-0.5 break-keep">{t.billingPart}</p>}
+              </FieldRow>
+            )}
             {isGroup ? <FieldRow label="담당자">{memberList}</FieldRow> : (
               <FieldRow label="담당자"><p className="text-sm font-semibold text-slate-700 pt-0.5">{personOf(data, t.assigneeId, t.assignee)}</p></FieldRow>
             )}
@@ -403,11 +397,20 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
                 <PhotoGrid urls={supplyPhotos} cols={4} />
               </FieldRow>
             )}
-            {!isGroup && (
-              <FieldRow label="파일첨부">
-                <PhotoGrid urls={photos} cols={4} />
-              </FieldRow>
-            )}
+            <FieldRow label="파일첨부">
+              {photos.length ? (
+                <div className="space-y-1.5">
+                  {splitAttachments(photos).media.length > 0 && <PhotoGrid urls={splitAttachments(photos).media} cols={4} />}
+                  <FileChips urls={splitAttachments(photos).files} />
+                </div>
+              ) : <p className="text-sm text-slate-400 pt-0.5">-</p>}
+            </FieldRow>
+          </div>
+          <div className="mt-5 pt-4 border-t border-slate-100">
+            <TodoHistory
+              ids={group.map((m) => m.id)}
+              refreshKey={`${group.map((m) => (m.done ? 1 : 0)).join("")}|${t.dueDate}|${t.title}|${t.assigneeId}|${t.description}|${group.length}|${photos.length}`}
+            />
           </div>
           {!isGroup && wasteReturnPending(t) ? (
             <button onClick={() => onOpenWasteReturn(t)} className="w-full mt-4 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-xl py-3">
@@ -425,23 +428,30 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
             <input className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           </FieldRow>
           <FieldRow label="현장">
-            <select className={inputCls} value={form.siteId} onChange={(e) => setForm({ ...form, siteId: e.target.value, unitId: "" })}>
+            <select className={inputCls} value={form.siteId} onChange={(e) => setForm({ ...form, siteId: e.target.value, unitId: "", unitIds: [] })}>
               <option value="">현장 없음</option>
               {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </FieldRow>
-          <FieldRow label="호기">
-            <select className={inputCls} value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })} disabled={!form.siteId}>
-              <option value="">전체(현장 공통)</option>
-              {siteUnits.map((u) => <option key={u.id} value={u.id}>{u.unitNo}</option>)}
-            </select>
-          </FieldRow>
+          {!form.billingRequired && (
+            <FieldRow label="호기">
+              <select className={inputCls} value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })} disabled={!form.siteId}>
+                <option value="">전체(현장 공통)</option>
+                {siteUnits.map((u) => <option key={u.id} value={u.id}>{u.unitNo}</option>)}
+              </select>
+            </FieldRow>
+          )}
           <FieldRow label="내용">
             <textarea className={inputCls} rows={5} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </FieldRow>
           <FieldRow label="기한">
             <DueDateField value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
           </FieldRow>
+          {canSetBilling(t) && t.billingRequired !== undefined && (
+            <FieldRow label="청구">
+              <BillingSetupFields form={form} setForm={setForm} siteUnits={siteUnits} siteSelected={!!form.siteId} />
+            </FieldRow>
+          )}
           <FieldRow label="요청자">
             <PersonPicker
               candidates={admins}
@@ -478,11 +488,9 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
           <FieldRow label="배정일">
             <input type="date" className={inputCls} value={form.assignedDate} onChange={(e) => setForm({ ...form, assignedDate: e.target.value })} />
           </FieldRow>
-          {!isGroup && (
-            <FieldRow label="파일첨부">
-              <PhotoAddSection photos={photos} setPhotos={setPhotos} uploading={uploading} onFiles={handleFiles} />
-            </FieldRow>
-          )}
+          <FieldRow label="파일첨부">
+            <PhotoAddSection photos={photos} setPhotos={setPhotos} uploading={uploading} onFiles={handleFiles} />
+          </FieldRow>
         </div>
       )}
       </div>
@@ -499,12 +507,15 @@ function AssignTodoModal({ data, onClose, onCreate }) {
   const [form, setForm] = useState({
     siteId: "", unitId: "", title: "", description: "", assigneeIds: [],
     requesterId: adminId ?? "", dueDate: addDays(TODAY_STR, 7),
+    billingRequired: false, unitIds: [], billingRows: [],
   });
   const [photos, setPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [folderToken] = useState(() => Date.now());
   const siteUnits = units.filter((u) => u.siteId === form.siteId);
-  const valid = form.siteId && form.title.trim() && form.assigneeIds.length > 0;
+  // todos.billing_required 컬럼(마이그레이션 151)이 있을 때만 "비용청구 후 완료" 설정을 보여준다.
+  const billingReady = (data.todos ?? []).some((x) => x.billingRequired !== undefined);
+  const valid = form.siteId && form.title.trim() && form.assigneeIds.length > 0 && billingSetupValid(form, siteUnits);
 
   function toggleAssignee(id) {
     setForm((f) => ({ ...f, assigneeIds: f.assigneeIds.includes(id) ? f.assigneeIds.filter((x) => x !== id) : [...f.assigneeIds, id] }));
@@ -515,7 +526,7 @@ function AssignTodoModal({ data, onClose, onCreate }) {
     if (!files.length) return;
     setUploading(true);
     try {
-      const urls = await Promise.all(files.map((f) => uploadPhoto(f, `todos/assign-${folderToken}`)));
+      const urls = await Promise.all(files.map((f) => uploadPhoto(f, `todos/assign-${folderToken}`, { keepName: true })));
       setPhotos((p) => [...p, ...urls]);
     } catch (err) {
       alert("사진 업로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
@@ -538,20 +549,24 @@ function AssignTodoModal({ data, onClose, onCreate }) {
           <input className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="예: 비상통화장치 배터리 교체" />
         </FieldRow>
         <FieldRow label="현장">
-          <SiteAutocomplete sites={sites} value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitId: "" })} />
+          <SiteAutocomplete sites={sites} value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitId: "", unitIds: [] })} />
         </FieldRow>
-        <FieldRow label="호기">
-          <select className={inputCls} value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })} disabled={!form.siteId}>
-            <option value="">전체(현장 공통)</option>
-            {siteUnits.map((u) => <option key={u.id} value={u.id}>{u.unitNo}</option>)}
-          </select>
-        </FieldRow>
+        {!form.billingRequired && (
+          <FieldRow label="호기">
+            <select className={inputCls} value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })} disabled={!form.siteId}>
+              <option value="">전체(현장 공통)</option>
+              {siteUnits.map((u) => <option key={u.id} value={u.id}>{u.unitNo}</option>)}
+            </select>
+          </FieldRow>
+        )}
         <FieldRow label="내용">
           <textarea className={inputCls} rows={5} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </FieldRow>
         <FieldRow label="기한">
           <DueDateField value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
         </FieldRow>
+        {/* 부품 교체+청구 업무는 자재신청관리의 "직접 지급"으로 일원화했다 — 새 배정에서는 청구 설정을 숨긴다
+            (이미 청구 필수로 만든 할일의 수정 폼에서는 그대로 보인다). */}
         <FieldRow label="요청자">
           <PersonPicker
             candidates={admins}
@@ -699,124 +714,37 @@ export default function TodosAdmin({ data, setData, initialView }) {
   };
   const sortedGroups = sortRows(groups, null, getVal);
 
+  // 저장 규칙은 앱 할일 상세 수정 모드와 공용(lib/todoEdit.js) — 화면 상태 반영·알림만 여기서 한다.
   async function saveTodoDetail(t, form) {
-    const unit = units.find((u) => u.id === form.unitId);
-    const site = sites.find((s) => s.id === form.siteId);
-    const engineer = profiles.find((p) => p.id === form.assigneeId);
-    const requester = profiles.find((p) => p.id === form.requesterId);
-    const photoUrls = form.photoUrls ?? [];
-    // 재배정 요청 중인 할일의 담당자를 여기서 바꾸면 요청은 처리된 것이므로 자동 해제한다 (모바일 담당자 변경과 동일 규칙).
-    const reassigned = form.assigneeId !== (t.assigneeId ?? "");
-    const patch = {
-      title: form.title.trim(), description: form.description || null,
-      site_name: site?.name ?? null, elevator_no: unit?.unitNo ?? null, unit_id: form.unitId || null,
-      assignee: engineer?.name ?? null, assignee_id: form.assigneeId || null,
-      requested_by_id: form.requesterId || null, requested_by_name: requester?.name ?? null,
-      assigned_date: form.assignedDate || null, due_date: form.dueDate || null, done: form.done,
-      photo_count: photoUrls.length, photo_urls: photoUrls.length ? photoUrls : null,
-      ...(reassigned ? { reassign_requested: false, reassign_reason: null, reassign_to: null } : {}),
-    };
-    const { error } = await supabase.from("todos").update(patch).eq("id", t.id);
-    if (error) { alert("저장 실패: " + error.message); return; }
+    const res = await saveSingleTodo(supabase, {
+      todo: t,
+      form: { ...form, assigneeIds: [form.assigneeId ?? ""].filter(Boolean) },
+      profiles, units, sites,
+    });
+    if (res.error) { alert(res.error); return; }
     setData((prev) => ({
       ...prev,
-      todos: prev.todos.map((x) => (x.id === t.id ? {
-        ...x,
-        title: patch.title, description: patch.description ?? "",
-        siteName: patch.site_name, elevatorNo: patch.elevator_no, unitId: patch.unit_id,
-        assignee: patch.assignee, assigneeId: patch.assignee_id,
-        requestedById: patch.requested_by_id, requestedByName: patch.requested_by_name,
-        assignedDate: patch.assigned_date, dueDate: patch.due_date, done: patch.done,
-        photoCount: patch.photo_count, photoUrls,
-        ...(reassigned ? { reassignRequested: false, reassignReason: null, reassignTo: null } : {}),
-      } : x)),
+      todos: prev.todos.map((x) => (x.id === t.id ? { ...x, ...res.local } : x)),
     }));
   }
 
-  // 담당자 여러 명(그룹)의 할 일 상세 저장 — 공통 필드(제목·현장·호기·내용·배정일·기한·요청자)만
-  // 그룹 전원에게 동일하게 적용한다. 담당자 구성·완료 여부는 개별 처리(onToggleMember)로 따로 다룬다.
+  // 담당자 여러 명(그룹)의 할 일 상세 저장 — 공통 필드만 그룹 전원에게 동일하게 적용한다.
   async function saveGroupDetail(group, form) {
-    const unit = units.find((u) => u.id === form.unitId);
-    const site = sites.find((s) => s.id === form.siteId);
-    const requester = profiles.find((p) => p.id === form.requesterId);
-    const ids = group.map((t) => t.id);
-    const patch = {
-      title: form.title.trim(), description: form.description || null,
-      site_name: site?.name ?? null, elevator_no: unit?.unitNo ?? null, unit_id: form.unitId || null,
-      requested_by_id: form.requesterId || null, requested_by_name: requester?.name ?? null,
-      assigned_date: form.assignedDate || null, due_date: form.dueDate || null,
-    };
-    const { error } = await supabase.from("todos").update(patch).in("id", ids);
-    if (error) { alert("저장 실패: " + error.message); return; }
+    const res = await saveGroupCommon(supabase, { group, form, profiles, units, sites });
+    if (res.error) { alert(res.error); return; }
     setData((prev) => ({
       ...prev,
-      todos: prev.todos.map((x) => (ids.includes(x.id) ? {
-        ...x,
-        title: patch.title, description: patch.description ?? "",
-        siteName: patch.site_name, elevatorNo: patch.elevator_no, unitId: patch.unit_id,
-        requestedById: patch.requested_by_id, requestedByName: patch.requested_by_name,
-        assignedDate: patch.assigned_date, dueDate: patch.due_date,
-      } : x)),
+      todos: prev.todos.map((x) => (res.ids.includes(x.id) ? { ...x, ...res.local } : x)),
     }));
   }
 
-  // 담당자 구성 변경(추가·제외·교체) — 빠진 사람과 새 사람을 짝지어 기존 행의 담당자만 바꾸고,
-  // 남는 빠진 사람 행은 삭제, 남는 새 사람은 기존 행을 복제해 새로 만든다. 새 행 id는 목록에서
-  // 같은 건으로 계속 묶이도록(groupKeyOf) 출처별 규칙을 따른다. 새로 배정된 사람에게만 알림.
+  // 담당자 구성 변경(추가·제외·교체) — 새로 배정된 사람에게만 알림.
   async function changeAssignees(group, assigneeIds) {
-    const removed = group.filter((m) => m.assigneeId && !assigneeIds.includes(m.assigneeId));
-    const addedIds = assigneeIds.filter((id) => !group.some((m) => m.assigneeId === id));
-    if (!removed.length && !addedIds.length) return;
-    const nameOf = (id) => profiles.find((p) => p.id === id)?.name ?? null;
-    const clearReassign = { reassign_requested: false, reassign_reason: null, reassign_to: null };
-    const swaps = removed.slice(0, addedIds.length).map((m, i) => ({ m, assigneeId: addedIds[i] }));
-    const toDelete = removed.slice(addedIds.length);
-    const toAdd = addedIds.slice(removed.length);
-
-    for (const { m, assigneeId } of swaps) {
-      const { error } = await supabase.from("todos").update({ assignee: nameOf(assigneeId), assignee_id: assigneeId, ...clearReassign }).eq("id", m.id);
-      if (error) { alert("담당자 변경 실패: " + error.message); return; }
-    }
-    if (toDelete.length) {
-      const { error } = await supabase.from("todos").delete().in("id", toDelete.map((m) => m.id));
-      if (error) { alert("담당자 제외 실패: " + error.message); return; }
-    }
-    let insertedRows = [];
-    if (toAdd.length) {
-      // 사람별 값(완료·청구금액·재고확인·재배정 요청)은 비우고 나머지(제목·현장·기한·내용·첨부 등)는 그대로 복제.
-      const base = group.find((m) => !m.done) ?? group[0];
-      const { data: baseRow, error: baseError } = await supabase.from("todos").select("*").eq("id", base.id).single();
-      if (baseError) { alert("담당자 추가 실패: " + baseError.message); return; }
-      const { created_at: _createdAt, ...copy } = baseRow;
-      const manualPrefix = base.id.replace(/-\d+$/, "");
-      let nextIdx = Math.max(...group.map((m) => Number(m.id.match(/-(\d+)$/)?.[1] ?? 0))) + 1;
-      const rows = toAdd.map((assigneeId) => ({
-        ...copy,
-        id: base.source === "manual"
-          ? `${manualPrefix}-${nextIdx++}`
-          : `todo-${base.source}-${base.quoteRequestId ?? base.materialRequestId}-${crypto.randomUUID()}`,
-        assignee: nameOf(assigneeId), assignee_id: assigneeId,
-        done: false, billing_amount: null, billing_part: null, billing_part_rows: null, stock_confirmed_at: null,
-        ...clearReassign,
-      }));
-      const { data: inserted, error } = await supabase.from("todos").insert(rows).select();
-      if (error) { alert("담당자 추가 실패: " + error.message); return; }
-      insertedRows = inserted ?? [];
-    }
-
-    const swapTo = new Map(swaps.map(({ m, assigneeId }) => [m.id, assigneeId]));
-    const deletedIds = new Set(toDelete.map((m) => m.id));
-    setData((prev) => ({
-      ...prev,
-      todos: [
-        ...insertedRows.map(mapTodo),
-        ...prev.todos.filter((x) => !deletedIds.has(x.id)).map((x) => (swapTo.has(x.id)
-          ? { ...x, assignee: nameOf(swapTo.get(x.id)), assigneeId: swapTo.get(x.id), reassignRequested: false, reassignReason: null, reassignTo: null }
-          : x)),
-      ],
-    }));
-    const newlyAssigned = [...swaps.map(({ m, assigneeId }) => ({ id: m.id, assigneeId })), ...insertedRows.map((r) => ({ id: r.id, assigneeId: r.assignee_id }))];
-    for (const n of newlyAssigned) {
+    const res = await changeTodoAssignees(supabase, { group, assigneeIds, profiles });
+    if (res.error) { alert(res.error); return; }
+    if (!res.changed) return;
+    setData((prev) => ({ ...prev, todos: applyAssigneeChange(prev.todos, res, profiles) }));
+    for (const n of res.newlyAssigned) {
       notify("todo_assigned", {
         profileIds: [n.assigneeId],
         title: "할 일이 배정되었습니다",
@@ -896,14 +824,12 @@ export default function TodosAdmin({ data, setData, initialView }) {
     return { ok: true, movementsInserted: true };
   }
 
-  // 담당자 여러 명이 한 팀으로 묶인 수동 할일(관리자 배정)은 1명만 완료해도 전원 완료 처리한다
-  // — 표에서도 이미 groupKeyOf로 한 행으로 묶어 보여주므로 완료 처리도 그룹 단위로 맞춘다.
-  // 완료 취소는 그룹 단위로 묶지 않는다(자체점검 지적사항과 동일한 비대칭 규칙).
+  // 담당자 여러 명이 한 팀으로 묶인 수동 할일(관리자 배정)·자체점검 지적사항은 1명이 완료하면 전원 완료,
+  // 완료 취소도 전원 취소한다(lib/todoEdit.js completionGroupIds) — 표에서도 한 행으로 묶어 보여주므로
+  // 완료·취소 둘 다 그룹 단위로 맞춘다. 자재·견적 연동은 담당자별 개별 처리.
   async function toggle(t) {
     const done = !t.done;
-    const ids = done && t.source === "manual"
-      ? todos.filter((x) => groupKeyOf(x) === groupKeyOf(t)).map((x) => x.id)
-      : [t.id];
+    const ids = completionGroupIds(todos, t);
     const { error } = await supabase.from("todos").update({ done }).in("id", ids);
     if (error) { alert("완료 처리 실패: " + error.message); return; }
     setData((prev) => ({ ...prev, todos: prev.todos.map((x) => (ids.includes(x.id) ? { ...x, done } : x)) }));
@@ -914,7 +840,13 @@ export default function TodosAdmin({ data, setData, initialView }) {
   async function toggleGroupDone(group) {
     const effectiveDone = (m) => (wasteReturnPending(m) ? false : m.done);
     const groupDone = group.every(effectiveDone);
-    await Promise.all(group.filter((m) => effectiveDone(m) === groupDone).map((m) => toggle(m)));
+    // 한 번 토글이 같이 바뀌는 행(completionGroupIds)을 이미 처리했으면 다시 보내지 않는다.
+    const handled = new Set();
+    for (const m of group.filter((x) => effectiveDone(x) === groupDone)) {
+      if (handled.has(m.id)) continue;
+      completionGroupIds(todos, m).forEach((id) => handled.add(id));
+      await toggle(m);
+    }
   }
 
   // 담당자를 2명 이상 고르면(AssignTodoModal), DB에 담당자 배열 컬럼이 없어(단일 assignee_id)
@@ -926,6 +858,8 @@ export default function TodosAdmin({ data, setData, initialView }) {
     const requester = profiles.find((p) => p.id === form.requesterId);
     const photoUrls = form.photoUrls ?? [];
     const batchId = Date.now(); // 담당자마다 부르면 ms가 달라져 같은 배정이 한 건으로 안 묶인다
+    // "비용청구 후 완료" — 켜면 billing_* 컬럼과 고른 호기(여러 개면 elevator_nos)가 채워진다(마이그레이션 151 이후).
+    const billingPatch = form.billingRequired ? billingPatchOf(form, units) : {};
     const rows = form.assigneeIds.map((assigneeId, i) => {
       const engineer = profiles.find((p) => p.id === assigneeId);
       return {
@@ -935,6 +869,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
         assigned_date: TODAY_STR, due_date: form.dueDate || null, done: false,
         photo_count: photoUrls.length, photo_urls: photoUrls.length ? photoUrls : null,
         requested_by_id: form.requesterId || adminId || null, requested_by_name: requester?.name ?? adminName,
+        ...billingPatch,
       };
     });
     const { error } = await supabase.from("todos").insert(rows);
@@ -949,6 +884,7 @@ export default function TodosAdmin({ data, setData, initialView }) {
           assignedDate: row.assigned_date, dueDate: row.due_date, done: false,
           photoCount: photoUrls.length, photoUrls, part: null, materialRequestId: null, quoteRequestId: null,
           requestedById: row.requested_by_id, requestedByName: row.requested_by_name,
+          ...billingLocalOf(billingPatch),
         })),
         ...prev.todos,
       ],

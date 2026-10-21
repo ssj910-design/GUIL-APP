@@ -18,6 +18,7 @@ import { locOf, addressOf, personOf, assigneeNames, billingCompleteFor, StatusBa
 import QuoteItemsModal from "@/app/components/admin/QuoteItemsModal";
 import QuoteSendModal from "@/app/components/admin/QuoteSendModal";
 import QuotePdfPreview from "@/app/components/admin/QuotePdfPreview";
+import { authFetch } from "@/lib/apiFetch";
 
 // 할 일 제목에 쓸 호기 — v2 unit_id가 있으면 그걸 우선하고(관리자 콘솔은 v2 네이티브),
 // 없으면 견적 요청 자체의 elevatorNo, 그것도 없으면(관리자가 새로 작성한 견적) 품목에
@@ -96,7 +97,7 @@ export default function QuotesAdmin({ data, setData }) {
   // 예전엔 견적 발송 현황 패널이 화면에 뜰 때 하던 일인데, 패널을 없애도 조회는 남긴다.
   // 화면을 열 때 한 번. 확인 중인 건이 없으면 서버가 바로 0을 돌려줘 부담이 없다.
   useEffect(() => {
-    fetch("/api/alimtalk-status", { method: "POST" })
+    authFetch("/api/alimtalk-status", { method: "POST" })
       .then((r) => r.json())
       .then((d) => {
         if (!(d?.updated > 0) || !d.changedRows) return;
@@ -375,7 +376,12 @@ export default function QuotesAdmin({ data, setData }) {
     >
       <td className="pl-5 pr-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(drafted ? q.quoteIssuedDate : q.requestedDate)}</td>
       <td className="px-3 py-2.5 font-semibold whitespace-nowrap">{quoteLocLabel(data, q)}</td>
-      <td className="px-3 py-2.5 text-slate-600">{drafted ? (q.quoteTitle || "-") : q.constructionType}</td>
+      <td className="px-3 py-2.5 text-slate-600">
+        {drafted ? (q.quoteTitle || "-") : q.constructionType}
+        {q.attachmentUrls?.length > 0 && (
+          <span className="ml-1.5 inline-flex items-center text-[10px] font-bold text-blue-700 bg-blue-50 rounded-full px-1.5 py-0.5 align-middle" title="첨부 서류">첨부 {q.attachmentUrls.length}</span>
+        )}
+      </td>
       <td className="px-3 py-2.5 whitespace-nowrap">
         {!q.requesterId && !q.engineer
           ? <StatusBadge tone="slate">관리자발행</StatusBadge>
@@ -554,6 +560,7 @@ export default function QuotesAdmin({ data, setData }) {
           profiles={data.profiles ?? []}
           inventoryProducts={data.inventoryProducts ?? []}
           inventoryStockMovements={data.inventoryStockMovements ?? []}
+          quoteHistory={data.quoteRequests ?? []}
           onClose={async () => {
             // 관리자가 새 견적 발행에서 현장만 고르고 품목편집을 취소하면, 기사 요청도 없이
             // 만들어진 빈 초안(요청접수 상태, 담당 기사 없음)만 남는다 — 그건 내역에 남기지 않고
@@ -851,6 +858,25 @@ function QuoteDetailModal({ quote: r, data, onClose, onReject }) {
           <p className="text-xs font-bold text-slate-400 mb-1">발송일</p>
           <SentHistory log={r} />
         </div>
+        {r.attachmentUrls?.length > 0 && (
+          <div>
+            <p className="text-xs font-bold text-slate-400 mb-1">첨부 서류 ({r.attachmentUrls.length})</p>
+            <div className="flex flex-wrap gap-1.5">
+              {r.attachmentUrls.map((att, i) => (
+                <a
+                  key={i}
+                  href={/\.pdf($|\?)/i.test(att.name || att.url) ? `/quote-view?url=${encodeURIComponent(att.url)}` : att.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 max-w-full text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 hover:bg-slate-100"
+                >
+                  <span className="truncate">{att.name || `첨부파일 ${i + 1}`}</span>
+                  <span className="text-blue-700 shrink-0">열기</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
         <div>
           <p className="text-xs font-bold text-slate-400 mb-1">진행상태</p>
           {r.status === "반려" ? (
@@ -907,6 +933,20 @@ function QuoteDetailModal({ quote: r, data, onClose, onReject }) {
         <div>
           <p className="text-xs font-bold text-slate-500 mb-2">견적서 PDF 미리보기</p>
           <QuotePdfPreview url={r.quotePdfUrl} />
+        </div>
+      )}
+      {r.approvalSignatureUrl && (
+        <div className="mt-3 bg-emerald-50 border border-emerald-100 rounded-xl p-3">
+          <p className="text-xs font-bold text-emerald-700 mb-2">고객 직접 승인 (전화 없이 승인페이지에서 서명)</p>
+          <div className="grid grid-cols-2 gap-3 text-sm mb-2">
+            <div><p className="text-xs font-bold text-slate-400 mb-1">승인 금액</p><p className="font-semibold text-slate-800">{r.approvedAmount != null ? `${Number(r.approvedAmount).toLocaleString()}원` : "-"}</p></div>
+            <div><p className="text-xs font-bold text-slate-400 mb-1">승인 일시</p><p className="font-semibold text-slate-800">{r.approvedAt ? r.approvedAt.slice(0, 16).replace("T", " ") : "-"}</p></div>
+          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={r.approvalSignatureUrl} alt="고객 서명" className="w-full max-w-[220px] h-24 object-contain bg-white rounded-lg border border-slate-200 mb-2" />
+          {r.purchaseOrderPdfUrl && (
+            <a href={r.purchaseOrderPdfUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-700 underline">발주서 PDF 보기</a>
+          )}
         </div>
       )}
       {canReject && (

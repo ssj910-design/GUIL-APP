@@ -1,12 +1,14 @@
 import { useState, useContext, useEffect, useRef } from "react";
-import { ListTodo, Check, CheckCircle2, Search, Lock, Plus, Repeat, ChevronDown } from "lucide-react";
+import { ListTodo, CheckCircle2, Search, Lock, Plus, Repeat, ChevronDown, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { addDays, formatShortDate, formatYyMmDd } from "@/lib/utils";
+import { addDays, formatShortDate } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
-import { PrimaryButton, Sheet, Field, inputCls, PhotoGrid, DDay } from "@/app/components/ui";
-import { SitesContext, AuthContext } from "@/app/components/context";
+import { PrimaryButton, Sheet, Field, inputCls, DDay } from "@/app/components/ui";
+import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
-import { confirmAsync } from "@/app/components/ConfirmHost";
+import { groupKeyOf, completionGroupIds } from "@/lib/todoEdit";
+import { TodoDetailScreen } from "@/app/components/tabs/TodoDetailScreen";
+import { billingSetupValid } from "@/app/components/BillingSetupFields";
 
 
 /* ------------------------------------------------------------------ */
@@ -17,32 +19,14 @@ import { confirmAsync } from "@/app/components/ConfirmHost";
 // 자재/견적 신청 시점의 신청자 이름을 찾아옵니다. 지급완료 시 실제 담당자를 신청자와
 // 다르게 지정할 수 있어(★ 담당자 재배정 기능), 요청자와 담당자가 다를 수 있습니다.
 export function getRequesterName(todo, materialRequests, quoteRequests) {
-  if (todo.source === "material") return materialRequests?.find((r) => r.id === todo.materialRequestId)?.engineer ?? null;
+  if (todo.source === "material") {
+    const req = materialRequests?.find((r) => r.id === todo.materialRequestId);
+    // 관리자 직접 지급 건은 신청자가 기사가 아니라 지급한 관리자다
+    return req?.createdByAdmin ? (todo.requestedByName ?? "관리자") : (req?.engineer ?? null);
+  }
   if (todo.source === "quote") return quoteRequests?.find((q) => q.id === todo.quoteRequestId)?.engineer ?? null;
   // 수동 등록 할일 — 097 마이그레이션 이전 행(requestedByName 없음)은 "관리자"로 표시.
   return todo.requestedByName ?? "관리자";
-}
-
-// 자재/견적 연동 할일은 담당자 수만큼 각자 별도 행으로 저장돼 있다(요청 하나당 여러 건) —
-// 목록에는 같은 요청을 공유하는 행을 한 건으로 묶어서 보여준다(펼치면 기존처럼 전체
-// 담당자가 보인다). 관리자 부여·검사보완 등 요청 연결이 없는 할일은 원래도 1건뿐이라 그대로 둔다.
-function groupKeyOf(t) {
-  if (t.source === "quote" && t.quoteRequestId) return `quote:${t.quoteRequestId}`;
-  if (t.source === "material" && t.materialRequestId) return `material:${t.materialRequestId}`;
-  // 관리자 직접 할일부여(복수 담당자)도 담당자 수만큼 행이 생기는데, 요청 id가 없어 위와 같은
-  // 방식으로 묶을 수 없다 — 대신 id가 "todo-manual-<생성시각>-<순번>" 형태로 배정 배치마다
-  // 같은 시각을 공유하므로 순번만 떼어 배치 키로 쓴다.
-  if (t.source === "manual" && typeof t.id === "string" && /^todo-manual-\d+-\d+$/.test(t.id)) {
-    return t.id.replace(/-\d+$/, "");
-  }
-  return `solo:${t.id}`;
-}
-
-// 같은 견적/자재 요청에 연결된 다른 담당자의 할 일(공동 담당)을 찾습니다.
-export function getCoAssignees(todo, todos) {
-  const key = groupKeyOf(todo);
-  if (key === `solo:${todo.id}`) return [];
-  return todos.filter((t) => t.id !== todo.id && groupKeyOf(t) === key).map((t) => t.assignee);
 }
 
 // 연결된 자재/견적 신청에 자재 담당자가 등록한 지급 사진을 찾아옵니다.
@@ -50,16 +34,6 @@ export function getSupplyPhotos(todo, materialRequests, quoteRequests) {
   if (todo.source === "material") return materialRequests?.find((r) => r.id === todo.materialRequestId)?.supplyPhotoUrls ?? [];
   if (todo.source === "quote") return quoteRequests?.find((q) => q.id === todo.quoteRequestId)?.supplyPhotoUrls ?? [];
   return [];
-}
-
-// 자재/견적 연동 할 일은 제목에 이미 현장명이 들어있어("OO빌딩 부품 교체 및..." 등) 상세에서는
-// 현장명 대신 주소를 보여준다. 관리자 부여 할 일은 제목에 현장명이 없으므로 그대로 현장명을 쓴다.
-export function getTodoSiteAddress(todo, materialRequests, quoteRequests, sites) {
-  if (todo.source === "manual" || todo.source === "inspection" || todo.source === "selfcheck") return null;
-  const req = todo.source === "material"
-    ? materialRequests?.find((r) => r.id === todo.materialRequestId)
-    : quoteRequests?.find((q) => q.id === todo.quoteRequestId);
-  return sites?.find((s) => s.id === req?.siteId)?.address ?? null;
 }
 
 function TodoCheckbox({ done, locked, onClick }) {
@@ -88,28 +62,36 @@ function TodoCheckbox({ done, locked, onClick }) {
   return <button type="button" onClick={onClick} className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />;
 }
 
-export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescription, onUpdateTodoDueDate, onExtendTodoDueDate, onRequestReassignTodo, onClearReassignRequest, onAssignTodo, onAdminToggle, onDeleteTodo, materialRequests, quoteRequests, focusTodoId, onFocusHandled }) {
+export function TodoTab({ todos, setTodos, onExtendTodoDueDate, onRequestReassignTodo, onClearReassignRequest, onAssignTodo, onAdminToggle, onSaveTodoEdit, onDeleteTodoGroup, materialRequests, quoteRequests, focusTodoId, onFocusHandled }) {
   const { name: CURRENT_ENGINEER, engineerNames, role } = useContext(AuthContext);
-  const sites = useContext(SitesContext);
   const [showDone, setShowDone] = useState(false);
-  const [expandedId, setExpandedId] = useState(null);
+  const [detailId, setDetailId] = useState(null);
+  const [listNavDir, setListNavDir] = useState("fwd");
   const [search, setSearch] = useState("");
   const [assignOpen, setAssignOpen] = useState(false);
   // 반납사진을 여러 장 연달아 올릴 때 setTodos만으로는 React 렌더 타이밍상 아직 반영 안 된
   // todo.photoUrls를 기준으로 계산될 수 있어(경쟁 상태 — 마지막 한 장만 저장되는 버그) —
   // ElevatorFieldApp의 supplyPhotoUrlsRef와 동일한 패턴으로 ref에 최신 배열을 동기적으로 보관한다.
   const photoUrlsRef = useRef({});
-  // 알림/푸시로 특정 할일을 지목해 열 때 쓴다 — 사용자가 아코디언을 직접 조작하면(펼치기/접기)
-  // 그 시점부터는 로컬 expandedId가 우선하고 focusTodoId는 해제한다(RoomTab의 focusPostId와 동일 패턴).
-  const shownExpandedId = expandedId ?? focusTodoId;
-  function setExpanded(id) {
-    setExpandedId(id);
-    if (focusTodoId) onFocusHandled?.();
+  // todos.billing_required 컬럼(마이그레이션 151)이 있을 때만 "비용청구 후 완료" 설정을 보여준다.
+  const billingReady = todos.some((x) => x.billingRequired !== undefined);
+
+  // 알림/푸시로 특정 할일을 지목하면(?openTodo=) 목록이 아니라 그 할일 상세를 바로 연다 —
+  // 지목된 id를 렌더 중에 상태로 옮기고(이전 값과 다를 때만) 부모의 focus 값은 비운다.
+  const [seenFocusId, setSeenFocusId] = useState(null);
+  if (focusTodoId && focusTodoId !== seenFocusId) {
+    setSeenFocusId(focusTodoId);
+    setDetailId(focusTodoId);
+  } else if (!focusTodoId && seenFocusId) {
+    setSeenFocusId(null); // 다음에 같은 할일을 다시 지목해도 열리도록
   }
   useEffect(() => {
-    if (!focusTodoId) return;
-    document.getElementById(`todo-row-${focusTodoId}`)?.scrollIntoView({ block: "center" });
-  }, [focusTodoId]);
+    if (focusTodoId) onFocusHandled?.();
+  }, [focusTodoId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function openDetail(id) { setListNavDir("fwd"); setDetailId(id); }
+  function closeDetail() { setListNavDir("back"); setDetailId(null); }
+
   // 관리자는 본인 담당 할일이 아니라 전체 기사의 할일을 본다.
   const mine = role === "admin" ? todos : todos.filter((t) => t.assignee === CURRENT_ENGINEER);
 
@@ -117,20 +99,10 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
     const current = todos.find((x) => x.id === id);
     if (!current) return;
     const done = !current.done;
-    // 자체점검 지적사항(B/C)은 담당기사 전원에게 같은 selfCheckItemId로 할 일이 하나씩 생긴다.
-    // 청구 화면(BillingTab)은 이미 형제 할일을 함께 완료 처리하는데, 이 체크박스 경로(청구 없이
-    // 완료)는 그걸 안 해서 동료 할일이 영영 안 지워지는 문제가 있었다 — BillingTab의 idsToComplete와
-    // 같은 패턴으로 형제도 같이 완료한다.
-    // 관리자가 담당자 여러 명으로 배정한 수동 할일(id가 "todo-manual-<배치id>-<순번>")도 같은
-    // 이유로 형제가 있다 — 1명만 완료해도 전원 완료 처리한다(관리자웹 할일관리와 동일 규칙).
-    const manualBatch = typeof current.id === "string" && /^todo-manual-\d+-\d+$/.test(current.id)
-      ? current.id.replace(/-\d+$/, "")
-      : null;
-    const idsToComplete = done && current.selfCheckItemId
-      ? todos.filter((t) => !t.done && t.selfCheckItemId === current.selfCheckItemId).map((t) => t.id)
-      : done && manualBatch
-      ? todos.filter((t) => typeof t.id === "string" && t.id.startsWith(manualBatch + "-")).map((t) => t.id)
-      : [id];
+    // 자체점검 지적사항(B/C)은 담당기사 전원에게 같은 selfCheckItemId로, 관리자가 담당자 여러 명으로 배정한
+    // 수동 할일(id가 "todo-manual-<배치id>-<순번>")도 담당자 수만큼 행이 있다 — 1명이 완료하면 전원 완료,
+    // 완료 취소도 전원 취소(관리자웹 할일관리와 같은 규칙, lib/todoEdit.js completionGroupIds).
+    const idsToComplete = completionGroupIds(todos, current);
     const { error } = await supabase.from("todos").update({ done }).in("id", idsToComplete);
     if (error) {
       alert(`할 일 완료 처리에 실패했습니다.\n${error.message ?? ""}\n다시 시도해주세요.`);
@@ -140,7 +112,7 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
   }
 
   // 폐자재/여유부품 반납 할일의 반납사진 등록/삭제. 완료 조건(사진 1장 이상, 재오픈 후엔 기준선보다
-  // 증가)은 TodoCheckbox·TodoDetailBody의 locked 계산에서 t.photoUrls/t.photoCount로 판정한다.
+  // 증가)은 목록의 TodoCheckbox·상세 화면의 잠금 계산에서 t.photoUrls/t.photoCount로 판정한다.
   async function writeTodoPhotos(id, urls) {
     photoUrlsRef.current[id] = urls;
     await supabase.from("todos").update({ photo_urls: urls }).eq("id", id);
@@ -155,6 +127,60 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
     await writeTodoPhotos(id, base.filter((_, i) => i !== idx));
   }
 
+  // 자재/견적 연동 할 일은 담당자 수만큼 각자 별도 행으로 저장돼 있다 — 같은 요청을 공유하는 행을
+  // 한 건으로 묶는다(기사 본인 화면은 자기 몫 1건만 남아 있어 묶어도 그대로).
+  function groupOf(t) {
+    const key = groupKeyOf(t);
+    return mine.filter((m) => groupKeyOf(m) === key);
+  }
+
+  // 자재/견적 연동 할 일은 비용청구가 완료되어야 자동으로 끝나지만, 관리자가 직접 부여한
+  // 할 일과 정기검사 보완조치·자체점검 지적사항 할 일은 그런 연결고리가 없어 본인이 직접 완료 처리해야 한다.
+  // 반납 할일은 반납사진을 최소 1장 올려야만 잠금이 풀린다. 재오픈 후에는 기존 사진이 누적 보존되므로
+  // "재오픈 시점 기준선(photoCount)보다 사진이 늘었으면"으로 판정 — 새 사진을 추가해야 잠금이 풀린다.
+  // 관리자 배정이라도 "비용청구 후 완료"로 설정된 할일은 자재지급건처럼 청구해야 완료된다(체크 잠금).
+  const isManualSource = (t) => (t.source === "manual" && !t.billingRequired) || t.source === "inspection" || t.source === "selfcheck" || t.source === "waste_return";
+  const wasteLocked = (t) => t.source === "waste_return" && !((t.photoUrls?.length ?? 0) > (t.photoCount ?? 0));
+
+  /* ------------------------------ 상세 화면 ------------------------------ */
+  const detailTodo = detailId ? todos.find((x) => x.id === detailId) : null;
+  if (detailTodo) {
+    const group = groupOf(detailTodo);
+    const members = group.length ? group : [detailTodo];
+    const locked = wasteLocked(detailTodo);
+    const manual = isManualSource(detailTodo);
+    return (
+      <TodoDetailScreen
+        key={detailTodo.id}
+        todo={detailTodo}
+        group={members}
+        requester={getRequesterName(detailTodo, materialRequests, quoteRequests)}
+        supplyPhotoUrls={getSupplyPhotos(detailTodo, materialRequests, quoteRequests)}
+        role={role}
+        canToggle={role === "admin" || (manual && !locked)}
+        photoLocked={role !== "admin" && locked}
+        onToggle={async () => {
+          if (role === "admin") {
+            const target = !members.every((m) => m.done);
+            members.forEach((m) => { if (m.done !== target) onAdminToggle(m.id); });
+          } else {
+            await toggleManualTodo(detailTodo.id);
+          }
+        }}
+        onBack={closeDetail}
+        onAddPhoto={addTodoPhoto}
+        onRemovePhoto={removeTodoPhoto}
+        onRequestReassign={role !== "admin" ? onRequestReassignTodo : null}
+        onClearReassignRequest={onClearReassignRequest}
+        onExtendDueDate={role !== "admin" ? onExtendTodoDueDate : null}
+        onSaveEdit={role === "admin" ? onSaveTodoEdit : null}
+        onDeleteGroup={role === "admin" ? onDeleteTodoGroup : null}
+        billingReady={billingReady}
+      />
+    );
+  }
+
+  /* ------------------------------ 목록 ------------------------------ */
   if (mine.length === 0 && role !== "admin") {
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
@@ -167,10 +193,8 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
 
   const q = search.trim().toLowerCase();
   const filtered = mine
-    .filter((t) => showDone || !t.done || t.id === focusTodoId)
+    .filter((t) => showDone || !t.done)
     .filter((t) => !q || t.title.toLowerCase().includes(q) || (t.siteName ?? "").toLowerCase().includes(q));
-  // 같은 요청을 공유하는 행끼리 묶는다 — 기사 본인 화면은 어차피 자기 몫 1건만 남아 있어
-  // 묶어도 그대로다. focusTodoId가 그룹 안에 있으면 그 행을 대표로 써서 딥링크 스크롤이 맞게 한다.
   const groupsMap = new Map();
   for (const t of filtered) {
     const key = groupKeyOf(t);
@@ -178,11 +202,11 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
     groupsMap.get(key).push(t);
   }
   const visible = [...groupsMap.values()]
-    .map((group) => ({ t: group.find((m) => m.id === focusTodoId) ?? group[0], group }))
+    .map((group) => ({ t: group[0], group }))
     .sort((a, b) => new Date(a.t.dueDate) - new Date(b.t.dueDate));
 
   return (
-    <div className="flex-1 overflow-y-auto pb-4">
+    <div className={`flex-1 overflow-y-auto pb-4 ${listNavDir === "back" ? "room-slide-in-left" : ""}`}>
       <div className="flex items-center gap-2 px-5 pt-4">
         {role === "admin" && (
           <button
@@ -213,42 +237,36 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
           <p className="text-xs text-slate-400 text-center py-10">완료되지 않은 할 일이 없습니다</p>
         )}
         {visible.map(({ t, group }, i) => {
-          // 자재/견적 연동 할 일은 비용청구가 완료되어야 자동으로 끝나지만, 관리자가 직접 부여한
-          // 할 일과 정기검사 보완조치·자체점검 지적사항 할 일은 그런 연결고리가 없어 본인이 직접 완료 처리해야 한다.
-          const isManual = t.source === "manual" || t.source === "inspection" || t.source === "selfcheck" || t.source === "waste_return";
-          // 반납 할일은 기사가 직접 완료 처리하되(=isManual), 반납사진을 최소 1장 올려야만 잠금이 풀린다.
-          // 재오픈 후에는 기존 사진이 누적 보존되므로(관리자 화면 감사이력용), "사진이 있으면"이 아니라
-          // "재오픈 시점 기준선(photoCount)보다 사진이 늘었으면"으로 판정 — 새 사진을 추가해야 잠금이 풀린다.
-          const wasteReturnLocked = t.source === "waste_return" && !((t.photoUrls?.length ?? 0) > (t.photoCount ?? 0));
+          const isManual = isManualSource(t);
+          const locked = wasteLocked(t);
           const groupDone = group.every((m) => m.done);
           const overdue = !groupDone && new Date(t.dueDate) < new Date(TODAY_STR);
           const requester = getRequesterName(t, materialRequests, quoteRequests);
-          const expanded = shownExpandedId === t.id;
           const dueTextCls = `text-[11px] font-bold ${overdue ? "text-red-600" : "text-slate-700"}`;
-          // 지브라 스트라이프 — 짝수줄만 살짝 톤(bg-slate-50), 펼친 행은 제목·내용을 한 박스로 묶어 흰 배경
+          // 지브라 스트라이프 — 짝수줄만 살짝 톤(bg-slate-50)
           return (
-            <div key={t.id} id={`todo-row-${t.id}`} className={`rounded-xl px-2 ${expanded ? "bg-white" : i % 2 === 1 ? "bg-slate-50" : ""}`}>
+            <div key={t.id} id={`todo-row-${t.id}`} className={`rounded-xl px-2 ${i % 2 === 1 ? "bg-slate-50" : ""}`}>
               <div className="flex items-start gap-2.5 py-2">
                 <div className="pt-0.5">
                   <TodoCheckbox
                     done={groupDone}
-                    locked={role !== "admin" && (!isManual || wasteReturnLocked)}
+                    locked={role !== "admin" && (!isManual || locked)}
                     onClick={
                       role === "admin"
                         ? () => { const target = !groupDone; group.forEach((m) => { if (m.done !== target) onAdminToggle(m.id); }); }
-                        : isManual && !wasteReturnLocked
+                        : isManual && !locked
                           ? () => toggleManualTodo(t.id)
                           : undefined
                     }
                   />
                 </div>
-                {/* 행 클릭 = 아코디언 펼침/접힘 (바텀시트 대신 인라인) */}
-                <button type="button" onClick={() => setExpanded(expanded ? null : t.id)} className="flex-1 min-w-0 text-left">
+                {/* 행 클릭 = 할 일 상세 화면으로 이동 (게시판 글 상세와 같은 슬라이드) */}
+                <button type="button" onClick={() => openDetail(t.id)} className="flex-1 min-w-0 text-left">
                   <div className="flex items-center gap-1.5">
                     {overdue && <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />}
-                    <p className={`text-sm font-bold min-w-0 ${expanded ? "" : "truncate"} ${groupDone ? "line-through text-slate-400" : "text-slate-800"}`}>{t.title}</p>
-                    {t.reassignRequested && <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full"><Repeat size={9} strokeWidth={2.8} />재배정 요청</span>}
-                    <ChevronDown size={15} className={`shrink-0 text-slate-300 ml-auto transition-transform ${expanded ? "rotate-180" : ""}`} />
+                    <p className={`text-sm font-bold min-w-0 truncate ${groupDone ? "line-through text-slate-400" : "text-slate-800"}`}>{t.title}</p>
+                    {group.some((m) => m.reassignRequested) && <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full"><Repeat size={9} strokeWidth={2.8} />재배정 요청</span>}
+                    <ChevronRight size={15} className="shrink-0 text-slate-300 ml-auto" />
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-0.5">
                     <p className="text-[11px] text-slate-400 truncate">
@@ -267,375 +285,24 @@ export function TodoTab({ todos, setTodos, onReassignTodo, onUpdateTodoDescripti
                   )}
                 </button>
               </div>
-              {expanded && (
-                <div className="pl-8 pr-0.5 pb-3 pt-1">
-                  <TodoDetailBody
-                    todo={t}
-                    requester={requester}
-                    coAssignees={getCoAssignees(t, todos)}
-                    supplyPhotoUrls={getSupplyPhotos(t, materialRequests, quoteRequests)}
-                    siteAddress={getTodoSiteAddress(t, materialRequests, quoteRequests, sites)}
-                    onToggle={role === "admin" ? onAdminToggle : isManual ? toggleManualTodo : null}
-                    onAddPhoto={addTodoPhoto}
-                    onRemovePhoto={removeTodoPhoto}
-                    onReassign={role === "admin" ? onReassignTodo : null}
-                    engineerNames={engineerNames}
-                    onUpdateDescription={role === "admin" ? onUpdateTodoDescription : null}
-                    onUpdateDueDate={role === "admin" ? onUpdateTodoDueDate : null}
-                    onDelete={role === "admin" ? onDeleteTodo : null}
-                    onExtendDueDate={role !== "admin" ? onExtendTodoDueDate : null}
-                    onRequestReassign={role !== "admin" ? onRequestReassignTodo : null}
-                    onClearReassignRequest={onClearReassignRequest}
-                    role={role}
-                    onClose={() => setExpanded(null)}
-                    hideTitleBlock
-                  />
-                </div>
-              )}
             </div>
           );
         })}
       </div>
 
       {assignOpen && (
-        <TodoAssignSheet engineerNames={engineerNames} onSubmit={onAssignTodo} onClose={() => setAssignOpen(false)} />
+        <TodoAssignSheet engineerNames={engineerNames} onSubmit={onAssignTodo} onClose={() => setAssignOpen(false)} billingReady={billingReady} />
       )}
     </div>
   );
 }
 
 
-// 할 일 상세 본문 (시트/아코디언 공용). role: 'admin'이면 편집·재배정, 기사면 기한연장·재배정 요청.
-export function TodoDetailBody({ todo, requester, coAssignees = [], supplyPhotoUrls = [], siteAddress, onToggle, onAddPhoto, onRemovePhoto, onReassign, engineerNames, onUpdateDescription, onUpdateDueDate, onDelete, onExtendDueDate, onRequestReassign, onClearReassignRequest, role, onClose, hideTitleBlock = false }) {
-  const [descDraft, setDescDraft] = useState(todo.description ?? "");
-  const [editingDesc, setEditingDesc] = useState(false);
-  const [reassignOpen, setReassignOpen] = useState(false);
-  const [reassignReason, setReassignReason] = useState("");
-  const [reassignTo, setReassignTo] = useState("");
-  const [extending, setExtending] = useState(false);
-  const [extendDate, setExtendDate] = useState(todo.dueDate ?? "");
-  const [extendReason, setExtendReason] = useState("");
-  const [deleting, setDeleting] = useState(false);
-
-  async function handleDeleteClick() {
-    if (!(await confirmAsync("이 할 일을 삭제하시겠습니까?"))) return;
-    setDeleting(true);
-    await onDelete(todo.id);
-    setDeleting(false);
-    onClose();
-  }
-  const sourceLabel = todo.source === "manual" ? "관리자 부여" : todo.source === "quote" ? "견적 연동" : todo.source === "inspection" ? "검사 보완" : todo.source === "selfcheck" ? "자체점검 지적" : todo.source === "waste_return" ? "폐자재·여유부품 반납" : "자재 연동";
-  const allAssignees = [todo.assignee, ...coAssignees];
-  // 반납 할일은 기사가 반납사진을 최소 1장 올리기 전까지 완료 처리 버튼을 잠근다 (관리자는 예외).
-  // 재오픈 시 사진은 누적 보존되므로, 재오픈 시점 기준선(photoCount)보다 늘어난 경우에만 잠금 해제.
-  const photoLockedForEngineer = role !== "admin" && todo.source === "waste_return" && !((todo.photoUrls?.length ?? 0) > (todo.photoCount ?? 0));
-
-  return (
-    <>
-      {!hideTitleBlock && (
-        <>
-          <span
-            className={`inline-block text-[11px] font-bold px-2 py-1 rounded-md mb-2 ${
-              todo.done ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-            }`}
-          >
-            {todo.done ? "완료된 할 일" : "미완료된 할 일"}
-          </span>
-          <div className="bg-slate-100 rounded-xl p-3 mb-3">
-            <p className="font-bold text-slate-800">{todo.title}</p>
-          </div>
-        </>
-      )}
-
-      {/* 재배정 요청 — 기사: 넘기기 요청 / 관리자: 요청 확인·반려 */}
-      {todo.reassignRequested && role === "admin" ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3">
-          <p className="text-xs font-bold text-amber-700 mb-1 flex items-center gap-1"><Repeat size={13} strokeWidth={2.5} /> 재배정 요청됨</p>
-          {todo.reassignReason && <p className="text-[13px] text-slate-700">사유: {todo.reassignReason}</p>}
-          {todo.reassignTo && <p className="text-[13px] text-slate-700">희망 담당자: <b>{todo.reassignTo}</b></p>}
-          <p className="text-[11px] text-slate-400 mt-1">아래 담당자에서 변경하면 요청이 자동 해제됩니다.</p>
-          {onClearReassignRequest && (
-            <button type="button" onClick={() => onClearReassignRequest(todo.id)} className="mt-2 text-[11px] font-bold text-slate-500 border border-slate-200 rounded-lg px-2.5 py-1.5 active:bg-slate-50">요청 반려</button>
-          )}
-        </div>
-      ) : null}
-      {onRequestReassign && !todo.done && role !== "admin" && (
-        todo.reassignRequested ? (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3">
-            <p className="text-xs font-bold text-amber-700 mb-1 flex items-center gap-1"><Repeat size={13} strokeWidth={2.5} /> 재배정 요청됨 · 관리자 확인 중</p>
-            {todo.reassignTo && <p className="text-[13px] text-slate-700">희망 담당자: <b>{todo.reassignTo}</b></p>}
-            {onClearReassignRequest && (
-              <button type="button" onClick={() => onClearReassignRequest(todo.id)} className="mt-2 text-[11px] font-bold text-slate-500 border border-slate-200 rounded-lg px-2.5 py-1.5 active:bg-slate-50">요청 취소</button>
-            )}
-          </div>
-        ) : reassignOpen ? (
-          <div className="border border-slate-200 rounded-xl p-3 mb-3">
-            <p className="text-xs font-bold text-slate-600 mb-2">담당자 재배정 요청</p>
-            <select className={`${inputCls} mb-2`} value={reassignTo} onChange={(e) => setReassignTo(e.target.value)}>
-              <option value="">희망 담당자 (선택 안 함 가능)</option>
-              {engineerNames?.filter((n) => n !== todo.assignee).map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-            <textarea className={inputCls} rows={2} placeholder="사유 (예: 오늘 다른 현장 처리 중)" value={reassignReason} onChange={(e) => setReassignReason(e.target.value)} />
-            <div className="flex gap-1.5 mt-2">
-              <button type="button" onClick={() => setReassignOpen(false)} className="flex-1 text-xs font-bold py-2 rounded-lg bg-slate-100 text-slate-500 active:bg-slate-200">취소</button>
-              <button type="button" onClick={() => { onRequestReassign(todo.id, reassignReason.trim(), reassignTo); setReassignOpen(false); }} className="flex-1 text-xs font-bold py-2 rounded-lg bg-blue-700 text-white active:bg-blue-800">요청 보내기</button>
-            </div>
-          </div>
-        ) : (
-          <button type="button" onClick={() => { setReassignReason(""); setReassignTo(""); setReassignOpen(true); }} className="w-full mb-3 text-xs font-bold text-blue-700 border border-blue-200 rounded-xl py-2.5 active:bg-blue-50 flex items-center justify-center gap-1.5">
-            <Repeat size={13} strokeWidth={2.5} /> 담당자 재배정 요청
-          </button>
-        )
-      )}
-
-      {(todo.description || onUpdateDescription) && (
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-bold text-slate-500">내용</p>
-            {onUpdateDescription && !editingDesc && (
-              <button type="button" onClick={() => setEditingDesc(true)} className="text-[11px] font-bold text-blue-600">
-                {todo.description ? "수정" : "내용 추가"}
-              </button>
-            )}
-          </div>
-          {editingDesc ? (
-            <div>
-              <textarea
-                className={inputCls}
-                rows={3}
-                placeholder="예: 7만원, 교체확인서 부탁드립니다"
-                value={descDraft}
-                onChange={(e) => setDescDraft(e.target.value)}
-              />
-              <div className="flex gap-1.5 mt-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onUpdateDescription(todo.id, descDraft.trim());
-                    setEditingDesc(false);
-                  }}
-                  className="flex-1 text-xs font-bold py-2 rounded-lg bg-blue-700 text-white active:bg-blue-800"
-                >
-                  저장
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDescDraft(todo.description ?? "");
-                    setEditingDesc(false);
-                  }}
-                  className="flex-1 text-xs font-bold py-2 rounded-lg bg-slate-100 text-slate-500 active:bg-slate-200"
-                >
-                  취소
-                </button>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-slate-700 whitespace-pre-wrap">{todo.description || "등록된 내용이 없습니다"}</p>
-          )}
-        </div>
-      )}
-
-      <div className="space-y-2.5 mb-4">
-        {requester && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">요청자</span>
-            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-blue-900 text-white">{requester}</span>
-          </div>
-        )}
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-400">담당자</span>
-          {onReassign ? (
-            <select
-              className="text-sm font-semibold text-slate-700 border border-slate-200 rounded-lg px-2 py-1"
-              value={todo.assignee}
-              onChange={async (e) => {
-                const target = e.target;
-                const next = target.value;
-                if (next === todo.assignee) return;
-                if (await confirmAsync(`담당자를 ${next}(으)로 변경하시겠습니까?`)) {
-                  onReassign(todo.id, next);
-                } else {
-                  target.value = todo.assignee; // 취소 시 원래 값으로 되돌림 — 안 그러면 select가 리렌더 전까지 바뀐 값으로 남아있어 취소가 안 먹힌 것처럼 보인다
-                }
-              }}
-            >
-              {engineerNames?.includes(todo.assignee) ? null : <option value={todo.assignee}>{todo.assignee}</option>}
-              {engineerNames?.map((name) => <option key={name} value={name}>{name}</option>)}
-            </select>
-          ) : (
-            <span className="font-semibold text-slate-700">{todo.assignee}</span>
-          )}
-        </div>
-        {coAssignees.length > 0 && (
-          <div>
-            <div className="flex items-center justify-between text-sm mb-1.5">
-              <span className="text-slate-400">전체 담당자</span>
-              <span className="text-xs text-slate-400">전체 {allAssignees.length}</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {allAssignees.map((name) => (
-                <span key={name} className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
-                  {name}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-        {todo.source !== "manual" && todo.source !== "waste_return" && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">완료 조건</span>
-            <span className="font-semibold text-slate-700">
-              {coAssignees.length > 0 ? "담당자 중 1명 비용청구" : "비용청구 시 자동완료"}
-            </span>
-          </div>
-        )}
-        <div className="flex items-center justify-between text-sm gap-3">
-          <span className="text-slate-400 shrink-0">현장</span>
-          <span className="font-semibold text-slate-700 text-right">{siteAddress || todo.siteName}</span>
-        </div>
-        {todo.billingAmount != null && (
-          <div className="flex items-center justify-between text-sm gap-3">
-            <span className="text-slate-400 shrink-0">청구 부품·금액</span>
-            <span className="font-bold text-blue-700 text-right">
-              {todo.billingPart ? `${todo.billingPart} · ` : ""}합계 ₩{Number(todo.billingAmount).toLocaleString()}
-            </span>
-          </div>
-        )}
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-400">출처</span>
-          <span className="font-semibold text-slate-700">{sourceLabel}</span>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-400">부여일</span>
-          <span className="font-semibold text-slate-700">{formatYyMmDd(todo.assignedDate)}</span>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-400">마감일</span>
-          {onUpdateDueDate ? (
-            <input
-              type="date"
-              className="text-sm font-semibold text-slate-700 border border-slate-200 rounded-lg px-2 py-1"
-              value={todo.dueDate ?? ""}
-              onChange={(e) => { if (e.target.value) onUpdateDueDate(todo.id, e.target.value); }}
-            />
-          ) : (
-            <span className="flex items-center gap-2">
-              <span className="font-semibold text-slate-700">{formatYyMmDd(todo.dueDate)}</span>
-              {onExtendDueDate && (
-                <button
-                  type="button"
-                  onClick={() => { setExtendDate(todo.dueDate ?? ""); setExtendReason(""); setExtending(true); }}
-                  className="text-sm font-semibold text-blue-600"
-                >
-                  연장
-                </button>
-              )}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-400">상태</span>
-          <span className={`font-semibold ${todo.done ? "text-emerald-600" : "text-amber-600"}`}>{todo.done ? "완료" : "미완료"}</span>
-        </div>
-      </div>
-      {supplyPhotoUrls.length > 0 && (
-        <div className="mb-4">
-          <p className="text-xs font-bold text-slate-500 mb-2">지급된 자재 사진 ({supplyPhotoUrls.length})</p>
-          <PhotoGrid urls={supplyPhotoUrls} cols={3} />
-        </div>
-      )}
-      {todo.source !== "waste_return" && todo.photoUrls?.length > 0 && (
-        <div className="mb-4">
-          <p className="text-xs font-bold text-slate-500 mb-2">첨부파일 ({todo.photoUrls.length})</p>
-          <PhotoGrid urls={todo.photoUrls} cols={3} />
-        </div>
-      )}
-      {todo.source === "waste_return" && (
-        <div className="mb-4">
-          {todo.wasteReturnRows?.length > 0 && (
-            <p className="text-[11px] font-bold text-slate-500 mb-1">
-              반납 항목: {todo.wasteReturnRows.map((r) => `${r.name} ${r.qtyRequired}EA`).join(", ")}
-            </p>
-          )}
-          <MultiPhotoUpload
-            photos={(todo.photoUrls ?? []).map((url) => ({ url }))}
-            onUploaded={(url) => onAddPhoto(todo.id, url)}
-            onRemove={(idx) => onRemovePhoto(todo.id, idx)}
-            label="반납 사진"
-            uploadFolder={`todos/${todo.id}`}
-          />
-        </div>
-      )}
-      {onToggle && !photoLockedForEngineer ? (
-        <PrimaryButton onClick={() => { onToggle(todo.id); onClose(); }}>
-          {todo.done ? "완료 취소" : "완료 처리"}
-        </PrimaryButton>
-      ) : todo.done ? (
-        <div className="text-xs font-bold px-3 py-2.5 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center gap-1">
-          <Check size={14} /> 완료됨
-        </div>
-      ) : photoLockedForEngineer ? (
-        <div className="text-[11px] font-bold px-3 py-2.5 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center gap-1">
-          <Lock size={12} /> 반납 사진 업로드 후 완료 가능
-        </div>
-      ) : (
-        <div className="text-[11px] font-bold px-3 py-2.5 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center gap-1">
-          <Lock size={12} /> 비용청구 시 자동완료
-        </div>
-      )}
-      {onDelete && (
-        <button
-          type="button"
-          disabled={deleting}
-          onClick={handleDeleteClick}
-          className="w-full mt-2 text-xs font-bold text-red-600 border border-red-200 rounded-xl py-2.5 active:bg-red-50 disabled:opacity-50"
-        >
-          {deleting ? "삭제 중..." : "할 일 삭제"}
-        </button>
-      )}
-      {extending && (
-        <div className="fixed inset-0 z-[80] bg-black/40 flex items-center justify-center px-8" onClick={() => setExtending(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-xs p-5" onClick={(e) => e.stopPropagation()}>
-            <p className="text-sm font-bold text-slate-800 mb-3">마감일 연장</p>
-            <input
-              type="date"
-              className={`${inputCls} mb-2`}
-              value={extendDate}
-              onChange={(e) => setExtendDate(e.target.value)}
-            />
-            <textarea
-              className={inputCls}
-              rows={2}
-              placeholder="연장 사유를 입력하세요"
-              value={extendReason}
-              onChange={(e) => setExtendReason(e.target.value)}
-            />
-            <div className="flex gap-2 mt-3">
-              <button type="button" onClick={() => setExtending(false)} className="flex-1 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl py-2.5 active:bg-slate-200">
-                취소
-              </button>
-              <button
-                type="button"
-                disabled={!extendDate || !extendReason.trim()}
-                onClick={() => { onExtendDueDate(todo.id, extendDate, extendReason.trim()); setExtending(false); }}
-                className="flex-1 text-sm font-bold text-white bg-blue-700 rounded-xl py-2.5 active:bg-blue-800 disabled:bg-slate-300"
-              >
-                확인
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-
-export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
+export function TodoAssignSheet({ engineerNames, onSubmit, onClose, billingReady }) {
   const sites = useContext(SitesContext);
+  const units = useContext(UnitsContext);
   const [uploadSession] = useState(() => Date.now());
-  const [form, setForm] = useState({ assignees: [], siteId: "", title: "", description: "", dueDate: addDays(TODAY_STR, 7), photos: [] });
+  const [form, setForm] = useState({ assignees: [], siteId: "", title: "", description: "", dueDate: addDays(TODAY_STR, 7), photos: [], billingRequired: false, unitIds: [], unitId: "", billingRows: [] });
   // 사진 업로드가 끝나기 전에 부여 버튼을 누르면 그 사진이 빠진 채로 저장될 수 있어 막는다.
   const [photosUploading, setPhotosUploading] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
@@ -649,7 +316,9 @@ export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
 
   const site = sites.find((s) => s.id === form.siteId);
   // 현장은 필수가 아니다 — 현장과 무관한 일반 할일도 부여할 수 있어야 한다.
-  const canSubmit = form.assignees.length > 0 && form.title.trim().length > 0 && !photosUploading;
+  const siteUnits = units.filter((u) => u.siteId === form.siteId && u.isActive !== false);
+  const canSubmit = form.assignees.length > 0 && form.title.trim().length > 0 && !photosUploading
+    && (!form.billingRequired || (!!form.siteId && billingSetupValid(form, siteUnits)));
 
   return (
     <Sheet title="할 일 부여" onClose={onClose}>
@@ -679,8 +348,9 @@ export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
         </div>
       </Field>
       <Field label="현장 (선택)">
-        <SiteSearchSelect value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id })} />
+        <SiteSearchSelect value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitIds: [], unitId: "" })} />
       </Field>
+      {/* 부품 교체+청구 업무는 관리자웹 자재신청관리의 "직접 지급"으로 일원화 — 새 배정에서는 청구 설정을 숨긴다 */}
       <Field label="할 일 제목">
         <input
           className={inputCls}
@@ -718,6 +388,9 @@ export function TodoAssignSheet({ engineerNames, onSubmit, onClose }) {
           onSubmit({
             assignees: form.assignees,
             siteName: site?.name ?? null,
+            billingRequired: form.billingRequired,
+            unitIds: form.unitIds,
+            billingRows: form.billingRows,
             title: form.title.trim(),
             description: form.description.trim() || null,
             dueDate: form.dueDate,

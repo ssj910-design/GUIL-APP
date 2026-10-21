@@ -3,14 +3,18 @@
 // 자재신청 처리 — 지급완료 액션 포함.
 // 입력이 필요 없는 전환(없음)은 없고, 사진·담당기사·금액처럼 입력이 필요한 전환(자재 지급완료)만
 // 모달을 쓴다 (docs/superpowers/specs/2026-07-21-materials-admin-actions-design.md).
-import { useState } from "react";
+import { useState, useContext } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
 import { uploadPhoto } from "@/lib/photos";
-import { unitIdFor, addDays, shortDate, parsePartQty } from "@/lib/utils";
+import { unitIdFor, addDays, shortDate, parsePartQty, formatUnitLabel } from "@/lib/utils";
+import { mapMaterialRequest, mapTodo } from "@/lib/mappers";
+import { billingPatchOf, isQuoteRefInput, rowAmountOf, amountTextOf, sumAmounts } from "@/lib/todoEdit";
+import { BillingSetupFields, billingSetupValid } from "@/app/components/BillingSetupFields";
+import { PersonPicker } from "@/app/components/admin/TodosAdmin";
 import { TODAY_STR } from "@/lib/constants";
-import { locOf, addressOf, personOf, assigneeNames, billingCompleteFor, StatusBadge, AdminTable, inputCls, Modal, PhotoGrid } from "@/app/components/admin/adminShared";
+import { locOf, addressOf, personOf, assigneeNames, billingCompleteFor, StatusBadge, AdminTable, inputCls, Modal, PhotoGrid, SiteAutocomplete, AdminAuthContext } from "@/app/components/admin/adminShared";
 
 const MATERIAL_TONE = { 승인대기: "blue", 지급완료: "green", 반려: "red", 교체완료: "indigo" };
 const MATERIAL_REJECT_REASONS = ["중복 요청", "현장 확인 필요", "내용 부족", "재고 보유"];
@@ -19,6 +23,7 @@ const MATERIAL_REJECT_REASONS = ["중복 요청", "현장 확인 필요", "내�
 function parseAmountFromBillingPart(billingPart, part) {
   if (!billingPart) return "";
   const escaped = part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp(`${escaped}\\(견적서 참조\\)`).test(billingPart)) return "-";
   const m = billingPart.match(new RegExp(`${escaped}\\(₩([0-9,]+)\\)`));
   return m ? m[1].replace(/,/g, "") : "";
 }
@@ -27,6 +32,12 @@ export default function MaterialsAdmin({ data, setData }) {
   const { materialRequests: allMaterialRequests } = data;
   const [search, setSearch] = useState("");
   const [payTarget, setPayTarget] = useState(null); // 지급완료 처리 중인 자재신청
+  const [directOpen, setDirectOpen] = useState(false); // 관리자 직접 지급(자재신청 없이)
+  const { id: adminId, name: adminName } = useContext(AdminAuthContext);
+  // material_requests.created_by_admin 컬럼(마이그레이션 152)이 있을 때만 "직접 지급"을 보여준다.
+  const directReady = (data.materialRequests ?? []).some((r) => r.createdByAdmin !== undefined);
+  // 여러 호기를 한 건으로 지급한 건은 대표 호기 하나만 보여주는 locOf 대신 호기 전체를 같이 보여준다.
+  const matLoc = (m) => (m.elevatorNos?.length > 1 ? `${m.siteName ?? "-"} · ${formatUnitLabel(m.elevatorNos)}` : locOf(data, m.unitId, m.siteName, m.elevatorNo));
   // 지급완료 체크는 모달이 닫히는 것 말고는 눈에 보이는 반응이 없어(목록 배지 변화는 필터에
   // 가려 안 보일 수 있음) "됐나?" 싶은 게 당연하다 — 처리 직후 잠깐 토스트를 띄운다.
   const [toast, setToast] = useState(null);
@@ -63,6 +74,64 @@ export default function MaterialsAdmin({ data, setData }) {
     setData((prev) => ({
       ...prev,
       materialRequests: prev.materialRequests.map((r) => (r.id === request.id ? { ...r, status: "반려", rejectReason: reason, rejectedDate: TODAY_STR } : r)),
+    }));
+    return true;
+  }
+
+  // 관리자 직접 지급 — 기사의 자재신청 없이 관리자가 지급을 만든다. "신청 + 지급완료"를 한 번에 처리해
+  // 기사 신청 → 지급 흐름과 같은 결과물(자재신청 1건 + 담당자별 할일 + 청구 연결)을 만든다.
+  // 여러 호기는 신청 1건(elevator_nos), 담당자 여러 명은 같은 신청을 공유하는 할일 여러 행.
+  // 순서: 신청 insert(승인대기) → 할일 upsert → 지급완료로 변경 — 중간 실패가 "지급완료인데 할일 없음"이
+  // 되지 않게 기존 지급 처리와 같은 패턴(실패하면 만든 신청을 지운다).
+  async function handleDirectSupply(form, photoUrls) {
+    const site = data.sites.find((s) => s.id === form.siteId);
+    const assignees = form.assigneeIds.map((id) => (data.profiles ?? []).find((p) => p.id === id)).filter(Boolean);
+    if (!site || !assignees.length) return false;
+    const patch = billingPatchOf({ ...form, billingRequired: true }, data.units);
+    const requestId = "m" + Date.now();
+    const first = assignees[0];
+    const { data: reqRow, error: reqError } = await supabase.from("material_requests").insert({
+      id: requestId, site_id: site.id, site_name: site.name,
+      elevator_no: patch.elevator_no ?? null, elevator_nos: patch.elevator_nos ?? null, unit_id: patch.unit_id ?? null,
+      part: patch.part, urgency: "일반", note: form.description || null, photo_count: 0,
+      engineer: first.name, requester_id: first.id, requested_date: TODAY_STR, status: "승인대기", created_by_admin: true,
+    }).select().single();
+    if (reqError) { alert("직접 지급 등록 실패: " + reqError.message); return false; }
+
+    const todoRows = assignees.map((p, i) => ({
+      id: i === 0 ? `todo-${requestId}` : `todo-${requestId}-${i}`,
+      material_request_id: requestId, source: "material",
+      title: `${site.name} ${patch.part} 교체 및 확인서 제출`,
+      site_name: site.name, elevator_no: patch.elevator_no ?? null, elevator_nos: patch.elevator_nos ?? null,
+      part: patch.part, assignee: p.name, assignee_id: p.id,
+      assigned_date: TODAY_STR, due_date: form.dueDate || addDays(TODAY_STR, 30), done: false,
+      description: form.description || null, unit_id: patch.unit_id ?? null,
+      billing_part: patch.billing_part, billing_amount: patch.billing_amount, billing_part_rows: patch.billing_part_rows,
+      requested_by_id: adminId ?? null, requested_by_name: adminName ?? null,
+    }));
+    const { data: todoSaved, error: todoError } = await supabase.from("todos").upsert(todoRows).select();
+    if (todoError) {
+      await supabase.from("material_requests").delete().eq("id", requestId);
+      alert("할 일 생성 실패 — 직접 지급을 취소했습니다: " + todoError.message);
+      return false;
+    }
+    const supplyPatch = {
+      status: "지급완료", supplied_date: TODAY_STR,
+      has_supply_photo: photoUrls.length > 0, supply_photo_urls: photoUrls.length ? photoUrls : null,
+    };
+    const { error: statusError } = await supabase.from("material_requests").update(supplyPatch).eq("id", requestId);
+    if (statusError) { alert("지급완료 처리 실패: " + statusError.message); return false; }
+    for (const [i, p] of assignees.entries()) {
+      notify("supply_ready", {
+        profileIds: [p.id], title: "자재 지급 완료 — 수령 확인해주세요",
+        body: `${site.name}${patch.elevator_no ? ` · ${formatUnitLabel(patch.elevator_nos ?? [patch.elevator_no])}` : ""} · ${patch.part}`,
+        url: `/?openTodo=${todoRows[i].id}`,
+      });
+    }
+    setData((prev) => ({
+      ...prev,
+      materialRequests: [mapMaterialRequest({ ...reqRow, ...supplyPatch }), ...prev.materialRequests],
+      todos: [...(todoSaved ?? []).map(mapTodo), ...prev.todos],
     }));
     return true;
   }
@@ -147,10 +216,15 @@ export default function MaterialsAdmin({ data, setData }) {
     const prevAssigneeId = (data.todos ?? []).find((t) => t.id === todoId)?.assigneeId;
     const assigneeChanged = assigneeId && assigneeId !== prevAssigneeId;
     const rowsToSave = billingPartRows?.length ? billingPartRows : null;
-    const todoPatch = {
-      assignee: assigneeName, assignee_id: assigneeId || null, billing_part: billingPart, billing_amount: billingAmount,
+    // 부품·금액은 같은 신청을 공유하는 모든 담당자 행에 똑같이, 담당자 교체는 대표 행(todo-<신청id>)에만 —
+    // 관리자 직접 지급으로 담당자가 여러 명인 건은 담당자 구성을 할일관리에서 바꾼다.
+    const billingPatchRows = {
+      billing_part: billingPart, billing_amount: billingAmount,
       ...(billingPartRowsReady ? { billing_part_rows: rowsToSave } : {}),
     };
+    const { error: billErr } = await supabase.from("todos").update(billingPatchRows).eq("material_request_id", request.id);
+    if (billErr) { alert("할 일 수정 실패: " + billErr.message); return; }
+    const todoPatch = { assignee: assigneeName, assignee_id: assigneeId || null };
     const { error: todoError } = await supabase.from("todos").update(todoPatch).eq("id", todoId);
     if (todoError) { alert("할 일 수정 실패: " + todoError.message); return; }
     if (assigneeChanged) {
@@ -163,7 +237,9 @@ export default function MaterialsAdmin({ data, setData }) {
         r.id === request.id ? { ...r, hasSupplyPhoto: patch.has_supply_photo, supplyPhotoUrls: photoUrls } : r
       ),
       todos: prev.todos.map((t) =>
-        t.id === todoId ? { ...t, assignee: assigneeName, assigneeId: assigneeId || null, billingPart, billingAmount, billingPartRows: rowsToSave } : t
+        t.materialRequestId === request.id
+          ? { ...t, billingPart, billingAmount, billingPartRows: rowsToSave, ...(t.id === todoId ? { assignee: assigneeName, assigneeId: assigneeId || null } : {}) }
+          : t
       ),
     }));
   }
@@ -172,6 +248,11 @@ export default function MaterialsAdmin({ data, setData }) {
     <div className="max-w-[100rem] mx-auto">
       <h1 className="text-xl font-extrabold mb-4">자재신청관리</h1>
       <div className="flex items-center justify-end gap-3 mb-3">
+        {directReady && (
+          <button onClick={() => setDirectOpen(true)} className="text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-xl px-4 py-2">
+            + 직접 지급
+          </button>
+        )}
         <div className="relative max-w-64">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input className={`${inputCls} pl-8`} placeholder="현장·부품·기사명 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -186,12 +267,14 @@ export default function MaterialsAdmin({ data, setData }) {
             onClick={() => setDetailTarget(m)}
           >
             <td className="pl-5 pr-3 py-2.5 text-slate-500 whitespace-nowrap">{shortDate(m.requestedDate)}</td>
-            <td className="px-3 py-2.5 font-semibold whitespace-nowrap">{locOf(data, m.unitId, m.siteName, m.elevatorNo)}</td>
+            <td className="px-3 py-2.5 font-semibold whitespace-nowrap">{matLoc(m)}</td>
             <td className="px-3 py-2.5 text-slate-600">{m.part}</td>
             <td className="px-3 py-2.5">
               {m.urgency === "긴급" ? <StatusBadge tone="red">긴급</StatusBadge> : <span className="text-slate-500 text-xs">{m.urgency}</span>}
             </td>
-            <td className="px-3 py-2.5 whitespace-nowrap">{personOf(data, m.requesterId, m.engineer)}</td>
+            <td className="px-3 py-2.5 whitespace-nowrap">
+              {m.createdByAdmin ? <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 rounded px-1.5 py-0.5">관리자 직접 지급</span> : personOf(data, m.requesterId, m.engineer)}
+            </td>
             <td className="px-3 py-2.5 text-xs text-slate-500">{m.supplyPhotoUrls?.length ? `${m.supplyPhotoUrls.length}장` : "-"}</td>
             <td className="px-3 py-2.5">
               {(() => {
@@ -239,6 +322,20 @@ export default function MaterialsAdmin({ data, setData }) {
         />
       )}
 
+      {directOpen && (
+        <DirectSupplyModal
+          data={data}
+          onClose={() => setDirectOpen(false)}
+          onSubmit={async (form, photoUrls) => {
+            if (!(await handleDirectSupply(form, photoUrls))) return false;
+            setDirectOpen(false);
+            setToast("직접 지급 처리했습니다.");
+            setTimeout(() => setToast(null), 1800);
+            return true;
+          }}
+        />
+      )}
+
       {detailTarget && (
         <MaterialDetailModal request={detailTarget} data={data} onClose={() => setDetailTarget(null)} onReject={() => setRejectTarget(detailTarget)} />
       )}
@@ -266,6 +363,90 @@ export default function MaterialsAdmin({ data, setData }) {
   );
 }
 
+// 관리자 직접 지급 — 기사 자재신청 없이 현장·호기(여러 개면 신청 1건)·부품별 예정금액·담당 기사(여러 명)를 정해 바로 지급한다.
+function DirectSupplyModal({ data, onClose, onSubmit }) {
+  const { sites, units, profiles } = data;
+  const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false);
+  const [form, setForm] = useState({
+    siteId: "", unitId: "", unitIds: [], billingRequired: true, billingRows: [], assigneeIds: [],
+    dueDate: addDays(TODAY_STR, 30), description: "",
+  });
+  const [photos, setPhotos] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [folderToken] = useState(() => Date.now());
+  const siteUnits = units.filter((u) => u.siteId === form.siteId);
+  const valid = !!form.siteId && form.assigneeIds.length > 0 && billingSetupValid(form, siteUnits);
+  const toggleAssignee = (id) => setForm((f) => ({ ...f, assigneeIds: f.assigneeIds.includes(id) ? f.assigneeIds.filter((x) => x !== id) : [...f.assigneeIds, id] }));
+  const label = "text-xs font-bold text-slate-400 block mb-1";
+
+  async function handleFiles(e) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const urls = await Promise.all(files.map((f) => uploadPhoto(f, `materials/direct-${folderToken}/supply`)));
+      setPhotos((p) => [...p, ...urls]);
+    } catch (err) {
+      alert("사진 업로드에 실패했습니다: " + (err.message ?? "알 수 없는 오류"));
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  }
+  async function submit() {
+    if (!valid || saving || uploading) return;
+    setSaving(true);
+    const ok = await onSubmit(form, photos);
+    setSaving(false);
+    if (!ok) return;
+  }
+
+  return (
+    <Modal title="직접 지급 — 기사 신청 없이 자재 지급" onClose={onClose}>
+      <p className="text-xs text-slate-500 mb-3">지급완료 처리와 함께 담당 기사에게 할일이 생기고, 기사가 비용청구를 제출해야 완료됩니다.</p>
+      <div className="space-y-3">
+        <div>
+          <label className={label}>현장</label>
+          <SiteAutocomplete sites={sites} value={form.siteId} onChange={(id) => setForm({ ...form, siteId: id, unitId: "", unitIds: [] })} />
+        </div>
+        <BillingSetupFields alwaysOn form={form} setForm={setForm} siteUnits={siteUnits} siteSelected={!!form.siteId} />
+        <div>
+          <label className={label}>담당 기사 (여러 명 가능 — 1명이 청구하면 전원 완료)</label>
+          <PersonPicker candidates={engineers} selectedIds={form.assigneeIds} onAdd={toggleAssignee} onRemove={toggleAssignee} placeholder="이름 검색" />
+        </div>
+        <div>
+          <label className={label}>기한</label>
+          <input type="date" className={inputCls} value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
+        </div>
+        <div>
+          <label className={label}>내용 (선택)</label>
+          <textarea className={inputCls} rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+        </div>
+        <div>
+          <label className={label}>지급 사진 (선택)</label>
+          <div className="flex flex-wrap gap-1.5 mb-1.5">
+            {photos.map((url, i) => (
+              <div key={i} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+                <button onClick={() => setPhotos((p) => p.filter((_, idx) => idx !== i))} className="absolute -top-1.5 -right-1.5 bg-slate-800 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]">×</button>
+              </div>
+            ))}
+          </div>
+          <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 cursor-pointer">
+            사진 추가
+            <input type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} disabled={uploading} />
+          </label>
+        </div>
+        <button onClick={submit} disabled={!valid || saving || uploading} className="w-full bg-blue-700 disabled:bg-slate-300 text-white text-sm font-bold py-2.5 rounded-lg">
+          {saving ? "처리 중..." : "직접 지급 처리"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 function MaterialSupplyModal({ request, profiles, todos, onClose, onSubmit }) {
   const isEdit = request.status === "지급완료";
   const existingTodo = todos.find((t) => t.materialRequestId === request.id);
@@ -287,13 +468,14 @@ function MaterialSupplyModal({ request, profiles, todos, onClose, onSubmit }) {
     return initial;
   });
   const total = parts.reduce((sum, _, i) => sum + (Number(amounts[i]) || 0), 0);
+  const refCount = parts.filter((_, i) => isQuoteRefInput(amounts[i])).length;
   const billingPartText = parts
-    .map((part, i) => (amounts[i] ? `${part}(₩${Number(amounts[i]).toLocaleString()})` : part))
+    .map((part, i) => (isQuoteRefInput(amounts[i]) ? `${part}(${amountTextOf(null)})` : amounts[i] ? `${part}(₩${Number(amounts[i]).toLocaleString()})` : part))
     .join(", ");
   const allAmountsFilled = parts.every((_, i) => amounts[i] !== undefined && amounts[i] !== "");
   const billingPartRows = parts.map((part, i) => {
     const { name, qty } = parsePartQty(part);
-    return { name: name || part, qty: qty || null, amount: Number(amounts[i]) || 0 };
+    return { name: name || part, qty: qty || null, amount: rowAmountOf(amounts[i]) };
   });
 
   async function handleFiles(e) {
@@ -313,7 +495,7 @@ function MaterialSupplyModal({ request, profiles, todos, onClose, onSubmit }) {
 
   async function submit() {
     setSaving(true);
-    await onSubmit({ assigneeId, billingPart: billingPartText || null, billingAmount: total || null, billingPartRows, photoUrls: photos });
+    await onSubmit({ assigneeId, billingPart: billingPartText || null, billingAmount: sumAmounts(billingPartRows.map((r) => r.amount)), billingPartRows, photoUrls: photos });
     setSaving(false);
   }
 
@@ -357,17 +539,17 @@ function MaterialSupplyModal({ request, profiles, todos, onClose, onSubmit }) {
               <div key={i} className="flex items-center gap-1.5">
                 <span className="text-xs text-slate-700 flex-1 truncate">{part}</span>
                 <input
-                  type="number"
                   className={`${inputCls} w-28`}
-                  placeholder="금액"
+                  placeholder="금액 (-)"
                   value={amounts[i] ?? ""}
-                  onChange={(e) => setAmounts((m) => ({ ...m, [i]: e.target.value }))}
+                  onChange={(e) => setAmounts((m) => ({ ...m, [i]: isQuoteRefInput(e.target.value) ? "-" : e.target.value.replace(/\D/g, "") }))}
                 />
               </div>
             ))}
           </div>
-          {parts.length > 1 && <p className="text-[10px] text-slate-400 text-right mt-1">합계 ₩{total.toLocaleString()}</p>}
-          {!allAmountsFilled && <p className="text-[10px] text-red-500 mt-1">모든 부품의 금액을 입력해주세요</p>}
+          {parts.length > 1 && <p className="text-[10px] text-slate-400 text-right mt-1">{refCount > 0 ? `견적서 참조 ${refCount}건 · 확정 금액 합 ` : "합계 "}₩{total.toLocaleString()}</p>}
+          {!allAmountsFilled && <p className="text-[10px] text-red-500 mt-1">모든 부품의 금액을 입력해주세요 (금액 미정이면 -)</p>}
+          <p className="text-[10px] text-slate-400 mt-1">금액 칸에 <b>-</b>를 입력하면 견적서 참조(금액 미정)로 표시되고, 관리자가 나중에 금액을 입력해 청구합니다.</p>
         </div>
 
         <button

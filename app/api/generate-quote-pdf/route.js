@@ -4,7 +4,10 @@
 import { buildQuotePdfBytes } from "@/lib/quotePdf";
 import { supabase } from "@/lib/supabaseClient";
 
+import { authGuard } from "@/lib/verifyToken";
+
 export async function POST(request) {
+  const denied = authGuard(request, { adminOnly: true }); if (denied) return denied;
   const body = await request.json().catch(() => null);
   if (!body?.quoteRequestId) {
     return Response.json({ ok: false, reason: "quoteRequestId 누락" }, { status: 200 });

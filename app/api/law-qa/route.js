@@ -120,7 +120,10 @@ function buildContext(rows) {
     .join("\n\n---\n\n");
 }
 
+import { authGuard } from "@/lib/verifyToken";
+
 export async function POST(request) {
+  const denied = authGuard(request); if (denied) return denied;
   if (!process.env.OPENAI_API_KEY) {
     return Response.json({ ok: false, reason: "OPENAI_API_KEY 미설정" }, { status: 200 });
   }
@@ -296,6 +299,7 @@ ${prev.length ? `판단 기준은 하나다 — **"무엇의" 기준·주기·�
 // 왜 서버를 거치나: 기사 앱이 로그인 상태가 아닐 수 있어(SKIP_LOGIN) 클라이언트에서
 // 바로 쓰면 RLS에 막힌다. 어차피 로그를 남긴 것도 서버라 여기서 마무리하는 게 맞다.
 export async function PATCH(request) {
+  const denied = authGuard(request); if (denied) return denied;
   const { logId, rating } = await request.json().catch(() => ({}));
   if (!logId || ![1, -1].includes(rating)) {
     return Response.json({ ok: false, reason: "잘못된 요청" }, { status: 400 });
