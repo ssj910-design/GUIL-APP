@@ -389,6 +389,16 @@ function DetailPanel({ group, data, onDeleted, onSave, onSaveGroup, onChangeAssi
                 {t.billingPart && <p className="text-[11px] text-slate-500 mt-0.5 break-keep">{t.billingPart}</p>}
               </FieldRow>
             )}
+            {/* 자재지급 연동 할일(source=quote/material)은 billingRequired가 아니라 지급 완료 시
+                billing_amount·billing_part가 바로 채워진다(마이그레이션 024) — 기사 앱 TodoDetailScreen과
+                같은 기준으로, billingRequired 플래그와 무관하게 금액이 있으면 보여준다. */}
+            {!t.billingRequired && (t.billingAmount != null || billingQuoteRef(t)) && (
+              <FieldRow label="청구 부품·금액">
+                <p className="text-sm font-semibold text-blue-700 pt-0.5">
+                  {t.billingPart ? `${t.billingPart} · ` : ""}{t.billingAmount != null ? `합계 ₩${Number(t.billingAmount).toLocaleString("ko-KR")}` : "금액 견적서 참조"}
+                </p>
+              </FieldRow>
+            )}
             {isGroup ? <FieldRow label="담당자">{memberList}</FieldRow> : (
               <FieldRow label="담당자"><p className="text-sm font-semibold text-slate-700 pt-0.5">{personOf(data, t.assigneeId, t.assignee)}</p></FieldRow>
             )}
