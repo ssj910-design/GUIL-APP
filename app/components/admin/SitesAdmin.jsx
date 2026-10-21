@@ -67,6 +67,8 @@ function AddSiteModal({ engineers, onClose, onSave }) {
     contractDate: "", contractEnd: "", assignedEngineers: [], leadEngineer: "",
     phone: "", fax: "", email: "", accessInfo: "", notes: "",
   });
+  // 저장 중 "추가" 연타(특히 느린 네트워크에서)로 같은 현장이 여러 번 insert되는 걸 막는다.
+  const [saving, setSaving] = useState(false);
   const set = (k) => (v) => setForm({ ...form, [k]: v });
   function toggleEngineer(name) {
     setForm((f) => {
@@ -128,11 +130,14 @@ function AddSiteModal({ engineers, onClose, onSave }) {
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onClose} className="text-sm font-bold text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5">취소</button>
           <button
-            disabled={!form.name.trim()}
-            onClick={() => onSave(form)}
+            disabled={!form.name.trim() || saving}
+            onClick={async () => {
+              setSaving(true);
+              try { await onSave(form); } finally { setSaving(false); }
+            }}
             className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-xl px-4 py-2.5"
           >
-            추가
+            {saving ? "추가 중..." : "추가"}
           </button>
         </div>
       </div>
