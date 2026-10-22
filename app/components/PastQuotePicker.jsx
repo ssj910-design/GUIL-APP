@@ -25,7 +25,7 @@ export default function PastQuotePicker({ Shell, inputCls, quotes, site, quote, 
   const q = normName(search);
   const rows = ranked
     .filter((r) => scope === "all" || r.sameSite || siteCount === 0)
-    .filter((r) => !q || normName(`${r.q.quoteTitle ?? ""} ${(r.q.quoteItems ?? []).map((it) => it.name).join(" ")} ${r.q.siteName ?? ""}`).includes(q))
+    .filter((r) => !q || normName(`${r.q.quoteTitle ?? ""} ${(r.q.quoteItems ?? []).map((it) => `${it.name} ${it.spec ?? ""}`).join(" ")} ${r.q.siteName ?? ""}`).includes(q))
     .slice(0, 40);
 
   function pick(pq) {
@@ -116,7 +116,7 @@ export default function PastQuotePicker({ Shell, inputCls, quotes, site, quote, 
                 </span>
               </div>
               <p className="text-sm font-bold text-slate-800 truncate">{pq.quoteTitle || pq.constructionType || "-"}</p>
-              <p className="text-[11px] text-slate-500 truncate">{named[0]?.name}{named.length > 1 ? ` 외 ${named.length - 1}건` : ""} · 품목합계 {total.toLocaleString()}원</p>
+              <p className="text-[11px] text-slate-500 truncate">{named[0]?.name}{named[0]?.spec ? ` (${named[0].spec})` : ""}{named.length > 1 ? ` 외 ${named.length - 1}건` : ""} · 품목합계 {total.toLocaleString()}원</p>
             </button>
           );
         })}
