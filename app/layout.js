@@ -15,6 +15,8 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: `${BRAND.name} ${BRAND.appTitle}`,
   description: "승강기 유지보수 현장관리 앱",
+  // Google Search Console 소유권 확인(Play Console 조직 웹사이트 인증용) — 지우면 인증이 풀린다.
+  verification: { google: "U3YBeAf_2_dst9gbqmhiDXw_ydbdR21CkyW7Ry8MT1w" },
   appleWebApp: {
     title: BRAND.short,
     statusBarStyle: "black-translucent",
