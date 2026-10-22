@@ -1512,7 +1512,8 @@ export default function SitesAdmin({ data, setData }) {
                             <td className="px-2 py-2 truncate" title={u.model ?? ""}>{u.model || "-"}</td>
                             {unitContractTypeReady && <td className="px-2 py-2 truncate">{u.contractType || CONTRACT_TYPES[0]}</td>}
                             <td className="px-2 py-2 truncate">{unitMaintenanceCostReady ? (u.maintenanceCost != null ? Number(u.maintenanceCost).toLocaleString() + "원" : "-") : "마이그레이션 대기"}</td>
-                            <td className="px-2 py-2 truncate" title={site.emergencyPhone ?? ""}>{site.emergencyPhone || "-"}</td>
+                            {/* 호기별 번호 우선, 없으면 현장 대표번호 (수정 표와 같은 기준) */}
+                            <td className="px-2 py-2 truncate" title={u.emergencyPhone ?? site.emergencyPhone ?? ""}>{u.emergencyPhone || site.emergencyPhone || "-"}</td>
                           </tr>
                         );
                       })}
