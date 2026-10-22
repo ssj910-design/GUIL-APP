@@ -20,7 +20,7 @@ export default function CompanyPage() {
       <H2>회사 정보</H2>
       <dl className="text-sm leading-7 text-slate-700 grid grid-cols-[7rem_1fr] gap-y-1">
         <dt className="font-bold">상호</dt><dd>{COMPANY.name}</dd>
-        <dt className="font-bold">대표자</dt><dd>{COMPANY.ceo.replace("대표이사 ", "")}</dd>
+        <dt className="font-bold">대표자</dt><dd>{COMPANY.ceo.replace("대표이사 ", "").replace(/ /g, "")}</dd>
         <dt className="font-bold">사업자등록번호</dt><dd>{COMPANY.regNo.replace("등록번호. ", "")}</dd>
         <dt className="font-bold">업태·종목</dt><dd>서비스업 · 승강기유지관리, 보수, 설치공사</dd>
         <dt className="font-bold">주소</dt><dd>{COMPANY.address}</dd>
