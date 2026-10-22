@@ -112,12 +112,19 @@ export function sentGroups(q) {
         const stale = e.channel === "kakao"
           && e.status !== "delivered" && e.status !== "failed"
           && Date.now() - new Date(e.sentAt).getTime() >= 600000;
+        // 알림톡이 거부되면 솔라피가 같은 내용을 문자로 대체발송한다 — 그 결과를 따로 보여준다.
+        const fb = e.fallback;
         return {
           ...e,
           tone: e.status === "delivered" ? "green" : e.status === "failed" || stale ? "red" : "amber",
           label: e.status === "delivered" ? "발송 완료"
             : e.status === "failed" ? `발송 거부${e.statusMessage ? ` · ${e.statusMessage}` : ""}`
             : stale ? "결과 없음" : "확인 중",
+          fallbackTone: !fb ? null : fb.status === "delivered" ? "green" : fb.status === "failed" ? "red" : "amber",
+          fallbackLabel: !fb ? null
+            : fb.status === "delivered" ? "문자 대체발송 완료"
+            : fb.status === "failed" ? `문자 대체발송 실패${fb.statusMessage ? ` · ${fb.statusMessage}` : ""}`
+            : "문자 대체발송 확인 중",
         };
       }),
     }));
@@ -146,7 +153,12 @@ export function sentHistory(q) {
           : e.status === "delivered" ? " · 발송완료"
           : e.status === "failed" ? ` · 발송거부(${e.statusMessage ?? "사유미상"})`
           : " · 확인중";
-        return `${name}(${e.target})${mark}`;
+        // 알림톡 거부 시 문자로 대체발송된 결과까지 한 줄에 같이 보여준다.
+        const fbMark = !e.fallback ? ""
+          : e.fallback.status === "delivered" ? " → 문자발송완료"
+          : e.fallback.status === "failed" ? ` → 문자발송실패(${e.fallback.statusMessage ?? "사유미상"})`
+          : " → 문자확인중";
+        return `${name}(${e.target})${mark}${fbMark}`;
       });
       return `${shortDate(sentAt.slice(0, 10))} ${parts.join(", ")}`;
     });
@@ -187,6 +199,7 @@ export function SentHistory({ log }) {
               {e.channel === "kakao" && (
                 <StatusBadge tone={e.tone}>{e.label}</StatusBadge>
               )}
+              {e.fallbackLabel && <StatusBadge tone={e.fallbackTone}>{e.fallbackLabel}</StatusBadge>}
             </span>
           ))}
         </div>

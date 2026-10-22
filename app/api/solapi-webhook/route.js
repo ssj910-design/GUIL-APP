@@ -38,6 +38,8 @@ export async function POST(request) {
   for (const r of reports) {
     const messageId = r?.messageId;
     if (!messageId) continue;
+    const groupId = r?.groupId ?? null;
+    let matched = false;
 
     // send_log(jsonb 배열) 안에 이 messageId가 든 행을 테이블 순서대로 찾는다.
     for (const table of LOG_TABLES) {
@@ -47,6 +49,7 @@ export async function POST(request) {
         .contains("send_log", [{ messageId }]);
       const row = rows?.[0];
       if (!row) continue; // 이 테이블엔 없음 — 다음 테이블 확인
+      matched = true;
 
       const nextLog = (row.send_log ?? []).map((e) =>
         e.messageId === messageId
@@ -56,6 +59,37 @@ export async function POST(request) {
               statusCode: r.statusCode ?? null,
               // 실패 사유(카톡 미가입 등)를 그대로 남긴다 — 화면에서 보여줘야 대응이 된다.
               statusMessage: r.reason ?? r.statusMessage ?? null,
+              reportedAt: r.dateReceived ?? new Date().toISOString(),
+            }
+          : e
+      );
+      await supabase.from(table).update({ send_log: nextLog }).eq("id", row.id);
+      updated += 1;
+      break;
+    }
+
+    // 알림톡이 거부되면 솔라피가 문자로 대체발송하는데, 그 건은 messageId가 달라 위에서 못 찾는다.
+    // 같은 groupId를 공유하므로 그 알림톡 이력에 "문자 대체발송 결과"로 붙인다.
+    if (matched || !groupId) continue;
+    for (const table of LOG_TABLES) {
+      const { data: rows } = await supabase
+        .from(table)
+        .select("id,send_log")
+        .contains("send_log", [{ groupId }]);
+      const row = rows?.[0];
+      if (!row) continue;
+
+      const nextLog = (row.send_log ?? []).map((e) =>
+        e.groupId === groupId
+          ? {
+              ...e,
+              fallback: {
+                status: statusOf(r),
+                statusCode: r.statusCode ?? null,
+                statusMessage: r.reason ?? r.statusMessage ?? null,
+                type: r.type ?? null,
+                to: r.to ?? null,
+              },
               reportedAt: r.dateReceived ?? new Date().toISOString(),
             }
           : e

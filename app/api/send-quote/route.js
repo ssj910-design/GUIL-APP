@@ -66,7 +66,8 @@ export async function POST(request) {
       results.kakao = { ok: true };
       patch.kakao_sent_at = now;
       // messageId를 남겨야 웹훅이 "이 발송의 결과"를 찾아 상태(수신완료/실패)를 채울 수 있다.
-      newLogEntries.push({ channel: "kakao", sentAt: now, target: recipientPhone, messageId: sent?.messageId ?? null, status: "pending" });
+      // groupId를 남겨야 알림톡 실패 시 솔라피가 따로 보낸 문자(대체발송) 결과를 같은 그룹으로 찾아올 수 있다.
+      newLogEntries.push({ channel: "kakao", sentAt: now, target: recipientPhone, messageId: sent?.messageId ?? null, groupId: sent?.groupId ?? null, status: "pending" });
     } catch (err) {
       results.kakao = { ok: false, reason: err.message };
     }

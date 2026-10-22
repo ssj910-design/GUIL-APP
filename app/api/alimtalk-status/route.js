@@ -6,7 +6,7 @@
 // 견적(quote_requests)·청구서(billings) 둘 다 같은 send_log 모양이라 같은 로직을 돌린다.
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { authGuard } from "@/lib/verifyToken";
-import { fetchAlimtalkStatus } from "@/lib/alimtalk";
+import { fetchAlimtalkStatus, fetchFallbackResults } from "@/lib/alimtalk";
 
 // 한 테이블의 "확인 중" 카카오 건을 솔라피에 물어 갱신 — 결과: { checked, updated, changedRows }.
 async function refreshTable(table) {
@@ -26,9 +26,21 @@ async function refreshTable(table) {
       }
     }
   }
-  if (!pendingIds.length) return { checked: 0, updated: 0, changedRows: {} };
+  const statuses = pendingIds.length ? await fetchAlimtalkStatus(pendingIds) : {};
 
-  const statuses = await fetchAlimtalkStatus(pendingIds);
+  // 알림톡이 거부된 건은 솔라피가 문자로 대체발송한다 — 같은 groupId로 그 결과를 찾아 붙인다.
+  // 방금 실패로 바뀐 건뿐 아니라 "예전에 이미 거부됐는데 문자 결과를 아직 모르는 건"도 같이 본다
+  // (후자만 남으면 확인할 알림톡이 없어 위 pendingIds는 비어 있다).
+  const fallbackGroupIds = [];
+  for (const r of rows ?? []) {
+    for (const e of r.send_log ?? []) {
+      if (e.channel !== "kakao" || !e.groupId) continue;
+      const nowFailed = (e.messageId && statuses[e.messageId]?.status === "failed") || e.status === "failed";
+      if (nowFailed && e.fallback?.status !== "delivered" && e.fallback?.status !== "failed") fallbackGroupIds.push(e.groupId);
+    }
+  }
+  if (!pendingIds.length && !fallbackGroupIds.length) return { checked: 0, updated: 0, changedRows: {} };
+  const fallbacks = fallbackGroupIds.length ? await fetchFallbackResults(fallbackGroupIds) : {};
 
   // 결과가 나온 건만 골라 그 행의 send_log를 통째로 다시 쓴다.
   let updated = 0;
@@ -37,9 +49,16 @@ async function refreshTable(table) {
     let changed = false;
     const next = (r.send_log ?? []).map((e) => {
       const s = e.messageId ? statuses[e.messageId] : null;
-      if (!s || s.status === "pending" || s.status === e.status) return e;
+      const f = e.groupId ? fallbacks[e.groupId] : null;
+      const fallbackChanged = f && f.status !== "pending" && f.status !== e.fallback?.status;
+      if ((!s || s.status === "pending" || s.status === e.status) && !fallbackChanged) return e;
       changed = true;
-      return { ...e, ...s, checkedAt: new Date().toISOString() };
+      return {
+        ...e,
+        ...(s && s.status !== "pending" && s.status !== e.status ? s : {}),
+        ...(fallbackChanged ? { fallback: f } : {}),
+        checkedAt: new Date().toISOString(),
+      };
     });
     if (!changed) continue;
     const { error: upErr } = await supabaseAdmin.from(table).update({ send_log: next }).eq("id", r.id);
@@ -47,7 +66,7 @@ async function refreshTable(table) {
     else { updated += 1; changedRows[r.id] = next; }
   }
 
-  return { checked: pendingIds.length, updated, changedRows };
+  return { checked: pendingIds.length + fallbackGroupIds.length, updated, changedRows };
 }
 
 export async function POST(request) {
