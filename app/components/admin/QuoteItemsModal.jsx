@@ -366,7 +366,10 @@ export default function QuoteItemsModal({ quote, site, siteManagers, profiles, i
     const nextStatus = quote.status === "요청접수" ? "작성" : quote.status;
     patch.status = nextStatus;
 
-    const { error: dbError } = await supabase.from("quote_requests").update(patch).eq("id", quote.id);
+    // 새로 발행하는 견적(_newRow)은 이 저장 시점에 행을 처음 만든다 — 빈 초안을 미리 만들지 않는다.
+    const { error: dbError } = await (quote._newRow
+      ? supabase.from("quote_requests").insert({ ...quote._newRow, ...patch })
+      : supabase.from("quote_requests").update(patch).eq("id", quote.id));
     if (dbError) {
       setError("저장 실패: " + dbError.message);
       setSaving(false);

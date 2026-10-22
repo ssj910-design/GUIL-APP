@@ -360,12 +360,9 @@ export default function QuotesAdmin({ data, setData }) {
       requested_date: TODAY_STR,
       status: "요청접수",
     };
-    const { error } = await supabase.from("quote_requests").insert(row);
-    if (error) { alert("견적 생성 실패: " + error.message); return; }
-    const created = mapQuoteRequest(row);
-    setData((prev) => ({ ...prev, quoteRequests: [created, ...prev.quoteRequests] }));
+    // 현장만 고르고 닫는 경우 빈 초안이 DB에 남지 않도록, 행은 모달에서 "저장"할 때 비로소 만든다(_newRow).
     setPickingSite(false);
-    setItemsTarget(created);
+    setItemsTarget({ ...mapQuoteRequest(row), _newRow: row });
   }
 
   const renderQuoteRow = (q, drafted) => (
@@ -588,9 +585,12 @@ export default function QuotesAdmin({ data, setData }) {
             setItemsTarget(null);
           }}
           onSaved={(patch) => {
+            const { _newRow, ...target } = itemsTarget;
             setData((prev) => ({
               ...prev,
-              quoteRequests: prev.quoteRequests.map((x) => (x.id === itemsTarget.id ? { ...x, ...patch } : x)),
+              quoteRequests: _newRow
+                ? [{ ...target, ...patch }, ...prev.quoteRequests]
+                : prev.quoteRequests.map((x) => (x.id === itemsTarget.id ? { ...x, ...patch } : x)),
             }));
           }}
         />

@@ -260,8 +260,19 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft?.id]);
 
-  function saveDraft() {
+  // 새 견적(_newRow)은 DB 행이 아직 없다 — 임시저장·발행처럼 남겨야 할 때만 만든다(빈 초안 방지).
+  async function ensurePersisted() {
+    if (!draft?._newRow) return true;
+    const { error: insertError } = await supabase.from("quote_requests").insert(draft._newRow);
+    if (insertError) { setError("초안 저장 실패: " + insertError.message); return false; }
+    onDraftCreated?.(mapQuoteRequest(draft._newRow));
+    setDraft((prev) => ({ ...prev, _newRow: null }));
+    return true;
+  }
+
+  async function saveDraft() {
     if (!draft?.id) return;
+    if (!(await ensurePersisted())) return;
     try {
       localStorage.setItem(draftKey(draft.id), JSON.stringify({
         step, items, transportCost, safetyCost, profit, quoteTitleInput, discountAmount, vatIncluded,
@@ -337,7 +348,9 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
       quote_pdf_url: pdfRes.url,
       status: "작성",
     };
-    const { error: dbError } = await supabase.from("quote_requests").update(patch).eq("id", draft.id);
+    const { error: dbError } = draft._newRow
+      ? await supabase.from("quote_requests").insert({ ...draft._newRow, ...patch })
+      : await supabase.from("quote_requests").update(patch).eq("id", draft.id);
     if (dbError) {
       setError("저장 실패: " + dbError.message);
       setSaving(false);
@@ -345,6 +358,7 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
     }
 
     try { localStorage.removeItem(draftKey(draft.id)); } catch { /* 임시저장 정리 실패는 무시 */ }
+    if (draft._newRow) onDraftCreated?.(mapQuoteRequest({ ...draft._newRow, ...patch }));
     onSaved({
       id: draft.id, quoteItems: cleanItems, transportCost: Number(transportCost) || 0, safetyCost: Number(safetyCost) || 0,
       profit: Number(profit) || 0, discountAmount: Number(discountAmount) || 0, vatIncluded, quoteNumber, recipientName: recipientLabel, quoteTitle, quoteIssuedDate: quoteDate,
@@ -388,7 +402,7 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
     // 기사가 올린 진짜 요청이니 지우지 않는다. existingQuote로 들어왔더라도 그 값이 둘 다
     // null이면(예: 마법사를 도중에 나갔다가 목록에서 다시 연 관리자 발행 빈 초안) 여전히
     // 지울 수 있어야 한다 — 안 그러면 그 초안이 영영 안 지워지는 고아 상태로 남는다.
-    if (draft && draft.status === "요청접수" && !draft.requesterId && !draft.engineer) {
+    if (draft && !draft._newRow && draft.status === "요청접수" && !draft.requesterId && !draft.engineer) {
       await supabase.from("quote_requests").delete().eq("id", draft.id);
       try { localStorage.removeItem(draftKey(draft.id)); } catch { /* 임시저장 정리 실패는 무시 */ }
       onDiscarded?.(draft.id);
@@ -403,9 +417,13 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
     // 현장만 갱신한다.
     if (draft) {
       if (draft.siteId !== site.id) {
-        const { error: updateError } = await supabase.from("quote_requests").update({ site_id: site.id, site_name: site.name }).eq("id", draft.id);
-        if (updateError) { setError("현장 변경 실패: " + updateError.message); return; }
-        setDraft((prev) => ({ ...prev, siteId: site.id, siteName: site.name }));
+        if (draft._newRow) {
+          setDraft((prev) => ({ ...prev, siteId: site.id, siteName: site.name, _newRow: { ...prev._newRow, site_id: site.id, site_name: site.name } }));
+        } else {
+          const { error: updateError } = await supabase.from("quote_requests").update({ site_id: site.id, site_name: site.name }).eq("id", draft.id);
+          if (updateError) { setError("현장 변경 실패: " + updateError.message); return; }
+          setDraft((prev) => ({ ...prev, siteId: site.id, siteName: site.name }));
+        }
       }
       setStep(1);
       return;
@@ -426,14 +444,10 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
       requested_date: TODAY_STR,
       status: "요청접수",
     };
-    const { error: insertError } = await supabase.from("quote_requests").insert(row);
     setCreating(false);
-    if (insertError) { setError("초안 생성 실패: " + insertError.message); return; }
-    // mapQuoteRequest로 전체 필드를 채운 shape을 쓴다 — 일부 필드만 채운 객체를 로컬 목록에
-    // 반영하면 목록 카드가 "undefined · undefined"처럼 깨져 보인다(실사고로 발견).
-    const created = mapQuoteRequest(row);
-    setDraft(created);
-    onDraftCreated?.(created);
+    // DB 행은 임시저장·발행 때 만든다(ensurePersisted) — 현장만 고르고 나가면 빈 초안이 남지 않는다.
+    // mapQuoteRequest로 전체 필드를 채운 shape을 쓴다(일부 필드만 채우면 목록 카드가 깨진다).
+    setDraft({ ...mapQuoteRequest(row), _newRow: row });
     setStep(1);
   }
 
