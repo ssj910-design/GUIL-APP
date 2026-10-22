@@ -527,7 +527,7 @@ function UnitRow({ unit, emergencyPhone, maintenanceCostReady, onSave, onSaveEme
           onClick={async () => {
             setSaving(true);
             if (dirty) await onSave(unit, form);
-            if (emergencyDirty) await onSaveEmergencyPhone(emergencyDraft);
+            if (emergencyDirty) await onSaveEmergencyPhone(unit, emergencyDraft);
             setSaving(false);
           }}
           className="text-xs font-bold text-white bg-blue-700 disabled:bg-slate-200 rounded-lg px-3 py-1.5 mr-1"
@@ -879,10 +879,13 @@ export default function SitesAdmin({ data, setData }) {
     select(site);
   }
 
-  // EMCALL,통신사,국선/무선 — 승강기 정보 표에서 편집한다(호기 공통 값, 사이트 단위 저장).
-  async function saveEmergencyPhone(value) {
-    await supabase.from("sites").update({ emergency_phone: value || null }).eq("id", selectedId);
-    setData((prev) => ({ ...prev, sites: prev.sites.map((s) => (s.id === selectedId ? { ...s, emergencyPhone: value || null } : s)) }));
+  // EMCALL,통신사,국선/무선 — 호기마다 번호가 다른 현장이 있어 호기(units.emergency_phone)에 저장한다.
+  // 예전엔 현장(sites.emergency_phone)에 저장해서 한 호기를 고치면 모든 호기가 같이 바뀌었다.
+  // 현장 대표번호(sites.emergency_phone)는 호기 번호가 없을 때의 기본값으로 그대로 둔다.
+  async function saveEmergencyPhone(unit, value) {
+    const { error } = await supabase.from("units").update({ emergency_phone: value || null }).eq("id", unit.id);
+    if (error) { alert("저장 실패: " + error.message); return; }
+    setData((prev) => ({ ...prev, units: prev.units.map((u) => (u.id === unit.id ? { ...u, emergencyPhone: value || null } : u)) }));
   }
 
   // 담당 기사 배열 전체를 다시 쓴다 — site_assignments를 지우고 배열 수만큼 재삽입.
@@ -1471,7 +1474,7 @@ export default function SitesAdmin({ data, setData }) {
                         <UnitRow
                           key={u.id}
                           unit={u}
-                          emergencyPhone={site.emergencyPhone}
+                          emergencyPhone={u.emergencyPhone ?? site.emergencyPhone}
                           maintenanceCostReady={unitMaintenanceCostReady}
                           onSave={saveUnit}
                           onSaveEmergencyPhone={saveEmergencyPhone}
