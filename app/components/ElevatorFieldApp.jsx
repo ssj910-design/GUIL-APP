@@ -2135,6 +2135,7 @@ ${error.message ?? ""}`); return false; }
         recipientName, recipientEmail, recipientPhone,
         emailSentAt: res.results?.email?.ok ? now : x.emailSentAt,
         kakaoSentAt: res.results?.kakao?.ok ? now : x.kakaoSentAt,
+        ...(res.sendLog ? { sendLog: res.sendLog } : {}),
       } : x)));
     }
     return res;

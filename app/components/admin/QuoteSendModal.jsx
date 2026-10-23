@@ -59,9 +59,6 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
     setSending(false);
 
     const now = new Date().toISOString();
-    const newLogEntries = [];
-    if (res.results?.email?.ok) newLogEntries.push({ channel: "email", sentAt: now, target: rf.email });
-    if (res.results?.kakao?.ok) newLogEntries.push({ channel: "kakao", sentAt: now, target: rf.phone });
 
     const patch = {
       recipientEmail: rf.email,
@@ -74,7 +71,9 @@ export default function QuoteSendModal({ quote, site, siteManagers, profiles, on
     };
     if (res.results?.email?.ok) patch.emailSentAt = now;
     if (res.results?.kakao?.ok) patch.kakaoSentAt = now;
-    if (newLogEntries.length) patch.sendLog = [...(quote.sendLog ?? []), ...newLogEntries];
+    // 발송 이력은 서버가 저장한 값을 그대로 쓴다 — 화면에서 만들면 messageId·groupId가 빠져
+    // 발송 결과(수신완료·거부·문자 대체발송)를 추적할 수 없다.
+    if (res.sendLog) patch.sendLog = res.sendLog;
     if (res.results?.email?.ok || res.results?.kakao?.ok) onSaved(patch);
   }
 

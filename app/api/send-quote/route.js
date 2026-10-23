@@ -112,5 +112,7 @@ export async function POST(request) {
     console.error(`Failed to update quote_requests id=${quoteRequestId}:`, error.message);
   }
 
-  return Response.json({ results });
+  // 화면이 보낸 직후 "발송내역"을 바로 그릴 수 있게 갱신된 이력을 같이 돌려준다 —
+  // 화면에서 따로 만들면 messageId·groupId가 빠져 발송 결과 추적이 안 된다.
+  return Response.json({ results, sendLog: patch.send_log ?? null });
 }

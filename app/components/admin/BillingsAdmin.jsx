@@ -962,6 +962,7 @@ function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
         invoicePdfUrl: pdfUrl,
         paymentDueDate: dueDate,
         reminderEnabled,
+        ...(res.sendLog ? { sendLog: res.sendLog } : {}),
         ...(reminder ? { lastReminderSentAt: now } : { invoiceSentAt: now }),
       });
     }
