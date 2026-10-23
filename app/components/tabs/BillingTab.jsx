@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { Receipt, Check, Search, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { siteUnitList, handlePhoneInputChange, freeReasonLabel, quoteGrandTotal, quoteBillingLines, shortDate, formatUnitLabel } from "@/lib/utils";
+import { siteUnitList, handlePhoneInputChange, freeReasonLabel, quoteGrandTotal, quoteBillingLines, shortDate, formatUnitLabel, normalizeAmount } from "@/lib/utils";
 import { TODAY_STR, KIT_PARTS } from "@/lib/constants";
 import { isVideoUrl } from "@/lib/photos";
 import { PrimaryButton, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink, Sheet, PhotoLightbox, VideoThumb } from "@/app/components/ui";
@@ -376,7 +376,7 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, onC
           name: part.name,
           qty: part.qty ?? null,
           // 금액을 비워둔 품목은 ""가 아니라 null로 — 문서에서 "₩0"이 아니라 "-"로 보여야 한다.
-          amount: part.amount === "" || part.amount == null || !Number.isFinite(Number(part.amount)) ? null : Number(part.amount),
+          amount: normalizeAmount(part.amount),
           beforeUrls: (partPhotos[i]?.before ?? []).map((p) => p.url),
           afterUrls: (partPhotos[i]?.after ?? []).map((p) => p.url),
         }))

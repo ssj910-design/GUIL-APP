@@ -6,7 +6,7 @@ import { useState, useContext, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Search, Plus, X, Pencil, ChevronDown, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { shortDate, formatUnitLabel, quoteGrandTotal, freeReasonOf, freeReasonLabel, isCostPending, quoteBillingLines, receivedTotalOf, receivedStatusOf, billingPaymentBucket, billingDueAmount, inferQuoteUnitId } from "@/lib/utils";
+import { shortDate, formatUnitLabel, quoteGrandTotal, freeReasonOf, freeReasonLabel, isCostPending, quoteBillingLines, receivedTotalOf, receivedStatusOf, billingPaymentBucket, billingDueAmount, inferQuoteUnitId, normalizeAmount } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { mapBilling } from "@/lib/mappers";
 import { notify } from "@/lib/push";
@@ -72,14 +72,6 @@ function signerLabel(b) {
 // 청구 건 하나를 교체확인서 PDF 입력 형태로 바꾼다. 부품이 2개 이상(billing_part_rows
 // 기반 구조화 저장건)이면 부품별 단가·금액까지 나오고, 그 전 방식(부품 1개 또는 옛
 // 데이터)으로 남은 건은 단가 정보가 없어 수량만 보여준다 — 없는 값을 지어내지 않는다.
-// 금액 정규화 — 기사 앱·관리자 입력에서 금액을 비워두면 null이 아니라 빈 문자열("")로
-// 저장된 행이 있다. 그대로 두면 Number("")=0이라 문서에 "₩0"으로 찍힌다(미입력과 무상 구분 불가).
-function normalizeAmount(v) {
-  if (v === null || v === undefined || v === "") return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
 function buildCertificateData(b, data) {
   const items = (b.partPhotos?.length > 1 ? b.partPhotos : null)?.map((p) => ({
     name: p.name,
