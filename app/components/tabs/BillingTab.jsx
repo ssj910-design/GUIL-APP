@@ -375,7 +375,8 @@ export function BillingTab({ todos, setTodos, onSubmitBilling, onUseKitPart, onC
       ? billingParts.map((part, i) => ({
           name: part.name,
           qty: part.qty ?? null,
-          amount: part.amount ?? null,
+          // 금액을 비워둔 품목은 ""가 아니라 null로 — 문서에서 "₩0"이 아니라 "-"로 보여야 한다.
+          amount: part.amount === "" || part.amount == null || !Number.isFinite(Number(part.amount)) ? null : Number(part.amount),
           beforeUrls: (partPhotos[i]?.before ?? []).map((p) => p.url),
           afterUrls: (partPhotos[i]?.after ?? []).map((p) => p.url),
         }))
