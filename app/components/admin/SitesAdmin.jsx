@@ -520,7 +520,8 @@ function UnitRow({ unit, emergencyPhone, maintenanceCostReady, onSave, onSaveEme
       </td>
       {/* 호기별 보수료 — 이 합계가 현장정보의 보수료(VAT별도)로 동기화된다(syncLegacy). */}
       <td className="px-2 py-2"><input className={inputCls} type="number" placeholder="원" disabled={!maintenanceCostReady} value={form.maintenanceCost} onChange={(e) => setForm({ ...form, maintenanceCost: e.target.value })} /></td>
-      <td className="px-2 py-2"><input className={inputCls} value={emergencyDraft} placeholder="비상통화장치" onChange={(e) => setEmergencyDraft(e.target.value)} /></td>
+      {/* 다른 전화번호 칸과 같이 하이픈을 자동으로 넣는다 */}
+      <td className="px-2 py-2"><input className={inputCls} value={emergencyDraft} placeholder="비상통화장치" onChange={(e) => handlePhoneInputChange(e, setEmergencyDraft)} /></td>
       <td className="px-2 py-2 whitespace-nowrap text-right">
         <button
           disabled={(!dirty && !emergencyDirty) || saving}
