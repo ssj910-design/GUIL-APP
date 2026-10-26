@@ -59,3 +59,14 @@ SMTP 비밀번호와 다른 별도 토큰 서명값은 선택사항이며, 미�
 - office.jpg: Photoreal architectural photography of a modern Seoul office tower, glass and silver facade seen from ground level, refined geometric vertical lines, landscaped entrance, natural daylight, understated corporate editorial aesthetic. Landscape 4:3. No text, logos, watermarks, people.
 - commercial.jpg: Photoreal architectural photography of a contemporary Korean commercial building and shopping entrance, warm interior lights visible through floor to ceiling glass, modern stone cladding, welcoming pedestrian frontage, twilight blue hour. Landscape 4:3. No signs, text, logos, watermarks or people.
 - maintenance.jpg: Photoreal cinematic commercial photograph, tight closeup of a professional elevator maintenance technician in dark navy workwear checking a clean brushed stainless steel elevator control cabinet using a handheld diagnostic device, only torso and gloved hands visible, warm focused work light, accurate believable wiring in background, careful professional gesture, premium dark teal and silver palette. Landscape 4:3. No logos, text, sparks, dramatic hazards, watermarks. This is a brand conceptual image, not a real company's employee portrait.
+
+## 2026-10-26 색상·B2B 문구·SEO 보완
+
+앱의 blue-950/blue-700 사용을 확인하고 홈페이지를 남색·파랑 계열로 맞췄습니다.
+KV는 건물주·관리자를 대상으로 승강기 유지관리·보수·설치공사를 설명하며,
+아래로 내려보기와 서비스 살펴보기 링크는 제거했습니다.
+검색 제목/설명, 대표주소, 공유 메타데이터, Organization/WebSite/WebPage/Service 구조화 데이터를 보완했습니다.
+robots.txt, noindex 부재, guil.kr → www.guil.kr 영구 이동, 사이트맵의 XML 응답을 확인했습니다.
+원페이지 구성은 유지했습니다. 서비스별 고유 페이지 및 실제 실적 콘텐츠는 별도 작업입니다.
+Google Search Console 및 네이버 서치어드바이저의 소유권/색인 상태는 계정 접근 권한이 없어 확인하지 않았습니다.
+검색 노출이나 상위 순위를 보장하는 설정은 아닙니다.
