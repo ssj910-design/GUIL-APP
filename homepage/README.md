@@ -1,38 +1,61 @@
 # 구일엘리베이터 홈페이지
 
-이 폴더만 별도 Vercel 프로젝트 guil-app-homepage의 Root Directory로 지정합니다.
-기존 Next.js 현장관리 앱의 파일·API·DB·Android·배포 설정은 사용하거나 수정하지 않습니다.
+홈페이지 전용 폴더이며 기존 현장관리 앱의 파일·API·DB·배포 설정을 수정하지 않습니다.
 
-## 실행 및 배포
+## 설치·빌드·배포
 
-- 정적 HTML/CSS/JS이며 설치·빌드가 필요 없습니다.
-- 로컬: 이 폴더에서 python3 -m http.server 4173
-- Vercel: Framework Other, Root Directory homepage, Install/Build Command 비움, Output Directory .
-- homepage 변경을 main에 push하면 홈페이지 프로젝트의 Git 연동으로 반영됩니다.
-- 기존 앱 배포를 트리거하는 문자열은 커밋에 넣지 않습니다.
-- guil.kr → www.guil.kr, 대표 주소 https://www.guil.kr
+- npm ci → npm run build. 화면 파일과 assets만 public/에 복사합니다.
+- Vercel 프로젝트: guil-app-homepage. Root Directory: homepage.
+- Framework: Other. Install Command: npm ci. Build Command: npm run build. Output Directory: public.
+- 위 설정은 vercel.json에 명시했습니다. main push로 홈페이지만 갱신하며 앱 운영 배포 표시는 넣지 않습니다.
+- 로컬 정적 화면: npm run build 후 python3 -m http.server 4173 --directory public.
+- 상담 기능 로컬 실행: Vercel 개발 서버 이용. 단위 테스트: npm test.
 
-## 구현 범위
+## 구현
 
-- 건축 이미지의 느린 이동/확대와 3개 문구 전환을 이용한 모션 KV. 동영상 파일은 아닙니다.
-- 장면 선택·일시정지, 모바일 메뉴, 서비스 상세 dialog, FAQ, 전화·이메일·지도 링크.
-- 실제 문의 전송 폼, 게시판 CMS, 관리자 기능은 없습니다. 이메일 링크는 방문자의 메일 앱을 엽니다.
-- 실적·연혁·인증서 자료가 없어 수치나 가상의 고객 실적을 넣지 않았습니다.
-- 회사 연락처·법인 정보는 기존 lib/company.js와 app/company/page.js 기준.
-- /privacy는 privacy.html로 이동. 기존 앱 개인정보처리방침 본문을 유지하고 홈페이지 이용 안내를 추가했습니다.
-- /company는 홈페이지 첫 화면으로 이동. Google 사이트 확인 메타 유지.
-- Google Fonts를 쓰며 다운로드 실패 시 시스템 글꼴로 표시됩니다.
+KV 슬라이드와 사진 이동 제거. 한 장면만 유지하며 전용 MP4는 아직 제작하지 않았습니다.
+site.js의 videoSource에 최종 영상 경로를 지정하면 muted/playsinline/loop로 재생합니다.
+자동재생 실패 또는 움직임 줄이기 설정 시 정지 이미지를 표시합니다.
 
-## 레퍼런스와 이미지
+앱 로고는 기존 public/icon-512.png를 assets/guil-app-icon.png로 그대로 복사했습니다.
+관리 대상은 건물 이미지로, 유지관리 모형 애니메이션은 점검 이미지로 교체했습니다.
+연락처 아이콘, 플로팅 전화·이메일·상담신청 링크, 상담 폼을 추가했습니다.
+임직원 앱 이동 링크는 제거했습니다. 서비스 상세, FAQ, 지도 링크를 유지합니다.
 
-구성: https://www.yuil-e.co.kr/
-영상 분위기: https://www.youtube.com/watch?v=deehk5Oz7Nw 및 https://www.youtube.com/watch?v=wk0j1wkUsCw
-레퍼런스 영상 자체를 다운로드하거나 홈페이지에 재사용하지 않았습니다.
+## 상담 메일 활성화
 
-assets/architecture.jpg는 built-in image_gen으로 만든 브랜드용 이미지이며 실제 시공 현장 사진이 아닙니다.
-최종 생성 프롬프트: Premium photoreal architectural advertising photograph, wide 16:9, low angle looking up between modern glass and brushed stainless steel skyscrapers in Seoul at blue hour. Strong vertical vanishing lines and illuminated warm white strips suggesting elevator shafts. Midnight teal and slate blue glass, silver reflections, warm amber window light. Architecture on the right, dark negative space on the left for HTML typography. Restrained cinematic contrast, subtle atmospheric haze. No people, text, logos or watermarks.
+친구분 Vercel의 guil-app-homepage → Settings → Environment Variables → Production에 등록:
 
-## 확인
+- NAVER_SMTP_USER: 기존 앱에서 사용하는 네이버 발신 계정 이메일
+- NAVER_SMTP_APP_PASSWORD: 해당 계정의 SMTP용 앱 비밀번호
+- CONTACT_FORM_SECRET: 선택. 별도 임의 문자열을 등록하면 폼 토큰 서명에 사용합니다.
 
-PC/390px 모바일 레이아웃, 모바일 메뉴, 서비스 dialog, FAQ, JS 구문, 로컬 링크·파일 존재 확인.
-기존 앱 npm run build는 실제 서비스에 연결되지 않는 임시 환경값으로 통과했습니다.
+값은 채팅이나 저장소에 넣지 않습니다. 기존 앱 설정은 그대로 두고 홈페이지 프로젝트에만 등록합니다.
+등록 후 홈페이지 프로젝트를 재배포합니다. /api/contact의 available이 true면 전송 설정이 준비된 상태입니다.
+최종 수신은 구일 메일함에서 확인해야 합니다. 실제 메일 전송 테스트는 아직 하지 않았습니다.
+
+메일 수신처는 guil2020@naver.com으로 서버에 고정했습니다. 사용자 입력으로 수신처를 바꿀 수 없습니다.
+입력 검증·동의 확인·honeypot·서명 토큰·Origin 검사·전송 오류 처리·요청 제한을 적용했습니다.
+설정 미완료 또는 전송 실패 시 접수 완료로 표시하지 않으며 입력 내용을 유지합니다.
+요청 제한은 함수 인스턴스 메모리 기준이며 분산 환경 전체의 강한 제한은 아닙니다.
+트래픽이 늘면 Vercel 방화벽에서 /api/contact의 요청 제한을 추가하는 것이 좋습니다.
+SMTP 비밀번호와 다른 별도 토큰 서명값은 선택사항이며, 미설정 시 서버 내부에서 SMTP 비밀번호로 서명합니다.
+서버 코드·node_modules·설정 파일은 정적 public 출력에 포함하지 않습니다.
+
+## 콘텐츠와 이미지
+
+회사 정보는 기존 lib/company.js 및 app/company/page.js 기준입니다. 실제 실적·인증·관리 대수는 꾸며 넣지 않았습니다.
+기존 Google 사이트 확인 메타와 앱 개인정보처리방침 본문을 유지했습니다.
+/회사소개 경로 /company는 /로, /privacy는 privacy.html로 연결됩니다.
+상담 폼에 맞춰 개인정보 수집·이용 안내를 추가했습니다.
+구성 참고: https://www.yuil-e.co.kr/
+영상 분위기 참고: https://www.youtube.com/watch?v=deehk5Oz7Nw 및 https://www.youtube.com/watch?v=wk0j1wkUsCw
+참고 영상 자체를 다운로드하거나 재사용하지 않았습니다.
+
+모든 새 사진은 built-in image_gen으로 생성한 브랜드 이미지이며 실제 현장/직원 사진이 아닙니다.
+생성 프롬프트:
+- architecture.jpg: Premium photoreal architectural advertising photograph, wide 16:9, low angle modern Seoul glass and stainless steel skyscrapers at blue hour, strong vertical vanishing lines, midnight teal and silver, warm illuminated strips, dark left negative space, no text/logos/people/watermarks.
+- residential.jpg: Photoreal architectural photography of a contemporary Korean apartment complex, elegant residential towers, landscaped trees and a calm pedestrian forecourt, clean pale stone and glass, natural morning light. Landscape 4:3. Realistic not futuristic. No text, logos, watermarks, signs, people. Premium quiet corporate editorial aesthetic.
+- office.jpg: Photoreal architectural photography of a modern Seoul office tower, glass and silver facade seen from ground level, refined geometric vertical lines, landscaped entrance, natural daylight, understated corporate editorial aesthetic. Landscape 4:3. No text, logos, watermarks, people.
+- commercial.jpg: Photoreal architectural photography of a contemporary Korean commercial building and shopping entrance, warm interior lights visible through floor to ceiling glass, modern stone cladding, welcoming pedestrian frontage, twilight blue hour. Landscape 4:3. No signs, text, logos, watermarks or people.
+- maintenance.jpg: Photoreal cinematic commercial photograph, tight closeup of a professional elevator maintenance technician in dark navy workwear checking a clean brushed stainless steel elevator control cabinet using a handheld diagnostic device, only torso and gloved hands visible, warm focused work light, accurate believable wiring in background, careful professional gesture, premium dark teal and silver palette. Landscape 4:3. No logos, text, sparks, dramatic hazards, watermarks. This is a brand conceptual image, not a real company's employee portrait.

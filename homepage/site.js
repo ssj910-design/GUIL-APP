@@ -4,42 +4,16 @@ const hero = document.querySelector('.hero');
 const header = document.querySelector('.header');
 const nav = document.querySelector('#nav');
 const menu = document.querySelector('.menu-toggle');
-const motionButton = document.querySelector('.motion-toggle');
-let paused = reducedMotion.matches;
-let sceneIndex = 0;
-let changeTimeout;
-const scenes = [
-  ['일상의 이동을,', '더 안전하게.', '보이지 않는 곳의 세심함이<br>당신의 평범한 하루를 지킵니다.'],
-  ['안전을 살피고,', '신뢰를 쌓습니다.', '정기적인 점검과 필요한 보수.<br>현장에 맞는 관리를 이어갑니다.'],
-  ['건물과 사람을,', '가까이 잇습니다.', '유지관리부터 보수, 설치까지.<br>이동의 모든 순간에 구일이 함께합니다.']
-];
-function showScene(index) {
-  sceneIndex = index;
-  clearTimeout(changeTimeout);
-  hero.classList.add('changing');
-  changeTimeout = setTimeout(() => {
-    hero.dataset.scene = String(index);
-    document.querySelector('#hero-line1').textContent = scenes[index][0];
-    document.querySelector('#hero-line2').textContent = scenes[index][1];
-    document.querySelector('#hero-copy').innerHTML = scenes[index][2];
-    document.querySelector('#scene-current').textContent = `0${index + 1}`;
-    document.querySelectorAll('.scene').forEach((button, i) => {
-      button.classList.toggle('active', i === index);
-      button.setAttribute('aria-pressed', String(i === index));
-    });
-    hero.classList.remove('changing');
-  }, reducedMotion.matches ? 0 : 350);
+// One continuous KV; set a produced MP4 path when the final film is ready.
+const heroVideo = document.querySelector('#hero-video');
+const videoSource = null;
+if (videoSource && !reducedMotion.matches) {
+  heroVideo.src = videoSource;
+  heroVideo.hidden = false;
+  heroVideo.addEventListener('playing', () => hero.classList.add('video-ready'));
+  heroVideo.addEventListener('error', () => hero.classList.remove('video-ready'));
+  heroVideo.play().catch(() => hero.classList.remove('video-ready'));
 }
-function updateMotion() {
-  document.body.classList.toggle('paused', paused);
-  motionButton.textContent = paused ? '▶' : 'Ⅱ';
-  motionButton.setAttribute('aria-label', paused ? '첫 화면 움직임 재생' : '첫 화면 움직임 일시정지');
-}
-updateMotion();
-motionButton.addEventListener('click', () => { paused = !paused; updateMotion(); });
-reducedMotion.addEventListener('change', () => { paused = reducedMotion.matches; updateMotion(); });
-document.querySelectorAll('.scene').forEach(button => button.addEventListener('click', () => showScene(Number(button.dataset.scene))));
-setInterval(() => { if (!paused && !document.hidden && window.scrollY < hero.offsetHeight) showScene((sceneIndex + 1) % scenes.length); }, 8000);
 function updateHeader() { header.classList.toggle('scrolled', window.scrollY > 80); }
 window.addEventListener('scroll', updateHeader, {passive:true});
 updateHeader();
@@ -69,3 +43,45 @@ document.querySelectorAll('[data-service]').forEach(button => button.addEventLis
 document.querySelector('.dialog-close').addEventListener('click', () => dialog.close());
 dialog.addEventListener('click', event => { if (event.target === dialog) { const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); } });
 document.querySelector('#year').textContent = new Date().getFullYear();
+// Contact form: retain entries on failure and show success only after SMTP accepts the email.
+const inquiryForm = document.querySelector('#inquiry-form');
+const formStatus = document.querySelector('#form-status');
+const submitButton = inquiryForm.querySelector('[type="submit"]');
+let formToken = '';
+let formAvailable = false;
+function showFormStatus(message, style='') { formStatus.textContent=message; formStatus.className=`form-status ${style}`; }
+async function refreshFormToken() {
+  try {
+    const response=await fetch('/api/contact',{cache:'no-store'});
+    if (!response.ok) throw new Error('unavailable');
+    const result=await response.json();
+    formAvailable=result.available===true;
+    formToken=result.token || '';
+    if (!formAvailable) showFormStatus('온라인 접수를 준비 중입니다. 전화 또는 이메일로 문의해 주세요.','error');
+    return formAvailable;
+  } catch { formAvailable=false; showFormStatus('온라인 접수에 연결할 수 없습니다. 전화 또는 이메일로 문의해 주세요.','error'); return false; }
+}
+refreshFormToken();
+inquiryForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!inquiryForm.reportValidity()) return;
+  if (!formAvailable || !formToken) { await refreshFormToken(); return; }
+  const values=new FormData(inquiryForm);
+  const payload=Object.fromEntries(values.entries());
+  payload.consent=values.get('consent')==='on';
+  payload.token=formToken;
+  submitButton.disabled=true;
+  submitButton.textContent='접수 중…';
+  showFormStatus('문의 내용을 전송하고 있습니다.');
+  try {
+    const response=await fetch('/api/contact',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const result=await response.json();
+    if (!response.ok || result.ok!==true) throw new Error(result.error || '전송하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    inquiryForm.reset();
+    await refreshFormToken();
+    showFormStatus('상담신청이 접수되었습니다. 남겨주신 연락처로 안내드리겠습니다.','success');
+  } catch (error) {
+    await refreshFormToken();
+    showFormStatus(error.message || '접수하지 못했습니다. 입력 내용은 유지됩니다.','error');
+  } finally { submitButton.disabled=false; submitButton.innerHTML='상담 신청하기 <span>↗</span>'; }
+});
