@@ -27,9 +27,9 @@ if ('IntersectionObserver' in window && !reducedMotion.matches) {
   document.querySelectorAll('.reveal').forEach(element => observer.observe(element));
 }
 const serviceDetails = {
-  maintenance: { title:'유지관리', en:'MAINTENANCE', description:'승강기 운행 상태를 주기적으로 확인하고 필요한 조치를 이어가는 관리 서비스입니다.', items:['현장과 승강기 현황 확인', '정기적인 점검과 점검 기록 관리', '고장 접수와 필요한 현장 대응', '법정 검사 일정 관리 및 대행 상담'] },
-  modernization: { title:'보수공사', en:'MODERNIZATION', description:'설비의 노후 상태와 운행 중 발생하는 문제를 살펴 필요한 보수 범위를 상담합니다.', items:['고장 증상과 부품 상태 확인', '교체가 필요한 부품과 작업 범위 협의', '공사 일정과 운행 중단 계획 안내', '보수 작업 후 운행 상태 확인'] },
-  installation: { title:'설치공사', en:'INSTALLATION', description:'건물 구조와 이용 목적, 현장 여건을 바탕으로 승강기 설치를 상담합니다.', items:['건물 구조와 설치 공간 확인', '이용 목적과 승강기 사양 상담', '설치 범위와 공사 계획 협의', '설치 후 관리 방향 안내'] }
+  maintenance: { title:'유지관리', en:'정기점검 · 고장 대응', description:'승강기 운행 상태를 주기적으로 확인하고 필요한 조치를 이어가는 관리 서비스입니다.', items:['현장과 승강기 현황 확인', '정기적인 점검과 점검 기록 관리', '고장 접수와 필요한 현장 대응', '법정 검사 일정 관리 및 대행 상담'] },
+  modernization: { title:'보수공사', en:'부품 교체 · 설비 보수', description:'설비의 노후 상태와 운행 중 발생하는 문제를 살펴 필요한 보수 범위를 상담합니다.', items:['고장 증상과 부품 상태 확인', '교체가 필요한 부품과 작업 범위 협의', '공사 일정과 운행 중단 계획 안내', '보수 작업 후 운행 상태 확인'] },
+  installation: { title:'설치공사', en:'현장 검토 · 설치 상담', description:'건물 구조와 이용 목적, 현장 여건을 바탕으로 승강기 설치를 상담합니다.', items:['건물 구조와 설치 공간 확인', '이용 목적과 승강기 사양 상담', '설치 범위와 공사 계획 협의', '설치 후 관리 방향 안내'] }
 };
 const dialog = document.querySelector('#service-dialog');
 document.querySelectorAll('[data-service]').forEach(button => button.addEventListener('click', () => {
