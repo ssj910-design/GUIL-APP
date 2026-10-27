@@ -3,7 +3,7 @@ import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame,
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, handlePhoneInputChange, distanceKm, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf, unitBadgeLabel, normalizeModel, normalizeCode, distinctModels, formatListText } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR, FAILURE_CANCEL_REASONS } from "@/lib/constants";
-import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink, VideoThumb } from "@/app/components/ui";
+import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink, VideoThumb, OverdueBanner } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 import { isVideoUrl } from "@/lib/photos";
@@ -224,6 +224,7 @@ function FailureRegisterForm({ failures, setFailures, goToUnassigned, onReported
                 extendedSearch
               />
             </div>
+            <OverdueBanner site={site} className="" />
             {site && (
               <>
                 <div>
@@ -537,6 +538,7 @@ export function FailureDetailSheet({ failure, failures = [], nested = false, onC
   return (
     <>
     <Sheet title={nested ? "지난 고장 상세" : "고장신고 상세"} onClose={onClose}>
+      <OverdueBanner site={site} />
       <div className="bg-slate-100 rounded-xl p-3 mb-3 text-center">
         <p className="font-bold text-slate-800">{failure.siteName} · {unitLabel}</p>
         <p className="text-sm text-blue-700 font-semibold mt-1">{faultType}</p>

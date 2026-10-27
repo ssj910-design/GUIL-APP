@@ -620,6 +620,7 @@ export default function SitesAdmin({ data, setData }) {
   const contractDateReady = sites.some((s) => s.contractDate !== undefined);
   const maintenanceCostReady = sites.some((s) => s.maintenanceCost !== undefined);
   const officeNotesReady = sites.some((s) => s.officeNotes !== undefined);
+  const longOverdueReady = sites.some((s) => s.longOverdue !== undefined);
   const unitContractTypeReady = units.some((u) => u.contractType !== undefined);
   const unitMaintenanceCostReady = units.some((u) => u.maintenanceCost !== undefined);
 
@@ -636,6 +637,7 @@ export default function SitesAdmin({ data, setData }) {
     setSiteForm({
       name: s.name, address: s.address ?? "",
       notes: s.notes ?? "", officeNotes: s.officeNotes ?? "",
+      longOverdue: !!s.longOverdue, longOverdueNote: s.longOverdueNote ?? "",
       assignedEngineers: s.assignedEngineers ?? [], leadEngineer: s.assignedEngineer ?? "",
       phone: s.phone ?? "", fax: s.fax ?? "", email: s.email ?? "", accessInfo: s.accessInfo ?? "",
       contractDate: s.contractDate ?? "", contractEnd: s.contractEnd ?? "",
@@ -868,6 +870,7 @@ export default function SitesAdmin({ data, setData }) {
       ...(contractDateReady ? { contract_date: siteForm.contractDate || null } : {}),
       contract_end: siteForm.contractEnd || null,
       ...(officeNotesReady ? { office_notes: siteForm.officeNotes || null } : {}),
+      ...(longOverdueReady ? { long_overdue: siteForm.longOverdue, long_overdue_note: siteForm.longOverdue ? (siteForm.longOverdueNote || null) : null } : {}),
     }).eq("id", selectedId);
     setData((prev) => ({
       ...prev,
@@ -1240,6 +1243,9 @@ export default function SitesAdmin({ data, setData }) {
                         <div><p className="text-xs font-bold text-slate-400 mb-1">이메일</p><p className="font-semibold text-slate-800"><Highlight text={site.email} query={search} /></p></div>
                         <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">출입 정보(비번·열쇠)</p><p className="font-semibold text-slate-700 whitespace-pre-wrap"><Highlight text={site.accessInfo} query={search} /></p></div>
                         <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(현장직 참고사항)</p><p className="text-slate-700 whitespace-pre-wrap"><Highlight text={site.notes} query={search} /></p></div>
+                        {site.longOverdue && (
+                          <div className="col-span-3"><p className="text-xs font-bold text-red-500 mb-1">장기미수 현장</p><p className="font-semibold text-red-700 whitespace-pre-wrap">{site.longOverdueNote || "-"}</p></div>
+                        )}
                         {officeNotesReady && (
                           <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(사무직 참고사항)</p><p className="text-slate-700 whitespace-pre-wrap"><Highlight text={site.officeNotes} query={search} /></p></div>
                         )}
@@ -1362,6 +1368,13 @@ export default function SitesAdmin({ data, setData }) {
                     <div>
                       <p className="text-xs font-bold text-slate-500 mb-1">비고(현장직 참고사항)</p>
                       <textarea className={inputCls + " resize-y"} rows={4} value={siteForm.notes} onChange={(e) => setSiteForm({ ...siteForm, notes: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="flex items-center gap-2 text-xs font-bold text-slate-500 mb-1">
+                        <input type="checkbox" disabled={!longOverdueReady} checked={siteForm.longOverdue} onChange={(e) => setSiteForm({ ...siteForm, longOverdue: e.target.checked })} />
+                        장기미수 현장 (기사 앱 고장접수·현장상세·자재신청에 경고 표시){!longOverdueReady && " (마이그레이션 대기)"}
+                      </label>
+                      {siteForm.longOverdue && <textarea className={inputCls + " resize-y"} rows={2} placeholder="기사에게 보일 안내 (예: 출동 전 사무실 확인)" value={siteForm.longOverdueNote} onChange={(e) => setSiteForm({ ...siteForm, longOverdueNote: e.target.value })} />}
                     </div>
                     <div>
                       <p className="text-xs font-bold text-slate-500 mb-1">비고(사무직 참고사항){!officeNotesReady && " (마이그레이션 대기)"}</p>

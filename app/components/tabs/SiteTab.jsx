@@ -5,7 +5,7 @@ import { siteUnitList, realInstallPlace, addDays, labelToSeq, govDateToDashed, s
 import { RESULT_LABEL } from "@/lib/constants";
 import { sanitizeFilename, extOf, downloadPhoto, downloadPhotosAsZip } from "@/lib/photos";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
-import { Badge, TimelineRow, HistoryCard, PrimaryButton, Sheet, Field, inputCls, DrillHeader, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, PhotoLightboxPane, PhoneLink } from "@/app/components/ui";
+import { Badge, TimelineRow, HistoryCard, PrimaryButton, Sheet, Field, inputCls, DrillHeader, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, PhotoLightboxPane, PhoneLink, OverdueBanner } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { useSwipeSubtab } from "@/app/hooks/useSwipeSubtab";
@@ -561,6 +561,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
             );
           })}
           {siteManagers.length === 0 && <TimelineRow icon={User} label="담당자" value="등록된 담당자가 없습니다" />}
+          <OverdueBanner site={site} />
           {/* 출입 정보 — 공동현관 비번·기계실 열쇠 위치. 갇힘 출동 때 바로 봐야 하는 정보라 별도 줄로, 비고 위에 고정 */}
           <TimelineRow
             icon={KeyRound}

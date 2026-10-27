@@ -3,7 +3,7 @@ import { ChevronRight, X, Plus, Search, PackageCheck, PackageX, AlertTriangle, C
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, realInstallPlace, unitIdFor, profileIdByName, handlePhoneInputChange, formatUnitLabel } from "@/lib/utils";
 import { TODAY_STR, QUOTE_STAGES, KIT_PARTS } from "@/lib/constants";
-import { PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink } from "@/app/components/ui";
+import { PhotoThumb, PrimaryButton, Sheet, Field, inputCls, DrillHeader, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink, OverdueBanner } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 import { PhotoViewerSheet } from "@/app/components/tabs/SiteTab";
@@ -1012,6 +1012,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
                       setForm({ ...form, siteId: id, units: us.length === 1 ? [us[0].unitNo] : [] });
                     }} />
                   </Field>
+                  <OverdueBanner site={sites.find((x) => x.id === form.siteId)} />
                   {form.siteId && (
                     <UnitPickGrid
                       site={sites.find((s) => s.id === form.siteId)}
@@ -1283,6 +1284,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
                     setQuoteForm({ ...quoteForm, siteId: id, units: us.length === 1 ? [us[0].unitNo] : [] });
                   }} />
                 </Field>
+                <OverdueBanner site={sites.find((x) => x.id === quoteForm.siteId)} />
                 {quoteForm.siteId && (
                   <UnitPickGrid
                     site={sites.find((s) => s.id === quoteForm.siteId)}

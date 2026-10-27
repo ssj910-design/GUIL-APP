@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { BRAND } from "@/lib/company";
 import { createPortal } from "react-dom";
-import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Download, FileText, Loader2, Play } from "lucide-react";
+import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Download, FileText, Loader2, Play, AlertTriangle } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
 import { Capacitor } from "@capacitor/core";
 import { downloadPhoto, downloadPhotosAsZip, extOf, isVideoUrl, videoPosterUrl } from "@/lib/photos";
@@ -714,6 +714,20 @@ export function SwipeSubtabTrack({ swipe, tabs, renderTab, paneClassName = "", t
             {renderTab(tabs[index + 1])}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// 장기미수 현장 안내 — 관리자가 수기로 체크한 현장에만 뜬다. 출동을 막지 않고 참고만 시킨다.
+export function OverdueBanner({ site, className = "mb-3" }) {
+  if (!site?.longOverdue) return null;
+  return (
+    <div className={`flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 ${className}`}>
+      <AlertTriangle size={16} className="text-red-600 shrink-0 mt-0.5" />
+      <div className="min-w-0">
+        <p className="text-sm font-bold text-red-700">장기미수 현장</p>
+        {site.longOverdueNote && <p className="text-xs text-red-700 mt-0.5 whitespace-pre-wrap">{site.longOverdueNote}</p>}
       </div>
     </div>
   );

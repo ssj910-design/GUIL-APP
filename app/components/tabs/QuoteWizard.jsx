@@ -8,7 +8,7 @@ import { useState, useContext, useEffect, useMemo } from "react";
 import { ChevronRight, Search, History } from "lucide-react";
 import { SitesContext, UnitsContext } from "@/app/components/context";
 import { SiteSearchSelect } from "@/app/components/formWidgets";
-import { inputCls, Sheet, CheckboxDropdown } from "@/app/components/ui";
+import { inputCls, Sheet, CheckboxDropdown, OverdueBanner } from "@/app/components/ui";
 import { supabase } from "@/lib/supabaseClient";
 import { mapQuoteRequest, mapSiteManager } from "@/lib/mappers";
 import { siteUnitList, quoteGrandTotal, quoteDisplayTotal } from "@/lib/utils";
@@ -469,6 +469,7 @@ export default function QuoteWizard({ existingQuote, inventoryProducts = [], inv
               <p className="text-xs font-bold text-slate-500 mb-1.5">현장명 *</p>
               <SiteSearchSelect value={siteId} onChange={setSiteId} placeholder="현장명 검색" />
             </div>
+            <OverdueBanner site={sites.find((x) => x.id === siteId)} className="" />
             <div>
               <p className="text-xs font-bold text-slate-500 mb-1.5">견적명</p>
               <input
