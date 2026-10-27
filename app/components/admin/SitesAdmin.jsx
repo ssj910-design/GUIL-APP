@@ -1136,7 +1136,7 @@ export default function SitesAdmin({ data, setData }) {
                         {contractBadges.map((b) => (
                           <span key={b} className="text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-1.5 py-0.5">{b}</span>
                         ))}
-                        {s.longOverdue && <span className="text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-1.5 py-0.5">장기미수현장</span>}
+                        {s.longOverdue && <span className="text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-1.5 py-0.5">장기미수</span>}
                         <span className="text-slate-400 font-semibold">· {cnt}대</span>
                       </p>
                       <span className="flex gap-1">
