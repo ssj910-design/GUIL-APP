@@ -805,7 +805,7 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
                   {contractBadges.map((b) => (
                     <span key={b} className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">{b}</span>
                   ))}
-                  {s.longOverdue && <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">장기미수</span>}
+                  {s.longOverdue && <span className="text-[10px] font-bold text-red-600 bg-yellow-100 px-2 py-0.5 rounded-full">장기미수</span>}
                   {(recentFailuresMap.get(s.id)?.length ?? 0) >= 3 && (
                     <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">집중관리</span>
                   )}
