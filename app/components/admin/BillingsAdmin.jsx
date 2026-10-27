@@ -863,6 +863,7 @@ function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
   const [email, setEmail] = useState(b.recipientEmail || primaryManager?.email || "");
   const [phone, setPhone] = useState(b.recipientPhone || primaryManager?.phone || "");
   const [dueDate, setDueDate] = useState(b.paymentDueDate || "");
+  const [savedDue, setSavedDue] = useState(b.paymentDueDate || ""); // DB에 저장된 결제기한 — 자동 재발송 예정일 계산 기준
   const [reminderEnabled, setReminderEnabled] = useState(b.reminderEnabled ?? false);
   const [stoppingAutomation, setStoppingAutomation] = useState(false);
   const [sending, setSending] = useState(false);
@@ -883,8 +884,8 @@ function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
   // 클라이언트에서 계산한다(별도 저장 컬럼 없음). 결제기한 60일 초과분은 크론이 자동화를
   // 꺼버리므로 그 이후로 계산되면 예정일 없음으로 처리.
   const nextResendAt = (() => {
-    if (!reminderEnabled || !b.paymentDueDate) return null;
-    const dueMs = new Date(`${b.paymentDueDate}T00:00:00+09:00`).getTime();
+    if (!reminderEnabled || !savedDue) return null;
+    const dueMs = new Date(`${savedDue}T00:00:00+09:00`).getTime();
     const base = b.lastReminderSentAt
       ? new Date(b.lastReminderSentAt).getTime() + BILLING_REMINDER_INTERVAL_DAYS * 86400000
       : dueMs;
@@ -909,7 +910,17 @@ function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
   async function refreshPreview() {
     setPreviewLoading(true);
     const { ok, pdfUrl } = await buildInvoiceAndPdf();
-    if (ok) setPreviewUrl(pdfUrl);
+    if (ok) {
+      setPreviewUrl(pdfUrl);
+      // 이미 발송한 청구서는 자동 재발송 크론이 DB의 결제기한·PDF를 그대로 쓰므로, 새로 만든 PDF와
+      // 결제기한을 발송 없이 같이 저장한다(안 그러면 옛 기한의 PDF가 독촉으로 나간다).
+      // 아직 한 번도 안 보낸 건은 저장하지 않는다 — PDF가 생기면 크론이 최초 발송 전에 독촉할 수 있다.
+      if (isSent && dueDate) {
+        const { error } = await supabase.from("billings").update({ payment_due_date: dueDate, invoice_pdf_url: pdfUrl }).eq("id", b.id);
+        if (error) alert("결제기한 저장 실패: " + error.message);
+        else { setSavedDue(dueDate); onInvoiceSent(b, { paymentDueDate: dueDate, invoicePdfUrl: pdfUrl }); }
+      }
+    }
     setPreviewLoading(false);
   }
 
@@ -956,6 +967,7 @@ function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
 
     const now = new Date().toISOString();
     if (res.results?.email?.ok || res.results?.kakao?.ok) {
+      setSavedDue(dueDate);
       onInvoiceSent(b, {
         recipientEmail: email.trim() || null,
         recipientPhone: phone.trim() || null,
