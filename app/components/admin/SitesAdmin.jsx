@@ -1136,6 +1136,7 @@ export default function SitesAdmin({ data, setData }) {
                         {contractBadges.map((b) => (
                           <span key={b} className="text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-1.5 py-0.5">{b}</span>
                         ))}
+                        {s.longOverdue && <span className="text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-1.5 py-0.5">장기미수현장</span>}
                         <span className="text-slate-400 font-semibold">· {cnt}대</span>
                       </p>
                       <span className="flex gap-1">
@@ -1212,6 +1213,12 @@ export default function SitesAdmin({ data, setData }) {
                         수정하기
                       </button>
                     </div>
+                    {site.longOverdue && (
+                      <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-sm">
+                        <p className="font-bold text-red-700">장기미수 현장</p>
+                        {site.longOverdueNote && <p className="text-xs text-red-700 mt-0.5 whitespace-pre-wrap">{site.longOverdueNote}</p>}
+                      </div>
+                    )}
                     <div className="flex items-start justify-between">
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 flex-1 text-sm">
                         <div><p className="text-xs font-bold text-slate-400 mb-1">현장명</p><p className="font-semibold text-slate-800"><Highlight text={site.name} query={search} /></p></div>
@@ -1243,9 +1250,6 @@ export default function SitesAdmin({ data, setData }) {
                         <div><p className="text-xs font-bold text-slate-400 mb-1">이메일</p><p className="font-semibold text-slate-800"><Highlight text={site.email} query={search} /></p></div>
                         <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">출입 정보(비번·열쇠)</p><p className="font-semibold text-slate-700 whitespace-pre-wrap"><Highlight text={site.accessInfo} query={search} /></p></div>
                         <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(현장직 참고사항)</p><p className="text-slate-700 whitespace-pre-wrap"><Highlight text={site.notes} query={search} /></p></div>
-                        {site.longOverdue && (
-                          <div className="col-span-3"><p className="text-xs font-bold text-red-500 mb-1">장기미수 현장</p><p className="font-semibold text-red-700 whitespace-pre-wrap">{site.longOverdueNote || "-"}</p></div>
-                        )}
                         {officeNotesReady && (
                           <div className="col-span-3"><p className="text-xs font-bold text-slate-400 mb-1">비고(사무직 참고사항)</p><p className="text-slate-700 whitespace-pre-wrap"><Highlight text={site.officeNotes} query={search} /></p></div>
                         )}

@@ -511,6 +511,7 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
       <div className="flex-1 overflow-y-auto bg-slate-50 pb-6">
         <p className="px-5 pt-4 pb-2 text-xs font-bold text-slate-400">상세정보</p>
         <div className="bg-white">
+          <OverdueBanner site={site} className="mx-4 mt-2 mb-2" />
           <TimelineRow icon={Flag} label="현장명" value={site.name} />
           <TimelineRow icon={Flag} label="대수" value={`${units.length} 대`} />
           <TimelineRow
@@ -561,7 +562,6 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
             );
           })}
           {siteManagers.length === 0 && <TimelineRow icon={User} label="담당자" value="등록된 담당자가 없습니다" />}
-          <OverdueBanner site={site} />
           {/* 출입 정보 — 공동현관 비번·기계실 열쇠 위치. 갇힘 출동 때 바로 봐야 하는 정보라 별도 줄로, 비고 위에 고정 */}
           <TimelineRow
             icon={KeyRound}
@@ -805,6 +805,7 @@ export function SiteTab({ inspections, failures, billings, quoteRequests, todos,
                   {contractBadges.map((b) => (
                     <span key={b} className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">{b}</span>
                   ))}
+                  {s.longOverdue && <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">장기미수현장</span>}
                   {(recentFailuresMap.get(s.id)?.length ?? 0) >= 3 && (
                     <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">집중관리</span>
                   )}
