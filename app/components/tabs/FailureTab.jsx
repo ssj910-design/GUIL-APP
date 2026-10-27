@@ -3,7 +3,7 @@ import { Home, Settings, ClipboardCheck, PackageX, PhoneCall, Flag, User, Flame,
 import { supabase } from "@/lib/supabaseClient";
 import { siteUnitList, realInstallPlace, failureStage, parseErrorCode, unitIdFor, profileIdByName, formatPhone, handlePhoneInputChange, distanceKm, formatUnitLabel, unitHistory, findErrorCode, errorCodeHistory, busyStatusOf, unitBadgeLabel, normalizeModel, normalizeCode, distinctModels, formatListText } from "@/lib/utils";
 import { FAULT_TYPES, TODAY_STR, FAILURE_CANCEL_REASONS } from "@/lib/constants";
-import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink, VideoThumb, OverdueBanner } from "@/app/components/ui";
+import { TimelineInput, tlInputCls, PrimaryButton, Sheet, Field, inputCls, SmsToast, MapLinkButtons, SwipeSubtabTrack, SwipeIndicatorBar, PhoneLink, VideoThumb, OverdueBanner, OverdueChip } from "@/app/components/ui";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { SiteSearchSelect, MultiPhotoUpload } from "@/app/components/formWidgets";
 import { isVideoUrl } from "@/lib/photos";
@@ -973,6 +973,7 @@ export function DispatchEtaModal({ failure, onConfirm, onClose }) {
   return (
     <Sheet title="도착 예정 시간 입력" onClose={onClose}>
       <p className="text-sm font-semibold text-slate-700 mb-4">{failure.siteName} · {formatUnitLabel(failure.elevatorNo)}</p>
+      <OverdueBanner site={site} className="-mt-2 mb-4" />
       {failure.escalation && (
         <div className="mb-4 rounded-xl border-2 border-red-400 bg-red-50 p-3.5">
           <p className="text-sm font-bold text-red-700 flex items-center gap-1.5 mb-1.5">
@@ -1293,6 +1294,7 @@ function FailureResponseCard({ f, dist, history = [], site, onOpenDetail, onDisp
       <div className="p-3.5 pb-2.5">
         <div className="flex items-center justify-between gap-2 mb-1">
           <p className="font-bold text-slate-800 text-[15px] truncate flex-1 min-w-0">{f.siteName} · {unitLabel}</p>
+          <OverdueChip siteId={f.siteId} />
           {contractBadge && <span className="shrink-0 text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">{contractBadge}</span>}
           {f.escalation && <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full"><AlertTriangle size={11} strokeWidth={2.5} />{f.escalation}</span>}
         </div>
@@ -1353,6 +1355,7 @@ function FailureActionCard({ f, onOpenDetail, onDispatch, onArrive, onOpenResult
         <button type="button" onClick={() => onOpenDetail(f)} className="flex-1 min-w-0 text-left">
           <div className="flex items-center gap-1.5 mb-1">
             <p className="font-bold text-slate-800 text-[15px] truncate">{f.siteName} · {unitLabel}</p>
+            <OverdueChip siteId={f.siteId} />
             {contractBadge && (
               <span className="shrink-0 text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">{contractBadge}</span>
             )}
@@ -1470,6 +1473,7 @@ export function FailureMiniCard({ f, dist, warnCount = 0, onOpenDetail, onDispat
       <button type="button" onClick={() => onOpenDetail(f)} className="w-full text-left px-3.5 pt-3 pb-2">
         <div className="flex items-center gap-1.5">
           <p className="font-bold text-slate-800 text-sm truncate flex-1 min-w-0">{f.siteName}{formatUnitLabel(f.elevatorNo) ? ` · ${unitLabel}` : ""}</p>
+          <OverdueChip siteId={f.siteId} />
           {contractBadge && <span className="shrink-0 text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-1.5 py-0.5">{contractBadge}</span>}
           <span className={`shrink-0 text-[10px] font-bold rounded-full px-1.5 py-0.5 ${state.chip}`}>{state.label}</span>
           {warnCount >= 3 && <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold rounded-full px-1.5 py-0.5 bg-red-100 text-red-600" title={`최근 14일 ${warnCount}회 고장`}><Repeat size={10} strokeWidth={2.8} />{warnCount}</span>}
@@ -1713,6 +1717,7 @@ function FailureStatusCard({ f, onOpenDetail, onReassign, canReassign }) {
       <button type="button" onClick={() => onOpenDetail(f)} className="w-full text-left p-3.5">
         <div className="flex items-center justify-between gap-2 mb-1.5">
           <p className="font-bold text-slate-800 text-sm truncate flex-1 min-w-0">{f.siteName} · {formatUnitLabel(f.elevatorNo)}</p>
+          <OverdueChip siteId={f.siteId} />
           {contractBadge && <span className="shrink-0 text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">{contractBadge}</span>}
           <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${state.chip}`}>{state.label}</span>
         </div>

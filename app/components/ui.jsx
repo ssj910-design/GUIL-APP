@@ -1,6 +1,7 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { BRAND } from "@/lib/company";
+import { SitesContext } from "@/app/components/context";
 import { createPortal } from "react-dom";
 import { Home, X, Camera, Check, Image as ImageIcon, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Download, FileText, Loader2, Play, AlertTriangle } from "lucide-react";
 import { TODAY_STR } from "@/lib/constants";
@@ -731,4 +732,11 @@ export function OverdueBanner({ site, className = "mb-3" }) {
       </div>
     </div>
   );
+}
+
+// 장기미수 뱃지 — 고장 카드처럼 site 객체 없이 siteId만 있는 곳용
+export function OverdueChip({ siteId }) {
+  const sites = useContext(SitesContext);
+  if (!sites.find((s) => s.id === siteId)?.longOverdue) return null;
+  return <span className="shrink-0 text-[10px] font-bold text-red-600 bg-yellow-100 px-2 py-0.5 rounded-full">장기미수</span>;
 }
