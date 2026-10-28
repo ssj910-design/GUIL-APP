@@ -609,6 +609,13 @@ export function FailureDetailSheet({ failure, failures = [], nested = false, onC
             <span className="font-semibold text-slate-700">{failure.escalatedArrivalTime}</span>
           </div>
         )}
+        {/* 증상 — 관리자웹 상세(Dashboard·FailuresAdmin)엔 있는데 앱 상세에만 빠져 있었다. */}
+        {failure.faultSymptom && (
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="text-slate-400 shrink-0">증상</span>
+            <span className="font-semibold text-slate-700 text-right">{failure.faultSymptom}</span>
+          </div>
+        )}
         {failure.faultErrorCode && (
           <div className="flex items-center justify-between text-sm">
             <span className="text-slate-400">에러코드</span>
