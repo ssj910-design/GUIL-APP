@@ -886,8 +886,10 @@ function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
   const nextResendAt = (() => {
     if (!reminderEnabled || !savedDue) return null;
     const dueMs = new Date(`${savedDue}T00:00:00+09:00`).getTime();
-    const base = b.lastReminderSentAt
-      ? new Date(b.lastReminderSentAt).getTime() + BILLING_REMINDER_INTERVAL_DAYS * 86400000
+    // 마지막 독촉이 결제기한보다 앞이면(기한을 뒤로 미룬 경우) 7일 간격에 안 친다 — 크론과 같은 규칙.
+    const lastMs = b.lastReminderSentAt ? new Date(b.lastReminderSentAt).getTime() : null;
+    const base = lastMs != null && lastMs >= dueMs
+      ? lastMs + BILLING_REMINDER_INTERVAL_DAYS * 86400000
       : dueMs;
     const expireAt = dueMs + BILLING_REMINDER_EXPIRE_DAYS * 86400000;
     return base > expireAt ? null : new Date(Math.max(base, dueMs));

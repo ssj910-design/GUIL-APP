@@ -3,7 +3,7 @@
 // reminder=false(관리자가 누른 최초/수동 재발송)와 reminder=true(크론의 자동 독촉)를 같이
 // 처리한다 — 크론은 CRON_SECRET으로, 관리자 화면은 로그인 토큰으로 인증한다.
 import { sendBillingInvoiceEmail } from "@/lib/email";
-import { sendBillingInvoiceAlimtalk } from "@/lib/alimtalk";
+import { sendBillingInvoiceAlimtalk, sendBillingReminderSms } from "@/lib/alimtalk";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { verifyAuthToken } from "@/lib/verifyToken";
 
@@ -50,12 +50,15 @@ export async function POST(request) {
 
   if (channels?.kakao) {
     try {
-      const sent = await sendBillingInvoiceAlimtalk({ to: recipientPhone, invoice, pdfUrl, reminder });
+      // 독촉(reminder)은 알림톡 템플릿이 반려돼 문자로 직접 보낸다 — 로그 채널도 sms.
+      const sent = reminder
+        ? await sendBillingReminderSms({ to: recipientPhone, invoice, pdfUrl })
+        : await sendBillingInvoiceAlimtalk({ to: recipientPhone, invoice, pdfUrl, reminder });
       results.kakao = { ok: true };
       // messageId를 남겨야 웹훅(app/api/solapi-webhook)이나 상태 새로고침(app/api/alimtalk-status)이
       // "이 발송의 결과"를 찾아 수신완료/실패 상태를 채울 수 있다 — 없으면 화면에 영원히 "결과 없음".
       // groupId는 알림톡 실패 시 따로 나가는 문자(대체발송) 결과를 찾는 열쇠다 (app/api/alimtalk-status).
-      newLogEntries.push({ channel: "kakao", sentAt: now, target: recipientPhone, reminder: !!reminder, messageId: sent?.messageId ?? null, groupId: sent?.groupId ?? null, status: "pending" });
+      newLogEntries.push({ channel: reminder ? "sms" : "kakao", sentAt: now, target: recipientPhone, reminder: !!reminder, messageId: sent?.messageId ?? null, groupId: sent?.groupId ?? null, status: "pending" });
     } catch (err) {
       results.kakao = { ok: false, reason: err.message };
     }

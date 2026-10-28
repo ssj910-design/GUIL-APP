@@ -12,7 +12,7 @@ import { mapBilling, mapUnit, mapSite } from "@/lib/mappers";
 import { buildBillingInvoiceData } from "@/lib/billingInvoiceData";
 import { billingDueAmount, receivedTotalOf } from "@/lib/utils";
 import { sendBillingInvoiceEmail } from "@/lib/email";
-import { sendBillingInvoiceAlimtalk } from "@/lib/alimtalk";
+import { sendBillingReminderSms } from "@/lib/alimtalk";
 
 const REMINDER_INTERVAL_DAYS = 7;
 const REMINDER_EXPIRE_DAYS = 60;
@@ -79,24 +79,38 @@ async function handle(request) {
       continue;
     }
 
+    // 마지막 독촉이 (바뀐) 결제기한보다 앞이면 그건 옛 기한 기준이라 7일 간격에 안 친다 —
+    // 결제기한을 뒤로 미루면 새 기한 당일부터 다시 시작한다. (화면 nextResendAt과 같은 규칙)
+    const dueMs = new Date(`${billing.paymentDueDate}T00:00:00+09:00`).getTime();
     const lastMs = billing.lastReminderSentAt ? new Date(billing.lastReminderSentAt).getTime() : null;
-    if (lastMs != null && Date.now() - lastMs < REMINDER_INTERVAL_DAYS * DAY_MS) continue;
+    if (lastMs != null && lastMs >= dueMs && Date.now() - lastMs < REMINDER_INTERVAL_DAYS * DAY_MS) continue;
     if (!billing.recipientEmail && !billing.recipientPhone) continue; // 발송 대상 없음
     const pdfUrl = billing.invoicePdfUrl;
     if (!pdfUrl) continue; // 최초 발송이 아직 안 된 건(PDF 없음)은 자동 독촉 대상이 아니다
 
     const invoice = buildBillingInvoiceData(billing, units, sites);
     let ok = false;
+    const now = new Date().toISOString();
+    const logEntries = []; // 관리자 화면 발송내역에 보이도록 send_log에도 남긴다
     if (billing.recipientEmail) {
-      try { await sendBillingInvoiceEmail({ to: billing.recipientEmail, invoice, pdfUrl, reminder: true }); ok = true; }
+      try {
+        await sendBillingInvoiceEmail({ to: billing.recipientEmail, invoice, pdfUrl, reminder: true });
+        ok = true;
+        logEntries.push({ channel: "email", sentAt: now, target: billing.recipientEmail, reminder: true });
+      }
       catch (err) { console.error(`청구서 재발송 이메일 실패 (billingId=${billing.id}):`, err.message); }
     }
     if (billing.recipientPhone) {
-      try { await sendBillingInvoiceAlimtalk({ to: billing.recipientPhone, invoice, pdfUrl, reminder: true }); ok = true; }
-      catch (err) { console.error(`청구서 재발송 알림톡 실패 (billingId=${billing.id}):`, err.message); }
+      // 독촉은 알림톡 템플릿이 카카오에서 반려돼 문자(LMS)로 직접 보낸다.
+      try {
+        const sms = await sendBillingReminderSms({ to: billing.recipientPhone, invoice, pdfUrl });
+        ok = true;
+        logEntries.push({ channel: "sms", sentAt: now, target: billing.recipientPhone, reminder: true, messageId: sms.messageId, groupId: sms.groupId, status: "pending" });
+      }
+      catch (err) { console.error(`청구서 재발송 문자 실패 (billingId=${billing.id}):`, err.message); }
     }
     if (ok) {
-      await db.from("billings").update({ last_reminder_sent_at: new Date().toISOString() }).eq("id", billing.id);
+      await db.from("billings").update({ last_reminder_sent_at: now, send_log: [...(row.send_log ?? []), ...logEntries] }).eq("id", billing.id);
       sent++;
     }
   }

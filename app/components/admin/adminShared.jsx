@@ -109,7 +109,7 @@ export function sentGroups(q) {
     .map(([sentAt, entries]) => ({
       date: shortDate(sentAt.slice(0, 10)),
       entries: entries.map((e) => {
-        const stale = e.channel === "kakao"
+        const stale = (e.channel === "kakao" || e.channel === "sms")
           && e.status !== "delivered" && e.status !== "failed"
           && Date.now() - new Date(e.sentAt).getTime() >= 600000;
         // 알림톡이 거부되면 솔라피가 같은 내용을 문자로 대체발송한다 — 그 결과를 따로 보여준다.
@@ -146,10 +146,10 @@ export function sentHistory(q) {
       // 알림톡은 "보냈다"와 "도착했다"가 다르다 — 웹훅(app/api/solapi-webhook)이 채워준
       // status를 함께 보여줘야 미가입·차단으로 못 받은 건을 알아챌 수 있다.
       const parts = entries.map((e) => {
-        const name = e.channel === "email" ? "이메일" : "알림톡";
+        const name = e.channel === "email" ? "이메일" : e.channel === "sms" ? "문자" : "알림톡";
         // 기호(✓·✗)를 섞으면 작게 보일 때 뭘 뜻하는지 알기 어렵다 — 말로 쓴다.
         // 배지로 보여줄 수 있는 자리(상세)는 SentHistory 컴포넌트를 쓰고, 여기는 한 줄 요약용이다.
-        const mark = e.channel !== "kakao" || !e.status ? ""
+        const mark = (e.channel !== "kakao" && e.channel !== "sms") || !e.status ? ""
           : e.status === "delivered" ? " · 발송완료"
           : e.status === "failed" ? ` · 발송거부(${e.statusMessage ?? "사유미상"})`
           : " · 확인중";
@@ -193,10 +193,10 @@ export function SentHistory({ log }) {
           {g.entries.map((e, j) => (
             <span key={j} className="inline-flex items-center gap-1">
               <span className="text-xs font-semibold text-slate-700">
-                {e.channel === "email" ? "이메일" : "알림톡"}
+                {e.channel === "email" ? "이메일" : e.channel === "sms" ? "문자" : "알림톡"}
                 <span className="ml-1 font-normal text-slate-400">{e.target}</span>
               </span>
-              {e.channel === "kakao" && (
+              {(e.channel === "kakao" || e.channel === "sms") && (
                 <StatusBadge tone={e.tone}>{e.label}</StatusBadge>
               )}
               {e.fallbackLabel && <StatusBadge tone={e.fallbackTone}>{e.fallbackLabel}</StatusBadge>}

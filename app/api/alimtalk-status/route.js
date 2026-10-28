@@ -21,7 +21,7 @@ async function refreshTable(table) {
   const pendingIds = [];
   for (const r of rows ?? []) {
     for (const e of r.send_log ?? []) {
-      if (e.channel === "kakao" && e.messageId && e.status !== "delivered" && e.status !== "failed") {
+      if ((e.channel === "kakao" || e.channel === "sms") && e.messageId && e.status !== "delivered" && e.status !== "failed") {
         pendingIds.push(e.messageId);
       }
     }
