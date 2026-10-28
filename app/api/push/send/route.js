@@ -137,7 +137,11 @@ async function handlePost(request) {
       await webpush.sendNotification(
         { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
         payload,
-        { urgency }
+        // TTL(초) — 브라우저가 꺼져 있으면 푸시 서버가 알림을 보관했다가 다시 켤 때 몰아서 준다.
+        // 기본값이 최대 4주라 아침에 브라우저를 켜면 밤사이 알림이 우르르 떴다. 30분만 보관하고
+        // 그 뒤엔 버린다 — 잠깐 끊긴 동안의 알림은 살리고, 오래된 건 안 띄운다(알림함 기록은 그대로 남음).
+        // 네이티브 앱(FCM)은 적용하지 않는다 — 앱은 오래 꺼둬도 받는 게 맞다고 판단(2026-10-28).
+        { urgency, TTL: 1800 }
       );
       sent++;
     } catch (e) {
