@@ -5,7 +5,7 @@
 // 하단시트/채팅형 UI 대신 가운데 정렬된 카드 목록 + 작성창 상단 고정 + 상세는
 // 중앙 모달(adminShared의 Modal)로 — PC 게시판에 맞는 레이아웃.
 // 작성자는 실제 로그인한 관리자 이름(AdminAuthContext)을 쓴다 — "관리자"로 뭉뚱그리지 않는다.
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Image as ImageIcon, Pin, ThumbsUp, MessageCircle, Trash2, X, Send, Search, MoreVertical, ChevronLeft, ChevronRight, Pencil } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
@@ -378,10 +378,16 @@ function PostCard({ p, comments, liked, likes, menuOpen, onToggleMenu, onOpenDet
   );
 }
 
-export default function RoomAdmin({ data, setData }) {
+export default function RoomAdmin({ data, setData, focusId, onFocusHandled }) {
   const { name: ADMIN_NAME, id: adminId } = useContext(AdminAuthContext);
   const [search, setSearch] = useState("");
   const [detailId, setDetailId] = useState(null);
+  // 푸시 알림(/?openPost=…)으로 들어오면 그 글의 상세를 바로 연다.
+  useEffect(() => {
+    if (!focusId) return;
+    setDetailId(focusId);
+    onFocusHandled?.();
+  }, [focusId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [photoViewer, setPhotoViewer] = useState(null); // { urls, index }
   const [menuFor, setMenuFor] = useState(null);
   const [editingId, setEditingId] = useState(null);

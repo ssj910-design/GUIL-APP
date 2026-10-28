@@ -65,6 +65,10 @@ const ADMIN_HRSUB_KEY = "guilAdminHrSubV1";
 export default function AdminApp() {
   const [menu, setMenu] = useState("dashboard");
   const [hrSub, setHrSub] = useState("직원"); // 인사관리 하위 탭 (대시보드에서 워크 캘린더·연차관리로 바로 진입)
+  // 알림으로 들어온 건 — { param, id }. 해당 화면이 상세를 열고 onFocusHandled로 지운다.
+  const [focus, setFocus] = useState(null);
+  const focusIdFor = (param) => (focus?.param === param ? focus.id : null);
+  const clearFocus = () => setFocus(null);
   // 마운트 직후(하이드레이션 이후) sessionStorage에 저장된 값이 있으면 복원 — SSR 시점엔
   // window가 없어 초기 useState 값 자체를 여기서 읽으면 하이드레이션 불일치가 나므로,
   // 마운트 후 effect에서 한 번 덮어쓴다. 이 시점엔 아직 데이터 로딩 스피너가 떠 있어
@@ -203,10 +207,18 @@ export default function AdminApp() {
         openCheckup: ["selfChecks", null],
         openInspectionTab: ["inspections", null],
       };
+      // 값이 건 id인 알림(고장·자재·견적·할일·게시판)은 그 화면에 id를 넘겨 상세까지 열어준다.
+      const DETAIL_PARAMS = ["openFailure", "openMaterial", "openQuote", "openTodo", "openPost"];
       let moved = false;
       for (const [param, [menuId, sub]] of Object.entries(PARAM_MENU)) {
-        if (!url.searchParams.get(param)) continue;
-        if (!moved) { if (sub) setHrSub(sub); setMenu(menuId); moved = true; }
+        const value = url.searchParams.get(param);
+        if (!value) continue;
+        if (!moved) {
+          if (sub) setHrSub(sub);
+          setMenu(menuId);
+          setFocus(DETAIL_PARAMS.includes(param) ? { param, id: value } : null);
+          moved = true;
+        }
         url.searchParams.delete(param);
       }
       if (!moved) return;
@@ -408,23 +420,23 @@ export default function AdminApp() {
         ) : menu === "sites" ? (
           <SitesAdmin data={data} setData={setData} />
         ) : menu === "failures" ? (
-          <FailuresAdmin data={data} setData={setData} initialStatus={failuresInitialStatus} />
+          <FailuresAdmin data={data} setData={setData} initialStatus={failuresInitialStatus} focusId={focusIdFor("openFailure")} onFocusHandled={clearFocus} />
         ) : menu === "inspections" ? (
           <InspectionsAdmin data={data} setData={setData} />
         ) : menu === "materials" ? (
-          <MaterialsAdmin data={data} setData={setData} />
+          <MaterialsAdmin data={data} setData={setData} focusId={focusIdFor("openMaterial")} onFocusHandled={clearFocus} />
         ) : menu === "quotes" ? (
-          <QuotesAdmin data={data} setData={setData} />
+          <QuotesAdmin data={data} setData={setData} focusId={focusIdFor("openQuote")} onFocusHandled={clearFocus} />
         ) : menu === "billings" ? (
           <BillingsAdmin data={data} setData={setData} />
         ) : menu === "inventory" ? (
           <InventoryAdmin data={data} setData={setData} />
         ) : menu === "todos" ? (
-          <TodosAdmin data={data} setData={setData} initialView={todosInitialView} />
+          <TodosAdmin data={data} setData={setData} initialView={todosInitialView} focusId={focusIdFor("openTodo")} onFocusHandled={clearFocus} />
         ) : menu === "selfChecks" ? (
           <SelfChecksAdmin data={data} setData={setData} initialView={selfChecksInitialView} />
         ) : menu === "room" ? (
-          <RoomAdmin data={data} setData={setData} />
+          <RoomAdmin data={data} setData={setData} focusId={focusIdFor("openPost")} onFocusHandled={clearFocus} />
         ) : menu === "engineers" ? (
           <EngineersAdmin data={data} setData={setData} sub={hrSub} onSub={setHrSub} />
         ) : menu === "notify" ? (

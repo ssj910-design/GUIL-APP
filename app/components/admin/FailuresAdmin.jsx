@@ -2,7 +2,7 @@
 
 // 고장관리 — 전체 고장 테이블 + 기사 배정(듀얼라이트) + 고장접수(신규 등록).
 // 출동/도착/처리결과 입력은 현장 기사의 모바일 앱 몫이므로 여기서는 하지 않는다.
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
@@ -319,11 +319,18 @@ export function RegisterFailureModal({ data, onClose, onCreate }) {
   );
 }
 
-export default function FailuresAdmin({ data, setData, initialStatus }) {
+export default function FailuresAdmin({ data, setData, initialStatus, focusId, onFocusHandled }) {
   const { failures, profiles, units, sites } = data;
   const [status, setStatus] = useState(initialStatus ?? "all");
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState(null);
+  // 푸시 알림(/?openFailure=…)으로 들어오면 그 건의 상세를 바로 연다 — 못 찾으면(취소 건 등) 목록만.
+  useEffect(() => {
+    if (!focusId) return;
+    const hit = (data.failures ?? []).find((f) => f.id === focusId);
+    if (hit) setDetail(hit);
+    onFocusHandled?.();
+  }, [focusId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [registering, setRegistering] = useState(false);
   // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 관리자가 자재담당자에게도 배정할 수 있어야 한다.
   const engineers = profiles.filter((p) => (p.role === "engineer" || p.admin_tier === "material") && p.is_active !== false); // 제외된 기사는 배정 목록에서 뺀다

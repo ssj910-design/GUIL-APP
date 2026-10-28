@@ -88,7 +88,7 @@ function quoteStageInfo(q, todos) {
   return { stage, dates };
 }
 
-export default function QuotesAdmin({ data, setData }) {
+export default function QuotesAdmin({ data, setData, focusId, onFocusHandled }) {
   const { id: meId, name: meName, tier } = useContext(AdminAuthContext);
   const isSuper = tier === "super";
   const { quoteRequests: allQuoteRequests } = data;
@@ -115,6 +115,13 @@ export default function QuotesAdmin({ data, setData }) {
   // 가려 안 보일 수 있음) "됐나?" 싶은 게 당연하다 — 처리 직후 잠깐 토스트를 띄운다.
   const [toast, setToast] = useState(null);
   const [detailTarget, setDetailTarget] = useState(null); // 상세내역 보는 중인 견적요청
+  // 푸시 알림(/?openQuote=…)으로 들어오면 그 건의 상세를 바로 연다.
+  useEffect(() => {
+    if (!focusId) return;
+    const hit = (data.quoteRequests ?? []).find((q) => q.id === focusId);
+    if (hit) setDetailTarget(hit);
+    onFocusHandled?.();
+  }, [focusId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [rejectTarget, setRejectTarget] = useState(null); // 반려/취소 사유 입력 중인 견적요청
   const [itemsTarget, setItemsTarget] = useState(null); // 품목편집 중인 견적요청
   const [sendTarget, setSendTarget] = useState(null); // 발송 중인 견적요청

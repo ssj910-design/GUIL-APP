@@ -3,7 +3,7 @@
 // 자재신청 처리 — 지급완료 액션 포함.
 // 입력이 필요 없는 전환(없음)은 없고, 사진·담당기사·금액처럼 입력이 필요한 전환(자재 지급완료)만
 // 모달을 쓴다 (docs/superpowers/specs/2026-07-21-materials-admin-actions-design.md).
-import { useState, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { notify } from "@/lib/push";
@@ -28,7 +28,7 @@ function parseAmountFromBillingPart(billingPart, part) {
   return m ? m[1].replace(/,/g, "") : "";
 }
 
-export default function MaterialsAdmin({ data, setData }) {
+export default function MaterialsAdmin({ data, setData, focusId, onFocusHandled }) {
   const { materialRequests: allMaterialRequests } = data;
   const [search, setSearch] = useState("");
   const [payTarget, setPayTarget] = useState(null); // 지급완료 처리 중인 자재신청
@@ -42,6 +42,13 @@ export default function MaterialsAdmin({ data, setData }) {
   // 가려 안 보일 수 있음) "됐나?" 싶은 게 당연하다 — 처리 직후 잠깐 토스트를 띄운다.
   const [toast, setToast] = useState(null);
   const [detailTarget, setDetailTarget] = useState(null); // 상세내역 보는 중인 자재신청
+  // 푸시 알림(/?openMaterial=…)으로 들어오면 그 건의 상세를 바로 연다.
+  useEffect(() => {
+    if (!focusId) return;
+    const hit = (data.materialRequests ?? []).find((r) => r.id === focusId);
+    if (hit) setDetailTarget(hit);
+    onFocusHandled?.();
+  }, [focusId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [rejectTarget, setRejectTarget] = useState(null); // 반려 사유 입력 중인 자재신청
   // todos.billing_part_rows 컬럼 존재 여부 — 마이그레이션 112 실행 전엔 컬럼이 없어, 있을 때만
   // 부품별 구조화 행(이름·수량·금액)을 같이 쓴다.

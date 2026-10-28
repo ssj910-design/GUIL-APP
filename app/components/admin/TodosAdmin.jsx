@@ -3,7 +3,7 @@
 // 할 일 관리 — 전체 할일 관제 + 관리자 권한 완료/취소 토글 + 할 일 배정(생성).
 // 완료 규칙(DESIGN-v2 §7-2): 자재·견적 할일의 정상 완료 경로는 비용청구지만,
 // 관리자는 예외적으로 임의 토글 가능(모바일 관리자 모드와 동일 권한).
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Plus, Search, Repeat, Pencil, ChevronDown, Check } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto, isFileUrl } from "@/lib/photos";
@@ -666,7 +666,7 @@ function WasteReturnConfirmModal({ todo, onClose, onConfirm }) {
   );
 }
 
-export default function TodosAdmin({ data, setData, initialView }) {
+export default function TodosAdmin({ data, setData, initialView, focusId, onFocusHandled }) {
   const { name: adminName, id: adminId } = useContext(AdminAuthContext);
   const { todos, sites, units, profiles } = data;
   const [view, setView] = useState(initialView ?? "open");
@@ -676,6 +676,14 @@ export default function TodosAdmin({ data, setData, initialView }) {
   // groupKeyOf 값만 들고 있다가 매 렌더마다 최신 목록에서 다시 찾는다 — 다른 경로(목록의 원형
   // 토글 등)로 done이 바뀌어도 패널이 그 변화를 바로 반영한다.
   const [selectedKey, setSelectedKey] = useState(null);
+  // 푸시 알림(/?openTodo=…)으로 들어오면 그 할일을 선택해 오른쪽 상세를 연다 — 이미 완료된 건도
+  // 보이도록 상태 필터를 전체로 바꾼다(기본값 "미완료"면 목록에 없어 선택이 풀린다).
+  useEffect(() => {
+    if (!focusId) return;
+    const hit = (data.todos ?? []).find((t) => t.id === focusId);
+    if (hit) { setView("all"); setSelectedKey(groupKeyOf(hit)); }
+    onFocusHandled?.();
+  }, [focusId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [assigning, setAssigning] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState(null);
 
