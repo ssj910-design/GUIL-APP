@@ -180,22 +180,36 @@ export default function AdminApp() {
     });
   }, []);
 
-  // 관리자 알림(연차 신청·계약 만료·출근 미체크 요약) 푸시 딥링크 — 모바일 App 셸의
-  // checkOpenParams와 같은 패턴. 알림이 이미 떠 있는 창을 재사용(navigate)할 수도 있어
-  // 마운트 시점 한 번만으론 못 잡고, 창이 다시 포커스/보임 상태가 될 때마다 다시 확인한다.
+  // 푸시 알림 딥링크 — 모바일 App 셸의 checkOpenParams와 같은 패턴. 알림이 이미 떠 있는 창을
+  // 재사용(navigate)할 수도 있어 마운트 시점 한 번만으론 못 잡고, 창이 다시 포커스/보임 상태가
+  // 될 때마다 다시 확인한다.
+  // 알림 url은 폰앱 기준(/?openFailure=…)이고 서비스워커가 관리자웹 창에서는 /admin으로 바꿔
+  // 넘겨준다(public/sw.js) — 여기서 그 쿼리를 받아 해당 메뉴를 연다. 모르는 값이면 아무것도 안 한다.
   useEffect(() => {
     function checkOpenParams() {
       const url = new URL(window.location.href);
-      const openLeave = url.searchParams.get("openLeave");
-      const openContract = url.searchParams.get("openContract");
-      const openAttendanceReport = url.searchParams.get("openAttendanceReport");
-      if (!openLeave && !openContract && !openAttendanceReport) return;
-      if (openLeave) { setHrSub("연차관리"); setMenu("engineers"); }
-      if (openContract) setMenu("sites");
-      if (openAttendanceReport) setMenu("dashboard");
-      url.searchParams.delete("openLeave");
-      url.searchParams.delete("openContract");
-      url.searchParams.delete("openAttendanceReport");
+      const PARAM_MENU = {
+        openLeave: ["engineers", "연차관리"],
+        openContract: ["sites", null],
+        openAttendanceReport: ["dashboard", null],
+        openAttendance: ["engineers", "출근부"],
+        openDuty: ["engineers", "당직 근무표"],
+        openFailure: ["failures", null],
+        openMaterial: ["materials", null],
+        openRestock: ["materials", null],
+        openQuote: ["quotes", null],
+        openTodo: ["todos", null],
+        openPost: ["room", null],
+        openCheckup: ["selfChecks", null],
+        openInspectionTab: ["inspections", null],
+      };
+      let moved = false;
+      for (const [param, [menuId, sub]] of Object.entries(PARAM_MENU)) {
+        if (!url.searchParams.get(param)) continue;
+        if (!moved) { if (sub) setHrSub(sub); setMenu(menuId); moved = true; }
+        url.searchParams.delete(param);
+      }
+      if (!moved) return;
       window.history.replaceState({}, "", url);
     }
     checkOpenParams();

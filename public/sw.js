@@ -25,13 +25,22 @@ self.addEventListener("notificationclick", (event) => {
   const url = event.notification.data?.url || "/";
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      // 알림 url은 폰앱 기준(/?openFailure=…)이라, 관리자웹(/admin) 창에서 그대로 열면 기사 화면으로
+      // 튕겨 나가고 해당 메뉴로도 못 간다 — 관리자웹 창이 열려 있으면 경로만 /admin으로 바꾸고
+      // 쿼리(openFailure 등)는 그대로 넘긴다. AdminApp이 그 쿼리를 보고 메뉴를 연다.
+      const target = new URL(url, self.location.origin);
+      const adminUrl = new URL(target);
+      adminUrl.pathname = "/admin";
+      const isAdmin = (c) => { try { return new URL(c.url).pathname.startsWith("/admin"); } catch { return false; } };
       // 이미 열려 있는 창이 있으면 그 창을 쓴다 (앱을 두 번 띄우지 않게)
       // navigate()가 끝나기 전에 focus()부터 반환하면, 앱 쪽 focus 리스너가 아직 안 바뀐 URL을
       // 읽어버려 딥링크가 안 먹는다 — navigate 완료를 기다린 뒤 focus한다.
+      const adminWindow = list.find((c) => isAdmin(c) && "navigate" in c);
+      if (adminWindow) return adminWindow.navigate(adminUrl.href).then((client) => (client ?? adminWindow).focus());
       for (const c of list) {
-        if ("navigate" in c) return c.navigate(url).then((client) => (client ?? c).focus());
+        if ("navigate" in c) return c.navigate(target.href).then((client) => (client ?? c).focus());
       }
-      return clients.openWindow(url);
+      return clients.openWindow(target.href);
     })
   );
 });
