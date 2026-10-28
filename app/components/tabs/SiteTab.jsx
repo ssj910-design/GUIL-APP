@@ -532,8 +532,9 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
             <>
               <TimelineRow icon={User} label={primaryManager.role || "담당자"} value={primaryManager.name || "-"} />
               <TimelineRow icon={PhoneCall} label={`${primaryManager.role || "담당자"} 전화번호`} value={primaryManager.phone ? <PhoneLink phone={primaryManager.phone} /> : "-"} valueColor="text-blue-600" />
-              <TimelineRow icon={Mail} label={`${primaryManager.role || "담당자"} 메일주소`} value={primaryManager.email || "-"} />
-              <TimelineRow icon={Paperclip} label={`${primaryManager.role || "담당자"} FAX`} value={primaryManager.fax || "-"} />
+              {/* 메일·FAX는 안 적힌 현장이 많다 — "-"만 있는 빈 줄은 아예 안 보여준다 */}
+              {primaryManager.email && <TimelineRow icon={Mail} label={`${primaryManager.role || "담당자"} 메일주소`} value={primaryManager.email} />}
+              {primaryManager.fax && <TimelineRow icon={Paperclip} label={`${primaryManager.role || "담당자"} FAX`} value={primaryManager.fax} />}
             </>
           )}
           {otherManagers.length > 0 && (
@@ -556,8 +557,8 @@ function SiteDetailScreen({ site, siteManagers, onBack, onHome, onOpenUnit, onUp
               <React.Fragment key={m.id}>
                 <TimelineRow icon={User} label={roleLabel} value={m.name || "-"} />
                 <TimelineRow icon={PhoneCall} label={`${roleLabel} 전화번호`} value={m.phone ? <PhoneLink phone={m.phone} /> : "-"} valueColor="text-blue-600" />
-                <TimelineRow icon={Mail} label={`${roleLabel} 메일주소`} value={m.email || "-"} />
-                <TimelineRow icon={Paperclip} label={`${roleLabel} FAX`} value={m.fax || "-"} />
+                {m.email && <TimelineRow icon={Mail} label={`${roleLabel} 메일주소`} value={m.email} />}
+                {m.fax && <TimelineRow icon={Paperclip} label={`${roleLabel} FAX`} value={m.fax} />}
               </React.Fragment>
             );
           })}
