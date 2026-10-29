@@ -20,7 +20,7 @@ export function validateForm(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
   const clean = (key, max) => typeof data[key] === 'string' && data[key].trim().length <= max && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(data[key]) ? data[key].trim() : '';
   const name = clean('name',60), phone = clean('phone',30), email = clean('email',180), building = clean('building',150), message = clean('message',3000), service = clean('service',30);
-  if (!name || /[\r\n]/.test(name+phone+email+building) || !/^[0-9+()\s-]{8,30}$/.test(phone) || phone.replace(/\D/g,'').length < 8 || (email && (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email) || /[,;:\"()\[\]\\]/.test(email))) || !message || !['유지관리','보수공사','설치공사','기타'].includes(service) || data.consent !== true) return null;
+  if (!name || /[\r\n]/.test(name+phone+email+building) || !/^[0-9+()\s-]{8,30}$/.test(phone) || phone.replace(/\D/g,'').length < 8 || (email && (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email) || /[,;:\"()\[\]\\]/.test(email))) || !message || !['유지관리','보수공사','전면교체','리모델링','안전장치 설치','설치공사','기타'].includes(service) || data.consent !== true) return null;
   return {name,phone,email,building,message,service};
 }
 function allowed(request) { return allowedOrigins.has(request.headers.get('origin')); }
