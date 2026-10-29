@@ -33,3 +33,7 @@ body{font-size:16px}.header{border-bottom:0}.header.scrolled{box-shadow:0 2px 10
 
 .metric-icon.metric-network{width:88px;height:36px}
 @media(max-width:700px){.home-company .company-metrics>.metric-system{padding-left:0}.home-company .metric-system .metric-network{position:static;width:88px;height:40px;margin-bottom:16px}}
+
+/* Matching navy and brushed-metal 3D feature illustrations. */
+.company-metrics .metric-3d{display:block;width:144px;height:128px;object-fit:contain;object-position:left center;margin:0 0 18px}
+@media(max-width:700px){.company-metrics>div,.home-company .company-metrics>div,.home-company .company-metrics>div+div,.home-company .company-metrics>.metric-system{display:grid;grid-template-columns:92px minmax(0,1fr);column-gap:18px;align-items:start;padding-left:0}.company-metrics .metric-3d{grid-column:1;grid-row:1/4;width:92px;height:104px;object-position:center top;margin:0}.company-metrics .metric-label,.company-metrics strong,.company-metrics p{grid-column:2}.company-metrics .metric-system strong,.home-company .company-metrics .metric-system strong{font-size:22px}.company-metrics .metric-label{font-size:16px}.company-metrics p{line-height:1.7}}
