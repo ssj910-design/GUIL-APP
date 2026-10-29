@@ -31,7 +31,8 @@ export async function GET(request) {
   if (!row || !tokenOk(row, new URL(request.url).searchParams.get("t"))) return Response.json({ ok: false, reason: BAD_LINK }, { status: 200 });
   const quote = mapQuoteRequest(row);
   if (quote.status !== "작성") {
-    return Response.json({ ok: true, status: quote.status, purchaseOrderPdfUrl: quote.purchaseOrderPdfUrl });
+    // 이미 승인된 뒤에도 고객이 링크를 다시 눌러 견적서 원본을 볼 수 있어야 한다(발주서와 별개).
+    return Response.json({ ok: true, status: quote.status, purchaseOrderPdfUrl: quote.purchaseOrderPdfUrl, quotePdfUrl: quote.quotePdfUrl ?? null });
   }
 
   const [{ data: unitRows }, { data: siteRows }] = await Promise.all([

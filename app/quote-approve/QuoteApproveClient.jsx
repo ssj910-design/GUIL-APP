@@ -34,7 +34,7 @@ export default function QuoteApproveClient({ id, token }) {
       if (cancelled) return;
       if (!res?.ok) { setState("notfound"); return; }
       if (res.status !== "작성") {
-        setQuote({ status: res.status, purchaseOrderPdfUrl: res.purchaseOrderPdfUrl });
+        setQuote({ status: res.status, purchaseOrderPdfUrl: res.purchaseOrderPdfUrl, quotePdfUrl: res.quotePdfUrl });
         setState("wrongStatus");
         return;
       }
@@ -88,6 +88,9 @@ export default function QuoteApproveClient({ id, token }) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
         <p className="text-sm text-slate-500">{msg}</p>
+        {quote.quotePdfUrl && (
+          <a href={`/quote-view?url=${encodeURIComponent(quote.quotePdfUrl)}`} className="text-sm font-bold text-blue-700 underline">견적서 확인</a>
+        )}
         {quote.purchaseOrderPdfUrl && (
           <a href={quote.purchaseOrderPdfUrl} className="text-sm font-bold text-blue-700 underline">발주서 확인</a>
         )}
