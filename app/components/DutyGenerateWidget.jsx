@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { AuthContext } from "@/app/components/context";
 import { confirmAsync } from "@/app/components/ConfirmHost";
 import { mapDutySchedule } from "@/lib/mappers";
+import { notify } from "@/lib/push";
 import { TODAY_STR, DUTY_KINDS } from "@/lib/constants";
 import { inputCls } from "@/app/components/admin/adminShared";
 
@@ -122,6 +123,14 @@ export function DutyGenerateWidget({ schedules, onSchedulesChange, onEngineersCh
     const mapped = (created ?? []).map(mapDutySchedule);
     onSchedulesChange((p) => [...p.filter((x) => !mapped.some((n) => n.id === x.id)), ...mapped]
       .sort((a, b) => a.dutyDate.localeCompare(b.dutyDate)));
+    // 배정이 끝나면 순번표에 든 사람에게 알린다 — 회수 후 다시 배정할 때도 일정이 바뀐 것이라 또 보낸다.
+    // 긴급 등급이라 소리·진동·헤드업으로 뜬다. 누르면 근무표 화면(관리자는 인사관리 → 당직 근무표)으로.
+    notify("duty_published", {
+      profileIds: roster.map((e) => e.id),
+      title: `${m}월 근무표 배정 완료`,
+      body: "내 당직·숙직 일정을 확인해주세요",
+      url: "/?openDuty=1",
+    });
     // 방금 채운 달의 수동지정은 이제 확정 기록에 흡수됐으니 정리한다.
     setManualOverrides((prev) => {
       const next = { ...prev };
