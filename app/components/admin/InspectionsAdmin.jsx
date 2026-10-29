@@ -129,8 +129,7 @@ function OverdueRow({ row, onToggleApplied, onSaveNote }) {
   const st = appliedStatusOf(row.unit, TODAY_STR);
   return (
     <tr className="border-b border-slate-50">
-      <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{row.siteName} · {row.unitLabel}</td>
-      <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap tabular-nums">{row.govNo || "-"}</td>
+      <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{row.siteName} · {row.unitLabel}{row.govNo ? `(${row.govNo})` : ""}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{row.techNames || "미배정"}</td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{shortDate(row.inspectionEnd)}</td>
       <td className="px-3 py-2.5 whitespace-nowrap">
@@ -376,7 +375,7 @@ export default function InspectionsAdmin({ data, setData }) {
             체크한 호기는 주간 알림에서 빠집니다(체크 후 30일이 지나도 검사가 안 되면 다시 알립니다).
             실제로 검사를 받아 유효기간이 갱신되면 이 목록과 체크가 자동으로 사라집니다.
           </p>
-          <AdminTable head={["현장 · 호기", "승강기번호", "담당 기사", "유효기간 만료일", "경과", "현장 담당자", "검사 신청", "메모"]}>
+          <AdminTable head={["현장 · 호기(승강기번호)", "담당 기사", "유효기간 만료일", "경과", "현장 담당자", "검사 신청", "메모"]}>
             {overdueRows
               .filter((r) => !search || r.siteName.toLowerCase().includes(search.toLowerCase()))
               .map((r) => <OverdueRow key={r.unit.id} row={r} onToggleApplied={toggleApplied} onSaveNote={saveAppliedNote} />)}
