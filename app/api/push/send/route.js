@@ -112,6 +112,16 @@ async function handlePost(request) {
   // 퇴근한 사람은 급한 알림도 소리·진동 없이 알림함에만 뜨게 한다(그래도 알아야 하니 안 막고 무음으로만).
   const offDutyIds = new Set((attRows ?? []).filter((a) => a.status === "퇴근").map((a) => a.profile_id));
 
+  // 알림 url은 폰앱 기준(/?openFailure=…)이라 PC 관리자가 눌러도 기사 화면이 열렸다 —
+  // 관리자 계정에는 관리자웹(/admin?openFailure=…)으로 바꿔 보낸다. 관리자웹이 그 값을 받아
+  // 해당 메뉴·상세를 연다(app/components/admin/AdminApp.jsx). 관리자가 폰앱(관리자 모드)을
+  // 쓰는 경우는 서비스워커가 열려 있는 창을 먼저 재사용하므로 그대로 동작한다.
+  const roleById = new Map((profiles ?? []).map((p) => [p.id, p.role]));
+  function urlFor(profileId) {
+    const u = url || "/";
+    return roleById.get(profileId) === "admin" && u.startsWith("/?") ? `/admin${u.slice(1)}` : u;
+  }
+
   const baseLevel = levelOf(item, org);
   const uniqueTag = tag || `${key}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   function payloadFor(profileId) {
@@ -127,7 +137,7 @@ async function handlePost(request) {
     const payload = JSON.stringify({
       title: title || item.label,
       body: body || "",
-      url: url || "/",
+      url: urlFor(s.profile_id),
       // tag를 안 주면 매번 고유하게 — 같은 종류(key) 알림이 안드로이드에서 서로 덮어써(소리 없이 갱신)
       // 두 번째부터 안 울리는 문제 방지. sendPush()·크론처럼 tag를 안 넘기는 호출까지 서버에서 일괄 커버.
       tag: uniqueTag,
