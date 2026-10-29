@@ -70,7 +70,7 @@ export async function GET(request) {
 
   const { data: units, error } = await supabase
     .from("units")
-    .select("id, site_id, gov_no, unit_no, inspection_start, inspection_result, prior_flagged_label, prior_flagged_checked_at")
+    .select("id, site_id, gov_no, unit_no, inspection_start, inspection_end, inspection_result, prior_flagged_label, prior_flagged_checked_at")
     .eq("is_active", true)
     .not("gov_no", "is", null);
   if (error) {
@@ -109,10 +109,16 @@ export async function GET(request) {
           siteUnits.map(async (u) => {
             const item = itemByGovNo.get(u.gov_no);
             if (!item) return;
+            const newEnd = normalizeDate(item.applcEnDt);
             const patch = {
               inspection_start: normalizeDate(item.applcBeDt),
-              inspection_end: normalizeDate(item.applcEnDt),
+              inspection_end: newEnd,
               inspection_result: item.resultNm || null,
+              // 검사를 실제로 받아 유효기간이 갱신되면 "검사 신청함" 체크를 자동으로 지운다
+              // (검사관리 > 유효기간 경과 목록에서도 같이 빠진다 — 마이그레이션 155).
+              ...(newEnd && u.inspection_end && newEnd > u.inspection_end
+                ? { inspection_applied_at: null, inspection_applied_by: null, inspection_applied_note: null }
+                : {}),
             };
             // 조건부합격/불합격인 호기만 부적합상세까지 같이 캐싱한다(대상이 적어 트래픽 부담 적음).
             if (item.resultNm === "조건부합격" || item.resultNm === "불합격") {

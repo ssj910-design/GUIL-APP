@@ -3,15 +3,16 @@
 // 검사관리 — 전체 현장의 정기검사 현황을 관제한다.
 // 검사예정일(기한)은 국가승강기정보센터 API 유효기간이 아니라 이 화면에서 관리자가 수기입력하는 값(inspections.due_date)이 기준이다.
 // 실시간 연동 현장(승강기고유번호 등록됨)도 여기서 검사예정일을 수기로 입력·수정할 수 있다 — API 유효기간은 참고용으로만 함께 보여준다.
-import { useState, useEffect } from "react";
+import { useContext, useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { TODAY_STR } from "@/lib/constants";
 import { unitsToInspections, shortDate, groupBySite } from "@/lib/utils";
 import { mapInspection } from "@/lib/mappers";
-import { Badge } from "@/app/components/ui";
+import { Badge, PhoneLink } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
 import { useInspectionFailItems } from "@/app/hooks/useLiveInspections";
-import { StatusBadge, AdminTable, FilterPills, SortableTh, sortRows, inputCls, Modal, EditableDate, EditableSelect, EditableText } from "@/app/components/admin/adminShared";
+import { StatusBadge, AdminTable, FilterPills, SortableTh, sortRows, inputCls, Modal, EditableDate, EditableSelect, EditableText, AdminAuthContext } from "@/app/components/admin/adminShared";
+import { overdueDaysOf, appliedStatusOf } from "@/lib/inspectionOverdue";
 
 function daysLeftOf(dueDate, today) {
   return Math.ceil((new Date(dueDate) - new Date(today)) / 86400000);
@@ -122,7 +123,41 @@ function FlaggedRow({ i, site, isLive }) {
   );
 }
 
+// 검사유효기간이 한 달 넘게 지난 호기 한 줄 — 건물관계자에게 전화해 검사 신청을 유도하는 화면이라
+// 담당자 연락처(눌러서 전화)와 "검사 신청함" 체크·메모를 한 줄에 둔다.
+function OverdueRow({ row, onToggleApplied, onSaveNote }) {
+  const st = appliedStatusOf(row.unit, TODAY_STR);
+  return (
+    <tr className="border-b border-slate-50">
+      <td className="pl-5 pr-3 py-2.5 font-semibold whitespace-nowrap">{row.siteName} · {row.unitLabel}</td>
+      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{row.techNames || "미배정"}</td>
+      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{shortDate(row.inspectionEnd)}</td>
+      <td className="px-3 py-2.5 whitespace-nowrap">
+        <span className={`font-bold ${row.overdueDays >= 90 ? "text-red-600" : "text-amber-600"}`}>{row.overdueDays}일</span>
+      </td>
+      <td className="px-3 py-2.5 whitespace-nowrap">
+        {row.managerPhone
+          ? <span className="inline-flex items-center gap-1.5"><PhoneLink phone={row.managerPhone} />{row.managerName && <span className="text-xs text-slate-400">{row.managerName}</span>}</span>
+          : <span className="text-slate-400">-</span>}
+      </td>
+      <td className="px-3 py-2.5 whitespace-nowrap">
+        <label className="inline-flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" className="w-4 h-4 rounded accent-blue-700" checked={!!row.unit.inspectionAppliedAt} onChange={() => onToggleApplied(row)} />
+          <StatusBadge tone={st.tone}>{st.label}</StatusBadge>
+        </label>
+        {row.unit.inspectionAppliedAt && (
+          <p className="text-[10px] text-slate-400 mt-0.5">{shortDate(row.unit.inspectionAppliedAt)}{row.unit.inspectionAppliedBy ? ` · ${row.unit.inspectionAppliedBy}` : ""}</p>
+        )}
+      </td>
+      <td className="px-3 py-2.5">
+        <EditableText value={row.unit.inspectionAppliedNote ?? ""} placeholder="통화 메모" emptyText="메모" onCommit={(v) => onSaveNote(row, v)} />
+      </td>
+    </tr>
+  );
+}
+
 export default function InspectionsAdmin({ data, setData }) {
+  const { name: meName } = useContext(AdminAuthContext);
   const { sites, units, inspections } = data;
   const [view, setView] = useState("all");
   const [search, setSearch] = useState("");
@@ -192,6 +227,55 @@ export default function InspectionsAdmin({ data, setData }) {
       afterConditionalAnchor: u?.priorFlaggedAnchorDate ?? null,
     };
   });
+
+  // 검사유효기간이 한 달 넘게 지난 호기 — 법정 검사 대상(requiresSelfCheck)만, 계약종료 현장 제외.
+  const overdueRows = (units ?? [])
+    .filter((u) => u.isActive !== false && u.requiresSelfCheck !== false && u.inspectionEnd)
+    .map((u) => {
+      const site = (sites ?? []).find((s) => s.id === u.siteId);
+      const overdueDays = overdueDaysOf(u.inspectionEnd, TODAY_STR);
+      if (!overdueDays || site?.isActive === false) return null;
+      const managers = (data.siteManagers ?? []).filter((m) => m.siteId === u.siteId);
+      const primary = managers.find((m) => m.isPrimary) ?? managers[0];
+      return {
+        unit: u,
+        siteName: site?.name ?? "-",
+        unitLabel: u.unitNo ?? `${u.seq}호기`,
+        inspectionEnd: u.inspectionEnd,
+        overdueDays,
+        techNames: site?.assignedEngineers?.join(", ") ?? "",
+        managerPhone: primary?.phone ?? null,
+        managerName: primary?.name ?? null,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.overdueDays - a.overdueDays);
+
+  // "검사 신청함" 체크 — 체크일과 체크한 사람을 같이 남긴다(해제하면 전부 지운다).
+  async function toggleApplied(row) {
+    const on = !row.unit.inspectionAppliedAt;
+    const patch = on
+      ? { inspection_applied_at: TODAY_STR, inspection_applied_by: meName ?? null }
+      : { inspection_applied_at: null, inspection_applied_by: null, inspection_applied_note: null };
+    const { error } = await supabase.from("units").update(patch).eq("id", row.unit.id);
+    if (error) { alert("저장 실패: " + error.message); return; }
+    setData((prev) => ({
+      ...prev,
+      units: prev.units.map((u) => (u.id === row.unit.id ? {
+        ...u,
+        inspectionAppliedAt: patch.inspection_applied_at,
+        inspectionAppliedBy: patch.inspection_applied_by,
+        ...(on ? {} : { inspectionAppliedNote: null }),
+      } : u)),
+    }));
+  }
+
+  async function saveAppliedNote(row, note) {
+    const value = note?.trim() || null;
+    const { error } = await supabase.from("units").update({ inspection_applied_note: value }).eq("id", row.unit.id);
+    if (error) { alert("저장 실패: " + error.message); return; }
+    setData((prev) => ({ ...prev, units: prev.units.map((u) => (u.id === row.unit.id ? { ...u, inspectionAppliedNote: value } : u)) }));
+  }
 
   const flagged = withUnitLabel.filter((i) => i.result === "conditional" || i.result === "fail");
 
@@ -277,12 +361,27 @@ export default function InspectionsAdmin({ data, setData }) {
           options={[
             { value: "all", label: "전체", count: withUnitLabel.length },
             { value: "flagged", label: "조건부·불합격", count: flagged.length },
+            { value: "overdue", label: "유효기간 경과", count: overdueRows.length },
           ]}
         />
         <input className={`${inputCls} max-w-56`} placeholder="현장명 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
-      {view === "flagged" ? (
+      {view === "overdue" ? (
+        <>
+          <p className="text-xs text-slate-500 mb-2">
+            검사유효기간이 30일 넘게 지난 호기입니다. 건물관계자에게 전화해 검사 신청을 유도하고, 신청을 확인하면 체크하세요 —
+            체크한 호기는 주간 알림에서 빠집니다(체크 후 30일이 지나도 검사가 안 되면 다시 알립니다).
+            실제로 검사를 받아 유효기간이 갱신되면 이 목록과 체크가 자동으로 사라집니다.
+          </p>
+          <AdminTable head={["현장 · 호기", "담당 기사", "유효기간 만료일", "경과", "현장 담당자", "검사 신청", "메모"]}>
+            {overdueRows
+              .filter((r) => !search || r.siteName.toLowerCase().includes(search.toLowerCase()))
+              .map((r) => <OverdueRow key={r.unit.id} row={r} onToggleApplied={toggleApplied} onSaveNote={saveAppliedNote} />)}
+          </AdminTable>
+          {overdueRows.length === 0 && <p className="text-xs text-slate-400 text-center py-10">유효기간이 지난 호기가 없습니다</p>}
+        </>
+      ) : view === "flagged" ? (
         <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
           <table className="w-full min-w-[54rem] text-sm">
             <thead>
@@ -312,7 +411,7 @@ export default function InspectionsAdmin({ data, setData }) {
           })}
         </AdminTable>
       )}
-      {rows.length === 0 && <p className="text-xs text-slate-400 text-center py-10">해당 조건의 검사 이력이 없습니다</p>}
+      {view !== "overdue" && rows.length === 0 && <p className="text-xs text-slate-400 text-center py-10">해당 조건의 검사 이력이 없습니다</p>}
 
       {failTarget && <InspectionFailDetailSheet inspection={failTarget} onClose={() => setFailTarget(null)} Container={Modal} />}
     </div>
