@@ -83,7 +83,7 @@ if ('IntersectionObserver' in window && !reducedMotion.matches) {
       const target = Number(entry.target.dataset.target);
       const start = performance.now();
       const tick = now => {
-        const progress = Math.min((now - start) / 1800, 1);
+        const progress = Math.min((now - start) / 2400, 1);
         entry.target.textContent = Math.round(target * (1 - Math.pow(1 - progress, 3))).toLocaleString('ko-KR');
         if (progress < 1) requestAnimationFrame(tick);
       };
@@ -91,26 +91,6 @@ if ('IntersectionObserver' in window && !reducedMotion.matches) {
     });
   }, {threshold:0.35});
   counters.forEach(counter => counterObserver.observe(counter));
-}
-// Light cabins follow the perspective of the building; no video or image panning.
-const liftVisual = document.querySelector('.kv-elevator');
-const liftControl = document.querySelector('.kv-motion-control');
-if (liftVisual && liftControl) {
-  let userPaused = false;
-  let visible = true;
-  const sync = () => {
-    const stop = userPaused || !visible || document.hidden || reducedMotion.matches;
-    if (stop) liftVisual.pauseAnimations(); else liftVisual.unpauseAnimations();
-    liftControl.setAttribute('aria-pressed', String(userPaused));
-    liftControl.setAttribute('aria-label', userPaused ? '상승 효과 재생' : '상승 효과 일시정지');
-    liftControl.querySelector('.motion-label').textContent = userPaused ? '효과 재생' : '효과 정지';
-    liftControl.firstElementChild.textContent = userPaused ? '▶' : 'Ⅱ';
-  };
-  liftControl.addEventListener('click', () => {userPaused = !userPaused; sync();});
-  document.addEventListener('visibilitychange', sync);
-  reducedMotion.addEventListener('change', sync);
-  if ('IntersectionObserver' in window) new IntersectionObserver(entries => {visible=entries[0].isIntersecting;sync();}).observe(hero);
-  sync();
 }
 document.querySelectorAll('#nav a, .business-tabs a').forEach(link => {
   if (link.pathname === location.pathname && !link.hash) link.setAttribute('aria-current','page');
