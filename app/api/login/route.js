@@ -2,7 +2,7 @@
 // Supabase가 RLS에서 알아볼 수 있는 서명된 JWT를 발급한다. 로그인 화면·과정 자체는
 // 안 바뀐다 — 이 라우트가 기존 클라이언트 직접 rpc 호출을 대신할 뿐이다.
 import jwt from "jsonwebtoken";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { supabaseAdminRetry as supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function POST(request) {
   const body = await request.json().catch(() => null);
