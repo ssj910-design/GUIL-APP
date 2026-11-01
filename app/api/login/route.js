@@ -23,17 +23,35 @@ export async function POST(request) {
   // 모든 로그인이 "아이디/비번 틀림"으로 실패하고 있었다(실사고).
   const { data, error } = await supabaseAdmin.rpc("verify_login", { p_login_id: loginId, p_password: password });
   const row = Array.isArray(data) ? data[0] : data;
-  if (error || !row) {
+  // DB가 응답을 못 하는 상황(연결 풀 고갈·타임아웃 등)을 "비번 틀림"으로 보여주면 원인을 못 찾는다 —
+  // 실제로 전원이 못 들어오는데 비번만 계속 다시 치는 일이 있었다(2026-11-02). 둘을 구분해서 알린다.
+  if (error) {
+    console.error("[login] verify_login 실패:", error.message, error.code ?? "");
+    return Response.json({
+      ok: false,
+      reason: "지금 서버(DB) 응답이 없어 로그인할 수 없습니다. 비밀번호 문제가 아니니 잠시 후 다시 시도하거나 관리자에게 알려주세요.",
+      serverError: true,
+    }, { status: 503 });
+  }
+  if (!row) {
     return Response.json({ ok: false, reason: "아이디 또는 비밀번호가 올바르지 않습니다." });
   }
 
   // 비활성·삭제된 계정은 verify_login 통과 후에도 다시 막는다 — 기존 AdminApp.jsx/
   // ElevatorFieldApp.jsx의 세션 재확인 로직과 같은 목적.
-  const { data: profile } = await supabaseAdmin
+  const { data: profile, error: profileError } = await supabaseAdmin
     .from("profiles")
     .select("id,name,role,admin_tier,is_active,deleted_at")
     .eq("id", row.id)
     .single();
+  if (profileError) {
+    console.error("[login] profiles 재조회 실패:", profileError.message, profileError.code ?? "");
+    return Response.json({
+      ok: false,
+      reason: "지금 서버(DB) 응답이 없어 로그인할 수 없습니다. 비밀번호 문제가 아니니 잠시 후 다시 시도하거나 관리자에게 알려주세요.",
+      serverError: true,
+    }, { status: 503 });
+  }
   if (!profile || profile.is_active === false || profile.deleted_at) {
     return Response.json({ ok: false, reason: "아이디 또는 비밀번호가 올바르지 않습니다." });
   }
