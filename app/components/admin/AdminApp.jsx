@@ -150,8 +150,9 @@ export default function AdminApp() {
         body: JSON.stringify({ loginId, password }),
       });
       json = await res.json().catch(() => ({ ok: false }));
-    } catch {
-      setAuthError("서버에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.");
+    } catch (err) {
+      // 원인 파악용으로 실제 오류 이름·메시지를 끝에 붙인다(어느 단계에서 끊기는지 구분).
+      setAuthError(`서버에 연결할 수 없습니다. 인터넷 연결을 확인해주세요. (${err?.name ?? "Error"}: ${err?.message ?? ""})`);
       setAuthSubmitting(false);
       return;
     }
