@@ -9,7 +9,7 @@ import { Plus, Trash2, Paperclip, FileText, ShieldCheck, BadgeCheck, PhoneCall }
 import { supabase } from "@/lib/supabaseClient";
 import { mapUnit, mapSite, mapUnitPartPhoto } from "@/lib/mappers";
 import { TODAY_STR } from "@/lib/constants";
-import { addDays, govDateToDashed, siteMatchesQuery, siteMatchReasons, handlePhoneInputChange, shortDate, realInstallPlace, unitContractBadges } from "@/lib/utils";
+import { addDays, govDateToDashed, siteMatchesQuery, siteMatchReasons, handlePhoneInputChange, shortDate, realInstallPlace, unitContractBadges, todayKst } from "@/lib/utils";
 import { useLiveInspections, useInspectionHistory, mapGovResultToCode } from "@/app/hooks/useLiveInspections";
 import { Badge } from "@/app/components/ui";
 import { InspectionFailDetailSheet } from "@/app/components/InspectionFailDetailSheet";
@@ -957,7 +957,9 @@ export default function SitesAdmin({ data, setData }) {
   // 계약종료/복구 (soft delete — 설계 원칙 4). 종료는 일자·근거·사유를 받아야 해서 모달을 연다.
   // 종료일자를 미래로 잡으면 지금 당장은 활성 상태를 유지하고, 그 날짜가 되면
   // check-terminations 크론(매일 KST 00:10)이 자동으로 비활성화한다.
-  const pendingTermination = site?.isActive !== false && site?.terminatedDate && site.terminatedDate > TODAY_STR;
+  // 오늘 날짜는 항상 지금 다시 계산한다 — 탭을 켜둔 채 자정을 넘기면 TODAY_STR이 어제로 남아
+  // 오늘 날짜로 계약종료해도 "예정"으로 저장된다(실사고).
+  const pendingTermination = site?.isActive !== false && site?.terminatedDate && site.terminatedDate > todayKst();
 
   async function toggleSiteActive() {
     if (site.isActive === false) {
@@ -982,7 +984,7 @@ export default function SitesAdmin({ data, setData }) {
   }
 
   async function confirmTermination({ date, basis, reason }) {
-    const effectiveNow = !date || date <= TODAY_STR;
+    const effectiveNow = !date || date <= todayKst();
     await supabase.from("sites").update({
       ...(effectiveNow ? { is_active: false } : {}),
       terminated_date: date || null, termination_basis: basis, termination_reason: reason || null,
