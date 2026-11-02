@@ -334,6 +334,9 @@ export default function InspectionsAdmin({ data, setData }) {
     const { data: inserted, error } = await supabase
       .from("inspections")
       .insert({
+        // id는 text PK라 자동 생성에 기대지 않고 직접 넣는다 — 수기 검사일정이 처음 등록되는
+        // 현장(실시간 연동만 있던 호기)에서 저장이 안 되던 원인(2026-11-02).
+        id: crypto.randomUUID(),
         site_id: i.siteId,
         unit_id: i.unitId ?? null,
         site_name: i.siteName,
