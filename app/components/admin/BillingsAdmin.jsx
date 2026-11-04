@@ -914,7 +914,7 @@ function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
     : null;
 
   async function buildInvoiceAndPdf() {
-    const invoice = buildBillingInvoiceData({ ...b, paymentDueDate: dueDate }, data.units, data.sites);
+    const invoice = buildBillingInvoiceData({ ...b, paymentDueDate: dueDate }, data.units, data.sites, data.quoteRequests);
     const genRes = await authFetch("/api/generate-billing-invoice-pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

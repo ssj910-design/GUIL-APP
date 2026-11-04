@@ -8,7 +8,7 @@
 // 최초 발송 PDF(billings.invoice_pdf_url)를 그대로 재사용한다 — 청구 내용은 안 바뀌므로
 // 재발송 때마다 새로 만들 필요가 없다.
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { mapBilling, mapUnit, mapSite } from "@/lib/mappers";
+import { mapBilling, mapUnit, mapSite, mapQuoteRequest } from "@/lib/mappers";
 import { buildBillingInvoiceData } from "@/lib/billingInvoiceData";
 import { billingDueAmount, receivedTotalOf } from "@/lib/utils";
 import { sendBillingInvoiceEmail } from "@/lib/email";
@@ -45,12 +45,19 @@ async function handle(request) {
     .lte("payment_due_date", todayStr);
   if (!rows?.length) return Response.json({ ok: true, targets: 0 });
 
-  const [{ data: unitRows }, { data: siteRows }] = await Promise.all([
+  // 견적 연동 청구서는 "청구 내역" 줄을 견적서와 같은 구성(인건비·운반비·할인 포함)으로 만든다 —
+  // 그 값이 견적에 있어 같이 불러온다(lib/billingInvoiceData.js).
+  const quoteIds = [...new Set(rows.map((r) => r.quote_request_id).filter(Boolean))];
+  const [{ data: unitRows }, { data: siteRows }, { data: quoteRows }] = await Promise.all([
     db.from("units").select("id,site_id,unit_no,is_active"),
     db.from("sites").select("id,name,address"),
+    quoteIds.length
+      ? db.from("quote_requests").select("id,quote_items,transport_cost,safety_cost,profit,discount_amount").in("id", quoteIds)
+      : Promise.resolve({ data: [] }),
   ]);
   const units = (unitRows ?? []).map(mapUnit);
   const sites = (siteRows ?? []).map(mapSite);
+  const quoteRequests = (quoteRows ?? []).map(mapQuoteRequest);
 
   let sent = 0, expired = 0, paid = 0;
   for (const row of rows) {
@@ -88,7 +95,7 @@ async function handle(request) {
     const pdfUrl = billing.invoicePdfUrl;
     if (!pdfUrl) continue; // 최초 발송이 아직 안 된 건(PDF 없음)은 자동 독촉 대상이 아니다
 
-    const invoice = buildBillingInvoiceData(billing, units, sites);
+    const invoice = buildBillingInvoiceData(billing, units, sites, quoteRequests);
     let ok = false;
     const now = new Date().toISOString();
     const logEntries = []; // 관리자 화면 발송내역에 보이도록 send_log에도 남긴다
