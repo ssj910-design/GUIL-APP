@@ -7,6 +7,10 @@ import { sendBillingInvoiceAlimtalk, sendBillingReminderSms } from "@/lib/alimta
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { verifyAuthToken } from "@/lib/verifyToken";
 
+// 메일(SMTP)·알림톡·PDF 업로드가 이어져 기본 제한(10초대)을 넘길 때가 있다 — 넘기면 함수가
+// 끊겨 응답이 빈 채로 돌아오고, 실제로는 발송됐는데 화면엔 "실패"로 보인다(2026-11-04).
+export const maxDuration = 60;
+
 export async function POST(request) {
   const cronSecret = process.env.CRON_SECRET;
   const isCron = !!cronSecret && request.headers.get("authorization") === `Bearer ${cronSecret}`;

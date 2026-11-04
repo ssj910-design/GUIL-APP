@@ -854,6 +854,21 @@ const BILLING_REMINDER_EXPIRE_DAYS = 60;
 // 청구서(무자료) 발송/재발송 — 미리보기 + 발송내역 + 자동화 상태를 한 화면에서 보고
 // 결제기한 입력 + 자동독촉 켬/끔 + 이메일·알림톡 발송(+ 나에게 테스트 발송)까지 처리한다.
 // PDF는 보낼 때마다 새로 만든다(청구 내역이 수정됐을 수 있어 캐시를 믿지 않음).
+// 발송 응답 해석 — 서버가 시간 제한에 걸려 끊기면 본문이 비어 온다. 그때 "실패"라고 단정하면
+// 실제로는 메일·알림톡이 나갔는데 다시 보내게 된다 — 결과를 모른다고 알린다.
+async function parseSendResponse(r) {
+  const text = await r.text();
+  if (!text) {
+    const reason = "발송 결과를 받지 못했습니다(서버 응답 지연) — 수신함을 먼저 확인하세요";
+    return { results: { email: { ok: false, reason }, kakao: { ok: false, reason } }, unknown: true };
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { results: { email: { ok: false, reason: text.slice(0, 120) }, kakao: { ok: false, reason: text.slice(0, 120) } } };
+  }
+}
+
 function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
   const { id: meId } = useContext(AdminAuthContext);
   const me = (data.profiles ?? []).find((p) => p.id === meId);
@@ -961,7 +976,7 @@ function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
         paymentDueDate: dueDate, reminderEnabled,
       }),
     })
-      .then((r) => r.json())
+      .then(parseSendResponse)
       .catch((e) => ({ results: { email: { ok: false, reason: e.message }, kakao: { ok: false, reason: e.message } } }));
 
     setResults(res.results ?? {});
@@ -1008,7 +1023,7 @@ function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
         invoice, pdfUrl, reminder, test: true,
       }),
     })
-      .then((r) => r.json())
+      .then(parseSendResponse)
       .catch((e) => ({ results: { email: { ok: false, reason: e.message }, kakao: { ok: false, reason: e.message } } }));
 
     setTestResults(res.results ?? {});

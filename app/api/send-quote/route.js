@@ -17,6 +17,9 @@ async function ensureApproveToken(quoteId) {
   return token;
 }
 
+// 청구서 발송(send-billing-invoice)과 같은 이유로 실행시간 한도를 넉넉히 둔다.
+export const maxDuration = 60;
+
 export async function POST(request) {
   const auth = verifyAuthToken(request);
   if (!auth || auth.appRole !== "admin") return Response.json({ results: {}, reason: "unauthorized" }, { status: 401 });
