@@ -87,5 +87,6 @@ export async function POST(request) {
   }
 
   // 화면이 보낸 직후 "발송내역"을 바로 그릴 수 있게 갱신된 이력을 같이 돌려준다(견적 발송과 동일).
-  return Response.json({ results, sendLog: patch.send_log ?? null });
+  // test(나에게 보내보기)일 땐 patch가 null이다 — 그대로 읽어서 500(빈 응답)으로 떨어졌다(2026-11-04).
+  return Response.json({ results, sendLog: patch?.send_log ?? null });
 }
