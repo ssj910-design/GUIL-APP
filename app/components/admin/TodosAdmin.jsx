@@ -8,13 +8,14 @@ import { Plus, Search, Repeat, Pencil, ChevronDown, Check } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadPhoto, isFileUrl } from "@/lib/photos";
 import FileChips, { splitAttachments } from "@/app/components/FileChips";
-import { confirmAsync } from "@/app/components/ConfirmHost";
+import { confirmAsync, promptAsync } from "@/app/components/ConfirmHost";
 import { mapInventoryStockMovement } from "@/lib/mappers";
 import { notify } from "@/lib/push";
 import { TodoHistory } from "@/app/components/TodoHistory";
 import { BillingSetupFields, billingSetupValid } from "@/app/components/BillingSetupFields";
 import {
   groupKeyOf, completionGroupIds, canHaveMultipleAssignees, canSetBilling, billingFormFrom, billingPatchOf, billingLocalOf, billingQuoteRef, saveSingleTodo, saveGroupCommon, changeTodoAssignees, applyAssigneeChange,
+  isBillingTodo,
 } from "@/lib/todoEdit";
 import { TODAY_STR } from "@/lib/constants";
 import { addDays, shortDate, formatUnitLabel } from "@/lib/utils";
@@ -848,9 +849,24 @@ export default function TodosAdmin({ data, setData, initialView, focusId, onFocu
   async function toggle(t) {
     const done = !t.done;
     const ids = completionGroupIds(todos, t);
-    const { error } = await supabase.from("todos").update({ done }).in("id", ids);
+    // 자재·견적 할일은 비용청구로 완료되는 게 정상 경로다 — 청구 없이 손으로 닫을 땐 사유를 받아
+    // 작업 내역에 남긴다(마이그레이션 157). 재오픈하거나 이미 청구금액이 있는 건은 묻지 않는다.
+    let reason;
+    if (done && isBillingTodo(t) && t.billingAmount == null) {
+      reason = await promptAsync(
+        `비용청구 없이 완료 처리합니다.\n사유를 남겨주세요 — 작업 내역에 기록됩니다.\n\n${t.title ?? ""}`,
+        { placeholder: "예: 별도 청구 완료(직접입력), 무상 처리" }
+      );
+      if (reason == null) return; // 취소
+    }
+    const { error } = await supabase.from("todos")
+      .update({ done, complete_reason: done ? (reason ?? null) : null })
+      .in("id", ids);
     if (error) { alert("완료 처리 실패: " + error.message); return; }
-    setData((prev) => ({ ...prev, todos: prev.todos.map((x) => (ids.includes(x.id) ? { ...x, done } : x)) }));
+    setData((prev) => ({
+      ...prev,
+      todos: prev.todos.map((x) => (ids.includes(x.id) ? { ...x, done, completeReason: done ? (reason ?? null) : null } : x)),
+    }));
   }
 
   // 목록의 원형 토글·상세패널의 "완료하기" 버튼 공용 — 자재/견적처럼 요청 하나를 공유하는

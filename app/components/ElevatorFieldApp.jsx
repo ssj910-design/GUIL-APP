@@ -7,7 +7,7 @@ import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken, onSessionExpired } from "@/lib/supabaseClient";
 import { authFetch } from "@/lib/apiFetch";
 import { mapSite, mergeAssignedEngineers, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode, mapUnitPartPhoto, mapInventoryProduct, mapInventoryStockMovement } from "@/lib/mappers";
-import { billingPatchOf, billingLocalOf, canHaveMultipleAssignees, saveSingleTodo, saveGroupCommon, changeTodoAssignees, applyAssigneeChange, deleteTodoRows } from "@/lib/todoEdit";
+import { billingPatchOf, billingLocalOf, canHaveMultipleAssignees, saveSingleTodo, saveGroupCommon, changeTodoAssignees, applyAssigneeChange, deleteTodoRows, isBillingTodo } from "@/lib/todoEdit";
 import { addDays, profileIdByName, unitIdFor, inferQuoteUnitId, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent, quoteGrandTotal, quotePartsSummary, quoteUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { recordQuoteSupplyStockOut } from "@/lib/inventoryStock";
@@ -20,7 +20,7 @@ import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { useBackHandler, popBackHandler } from "@/app/hooks/useBackHandler";
 import { ScreenHeader, BrandSplash, Sheet } from "@/app/components/ui";
-import { ConfirmHost, confirmAsync } from "@/app/components/ConfirmHost";
+import { ConfirmHost, confirmAsync, promptAsync } from "@/app/components/ConfirmHost";
 import { SitesContext, UnitsContext, AuthContext } from "@/app/components/context";
 import { LOCATION_TRACKING } from "@/lib/features";
 import { fetchLatestRelease } from "@/lib/releases";
@@ -2395,8 +2395,19 @@ ${error.message ?? ""}`); return false; }
   async function handleAdminToggleTodo(todoId) {
     const current = todos.find((t) => t.id === todoId);
     if (!current) return;
-    await supabase.from("todos").update({ done: !current.done }).eq("id", todoId);
-    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, done: !t.done } : t)));
+    const done = !current.done;
+    // 관리자웹 할일관리와 같은 규칙 — 자재·견적 할일을 청구 없이 손으로 완료하면 사유를 받아
+    // 작업 내역에 남긴다(마이그레이션 157).
+    let reason;
+    if (done && isBillingTodo(current) && current.billingAmount == null) {
+      reason = await promptAsync(
+        `비용청구 없이 완료 처리합니다.\n사유를 남겨주세요 — 작업 내역에 기록됩니다.\n\n${current.title ?? ""}`,
+        { placeholder: "예: 별도 청구 완료(직접입력), 무상 처리" }
+      );
+      if (reason == null) return;
+    }
+    await supabase.from("todos").update({ done, complete_reason: done ? (reason ?? null) : null }).eq("id", todoId);
+    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, done, completeReason: done ? (reason ?? null) : null } : t)));
   }
 
   // ★ 관리자 권한: 할 일을 완전히 삭제한다 — 담당자 여러 명이 한 건으로 묶인 할일은 전원 행을 함께 지운다

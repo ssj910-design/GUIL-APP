@@ -16,11 +16,21 @@ export function confirmAsync(message) {
   });
 }
 
+// 사유 등 한 줄을 받아야 하는 확인창 — 취소하면 null, 확인하면 입력한 문자열을 돌려준다.
+// required면 빈 값으로는 확인을 못 누른다. window.prompt는 PWA·웹뷰에서 안 뜨는 기기가 있어 직접 그린다.
+export function promptAsync(message, { placeholder = "", required = true } = {}) {
+  return new Promise((resolve) => {
+    if (pushRequest) pushRequest({ message, resolve, prompt: true, placeholder, required });
+    else resolve(window.prompt(message) || null);
+  });
+}
+
 export function ConfirmHost() {
   const [req, setReq] = useState(null);
+  const [text, setText] = useState("");
 
   useEffect(() => {
-    pushRequest = setReq;
+    pushRequest = (r) => { setText(""); setReq(r); };
     return () => { pushRequest = null; };
   }, []);
 
@@ -31,13 +41,32 @@ export function ConfirmHost() {
     setReq(null);
   };
 
+  const isPrompt = !!req.prompt;
+  const canConfirm = !isPrompt || !req.required || text.trim().length > 0;
+
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-6" onClick={() => finish(false)}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-6" onClick={() => finish(isPrompt ? null : false)}>
       <div className="bg-white rounded-2xl p-5 max-w-xs w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <p className="text-sm text-slate-800 whitespace-pre-line leading-relaxed mb-5">{req.message}</p>
+        <p className="text-sm text-slate-800 whitespace-pre-line leading-relaxed mb-4">{req.message}</p>
+        {isPrompt && (
+          <textarea
+            autoFocus
+            rows={2}
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm mb-4 outline-none focus:border-blue-400"
+            placeholder={req.placeholder}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        )}
         <div className="flex gap-2 justify-end">
-          <button onClick={() => finish(true)} className="text-sm font-bold text-white bg-blue-700 rounded-lg px-4 py-2.5">확인</button>
-          <button onClick={() => finish(false)} className="text-sm font-bold text-slate-600 bg-slate-100 rounded-lg px-4 py-2.5">취소</button>
+          <button
+            disabled={!canConfirm}
+            onClick={() => finish(isPrompt ? text.trim() : true)}
+            className="text-sm font-bold text-white bg-blue-700 disabled:bg-slate-300 rounded-lg px-4 py-2.5"
+          >
+            확인
+          </button>
+          <button onClick={() => finish(isPrompt ? null : false)} className="text-sm font-bold text-slate-600 bg-slate-100 rounded-lg px-4 py-2.5">취소</button>
         </div>
       </div>
     </div>,
