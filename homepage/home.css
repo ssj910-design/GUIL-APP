@@ -58,7 +58,7 @@ html.motion-off .hm-hero-image{transform:none}
 .hm-service-all-link{display:inline-flex;align-items:center;gap:24px;white-space:nowrap;font-size:16px;color:var(--blue);text-decoration:underline;text-underline-offset:6px}
 .hm-carousel-progress{min-width:40px}
 .hm-system-art-note{font-size:11px;line-height:1.4;color:#9bb2c7;margin-top:10px}
-.hm-city-scene>img.reception-art{object-fit:contain;object-position:center;filter:none}
+.hm-city-scene>img.hm-reception-art{object-fit:contain;object-position:center;filter:none}
 @media(min-width:721px){
  .hm-system-layout{--pin-top:112px;--panel-height:clamp(420px,calc(100svh - 144px),780px);align-items:start;gap:8%}
  .hm-system-sticky{position:sticky;top:var(--pin-top);height:var(--panel-height);display:flex;flex-direction:column}
