@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "docs": "node scripts/gen-snapshot.mjs && rm -rf public/design && cp -R docs/design public/design",
-    "deploy": "git push && git commit --allow-empty -m '[deploy] 운영 반영' && git push"
+    "deploy": "git push && git commit --allow-empty -m \"[deploy] release\" && git push"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",
