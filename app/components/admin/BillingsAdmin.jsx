@@ -888,6 +888,22 @@ function BillingInvoiceSendModal({ b, data, onClose, onInvoiceSent }) {
   const [previewUrl, setPreviewUrl] = useState(b.invoicePdfUrl || null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
+  // 자동 재발송은 서버 크론(09:00)이 한다 — 관리자웹을 띄워둔 채 그 시각이 지나면 화면의
+  // 발송내역·다음 예정일이 그대로 낡는다(페이지 로드 때 한 번만 읽으므로). 이 창을 열 때
+  // 그 건만 다시 읽어 맞춘다.
+  useEffect(() => {
+    supabase.from("billings").select("send_log,last_reminder_sent_at,reminder_enabled").eq("id", b.id).single()
+      .then(({ data: row }) => {
+        if (!row) return;
+        setReminderEnabled(row.reminder_enabled ?? false);
+        onInvoiceSent(b, {
+          sendLog: row.send_log ?? [],
+          lastReminderSentAt: row.last_reminder_sent_at ?? null,
+          reminderEnabled: row.reminder_enabled ?? false,
+        });
+      });
+  }, [b.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const isSent = !!b.invoiceSentAt;
   const isOverdue = dueDate ? new Date(`${dueDate}T23:59:59+09:00`) < new Date() : false;
   const reminder = isSent && isOverdue; // 이미 한 번 보냈고 결제기한이 지났으면 독촉 문구/템플릿 사용
