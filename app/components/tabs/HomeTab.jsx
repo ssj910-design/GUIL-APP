@@ -676,13 +676,16 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
   const liveSiteIds = new Set(liveInspections.map((i) => i.siteId));
   const combinedInspections = [...liveInspections, ...inspections.filter((i) => !liveSiteIds.has(i.siteId) && mySiteIds.has(i.siteId))];
 
+  // 관리자 홈은 당일 검사만 본다 — 관리자웹 대시보드의 "금일검사현장"과 같은 기준.
+  // 기사는 앞 일정을 미리 챙겨야 해서 도래현장(오늘 이후 전부)을 그대로 본다.
+  const todayOnly = role === "admin";
   // 도래현장: 관리자가 수기입력한 검사일자(inspections.due_date)가 있는 담당현장 전부 (기간 제한 없음,
   // 국가승강기정보센터 API 연동 현장은 제외) — 검사일이 지나면(daysLeft < 0) 자동으로 빠진다.
   const dueSoon = groupBySite(
     inspections
       .filter((i) => mySiteIds.has(i.siteId) && i.dueDate && !i.result)
       .map((i) => ({ ...i, daysLeft: Math.ceil((new Date(i.dueDate) - new Date(TODAY_STR)) / 86400000) }))
-      .filter((i) => i.daysLeft >= 0)
+      .filter((i) => (todayOnly ? i.daysLeft === 0 : i.daysLeft >= 0))
       // 같은 날이면 방문 예정 시각순(시간 미지정 건은 뒤로) — 검사관리 탭(InspectionTab.jsx)의
       // 검사도래현장 정렬과 동일 기준.
       .sort((a, b) => {
@@ -934,10 +937,10 @@ export function HomeTab({ attendances = [], dutySchedules = [], pendingNight, on
 
           <div className="px-4 pt-3 pb-3.5">
             <p className="text-xs font-bold text-blue-700 mb-2 flex items-center gap-1.5">
-              <ShieldCheck size={13} /> 검사도래현장
+              <ShieldCheck size={13} /> {todayOnly ? "금일 검사현장" : "검사도래현장"}
             </p>
             {dueSoon.length === 0 ? (
-              <p className="text-xs text-slate-400 py-1.5">검사 도래 현장이 없습니다.</p>
+              <p className="text-xs text-slate-400 py-1.5">{todayOnly ? "금일 검사 현장이 없습니다." : "검사 도래 현장이 없습니다."}</p>
             ) : (
               <div className="space-y-1.5">
                 {dueSoon.map((i) => {
