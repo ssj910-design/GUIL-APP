@@ -7,7 +7,7 @@ import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { supabase, writeOk, fetchAll, loginFailReason, setAuthToken, clearAuthToken, getAuthToken, onSessionExpired } from "@/lib/supabaseClient";
 import { authFetch } from "@/lib/apiFetch";
 import { mapSite, mergeAssignedEngineers, mapSiteManager, mapFailure, mapInspection, mapMaterialRequest, mapTodo, mapQuoteRequest, mapBilling, mapRestockRequest, mapFeedPost, mapUnit, mapKitStock, mapSelfCheck, mapAttendance, mapDutySchedule, mapDutySwap, mapErrorCode, mapUnitPartPhoto, mapInventoryProduct, mapInventoryStockMovement } from "@/lib/mappers";
-import { billingPatchOf, billingLocalOf, canHaveMultipleAssignees, saveSingleTodo, saveGroupCommon, changeTodoAssignees, applyAssigneeChange, deleteTodoRows, isBillingTodo } from "@/lib/todoEdit";
+import { billingPatchOf, billingLocalOf, canHaveMultipleAssignees, saveSingleTodo, saveGroupCommon, changeTodoAssignees, applyAssigneeChange, deleteTodoRows, isBillingTodo, groupKeyOf } from "@/lib/todoEdit";
 import { addDays, profileIdByName, unitIdFor, inferQuoteUnitId, parseErrorCode, formatUnitLabel, recentFailuresBySite, entrapmentSitesRecent, quoteGrandTotal, quotePartsSummary, quoteUnitLabel } from "@/lib/utils";
 import { TODAY_STR } from "@/lib/constants";
 import { recordQuoteSupplyStockOut } from "@/lib/inventoryStock";
@@ -2508,8 +2508,13 @@ ${error.message ?? ""}`); return false; }
     if (!current) return;
     const logLine = `[기한연장] ${current.dueDate} → ${dueDate} · 사유: ${reason}`;
     const description = current.description ? `${current.description}\n${logLine}` : logLine;
-    await supabase.from("todos").update({ due_date: dueDate, description }).eq("id", todoId);
-    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, dueDate, description } : t)));
+    // 담당자가 여러 명이면 행이 담당자 수만큼 있다 — 기한은 건의 속성이라 전원에게 같이 적용한다
+    // (관리자 수정의 saveGroupCommon과 같은 규칙). 한 행만 바꾸면 다른 담당자 행은 옛 기한으로 남아
+    // 상세화면 기한이 안 바뀐 것처럼 보인다.
+    const key = groupKeyOf(current);
+    const ids = todos.filter((t) => groupKeyOf(t) === key).map((t) => t.id);
+    await supabase.from("todos").update({ due_date: dueDate, description }).in("id", ids);
+    setTodos((prev) => prev.map((t) => (ids.includes(t.id) ? { ...t, dueDate, description } : t)));
   }
 
   // ★ 기사 반려: 잘못된 자재가 지급된 경우. 연결된 할 일은 취소되고 담당자에게 재지급 알림이 전달됩니다.
