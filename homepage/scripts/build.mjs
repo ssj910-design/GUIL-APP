@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 await rm(`${root}public`, {recursive:true, force:true});
 await mkdir(`${root}public`, {recursive:true});
-for (const file of [...(await readdir(root)).filter(file => file.endsWith('.html')), 'styles.css','site.js','robots.txt','sitemap.xml']) {
+for (const file of [...(await readdir(root)).filter(file => file.endsWith('.html')), 'styles.css','site.js','home.css','home.js','robots.txt','sitemap.xml']) {
   await copyFile(`${root}${file}`, `${root}public/${file}`);
 }
 await cp(`${root}assets`, `${root}public/assets`, {recursive:true});
