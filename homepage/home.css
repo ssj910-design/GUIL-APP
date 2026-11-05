@@ -100,3 +100,35 @@ body.home-v2{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,'Apple 
  .home-v2 .header .logo .brand-name{font-size:21px}
  .home-v2 #spaces{padding-top:65px}
 }
+
+/* Explicit system tabs, with identical square artwork frames at every step. */
+.hm-system-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 36px}
+.hm-system-tabs button{display:flex;align-items:center;justify-content:center;gap:14px;padding:19px 12px;border:1px solid #57758f;color:#c1d0de;font-size:18px;line-height:1.5;background:#0c263e}
+.hm-system-tabs button span{font-size:14px;color:#91b3d2}
+.hm-system-tabs button[aria-selected=true]{background:#e3f1ff;border-color:#e3f1ff;color:#08366d;font-weight:700}
+.hm-system-tabs button[aria-selected=true] span{color:#1b5c9e}
+.hm-system-layout{grid-template-columns:1fr 1fr;align-items:center;gap:8%}
+.hm-system-sticky{position:static;top:auto;height:auto;display:block}
+.hm-system-stage{height:auto;min-height:0;max-height:none;aspect-ratio:1;width:100%;flex:none;overflow:hidden;isolation:isolate}
+.hm-system-scene{transition:none}
+.hm-system-scene[hidden],.hm-system-step[hidden]{display:none!important}
+.hm-system-scene>img,.hm-city-scene>img.hm-reception-art{width:100%;height:100%;object-fit:cover;object-position:center}
+.hm-system-steps{padding:0;align-self:center}
+.hm-system-step,.hm-system-step.active{height:auto;min-height:0;padding:0;opacity:1;transition:none}
+.hm-system-step h3{font-size:clamp(29px,3.1vw,44px)}
+.hm-system-step p{font-size:17px;line-height:1.9}
+.hm-inspection-caption{bottom:9%}
+.hm-phone,.active .hm-phone{top:50%;transform:translate(-50%,-50%) scale(var(--phone-fit,.8));transition:none}
+.hm-restored-node{display:none}
+.hm-system{padding-bottom:100px}
+@media(max-width:720px){
+ .hm-system-tabs{gap:6px;margin-bottom:24px}
+ .hm-system-tabs button{padding:13px 4px;gap:6px;font-size:16px;flex-direction:column}
+ .hm-system-tabs button span{font-size:12px}
+ .hm-system-layout{grid-template-columns:1fr;gap:28px}
+ .hm-system-steps{width:100%;align-self:stretch;min-height:270px}
+ .hm-system-step h3{font-size:29px;margin:18px 0}
+ .hm-system-step p{font-size:16px}
+ .hm-system-stage{height:auto;min-height:0;max-height:none}
+ .hm-system{padding-bottom:65px}
+}

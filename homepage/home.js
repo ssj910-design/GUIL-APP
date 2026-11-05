@@ -6,27 +6,33 @@ const mobile=matchMedia('(max-width: 720px)');
 let motion=!preference.matches;
 const hero=document.querySelector('.hm-hero-track');
 const systemLayout=document.querySelector('.hm-system-layout');
-const systemSticky=document.querySelector('.hm-system-sticky');
 const steps=[...document.querySelectorAll('.hm-system-step')];
 const scenes=[...document.querySelectorAll('.hm-system-scene')];
 const stepButtons=[...document.querySelectorAll('[data-step]')];
-let currentStage=0;
 function setStage(index){
- currentStage=index;
- document.querySelector('#system-hint').textContent=mobile.matches?'아래 단계를 눌러 관리 흐름을 살펴보세요.':'스크롤하며 관리 흐름을 살펴보세요.';
- scenes.forEach((scene,i)=>{scene.classList.toggle('active',i===index);scene.setAttribute('aria-hidden',String(i!==index));});
- steps.forEach((step,i)=>{step.classList.toggle('active',i===index);step.hidden=mobile.matches&&i!==index;});
- stepButtons.forEach((button,i)=>{if(i===index)button.setAttribute('aria-current','step');else button.removeAttribute('aria-current');});
+ scenes.forEach((scene,i)=>{scene.classList.toggle('active',i===index);scene.hidden=i!==index;scene.setAttribute('aria-hidden',String(i!==index));});
+ steps.forEach((step,i)=>{step.classList.toggle('active',i===index);step.hidden=i!==index;});
+ stepButtons.forEach((button,i)=>{button.setAttribute('aria-selected',String(i===index));button.tabIndex=i===index?0:-1;});
+ systemLayout.setAttribute('aria-labelledby',`system-tab-${index}`);
  document.querySelector('.hm-system-stage').dataset.stage=String(index);
 }
-stepButtons.forEach((button,i)=>button.addEventListener('click',()=>{
- setStage(i);
- if(!mobile.matches){
- const pinTop=parseFloat(getComputedStyle(systemSticky).top);
- const top=scrollY+systemLayout.getBoundingClientRect().top+i*steps[0].offsetHeight-pinTop;
- window.scrollTo({top,behavior:motion?'smooth':'instant'});
- }
-}));
+stepButtons.forEach((button,i)=>{
+ button.addEventListener('click',()=>setStage(i));
+ button.addEventListener('keydown',event=>{
+ let next=i;
+ if(event.key==='ArrowRight')next=(i+1)%3;
+ else if(event.key==='ArrowLeft')next=(i+2)%3;
+ else if(event.key==='Home')next=0;
+ else if(event.key==='End')next=2;
+ else return;
+ event.preventDefault();setStage(next);stepButtons[next].focus({preventScroll:true});
+ });
+});
+const stage=document.querySelector('.hm-system-stage');
+function fitSystemPhone(){stage.style.setProperty('--phone-fit',String(Math.min(1.1,stage.clientWidth*.82/444)));}
+if('ResizeObserver' in window)new ResizeObserver(fitSystemPhone).observe(stage);
+else addEventListener('resize',fitSystemPhone);
+fitSystemPhone();
 const clamp=(n,min=0,max=1)=>Math.max(min,Math.min(max,n));
 function renderScroll(){
  const height=innerHeight;
@@ -36,12 +42,7 @@ function renderScroll(){
  const progress=motion?clamp(-hero.getBoundingClientRect().top/travel):0;
  hero.style.setProperty('--rise-scale',String(1.06+progress*(mobile.matches?.10:.18)));
  hero.style.setProperty('--rise-y',`${-progress*(mobile.matches?22:45)}px`);
- if(!mobile.matches){
- const pinTop=parseFloat(getComputedStyle(systemSticky).top);
- const position=(pinTop-systemLayout.getBoundingClientRect().top)/steps[0].offsetHeight;
- const nearest=Math.round(clamp(position,0,steps.length-1));
- if(nearest!==currentStage)setStage(nearest);
- }
+
  scheduled=false;
 }
 let scheduled=false;
@@ -54,7 +55,7 @@ function syncMotion(){
  requestRender();
 }
 preference.addEventListener('change',()=>{motion=!preference.matches;syncMotion();});
-mobile.addEventListener('change',()=>{setStage(currentStage);requestRender();});
+mobile.addEventListener('change',requestRender);
 const slides=[...document.querySelectorAll('.hm-service-slide')];
 const serviceTrack=document.querySelector('.hm-service-track');
 const carousel=document.querySelector('.hm-service-carousel');
