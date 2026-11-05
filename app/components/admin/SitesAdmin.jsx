@@ -602,10 +602,9 @@ export default function SitesAdmin({ data, setData }) {
   const in30 = (d) => d && d >= TODAY_STR && d <= addDays(TODAY_STR, 30);
   const isExpired = (d) => d && d < TODAY_STR;
   const dday = (d) => Math.ceil((new Date(d) - new Date(TODAY_STR)) / 86400000);
-  const expiringSites = sites.filter((s) => s.isActive !== false && (in30(s.contractEnd) || isExpired(s.contractEnd)));
   const endedSites = sites.filter((s) => s.isActive === false);
   const overdueSites = sites.filter((s) => s.isActive !== false && s.longOverdue);
-  const [contractFilter, setContractFilter] = useState("all"); // all | expiring(만료 배너의 모아보기) | overdue | ended
+  const [contractFilter, setContractFilter] = useState("all"); // all | overdue | ended
 
   const filtered = sites
     .filter((s) => siteMatchesQuery(s, search, { units, siteManagers }))
@@ -613,7 +612,6 @@ export default function SitesAdmin({ data, setData }) {
     .filter((s) =>
       contractFilter === "ended" ? s.isActive === false :
       contractFilter === "overdue" ? s.isActive !== false && s.longOverdue :
-      contractFilter === "expiring" ? s.isActive !== false && (in30(s.contractEnd) || isExpired(s.contractEnd)) :
       // "전체" 목록에선 계약종료 현장을 기본으로 숨긴다 — 검색어를 입력했을 때만 매칭되면 보이게(종료 계약 탭은 그대로 전용 진입점).
       search.trim() ? true : s.isActive !== false);
   // 배정 대상 = 기사 + 자재담당관리자(admin_tier "material") — 관리자가 자재담당자에게도 담당기사 배정을 할 수 있어야 한다.
@@ -1043,18 +1041,6 @@ export default function SitesAdmin({ data, setData }) {
       {importing && <ImportSites data={data} setData={setData} onClose={() => setImporting(false)} />}
       {verifying && <VerifyImport data={data} setData={setData} onClose={() => setVerifying(false)} />}
       {emgOpen && <ImportEmergencyPhones data={data} setData={setData} onClose={() => setEmgOpen(false)} />}
-
-      {/* 계약 만료 알림 배너 */}
-      {expiringSites.length > 0 && contractFilter !== "expiring" && (
-        <div className="flex flex-wrap items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
-          <p className="text-sm font-bold text-amber-700 flex-1">
-            ⚠️ 계약 만료 30일 내(만료 포함) 현장 {expiringSites.length}곳 — 재계약 협의가 필요합니다
-          </p>
-          <button onClick={() => setContractFilter("expiring")} className="text-xs font-bold text-white bg-amber-600 rounded-lg px-3 py-1.5 whitespace-nowrap">
-            모아보기
-          </button>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-7 gap-5 items-stretch">
         {/* 현장 목록 */}
