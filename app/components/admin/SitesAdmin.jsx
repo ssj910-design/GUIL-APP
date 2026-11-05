@@ -604,13 +604,15 @@ export default function SitesAdmin({ data, setData }) {
   const dday = (d) => Math.ceil((new Date(d) - new Date(TODAY_STR)) / 86400000);
   const expiringSites = sites.filter((s) => s.isActive !== false && (in30(s.contractEnd) || isExpired(s.contractEnd)));
   const endedSites = sites.filter((s) => s.isActive === false);
-  const [contractFilter, setContractFilter] = useState("all"); // all | expiring | ended
+  const overdueSites = sites.filter((s) => s.isActive !== false && s.longOverdue);
+  const [contractFilter, setContractFilter] = useState("all"); // all | expiring(만료 배너의 모아보기) | overdue | ended
 
   const filtered = sites
     .filter((s) => siteMatchesQuery(s, search, { units, siteManagers }))
     .filter((s) => !onlyUnassigned || !s.assignedEngineers?.length)
     .filter((s) =>
       contractFilter === "ended" ? s.isActive === false :
+      contractFilter === "overdue" ? s.isActive !== false && s.longOverdue :
       contractFilter === "expiring" ? s.isActive !== false && (in30(s.contractEnd) || isExpired(s.contractEnd)) :
       // "전체" 목록에선 계약종료 현장을 기본으로 숨긴다 — 검색어를 입력했을 때만 매칭되면 보이게(종료 계약 탭은 그대로 전용 진입점).
       search.trim() ? true : s.isActive !== false);
@@ -1061,7 +1063,7 @@ export default function SitesAdmin({ data, setData }) {
             <input className={inputCls} placeholder="현장정보·현장담당자정보·승강기정보 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
             {/* 계약 상태 필터 — 종료 계약 모아보기 */}
             <div className="flex gap-1.5">
-              {[["all", `전체 (${sites.length})`], ["expiring", `만료임박 (${expiringSites.length})`], ["ended", `종료 계약 (${endedSites.length})`]].map(([v, label]) => (
+              {[["all", `전체 (${sites.length})`], ["overdue", `장기미수 (${overdueSites.length})`], ["ended", `종료 계약 (${endedSites.length})`]].map(([v, label]) => (
                 <button
                   key={v}
                   onClick={() => setContractFilter(v)}
