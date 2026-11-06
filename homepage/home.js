@@ -81,38 +81,97 @@ function syncMotion(){
  root.classList.toggle('motion-off',!motion);
  document.body.classList.toggle('js-motion',motion);
  requestRender();
+ scheduleService();
 }
 preference.addEventListener('change',()=>{motion=!preference.matches;syncMotion();});
 mobile.addEventListener('change',requestRender);
-const slides=[...document.querySelectorAll('.hm-service-slide')];
-const serviceTrack=document.querySelector('.hm-service-track');
 const carousel=document.querySelector('.hm-service-carousel');
-let serviceIndex=0;
-function selectService(index){
+const slides=[...carousel.querySelectorAll('.hm-service-slide')];
+const serviceTrack=carousel.querySelector('.hm-service-track');
+const swipeArea=carousel.querySelector('.hm-service-window');
+const serviceStatus=carousel.querySelector('.hm-carousel-status');
+const serviceToggle=document.querySelector('#service-toggle');
+let serviceIndex=0,serviceTimer=null,carouselInView=false,hoverPaused=false,focusPaused=false,userPaused=false;
+let swipeStart=null,suppressClickUntil=0;
+function scheduleService(){
+ clearTimeout(serviceTimer);
+ serviceTimer=null;
+ if(!motion||!carouselInView||document.hidden||hoverPaused||focusPaused||userPaused||swipeStart)return;
+ serviceTimer=setTimeout(()=>selectService(serviceIndex+1),6000);
+}
+function selectService(index,announce=false){
  serviceIndex=(index+slides.length)%slides.length;
- serviceTrack.style.transform=`translate3d(${-serviceIndex*100}%,0,0)`;
- slides.forEach((slide,i)=>{slide.inert=i!==serviceIndex;slide.setAttribute('aria-hidden',String(i!==serviceIndex));});
+ slides.forEach((slide,i)=>{
+  let offset=(i-serviceIndex+slides.length)%slides.length;
+  if(offset>Math.floor(slides.length/2))offset-=slides.length;
+  const visible=Math.abs(offset)<=1;
+  slide.style.setProperty('--card-slot',String(offset));
+  slide.classList.toggle('is-active',offset===0);
+  slide.classList.toggle('is-neighbor',Math.abs(offset)===1);
+  slide.classList.toggle('is-prev',offset===-1);
+  slide.inert=!visible;
+  slide.setAttribute('aria-hidden',String(!visible));
+  slide.querySelector('.hm-card-select').disabled=offset===0;
+ });
+ serviceStatus.setAttribute('aria-live',announce?'polite':'off');
  document.querySelector('#service-count').textContent=String(serviceIndex+1).padStart(2,'0');
  document.querySelector('#service-name').textContent=slides[serviceIndex].querySelector('h3').textContent;
  document.querySelector('.hm-carousel-progress span').style.transform=`translateX(${serviceIndex*100}%)`;
+ scheduleService();
 }
-document.querySelector('#service-prev').addEventListener('click',()=>selectService(serviceIndex-1));
-document.querySelector('#service-next').addEventListener('click',()=>selectService(serviceIndex+1));
+slides.forEach((slide,i)=>slide.querySelector('.hm-card-select').addEventListener('click',()=>selectService(i,true)));
+document.querySelector('#service-prev').addEventListener('click',()=>selectService(serviceIndex-1,true));
+document.querySelector('#service-next').addEventListener('click',()=>selectService(serviceIndex+1,true));
+serviceToggle.addEventListener('click',()=>{
+ userPaused=!userPaused;
+ const label=userPaused?'자동 넘김 재생':'자동 넘김 일시정지';
+ serviceToggle.setAttribute('aria-label',label);serviceToggle.title=label;
+ serviceToggle.querySelector('span').textContent=userPaused?'▶':'Ⅱ';
+ scheduleService();
+});
+carousel.addEventListener('pointerenter',event=>{if(event.pointerType==='mouse'){hoverPaused=true;scheduleService();}});
+carousel.addEventListener('pointerleave',event=>{if(event.pointerType==='mouse'){hoverPaused=false;scheduleService();}});
+carousel.addEventListener('focusin',event=>{focusPaused=event.target.matches(':focus-visible');scheduleService();});
+carousel.addEventListener('focusout',()=>{queueMicrotask(()=>{focusPaused=carousel.contains(document.activeElement)&&document.activeElement.matches(':focus-visible');scheduleService();});});
 carousel.addEventListener('keydown',event=>{
  if(event.key!=='ArrowLeft'&&event.key!=='ArrowRight')return;
- event.preventDefault();selectService(serviceIndex+(event.key==='ArrowRight'?1:-1));
+ event.preventDefault();selectService(serviceIndex+(event.key==='ArrowRight'?1:-1),true);
 });
-const swipeArea=document.querySelector('.hm-service-window');
-let swipeStart=null,suppressClick=false;
-swipeArea.addEventListener('pointerdown',event=>{if(event.pointerType==='touch')swipeStart={x:event.clientX,y:event.clientY};});
-swipeArea.addEventListener('pointerup',event=>{
- if(!swipeStart)return;
+new IntersectionObserver(entries=>{carouselInView=entries[0].intersectionRatio>=.25;scheduleService();},{threshold:.25}).observe(carousel);
+document.addEventListener('visibilitychange',scheduleService);
+// Drag and touch swipe share a direction lock so vertical page scrolling stays native.
+swipeArea.addEventListener('pointerdown',event=>{
+ if(!event.isPrimary||event.button!==0)return;
+ swipeStart={id:event.pointerId,x:event.clientX,y:event.clientY,horizontal:false};
+ scheduleService();
+});
+swipeArea.addEventListener('pointermove',event=>{
+ if(!swipeStart||event.pointerId!==swipeStart.id)return;
  const dx=event.clientX-swipeStart.x,dy=event.clientY-swipeStart.y;
- swipeStart=null;
- if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.5){selectService(serviceIndex+(dx<0?1:-1));suppressClick=true;setTimeout(()=>{suppressClick=false;},400);}
+ if(!swipeStart.horizontal){
+  if(Math.abs(dx)<10||Math.abs(dx)<=Math.abs(dy)*1.25)return;
+  swipeStart.horizontal=true;swipeArea.setPointerCapture(event.pointerId);
+  serviceTrack.classList.add('is-dragging');
+ }
+ event.preventDefault();
+ serviceTrack.style.setProperty('--drag-x',`${Math.max(-swipeArea.clientWidth*.7,Math.min(swipeArea.clientWidth*.7,dx))}px`);
 });
-swipeArea.addEventListener('pointercancel',()=>{swipeStart=null;});
-swipeArea.addEventListener('click',event=>{if(suppressClick){event.preventDefault();event.stopPropagation();suppressClick=false;}},true);
+function finishSwipe(event,cancelled=false){
+ if(!swipeStart||event.pointerId!==swipeStart.id)return;
+ const start=swipeStart,dx=event.clientX-start.x;
+ swipeStart=null;
+ serviceTrack.classList.remove('is-dragging');serviceTrack.style.setProperty('--drag-x','0px');
+ if(swipeArea.hasPointerCapture(event.pointerId))swipeArea.releasePointerCapture(event.pointerId);
+ if(start.horizontal){
+  suppressClickUntil=performance.now()+400;
+  if(!cancelled&&Math.abs(dx)>Math.min(60,swipeArea.clientWidth*.14)){selectService(serviceIndex+(dx<0?1:-1),true);return;}
+ }
+ scheduleService();
+}
+swipeArea.addEventListener('pointerup',event=>finishSwipe(event));
+swipeArea.addEventListener('pointercancel',event=>finishSwipe(event,true));
+swipeArea.addEventListener('lostpointercapture',event=>finishSwipe(event,true));
+swipeArea.addEventListener('click',event=>{if(performance.now()<suppressClickUntil){event.preventDefault();event.stopPropagation();}},true);
 selectService(0);setStage(0);syncMotion();
 
 })();
