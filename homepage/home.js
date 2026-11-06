@@ -10,8 +10,8 @@ const steps=[...document.querySelectorAll('.hm-system-step')];
 const scenes=[...document.querySelectorAll('.hm-system-scene')];
 const stepButtons=[...document.querySelectorAll('[data-step]')];
 function setStage(index){
- scenes.forEach((scene,i)=>{scene.classList.toggle('active',i===index);scene.hidden=i!==index;scene.setAttribute('aria-hidden',String(i!==index));});
- steps.forEach((step,i)=>{step.classList.toggle('active',i===index);step.hidden=i!==index;});
+ scenes.forEach((scene,i)=>{scene.hidden=false;scene.classList.toggle('active',i===index);scene.inert=i!==index;scene.setAttribute('aria-hidden',String(i!==index));});
+ steps.forEach((step,i)=>{step.hidden=false;step.classList.toggle('active',i===index);step.inert=i!==index;step.setAttribute('aria-hidden',String(i!==index));});
  stepButtons.forEach((button,i)=>{button.setAttribute('aria-selected',String(i===index));button.tabIndex=i===index?0:-1;});
  systemLayout.setAttribute('aria-labelledby',`system-tab-${index}`);
  document.querySelector('.hm-system-stage').dataset.stage=String(index);
@@ -28,7 +28,41 @@ stepButtons.forEach((button,i)=>{
  event.preventDefault();setStage(next);stepButtons[next].focus({preventScroll:true});
  });
 });
+// Expand building categories without moving the section or forcing page scroll.
+const spaceGrid=document.querySelector('#spaces .space-grid');
+const spaceCards=[...spaceGrid.querySelectorAll('.space-card')];
+const spaceButtons=spaceCards.map(card=>card.querySelector('.space-toggle'));
+function selectSpace(index){
+ spaceCards.forEach((card,i)=>{
+  card.classList.toggle('is-expanded',i===index);
+  spaceButtons[i].setAttribute('aria-expanded',String(i===index));
+  card.querySelector('.space-description').setAttribute('aria-hidden',String(i!==index));
+ });
+}
+spaceCards.forEach((card,i)=>{
+ card.addEventListener('pointerenter',event=>{if(event.pointerType==='mouse')selectSpace(i);});
+ card.addEventListener('click',()=>selectSpace(i));
+ spaceButtons[i].addEventListener('focus',()=>selectSpace(i));
+ spaceButtons[i].addEventListener('keydown',event=>{
+  let next=i;
+  if(event.key==='ArrowRight')next=(i+1)%spaceCards.length;
+  else if(event.key==='ArrowLeft')next=(i+spaceCards.length-1)%spaceCards.length;
+  else if(event.key==='Home')next=0;
+  else if(event.key==='End')next=spaceCards.length-1;
+  else return;
+  event.preventDefault();selectSpace(next);spaceButtons[next].focus({preventScroll:true});
+ });
+});
+spaceGrid.classList.add('is-interactive');selectSpace(0);
 const stage=document.querySelector('.hm-system-stage');
+// Prepare all three views near the section so the first transition has no blank image.
+const prepareSystemImages=()=>scenes.forEach(scene=>scene.querySelectorAll('img').forEach(img=>{img.loading='eager';}));
+if('IntersectionObserver' in window){
+ const imageObserver=new IntersectionObserver(entries=>{
+  if(entries.some(entry=>entry.isIntersecting)){prepareSystemImages();imageObserver.disconnect();}
+ },{rootMargin:'400px'});
+ imageObserver.observe(stage);
+}else prepareSystemImages();
 function fitSystemPhone(){stage.style.setProperty('--phone-fit',String(Math.min(1.1,stage.clientWidth*.82/444)));}
 if('ResizeObserver' in window)new ResizeObserver(fitSystemPhone).observe(stage);
 else addEventListener('resize',fitSystemPhone);

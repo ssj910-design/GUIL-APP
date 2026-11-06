@@ -176,8 +176,8 @@ html.motion-off .hm-city-hero .hm-hero-sky,html.motion-off .hm-city-hero .hm-her
 .hm-about-blueprint h2{font-size:clamp(36px,4.2vw,62px);font-weight:600;line-height:1.23}
 .hm-about-blueprint .hm-about-heading>p:not(.hm-eyebrow){color:#385a7b;font-size:17px;line-height:1.95}
 .hm-about-blueprint .hm-about-heading p strong{color:#163e68;font-weight:600}
-.hm-about-blueprint .hm-outline-button{color:#164e88;border-color:#3278b94d;border-radius:6px;background:#ffffff70;gap:42px;padding:14px 22px;font-size:16px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
-.hm-about-blueprint .hm-outline-button:hover{background:#145a9e;color:#fff;border-color:#145a9e}
+.hm-about-blueprint .hm-outline-button{color:#164e88;border:0;border-radius:0;background:none;gap:7px;padding:4px 0;font-size:16px;justify-content:flex-start;text-decoration:underline;text-underline-offset:6px;text-decoration-thickness:1px}
+.hm-about-blueprint .hm-outline-button:hover{background:none;color:#0753cd}
 .hm-about-blueprint .hm-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;border:0;margin-top:28px;padding:0}
 .hm-about-blueprint .hm-metrics article,.hm-about-blueprint .hm-metrics article:first-child{display:flex;align-items:center;justify-content:flex-start;gap:16px;min-height:140px;padding:16px 0;border:0;border-radius:0;background:transparent;box-shadow:none}
 
@@ -206,3 +206,40 @@ html.motion-off .hm-city-hero .hm-hero-sky,html.motion-off .hm-city-hero .hm-her
 @keyframes hm-blueprint-breathe-mobile{from{transform:scale(1)}to{transform:scale(1.06)}}
 html.motion-off .hm-about-blueprint::before{animation:none;transform:none;will-change:auto}
 @media(prefers-reduced-motion:reduce){.hm-about-blueprint::before{animation:none;transform:none;will-change:auto}}
+
+/* Building gallery: a selected image expands, with fixed height and readable captions. */
+.home-v2 #spaces .space-grid{display:flex;gap:18px}
+.home-v2 #spaces .space-card{position:relative;display:block;flex:1 1 0;min-width:0;height:440px;overflow:hidden;border-radius:14px;background:#102b47;color:#fff;transition:flex-grow .7s cubic-bezier(.22,.68,.15,1),opacity .7s,transform .7s}
+.home-v2 #spaces .space-grid.is-interactive .space-card.is-expanded{flex-grow:1.7}
+.home-v2 #spaces .space-image{position:absolute;inset:0;height:100%;width:100%;aspect-ratio:auto;margin:0}
+.home-v2 #spaces .space-image img{height:100%;object-fit:cover;transform:scale(1.06);transition:transform 1s cubic-bezier(.22,.68,.15,1)}
+.home-v2 #spaces .is-expanded .space-image img{transform:scale(1)}
+.home-v2 #spaces .space-card::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,#071c3200 18%,#071c3240 48%,#071c32ec 100%);pointer-events:none}
+.home-v2 #spaces .space-copy{position:absolute;z-index:1;left:26px;right:26px;bottom:30px}
+.home-v2 #spaces .space-copy>span{font-size:16px;color:#d7e9fa}
+.home-v2 #spaces .space-card h3{font-size:28px;margin:10px 0 0}
+.home-v2 #spaces .space-toggle{display:flex;align-items:center;gap:12px;width:100%;padding:0;border:0;background:none;color:#fff;text-align:left;font:inherit;letter-spacing:inherit}
+.home-v2 #spaces .space-toggle::after{content:"";position:absolute;inset:0;z-index:2}
+.home-v2 #spaces .space-card:has(.space-toggle:focus-visible){outline:3px solid #0753cd;outline-offset:5px}
+.home-v2 #spaces .space-toggle span{font-size:21px;transition:transform .5s}
+.home-v2 #spaces .is-expanded .space-toggle span{transform:rotate(45deg)}
+.home-v2 #spaces .space-card p{color:#e3edf7;font-size:16px;line-height:1.75;margin-top:16px}
+.home-v2 #spaces .is-interactive .space-description{max-height:0;opacity:0;margin-top:0;overflow:hidden;transform:translateY(10px);transition:opacity .35s,transform .5s,max-height .6s,margin-top .6s}
+.home-v2 #spaces .is-interactive .is-expanded .space-description{max-height:180px;opacity:1;margin-top:16px;transform:none;transition:opacity .45s .12s,transform .5s .1s,max-height .6s,margin-top .6s}
+@media(max-width:1050px) and (min-width:721px){.home-v2 #spaces .space-copy{left:18px;right:18px}.home-v2 #spaces .space-card h3{font-size:24px}.home-v2 #spaces .space-grid.is-interactive .space-card.is-expanded{flex-grow:1.5}}
+@media(max-width:720px){
+ .home-v2 #spaces .space-grid{flex-direction:column;gap:18px}
+ .home-v2 #spaces .space-card{flex:none;height:330px}
+ .home-v2 #spaces .space-grid.is-interactive .space-card.is-expanded{flex:none}
+ .home-v2 #spaces .space-copy{left:24px;right:24px;bottom:26px}
+}
+/* Keep outgoing and incoming system views layered for a crossfade, without height jumps. */
+.hm-system .hm-system-scene{opacity:0;visibility:hidden;z-index:0;transform:translateX(14px) scale(1.035);pointer-events:none;transition:opacity .65s cubic-bezier(.22,.68,.15,1),transform .8s cubic-bezier(.22,.68,.15,1),visibility 0s .8s}
+.hm-system .hm-system-scene.active{opacity:1;visibility:visible;z-index:1;transform:none;pointer-events:auto;transition-delay:0s}
+.hm-system .hm-system-steps{display:grid;align-items:center}
+.hm-system .hm-system-step{display:flex;grid-area:1/1;opacity:0;visibility:hidden;transform:translateY(12px);pointer-events:none;transition:opacity .35s,transform .5s,visibility 0s .5s}
+.hm-system .hm-system-step.active{opacity:1;visibility:visible;transform:none;pointer-events:auto;transition:opacity .5s .1s,transform .6s .1s,visibility 0s}
+.hm-system-tabs button{transition:background .3s,color .3s,border-color .3s}
+@media(prefers-reduced-motion:reduce){
+ .home-v2 #spaces .space-card,.home-v2 #spaces .space-image img,.home-v2 #spaces .space-description,.hm-system .hm-system-scene,.hm-system .hm-system-step{transition:none;transform:none}
+}
