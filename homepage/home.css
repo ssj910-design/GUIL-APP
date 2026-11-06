@@ -254,6 +254,17 @@ html.motion-off .hm-about-blueprint::before{animation:none;transform:none;will-c
 .hm-network-art{display:block;width:100%;height:auto;overflow:visible}
 .network-connections path{stroke:#b6cce9;stroke-width:3;transition:stroke .55s,stroke-width .55s}
 .network-connections path.is-lit{stroke:#2b75e5;stroke-width:5}
+/* A short light travels along each active connection, then returns slowly. */
+.network-data-flow{pointer-events:none}
+.network-data-flow path{stroke:#8cdbff;stroke-width:3;stroke-dasharray:6 194;stroke-dashoffset:6;opacity:0;filter:drop-shadow(0 0 3px #54b8ff);animation:network-data-travel 9s ease-in-out infinite alternate;transition:opacity .6s}
+.network-data-flow path.is-lit{opacity:.9}
+.network-data-flow [data-network-flow=field]{animation-delay:-5s}
+.network-data-flow [data-network-flow=app]{animation-delay:-9s}
+.network-data-flow [data-network-flow=records]{animation-delay:-13s}
+@keyframes network-data-travel{from{stroke-dashoffset:6}to{stroke-dashoffset:-100}}
+html.motion-off .network-data-flow{display:none}
+@media(prefers-reduced-motion:reduce){.network-data-flow{display:none}}
+
 .network-object{opacity:.62;cursor:pointer;transition:opacity .55s}
 .network-object.is-lit{opacity:1}
 .hm-network-center{position:absolute;left:50%;top:61%;transform:translateX(-50%);width:220px;text-align:center;pointer-events:none}

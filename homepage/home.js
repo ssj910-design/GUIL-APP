@@ -17,7 +17,7 @@ function setStage(index){
  systemPanel.setAttribute('aria-labelledby',`system-tab-${index}`);
  network.dataset.stage=String(index);
  const connected=stageConnections[index];
- network.querySelectorAll('[data-network-part],[data-network-wire]').forEach(el=>el.classList.toggle('is-lit',connected.includes(el.dataset.networkPart||el.dataset.networkWire)));
+ network.querySelectorAll('[data-network-part],[data-network-wire],[data-network-flow]').forEach(el=>el.classList.toggle('is-lit',connected.includes(el.dataset.networkPart||el.dataset.networkWire||el.dataset.networkFlow)));
  nodeButtons.forEach(button=>button.setAttribute('aria-pressed',String(connected.includes(button.dataset.systemNode))));
 }
 stepButtons.forEach((button,i)=>{
