@@ -168,10 +168,10 @@ html.motion-off .hm-city-hero .hm-hero-sky,html.motion-off .hm-city-hero .hm-her
 
 /* Company overview: original elevator blueprint and three restrained glass cards. */
 .hm-about-blueprint{position:relative;isolation:isolate;display:block;width:100%;padding:112px 0 116px;overflow:hidden;color:#13365b;background:radial-gradient(ellipse at 8% 8%,#fff9,transparent 58%),linear-gradient(115deg,#edf6ff 4%,#deedfc 60%,#c3dffa)}
-.hm-about-blueprint::before{content:"";position:absolute;z-index:-2;inset:-4%;background:url('assets/guil-elevator-blueprint.svg?v=20261106-light') 70% center/cover no-repeat;opacity:.66;pointer-events:none;transform-origin:70% 50%;animation:hm-blueprint-breathe 22s ease-in-out infinite alternate;will-change:transform}
+.hm-about-blueprint::before{content:"";position:absolute;z-index:-2;inset:-4%;background:url('assets/guil-elevator-blueprint.svg?v=20261106-light') 70% center/cover no-repeat;opacity:.66;pointer-events:none;transform-origin:70% 50%;animation:hm-blueprint-breathe 14s linear infinite alternate;will-change:transform}
 .hm-about-blueprint::after{content:"";position:absolute;z-index:-1;inset:0;background:linear-gradient(90deg,#f3f9ff85,transparent 70%);pointer-events:none}
-.hm-about-content{position:relative}
-.hm-about-blueprint .hm-about-heading{column-gap:12%}
+.hm-about-content{position:relative;padding:48px 40px 40px;border:1px solid #ffffffe0;border-radius:24px;background:linear-gradient(130deg,#ffffff9e,#ffffff57);box-shadow:inset 0 1px 0 #fff,0 24px 64px #22598714;backdrop-filter:blur(10px) saturate(115%);-webkit-backdrop-filter:blur(10px) saturate(115%)}
+.hm-about-blueprint .hm-about-heading{column-gap:8%}
 .hm-about-blueprint .hm-eyebrow{color:#2669a5;letter-spacing:.06em}
 .hm-about-blueprint h2{font-size:clamp(36px,4.2vw,62px);font-weight:600;line-height:1.23}
 .hm-about-blueprint .hm-about-heading>p:not(.hm-eyebrow){color:#385a7b;font-size:17px;line-height:1.95}
@@ -179,30 +179,30 @@ html.motion-off .hm-city-hero .hm-hero-sky,html.motion-off .hm-city-hero .hm-her
 .hm-about-blueprint .hm-outline-button{color:#164e88;border-color:#3278b94d;border-radius:6px;background:#ffffff70;gap:42px;padding:14px 22px;font-size:16px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 .hm-about-blueprint .hm-outline-button:hover{background:#145a9e;color:#fff;border-color:#145a9e}
 .hm-about-blueprint .hm-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;border:0;margin-top:64px;padding:0}
-.hm-about-blueprint .hm-metrics article,.hm-about-blueprint .hm-metrics article:first-child{display:flex;align-items:center;justify-content:flex-start;gap:20px;min-height:180px;padding:30px 26px;border:1px solid #ffffffd9;border-radius:14px;background:linear-gradient(135deg,#ffffffb8,#ffffff66);box-shadow:inset 0 1px 0 #ffffff,0 16px 40px #174b7710;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.hm-about-blueprint .hm-metrics article,.hm-about-blueprint .hm-metrics article:first-child{display:flex;align-items:center;justify-content:flex-start;gap:16px;min-height:168px;padding:26px 18px;border:1px solid #ffffff73;border-radius:12px;background:#ffffff29;box-shadow:none}
 .hm-about-blueprint .hm-metric-icon{width:40px;height:40px;flex:0 0 40px;stroke:#2677b9;stroke-width:1.35;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .hm-about-blueprint .hm-metrics strong{display:block;font-size:clamp(37px,3.7vw,56px);font-weight:600;color:#124a82;letter-spacing:-.035em}
 .hm-about-blueprint .hm-metrics small{font-size:19px;margin-left:6px;color:#355d87}
 .hm-about-blueprint .hm-metrics p{margin-top:14px;color:#385a7b;text-align:left;font-size:16px;line-height:1.6;max-width:none}
 .hm-about-blueprint .hm-metrics .hm-system-metric{font-size:clamp(23px,2.2vw,30px);line-height:1.4;white-space:normal}
-@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.hm-about-blueprint .hm-metrics article{background:#f1f7fe}}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.hm-about-blueprint .hm-about-content{background:#eaf4fcef}}
 @media(min-width:721px) and (max-width:1050px){.hm-about-blueprint .hm-metrics{gap:14px}.hm-about-blueprint .hm-metrics article,.hm-about-blueprint .hm-metrics article:first-child{padding:24px 20px;gap:16px;flex-direction:column;align-items:flex-start}.hm-about-blueprint .hm-metric-icon{width:30px;height:30px;flex-basis:30px}.hm-about-blueprint .hm-metrics p{font-size:16px}.hm-about-blueprint .hm-metrics .hm-system-metric{font-size:23px}}
 @media(max-width:720px){
- .hm-about-blueprint{padding:72px 0 76px}
+ .hm-about-blueprint{padding:56px 0 60px}
+ .hm-about-blueprint .hm-about-content{width:92%;padding:32px 20px 20px;border-radius:20px}
  .hm-about-blueprint::before{background-size:auto 100%;background-position:72% center;opacity:.45;animation-name:hm-blueprint-breathe-mobile}
  .hm-about-blueprint::after{background:#eef6ff44}
  .hm-about-blueprint .hm-about-heading{display:block}
  .hm-about-blueprint .hm-about-heading>p:not(.hm-eyebrow){font-size:16px;margin-top:24px}
  .hm-about-blueprint .hm-outline-button{margin-top:24px}
  .hm-about-blueprint .hm-metrics{grid-template-columns:1fr;margin-top:36px;gap:14px}
- .hm-about-blueprint .hm-metrics article,.hm-about-blueprint .hm-metrics article:first-child{padding:25px 26px;min-height:160px;gap:25px}
+ .hm-about-blueprint .hm-metrics article,.hm-about-blueprint .hm-metrics article:first-child{padding:22px 16px;min-height:152px;gap:20px}
  .hm-about-blueprint .hm-metrics strong{font-size:44px}
  .hm-about-blueprint .hm-metrics .hm-system-metric{font-size:25px}
  .hm-about-blueprint .hm-metrics p{margin-top:9px}
 }
 
-@keyframes hm-blueprint-breathe{from{transform:scale(1) translate3d(0,0,0)}to{transform:scale(1.085) translate3d(-.6%,-.8%,0)}}
-@keyframes hm-blueprint-breathe-mobile{from{transform:scale(1)}to{transform:scale(1.045)}}
-.hm-about-blueprint.blueprint-paused::before{animation-play-state:paused}
+@keyframes hm-blueprint-breathe{from{transform:scale(1) translate3d(0,0,0)}to{transform:scale(1.12) translate3d(-.6%,-.8%,0)}}
+@keyframes hm-blueprint-breathe-mobile{from{transform:scale(1)}to{transform:scale(1.06)}}
 html.motion-off .hm-about-blueprint::before{animation:none;transform:none;will-change:auto}
 @media(prefers-reduced-motion:reduce){.hm-about-blueprint::before{animation:none;transform:none;will-change:auto}}

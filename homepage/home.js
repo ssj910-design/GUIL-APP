@@ -5,17 +5,6 @@ const preference=matchMedia('(prefers-reduced-motion: reduce)');
 const mobile=matchMedia('(max-width: 720px)');
 let motion=!preference.matches;
 const hero=document.querySelector('.hm-hero-track');
-// Only the decorative drawing breathes; pause it outside the viewport or hidden tab.
-const blueprint=document.querySelector('.hm-about-blueprint');
-if(blueprint){
- let blueprintVisible=true;
- const syncBlueprint=()=>blueprint.classList.toggle('blueprint-paused',!blueprintVisible||document.hidden);
- if('IntersectionObserver' in window)new IntersectionObserver(entries=>{
-  blueprintVisible=entries[0].isIntersecting;syncBlueprint();
- },{threshold:0}).observe(blueprint);
- document.addEventListener('visibilitychange',syncBlueprint);
- syncBlueprint();
-}
 const systemLayout=document.querySelector('.hm-system-layout');
 const steps=[...document.querySelectorAll('.hm-system-step')];
 const scenes=[...document.querySelectorAll('.hm-system-scene')];
