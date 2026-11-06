@@ -5,23 +5,23 @@ const preference=matchMedia('(prefers-reduced-motion: reduce)');
 const mobile=matchMedia('(max-width: 720px)');
 let motion=!preference.matches;
 const hero=document.querySelector('.hm-hero-track');
-const systemPanel=document.querySelector('#system-panel');
-const network=document.querySelector('.hm-network');
-const nodeButtons=[...document.querySelectorAll('[data-system-node]')];
-const stageConnections=[['office','field'],['field','app'],['app','records','office']];
-const steps=[...document.querySelectorAll('.hm-system-step')];
-const stepButtons=[...document.querySelectorAll('[data-step]')];
+const system=document.querySelector('.hm-connected');
+const nodeButtons=[...system.querySelectorAll('[data-system-node]')];
+const steps=[...system.querySelectorAll('.cs-flow-panel')];
+const stepButtons=[...system.querySelectorAll('[data-step]')];
 function setStage(index){
  steps.forEach((step,i)=>{step.hidden=false;step.classList.toggle('active',i===index);step.inert=i!==index;step.setAttribute('aria-hidden',String(i!==index));});
  stepButtons.forEach((button,i)=>{button.setAttribute('aria-selected',String(i===index));button.tabIndex=i===index?0:-1;});
- systemPanel.setAttribute('aria-labelledby',`system-tab-${index}`);
- network.dataset.stage=String(index);
- const connected=stageConnections[index];
- network.querySelectorAll('[data-network-part],[data-network-wire],[data-network-flow]').forEach(el=>el.classList.toggle('is-lit',connected.includes(el.dataset.networkPart||el.dataset.networkWire||el.dataset.networkFlow)));
- nodeButtons.forEach(button=>button.setAttribute('aria-pressed',String(connected.includes(button.dataset.systemNode))));
+ nodeButtons.forEach((button,i)=>button.setAttribute('aria-pressed',String(i===index)));
+}
+// Pointer hover on PC; touch activation and keyboard focus remain available.
+function bindStageControl(button,index){
+ button.addEventListener('pointerenter',event=>{if(event.pointerType==='mouse')setStage(index);});
+ button.addEventListener('focus',()=>setStage(index));
+ button.addEventListener('click',()=>setStage(index));
 }
 stepButtons.forEach((button,i)=>{
- button.addEventListener('click',()=>setStage(i));
+ bindStageControl(button,i);
  button.addEventListener('keydown',event=>{
  let next=i;
  if(event.key==='ArrowRight')next=(i+1)%3;
@@ -32,6 +32,7 @@ stepButtons.forEach((button,i)=>{
  event.preventDefault();setStage(next);stepButtons[next].focus({preventScroll:true});
  });
 });
+nodeButtons.forEach((button,i)=>bindStageControl(button,i));
 // Expand building categories without moving the section or forcing page scroll.
 const spaceGrid=document.querySelector('#spaces .space-grid');
 const spaceCards=[...spaceGrid.querySelectorAll('.space-card')];
@@ -58,11 +59,6 @@ spaceCards.forEach((card,i)=>{
  });
 });
 spaceGrid.classList.add('is-interactive');selectSpace(0);
-nodeButtons.forEach(button=>{
- const selectNode=()=>setStage(Number(button.dataset.nodeStep));
- button.addEventListener('click',selectNode);
- network.querySelector(`[data-network-part="${button.dataset.systemNode}"]`).addEventListener('click',selectNode);
-});
 const clamp=(n,min=0,max=1)=>Math.max(min,Math.min(max,n));
 function renderScroll(){
  const frame=hero.querySelector('.hm-hero-frame');
