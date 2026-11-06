@@ -221,12 +221,10 @@ html.motion-off .hm-about-blueprint::before{animation:none;transform:none;will-c
 .home-v2 #spaces .space-toggle{display:flex;align-items:center;gap:12px;width:100%;padding:0;border:0;background:none;color:#fff;text-align:left;font:inherit;letter-spacing:inherit}
 .home-v2 #spaces .space-toggle::after{content:"";position:absolute;inset:0;z-index:2}
 .home-v2 #spaces .space-card:has(.space-toggle:focus-visible){outline:3px solid #0753cd;outline-offset:5px}
-.home-v2 #spaces .space-toggle span{font-size:21px;transition:transform .5s}
-.home-v2 #spaces .is-expanded .space-toggle span{transform:rotate(45deg)}
 .home-v2 #spaces .space-card p{color:#e3edf7;font-size:16px;line-height:1.75;margin-top:16px}
 .home-v2 #spaces .is-interactive .space-description{opacity:0;transition:opacity .35s}
 .home-v2 #spaces .is-interactive .is-expanded .space-description{opacity:1;transition:opacity .5s .12s}
-@media(max-width:1050px) and (min-width:721px){.home-v2 #spaces .space-copy{left:18px;right:18px}.home-v2 #spaces .space-card h3{font-size:22px}.home-v2 #spaces .space-toggle{gap:8px}.home-v2 #spaces .space-toggle span{font-size:18px}.home-v2 #spaces .space-grid.is-interactive .space-card.is-expanded{flex-grow:1.5}}
+@media(max-width:1050px) and (min-width:721px){.home-v2 #spaces .space-copy{left:18px;right:18px}.home-v2 #spaces .space-card h3{font-size:22px}.home-v2 #spaces .space-toggle{gap:8px}.home-v2 #spaces .space-grid.is-interactive .space-card.is-expanded{flex-grow:1.5}}
 @media(max-width:720px){
  .home-v2 #spaces .space-grid{flex-direction:column;gap:18px}
  .home-v2 #spaces .space-card{flex:none;height:330px}
