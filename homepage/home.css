@@ -10,8 +10,13 @@ html.motion-off{scroll-behavior:auto}html.motion-off *,html.motion-off *:before,
 @media(min-width:721px){.hm-system-steps{padding-bottom:25svh}.hm-phone{transform:translate(-50%,-50%) scale(.82) rotate(-5deg)}.active .hm-phone{transform:translate(-50%,-50%) scale(.82)}}
 
 .hm-phone{top:42%;transform:translate(-50%,-50%) scale(.74) rotate(-5deg)}.active .hm-phone{transform:translate(-50%,-50%) scale(.74)}
-@keyframes hero-enter{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
-.hm-hero-copy h1 span{animation:hero-enter .9s both}.hm-hero-copy h1 span:nth-child(2){animation-delay:.12s}.hm-hero-copy h1 span:nth-child(3){animation-delay:.24s}
+/* One entrance per page load; the image appears before the copy. */
+@keyframes hero-enter{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.hm-hero-copy h1 span{animation:hero-enter 1.4s cubic-bezier(.22,.61,.36,1) .45s both}
+.hm-hero-copy h1 span:nth-child(2){animation-delay:.65s}
+.hm-hero-copy h1 span:nth-child(3){animation-delay:.85s}
+.hm-hero-copy .hm-eyebrow{animation:hero-enter 1.3s ease .7s both}
+.hm-hero-copy .hm-hero-description{animation:hero-enter 1.4s ease 1.15s both}
 
 /* Full-bleed camera study: constant scale, no scroll shrink or framing. */
 
