@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" fill="none">
   <defs>
-    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M48 0H0V48" stroke="#a6d4ff" stroke-opacity=".12" stroke-width=".7"/></pattern>
-    <pattern id="major" width="240" height="240" patternUnits="userSpaceOnUse"><rect width="240" height="240" fill="url(#grid)"/><path d="M240 0H0V240" stroke="#a6d4ff" stroke-opacity=".15"/></pattern>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" stroke="#4386c9" stroke-opacity=".12" stroke-width=".7"/></pattern>
+    <pattern id="major" width="240" height="240" patternUnits="userSpaceOnUse"><rect width="240" height="240" fill="url(#grid)"/><path d="M240 0H0V240" stroke="#4386c9" stroke-opacity=".15"/></pattern>
   </defs>
   <path fill="url(#major)" d="M0 0h1600v900H0z"/>
   <!-- Decorative elevator schematic; original artwork, not construction drawings. -->
-  <g stroke="#b5dfff" stroke-linejoin="round" stroke-linecap="round">
+  <g stroke="#2870b5" stroke-linejoin="round" stroke-linecap="round">
     <g stroke-width="1.15" opacity=".65">
       <!-- Twin shaft frame, shown in parallel projection. -->
       <path d="m913 145 235-76 196 105-235 76-196-105Zm0 0v512l196 105 235-76V174M1109 250v512M1148 69v512l196 105"/>
@@ -44,5 +44,21 @@
       <circle cx="460" cy="355" r="111" stroke-dasharray="3 9"/><path d="M327 355h266M460 222v266" stroke-dasharray="12 8"/>
       <circle cx="460" cy="355" r="72"/><circle cx="460" cy="355" r="49"/>
     </g>
+  </g>
+  <g stroke="#2870b5" stroke-width=".9" stroke-linejoin="round" opacity=".48">
+    <!-- Additional plan, rail section and traction-drive study. -->
+    <path d="M118 515h376v210H118zM130 527h352v186H130zM151 549h310v144H151zM199 560h212v120H199zM209 570h192v100H209zM305 570v100M220 681v12m170-12v12M151 615h48m212 0h50"/>
+    <path d="M100 515v210m-7-210h15m-15 210h15M118 746h376m-376-8v16m376-16v16M100 625H68m237-110v-33m-8 0h16"/>
+    <path d="M151 549l48 11m212 0 50-11m-310 144 48-13m212 0 50 13M130 537h12v10h-12m340-10h12v10h-12m-352 145h12v10h-12m340-10h12v10h-12"/>
+    <g opacity=".22"><path d="M142 555v146"/><path d="M160 555v146"/><path d="M178 555v146"/><path d="M196 555v146"/><path d="M214 555v146"/><path d="M232 555v146"/><path d="M250 555v146"/><path d="M268 555v146"/><path d="M286 555v146"/><path d="M304 555v146"/><path d="M322 555v146"/><path d="M340 555v146"/><path d="M358 555v146"/><path d="M376 555v146"/><path d="M394 555v146"/><path d="M412 555v146"/><path d="M430 555v146"/><path d="M448 555v146"/></g>
+    <path d="M563 507h78v22h-25v75h25v22h-78v-22h25v-75h-25zM554 493h96v147h-96zM601 476v179m-61-89h122"/>
+    <circle cx="460" cy="355" r="92"/><circle cx="460" cy="355" r="21"/>
+    <path d="M439 355h42m-21-21v42m-86-60 30 13m112 51 29 14m-128 41 14-30m58-101 14-31M388 405l30-21m84-58 30-21"/>
+    <path d="M340 226v258m-8-258h16m-16 258h16M349 499h222m-222-7v14m222-14v14"/>
+    <path d="M696 69v696m-7-696h14m-14 174h14m-14 174h14m-14 174h14m-14 174h14M716 69h98m-98 174h98m-98 174h98m-98 174h98m-98 174h98" stroke-dasharray="4 6"/>
+    <path d="M1095 183v158"/><path d="M1103 186v160"/><path d="M1111 189v162"/><path d="M1119 192v164"/><path d="M1127 195v166"/><circle cx="945" cy="170" r="3"/><circle cx="960" cy="178" r="3"/><circle cx="1000" cy="200" r="3"/><circle cx="1050" cy="227" r="3"/><circle cx="1177" cy="225" r="3"/><circle cx="1220" cy="211" r="3"/><circle cx="1260" cy="198" r="3"/><circle cx="1300" cy="185" r="3"/><circle cx="968" cy="388" r="3"/><circle cx="1104" cy="347" r="3"/><circle cx="1252" cy="425" r="3"/><circle cx="1125" cy="475" r="3"/>
+    <path d="m944 375 157-51 177 95m-334-44 0 209 173 92 161-52V419m-334-44-21-11m355 55 20-6M1000 574v-136m12 142V444m39 158V466m12 142V472M1196 259v185m14-190v188m14-193v190M1022 659l30 16m-30-12 30 16m-30-12 30 16m-30-12 30 16"/>
+    <path d="M1410 132h82v108h-82zM1420 145h62v22h-62zM1420 178h62m-62 10h62m-62 10h62m-62 10h62m-62 10h62m-62 10h62m-21-61v61M1410 249h82m-92-117v108"/>
+    <path d="m1365 401 57 30h91m-91 0v183h91m-10-193v20m-10-10h20m-10 173v20m-10-10h20M792 777h144m-144 9h80m-80 9h111M1290 816h196m-196 9h122m-122 9h164"/>
   </g>
 </svg>
