@@ -215,7 +215,7 @@ html.motion-off .hm-about-blueprint::before{animation:none;transform:none;will-c
 .home-v2 #spaces .space-image img{height:100%;object-fit:cover;transform:scale(1.06);transition:transform 1s cubic-bezier(.22,.68,.15,1)}
 .home-v2 #spaces .is-expanded .space-image img{transform:scale(1)}
 .home-v2 #spaces .space-card::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,#071c3200 18%,#071c3240 48%,#071c32ec 100%);pointer-events:none}
-.home-v2 #spaces .space-copy{position:absolute;z-index:1;left:26px;right:26px;bottom:30px}
+.home-v2 #spaces .space-copy{position:absolute;z-index:1;left:26px;right:26px;top:calc(100% - 210px)}
 .home-v2 #spaces .space-copy>span{font-size:16px;color:#d7e9fa}
 .home-v2 #spaces .space-card h3{font-size:28px;margin:10px 0 0}
 .home-v2 #spaces .space-toggle{display:flex;align-items:center;gap:12px;width:100%;padding:0;border:0;background:none;color:#fff;text-align:left;font:inherit;letter-spacing:inherit}
@@ -224,14 +224,14 @@ html.motion-off .hm-about-blueprint::before{animation:none;transform:none;will-c
 .home-v2 #spaces .space-toggle span{font-size:21px;transition:transform .5s}
 .home-v2 #spaces .is-expanded .space-toggle span{transform:rotate(45deg)}
 .home-v2 #spaces .space-card p{color:#e3edf7;font-size:16px;line-height:1.75;margin-top:16px}
-.home-v2 #spaces .is-interactive .space-description{max-height:0;opacity:0;margin-top:0;overflow:hidden;transform:translateY(10px);transition:opacity .35s,transform .5s,max-height .6s,margin-top .6s}
-.home-v2 #spaces .is-interactive .is-expanded .space-description{max-height:180px;opacity:1;margin-top:16px;transform:none;transition:opacity .45s .12s,transform .5s .1s,max-height .6s,margin-top .6s}
-@media(max-width:1050px) and (min-width:721px){.home-v2 #spaces .space-copy{left:18px;right:18px}.home-v2 #spaces .space-card h3{font-size:24px}.home-v2 #spaces .space-grid.is-interactive .space-card.is-expanded{flex-grow:1.5}}
+.home-v2 #spaces .is-interactive .space-description{opacity:0;transition:opacity .35s}
+.home-v2 #spaces .is-interactive .is-expanded .space-description{opacity:1;transition:opacity .5s .12s}
+@media(max-width:1050px) and (min-width:721px){.home-v2 #spaces .space-copy{left:18px;right:18px}.home-v2 #spaces .space-card h3{font-size:22px}.home-v2 #spaces .space-toggle{gap:8px}.home-v2 #spaces .space-toggle span{font-size:18px}.home-v2 #spaces .space-grid.is-interactive .space-card.is-expanded{flex-grow:1.5}}
 @media(max-width:720px){
  .home-v2 #spaces .space-grid{flex-direction:column;gap:18px}
  .home-v2 #spaces .space-card{flex:none;height:330px}
  .home-v2 #spaces .space-grid.is-interactive .space-card.is-expanded{flex:none}
- .home-v2 #spaces .space-copy{left:24px;right:24px;bottom:26px}
+ .home-v2 #spaces .space-copy{left:24px;right:24px;top:calc(100% - 220px)}
 }
 /* Keep outgoing and incoming system views layered for a crossfade, without height jumps. */
 .hm-system .hm-system-scene{opacity:0;visibility:hidden;z-index:0;transform:translateX(14px) scale(1.035);pointer-events:none;transition:opacity .65s cubic-bezier(.22,.68,.15,1),transform .8s cubic-bezier(.22,.68,.15,1),visibility 0s .8s}
