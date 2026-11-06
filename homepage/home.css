@@ -178,8 +178,8 @@ html.motion-off .hm-city-hero .hm-hero-sky,html.motion-off .hm-city-hero .hm-her
 .hm-about-blueprint .hm-about-heading p strong{color:#163e68;font-weight:600}
 .hm-about-blueprint .hm-outline-button{color:#164e88;border-color:#3278b94d;border-radius:6px;background:#ffffff70;gap:42px;padding:14px 22px;font-size:16px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 .hm-about-blueprint .hm-outline-button:hover{background:#145a9e;color:#fff;border-color:#145a9e}
-.hm-about-blueprint .hm-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;border:0;margin-top:64px;padding:0}
-.hm-about-blueprint .hm-metrics article,.hm-about-blueprint .hm-metrics article:first-child{display:flex;align-items:center;justify-content:flex-start;gap:16px;min-height:168px;padding:26px 0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.hm-about-blueprint .hm-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;border:0;margin-top:28px;padding:0}
+.hm-about-blueprint .hm-metrics article,.hm-about-blueprint .hm-metrics article:first-child{display:flex;align-items:center;justify-content:flex-start;gap:16px;min-height:140px;padding:16px 0;border:0;border-radius:0;background:transparent;box-shadow:none}
 
 .hm-about-blueprint .hm-metrics strong{display:block;font-size:clamp(37px,3.7vw,56px);font-weight:600;color:#124a82;letter-spacing:-.035em}
 .hm-about-blueprint .hm-metrics small{font-size:19px;margin-left:6px;color:#355d87}
@@ -195,7 +195,7 @@ html.motion-off .hm-city-hero .hm-hero-sky,html.motion-off .hm-city-hero .hm-her
  .hm-about-blueprint .hm-about-heading{display:block}
  .hm-about-blueprint .hm-about-heading>p:not(.hm-eyebrow){font-size:16px;margin-top:24px}
  .hm-about-blueprint .hm-outline-button{margin-top:24px}
- .hm-about-blueprint .hm-metrics{grid-template-columns:1fr;margin-top:36px;gap:14px}
+ .hm-about-blueprint .hm-metrics{grid-template-columns:1fr;margin-top:24px;gap:14px}
  .hm-about-blueprint .hm-metrics article,.hm-about-blueprint .hm-metrics article:first-child{padding:22px 0;min-height:152px;gap:20px}
  .hm-about-blueprint .hm-metrics strong{font-size:44px}
  .hm-about-blueprint .hm-metrics .hm-system-metric{font-size:25px}
