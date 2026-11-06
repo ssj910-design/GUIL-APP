@@ -241,3 +241,72 @@ html.motion-off .hm-about-blueprint::before{animation:none;transform:none;will-c
 @media(prefers-reduced-motion:reduce){
  .home-v2 #spaces .space-card,.home-v2 #spaces .space-image img,.home-v2 #spaces .space-description,.hm-system .hm-system-scene,.hm-system .hm-system-step{transition:none;transform:none}
 }
+
+/* The system as one connected workspace, rather than separate image slides. */
+.hm-network-system{position:relative;background:linear-gradient(145deg,#f8fbff,#edf4ff 58%,#f6f9fd);color:#102e54;padding:100px 0 90px;overflow:hidden}
+.hm-network-system .hm-eyebrow{color:#276bd0}
+.hm-network-system .hm-section-heading{align-items:end;margin-bottom:48px}
+.hm-network-system .hm-section-heading h2{font-size:clamp(34px,3.8vw,56px);line-height:1.25}
+.hm-network-system .hm-section-heading h2 span{color:#2168dc}
+.hm-network-system .hm-section-heading>p{color:#536b86;font-size:17px;line-height:1.9;max-width:340px}
+.hm-network-system .hm-system-layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(300px,1fr);gap:4%;align-items:center}
+.hm-network-system .hm-network{position:relative;inset:auto;width:100%;height:auto;aspect-ratio:760/620;min-width:0;opacity:1;stroke:none;fill:initial}
+.hm-network-art{display:block;width:100%;height:auto;overflow:visible}
+.network-connections path{stroke:#b6cce9;stroke-width:3;transition:stroke .55s,stroke-width .55s}
+.network-connections path.is-lit{stroke:#2b75e5;stroke-width:5}
+.network-object{opacity:.62;cursor:pointer;transition:opacity .55s}
+.network-object.is-lit{opacity:1}
+.hm-network-center{position:absolute;left:50%;top:61%;transform:translateX(-50%);width:220px;text-align:center;pointer-events:none}
+.hm-network-center span{display:inline-block;padding:5px 13px;background:#1a60d3;color:white;border-radius:6px;font-size:17px;font-weight:650;box-shadow:0 5px 14px #1656ae18}
+.hm-network-center small{display:block;font-size:14px;color:#59718e;margin-top:6px}
+.hm-network-node{position:absolute;transform:translateX(-50%);padding:7px 5px;border:0;background:none;color:#29486c;white-space:nowrap;text-align:center;transition:color .3s}
+.hm-network-node span{display:block;font-size:17px;line-height:1.5;font-weight:600;text-decoration:underline;text-decoration-color:#a9c4e3;text-underline-offset:5px}
+.hm-network-node small{display:block;font-size:14px;line-height:1.5;margin-top:8px;color:#68809c}
+.hm-network-node[aria-pressed=true]{color:#125bd0}
+.hm-network-node[aria-pressed=true] span{text-decoration-color:#2b75e5}
+.node-office{left:19.74%;top:39%}.node-field{left:80.26%;top:39%}.node-app{left:19.74%;top:84%}.node-records{left:80.26%;top:84%}
+.hm-network-detail{min-width:0;padding-left:20px;border-left:1px solid #cfdeef}
+.hm-network-system .hm-system-tabs{gap:0;margin:0 0 30px;border-bottom:1px solid #c7d9ef}
+.hm-network-system .hm-system-tabs button{flex-direction:column;gap:6px;padding:13px 5px;border:0;border-bottom:2px solid transparent;background:none;color:#667f9a;font-size:16px;white-space:nowrap}
+.hm-network-system .hm-system-tabs button span{font-size:13px;color:#7994b3}
+.hm-network-system .hm-system-tabs button[aria-selected=true]{color:#155ed1;border-bottom-color:#236ce0;background:none}
+.hm-network-system .hm-system-tabs button[aria-selected=true] span{color:#155ed1}
+.hm-network-system .hm-system-steps{min-height:300px;width:100%;padding:0;align-self:center}
+.hm-network-system .hm-system-step h3{font-size:clamp(26px,2.5vw,35px);line-height:1.35;margin:20px 0}
+.hm-network-system .hm-system-step p{font-size:16px;color:#506982;line-height:1.9}
+.hm-network-system .hm-step-number{color:#286bc8;font-size:14px}
+.hm-network-system .hm-step-foot{color:#245da5;border-color:#c8d9ed;font-size:16px;margin-top:24px}
+.hm-network-system .hm-detail-light{color:#145dcd;border-color:#98b5df;font-size:16px;margin-top:24px}
+.hm-network-note{font-size:14px;line-height:1.8;color:#6c819a;margin-top:26px}
+.hm-space-contact{display:flex;justify-content:center;margin-top:36px}
+.hm-space-contact a{display:inline-flex;align-items:center;gap:7px;color:#1757a6;font-size:17px;text-decoration:underline;text-underline-offset:6px;padding:8px 0}
+.hm-space-contact a:hover{color:#0753cd}
+@media(max-width:1050px){
+ .hm-network-system .hm-system-layout{grid-template-columns:1fr;gap:20px}
+ .hm-network{max-width:760px;margin:auto}
+ .hm-network-detail{border-left:0;padding-left:0;max-width:760px;width:100%;margin:auto}
+ .hm-network-system .hm-system-tabs button{flex-direction:row;gap:12px;padding:18px 8px}
+ .hm-network-system .hm-system-steps{min-height:260px}
+ .hm-network-note{margin-top:15px}
+}
+@media(max-width:720px){
+ .hm-network-system{padding:70px 0 65px}
+ .hm-network-system .hm-section-heading{margin-bottom:25px}
+ .hm-network-system .hm-section-heading>p{font-size:16px;margin-top:24px}
+ .hm-network-system .hm-system-layout{gap:20px}
+ .hm-network-system .hm-network{width:110%;margin-left:-5%;margin-right:-5%;margin-bottom:12px}
+ .hm-network-center{width:175px;top:59%}
+ .hm-network-center span{font-size:14px;padding:4px 8px}
+ .hm-network-center small{font-size:12px;margin-top:4px}
+ .hm-network-node{padding:4px 0;min-height:44px}
+ .hm-network-node span{font-size:15px}
+ .hm-network-node small{display:none}
+ .node-office,.node-field{top:40%}
+ .node-app,.node-records{top:86%}
+ .hm-network-system .hm-system-tabs{margin-bottom:24px}
+ .hm-network-system .hm-system-tabs button{flex-direction:column;gap:5px;padding:12px 4px}
+ .hm-network-system .hm-system-step h3{font-size:27px}
+ .hm-network-system .hm-system-steps{min-height:280px}
+ .hm-network-note{font-size:14px}
+}
+@media(prefers-reduced-motion:reduce){.network-connections path,.network-object,.hm-network-node{transition:none}}

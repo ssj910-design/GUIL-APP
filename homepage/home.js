@@ -5,16 +5,20 @@ const preference=matchMedia('(prefers-reduced-motion: reduce)');
 const mobile=matchMedia('(max-width: 720px)');
 let motion=!preference.matches;
 const hero=document.querySelector('.hm-hero-track');
-const systemLayout=document.querySelector('.hm-system-layout');
+const systemPanel=document.querySelector('#system-panel');
+const network=document.querySelector('.hm-network');
+const nodeButtons=[...document.querySelectorAll('[data-system-node]')];
+const stageConnections=[['office','field'],['field','app'],['app','records','office']];
 const steps=[...document.querySelectorAll('.hm-system-step')];
-const scenes=[...document.querySelectorAll('.hm-system-scene')];
 const stepButtons=[...document.querySelectorAll('[data-step]')];
 function setStage(index){
- scenes.forEach((scene,i)=>{scene.hidden=false;scene.classList.toggle('active',i===index);scene.inert=i!==index;scene.setAttribute('aria-hidden',String(i!==index));});
  steps.forEach((step,i)=>{step.hidden=false;step.classList.toggle('active',i===index);step.inert=i!==index;step.setAttribute('aria-hidden',String(i!==index));});
  stepButtons.forEach((button,i)=>{button.setAttribute('aria-selected',String(i===index));button.tabIndex=i===index?0:-1;});
- systemLayout.setAttribute('aria-labelledby',`system-tab-${index}`);
- document.querySelector('.hm-system-stage').dataset.stage=String(index);
+ systemPanel.setAttribute('aria-labelledby',`system-tab-${index}`);
+ network.dataset.stage=String(index);
+ const connected=stageConnections[index];
+ network.querySelectorAll('[data-network-part],[data-network-wire]').forEach(el=>el.classList.toggle('is-lit',connected.includes(el.dataset.networkPart||el.dataset.networkWire)));
+ nodeButtons.forEach(button=>button.setAttribute('aria-pressed',String(connected.includes(button.dataset.systemNode))));
 }
 stepButtons.forEach((button,i)=>{
  button.addEventListener('click',()=>setStage(i));
@@ -54,19 +58,11 @@ spaceCards.forEach((card,i)=>{
  });
 });
 spaceGrid.classList.add('is-interactive');selectSpace(0);
-const stage=document.querySelector('.hm-system-stage');
-// Prepare all three views near the section so the first transition has no blank image.
-const prepareSystemImages=()=>scenes.forEach(scene=>scene.querySelectorAll('img').forEach(img=>{img.loading='eager';}));
-if('IntersectionObserver' in window){
- const imageObserver=new IntersectionObserver(entries=>{
-  if(entries.some(entry=>entry.isIntersecting)){prepareSystemImages();imageObserver.disconnect();}
- },{rootMargin:'400px'});
- imageObserver.observe(stage);
-}else prepareSystemImages();
-function fitSystemPhone(){stage.style.setProperty('--phone-fit',String(Math.min(1.1,stage.clientWidth*.82/444)));}
-if('ResizeObserver' in window)new ResizeObserver(fitSystemPhone).observe(stage);
-else addEventListener('resize',fitSystemPhone);
-fitSystemPhone();
+nodeButtons.forEach(button=>{
+ const selectNode=()=>setStage(Number(button.dataset.nodeStep));
+ button.addEventListener('click',selectNode);
+ network.querySelector(`[data-network-part="${button.dataset.systemNode}"]`).addEventListener('click',selectNode);
+});
 const clamp=(n,min=0,max=1)=>Math.max(min,Math.min(max,n));
 function renderScroll(){
  const frame=hero.querySelector('.hm-hero-frame');
