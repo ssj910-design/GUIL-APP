@@ -90,14 +90,13 @@ const slides=[...carousel.querySelectorAll('.hm-service-slide')];
 const serviceTrack=carousel.querySelector('.hm-service-track');
 const swipeArea=carousel.querySelector('.hm-service-window');
 const serviceStatus=carousel.querySelector('.hm-carousel-status');
-const serviceToggle=document.querySelector('#service-toggle');
-let serviceIndex=0,serviceTimer=null,carouselInView=false,hoverPaused=false,focusPaused=false,userPaused=false;
+let serviceIndex=0,serviceTimer=null,carouselInView=false,hoverPaused=false,focusPaused=false;
 let swipeStart=null,suppressClickUntil=0;
 function scheduleService(){
  clearTimeout(serviceTimer);
  serviceTimer=null;
- if(!motion||!carouselInView||document.hidden||hoverPaused||focusPaused||userPaused||swipeStart)return;
- serviceTimer=setTimeout(()=>selectService(serviceIndex+1),6000);
+ if(!motion||!carouselInView||document.hidden||hoverPaused||focusPaused||swipeStart)return;
+ serviceTimer=setTimeout(()=>selectService(serviceIndex+1),4000);
 }
 function selectService(index,announce=false){
  serviceIndex=(index+slides.length)%slides.length;
@@ -120,15 +119,6 @@ function selectService(index,announce=false){
  scheduleService();
 }
 slides.forEach((slide,i)=>slide.querySelector('.hm-card-select').addEventListener('click',()=>selectService(i,true)));
-document.querySelector('#service-prev').addEventListener('click',()=>selectService(serviceIndex-1,true));
-document.querySelector('#service-next').addEventListener('click',()=>selectService(serviceIndex+1,true));
-serviceToggle.addEventListener('click',()=>{
- userPaused=!userPaused;
- const label=userPaused?'자동 넘김 재생':'자동 넘김 일시정지';
- serviceToggle.setAttribute('aria-label',label);serviceToggle.title=label;
- serviceToggle.querySelector('span').textContent=userPaused?'▶':'Ⅱ';
- scheduleService();
-});
 carousel.addEventListener('pointerenter',event=>{if(event.pointerType==='mouse'){hoverPaused=true;scheduleService();}});
 carousel.addEventListener('pointerleave',event=>{if(event.pointerType==='mouse'){hoverPaused=false;scheduleService();}});
 carousel.addEventListener('focusin',event=>{focusPaused=event.target.matches(':focus-visible');scheduleService();});

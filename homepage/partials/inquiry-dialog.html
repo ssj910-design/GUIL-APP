@@ -1,0 +1,15 @@
+<dialog class="inquiry-dialog" id="inquiry" aria-labelledby="inquiry-title" aria-describedby="inquiry-description">
+<div class="inquiry-dialog-header"><div><p class="eyebrow">구일엘리베이터</p><h2 id="inquiry-title" tabindex="-1">상담신청</h2></div><button type="button" class="inquiry-close" aria-label="상담신청 닫기"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+<div class="inquiry-dialog-body"><p id="inquiry-description">문의 내용을 남겨주시면 확인 후 연락드리겠습니다.</p>
+<form id="inquiry-form" action="/api/contact" method="post"><div class="form-grid">
+<label>성함 <span class="required">*</span><input name="name" autocomplete="name" placeholder="성함을 입력해 주세요" maxlength="60" required></label>
+<label>연락처 <span class="required">*</span><input name="phone" type="tel" autocomplete="tel" placeholder="연락받으실 전화번호" maxlength="30" required></label>
+<label>이메일<input name="email" type="email" autocomplete="email" placeholder="이메일 주소 (선택)" maxlength="180"></label>
+<label>문의 분야 <span class="required">*</span><select name="service" required><option value="">선택해 주세요</option><option>유지관리</option><option>보수공사</option><option>전면교체</option><option>리모델링</option><option>안전장치 설치</option><option>설치공사</option><option>기타</option></select></label>
+<label class="full">건물명 / 주소<input name="building" placeholder="건물명 또는 소재지 (선택)" maxlength="150"></label>
+<label class="full">문의 내용 <span class="required">*</span><textarea name="message" rows="4" maxlength="3000" placeholder="승강기 현황이나 상담받고 싶은 내용을 알려주세요." required></textarea></label></div>
+<div class="form-trap" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
+<details class="consent-details"><summary>개인정보 수집·이용 안내<span>+</span></summary><p>수집항목: 성함, 연락처, 이메일(선택), 건물명·주소(선택), 문의내용.<br>이용목적: 상담 접수와 답변.<br>보유기간: 상담 종료 후 1년 이내 파기하며, 관련 법령에 보존 의무가 있는 경우 해당 기간을 따릅니다.<br>동의를 거부할 수 있으나 온라인 상담 접수는 제한됩니다. 전화 상담을 이용하실 수 있습니다.</p></details>
+<div class="form-bottom"><label class="consent-check"><input name="consent" type="checkbox" required><span>개인정보 수집·이용에 동의합니다. <span class="required">*</span></span></label><button type="submit" class="submit-inquiry">상담 신청하기 <span>↗</span></button></div><p class="form-status" id="form-status" role="status" aria-live="polite"></p><noscript><p>온라인 접수에는 JavaScript가 필요합니다. 전화 02-588-2384 또는 guil2020@naver.com으로 문의해 주세요.</p></noscript></form>
+<p class="inquiry-direct">전화 <a href="tel:025882384">02-588-2384</a><span>·</span><a href="mailto:guil2020@naver.com">guil2020@naver.com</a></p></div>
+</dialog>

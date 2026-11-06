@@ -27,6 +27,56 @@ if ('IntersectionObserver' in window && !reducedMotion.matches) {
   document.querySelectorAll('.reveal').forEach(element => observer.observe(element));
 }
 document.querySelector('#year').textContent = new Date().getFullYear();
+// A native dialog keeps keyboard focus inside and the page behind it inert.
+const inquiryDialog = document.querySelector('.inquiry-dialog');
+if (inquiryDialog) {
+  let inquiryTrigger = null;
+  let backdropPointerDown = false;
+  const isInquiryLink = link => {
+    const url = new URL(link.href, location.href);
+    return url.origin === location.origin && url.hash === '#inquiry' && ['/', '/index.html', location.pathname].includes(url.pathname);
+  };
+  function openInquiry(trigger) {
+    if (inquiryDialog.open) return;
+    inquiryTrigger = trigger || document.activeElement;
+    closeMenu();
+    document.documentElement.classList.add('inquiry-open');
+    inquiryDialog.showModal();
+    inquiryDialog.scrollTop = 0;
+    document.querySelector('#inquiry-title').focus({preventScroll:true});
+  }
+  document.querySelectorAll('a[href*="#inquiry"]').forEach(link => {
+    if (!isInquiryLink(link)) return;
+    link.setAttribute('aria-haspopup', 'dialog');
+    link.setAttribute('aria-controls', 'inquiry');
+    link.addEventListener('click', event => {
+      if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      openInquiry(link);
+    });
+  });
+  inquiryDialog.querySelector('.inquiry-close').addEventListener('click', () => inquiryDialog.close());
+  const outsideDialog = event => {
+    const rect = inquiryDialog.getBoundingClientRect();
+    return event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom;
+  };
+  inquiryDialog.addEventListener('pointerdown', event => { backdropPointerDown = event.target === inquiryDialog && outsideDialog(event); });
+  inquiryDialog.addEventListener('click', event => {
+    if (backdropPointerDown && event.target === inquiryDialog && outsideDialog(event)) inquiryDialog.close();
+    backdropPointerDown = false;
+  });
+  inquiryDialog.addEventListener('close', () => {
+    document.documentElement.classList.remove('inquiry-open');
+    if (inquiryTrigger?.isConnected) inquiryTrigger.focus({preventScroll:true});
+  });
+  function openLinkedInquiry() {
+    if (location.hash !== '#inquiry') return;
+    history.replaceState(history.state, '', location.pathname + location.search);
+    openInquiry(document.querySelector('.floating-primary'));
+  }
+  openLinkedInquiry();
+  window.addEventListener('hashchange', openLinkedInquiry);
+}
 // Contact form: retain entries on failure and show success only after SMTP accepts the email.
 const inquiryForm = document.querySelector('#inquiry-form');
 if (inquiryForm) {
