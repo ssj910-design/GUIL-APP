@@ -165,3 +165,38 @@ body.home-v2{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,'Apple 
 }
 html.motion-off .hm-city-hero .hm-hero-sky,html.motion-off .hm-city-hero .hm-hero-city{transform:none}
 @media(prefers-reduced-motion:reduce){.home-v2 .hm-city-hero .hm-hero-sky,.hm-city-hero .hm-hero-city{transform:none}}
+
+/* Company overview: original elevator blueprint and three restrained glass cards. */
+.hm-about-blueprint{position:relative;isolation:isolate;display:block;width:100%;padding:112px 0 116px;overflow:hidden;color:#fff;background:radial-gradient(ellipse at 93% 25%,#2369a650,transparent 62%),linear-gradient(115deg,#071d37 4%,#0b3562 60%,#104d87)}
+.hm-about-blueprint::before{content:"";position:absolute;z-index:-2;inset:0;background:url('assets/guil-elevator-blueprint.svg') 70% center/cover no-repeat;opacity:.7;pointer-events:none}
+.hm-about-blueprint::after{content:"";position:absolute;z-index:-1;inset:0;background:linear-gradient(90deg,#071d3755,transparent 65%);pointer-events:none}
+.hm-about-content{position:relative}
+.hm-about-blueprint .hm-about-heading{column-gap:12%}
+.hm-about-blueprint .hm-eyebrow{color:#9fcfff;letter-spacing:.06em}
+.hm-about-blueprint h2{font-size:clamp(36px,4.2vw,62px);font-weight:600;line-height:1.23}
+.hm-about-blueprint .hm-about-heading>p:not(.hm-eyebrow){color:#c2d6eb;font-size:17px;line-height:1.95}
+.hm-about-blueprint .hm-about-heading p strong{color:#edf6ff;font-weight:600}
+.hm-about-blueprint .hm-outline-button{color:#fff;border-color:#adcff780;border-radius:6px;background:#b4dcff0a;gap:42px;padding:14px 22px;font-size:16px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.hm-about-blueprint .hm-outline-button:hover{background:#e5f2ff;color:#082b50;border-color:#e5f2ff}
+.hm-about-blueprint .hm-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;border:0;margin-top:64px;padding:0}
+.hm-about-blueprint .hm-metrics article,.hm-about-blueprint .hm-metrics article:first-child{display:flex;align-items:center;justify-content:flex-start;gap:20px;min-height:180px;padding:30px 26px;border:1px solid #c0deff40;border-radius:14px;background:linear-gradient(135deg,#e1f1ff21,#d4eaff09);box-shadow:inset 0 1px 0 #ffffff12,0 16px 40px #00112514;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.hm-about-blueprint .hm-metric-icon{width:40px;height:40px;flex:0 0 40px;stroke:#a9d7ff;stroke-width:1.35;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.hm-about-blueprint .hm-metrics strong{display:block;font-size:clamp(37px,3.7vw,56px);font-weight:600;color:#fff;letter-spacing:-.035em}
+.hm-about-blueprint .hm-metrics small{font-size:19px;margin-left:6px;color:#d8eaff}
+.hm-about-blueprint .hm-metrics p{margin-top:14px;color:#c2d6eb;text-align:left;font-size:16px;line-height:1.6;max-width:none}
+.hm-about-blueprint .hm-metrics .hm-system-metric{font-size:clamp(23px,2.2vw,30px);line-height:1.4;white-space:normal}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.hm-about-blueprint .hm-metrics article{background:#163c63}}
+@media(min-width:721px) and (max-width:1050px){.hm-about-blueprint .hm-metrics{gap:14px}.hm-about-blueprint .hm-metrics article,.hm-about-blueprint .hm-metrics article:first-child{padding:24px 20px;gap:16px;flex-direction:column;align-items:flex-start}.hm-about-blueprint .hm-metric-icon{width:30px;height:30px;flex-basis:30px}.hm-about-blueprint .hm-metrics p{font-size:16px}.hm-about-blueprint .hm-metrics .hm-system-metric{font-size:23px}}
+@media(max-width:720px){
+ .hm-about-blueprint{padding:72px 0 76px}
+ .hm-about-blueprint::before{background-size:auto 100%;background-position:72% center;opacity:.4}
+ .hm-about-blueprint::after{background:#071d3726}
+ .hm-about-blueprint .hm-about-heading{display:block}
+ .hm-about-blueprint .hm-about-heading>p:not(.hm-eyebrow){font-size:16px;margin-top:24px}
+ .hm-about-blueprint .hm-outline-button{margin-top:24px}
+ .hm-about-blueprint .hm-metrics{grid-template-columns:1fr;margin-top:36px;gap:14px}
+ .hm-about-blueprint .hm-metrics article,.hm-about-blueprint .hm-metrics article:first-child{padding:25px 26px;min-height:160px;gap:25px}
+ .hm-about-blueprint .hm-metrics strong{font-size:44px}
+ .hm-about-blueprint .hm-metrics .hm-system-metric{font-size:25px}
+ .hm-about-blueprint .hm-metrics p{margin-top:9px}
+}
