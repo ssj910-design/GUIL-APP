@@ -137,3 +137,30 @@ body.home-v2{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,'Apple 
  .hm-system-stage{height:auto;min-height:0;max-height:none}
  .hm-system{padding-bottom:65px}
 }
+
+/* City KV: background, live text and a separate transparent foreground. */
+@keyframes hm-header-enter{from{opacity:0}to{opacity:1}}
+.home-v2 .header .logo{animation:hm-header-enter 1.2s ease .2s both}
+.home-v2 .header nav>a{animation:hm-header-enter 1.2s ease .35s both}
+.home-v2 .header nav>a:nth-child(2){animation-delay:.42s}
+.home-v2 .header nav>a:nth-child(3){animation-delay:.49s}
+.home-v2 .header nav>a:nth-child(4){animation-delay:.56s}
+.home-v2 .header nav>a:nth-child(5){animation-delay:.63s}
+.home-v2 .header nav>a:nth-child(6){animation-delay:.7s}
+.home-v2 .header .menu-toggle{animation:hm-header-enter 1.2s ease .35s both}
+.hm-city-hero .hm-hero-frame{isolation:isolate;background:#80b2dd}
+.home-v2 .hm-city-hero .hm-hero-image{z-index:0;object-position:65% center;transform-origin:50% 50%}
+.hm-city-hero .hm-hero-shade{z-index:1;background:linear-gradient(90deg,#062a52a8 0%,#092e5463 42%,#092e5410 75%),linear-gradient(180deg,#0525465c,transparent 25%,#061e3933)}
+.hm-city-hero .hm-hero-copy{z-index:2;transform:translateY(calc(-45% + var(--copy-y,0px)));width:86%}
+.hm-city-hero .hm-hero-copy h1{font-size:clamp(46px,6.3vw,96px);text-shadow:0 2px 24px #08254418}
+.hm-city-hero .hm-accent{color:#d3eaff}
+.hm-city-hero .hm-hero-foreground{position:absolute;z-index:3;inset:0;width:100%;height:110%;max-width:none;object-fit:cover;object-position:center;pointer-events:none;transform:translate3d(var(--near-x,0px),var(--near-y,0px),0) scale(var(--near-scale,1));transform-origin:75% 80%;will-change:transform}
+@media(max-width:720px){
+ .hm-city-hero .hm-hero-copy{width:87%}
+ .hm-city-hero .hm-hero-copy h1{font-size:clamp(36px,8.4vw,60px)}
+ .hm-city-hero .hm-hero-shade{background:linear-gradient(90deg,#062a52bb,#092e546b),linear-gradient(0deg,#061e3970,transparent 65%)}
+ .hm-city-hero .hm-hero-foreground{inset:auto -47% -3% auto;width:175%;height:auto;object-fit:contain}
+}
+html.motion-off .hm-city-hero .hm-hero-foreground{transform:none}
+html.motion-off .hm-city-hero .hm-hero-copy{transform:translateY(-45%)}
+@media(prefers-reduced-motion:reduce){.hm-city-hero .hm-hero-foreground{transform:none}.hm-city-hero .hm-hero-copy{transform:translateY(-45%)}}

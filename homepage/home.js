@@ -35,13 +35,15 @@ else addEventListener('resize',fitSystemPhone);
 fitSystemPhone();
 const clamp=(n,min=0,max=1)=>Math.max(min,Math.min(max,n));
 function renderScroll(){
- const height=innerHeight;
- const y=scrollY;
  const frame=hero.querySelector('.hm-hero-frame');
  const travel=Math.max(1,hero.offsetHeight-frame.offsetHeight);
  const progress=motion?clamp(-hero.getBoundingClientRect().top/travel):0;
- hero.style.setProperty('--rise-scale',String(1.06+progress*(mobile.matches?.10:.18)));
- hero.style.setProperty('--rise-y',`${-progress*(mobile.matches?22:45)}px`);
+ hero.style.setProperty('--rise-scale',String(1.04+progress*(mobile.matches?.035:.065)));
+ hero.style.setProperty('--rise-y',`${-progress*(mobile.matches?12:24)}px`);
+ hero.style.setProperty('--near-y',`${progress*(mobile.matches?24:95)}px`);
+ hero.style.setProperty('--near-x',`${-progress*(mobile.matches?8:55)}px`);
+ hero.style.setProperty('--near-scale',String(1+progress*.06));
+ hero.style.setProperty('--copy-y',`${-progress*(mobile.matches?8:26)}px`);
 
  scheduled=false;
 }
