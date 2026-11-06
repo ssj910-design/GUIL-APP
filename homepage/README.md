@@ -17,7 +17,7 @@ KV 슬라이드와 사진 이동 제거. 한 장면만 유지하며 전용 MP4�
 site.js의 videoSource에 최종 영상 경로를 지정하면 muted/playsinline/loop로 재생합니다.
 자동재생 실패 또는 움직임 줄이기 설정 시 정지 이미지를 표시합니다.
 
-앱 로고는 흰 배경이 없는 기존 public/guil-icon.png를 assets/guil-mark.png로 그대로 복사했습니다. 한글 회사명만 표시합니다. 본문·메뉴·버튼·보조 문구는 16px 이상을 기본으로 사용합니다. KV 격자선과 전화번호 옆 화살표는 제거했습니다.
+앱 로고는 흰 배경이 없는 기존 public/guil-icon.png를 assets/guil-elevator-logo.webp로 그대로 복사했습니다. 한글 회사명만 표시합니다. 본문·메뉴·버튼·보조 문구는 16px 이상을 기본으로 사용합니다. KV 격자선과 전화번호 옆 화살표는 제거했습니다.
 관리 대상은 건물 이미지로, 유지관리 모형 애니메이션은 점검 이미지로 교체했습니다.
 연락처 아이콘, 플로팅 전화·이메일·상담신청 링크, 상담 폼을 추가했습니다.
 임직원 앱 이동 링크는 제거했습니다. 서비스 상세, FAQ, 지도 링크를 유지합니다.
@@ -54,11 +54,11 @@ SMTP 비밀번호와 다른 별도 토큰 서명값은 선택사항이며, 미�
 
 모든 새 사진은 built-in image_gen으로 생성한 브랜드 이미지이며 실제 현장/직원 사진이 아닙니다.
 생성 프롬프트:
-- architecture.jpg: Premium photoreal architectural advertising photograph, wide 16:9, low angle modern Seoul glass and stainless steel skyscrapers at blue hour, strong vertical vanishing lines, midnight teal and silver, warm illuminated strips, dark left negative space, no text/logos/people/watermarks.
-- residential.jpg: Photoreal architectural photography of a contemporary Korean apartment complex, elegant residential towers, landscaped trees and a calm pedestrian forecourt, clean pale stone and glass, natural morning light. Landscape 4:3. Realistic not futuristic. No text, logos, watermarks, signs, people. Premium quiet corporate editorial aesthetic.
-- office.jpg: Photoreal architectural photography of a modern Seoul office tower, glass and silver facade seen from ground level, refined geometric vertical lines, landscaped entrance, natural daylight, understated corporate editorial aesthetic. Landscape 4:3. No text, logos, watermarks, people.
-- commercial.jpg: Photoreal architectural photography of a contemporary Korean commercial building and shopping entrance, warm interior lights visible through floor to ceiling glass, modern stone cladding, welcoming pedestrian frontage, twilight blue hour. Landscape 4:3. No signs, text, logos, watermarks or people.
-- maintenance.jpg: Photoreal cinematic commercial photograph, tight closeup of a professional elevator maintenance technician in dark navy workwear checking a clean brushed stainless steel elevator control cabinet using a handheld diagnostic device, only torso and gloved hands visible, warm focused work light, accurate believable wiring in background, careful professional gesture, premium dark teal and silver palette. Landscape 4:3. No logos, text, sparks, dramatic hazards, watermarks. This is a brand conceptual image, not a real company's employee portrait.
+- guil-elevator-building.webp: Premium photoreal architectural advertising photograph, wide 16:9, low angle modern Seoul glass and stainless steel skyscrapers at blue hour, strong vertical vanishing lines, midnight teal and silver, warm illuminated strips, dark left negative space, no text/logos/people/watermarks.
+- guil-apartment-building.webp: Photoreal architectural photography of a contemporary Korean apartment complex, elegant residential towers, landscaped trees and a calm pedestrian forecourt, clean pale stone and glass, natural morning light. Landscape 4:3. Realistic not futuristic. No text, logos, watermarks, signs, people. Premium quiet corporate editorial aesthetic.
+- guil-office-building.webp: Photoreal architectural photography of a modern Seoul office tower, glass and silver facade seen from ground level, refined geometric vertical lines, landscaped entrance, natural daylight, understated corporate editorial aesthetic. Landscape 4:3. No text, logos, watermarks, people.
+- guil-commercial-building.webp: Photoreal architectural photography of a contemporary Korean commercial building and shopping entrance, warm interior lights visible through floor to ceiling glass, modern stone cladding, welcoming pedestrian frontage, twilight blue hour. Landscape 4:3. No signs, text, logos, watermarks or people.
+- guil-elevator-maintenance.webp: Photoreal cinematic commercial photograph, tight closeup of a professional elevator maintenance technician in dark navy workwear checking a clean brushed stainless steel elevator control cabinet using a handheld diagnostic device, only torso and gloved hands visible, warm focused work light, accurate believable wiring in background, careful professional gesture, premium dark teal and silver palette. Landscape 4:3. No logos, text, sparks, dramatic hazards, watermarks. This is a brand conceptual image, not a real company's employee portrait.
 
 ## 2026-10-26 색상·B2B 문구·SEO 보완
 
@@ -107,3 +107,12 @@ https://cyber.koelsa.or.kr/portal/contents.do?mId=0101000000
 ### 2026-10-30 핵심 지표 가로 정렬
 - 세 개의 상단 라벨 문구 삭제. 각 항목은 SVG 아이콘과 정보 묶음을 좌우 배치.
 - 데스크톱 3열 유지, 모바일은 항목을 쌓고 각 항목 내부의 가로 배치 유지.
+
+## 2026-11-06 이미지 경량화
+
+- 화면 사진 및 로고는 WebP로 제공하고, 내용이 드러나는 guil-* 파일명으로 통일했습니다.
+- 브라우저 호환성을 위해 기존 favicon PNG와 공유 미리보기 전용 JPEG는 유지합니다.
+- KV 도시는 원본 사진에 투명 마스크를 적용합니다. 마스크는 색상 대신 알파 정보만 담도록 최적화했습니다.
+- 하단 사진은 지연 로딩하며, 기존 사용 이미지 URL은 새 URL로 영구 리디렉션합니다.
+- 미사용 3D 아이콘, 예전 앞쪽 건물 이미지, 사용하지 않는 SVG 파비콘을 제거했습니다.
+- 빌드는 배포 HTML/CSS/JS/XML에서 참조하는 assets만 복사합니다. 파일을 추가할 때 실제 참조도 함께 추가해야 하며, 누락된 파일은 빌드 오류로 확인됩니다.

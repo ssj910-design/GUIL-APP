@@ -32,6 +32,56 @@
       "source": "/privacy",
       "destination": "/privacy.html",
       "permanent": true
+    },
+    {
+      "source": "/assets/architecture.jpg",
+      "destination": "/assets/guil-elevator-building.webp",
+      "permanent": true
+    },
+    {
+      "source": "/assets/commercial.jpg",
+      "destination": "/assets/guil-commercial-building.webp",
+      "permanent": true
+    },
+    {
+      "source": "/assets/maintenance.jpg",
+      "destination": "/assets/guil-elevator-maintenance.webp",
+      "permanent": true
+    },
+    {
+      "source": "/assets/office.jpg",
+      "destination": "/assets/guil-office-building.webp",
+      "permanent": true
+    },
+    {
+      "source": "/assets/residential.jpg",
+      "destination": "/assets/guil-apartment-building.webp",
+      "permanent": true
+    },
+    {
+      "source": "/assets/system-reception-v1.jpg",
+      "destination": "/assets/guil-elevator-fault-monitoring.webp",
+      "permanent": true
+    },
+    {
+      "source": "/assets/guil-mark.png",
+      "destination": "/assets/guil-elevator-logo.webp",
+      "permanent": true
+    },
+    {
+      "source": "/assets/kv-city-v1.webp",
+      "destination": "/assets/guil-seoul-city-skyline.webp",
+      "permanent": true
+    },
+    {
+      "source": "/assets/kv-sky-v2.webp",
+      "destination": "/assets/guil-city-sky-background.webp",
+      "permanent": true
+    },
+    {
+      "source": "/assets/kv-city-mask-v2.webp",
+      "destination": "/assets/guil-city-skyline-mask.webp",
+      "permanent": true
     }
   ],
   "installCommand": "npm ci",
