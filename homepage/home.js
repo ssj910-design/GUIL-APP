@@ -38,12 +38,12 @@ function renderScroll(){
  const frame=hero.querySelector('.hm-hero-frame');
  const travel=Math.max(1,hero.offsetHeight-frame.offsetHeight);
  const progress=motion?clamp(-hero.getBoundingClientRect().top/travel):0;
- hero.style.setProperty('--rise-scale',String(1.04+progress*(mobile.matches?.035:.065)));
- hero.style.setProperty('--rise-y',`${-progress*(mobile.matches?12:24)}px`);
- hero.style.setProperty('--near-y',`${progress*(mobile.matches?24:95)}px`);
- hero.style.setProperty('--near-x',`${-progress*(mobile.matches?8:55)}px`);
- hero.style.setProperty('--near-scale',String(1+progress*.06));
- hero.style.setProperty('--copy-y',`${-progress*(mobile.matches?8:26)}px`);
+ // Downward tilt: the city rises within the frame as the view approaches it.
+ const tilt=progress*Math.min(frame.offsetHeight*.045,mobile.matches?32:50);
+ hero.style.setProperty('--sky-scale',String(1+progress*.025));
+ hero.style.setProperty('--sky-y',`${-tilt*.28}px`);
+ hero.style.setProperty('--city-scale',String(1+progress*(mobile.matches?.09:.16)));
+ hero.style.setProperty('--city-y',`${-tilt}px`);
 
  scheduled=false;
 }
