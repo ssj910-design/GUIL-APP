@@ -60,7 +60,7 @@ html.motion-off .hm-hero-image{transform:none}
 @media(prefers-reduced-motion:reduce){.hm-hero-track{height:100svh;min-height:540px}.hm-hero-frame{position:relative}.hm-hero-image{transform:none}.hm-service-track,.hm-carousel-progress span{transition:none}}
 
 /* One shared business link; slide controls remain outside the image. */
-.hm-service-all-link{display:inline-flex;align-items:center;gap:24px;white-space:nowrap;font-size:16px;color:var(--blue);text-decoration:underline;text-underline-offset:6px}
+.hm-service-all-link{display:inline-block;white-space:nowrap;font-size:16px;color:var(--blue);text-decoration:underline;text-underline-offset:6px}
 .hm-carousel-progress{min-width:40px}
 .hm-system-art-note{font-size:11px;line-height:1.4;color:#9bb2c7;margin-top:10px}
 .hm-city-scene>img.hm-reception-art{object-fit:contain;object-position:center;filter:none}
