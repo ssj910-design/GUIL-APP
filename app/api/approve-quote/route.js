@@ -9,7 +9,7 @@
 import crypto from "crypto";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { mapQuoteRequest, mapUnit, mapSite } from "@/lib/mappers";
-import { buildPurchaseOrderData } from "@/lib/purchaseOrderData";
+import { buildPurchaseOrderData, kstDateTime } from "@/lib/purchaseOrderData";
 import { buildPurchaseOrderPdfBytes } from "@/lib/purchaseOrderPdf";
 import { quoteGrandTotal, quoteDisplayTotal } from "@/lib/utils";
 
@@ -93,7 +93,7 @@ export async function POST(request) {
 
   const { error: updateError } = await db.from("quote_requests").update({
     status: "승인",
-    approved_date: now.slice(0, 10),
+    approved_date: kstDateTime(now).date, // UTC로 자르면 KST 새벽 승인이 전날로 저장된다
     approved_at: now,
     approved_amount: displayTotal,
     approval_signature_url: signatureUrl,
