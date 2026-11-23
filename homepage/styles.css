@@ -89,3 +89,10 @@ html.inquiry-open{overflow:hidden}
  .inquiry-dialog .inquiry-direct{font-size:14px;gap:6px 8px}
 }
 @media(prefers-reduced-motion:reduce){.inquiry-dialog[open]{animation:none}}
+
+/* Detail service navigation and contextual links. */
+.service-detail .breadcrumbs{flex-wrap:wrap;row-gap:10px}
+.service-detail .detail-inline-link{display:inline-block;margin-top:20px}
+.service-detail .detail-related-links{display:flex;flex-wrap:wrap;gap:14px 28px;margin-top:24px}
+.service-detail .detail-inline-link,.service-detail .detail-related-links a{font-size:16px;line-height:1.8;color:#1d4ed8;text-decoration:underline;text-underline-offset:5px;text-decoration-thickness:1px}
+.service-detail .detail-inline-link:hover,.service-detail .detail-related-links a:hover{color:#172554}
