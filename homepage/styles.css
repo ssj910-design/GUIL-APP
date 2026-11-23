@@ -96,3 +96,22 @@ html.inquiry-open{overflow:hidden}
 .service-detail .detail-related-links{display:flex;flex-wrap:wrap;gap:14px 28px;margin-top:24px}
 .service-detail .detail-inline-link,.service-detail .detail-related-links a{font-size:16px;line-height:1.8;color:#1d4ed8;text-decoration:underline;text-underline-offset:5px;text-decoration-thickness:1px}
 .service-detail .detail-inline-link:hover,.service-detail .detail-related-links a:hover{color:#172554}
+
+/* Keep the consultation controls off the content columns on smaller screens. */
+@media(max-width:1279px){
+ body:has(>.floating-contact){padding-bottom:calc(80px + env(safe-area-inset-bottom,0px))}
+ .floating-contact{left:0;right:0;bottom:0;flex-direction:row;align-items:stretch;gap:0;padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));background:#fff;border-top:1px solid #dbe3ef;box-shadow:0 -4px 20px #1725540a;filter:none}
+ .floating-contact a{flex:1;width:auto;min-width:0;min-height:56px;font-size:16px;gap:5px;border:0;border-radius:8px}
+ .floating-contact a:first-child,.floating-contact a.floating-primary{border-radius:8px}
+ .floating-contact .icon{width:20px;height:20px}
+ .footer{padding-bottom:28px}
+}
+@media(max-width:900px){
+ .header nav.open{max-height:calc(100dvh - 165px);overflow-y:auto;overscroll-behavior:contain}
+ .header nav.open>a{min-height:44px;display:flex;align-items:center}
+ .header nav.open>.nav-contact{display:none}
+}
+.service-choice-note{display:none}
+@media(max-width:420px){
+ .inquiry-dialog select:has(option[value="안전장치 설치"]:checked)+.service-choice-note{display:block;margin-top:8px;font-size:16px;line-height:1.6;color:#475569}
+}

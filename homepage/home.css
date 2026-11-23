@@ -302,8 +302,8 @@ html.motion-off .cs-data-lines{display:none}
  .cs-scene-label{padding:6px 8px;gap:5px;border-radius:7px;min-height:44px}.cs-scene-label i{height:18px;width:18px;font-size:9px}.cs-scene-label span{font-size:11px}
  .cs-label-office{left:3%;top:40%}.cs-label-field{top:12%;left:69%}.cs-label-app{top:77%;left:auto;right:3%}
  .cs-label-office:after,.cs-label-field:after{display:none}
- .cs-workflow{padding:19px 17px 20px;border-radius:12px;margin-bottom:20px}.cs-flow-tabs{gap:12px}
- .cs-flow-tab{display:block;padding-bottom:15px}.cs-flow-tab b{display:block;font-size:10px;margin-bottom:7px}.cs-flow-tab span{font-size:16px}.cs-flow-tab em{display:none}
+ .cs-workflow{padding:19px 17px 20px;border-radius:12px;margin-bottom:20px}.cs-flow-tabs{gap:8px}
+ .cs-flow-tab{display:block;padding-bottom:15px}.cs-flow-tab b{display:block;font-size:10px;margin-bottom:7px}.cs-flow-tab span{font-size:16px;white-space:nowrap;letter-spacing:-.04em}.cs-flow-tab em{display:none}
  .cs-flow-panel{display:block;min-height:160px;padding-top:20px}.cs-flow-panel h3{font-size:20px;margin:0 0 12px}.cs-flow-panel p{font-size:16px}
  .cs-section-note{display:block;font-size:12px}.cs-section-note span{display:block;margin-bottom:5px}
 }
@@ -370,3 +370,4 @@ html.motion-off .cs-data-lines{display:none}
  .hm-card-carousel .hm-carousel-bottom{grid-template-columns:auto 1fr;padding-right:0}
  .hm-card-carousel .hm-service-all-link{justify-self:start}
 }
+.hm-card-carousel .hm-slide-copy h3.hm-long-service-name{font-size:clamp(24px,2.3vw,34px);line-height:1.35;word-break:keep-all}

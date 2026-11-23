@@ -31,12 +31,15 @@
 .contact-map{overflow:hidden;border:1px solid #dbe3ef;border-radius:12px;background:#e8eef5}
 .contact-map iframe{display:block;width:100%;height:480px}
 .contact-map-note{font-size:16px;color:#64748b;margin-top:16px;line-height:1.8}
-@media(max-width:1050px){.contact-options{gap:14px}.contact-card{padding:26px 20px}.contact-card p br{display:none}}
+@media(max-width:1050px){
+ .contact-options{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+ .contact-card{padding:28px}.contact-inquiry{grid-column:1/-1}
+}
 @media(max-width:760px){
  .contact-wrap{padding-top:35px;padding-bottom:48px}
  .contact-options{grid-template-columns:1fr;gap:16px}
  .contact-card{padding:26px}.contact-icon{margin-bottom:18px}
- .contact-value{font-size:30px}.contact-email{font-size:24px}
+ .contact-value{font-size:30px}.contact-email{font-size:clamp(18px,5.8vw,24px)}
  .contact-card p{margin:14px 0 20px}.contact-inquiry p{margin-top:0}
  .contact-location{padding-top:48px}
  .contact-location-heading{align-items:flex-start;flex-direction:column;gap:14px}
