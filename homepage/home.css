@@ -309,6 +309,14 @@ html.motion-off .cs-data-lines{display:none}
 }
 @media(prefers-reduced-motion:reduce){.cs-data-lines{display:none}.cs-scene-label,.cs-flow-tab,.cs-flow-panel{transition:none;transform:none}}
 
+/* Service Q&A: readable answers and descriptive links to the detail pages. */
+.home-v2 .faq h2{margin-top:0}
+.home-v2 .faq summary span{flex-shrink:0}
+.home-v2 .faq-links{display:flex;flex-wrap:wrap;gap:8px 24px;margin-top:16px;padding-right:35px}
+.home-v2 .faq-links a{font-size:16px;line-height:1.8;color:#1d4ed8;text-decoration:underline;text-underline-offset:5px;text-decoration-thickness:1px}
+.home-v2 .faq-links a:hover{color:#172554}
+@media(max-width:700px){.home-v2 .faq details p,.home-v2 .faq-links{padding-right:0}}
+
 /* Centered service cards: five originals loop without duplicated content. */
 .hm-services{overflow:hidden}
 .hm-card-carousel .hm-service-window{position:relative;background:none;overflow:hidden;height:clamp(420px,39vw,540px);touch-action:pan-y pinch-zoom;user-select:none}
