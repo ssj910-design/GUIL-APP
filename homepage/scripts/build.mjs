@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 await rm(`${root}public`, {recursive:true, force:true});
 await mkdir(`${root}public`, {recursive:true});
-const files = [...(await readdir(root)).filter(file => file.endsWith('.html')), 'styles.css','site.js','home.css','home.js','services.css','services.js','robots.txt','sitemap.xml'];
+const files = [...(await readdir(root)).filter(file => file.endsWith('.html')), 'styles.css','site.js','home.css','home.js','services.css','services.js','contact.css','robots.txt','sitemap.xml'];
 const assets = new Set();
 const inquiryDialog = await readFile(`${root}partials/inquiry-dialog.html`, 'utf8');
 const serviceNames = ['maintenance', 'replacement', 'remodeling', 'safety', 'installation'];
