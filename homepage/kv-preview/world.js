@@ -6,7 +6,7 @@ const mix=(a,b,t)=>a+(b-a)*t;
 const CX=2.16,CZ=3.7,PHOTO_W=72,PHOTO_H=72/(1672/941),CABIN_HEIGHT_SCALE=.72;
 export async function createWorld(host,onAction){
  const renderer=new T.WebGLRenderer({alpha:true,antialias:true,powerPreference:'high-performance'});
- renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.outputColorSpace=T.SRGBColorSpace;
+ renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));renderer.outputColorSpace=T.SRGBColorSpace;
  renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
  renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;
  renderer.setClearColor(0x000000,0);host.appendChild(renderer.domElement);
@@ -14,29 +14,29 @@ export async function createWorld(host,onAction){
  // Keep the entire interior in the building's oblique coordinate frame. The camera
  // joins this frame during entry; the shaft itself never spins inside the facade.
  const buildingAngle=-34*Math.PI/180,pivot=new T.Vector3(CX,0,CZ),buildingScale=new T.Vector3(.76,1,.76);
- const buildingFrame=new T.Group();buildingFrame.position.set(CX+1.66,0,CZ-3);buildingFrame.rotation.y=buildingAngle;buildingFrame.scale.copy(buildingScale);scene.add(buildingFrame);
+ const buildingFrame=new T.Group();buildingFrame.position.set(CX+2.86,0,CZ-7.8);buildingFrame.rotation.y=buildingAngle;buildingFrame.scale.copy(buildingScale);scene.add(buildingFrame);
  const interiorWorld=new T.Group();interiorWorld.position.copy(pivot).multiplyScalar(-1);buildingFrame.add(interiorWorld);
  const intoBuilding=p=>new T.Vector3(...p).sub(pivot).multiply(buildingScale).applyAxisAngle(new T.Vector3(0,1,0),buildingAngle).add(buildingFrame.position);
  const loader=new T.TextureLoader();
  const [exterior,interior,environmentPhoto]=await Promise.all([
   './assets/guil-elevator-building-photoreal.webp','./assets/guil-elevator-cabin-photoreal-v3.webp','../assets/guil-seoul-city-skyline.webp'
  ].map(p=>loader.loadAsync(p)));
- for(const t of [exterior,interior,environmentPhoto])t.colorSpace=T.SRGBColorSpace;
+ for(const t of [exterior,interior,environmentPhoto]){t.colorSpace=T.SRGBColorSpace;t.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),8);}
  environmentPhoto.mapping=T.EquirectangularReflectionMapping;const pmrem=new T.PMREMGenerator(renderer),environment=pmrem.fromEquirectangular(environmentPhoto);scene.environment=environment.texture;pmrem.dispose();
- scene.add(new T.HemisphereLight(0xc4d4e6,0x33383b,.6));
- const key=new T.DirectionalLight(0xe6edf5,2.2);key.position.set(-10,43,24);scene.add(key);
- const upperLight=new T.PointLight(0xd5e5f4,40,38,1.7);upperLight.position.set(CX,35,4.8);interiorWorld.add(upperLight);
+ scene.add(new T.HemisphereLight(0xdde5ed,0x59656d,.85));
+ const key=new T.DirectionalLight(0xe6edf5,1.65);key.position.set(-10,43,24);scene.add(key);
+ const upperLight=new T.PointLight(0xd5e5f4,28,38,1.7);upperLight.position.set(CX,35,4.8);interiorWorld.add(upperLight);
  const texture=(kind)=>{const c=document.createElement('canvas');c.width=c.height=512;const ctx=c.getContext('2d');let seed=9217;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
   ctx.fillStyle=kind==='metal'?'#a8acaf':'#8b8986';ctx.fillRect(0,0,512,512);
-  if(kind==='metal'){for(let x=0;x<512;x++){const n=105+Math.floor(rnd()*85);ctx.strokeStyle=`rgba(${n},${n},${n},.25)`;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,512);ctx.stroke();}}
-  else{const data=ctx.getImageData(0,0,512,512);for(let i=0;i<data.data.length;i+=4){const n=110+rnd()*65;data.data[i]=n;data.data[i+1]=n*.99;data.data[i+2]=n*.95;}ctx.putImageData(data,0,0);for(let n=0;n<180;n++){ctx.fillStyle=`rgba(45,45,42,${rnd()*.08})`;ctx.beginPath();ctx.ellipse(rnd()*512,rnd()*512,4+rnd()*45,3+rnd()*18,rnd()*Math.PI,0,Math.PI*2);ctx.fill();}}
+  if(kind==='metal'){for(let x=0;x<512;x++){const n=143+Math.floor(rnd()*24);ctx.strokeStyle=`rgba(${n},${n},${n},.13)`;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,512);ctx.stroke();}}
+  else{const data=ctx.getImageData(0,0,512,512);for(let i=0;i<data.data.length;i+=4){const n=148+rnd()*18;data.data[i]=n;data.data[i+1]=n*.99;data.data[i+2]=n*.95;}ctx.putImageData(data,0,0);for(let n=0;n<180;n++){ctx.fillStyle=`rgba(45,45,42,${rnd()*.025})`;ctx.beginPath();ctx.ellipse(rnd()*512,rnd()*512,4+rnd()*45,3+rnd()*18,rnd()*Math.PI,0,Math.PI*2);ctx.fill();}}
   const t=new T.CanvasTexture(c);t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),4);return t;
  };
  const concreteTexture=texture('concrete'),metalTexture=texture('metal');concreteTexture.repeat.set(2,7);
  const material=(color,roughness=.5,metalness=0,extra={})=>new T.MeshStandardMaterial({color,roughness,metalness,...extra});
- const concrete=material(0x646b6e,.97,.02,{map:concreteTexture,bumpMap:concreteTexture,bumpScale:.035});
- const steel=material(0x8b989e,.32,.85,{roughnessMap:metalTexture,envMapIntensity:.6});
- const charcoal=material(0x29323a,.6,.6),dark=material(0x141b20,.8,.2),galvanized=material(0x929a9b,.6,.65,{map:metalTexture});
+ const concrete=material(0x929ba1,.93,.02,{map:concreteTexture,bumpMap:concreteTexture,bumpScale:.012});
+ const steel=material(0xa5b1ba,.54,.65,{roughnessMap:metalTexture,envMapIntensity:.38});
+ const charcoal=material(0x394750,.73,.45),dark=material(0x202b34,.85,.15),galvanized=material(0xa0acb4,.72,.45,{map:metalTexture,envMapIntensity:.35});
  const conduit=material(0x3a4144,.66,.5),rubber=material(0x11171b,.9,0),lightMat=new T.MeshBasicMaterial({color:0xe9f3ff,toneMapped:false});
  const boxGeometry=new T.BoxGeometry(1,1,1),cylGeometry=new T.CylinderGeometry(1,1,1,12);
  function box(parent,x,y,z,w,h,d,mat,shadow=false){const m=new T.Mesh(boxGeometry,mat);m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=shadow;m.receiveShadow=shadow;parent.add(m);return m;}
@@ -51,19 +51,34 @@ export async function createWorld(host,onAction){
    float insideEdge(vec2 a,vec2 b,vec2 p){vec2 edge=b-a;return (edge.x*(p.y-a.y)-edge.y*(p.x-a.x))/max(length(edge),.0001);}
    `+shader.fragmentShader;
   shader.fragmentShader=shader.fragmentShader.replace('#include <alphatest_fragment>',`
-   float opening=1.0;
-   for(int i=0;i<4;i++){opening*=smoothstep(-.0015,.003,insideEdge(uOpening[i],uOpening[(i+1)%4],vMapUv));}
+   float edge=1.0;
+   for(int i=0;i<4;i++){edge=min(edge,insideEdge(uOpening[i],uOpening[(i+1)%4],vMapUv));}
+   float opening=smoothstep(-.001,.004,edge);
+   diffuseColor.rgb*=1.0-.2*uReveal*opening*(1.0-smoothstep(.003,.019,edge));
    diffuseColor.a*=1.0-uReveal*opening;
    #include <alphatest_fragment>`);
  };
- // Cutout corners are projected from the same rotated shaft, rather than using a
- // screen-aligned rectangular window that contradicts the building's perspective.
- const openingWorld=[[-3.05,4.2],[3.05,4.2],[3.05,36.4],[-3.05,36.4]].map(([x,y])=>intoBuilding([CX+x,y,7.98]));
- function updateOpening(){
-  if(camera.position.z<=8.1)return;
-  openingWorld.forEach((p,i)=>{const t=(8-camera.position.z)/(p.z-camera.position.z);const x=mix(camera.position.x,p.x,t),y=mix(camera.position.y,p.y,t);openingCorners.value[i].set(x/PHOTO_W+.5,(y-20)/PHOTO_H+.5);});
- }
+ // The aperture belongs to the facade, not to the shaft. Its fixed corners stay
+ // on the photographed window bays while the actual shaft sits farther behind it.
+ const openingWorld=[[.03,5.5,8],[3.75,4.95,8],[3.75,35.62,8],[.03,35.05,8]].map(p=>new T.Vector3(...p));
+ openingWorld.forEach((p,i)=>openingCorners.value[i].set(p.x/PHOTO_W+.5,(p.y-20)/PHOTO_H+.5));
  const cityPlane=new T.Mesh(new T.PlaneGeometry(PHOTO_W,PHOTO_H),exteriorMat);cityPlane.position.set(0,20,8);cityPlane.renderOrder=20;scene.add(cityPlane);
+ // Four recessed reveals bridge the facade to the inner core. Darkening toward
+ // the back, the retained glass and front floor edges establish foreground depth.
+ const recess=new T.Group();scene.add(recess);
+ const innerOpening=[[-3.05,4.2],[3.05,4.2],[3.05,36.4],[-3.05,36.4]].map(([x,y])=>intoBuilding([CX+x,y,8.03]));
+ const recessMaterial=material(0x697e8d,.92,.04,{side:T.DoubleSide,vertexColors:true});
+ for(let i=0;i<4;i++){
+  const j=(i+1)%4,points=[openingWorld[i],openingWorld[j],innerOpening[j],innerOpening[i]];
+  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(points.flatMap(p=>[p.x,p.y,p.z-.035]),3));g.setIndex([0,1,2,0,2,3]);
+  const near=i===1?.58:.76,far=.32;g.setAttribute('color',new T.Float32BufferAttribute([near,near,near,near,near,near,far,far,far,far,far,far],3));g.computeVertexNormals();recess.add(new T.Mesh(g,recessMaterial));
+ }
+ const facadeEdges=new T.Group();scene.add(facadeEdges);
+ const facadeEdgeMaterial=material(0x34495b,.64,.45,{transparent:true,opacity:0});
+ for(let n=1;n<14;n++){
+  const f=n/14,a=openingWorld[0].clone().lerp(openingWorld[3],f),b=openingWorld[1].clone().lerp(openingWorld[2],f),d=b.clone().sub(a);
+  const beam=box(facadeEdges,(a.x+b.x)/2,(a.y+b.y)/2,7.94,d.length(),.065,.2,facadeEdgeMaterial);beam.rotation.z=Math.atan2(d.y,d.x);
+ }
  // A full-scale enclosed shaft: floor divisions, real rail profiles, brackets and service runs.
  const shaft=new T.Group();shaft.position.x=CX;interiorWorld.add(shaft);
  box(shaft,-3.2,18.3,3.7,.28,37,8.5,concrete);box(shaft,3.2,18.3,3.7,.28,37,8.5,concrete);const backWall=box(shaft,0,18.3,-.55,6.6,37,.3,concrete);const landingDoors=new T.Group();shaft.add(landingDoors);
@@ -96,14 +111,14 @@ export async function createWorld(host,onAction){
  for(let i=0;i<5;i++){const ring=new T.Mesh(new T.TorusGeometry(.62,.012,6,40),dark);ring.position.set(.15,.88,.11+i*.08);machinery.add(ring);}
  const ropes=new T.Group();shaft.add(ropes);for(let i=0;i<5;i++)cyl(ropes,-1.7+i*.09,0,3.85,.012,1,steel);
  const weight=new T.Group();shaft.add(weight);box(weight,2.66,0,.6,.34,3.4,1.05,charcoal);for(let i=0;i<10;i++)box(weight,2.66,-1.45+i*.31,.6,.4,.25,1.1,galvanized);
- const lowLight=new T.PointLight(0xd7e5f2,22,22,1.7);lowLight.position.set(CX-1.5,17,.4);interiorWorld.add(lowLight);
+ const lowLight=new T.PointLight(0xd7e5f2,18,22,1.7);lowLight.position.set(CX-1.5,17,.4);interiorWorld.add(lowLight);
  // The cabin is a geometric space. Photographic projection supplies its brushed-metal detail.
  const cabin=new T.Group();cabin.scale.y=CABIN_HEIGHT_SCALE;cabin.position.set(CX,5,CZ);cabin.rotation.y=Math.PI;interiorWorld.add(cabin);
  const refCamera=new T.PerspectiveCamera(56,1672/941,.01,50);refCamera.position.set(0,1.9,-1.8);refCamera.lookAt(0,1.9,2.05);refCamera.updateMatrixWorld();
  const photoMatrix=new T.Matrix4().multiplyMatrices(refCamera.projectionMatrix,refCamera.matrixWorldInverse);
  const photoMaterial=new T.ShaderMaterial({uniforms:{photo:{value:interior},grain:{value:metalTexture},baseColor:{value:new T.Color(0x727b82)},layerOpacity:{value:1}},side:T.DoubleSide,toneMapped:false,
   vertexShader:'attribute vec4 photoCoord; varying vec4 vPhoto; varying vec3 vLocal; void main(){ vPhoto=photoCoord; vLocal=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-  fragmentShader:'#include <common>\n varying vec4 vPhoto; varying vec3 vLocal; uniform sampler2D photo; uniform sampler2D grain; uniform vec3 baseColor; uniform float layerOpacity; void main(){vec2 uv=vPhoto.xy/max(vPhoto.w,.001)*.5+.5;float valid=smoothstep(.15,.7,vPhoto.w)*smoothstep(0.0,.05,uv.x)*(1.0-smoothstep(.95,1.0,uv.x))*smoothstep(0.0,.05,uv.y)*(1.0-smoothstep(.95,1.0,uv.y));vec3 metal=baseColor*(.85+.3*texture2D(grain,vLocal.xy*.4).r);gl_FragColor=vec4(mix(metal,texture2D(photo,clamp(uv,vec2(.001),vec2(.999))).rgb,valid),layerOpacity);\n#include <colorspace_fragment>\n}'
+  fragmentShader:'#include <common>\n varying vec4 vPhoto; varying vec3 vLocal; uniform sampler2D photo; uniform sampler2D grain; uniform vec3 baseColor; uniform float layerOpacity; void main(){vec2 uv=vPhoto.xy/max(vPhoto.w,.001)*.5+.5;float valid=smoothstep(.15,.7,vPhoto.w)*smoothstep(0.0,.05,uv.x)*(1.0-smoothstep(.95,1.0,uv.x))*smoothstep(0.0,.05,uv.y)*(1.0-smoothstep(.95,1.0,uv.y));vec3 metal=baseColor*(.96+.08*texture2D(grain,vLocal.xy*.4).r);vec3 sampleColor=texture2D(photo,clamp(uv,vec2(.001),vec2(.999))).rgb;sampleColor=mix(sampleColor,vec3(dot(sampleColor,vec3(.2126,.7152,.0722))),.06);sampleColor=mix(sampleColor,vec3(.60,.66,.71),.055);gl_FragColor=vec4(mix(metal,sampleColor,valid),layerOpacity);\n#include <colorspace_fragment>\n}'
  });
  function photoQuad(points){const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(points.flat(),3));g.setIndex([0,1,2,0,2,3]);g.computeVertexNormals();const coords=[];for(const p of points){const q=new T.Vector4(...p,1).applyMatrix4(photoMatrix);coords.push(q.x,q.y,q.z,q.w);}g.setAttribute('photoCoord',new T.Float32BufferAttribute(coords,4));const mesh=new T.Mesh(g,photoMaterial);cabin.add(mesh);return mesh;}
  // Closed reference front dimensions derived from the photograph's door edges.
@@ -177,7 +192,8 @@ export async function createWorld(host,onAction){
   const p=interpolate(poses,u,'p'),l=interpolate(poses,u,'l');
   camera.position.set(...p);const tilt=phase(u,.82,1.43)*(1-phase(u,1.78,2.48));camera.up.set(0,1-tilt,-tilt).normalize().applyAxisAngle(new T.Vector3(0,1,0),buildingAngle);camera.lookAt(new T.Vector3(...l));
   camera.fov=mix(34,mobile?65:51,phase(u,.5,1.45));camera.fov=mix(camera.fov,interiorFov,phase(u,1.85,2.5));camera.updateProjectionMatrix();camera.updateMatrixWorld();
-  reveal.value=Math.max(peek*.98,phase(u,.04,.58));updateOpening();cityPlane.visible=camera.position.z>8.05;
+  reveal.value=Math.max(peek*.78,phase(u,.04,.58));cityPlane.visible=camera.position.z>8.05;
+  facadeEdgeMaterial.opacity=Math.max(peek,phase(u,.04,.2))*.68*(1-phase(u,.18,.68));facadeEdges.visible=facadeEdgeMaterial.opacity>.002;
   const rise=phase(u,.92,2.12);cabin.position.y=mix(5,18,rise);weight.position.y=31-(cabin.position.y-5);
   const cable=Math.max(.1,36.9-(cabin.position.y+4.45*CABIN_HEIGHT_SCALE));ropes.scale.y=cable;ropes.position.y=cabin.position.y+4.45*CABIN_HEIGHT_SCALE+cable*.5;
   const roofOpacity=1-phase(u,1.48,2.04)*(1-phase(u,2.32,2.58));
@@ -186,7 +202,7 @@ export async function createWorld(host,onAction){
   leafLeft.position.x=-(right-left)*.51*door;leafRight.position.x=(right-left)*.51*door;
   backWall.visible=u<2.3;landingDoors.visible=u<2.3;canControl=u>2.3&&u<2.88;renderer.domElement.style.pointerEvents=u>.6?'auto':'none';
   renderer.render(scene,camera);
-  const hotspot=intoBuilding([CX,20,7.98]).project(camera);
+  const hotspot=openingWorld[0].clone().add(openingWorld[2]).multiplyScalar(.5).project(camera);
   const projected=openingWorld.map(p=>p.clone().project(camera));
   return {hotspot:{x:(hotspot.x*.5+.5)*w,y:(-.5*hotspot.y+.5)*h},hoverBox:{left:Math.min(...projected.map(p=>(p.x*.5+.5)*w)),right:Math.max(...projected.map(p=>(p.x*.5+.5)*w)),top:Math.min(...projected.map(p=>(-.5*p.y+.5)*h)),bottom:Math.max(...projected.map(p=>(-.5*p.y+.5)*h))},camera:p,carY:cabin.position.y,roofOpacity};
  }
