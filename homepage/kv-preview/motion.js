@@ -29,6 +29,14 @@ export function scrollAtScene(scene) {
   return (low + high) / 2;
 }
 
+// One visible-time pass: hold the building, then ease through the same route.
+export const AUTOPLAY_HOLD = 2;
+export const AUTOPLAY_DURATION = 28;
+export function autoplayAtTime(seconds) {
+  const t = Math.min(1, Math.max(0, (seconds - AUTOPLAY_HOLD) / (AUTOPLAY_DURATION - AUTOPLAY_HOLD)));
+  return sceneAtScroll(t*t*(3-2*t));
+}
+
 // Critically damped progress plus a speed cap prevents a large wheel gesture or
 // chapter jump from rushing through a doorway. Native scrolling is never trapped.
 export function advanceMotion(position, velocity, target, seconds) {
