@@ -228,6 +228,12 @@ export function DutyGenerateWidget({ schedules, onSchedulesChange, onEngineersCh
     return rows;
   }
 
+  // 미리보기 칸에도 순번표와 같은 번호를 붙인다 — 이름만 봐선 지금 몇 번 차례가 도는지 안 보인다.
+  const dutyLabel = (name) => {
+    const o = name == null ? null : engineers.find((e) => e.name === name)?.duty_order;
+    return name == null ? "-" : o == null ? name : `${name} ${o}`;
+  };
+
   const sorted = engineers.slice().sort((a, b) => (a.duty_order ?? 999) - (b.duty_order ?? 999));
   const inMode = (mode) => sorted.filter((e) => e.duty_order != null && (e.duty_modes ?? []).includes(mode)).length;
   const rosterOf = (mode) => sorted.filter((e) => e.duty_order != null && (e.duty_modes ?? []).includes(mode));
@@ -384,11 +390,11 @@ export function DutyGenerateWidget({ schedules, onSchedulesChange, onEngineersCh
                             r.name == null ? "text-slate-300" : KIND_TEXT[r.kind]
                           } ${r.isManual ? "bg-amber-100" : "bg-blue-100"}`}
                         >
-                          {r.name ?? "-"}
+                          {dutyLabel(r.name)}
                         </button>
                       ) : (
                         <p key={r.kind} className={`text-[9px] leading-tight rounded px-0.5 truncate font-semibold ${r.name == null ? "text-slate-300" : KIND_TEXT[r.kind]}`}>
-                          {r.name ?? "-"}
+                          {dutyLabel(r.name)}
                         </p>
                       )
                     ))}
