@@ -29,12 +29,19 @@ export function scrollAtScene(scene) {
   return (low + high) / 2;
 }
 
-// One visible-time pass: hold the building, then ease through the same route.
-export const AUTOPLAY_HOLD = 2;
-export const AUTOPLAY_DURATION = 28;
+// Reserve 7.2 seconds for the building entry instead of speeding every scene up.
+export const AUTOPLAY_HOLD = 1;
+export const AUTOPLAY_DURATION = 20;
+const autoKeys = [[1,0],[8.2,1.34],[9.8,1.72],[13.5,2.6],[16.5,3.55],[20,4.2]];
+const autoSlopes = autoKeys.slice(1).map((p,i)=>(p[1]-autoKeys[i][1])/(p[0]-autoKeys[i][0]));
+const autoTangents = autoKeys.map((_,i)=>i===0||i===autoKeys.length-1?0:2/(1/autoSlopes[i-1]+1/autoSlopes[i]));
 export function autoplayAtTime(seconds) {
-  const t = Math.min(1, Math.max(0, (seconds - AUTOPLAY_HOLD) / (AUTOPLAY_DURATION - AUTOPLAY_HOLD)));
-  return sceneAtScroll(t*t*(3-2*t));
+  if(seconds<=AUTOPLAY_HOLD)return 0;
+  if(seconds>=AUTOPLAY_DURATION)return 4.2;
+  let i=0;while(i<autoKeys.length-2&&seconds>autoKeys[i+1][0])i++;
+  const [t0,u0]=autoKeys[i],[t1,u1]=autoKeys[i+1],width=t1-t0,t=(seconds-t0)/width;
+  return (2*t*t*t-3*t*t+1)*u0+(t*t*t-2*t*t+t)*width*autoTangents[i]
+    +(-2*t*t*t+3*t*t)*u1+(t*t*t-t*t)*width*autoTangents[i+1];
 }
 
 // Critically damped progress plus a speed cap prevents a large wheel gesture or

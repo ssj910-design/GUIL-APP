@@ -1,4 +1,4 @@
-# 구일 KV 검토 시안 10 — 2026-11-26
+# 구일 KV 검토 시안 11 — 2026-11-26
 
 공유 주소: https://www.guil.kr/kv-preview/
 
@@ -15,12 +15,13 @@
 - 카메라는 하강하고 승강기는 상승한다. 벽체, 층별 문 뒷면, T형 레일, 브래킷, 고정 볼트, 로프, 배선 트레이, 균형추, 상부 구동기를 같은 공간에 구성한다.
 - 승강기 천장은 고정한 채 표면과 상부 설비만 서서히 투명해진다. 카메라가 통과한 뒤 실내 눈높이에 도착하면 천장이 복원된다. 해치 개폐와 수평 이동은 제거했다. 외벽·레일·문은 이 투명 효과의 영향을 받지 않는다. 역스크롤에도 같은 경로와 투명도를 적용한다.
 - 실내도 3D 벽, 바닥, 천장, 문으로 구성한다. 기존 실사풍 이미지의 질감을 투영해 스테인리스 문과 층수 표시, 조작반, 손잡이를 유지한다. 사진에 없는 시점은 금속 재질로 보완하며 자유 시점의 완전한 실사 재구성은 아니다.
-- 재질의 미세 노이즈와 범프 강도를 줄이고 금속의 거칠기를 높였다. 주변광을 보강하고 직접광을 낮춰 표면 대비를 완화한다. 실내 사진 투영의 색 대비도 소폭 낮추되 조작반과 문 디테일은 유지한다.
+- 콘크리트는 생성한 실사풍 표면 텍스처를 1.8m 단위 UV로 적용해 긴 벽에서 늘어나지 않게 한다. 벽·바닥 연결부에 같은 질감과 미세 요철을 사용한다. 철제 레일은 방향성 반사, 외판은 더 거친 금속 반사를 사용하며 실내 조명 형태의 환경 반사와 제한된 1024px 그림자를 적용한다. 조명은 중성 계열로 조정했다.
+- 실내 사진의 청색·회색 덮개를 줄이고 미세 금속 결과 보는 각도에 따른 약한 반사를 더한다. 문틀에는 얇은 스테인리스 입체 마감이 있다. 조작반과 문 위치, 텍스처 투영 좌표는 유지한다.
 - 좌우 문짝이 문틀 뒤로 열리면서 실제 구일 로고가 보인다. 로고가 화면 중앙에서 최종 크기의 2.5배(모바일 2.3배)로 먼저 나타나 잠시 머문다. 1.0~2.15초에 축소·이동을 마치고, 회사명은 2.3~3.25초에 오른쪽으로 펼쳐진다. 이동과 회사명 등장을 겹치지 않는다. 후속 문구는 3.35초 이후 나타난다. 이 순서는 문 열림 후 경과 시간으로 진행하며, 문을 닫거나 처음으로 돌아가면 초기화된다. 카메라가 열린 문을 통과해 밝은 브랜드 화면으로 이어진다. 실내 벽면에 로고를 붙이지 않는다.
 - 문은 스크롤과 별도 버튼/실내 조작반으로 열고 닫을 수 있다. 층수 선택은 표시기만 바꾸며 실제 운행이나 비상 호출을 전송하지 않는다.
 - 역스크롤, 장면 바로가기, 재시작, 안내창과 키보드 조작을 유지한다.
-- 준비 완료 후 건물을 2초 유지하고, 약 26초에 걸쳐 한 번만 자동으로 이동한 뒤 로고에서 정지한다. 자동재생은 실제 스크롤 위치를 카메라와 계속 맞춘다. 휠·터치·포인터 누름·이동 키·장면 선택 시 현재 위치에서 수동 조작으로 전환하며 자동으로 재개하지 않는다. 다시 보기를 누르면 건물로 돌아가 새로 재생한다.
-- 숨긴 탭에서는 시간과 렌더링이 멈춘다. OS 움직임 감소 설정이나 이미 스크롤한 위치에서 새로고침한 경우 자동재생하지 않는다. 승인된 로고 등장·축소·이동 순서, 창틀 투시와 재질은 그대로 유지한다.
+- 준비 완료 후 건물을 1초 유지하고, 약 19초에 걸쳐 한 번만 자동으로 이동한 뒤 로고에서 정지한다. 전체 20초 중 건물 진입에 7.2초를 배정하며, 이후 승강로 하강·실내 도착·문 열림·로고 이동은 속도가 연속적인 별도 시간 곡선을 사용한다. 자동재생은 실제 스크롤 위치를 카메라와 계속 맞춘다. 휠·터치·포인터 누름·이동 키·장면 선택 시 현재 위치에서 수동 조작으로 전환하며 자동으로 재개하지 않는다. 다시 보기를 누르면 건물로 돌아가 새로 재생한다.
+- 숨긴 탭에서는 시간과 렌더링이 멈춘다. OS 움직임 감소 설정이나 이미 스크롤한 위치에서 새로고침한 경우 자동재생하지 않는다. 승인된 로고 등장·축소·이동 순서와 창틀 투시는 그대로 유지한다.
 
 ## 구현과 리소스
 
@@ -28,6 +29,7 @@
 - preview.js: 스크롤, 호버/터치, 문 조작, UI, 재시작과 수명 관리.
 - motion.js: 구간별 스크롤 배분, 장면 바로가기의 역변환, 감쇠·속도 제한, 자동재생 시간과 경로.
 - assets/guil-elevator-building-photoreal.webp: 기존 건물 외관.
+- assets/guil-elevator-shaft-concrete.webp: 내장 image_gen으로 생성한 콘크리트 질감. 1024px WebP, 약 134KB. 아래 생성 기록 참고.
 - assets/guil-elevator-cabin-photoreal-v3.webp: 기존 실사풍 실내 질감. 원본 이미지는 변경하지 않는다.
 - assets/guil-elevator-hoistway-photoreal-v3.webp: 이전 버전 검토 이력용이며 현재 페이지에서 요청하지 않는다.
 - vendor/three.module.min.js: 기존 로컬 Three.js 0.170.0, MIT. CDN/API/환경 변수 없이 동작한다.
@@ -44,8 +46,23 @@
 
 ## 검증
 
+v11: 1초 정지·20초 종료·구간 경계의 연속 속도·단조 증가와 스크롤 역변환을 수치 검증했다. 브라우저에서 0.53초/진행도 0, 20.00초/진행도 4.200과 로고·회사명 등장 완료를 확인했다. 데스크톱 승강로·실내 및 390px 모바일 재질, 수동 장면 선택과 가로 넘침 없음을 확인했다. 반사 환경 블러 경고는 샘플 범위를 줄여 해결했다. 기존 홈페이지 배포 파일 37개와 로고 CSS는 불변이다.
+
 v10: 2초 정지·단조 증가·28초 종료와 스크롤 역변환의 오차 범위를 수치 확인했다. 브라우저에서 1.10초에 진행도 0, 28초에 4.200·정지 상태를 확인했다. 중간 휠 입력, 모바일 크기의 포인터 입력, Tab 입력이 수동 모드로 전환되고 자동으로 재개하지 않음을 확인했다. PC/390px 모바일 자동 엔딩, 재시작, 콘솔 오류 없음을 확인했다. 실제 터치 장치의 성능 검증은 별도이며 pointerdown과 touchstart 모두 같은 중단 처리기를 사용한다.
 
 v9: JS 문법과 정적 빌드 통과, 기존 배포 파일 37개의 해시 불변을 확인했다. 데스크톱의 창별 투시·승강로 진입·실내 도착, 390px 모바일의 투시 위치와 가로 넘침 없음을 브라우저에서 확인했다. WebGL/콘솔 오류는 없었다. v8의 로고 CSS와 UI 로직은 캐시 버전 외에 변경하지 않았다.
 
 이전 검증: 스크롤 매핑의 단조 증가·역변환과 20/60/120fps 수렴·최대 속도, 천장 투명도 복원, 문 조작, 로고 단독 등장 후 축소·이동·회사명 표시 순서 및 PC·모바일 요소 간격. 실제 모든 장치 및 브라우저 조합에 대한 성능 측정은 아니다.
+
+## 콘크리트 질감 생성 기록
+
+- 도구: 내장 image_gen (CLI/API 키 사용 없음)
+- 원본: /Users/chahogeun/.codex/generated_images/01a175e4-6741-7683-a631-c9f1a7746a40/exec-cf161331-b711-49d1-9ae9-8d29b5833189.png
+- 적용 파일: homepage/kv-preview/assets/guil-elevator-shaft-concrete.webp
+- 변환: cwebp, 1024×1024, quality 82. 이미지 안의 조명은 균일하게 요청하고 장면 조명·반사·요철은 3D 재질에서 처리한다.
+
+프롬프트:
+
+```text
+Use case: photorealistic-natural. Asset type: seamless PBR base-color texture for concrete walls inside a modern elevator hoistway in an architectural WebGL scene. Create a square 1024x1024 texture, orthographic perfectly front-on view, edge to edge bare cast-in-place concrete. Real photographic material quality with neutral warm light gray cement, subtle mottling at different scales, fine mineral grains, tiny pinholes and restrained formwork grain. Clean maintained industrial building, not abandoned. Flat cross-polarized diffuse illumination, no baked directional shadows, no vignette, no obvious highlights. Seamlessly tileable all four edges, no major cracks, no large dark stains, no large formwork seams, no tie holes in a repetitive pattern, no objects, no perspective, no labels, no border, no watermark. Contrast low to medium so it stays credible when repeated over a 37m shaft; natural fine surface variation rather than smooth plastic or harsh speckled noise.
+```

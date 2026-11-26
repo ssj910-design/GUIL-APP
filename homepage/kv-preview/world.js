@@ -19,28 +19,48 @@ export async function createWorld(host,onAction){
  const interiorWorld=new T.Group();interiorWorld.position.copy(pivot).multiplyScalar(-1);buildingFrame.add(interiorWorld);
  const intoBuilding=p=>new T.Vector3(...p).sub(pivot).multiply(buildingScale).applyAxisAngle(new T.Vector3(0,1,0),buildingAngle).add(buildingFrame.position);
  const loader=new T.TextureLoader();
- const [exterior,interior,environmentPhoto]=await Promise.all([
-  './assets/guil-elevator-building-photoreal.webp','./assets/guil-elevator-cabin-photoreal-v3.webp','../assets/guil-seoul-city-skyline.webp'
+ const [exterior,interior,concreteTexture]=await Promise.all([
+  './assets/guil-elevator-building-photoreal.webp','./assets/guil-elevator-cabin-photoreal-v3.webp','./assets/guil-elevator-shaft-concrete.webp'
  ].map(p=>loader.loadAsync(p)));
- for(const t of [exterior,interior,environmentPhoto]){t.colorSpace=T.SRGBColorSpace;t.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),8);}
- environmentPhoto.mapping=T.EquirectangularReflectionMapping;const pmrem=new T.PMREMGenerator(renderer),environment=pmrem.fromEquirectangular(environmentPhoto);scene.environment=environment.texture;pmrem.dispose();
- const ambient=new T.HemisphereLight(0xdde5ed,0x59656d,.85);scene.add(ambient);
- const key=new T.DirectionalLight(0xe6edf5,1.65);key.position.set(-10,43,24);scene.add(key);
- const upperLight=new T.PointLight(0xd5e5f4,28,38,1.7);upperLight.position.set(CX,35,4.8);interiorWorld.add(upperLight);
+ for(const t of [exterior,interior,concreteTexture]){t.colorSpace=T.SRGBColorSpace;t.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),8);}
+ concreteTexture.wrapS=concreteTexture.wrapT=T.RepeatWrapping;
+ // Broad indoor luminaires give metal a real reflection shape, not a blue sky.
+ const reflectionRoom=new T.Scene();reflectionRoom.background=new T.Color(0x535351);
+ const roomGeo=new T.BoxGeometry(10,12,10),roomMat=new T.MeshBasicMaterial({color:0x686864,side:T.BackSide});reflectionRoom.add(new T.Mesh(roomGeo,roomMat));
+ const reflectors=[];
+ for(const [x,y,z,ry,w,h]of[[-4.9,1,0,Math.PI/2,2,9],[4.9,2,-1,-Math.PI/2,1.3,7],[0,4,-4.9,0,5,1.4]]){
+  const g=new T.PlaneGeometry(w,h),m=new T.MeshBasicMaterial({color:new T.Color(3.8,3.7,3.5),side:T.DoubleSide}),p=new T.Mesh(g,m);p.position.set(x,y,z);p.rotation.y=ry;reflectionRoom.add(p);reflectors.push(p);
+ }
+ const pmrem=new T.PMREMGenerator(renderer),environment=pmrem.fromScene(reflectionRoom,.025);scene.environment=environment.texture;pmrem.dispose();roomGeo.dispose();roomMat.dispose();reflectors.forEach(p=>{p.geometry.dispose();p.material.dispose();});
+ const ambient=new T.HemisphereLight(0xf0f3f5,0x595751,.78);scene.add(ambient);
+ const key=new T.DirectionalLight(0xfff5e9,1.5);key.position.set(-10,43,24);key.target.position.copy(intoBuilding([CX,19,3.7]));scene.add(key,key.target);
+ key.castShadow=true;key.shadow.mapSize.set(1024,1024);Object.assign(key.shadow.camera,{left:-15,right:15,top:25,bottom:-25,near:1,far:90});key.shadow.bias=-.00015;key.shadow.normalBias=.025;key.shadow.radius=3;
+ const upperLight=new T.PointLight(0xf1f4f6,26,38,1.7);upperLight.position.set(CX,35,4.8);interiorWorld.add(upperLight);
  const texture=(kind)=>{const c=document.createElement('canvas');c.width=c.height=512;const ctx=c.getContext('2d');let seed=9217;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
   ctx.fillStyle=kind==='metal'?'#a8acaf':'#8b8986';ctx.fillRect(0,0,512,512);
   if(kind==='metal'){for(let x=0;x<512;x++){const n=143+Math.floor(rnd()*24);ctx.strokeStyle=`rgba(${n},${n},${n},.13)`;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,512);ctx.stroke();}}
   else{const data=ctx.getImageData(0,0,512,512);for(let i=0;i<data.data.length;i+=4){const n=148+rnd()*18;data.data[i]=n;data.data[i+1]=n*.99;data.data[i+2]=n*.95;}ctx.putImageData(data,0,0);for(let n=0;n<180;n++){ctx.fillStyle=`rgba(45,45,42,${rnd()*.025})`;ctx.beginPath();ctx.ellipse(rnd()*512,rnd()*512,4+rnd()*45,3+rnd()*18,rnd()*Math.PI,0,Math.PI*2);ctx.fill();}}
   const t=new T.CanvasTexture(c);t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),4);return t;
  };
- const concreteTexture=texture('concrete'),metalTexture=texture('metal');concreteTexture.repeat.set(2,7);
+ const metalTexture=texture('metal');
  const material=(color,roughness=.5,metalness=0,extra={})=>new T.MeshStandardMaterial({color,roughness,metalness,...extra});
- const concrete=material(0x929ba1,.93,.02,{map:concreteTexture,bumpMap:concreteTexture,bumpScale:.012});
- const steel=material(0xa5b1ba,.54,.65,{roughnessMap:metalTexture,envMapIntensity:.38});
- const charcoal=material(0x394750,.73,.45),dark=material(0x202b34,.85,.15),galvanized=material(0xa0acb4,.72,.45,{map:metalTexture,envMapIntensity:.35});
+ const concrete=material(0xe5e4e0,.96,0,{map:concreteTexture,bumpMap:concreteTexture,bumpScale:.045,envMapIntensity:.14});concrete.userData.tileSize=1.8;
+ const steel=new T.MeshPhysicalMaterial({color:0xc5c8c8,roughness:.54,metalness:.96,roughnessMap:metalTexture,bumpMap:metalTexture,bumpScale:.003,anisotropy:.45,anisotropyRotation:Math.PI/2,envMapIntensity:.72});steel.userData.tileSize=.8;
+ const charcoal=material(0x353a3c,.72,.28,{roughnessMap:metalTexture,envMapIntensity:.3}),dark=material(0x1c2022,.88,.05),galvanized=material(0xb7bab8,.76,.82,{roughnessMap:concreteTexture,bumpMap:metalTexture,bumpScale:.003,envMapIntensity:.48});galvanized.userData.tileSize=1.2;
+ const joint=material(0x64635e,.96,0);
  const conduit=material(0x3a4144,.66,.5),rubber=material(0x11171b,.9,0),lightMat=new T.MeshBasicMaterial({color:0xe9f3ff,toneMapped:false});
  const boxGeometry=new T.BoxGeometry(1,1,1),cylGeometry=new T.CylinderGeometry(1,1,1,12);
- function box(parent,x,y,z,w,h,d,mat,shadow=false){const m=new T.Mesh(boxGeometry,mat);m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=shadow;m.receiveShadow=shadow;parent.add(m);return m;}
+ function box(parent,x,y,z,w,h,d,mat,shadow=false){
+  let g=boxGeometry;
+  if(mat.map||mat.bumpMap||mat.roughnessMap){
+   g=boxGeometry.clone();const pos=g.attributes.position,norm=g.attributes.normal,uv=g.attributes.uv,tile=mat.userData.tileSize||1;
+   for(let i=0;i<pos.count;i++){
+    const px=pos.getX(i)*w+x,py=pos.getY(i)*h+y,pz=pos.getZ(i)*d+z;
+    uv.setXY(i,(Math.abs(norm.getX(i))>.5?pz:px)/tile,(Math.abs(norm.getY(i))>.5?pz:py)/tile);
+   }
+  }
+  const m=new T.Mesh(g,mat);m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=shadow;m.receiveShadow=true;parent.add(m);return m;
+ }
  function cyl(parent,x,y,z,r,h,mat){const m=new T.Mesh(cylGeometry,mat);m.position.set(x,y,z);m.scale.set(r,h,r);parent.add(m);return m;}
  // Trace the original photograph's glass grid. Opaque mullions, floor bands,
  // canopy and lobby stay in front during hover; only the individual panes reveal.
@@ -102,16 +122,17 @@ export async function createWorld(host,onAction){
  // All four reveals are planar. The sill and head are horizontal; the jambs,
  // rail brackets and facade edges use the same axes and vanishing directions.
  const recess=new T.Group();scene.add(recess);
- const recessMaterial=material(0x697e8d,.92,.04,{side:T.DoubleSide,vertexColors:true});
+ const recessMaterial=concrete.clone();recessMaterial.side=T.DoubleSide;recessMaterial.vertexColors=true;
  for(let i=0;i<4;i++){
   const j=(i+1)%4,points=[openingWorld[i],openingWorld[j],innerOpening[j],innerOpening[i]];
   const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(points.flatMap(p=>p.toArray()),3));g.setIndex([0,1,2,0,2,3]);
+  const span=points[0].distanceTo(points[1])/1.8,depth=points[0].distanceTo(points[3])/1.8;g.setAttribute('uv',new T.Float32BufferAttribute([0,0,span,0,span,depth,0,depth],2));
   const near=i===1?.58:.76,far=.32;g.setAttribute('color',new T.Float32BufferAttribute([near,near,near,near,near,near,far,far,far,far,far,far],3));g.computeVertexNormals();recess.add(new T.Mesh(g,recessMaterial));
  }
  // Short floor returns stop at the core, leaving the shaft itself clear.
  // Original photographic transoms supply the front edge instead of a second grid.
  const floorReturns=new T.Group();interiorWorld.add(floorReturns);
- const slab=material(0x536977,.92,.02);
+ const slab=concrete;
  for(const y of floorLevels.slice(2,-1))box(floorReturns,(openingBounds.left+openingBounds.right)/2,y-.08,(openingBounds.front+openingBounds.back)/2,openingBounds.right-openingBounds.left,.16,openingBounds.front-openingBounds.back,slab);
  // A full-scale enclosed shaft: floor divisions, real rail profiles, brackets and service runs.
  const shaft=new T.Group();shaft.position.x=CX;interiorWorld.add(shaft);
@@ -121,7 +142,7 @@ export async function createWorld(host,onAction){
  for(let floor=0;floor<floorLevels.length-1;floor++){
   const y=floorLevels[floor],height=floorLevels[floor+1]-y,doorHeight=Math.min(2.45,height-.24);
   for(const x of [-3.04,3.04]){
-   box(shaft,x,y,3.7,.09,.05,8.2,charcoal);
+   box(shaft,x,y,3.7,.012,.018,8.2,joint);
    for(const z of [.2,3.7,7]){box(shaft,x,y+.35,z,.14,.32,.25,galvanized);bolts.push([x+(x<0?.1:-.1),y+.35,z]);}
   }
   box(landingDoors,0,y,-.35,6.1,.06,.04,charcoal);
@@ -131,7 +152,7 @@ export async function createWorld(host,onAction){
   for(const x of [-2.38,2.38]){box(shaft,x,y+.28,3.7,.5,.12,.45,charcoal);box(shaft,x,y+.37,3.7,.32,.06,.35,steel);}
   if(floor%2===0){box(shaft,-2.96,y+1.5,.15,.07,.68,.16,charcoal);box(shaft,-2.9,y+1.5,.15,.025,.57,.08,lightMat);}
  }
- for(const x of [-2.34,2.34]){box(shaft,x,18.5,3.7,.1,37,.28,steel);box(shaft,x,18.5,3.7,.3,37,.065,steel);}
+ for(const x of [-2.34,2.34]){box(shaft,x,18.5,3.7,.1,37,.28,steel,true);box(shaft,x,18.5,3.7,.3,37,.065,steel,true);}
  for(let i=0;i<5;i++)cyl(shaft,-2.92+i*.09,18.4,.2,.025,36.8,conduit);
  box(shaft,2.95,18.4,1,.09,36.8,.38,charcoal);
  for(let n=0;n<76;n++)box(shaft,2.87,.5+n*.48,1,.06,.035,.38,galvanized);
@@ -145,14 +166,14 @@ export async function createWorld(host,onAction){
  for(let i=0;i<5;i++){const ring=new T.Mesh(new T.TorusGeometry(.62,.012,6,40),dark);ring.position.set(.15,.88,.11+i*.08);machinery.add(ring);}
  const ropes=new T.Group();shaft.add(ropes);for(let i=0;i<5;i++)cyl(ropes,-1.7+i*.09,0,3.85,.012,1,steel);
  const weight=new T.Group();shaft.add(weight);box(weight,2.66,0,.6,.34,3.4,1.05,charcoal);for(let i=0;i<10;i++)box(weight,2.66,-1.45+i*.31,.6,.4,.25,1.1,galvanized);
- const lowLight=new T.PointLight(0xd7e5f2,18,22,1.7);lowLight.position.set(CX-1.5,17,.4);interiorWorld.add(lowLight);
+ const lowLight=new T.PointLight(0xe9edf0,16,22,1.7);lowLight.position.set(CX-1.5,17,.4);interiorWorld.add(lowLight);
  // The cabin is a geometric space. Photographic projection supplies its brushed-metal detail.
  const cabin=new T.Group();cabin.scale.y=CABIN_HEIGHT_SCALE;cabin.position.set(CX,5,CZ);cabin.rotation.y=Math.PI;interiorWorld.add(cabin);
  const refCamera=new T.PerspectiveCamera(56,1672/941,.01,50);refCamera.position.set(0,1.9,-1.8);refCamera.lookAt(0,1.9,2.05);refCamera.updateMatrixWorld();
  const photoMatrix=new T.Matrix4().multiplyMatrices(refCamera.projectionMatrix,refCamera.matrixWorldInverse);
- const photoMaterial=new T.ShaderMaterial({uniforms:{photo:{value:interior},grain:{value:metalTexture},baseColor:{value:new T.Color(0x727b82)},layerOpacity:{value:1}},side:T.DoubleSide,toneMapped:false,
-  vertexShader:'attribute vec4 photoCoord; varying vec4 vPhoto; varying vec3 vLocal; void main(){ vPhoto=photoCoord; vLocal=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-  fragmentShader:'#include <common>\n varying vec4 vPhoto; varying vec3 vLocal; uniform sampler2D photo; uniform sampler2D grain; uniform vec3 baseColor; uniform float layerOpacity; void main(){vec2 uv=vPhoto.xy/max(vPhoto.w,.001)*.5+.5;float valid=smoothstep(.15,.7,vPhoto.w)*smoothstep(0.0,.05,uv.x)*(1.0-smoothstep(.95,1.0,uv.x))*smoothstep(0.0,.05,uv.y)*(1.0-smoothstep(.95,1.0,uv.y));vec3 metal=baseColor*(.96+.08*texture2D(grain,vLocal.xy*.4).r);vec3 sampleColor=texture2D(photo,clamp(uv,vec2(.001),vec2(.999))).rgb;sampleColor=mix(sampleColor,vec3(dot(sampleColor,vec3(.2126,.7152,.0722))),.06);sampleColor=mix(sampleColor,vec3(.60,.66,.71),.055);gl_FragColor=vec4(mix(metal,sampleColor,valid),layerOpacity);\n#include <colorspace_fragment>\n}'
+ const photoMaterial=new T.ShaderMaterial({uniforms:{photo:{value:interior},grain:{value:metalTexture},baseColor:{value:new T.Color(0x848682)},surfaceMetal:{value:1},layerOpacity:{value:1}},side:T.DoubleSide,toneMapped:false,
+  vertexShader:'attribute vec4 photoCoord; varying vec4 vPhoto; varying vec3 vLocal; varying vec3 vSurfaceNormal; varying vec3 vView; void main(){ vPhoto=photoCoord; vLocal=position; vSurfaceNormal=normalize(normalMatrix*normal); vec4 mv=modelViewMatrix*vec4(position,1.0); vView=-mv.xyz; gl_Position=projectionMatrix*mv; }',
+  fragmentShader:'#include <common>\n varying vec4 vPhoto; varying vec3 vLocal; varying vec3 vSurfaceNormal; varying vec3 vView; uniform float surfaceMetal; uniform sampler2D photo; uniform sampler2D grain; uniform vec3 baseColor; uniform float layerOpacity; void main(){vec2 uv=vPhoto.xy/max(vPhoto.w,.001)*.5+.5;float valid=smoothstep(.15,.7,vPhoto.w)*smoothstep(0.0,.05,uv.x)*(1.0-smoothstep(.95,1.0,uv.x))*smoothstep(0.0,.05,uv.y)*(1.0-smoothstep(.95,1.0,uv.y));vec3 metal=baseColor*(.96+.08*texture2D(grain,vLocal.xy*.4).r);vec3 sampleColor=texture2D(photo,clamp(uv,vec2(.001),vec2(.999))).rgb;sampleColor=mix(sampleColor,vec3(dot(sampleColor,vec3(.2126,.7152,.0722))),.025);float brush=texture2D(grain,vLocal.xy*1.4).r;sampleColor*=1.0+(brush-.66)*.045*surfaceMetal;vec3 n=normalize(vSurfaceNormal),v=normalize(vView);float grazing=pow(1.0-abs(dot(n,v)),3.0);float strip=smoothstep(.65,.98,abs(reflect(-v,n).x));vec3 finish=mix(metal,sampleColor,valid)+vec3(.024,.023,.021)*strip*grazing*surfaceMetal;gl_FragColor=vec4(finish,layerOpacity);\n#include <colorspace_fragment>\n}'
  });
  function photoQuad(points){const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(points.flat(),3));g.setIndex([0,1,2,0,2,3]);g.computeVertexNormals();const coords=[];for(const p of points){const q=new T.Vector4(...p,1).applyMatrix4(photoMatrix);coords.push(q.x,q.y,q.z,q.w);}g.setAttribute('photoCoord',new T.Float32BufferAttribute(coords,4));const mesh=new T.Mesh(g,photoMaterial);cabin.add(mesh);return mesh;}
  // Closed reference front dimensions derived from the photograph's door edges.
@@ -164,14 +185,14 @@ export async function createWorld(host,onAction){
  const leafLeft=front(left,bottom,mid,top),leafRight=front(mid,bottom,right,top);
  photoQuad([[-2.15,.1,-2.15],[-2.15,.1,2.05],[-2.15,3.55,2.05],[-2.15,3.55,-2.15]]);
  photoQuad([[2.15,.1,2.05],[2.15,.1,-2.15],[2.15,3.55,-2.15],[2.15,3.55,2.05]]);
- const floorPhoto=photoQuad([[-2.15,.1,-2.15],[2.15,.1,-2.15],[2.15,.1,2.05],[-2.15,.1,2.05]]);floorPhoto.material=photoMaterial.clone();floorPhoto.material.uniforms.baseColor.value=new T.Color(0x343b40);floorPhoto.material.uniforms.grain.value=concreteTexture;
- box(cabin,0,1.82,-2.24,4.4,3.65,.15,galvanized);
- for(const x of [-2.22,2.22])box(cabin,x,1.8,0,.13,3.6,4.45,galvanized);
+ const floorPhoto=photoQuad([[-2.15,.1,-2.15],[2.15,.1,-2.15],[2.15,.1,2.05],[-2.15,.1,2.05]]);floorPhoto.material=photoMaterial.clone();floorPhoto.material.uniforms.baseColor.value=new T.Color(0x343b40);floorPhoto.material.uniforms.grain.value=concreteTexture;floorPhoto.material.uniforms.surfaceMetal.value=0;
+ box(cabin,0,1.82,-2.24,4.4,3.65,.15,galvanized,true);
+ for(const x of [-2.22,2.22])box(cabin,x,1.8,0,.13,3.6,4.45,galvanized,true);
  box(cabin,0,0,0,4.5,.18,4.5,charcoal);
  // The intact roof fades away as the camera approaches; no hatch or mechanical
  // opening. Only roof-specific materials fade, leaving walls and rails unchanged.
  const roof=new T.Group();cabin.add(roof);
- box(roof,0,3.63,0,4.5,.16,4.5,galvanized);
+ box(roof,0,3.63,0,4.5,.16,4.5,galvanized,true);
  for(const x of[-1.9,1.9]){box(roof,x,4.03,-1.7,.035,.7,.035,steel);box(roof,x,4.03,1.7,.035,.7,.035,steel);box(roof,x,4.39,0,.035,.035,3.4,steel);}
  box(roof,0,3.82,-1.65,1.3,.25,.5,charcoal);for(let i=0;i<4;i++)box(roof,-.45+i*.3,3.97,-1.65,.02,.02,.4,steel);
  const roofMaterials=new Map();
@@ -183,6 +204,9 @@ export async function createWorld(host,onAction){
  box(cabin,mid,bottom-.03,2.15,right-left+.12,.07,.35,steel);
  for(const z of[2.01,2.09,2.17])box(cabin,mid,bottom+.01,z,right-left,.006,.012,dark);
  const frameTop=box(cabin,mid,top+.035,2.1,right-left+.12,.08,.2,charcoal);
+ // Slim stainless returns catch the light around the photographed door frame.
+ for(const x of[left-.012,right+.012])box(cabin,x,(top+bottom)/2,2.015,.022,top-bottom,.05,steel);
+ box(cabin,mid,top+.012,2.015,right-left+.044,.024,.05,steel);
  // Floor display and control hotspots stay in the photographic control-panel positions.
  const displayCanvas=document.createElement('canvas');displayCanvas.width=512;displayCanvas.height=192;const displayTexture=new T.CanvasTexture(displayCanvas);displayTexture.colorSpace=T.SRGBColorSpace;
  const d1=frontPoint(772,62,2.042),d2=frontPoint(900,108,2.042),displayMesh=new T.Mesh(new T.PlaneGeometry(Math.abs(d2.x-d1.x),Math.abs(d2.y-d1.y)),new T.MeshBasicMaterial({map:displayTexture,toneMapped:false}));
@@ -232,7 +256,7 @@ export async function createWorld(host,onAction){
   camera.fov=mix(startFov,mobile?65:51,phase(u,.5,1.45));camera.fov=mix(camera.fov,interiorFov,phase(u,1.85,2.5));camera.updateProjectionMatrix();
   const lens=1-phase(u,0,.85);camera.projectionMatrix.elements[8]=lensX*lens;camera.projectionMatrix.elements[9]=lensY*lens;camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();camera.updateMatrixWorld();
   entry.value=phase(u,.08,.58);reveal.value=Math.max(peek*.64,phase(u,.04,.58));updateOpening();cityPlane.visible=camera.position.z>8.05;
-  const interiorLight=phase(u,.18,.85);ambient.intensity=mix(.62,.85,interiorLight);key.intensity=mix(1.15,1.65,interiorLight);upperLight.intensity=mix(20,28,interiorLight);
+ const interiorLight=phase(u,.18,.85);ambient.intensity=mix(.58,.78,interiorLight);key.intensity=mix(1.05,1.5,interiorLight);upperLight.intensity=mix(19,26,interiorLight);
   const rise=phase(u,.92,2.12);cabin.position.y=mix(5,18,rise);weight.position.y=31-(cabin.position.y-5);
   const cable=Math.max(.1,36.9-(cabin.position.y+4.45*CABIN_HEIGHT_SCALE));ropes.scale.y=cable;ropes.position.y=cabin.position.y+4.45*CABIN_HEIGHT_SCALE+cable*.5;
   const roofOpacity=1-phase(u,1.48,2.04)*(1-phase(u,2.32,2.58));
