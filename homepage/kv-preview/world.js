@@ -4,6 +4,7 @@ const smooth=n=>{const t=clamp(n);return t*t*(3-2*t);};
 const phase=(u,a,b)=>smooth((u-a)/(b-a));
 const mix=(a,b,t)=>a+(b-a)*t;
 const CX=2.16,CZ=3.7,PHOTO_W=72,PHOTO_H=72/(1672/941),CABIN_HEIGHT_SCALE=.72;
+const exteriorEye=8.8,exteriorDistance=PHOTO_H/(2*Math.tan(T.MathUtils.degToRad(17)));
 export async function createWorld(host,onAction){
  const renderer=new T.WebGLRenderer({alpha:true,antialias:true,powerPreference:'high-performance'});
  renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));renderer.outputColorSpace=T.SRGBColorSpace;
@@ -23,7 +24,7 @@ export async function createWorld(host,onAction){
  ].map(p=>loader.loadAsync(p)));
  for(const t of [exterior,interior,environmentPhoto]){t.colorSpace=T.SRGBColorSpace;t.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),8);}
  environmentPhoto.mapping=T.EquirectangularReflectionMapping;const pmrem=new T.PMREMGenerator(renderer),environment=pmrem.fromEquirectangular(environmentPhoto);scene.environment=environment.texture;pmrem.dispose();
- scene.add(new T.HemisphereLight(0xdde5ed,0x59656d,.85));
+ const ambient=new T.HemisphereLight(0xdde5ed,0x59656d,.85);scene.add(ambient);
  const key=new T.DirectionalLight(0xe6edf5,1.65);key.position.set(-10,43,24);scene.add(key);
  const upperLight=new T.PointLight(0xd5e5f4,28,38,1.7);upperLight.position.set(CX,35,4.8);interiorWorld.add(upperLight);
  const texture=(kind)=>{const c=document.createElement('canvas');c.width=c.height=512;const ctx=c.getContext('2d');let seed=9217;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
@@ -41,26 +42,56 @@ export async function createWorld(host,onAction){
  const boxGeometry=new T.BoxGeometry(1,1,1),cylGeometry=new T.CylinderGeometry(1,1,1,12);
  function box(parent,x,y,z,w,h,d,mat,shadow=false){const m=new T.Mesh(boxGeometry,mat);m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=shadow;m.receiveShadow=shadow;parent.add(m);return m;}
  function cyl(parent,x,y,z,r,h,mat){const m=new T.Mesh(cylGeometry,mat);m.position.set(x,y,z);m.scale.set(r,h,r);parent.add(m);return m;}
- // The exterior stays a perspective plane. A real opening exposes the shaft behind it.
- const reveal={value:0},openingCorners={value:Array.from({length:4},()=>new T.Vector2())};
+ // Trace the original photograph's glass grid. Opaque mullions, floor bands,
+ // canopy and lobby stay in front during hover; only the individual panes reveal.
+ const paneColumns=[[827,827],[853,853],[878,878.6],[904,904.6],[931,932.2]].map(p=>new T.Vector2(...p));
+ // Each pair is the observed horizontal boundary at photo x=830 and x=932.
+ const paneRows=[[103,79.5],[155,134.6],[208,188.6],[262,244.7],[316,300.7],[370,356.7],[425,413.8],[480,471.8],[536,529.9],[592,587.9],[648,646],[705,705]].map(p=>new T.Vector2(...p));
+ const reveal={value:0},entry={value:0},openingCorners={value:Array.from({length:4},()=>new T.Vector2())};
  const exteriorMat=new T.MeshBasicMaterial({map:exterior,transparent:true,depthWrite:false,toneMapped:false,side:T.FrontSide});
  exteriorMat.onBeforeCompile=shader=>{
-  shader.uniforms.uReveal=reveal;shader.uniforms.uOpening=openingCorners;
+  shader.uniforms.uReveal=reveal;shader.uniforms.uEntry=entry;shader.uniforms.uOpening=openingCorners;shader.uniforms.uPaneColumns={value:paneColumns};shader.uniforms.uPaneRows={value:paneRows};
   shader.fragmentShader=`uniform float uReveal;
    uniform vec2 uOpening[4];
+   uniform float uEntry;
+   uniform vec2 uPaneColumns[5];
+   uniform vec2 uPaneRows[12];
+   float glassPane(vec2 p){
+    float column=0.0,row=0.0;
+    float v=clamp((p.y-100.0)/605.0,0.0,1.0),h=(p.x-830.0)/102.0;
+    for(int i=0;i<4;i++){
+     float a=mix(uPaneColumns[i].x,uPaneColumns[i].y,v),b=mix(uPaneColumns[i+1].x,uPaneColumns[i+1].y,v);
+     column=max(column,smoothstep(1.4,2.4,p.x-a)*smoothstep(1.4,2.4,b-p.x));
+    }
+    for(int i=0;i<11;i++){
+     float a=mix(uPaneRows[i].x,uPaneRows[i].y,h),b=mix(uPaneRows[i+1].x,uPaneRows[i+1].y,h);
+     row=max(row,smoothstep(1.8,3.1,p.y-a)*smoothstep(1.8,3.1,b-p.y));
+    }
+    return column*row;
+   }
    float insideEdge(vec2 a,vec2 b,vec2 p){vec2 edge=b-a;return (edge.x*(p.y-a.y)-edge.y*(p.x-a.x))/max(length(edge),.0001);}
    `+shader.fragmentShader;
   shader.fragmentShader=shader.fragmentShader.replace('#include <alphatest_fragment>',`
    float edge=1.0;
    for(int i=0;i<4;i++){edge=min(edge,insideEdge(uOpening[i],uOpening[(i+1)%4],vMapUv));}
    float opening=smoothstep(-.001,.004,edge);
-   diffuseColor.rgb*=1.0-.2*uReveal*opening*(1.0-smoothstep(.003,.019,edge));
-   diffuseColor.a*=1.0-uReveal*opening;
+   vec2 photoPixel=vec2(vMapUv.x*1672.0,(1.0-vMapUv.y)*941.0);
+   float aperture=mix(glassPane(photoPixel),opening,uEntry);
+   diffuseColor.rgb*=1.0-.12*uEntry*opening*(1.0-smoothstep(.003,.019,edge));
+   diffuseColor.a*=1.0-uReveal*aperture;
    #include <alphatest_fragment>`);
  };
- // Facade and core share one oblique coordinate frame and one floor level.
- // The earlier screen-plane rectangle made the sill a sloping, twisted quad.
- const openingBounds={left:CX-3.05,right:CX+3.05,bottom:4.1,top:36.4,front:12,back:8.03};
+ // Back-project the measured window edges and floor rows into the common
+ // facade plane. Floor brackets, landing doors and reveal slabs use these levels.
+ const fromBuilding=p=>new T.Vector3(...p).sub(buildingFrame.position).applyAxisAngle(new T.Vector3(0,1,0),-buildingAngle).divide(buildingScale).add(pivot);
+ function photoToFacade(px,py,z=12){
+  const origin=fromBuilding([0,exteriorEye,8+exteriorDistance]);
+  const ray=fromBuilding([(px/1672-.5)*PHOTO_W,20+(.5-py/941)*PHOTO_H,8]).sub(origin);
+  return origin.addScaledVector(ray,(z-origin.z)/ray.z);
+ }
+ const rowLevel=row=>photoToFacade(878,mix(row.x,row.y,(878-830)/102)).y;
+ const floorLevels=[.4,photoToFacade(878,847.35).y,photoToFacade(878,752.47).y,...paneRows.map(rowLevel).reverse()];
+ const openingBounds={left:photoToFacade(827,400).x,right:photoToFacade(932,400).x,bottom:floorLevels[1],top:rowLevel(paneRows[0]),front:12,back:8.03};
  const openingAt=z=>[[openingBounds.left,openingBounds.bottom,z],[openingBounds.right,openingBounds.bottom,z],[openingBounds.right,openingBounds.top,z],[openingBounds.left,openingBounds.top,z]].map(intoBuilding);
  const openingWorld=openingAt(openingBounds.front),innerOpening=openingAt(openingBounds.back);
  function updateOpening(){
@@ -77,27 +108,26 @@ export async function createWorld(host,onAction){
   const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(points.flatMap(p=>p.toArray()),3));g.setIndex([0,1,2,0,2,3]);
   const near=i===1?.58:.76,far=.32;g.setAttribute('color',new T.Float32BufferAttribute([near,near,near,near,near,near,far,far,far,far,far,far],3));g.computeVertexNormals();recess.add(new T.Mesh(g,recessMaterial));
  }
- const facadeEdges=new T.Group();interiorWorld.add(facadeEdges);
- const facadeEdgeMaterial=material(0x34495b,.64,.45,{transparent:true,opacity:0});
- for(let floor=0;floor<14;floor++){
-  const y=.4+floor*2.65;
-  if(y>openingBounds.bottom&&y<openingBounds.top)box(facadeEdges,CX,y,openingBounds.front,6.1,.065,.2,facadeEdgeMaterial);
- }
+ // Short floor returns stop at the core, leaving the shaft itself clear.
+ // Original photographic transoms supply the front edge instead of a second grid.
+ const floorReturns=new T.Group();interiorWorld.add(floorReturns);
+ const slab=material(0x536977,.92,.02);
+ for(const y of floorLevels.slice(2,-1))box(floorReturns,(openingBounds.left+openingBounds.right)/2,y-.08,(openingBounds.front+openingBounds.back)/2,openingBounds.right-openingBounds.left,.16,openingBounds.front-openingBounds.back,slab);
  // A full-scale enclosed shaft: floor divisions, real rail profiles, brackets and service runs.
  const shaft=new T.Group();shaft.position.x=CX;interiorWorld.add(shaft);
  box(shaft,-3.2,18.3,3.7,.28,37,8.5,concrete);box(shaft,3.2,18.3,3.7,.28,37,8.5,concrete);const backWall=box(shaft,0,18.3,-.55,6.6,37,.3,concrete);const landingDoors=new T.Group();shaft.add(landingDoors);
  box(shaft,0,-.3,3.7,6.5,.3,8.6,concrete);
  const bolts=[];
- for(let floor=0;floor<14;floor++){
-  const y=.4+floor*2.65;
+ for(let floor=0;floor<floorLevels.length-1;floor++){
+  const y=floorLevels[floor],height=floorLevels[floor+1]-y,doorHeight=Math.min(2.45,height-.24);
   for(const x of [-3.04,3.04]){
    box(shaft,x,y,3.7,.09,.05,8.2,charcoal);
    for(const z of [.2,3.7,7]){box(shaft,x,y+.35,z,.14,.32,.25,galvanized);bolts.push([x+(x<0?.1:-.1),y+.35,z]);}
   }
   box(landingDoors,0,y,-.35,6.1,.06,.04,charcoal);
   // Back of landing door assembly and header, visible between rails.
-  box(landingDoors,0,y+1.36,-.28,2.5,2.45,.06,galvanized);box(landingDoors,0,y+1.36,-.235,.035,2.4,.015,dark);
-  box(landingDoors,0,y+2.59,-.12,2.9,.22,.28,charcoal);box(landingDoors,0,y+.05,-.1,2.9,.12,.35,steel);
+  box(landingDoors,0,y+.12+doorHeight/2,-.28,2.5,doorHeight,.06,galvanized);box(landingDoors,0,y+.12+doorHeight/2,-.235,.035,doorHeight-.05,.015,dark);
+  box(landingDoors,0,y+height-.12,-.12,2.9,.22,.28,charcoal);box(landingDoors,0,y+.05,-.1,2.9,.12,.35,steel);
   for(const x of [-2.38,2.38]){box(shaft,x,y+.28,3.7,.5,.12,.45,charcoal);box(shaft,x,y+.37,3.7,.32,.06,.35,steel);}
   if(floor%2===0){box(shaft,-2.96,y+1.5,.15,.07,.68,.16,charcoal);box(shaft,-2.9,y+1.5,.15,.025,.57,.08,lightMat);}
  }
@@ -170,7 +200,6 @@ export async function createWorld(host,onAction){
  // Architectural photography uses a low eye line with an upward lens shift.
  // Keep that optical center fixed on every viewport; crop with the lens, not by
  // moving the camera, so the inset geometry and the photo retain the same view.
- const exteriorEye=8.8,exteriorDistance=PHOTO_H/(2*Math.tan(T.MathUtils.degToRad(17)));
  let w=1,h=1,mobile=false,initial=[0,exteriorEye,8+exteriorDistance],startFov=34,lensX=0,lensY=0;
  function resize(width,height){w=width;h=height;mobile=w<700;renderer.setSize(w,h);camera.aspect=w/h;
   const halfHeight=Math.min(PHOTO_H/2,PHOTO_W/(2*camera.aspect)),halfWidth=halfHeight*camera.aspect;
@@ -202,8 +231,8 @@ export async function createWorld(host,onAction){
   camera.position.set(...p);const tilt=phase(u,.82,1.43)*(1-phase(u,1.78,2.48));camera.up.set(0,1-tilt,-tilt).normalize().applyAxisAngle(new T.Vector3(0,1,0),buildingAngle);camera.lookAt(new T.Vector3(...l));
   camera.fov=mix(startFov,mobile?65:51,phase(u,.5,1.45));camera.fov=mix(camera.fov,interiorFov,phase(u,1.85,2.5));camera.updateProjectionMatrix();
   const lens=1-phase(u,0,.85);camera.projectionMatrix.elements[8]=lensX*lens;camera.projectionMatrix.elements[9]=lensY*lens;camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();camera.updateMatrixWorld();
-  reveal.value=Math.max(peek*.78,phase(u,.04,.58));updateOpening();cityPlane.visible=camera.position.z>8.05;
-  facadeEdgeMaterial.opacity=Math.max(peek,phase(u,.04,.2))*.68*(1-phase(u,.18,.68));facadeEdges.visible=facadeEdgeMaterial.opacity>.002;
+  entry.value=phase(u,.08,.58);reveal.value=Math.max(peek*.64,phase(u,.04,.58));updateOpening();cityPlane.visible=camera.position.z>8.05;
+  const interiorLight=phase(u,.18,.85);ambient.intensity=mix(.62,.85,interiorLight);key.intensity=mix(1.15,1.65,interiorLight);upperLight.intensity=mix(20,28,interiorLight);
   const rise=phase(u,.92,2.12);cabin.position.y=mix(5,18,rise);weight.position.y=31-(cabin.position.y-5);
   const cable=Math.max(.1,36.9-(cabin.position.y+4.45*CABIN_HEIGHT_SCALE));ropes.scale.y=cable;ropes.position.y=cabin.position.y+4.45*CABIN_HEIGHT_SCALE+cable*.5;
   const roofOpacity=1-phase(u,1.48,2.04)*(1-phase(u,2.32,2.58));
