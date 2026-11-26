@@ -77,8 +77,8 @@ export async function createWorld(host,onAction){
  const material=(color,roughness=.5,metalness=0,extra={})=>new T.MeshStandardMaterial({color,roughness,metalness,...extra});
  const concrete=material(0xe5e4e0,.99,0,{map:concreteTexture,bumpMap:concreteTexture,bumpScale:.022,normalMap:concreteNormal,normalScale:new T.Vector2(.42,.42),roughnessMap:concreteRoughness,envMapIntensity:.12});concrete.userData.tileSize=1.8;
  const steel=new T.MeshPhysicalMaterial({color:0xc5c8c8,roughness:.54,metalness:.96,roughnessMap:metalTexture,bumpMap:metalTexture,bumpScale:.003,anisotropy:.45,anisotropyRotation:Math.PI/2,envMapIntensity:.72});steel.userData.tileSize=.8;
- const railFace=new T.MeshPhysicalMaterial({color:0xbcc2c8,metalness:1,roughness:.3,roughnessMap:metalTexture,bumpMap:metalTexture,bumpScale:.00065,anisotropy:.22,anisotropyRotation:Math.PI/2,envMapIntensity:1.05});
- const railSide=material(0x69737d,.49,1,{roughnessMap:metalTexture,envMapIntensity:.8});
+ const railFace=new T.MeshPhysicalMaterial({color:0xd2d6da,metalness:1,roughness:.36,roughnessMap:metalTexture,bumpMap:metalTexture,bumpScale:.00065,anisotropy:.22,anisotropyRotation:Math.PI/2,envMapIntensity:1.25});
+ const railSide=material(0xa4acb3,.49,1,{roughnessMap:metalTexture,envMapIntensity:1.05});
  const cableSteel=material(0x555d63,.62,.88,{roughnessMap:metalTexture,envMapIntensity:.3});
  const charcoal=material(0x353a3c,.72,.28,{roughnessMap:metalTexture,envMapIntensity:.3}),dark=material(0x1c2022,.88,.05),galvanized=material(0xb7bab8,.68,.82,{roughnessMap:concreteRoughness,bumpMap:metalTexture,bumpScale:.003,envMapIntensity:.48});galvanized.userData.tileSize=1.2;
  const joint=material(0x64635e,.96,0);
