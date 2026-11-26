@@ -1,5 +1,5 @@
-import {createWorld} from './world.js?v=20261126-v13';
-import {sceneAtScroll,scrollAtScene,advanceMotion,autoplayAtTime,AUTOPLAY_HOLD,AUTOPLAY_DURATION} from './motion.js?v=20261126-v13';
+import {createWorld} from './world.js?v=20261126-v14';
+import {sceneAtScroll,scrollAtScene,advanceMotion,autoplayAtTime,AUTOPLAY_HOLD,AUTOPLAY_DURATION} from './motion.js?v=20261126-v14';
 const $=s=>document.querySelector(s);
 const ui={experience:$('.experience'),world:$('#world'),hotspot:$('#hotspot'),copy:$('.scene-copy'),title:$('#stage-title'),label:$('#stage-label'),description:$('#stage-description'),index:$('#stage-index'),kicker:$('#hotspot-kicker'),action:$('#hotspot-title'),ending:$('.brand-ending'),endingContent:$('.ending-content'),hint:$('#interaction-hint'),steps:[...document.querySelectorAll('[data-go]')],controls:$('.cabin-controls'),vignette:$('.scene-vignette')};
 const clamp=(n,a=0,b=1)=>Math.min(b,Math.max(a,n)),mix=(a,b,t)=>a+(b-a)*t;
@@ -56,11 +56,15 @@ let down=null;ui.world.addEventListener('pointerdown',e=>down=[e.clientX,e.clien
 for(const[i,b]of ui.steps.entries())b.addEventListener('click',()=>jump(i));for(const s of['#reset','#ending-replay'])$(s).addEventListener('click',replay);
 addEventListener('scroll',()=>{if(autoActive()&&Math.abs(scrollY-expectedScrollY)>2)takeControl();target=scrollTarget();wake();},{passive:true});
 function resize(){
- width=ui.experience.clientWidth;height=ui.experience.clientHeight;const prev=mobile;mobile=width<700;world?.resize(width,height);
+ const nextWidth=ui.experience.clientWidth,nextHeight=ui.experience.clientHeight;
+ const resized=width>0&&(width!==nextWidth||height!==nextHeight);
+ width=nextWidth;height=nextHeight;const prev=mobile;mobile=width<700;world?.resize(width,height);
  const lockup=$('.ending-lockup'),logo=$('.ending-lockup img');
  lockup.style.setProperty('--logo-center-offset',`${(lockup.offsetWidth-logo.offsetWidth)/2}px`);
  lockup.style.setProperty('--logo-center-offset-y',`${(ui.endingContent.offsetHeight-lockup.offsetHeight)/2}px`);
- if(autoActive())syncScroll();if(prev!==mobile&&stage>=0)setCopy(stage,true);wake();
+ // Preserve the current scene when rotation changes the native scroll range.
+ if(resized&&!autoActive()){target=progress;velocity=0;}
+ if(autoActive()||resized)syncScroll();if(prev!==mobile&&stage>=0)setCopy(stage,true);wake();
 }
 function render(now){frame=0;if(!ready||document.hidden)return;const dt=lastTime?Math.min(.05,(now-lastTime)/1000):0;lastTime=now;
  if(autoActive()){

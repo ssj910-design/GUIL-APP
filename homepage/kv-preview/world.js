@@ -219,11 +219,51 @@ export async function createWorld(host,onAction){
  const lowLight=new T.PointLight(0xe9edf0,16,22,1.7);lowLight.position.set(CX-1.5,17,.4);interiorWorld.add(lowLight);
  // The cabin is a geometric space. Photographic projection supplies its brushed-metal detail.
  const cabin=new T.Group();cabin.scale.y=CABIN_HEIGHT_SCALE;cabin.position.set(CX,5,CZ);cabin.rotation.y=Math.PI;interiorWorld.add(cabin);
- const refCamera=new T.PerspectiveCamera(56,1672/941,.01,50);refCamera.position.set(0,1.9,-1.8);refCamera.lookAt(0,1.9,2.05);refCamera.updateMatrixWorld();
+ const refCamera=new T.PerspectiveCamera(50,1672/941,.01,50);refCamera.position.set(0,1.9,-1.8);refCamera.lookAt(0,1.9,2.05);refCamera.updateMatrixWorld();
  const photoMatrix=new T.Matrix4().multiplyMatrices(refCamera.projectionMatrix,refCamera.matrixWorldInverse);
- const photoMaterial=new T.ShaderMaterial({uniforms:{photo:{value:interior},grain:{value:metalTexture},baseColor:{value:new T.Color(0x848682)},surfaceMetal:{value:1},layerOpacity:{value:1}},side:T.DoubleSide,toneMapped:false,
+ const photoMaterial=new T.ShaderMaterial({uniforms:{photo:{value:interior},grain:{value:metalTexture},baseColor:{value:new T.Color(0x848682)},surfaceMetal:{value:1},surfaceKind:{value:0},layerOpacity:{value:1}},side:T.DoubleSide,toneMapped:false,
   vertexShader:'attribute vec4 photoCoord; varying vec4 vPhoto; varying vec3 vLocal; varying vec3 vSurfaceNormal; varying vec3 vView; void main(){ vPhoto=photoCoord; vLocal=position; vSurfaceNormal=normalize(normalMatrix*normal); vec4 mv=modelViewMatrix*vec4(position,1.0); vView=-mv.xyz; gl_Position=projectionMatrix*mv; }',
-  fragmentShader:'#include <common>\n varying vec4 vPhoto; varying vec3 vLocal; varying vec3 vSurfaceNormal; varying vec3 vView; uniform float surfaceMetal; uniform sampler2D photo; uniform sampler2D grain; uniform vec3 baseColor; uniform float layerOpacity; void main(){vec2 uv=vPhoto.xy/max(vPhoto.w,.001)*.5+.5;float valid=smoothstep(.15,.7,vPhoto.w)*smoothstep(0.0,.05,uv.x)*(1.0-smoothstep(.95,1.0,uv.x))*smoothstep(0.0,.05,uv.y)*(1.0-smoothstep(.95,1.0,uv.y));vec3 metal=baseColor*(.96+.08*texture2D(grain,vLocal.xy*.4).r);vec3 sampleColor=texture2D(photo,clamp(uv,vec2(.001),vec2(.999))).rgb;sampleColor=mix(sampleColor,vec3(dot(sampleColor,vec3(.2126,.7152,.0722))),.025);float brush=texture2D(grain,vLocal.xy*1.4).r;sampleColor*=1.0+(brush-.66)*.045*surfaceMetal;vec3 n=normalize(vSurfaceNormal),v=normalize(vView);float grazing=pow(1.0-abs(dot(n,v)),3.0);float strip=smoothstep(.65,.98,abs(reflect(-v,n).x));vec3 finish=mix(metal,sampleColor,valid)+vec3(.024,.023,.021)*strip*grazing*surfaceMetal;gl_FragColor=vec4(finish,layerOpacity);\n#include <colorspace_fragment>\n}'
+  fragmentShader:`#include <common>
+   varying vec4 vPhoto;
+   varying vec3 vLocal;
+   varying vec3 vSurfaceNormal;
+   varying vec3 vView;
+   uniform float surfaceMetal;
+   uniform float surfaceKind;
+   uniform sampler2D photo;
+   uniform sampler2D grain;
+   uniform vec3 baseColor;
+   uniform float layerOpacity;
+   void main(){
+    vec2 uv=vPhoto.xy/max(vPhoto.w,.001)*.5+.5;
+    float valid=smoothstep(.15,.7,vPhoto.w)*smoothstep(0.0,.05,uv.x)*(1.0-smoothstep(.95,1.0,uv.x))*smoothstep(0.0,.05,uv.y)*(1.0-smoothstep(.95,1.0,uv.y));
+    vec3 fallback=baseColor*(.96+.08*texture2D(grain,vLocal.xy*.4).r);
+    // Portrait views see beyond the photograph. Continue the actual floor and
+    // ceiling finishes there instead of stretching pixels or leaving flat bands.
+    if(surfaceKind>0.5&&surfaceKind<1.5){
+     float stone=texture2D(grain,vLocal.xz*.65).r;
+     vec2 tile=abs(fract(vLocal.xz/.9)-.5);
+     float grout=smoothstep(.489,.499,max(tile.x,tile.y));
+     fallback=vec3(.065,.075,.082)*(0.8+stone*.85)*(1.0-grout*.23);
+    }else if(surfaceKind>1.5){
+     float brushed=texture2D(grain,vLocal.xz*.8).r;
+     float seam=1.0-smoothstep(.004,.012,abs(abs(vLocal.x)-.72));
+     float light=(1.0-smoothstep(.022,.038,abs(abs(vLocal.x)-1.72)))*smoothstep(-1.95,-1.8,vLocal.z)*(1.0-smoothstep(1.65,1.8,vLocal.z));
+     fallback=vec3(.16,.175,.185)*(.88+brushed*.2)*(1.0-seam*.35)+vec3(.58,.6,.61)*light;
+    }
+    vec3 sampleColor=texture2D(photo,clamp(uv,vec2(.001),vec2(.999))).rgb;
+    float indicator=step(770.0/1672.0,uv.x)*step(uv.x,902.0/1672.0)*step(1.0-110.0/941.0,uv.y)*step(uv.y,1.0-60.0/941.0);
+    sampleColor=mix(sampleColor,vec3(.0025,.004,.006),indicator);
+    sampleColor=mix(sampleColor,vec3(dot(sampleColor,vec3(.2126,.7152,.0722))),.025);
+    float brush=texture2D(grain,vLocal.xy*1.4).r;
+    sampleColor*=1.0+(brush-.66)*.045*surfaceMetal;
+    vec3 n=normalize(vSurfaceNormal),v=normalize(vView);
+    float grazing=pow(1.0-abs(dot(n,v)),3.0);
+    float strip=smoothstep(.65,.98,abs(reflect(-v,n).x));
+    vec3 finish=mix(fallback,sampleColor,valid)+vec3(.024,.023,.021)*strip*grazing*surfaceMetal;
+    gl_FragColor=vec4(finish,layerOpacity);
+    #include <colorspace_fragment>
+   }`
  });
  function photoQuad(points){const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(points.flat(),3));g.setIndex([0,1,2,0,2,3]);g.computeVertexNormals();const coords=[];for(const p of points){const q=new T.Vector4(...p,1).applyMatrix4(photoMatrix);coords.push(q.x,q.y,q.z,q.w);}g.setAttribute('photoCoord',new T.Float32BufferAttribute(coords,4));const mesh=new T.Mesh(g,photoMaterial);cabin.add(mesh);return mesh;}
  // Closed reference front dimensions derived from the photograph's door edges.
@@ -235,20 +275,42 @@ export async function createWorld(host,onAction){
  const leafLeft=front(left,bottom,mid,top),leafRight=front(mid,bottom,right,top);
  photoQuad([[-2.15,.1,-2.15],[-2.15,.1,2.05],[-2.15,3.55,2.05],[-2.15,3.55,-2.15]]);
  photoQuad([[2.15,.1,2.05],[2.15,.1,-2.15],[2.15,3.55,-2.15],[2.15,3.55,2.05]]);
- const floorPhoto=photoQuad([[-2.15,.1,-2.15],[2.15,.1,-2.15],[2.15,.1,2.05],[-2.15,.1,2.05]]);floorPhoto.material=photoMaterial.clone();floorPhoto.material.uniforms.baseColor.value=new T.Color(0x343b40);floorPhoto.material.uniforms.grain.value=concreteTexture;floorPhoto.material.uniforms.surfaceMetal.value=0;
+ const floorPhoto=photoQuad([[-2.15,.1,-2.15],[2.15,.1,-2.15],[2.15,.1,2.05],[-2.15,.1,2.05]]);floorPhoto.material=photoMaterial.clone();floorPhoto.material.uniforms.baseColor.value=new T.Color(0x343b40);floorPhoto.material.uniforms.grain.value=concreteTexture;floorPhoto.material.uniforms.surfaceMetal.value=0;floorPhoto.material.uniforms.surfaceKind.value=1;
  box(cabin,0,1.82,-2.24,4.4,3.65,.15,galvanized,true);
  for(const x of [-2.22,2.22])box(cabin,x,1.8,0,.13,3.6,4.45,galvanized,true);
  box(cabin,0,0,0,4.5,.18,4.5,charcoal);
  // The intact roof fades away as the camera approaches; no hatch or mechanical
  // opening. Only roof-specific materials fade, leaving walls and rails unchanged.
  const roof=new T.Group();cabin.add(roof);
- box(roof,0,3.63,0,4.5,.16,4.5,galvanized,true);
+ // Fine zinc mottling and separate folded sheets keep the car top from reading
+ // as a single smooth plastic lid. These textures/materials belong to the roof.
+ const zincCanvas=document.createElement('canvas');zincCanvas.width=zincCanvas.height=256;
+ const zincCtx=zincCanvas.getContext('2d'),zincPixels=zincCtx.createImageData(256,256);let zincSeed=71839;
+ for(let y=0;y<256;y++)for(let x=0;x<256;x++){
+  zincSeed=(zincSeed*16807)%2147483647;
+  const grain=zincSeed/2147483647-.5,mottle=Math.sin(x*.19+Math.sin(y*.11))*Math.cos(y*.23+x*.025),v=Math.round(192+grain*14+mottle*9);
+  zincPixels.data.set([v,v+1,v+2,255],(y*256+x)*4);
+ }
+ zincCtx.putImageData(zincPixels,0,0);const zincTexture=new T.CanvasTexture(zincCanvas);zincTexture.colorSpace=T.SRGBColorSpace;zincTexture.wrapS=zincTexture.wrapT=T.RepeatWrapping;zincTexture.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),8);
+ const roofSteel=new T.MeshPhysicalMaterial({color:0xd1d5d8,map:zincTexture,metalness:.94,roughness:.43,roughnessMap:metalTexture,bumpMap:metalTexture,bumpScale:.0012,anisotropy:.25,envMapIntensity:.85});roofSteel.userData.tileSize=.65;
+ const foldedEdge=material(0x929ca5,.4,.96,{roughnessMap:metalTexture,envMapIntensity:.7});foldedEdge.userData.tileSize=.7;
+ box(roof,0,3.63,0,4.5,.1,4.5,foldedEdge,true);
+ for(const x of[-1.48,0,1.48])box(roof,x,3.689,0,1.465,.018,4.42,roofSteel,true);
+ for(const x of[-2.22,2.22])box(roof,x,3.70,0,.045,.065,4.5,foldedEdge,true);
+ for(const z of[-2.22,2.22])box(roof,0,3.70,z,4.45,.065,.045,foldedEdge,true);
+ // Flush inspection cover, inset gasket and small hex fixings.
+ box(roof,.65,3.704,.42,1.18,.012,1.02,dark);
+ box(roof,.65,3.716,.42,1.14,.016,.98,roofSteel,true);
+ const roofFixings=[];for(const x of[-2.13,-.74,.74,2.13])for(const z of[-2.1,-.7,.7,2.1])roofFixings.push([x,3.708,z]);
+ for(const x of[.15,1.15])for(const z of[.01,.83])roofFixings.push([x,3.733,z]);
+ const roofBolts=new T.InstancedMesh(new T.CylinderGeometry(.026,.026,.012,6),steel,roofFixings.length);
+ roofFixings.forEach((p,i)=>{dummy.position.set(...p);dummy.rotation.set(0,0,0);dummy.updateMatrix();roofBolts.setMatrixAt(i,dummy.matrix);});roof.add(roofBolts);
  for(const x of[-1.9,1.9]){box(roof,x,4.03,-1.7,.035,.7,.035,steel);box(roof,x,4.03,1.7,.035,.7,.035,steel);box(roof,x,4.39,0,.035,.035,3.4,steel);}
  box(roof,0,3.82,-1.65,1.3,.25,.5,charcoal);for(let i=0;i<4;i++)box(roof,-.45+i*.3,3.97,-1.65,.02,.02,.4,steel);
  const roofMaterials=new Map();
- roof.traverse(o=>{if(!o.isMesh)return;const original=o.material;if(!roofMaterials.has(original)){const faded=original.clone();faded.transparent=true;faded.depthWrite=false;roofMaterials.set(original,faded);}o.material=roofMaterials.get(original);});
+ roof.traverse(o=>{if(!o.isMesh)return;const original=o.material;if(!roofMaterials.has(original)){const faded=original.clone();faded.transparent=false;faded.depthWrite=true;roofMaterials.set(original,faded);}o.material=roofMaterials.get(original);});
  const ceiling=photoQuad([[-2.15,3.52,-2.15],[2.15,3.52,-2.15],[2.15,3.52,2.05],[-2.15,3.52,2.05]]);
- ceiling.material=photoMaterial.clone();ceiling.material.transparent=true;ceiling.material.depthWrite=false;ceiling.material.side=T.FrontSide;
+ ceiling.material=photoMaterial.clone();ceiling.material.uniforms.surfaceKind.value=2;ceiling.material.transparent=true;ceiling.material.depthWrite=false;ceiling.material.side=T.FrontSide;
  // A shallow textured door recess and sill add true depth at the opening.
  for(const x of[left-.04,right+.04])box(cabin,x,(top+bottom)/2,2.12,.07,top-bottom+.1,.22,charcoal);
  box(cabin,mid,bottom-.03,2.15,right-left+.12,.07,.35,steel);
@@ -258,12 +320,14 @@ export async function createWorld(host,onAction){
  for(const x of[left-.012,right+.012])box(cabin,x,(top+bottom)/2,2.015,.022,top-bottom,.05,steel);
  box(cabin,mid,top+.012,2.015,right-left+.044,.024,.05,steel);
  // Floor display and control hotspots stay in the photographic control-panel positions.
- const displayCanvas=document.createElement('canvas');displayCanvas.width=512;displayCanvas.height=192;const displayTexture=new T.CanvasTexture(displayCanvas);displayTexture.colorSpace=T.SRGBColorSpace;
- const d1=frontPoint(772,62,2.042),d2=frontPoint(900,108,2.042),displayMesh=new T.Mesh(new T.PlaneGeometry(Math.abs(d2.x-d1.x),Math.abs(d2.y-d1.y)),new T.MeshBasicMaterial({map:displayTexture,toneMapped:false}));
- displayMesh.position.copy(d1).add(d2).multiplyScalar(.5);displayMesh.rotation.y=Math.PI;cabin.add(displayMesh);
- function setFloor(n){const ctx=displayCanvas.getContext('2d');ctx.fillStyle='#080d13';ctx.fillRect(0,0,512,192);ctx.fillStyle='#edf6ff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='100px Arial';ctx.fillText(`↑ ${String(n).padStart(2,'0')}`,256,103);displayTexture.needsUpdate=true;}
+ const displayCanvas=document.createElement('canvas');displayCanvas.width=512;displayCanvas.height=192;const displayTexture=new T.CanvasTexture(displayCanvas);displayTexture.colorSpace=T.SRGBColorSpace;displayTexture.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),8);
+ const d1=frontPoint(770,60,1.985),d2=frontPoint(902,110,1.985),displayMesh=new T.Mesh(new T.PlaneGeometry(Math.abs(d2.x-d1.x),Math.abs(d2.y-d1.y)),new T.MeshBasicMaterial({map:displayTexture,toneMapped:false}));
+ const displayCenter=d1.clone().add(d2).multiplyScalar(.5);
+ box(cabin,displayCenter.x,displayCenter.y,2.006,Math.abs(d2.x-d1.x)+.026,Math.abs(d2.y-d1.y)+.026,.027,charcoal);
+ displayMesh.position.copy(displayCenter);displayMesh.rotation.y=Math.PI;cabin.add(displayMesh);
+ function setFloor(n){const ctx=displayCanvas.getContext('2d');ctx.fillStyle='#080d13';ctx.fillRect(0,0,512,192);ctx.fillStyle='#edf6ff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='600 112px Arial';ctx.fillText(String(n).padStart(2,'0'),310,103);ctx.lineWidth=12;ctx.lineCap='square';ctx.lineJoin='miter';ctx.strokeStyle='#c8e6f7';ctx.beginPath();ctx.moveTo(150,132);ctx.lineTo(150,62);ctx.moveTo(120,92);ctx.lineTo(150,62);ctx.lineTo(180,92);ctx.stroke();displayTexture.needsUpdate=true;}
  const hitMaterial=new T.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false,colorWrite:false,side:T.DoubleSide});const hits=[];
- function panelHit(px,py,action){const p=frontPoint(px,py,2.035),m=new T.Mesh(new T.CircleGeometry(.07,16),hitMaterial);m.position.copy(p);m.rotation.y=Math.PI;cabin.add(m);hits.push({mesh:m,action});}
+ function panelHit(px,py,action){const p=frontPoint(px,py,1.98),m=new T.Mesh(new T.CircleGeometry(.07,16),hitMaterial);m.position.copy(p);m.rotation.y=Math.PI;cabin.add(m);hits.push({mesh:m,action});}
  for(let row=0;row<6;row++)for(let col=0;col<2;col++)panelHit(col?1236:1199,365+row*30.6,`floor:${11-row*2+col}`);
  panelHit(1199,569,'open');panelHit(1236,569,'close');panelHit(1218,600,'alarm');
  const raycaster=new T.Raycaster();let canControl=false,pointerDown=null;
@@ -285,13 +349,15 @@ export async function createWorld(host,onAction){
   return a[field].map((v,j)=>{const d0=(a[field][j]-p[field][j])/Math.max(.01,a.u-p.u),d1=(b[field][j]-a[field][j])/dt,d2=(n[field][j]-b[field][j])/Math.max(.01,n.u-b.u);const tangent=(x,y)=>x*y<=0?0:Math.sign(x)*Math.min(Math.abs((x+y)/2),3*Math.min(Math.abs(x),Math.abs(y)));const m0=tangent(d0,d1)*dt,m1=tangent(d1,d2)*dt;return(2*t*t*t-3*t*t+1)*v+(t*t*t-2*t*t+t)*m0+(-2*t*t*t+3*t*t)*b[field][j]+(t*t*t-t*t)*m1;});
  }
  function update(u,peek,door,reduced){
-  const interiorFov=2*T.MathUtils.radToDeg(Math.atan(Math.tan(T.MathUtils.degToRad((mobile?100:56)/2))*CABIN_HEIGHT_SCALE/buildingScale.z));
+  const interiorFov=2*T.MathUtils.radToDeg(Math.atan(Math.tan(T.MathUtils.degToRad(25))*Math.max(1,1.02/camera.aspect)*CABIN_HEIGHT_SCALE/buildingScale.z));
   const eyeY=18+1.9*CABIN_HEIGHT_SCALE;
   const poses=[
    {u:0,p:initial,l:[0,exteriorEye,8]},
    {u:.55,p:[CX,30.8,34],l:intoBuilding([CX,30,4]).toArray()},
-   {u:.9,p:[CX,33,13.5],l:[CX,28.8,3.7],local:true},
-   {u:1.15,p:[CX,33.2,6.5],l:[CX,24.7,3.7],local:true},
+   // Clear the landing slab at 32.42 m before tilting down into the shaft.
+   {u:.9,p:[CX,33.35,13.5],l:[CX,33.35,3.7],local:true},
+   {u:1.03,p:[CX,33.35,9.2],l:[CX,33.20,3.7],local:true},
+   {u:1.15,p:[CX,33.2,6.5],l:[CX,30.4,3.7],local:true},
    {u:1.45,p:[CX,29,3.7],l:[CX,18,3.65],local:true},
    {u:1.85,p:[CX,24.4,3.7],l:[CX,18.5,3.5],local:true},
    {u:2.15,p:[CX,20.85,3.7],l:[CX,eyeY,1.8],local:true},
@@ -310,7 +376,9 @@ export async function createWorld(host,onAction){
   const rise=phase(u,.92,2.12);cabin.position.y=mix(5,18,rise);weight.position.y=31-(cabin.position.y-5);
   const cable=Math.max(.1,36.9-(cabin.position.y+4.45*CABIN_HEIGHT_SCALE));ropes.scale.y=cable;ropes.position.y=cabin.position.y+4.45*CABIN_HEIGHT_SCALE+cable*.5;
   const roofOpacity=1-phase(u,1.48,2.04)*(1-phase(u,2.32,2.58));
-  for(const mat of roofMaterials.values())mat.opacity=roofOpacity;ceiling.material.uniforms.layerOpacity.value=roofOpacity;roof.visible=ceiling.visible=roofOpacity>.002;
+  for(const mat of roofMaterials.values()){
+   const fading=roofOpacity<.999;if(mat.transparent!==fading){mat.transparent=fading;mat.depthWrite=!fading;mat.needsUpdate=true;}mat.opacity=roofOpacity;
+  }ceiling.material.uniforms.layerOpacity.value=roofOpacity;roof.visible=ceiling.visible=roofOpacity>.002;
   // Rails and walls stay in the same world; the camera physically passes their foreground edges.
   leafLeft.position.x=-(right-left)*.51*door;leafRight.position.x=(right-left)*.51*door;
   backWall.visible=u<2.3;landingDoors.visible=u<2.3;canControl=u>2.3&&u<2.88;renderer.domElement.style.pointerEvents=u>.6?'auto':'none';
@@ -319,6 +387,6 @@ export async function createWorld(host,onAction){
   const projected=openingWorld.map(p=>p.clone().project(camera));
   return {hotspot:{x:(hotspot.x*.5+.5)*w,y:(-.5*hotspot.y+.5)*h},hoverBox:{left:Math.min(...projected.map(p=>(p.x*.5+.5)*w)),right:Math.max(...projected.map(p=>(p.x*.5+.5)*w)),top:Math.min(...projected.map(p=>(-.5*p.y+.5)*h)),bottom:Math.max(...projected.map(p=>(-.5*p.y+.5)*h))},camera:p,carY:cabin.position.y,roofOpacity};
  }
- function dispose(){renderer.dispose();environment.dispose();concreteNormal.dispose();concreteRoughness.dispose();scene.traverse(o=>{if(o.isMesh){o.geometry.dispose();}});}
+ function dispose(){renderer.dispose();environment.dispose();zincTexture.dispose();concreteNormal.dispose();concreteRoughness.dispose();scene.traverse(o=>{if(o.isMesh){o.geometry.dispose();}});}
  setFloor(7);return {resize,update,setFloor,dispose,canvas:renderer.domElement};
 }
