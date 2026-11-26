@@ -51,7 +51,7 @@ body[data-stage="2"] .cabin-controls{bottom:135px;right:4%}
 /* V4 keeps a single camera in one geometric shaft and cabin. */
 #scene{background:#111b25}#world{position:absolute;inset:0;z-index:2;touch-action:pan-y}#world canvas{display:block;width:100%;height:100%;touch-action:pan-y}#scene .brand-ending{z-index:1}body.ended #world{pointer-events:none}
 
-/* V7: the logo arrives alone, then settles left as the company name unfolds. */
-.ending-lockup{--logo-center-offset:0px;isolation:isolate}
-.ending-lockup img{opacity:var(--logo-reveal);transform:translateX(calc(var(--logo-center-offset) * (1 - var(--word-reveal)))) translateY(calc(14px * (1 - var(--logo-reveal)))) scale(calc(.88 + .12 * var(--logo-reveal)));filter:drop-shadow(0 5px 9px #20375118);will-change:transform,opacity}
-.ending-lockup h2{white-space:nowrap;opacity:var(--word-reveal);clip-path:inset(0 calc(100% * (1 - var(--word-reveal))) 0 -6%);transform:translateX(calc(-18px * (1 - var(--word-reveal))));will-change:transform,opacity,clip-path}
+/* V8: large centered mark → shrink and settle → reveal the separate wordmark. */
+.ending-lockup{--logo-center-offset:0px;--logo-center-offset-y:0px;isolation:isolate}
+.ending-lockup img{position:relative;z-index:2;opacity:var(--logo-reveal,0);transform:translateX(calc(var(--logo-center-offset) * (1 - var(--logo-settle,0)))) translateY(calc(var(--logo-center-offset-y) * (1 - var(--logo-settle,0)) + 12px * (1 - var(--logo-reveal,0)))) scale(var(--logo-scale,2.5));transform-origin:center;filter:drop-shadow(0 5px 9px #20375118);will-change:transform,opacity}
+.ending-lockup h2{white-space:nowrap;opacity:var(--word-reveal,0);clip-path:inset(0 calc(100% * (1 - var(--word-reveal,0))) 0 0);transform:translateX(calc(14px * (1 - var(--word-reveal,0))));will-change:transform,opacity,clip-path}

@@ -13,8 +13,8 @@ export async function createWorld(host,onAction){
  const scene=new T.Scene(),camera=new T.PerspectiveCamera(34,1,.025,240);
  // Keep the entire interior in the building's oblique coordinate frame. The camera
  // joins this frame during entry; the shaft itself never spins inside the facade.
- const buildingAngle=-34*Math.PI/180,pivot=new T.Vector3(CX,0,CZ),buildingScale=new T.Vector3(.76,1,.76);
- const buildingFrame=new T.Group();buildingFrame.position.set(CX+2.86,0,CZ-7.8);buildingFrame.rotation.y=buildingAngle;buildingFrame.scale.copy(buildingScale);scene.add(buildingFrame);
+ const buildingAngle=-31*Math.PI/180,pivot=new T.Vector3(CX,0,CZ),buildingScale=new T.Vector3(.76,1,.76);
+ const buildingFrame=new T.Group();buildingFrame.position.set(CX+3.13,0,CZ-3.1);buildingFrame.rotation.y=buildingAngle;buildingFrame.scale.copy(buildingScale);scene.add(buildingFrame);
  const interiorWorld=new T.Group();interiorWorld.position.copy(pivot).multiplyScalar(-1);buildingFrame.add(interiorWorld);
  const intoBuilding=p=>new T.Vector3(...p).sub(pivot).multiply(buildingScale).applyAxisAngle(new T.Vector3(0,1,0),buildingAngle).add(buildingFrame.position);
  const loader=new T.TextureLoader();
@@ -58,26 +58,30 @@ export async function createWorld(host,onAction){
    diffuseColor.a*=1.0-uReveal*opening;
    #include <alphatest_fragment>`);
  };
- // The aperture belongs to the facade, not to the shaft. Its fixed corners stay
- // on the photographed window bays while the actual shaft sits farther behind it.
- const openingWorld=[[.03,5.5,8],[3.75,4.95,8],[3.75,35.62,8],[.03,35.05,8]].map(p=>new T.Vector3(...p));
- openingWorld.forEach((p,i)=>openingCorners.value[i].set(p.x/PHOTO_W+.5,(p.y-20)/PHOTO_H+.5));
+ // Facade and core share one oblique coordinate frame and one floor level.
+ // The earlier screen-plane rectangle made the sill a sloping, twisted quad.
+ const openingBounds={left:CX-3.05,right:CX+3.05,bottom:4.1,top:36.4,front:12,back:8.03};
+ const openingAt=z=>[[openingBounds.left,openingBounds.bottom,z],[openingBounds.right,openingBounds.bottom,z],[openingBounds.right,openingBounds.top,z],[openingBounds.left,openingBounds.top,z]].map(intoBuilding);
+ const openingWorld=openingAt(openingBounds.front),innerOpening=openingAt(openingBounds.back);
+ function updateOpening(){
+  if(camera.position.z<=8.1)return;
+  openingWorld.forEach((p,i)=>{const t=(8-camera.position.z)/(p.z-camera.position.z);const x=mix(camera.position.x,p.x,t),y=mix(camera.position.y,p.y,t);openingCorners.value[i].set(x/PHOTO_W+.5,(y-20)/PHOTO_H+.5);});
+ }
  const cityPlane=new T.Mesh(new T.PlaneGeometry(PHOTO_W,PHOTO_H),exteriorMat);cityPlane.position.set(0,20,8);cityPlane.renderOrder=20;scene.add(cityPlane);
- // Four recessed reveals bridge the facade to the inner core. Darkening toward
- // the back, the retained glass and front floor edges establish foreground depth.
+ // All four reveals are planar. The sill and head are horizontal; the jambs,
+ // rail brackets and facade edges use the same axes and vanishing directions.
  const recess=new T.Group();scene.add(recess);
- const innerOpening=[[-3.05,4.2],[3.05,4.2],[3.05,36.4],[-3.05,36.4]].map(([x,y])=>intoBuilding([CX+x,y,8.03]));
  const recessMaterial=material(0x697e8d,.92,.04,{side:T.DoubleSide,vertexColors:true});
  for(let i=0;i<4;i++){
   const j=(i+1)%4,points=[openingWorld[i],openingWorld[j],innerOpening[j],innerOpening[i]];
-  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(points.flatMap(p=>[p.x,p.y,p.z-.035]),3));g.setIndex([0,1,2,0,2,3]);
+  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(points.flatMap(p=>p.toArray()),3));g.setIndex([0,1,2,0,2,3]);
   const near=i===1?.58:.76,far=.32;g.setAttribute('color',new T.Float32BufferAttribute([near,near,near,near,near,near,far,far,far,far,far,far],3));g.computeVertexNormals();recess.add(new T.Mesh(g,recessMaterial));
  }
- const facadeEdges=new T.Group();scene.add(facadeEdges);
+ const facadeEdges=new T.Group();interiorWorld.add(facadeEdges);
  const facadeEdgeMaterial=material(0x34495b,.64,.45,{transparent:true,opacity:0});
- for(let n=1;n<14;n++){
-  const f=n/14,a=openingWorld[0].clone().lerp(openingWorld[3],f),b=openingWorld[1].clone().lerp(openingWorld[2],f),d=b.clone().sub(a);
-  const beam=box(facadeEdges,(a.x+b.x)/2,(a.y+b.y)/2,7.94,d.length(),.065,.2,facadeEdgeMaterial);beam.rotation.z=Math.atan2(d.y,d.x);
+ for(let floor=0;floor<14;floor++){
+  const y=.4+floor*2.65;
+  if(y>openingBounds.bottom&&y<openingBounds.top)box(facadeEdges,CX,y,openingBounds.front,6.1,.065,.2,facadeEdgeMaterial);
  }
  // A full-scale enclosed shaft: floor divisions, real rail profiles, brackets and service runs.
  const shaft=new T.Group();shaft.position.x=CX;interiorWorld.add(shaft);
@@ -163,10 +167,15 @@ export async function createWorld(host,onAction){
  renderer.domElement.addEventListener('pointermove',e=>{if(!canControl)return;renderer.domElement.style.cursor=hitAt(e)?'pointer':'';});
  renderer.domElement.addEventListener('pointerdown',e=>{pointerDown=[e.clientX,e.clientY];});
  renderer.domElement.addEventListener('pointerup',e=>{if(!pointerDown)return;const moved=Math.hypot(e.clientX-pointerDown[0],e.clientY-pointerDown[1]);pointerDown=null;if(!canControl||moved>10)return;const hit=hitAt(e);if(hit)onAction(hits.find(h=>h.mesh===hit.object).action);});
- let w=1,h=1,mobile=false,initial=[0,20,74];
+ // Architectural photography uses a low eye line with an upward lens shift.
+ // Keep that optical center fixed on every viewport; crop with the lens, not by
+ // moving the camera, so the inset geometry and the photo retain the same view.
+ const exteriorEye=8.8,exteriorDistance=PHOTO_H/(2*Math.tan(T.MathUtils.degToRad(17)));
+ let w=1,h=1,mobile=false,initial=[0,exteriorEye,8+exteriorDistance],startFov=34,lensX=0,lensY=0;
  function resize(width,height){w=width;h=height;mobile=w<700;renderer.setSize(w,h);camera.aspect=w/h;
-  const fov=34,half=Math.tan(T.MathUtils.degToRad(fov/2)),distance=Math.min(PHOTO_H/(2*half),PHOTO_W/(2*half*camera.aspect));
-  const visibleWidth=distance*2*half*camera.aspect,x=mobile?(PHOTO_W-visibleWidth)*.08:0;initial=[x,20,8+distance];
+  const halfHeight=Math.min(PHOTO_H/2,PHOTO_W/(2*camera.aspect)),halfWidth=halfHeight*camera.aspect;
+  startFov=2*T.MathUtils.radToDeg(Math.atan(halfHeight/exteriorDistance));
+  lensY=(20-exteriorEye)/halfHeight;lensX=mobile?(PHOTO_W-2*halfWidth)*.08/halfWidth:0;
  }
  // Continuous Hermite position/target tracks keep direction and velocity coherent across scene labels.
  function interpolate(keys,u,field){let i=0;while(i<keys.length-2&&u>keys[i+1].u)i++;const a=keys[i],b=keys[i+1],p=keys[Math.max(0,i-1)],n=keys[Math.min(keys.length-1,i+2)];const t=clamp((u-a.u)/(b.u-a.u)),dt=b.u-a.u;
@@ -176,7 +185,7 @@ export async function createWorld(host,onAction){
   const interiorFov=2*T.MathUtils.radToDeg(Math.atan(Math.tan(T.MathUtils.degToRad((mobile?100:56)/2))*CABIN_HEIGHT_SCALE/buildingScale.z));
   const eyeY=18+1.9*CABIN_HEIGHT_SCALE;
   const poses=[
-   {u:0,p:initial,l:[initial[0],20,8]},
+   {u:0,p:initial,l:[0,exteriorEye,8]},
    {u:.55,p:[CX,30.8,34],l:intoBuilding([CX,30,4]).toArray()},
    {u:.9,p:[CX,33,13.5],l:[CX,28.8,3.7],local:true},
    {u:1.15,p:[CX,33.2,6.5],l:[CX,24.7,3.7],local:true},
@@ -191,8 +200,9 @@ export async function createWorld(host,onAction){
   for(const pose of poses){if(pose.local){pose.p=intoBuilding(pose.p).toArray();pose.l=intoBuilding(pose.l).toArray();}}
   const p=interpolate(poses,u,'p'),l=interpolate(poses,u,'l');
   camera.position.set(...p);const tilt=phase(u,.82,1.43)*(1-phase(u,1.78,2.48));camera.up.set(0,1-tilt,-tilt).normalize().applyAxisAngle(new T.Vector3(0,1,0),buildingAngle);camera.lookAt(new T.Vector3(...l));
-  camera.fov=mix(34,mobile?65:51,phase(u,.5,1.45));camera.fov=mix(camera.fov,interiorFov,phase(u,1.85,2.5));camera.updateProjectionMatrix();camera.updateMatrixWorld();
-  reveal.value=Math.max(peek*.78,phase(u,.04,.58));cityPlane.visible=camera.position.z>8.05;
+  camera.fov=mix(startFov,mobile?65:51,phase(u,.5,1.45));camera.fov=mix(camera.fov,interiorFov,phase(u,1.85,2.5));camera.updateProjectionMatrix();
+  const lens=1-phase(u,0,.85);camera.projectionMatrix.elements[8]=lensX*lens;camera.projectionMatrix.elements[9]=lensY*lens;camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();camera.updateMatrixWorld();
+  reveal.value=Math.max(peek*.78,phase(u,.04,.58));updateOpening();cityPlane.visible=camera.position.z>8.05;
   facadeEdgeMaterial.opacity=Math.max(peek,phase(u,.04,.2))*.68*(1-phase(u,.18,.68));facadeEdges.visible=facadeEdgeMaterial.opacity>.002;
   const rise=phase(u,.92,2.12);cabin.position.y=mix(5,18,rise);weight.position.y=31-(cabin.position.y-5);
   const cable=Math.max(.1,36.9-(cabin.position.y+4.45*CABIN_HEIGHT_SCALE));ropes.scale.y=cable;ropes.position.y=cabin.position.y+4.45*CABIN_HEIGHT_SCALE+cable*.5;
