@@ -48,3 +48,5 @@ body[data-stage="2"] .cabin-controls{bottom:135px;right:4%}
 }
 @media(max-width:360px){.floor-display{font-size:17px}body[data-stage="2"] .scene-copy h1{font-size:25px}.brand-promises span{padding:0 9px}body[data-stage="2"] .cabin-controls{bottom:110px}}
 @media(max-height:540px) and (min-width:701px){body[data-stage="2"] .scene-copy{top:25%}body[data-stage="2"] .cabin-controls{bottom:95px}.floor-display{font-size:25px}}
+/* V4 keeps a single camera in one geometric shaft and cabin. */
+#scene{background:#111b25}#world{position:absolute;inset:0;z-index:2;touch-action:pan-y}#world canvas{display:block;width:100%;height:100%;touch-action:pan-y}#scene .brand-ending{z-index:1}body.ended #world{pointer-events:none}
