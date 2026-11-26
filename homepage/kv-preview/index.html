@@ -4,32 +4,34 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex, nofollow, noarchive">
-  <meta name="theme-color" content="#e9eff5">
+  <meta name="theme-color" content="#122133">
   <title>구일엘리베이터 · KV 검토 시안</title>
   <meta name="description" content="구일엘리베이터 KV 검토 시안. 건물에서 승강로, 승강기 내부, 구일 브랜드로 이어지는 공간 체험.">
   <link rel="icon" href="../assets/guil-elevator-logo.webp">
-  <link rel="stylesheet" href="./preview.css">
+  <link rel="stylesheet" href="./preview.css?v=20261126-v2">
 </head>
 <body data-stage="0" class="loading">
-  <main class="experience" aria-label="구일엘리베이터 KV 검토 시안">
+  <div class="scroll-track"><main class="experience" aria-label="구일엘리베이터 KV 검토 시안">
     <div id="scene" aria-hidden="true"></div>
+    <img class="exterior-photo" src="./assets/guil-elevator-building-photoreal.webp" width="1672" height="941" alt="" aria-hidden="true" fetchpriority="high">
     <div class="scene-vignette" aria-hidden="true"></div>
     <header class="preview-header">
       <a class="brand" href="./" aria-label="구일엘리베이터 시안 처음으로"><img src="../assets/guil-elevator-logo.webp" width="34" height="40" alt=""><span>구일엘리베이터</span></a>
-      <div class="header-actions"><span class="review-badge">검토용 시안 <i></i></span><button id="about-preview" aria-label="시안 안내 열기">안내 <span aria-hidden="true">↗</span></button></div>
+      <div class="header-actions"><span class="review-badge">검토 시안 02 <i></i></span><button id="about-preview" aria-label="시안 안내 열기">안내 <span aria-hidden="true">↗</span></button></div>
     </header>
 
     <section class="scene-copy" aria-live="polite" aria-atomic="true">
       <p class="scene-eyebrow"><span id="stage-index">01</span><span class="eyebrow-line"></span><span id="stage-label">건물 전체</span></p>
       <h1 id="stage-title">건물의 중심으로.</h1>
-      <p id="stage-description">우리의 일상을 움직이는 승강기.<br>그 안에서 구일을 만나보세요.</p>
+      <p id="stage-description">승강로에 마우스를 올려보세요.<br>외벽 너머의 구조가 드러납니다.</p>
     </section>
 
-    <button id="hotspot" class="hotspot" disabled aria-label="승강로 살펴보기">
-      <span class="hotspot-ring" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></span>
-      <span class="hotspot-caption"><small id="hotspot-kicker">건물 내부</small><strong id="hotspot-title">승강로 살펴보기</strong></span>
+    <button id="hotspot" class="hotspot" disabled aria-label="승강로 투시 보기" aria-pressed="false">
+      <span class="hotspot-ring" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14m-6-6 6 6 6-6"/></svg></span>
+      <span class="hotspot-caption"><small id="hotspot-kicker">마우스를 올려보세요</small><strong id="hotspot-title">승강로 투시 보기</strong></span>
     </button>
 
+    <div class="cabin-controls" hidden aria-label="승강기 조작반 체험"><span class="cabin-control-label">조작반 체험 <b id="floor-readout">↑ 07</b></span><div><button id="open-doors">문 열림 <span aria-hidden="true">◀│▶</span></button><button id="close-doors">문 닫힘 <span aria-hidden="true">▶│◀</span></button></div><span id="door-status" class="sr-only" role="status">문이 닫혀 있습니다.</span></div>
     <section class="brand-ending" aria-label="구일엘리베이터 브랜드" aria-hidden="true">
       <div class="ending-lockup"><img src="../assets/guil-elevator-logo.webp" width="90" height="103" alt="구일 로고"><h2>구일엘리베이터</h2></div>
       <p class="ending-description">승강기 유지관리 · 교체공사 · 설치</p>
@@ -41,8 +43,8 @@
     <div id="fallback" class="fallback" hidden><img src="../assets/guil-elevator-building.webp" alt="유리 외벽의 현대적인 건물"><div><h2>구일엘리베이터 KV 시안</h2><p>이 환경에서는 3D 화면을 표시할 수 없습니다.<br>최신 Chrome 또는 Safari에서 다시 열어주세요.</p><button id="retry">다시 불러오기 ↻</button></div></div>
     <noscript><div class="no-script">공간 체험을 보려면 브라우저의 JavaScript를 켜주세요.</div></noscript>
 
-    <footer class="experience-footer">
-      <div class="interaction-note"><span class="note-dot"></span><span id="interaction-hint">파란 표시를 눌러 다음 공간으로 이동하세요</span></div>
+    <div class="journey-progress" aria-hidden="true"><i id="journey-progress-bar"></i></div><footer class="experience-footer">
+      <div class="interaction-note"><span class="scroll-mouse" aria-hidden="true"><i></i></span><span id="interaction-hint">스크롤하여 건물 안으로 들어가세요</span></div>
       <nav class="chapters" aria-label="장면 선택">
         <button data-go="0" aria-current="step" disabled><span>01</span><b>건물</b><i></i></button>
         <button data-go="1" disabled><span>02</span><b>승강로</b><i></i></button>
@@ -51,8 +53,8 @@
       </nav>
       <button id="reset" class="reset" disabled aria-label="첫 장면으로 돌아가기"><span aria-hidden="true">↺</span> 다시 보기</button>
     </footer>
-  </main>
-  <dialog id="preview-info" aria-labelledby="info-title"><button id="close-info" aria-label="안내 닫기">×</button><p class="dialog-label">KV CONCEPT · 01</p><h2 id="info-title">건물에서, 구일까지.</h2><p>건물 전체 → 승강로 → 올라오는 승강기 내부 → 구일 로고 순서로 이어지는 검토용 시안입니다.</p><p>PC에서는 파란 표시에 마우스를 올려 강조 효과를 확인하고 클릭해 주세요. 모바일에서는 같은 표시를 터치하면 됩니다.</p><p>아래 장면 메뉴로 원하는 장면을 바로 확인할 수 있습니다. 실제 건물·제품의 구조를 재현한 도면은 아닙니다.</p><button id="start-review">시안 살펴보기 →</button></dialog>
-  <script type="module" src="./preview.js"></script>
+  </main></div>
+  <dialog id="preview-info" aria-labelledby="info-title"><button id="close-info" aria-label="안내 닫기">×</button><p class="dialog-label">KV CONCEPT · 02</p><h2 id="info-title">건물에서, 구일까지.</h2><p>건물 전체 → 승강로 → 올라오는 승강기 내부 → 구일 로고 순서로 이어지는 검토용 시안입니다.</p><p>스크롤·트랙패드·모바일 스와이프로 공간을 오갈 수 있습니다. 첫 장면의 승강로에 마우스를 올리면 외벽이 투명해집니다. 모바일에서는 ‘승강로 투시 보기’를 눌러주세요.</p><p>실내의 문 열림·닫힘과 층수 버튼도 체험해 보세요. 하단 메뉴로 장면을 바로 선택할 수 있습니다. 실제 건물·제품의 구조를 재현한 도면은 아닙니다.</p><button id="start-review">시안 살펴보기 →</button></dialog>
+  <script type="module" src="./preview.js?v=20261126-v2"></script>
 </body>
 </html>
