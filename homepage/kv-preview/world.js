@@ -24,14 +24,23 @@ export async function createWorld(host,onAction){
  ].map(p=>loader.loadAsync(p)));
  for(const t of [exterior,interior,concreteTexture]){t.colorSpace=T.SRGBColorSpace;t.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),8);}
  concreteTexture.wrapS=concreteTexture.wrapT=T.RepeatWrapping;
- // Broad indoor luminaires give metal a real reflection shape, not a blue sky.
- const reflectionRoom=new T.Scene();reflectionRoom.background=new T.Color(0x535351);
- const roomGeo=new T.BoxGeometry(10,12,10),roomMat=new T.MeshBasicMaterial({color:0x686864,side:T.BackSide});reflectionRoom.add(new T.Mesh(roomGeo,roomMat));
+ // Dark surroundings and feathered service lights keep steel reflections from
+ // flattening into a uniformly gray surface or a clipped white stripe.
+ const reflectionRoom=new T.Scene();reflectionRoom.background=new T.Color(0x151a20);
+ const roomGeo=new T.BoxGeometry(10,12,10),roomMat=new T.MeshBasicMaterial({color:0x30353a,side:T.BackSide});reflectionRoom.add(new T.Mesh(roomGeo,roomMat));
+ const softboxCanvas=document.createElement('canvas');softboxCanvas.width=64;softboxCanvas.height=256;const softboxCtx=softboxCanvas.getContext('2d'),softboxPixels=softboxCtx.createImageData(64,256);
+ for(let y=0;y<256;y++)for(let x=0;x<64;x++){const i=(y*64+x)*4,a=Math.pow(Math.sin(Math.PI*(x+.5)/64),.7)*Math.pow(Math.sin(Math.PI*(y+.5)/256),.4);softboxPixels.data.set([255,255,255,Math.round(a*255)],i);}
+ softboxCtx.putImageData(softboxPixels,0,0);const softboxTexture=new T.CanvasTexture(softboxCanvas);softboxTexture.colorSpace=T.SRGBColorSpace;
  const reflectors=[];
- for(const [x,y,z,ry,w,h]of[[-4.9,1,0,Math.PI/2,2,9],[4.9,2,-1,-Math.PI/2,1.3,7],[0,4,-4.9,0,5,1.4]]){
-  const g=new T.PlaneGeometry(w,h),m=new T.MeshBasicMaterial({color:new T.Color(3.8,3.7,3.5),side:T.DoubleSide}),p=new T.Mesh(g,m);p.position.set(x,y,z);p.rotation.y=ry;reflectionRoom.add(p);reflectors.push(p);
+ for(const [x,y,z,ry,w,h,power]of[[-4.9,1,0,Math.PI/2,.8,9,5],[4.9,2,-1,-Math.PI/2,2.8,7,1.8],[0,4,-4.9,0,4,1.4,3]]){
+  const g=new T.PlaneGeometry(w,h),m=new T.MeshBasicMaterial({map:softboxTexture,transparent:true,depthWrite:false,color:new T.Color(power,power*.99,power*.96),side:T.DoubleSide}),p=new T.Mesh(g,m);p.position.set(x,y,z);p.rotation.y=ry;reflectionRoom.add(p);reflectors.push(p);
  }
- const pmrem=new T.PMREMGenerator(renderer),environment=pmrem.fromScene(reflectionRoom,.025);scene.environment=environment.texture;pmrem.dispose();roomGeo.dispose();roomMat.dispose();reflectors.forEach(p=>{p.geometry.dispose();p.material.dispose();});
+ // Diffuse light from lower landings remains visible in grazing reflections
+ // when looking down the shaft; the narrow side lights supply the highlights.
+ for(const [y,power]of[[-5.9,.25],[5.9,.4]]){
+  const g=new T.PlaneGeometry(6,5),m=new T.MeshBasicMaterial({map:softboxTexture,transparent:true,depthWrite:false,color:new T.Color(power,power*.99,power*.97),side:T.DoubleSide}),p=new T.Mesh(g,m);p.position.set(0,y,0);p.rotation.x=Math.PI/2;reflectionRoom.add(p);reflectors.push(p);
+ }
+ const pmrem=new T.PMREMGenerator(renderer),environment=pmrem.fromScene(reflectionRoom,.018);scene.environment=environment.texture;pmrem.dispose();roomGeo.dispose();roomMat.dispose();softboxTexture.dispose();reflectors.forEach(p=>{p.geometry.dispose();p.material.dispose();});
  const ambient=new T.HemisphereLight(0xf0f3f5,0x595751,.78);scene.add(ambient);
  const key=new T.DirectionalLight(0xfff5e9,1.5);key.position.set(-10,43,24);key.target.position.copy(intoBuilding([CX,19,3.7]));scene.add(key,key.target);
  key.castShadow=true;key.shadow.mapSize.set(1024,1024);Object.assign(key.shadow.camera,{left:-15,right:15,top:25,bottom:-25,near:1,far:90});key.shadow.bias=-.00015;key.shadow.normalBias=.025;key.shadow.radius=3;
@@ -43,10 +52,35 @@ export async function createWorld(host,onAction){
   const t=new T.CanvasTexture(c);t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),4);return t;
  };
  const metalTexture=texture('metal');
+ // A separate small-scale normal field adds grit without darkening the concrete
+ // photo or turning its broad mottling into oversized dents. Mipmaps suppress
+ // shimmer in distant floors. No additional downloaded texture is needed.
+ function concreteFinish(){
+  const size=512,heights=new Float32Array(size*size);let seed=21733;
+  const random=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
+  for(let i=0;i<heights.length;i++)heights[i]=.5+(random()-.5)*.12;
+  for(let p=0;p<1300;p++){
+   const cx=random()*size,cy=random()*size,r=.8+random()*2.2,depth=.09+random()*.18;
+   for(let y=Math.floor(cy-r);y<=Math.ceil(cy+r);y++)for(let x=Math.floor(cx-r);x<=Math.ceil(cx+r);x++){
+    const distance=Math.hypot(x-cx,y-cy)/r;if(distance<1)heights[((y+size)%size)*size+(x+size)%size]-=depth*(1-distance*distance);
+   }
+  }
+  const normals=new Uint8Array(size*size*4),roughness=new Uint8Array(size*size*4);
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+   const i=y*size+x,nx=(heights[y*size+(x+size-1)%size]-heights[y*size+(x+1)%size])*2.4,ny=(heights[((y+size-1)%size)*size+x]-heights[((y+1)%size)*size+x])*2.4,length=Math.hypot(nx,ny,1);
+   normals.set([Math.round((nx/length*.5+.5)*255),Math.round((ny/length*.5+.5)*255),Math.round((1/length*.5+.5)*255),255],i*4);
+   const r=Math.round(231+clamp(.6-heights[i])*35);roughness.set([r,r,r,255],i*4);
+  }
+  return [normals,roughness].map(data=>{const t=new T.DataTexture(data,size,size,T.RGBAFormat);t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(3,3);t.generateMipmaps=true;t.minFilter=T.LinearMipmapLinearFilter;t.magFilter=T.LinearFilter;t.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),8);t.needsUpdate=true;return t;});
+ }
+ const [concreteNormal,concreteRoughness]=concreteFinish();
  const material=(color,roughness=.5,metalness=0,extra={})=>new T.MeshStandardMaterial({color,roughness,metalness,...extra});
- const concrete=material(0xe5e4e0,.96,0,{map:concreteTexture,bumpMap:concreteTexture,bumpScale:.045,envMapIntensity:.14});concrete.userData.tileSize=1.8;
+ const concrete=material(0xe5e4e0,.99,0,{map:concreteTexture,bumpMap:concreteTexture,bumpScale:.022,normalMap:concreteNormal,normalScale:new T.Vector2(.42,.42),roughnessMap:concreteRoughness,envMapIntensity:.12});concrete.userData.tileSize=1.8;
  const steel=new T.MeshPhysicalMaterial({color:0xc5c8c8,roughness:.54,metalness:.96,roughnessMap:metalTexture,bumpMap:metalTexture,bumpScale:.003,anisotropy:.45,anisotropyRotation:Math.PI/2,envMapIntensity:.72});steel.userData.tileSize=.8;
- const charcoal=material(0x353a3c,.72,.28,{roughnessMap:metalTexture,envMapIntensity:.3}),dark=material(0x1c2022,.88,.05),galvanized=material(0xb7bab8,.76,.82,{roughnessMap:concreteTexture,bumpMap:metalTexture,bumpScale:.003,envMapIntensity:.48});galvanized.userData.tileSize=1.2;
+ const railFace=new T.MeshPhysicalMaterial({color:0xbcc2c8,metalness:1,roughness:.3,roughnessMap:metalTexture,bumpMap:metalTexture,bumpScale:.00065,anisotropy:.22,anisotropyRotation:Math.PI/2,envMapIntensity:1.05});
+ const railSide=material(0x69737d,.49,1,{roughnessMap:metalTexture,envMapIntensity:.8});
+ const cableSteel=material(0x555d63,.62,.88,{roughnessMap:metalTexture,envMapIntensity:.3});
+ const charcoal=material(0x353a3c,.72,.28,{roughnessMap:metalTexture,envMapIntensity:.3}),dark=material(0x1c2022,.88,.05),galvanized=material(0xb7bab8,.68,.82,{roughnessMap:concreteRoughness,bumpMap:metalTexture,bumpScale:.003,envMapIntensity:.48});galvanized.userData.tileSize=1.2;
  const joint=material(0x64635e,.96,0);
  const conduit=material(0x3a4144,.66,.5),rubber=material(0x11171b,.9,0),lightMat=new T.MeshBasicMaterial({color:0xe9f3ff,toneMapped:false});
  const boxGeometry=new T.BoxGeometry(1,1,1),cylGeometry=new T.CylinderGeometry(1,1,1,12);
@@ -62,6 +96,22 @@ export async function createWorld(host,onAction){
   const m=new T.Mesh(g,mat);m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=shadow;m.receiveShadow=true;parent.add(m);return m;
  }
  function cyl(parent,x,y,z,r,h,mat){const m=new T.Mesh(cylGeometry,mat);m.position.set(x,y,z);m.scale.set(r,h,r);parent.add(m);return m;}
+ // Millimetre-sized chamfers give the guide rail an actual reflective edge.
+ // Broad running faces are machined steel; narrow returns retain a satin finish.
+ function railBar(x,z,w,d,running=false){
+  const r=Math.min(.0035,w*.1,d*.1),a=w/2,b=d/2,profile=[[-a+r,-b],[a-r,-b],[a,-b+r],[a,b-r],[a-r,b],[-a+r,b],[-a,b-r],[-a,-b+r]],positions=[],uvs=[],g=new T.BufferGeometry();
+  function vertex(p,y,u){positions.push(p[0],y,p[1]);uvs.push(u,y/.65);}
+  let distance=0;
+  for(let i=0;i<8;i++){
+   const p=profile[i],q=profile[(i+1)%8],next=distance+Math.hypot(q[0]-p[0],q[1]-p[1]),start=positions.length/3;
+   vertex(p,-18.5,distance/.25);vertex(p,18.5,distance/.25);vertex(q,18.5,next/.25);vertex(p,-18.5,distance/.25);vertex(q,18.5,next/.25);vertex(q,-18.5,next/.25);
+   g.addGroup(start,6,i%2===1||running?0:1);distance=next;
+  }
+  for(const y of[-18.5,18.5])for(let i=0;i<8;i++){
+   const start=positions.length/3,p=profile[i],q=profile[(i+1)%8];vertex([0,0],y,0);vertex(y>0?q:p,y,0);vertex(y>0?p:q,y,0);g.addGroup(start,3,1);
+  }
+  g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.setAttribute('uv',new T.Float32BufferAttribute(uvs,2));g.computeVertexNormals();const mesh=new T.Mesh(g,[railFace,railSide]);mesh.position.set(x,18.5,z);mesh.castShadow=mesh.receiveShadow=true;shaft.add(mesh);
+ }
  // Trace the original photograph's glass grid. Opaque mullions, floor bands,
  // canopy and lobby stay in front during hover; only the individual panes reveal.
  const paneColumns=[[827,827],[853,853],[878,878.6],[904,904.6],[931,932.2]].map(p=>new T.Vector2(...p));
@@ -152,7 +202,7 @@ export async function createWorld(host,onAction){
   for(const x of [-2.38,2.38]){box(shaft,x,y+.28,3.7,.5,.12,.45,charcoal);box(shaft,x,y+.37,3.7,.32,.06,.35,steel);}
   if(floor%2===0){box(shaft,-2.96,y+1.5,.15,.07,.68,.16,charcoal);box(shaft,-2.9,y+1.5,.15,.025,.57,.08,lightMat);}
  }
- for(const x of [-2.34,2.34]){box(shaft,x,18.5,3.7,.1,37,.28,steel,true);box(shaft,x,18.5,3.7,.3,37,.065,steel,true);}
+ for(const sign of[-1,1]){railBar(sign*2.43,3.7,.065,.3);railBar(sign*2.30,3.7,.24,.1,true);}
  for(let i=0;i<5;i++)cyl(shaft,-2.92+i*.09,18.4,.2,.025,36.8,conduit);
  box(shaft,2.95,18.4,1,.09,36.8,.38,charcoal);
  for(let n=0;n<76;n++)box(shaft,2.87,.5+n*.48,1,.06,.035,.38,galvanized);
@@ -164,7 +214,7 @@ export async function createWorld(host,onAction){
  box(machinery,0,.22,0,3.7,.16,2.1,galvanized);box(machinery,-.8,.55,0,1.2,.62,1.3,charcoal);
  const wheel=new T.Mesh(new T.CylinderGeometry(.63,.63,.4,40),steel);wheel.rotation.x=Math.PI/2;wheel.position.set(.15,.88,.28);machinery.add(wheel);
  for(let i=0;i<5;i++){const ring=new T.Mesh(new T.TorusGeometry(.62,.012,6,40),dark);ring.position.set(.15,.88,.11+i*.08);machinery.add(ring);}
- const ropes=new T.Group();shaft.add(ropes);for(let i=0;i<5;i++)cyl(ropes,-1.7+i*.09,0,3.85,.012,1,steel);
+ const ropes=new T.Group();shaft.add(ropes);for(let i=0;i<5;i++)cyl(ropes,-1.7+i*.09,0,3.85,.012,1,cableSteel);
  const weight=new T.Group();shaft.add(weight);box(weight,2.66,0,.6,.34,3.4,1.05,charcoal);for(let i=0;i<10;i++)box(weight,2.66,-1.45+i*.31,.6,.4,.25,1.1,galvanized);
  const lowLight=new T.PointLight(0xe9edf0,16,22,1.7);lowLight.position.set(CX-1.5,17,.4);interiorWorld.add(lowLight);
  // The cabin is a geometric space. Photographic projection supplies its brushed-metal detail.
@@ -269,6 +319,6 @@ export async function createWorld(host,onAction){
   const projected=openingWorld.map(p=>p.clone().project(camera));
   return {hotspot:{x:(hotspot.x*.5+.5)*w,y:(-.5*hotspot.y+.5)*h},hoverBox:{left:Math.min(...projected.map(p=>(p.x*.5+.5)*w)),right:Math.max(...projected.map(p=>(p.x*.5+.5)*w)),top:Math.min(...projected.map(p=>(-.5*p.y+.5)*h)),bottom:Math.max(...projected.map(p=>(-.5*p.y+.5)*h))},camera:p,carY:cabin.position.y,roofOpacity};
  }
- function dispose(){renderer.dispose();environment.dispose();scene.traverse(o=>{if(o.isMesh){o.geometry.dispose();}});}
+ function dispose(){renderer.dispose();environment.dispose();concreteNormal.dispose();concreteRoughness.dispose();scene.traverse(o=>{if(o.isMesh){o.geometry.dispose();}});}
  setFloor(7);return {resize,update,setFloor,dispose,canvas:renderer.domElement};
 }
