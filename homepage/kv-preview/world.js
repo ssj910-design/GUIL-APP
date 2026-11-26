@@ -3,7 +3,7 @@ const clamp=(n,a=0,b=1)=>Math.min(b,Math.max(a,n));
 const smooth=n=>{const t=clamp(n);return t*t*(3-2*t);};
 const phase=(u,a,b)=>smooth((u-a)/(b-a));
 const mix=(a,b,t)=>a+(b-a)*t;
-const CX=2.16,CZ=3.7,PHOTO_W=72,PHOTO_H=72/(1672/941);
+const CX=2.16,CZ=3.7,PHOTO_W=72,PHOTO_H=72/(1672/941),CABIN_HEIGHT_SCALE=.72;
 export async function createWorld(host,onAction){
  const renderer=new T.WebGLRenderer({alpha:true,antialias:true,powerPreference:'high-performance'});
  renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.outputColorSpace=T.SRGBColorSpace;
@@ -13,10 +13,10 @@ export async function createWorld(host,onAction){
  const scene=new T.Scene(),camera=new T.PerspectiveCamera(34,1,.025,240);
  // Keep the entire interior in the building's oblique coordinate frame. The camera
  // joins this frame during entry; the shaft itself never spins inside the facade.
- const buildingAngle=-34*Math.PI/180,pivot=new T.Vector3(CX,0,CZ);
- const buildingFrame=new T.Group();buildingFrame.position.set(CX+2.5,0,CZ-3);buildingFrame.rotation.y=buildingAngle;scene.add(buildingFrame);
+ const buildingAngle=-34*Math.PI/180,pivot=new T.Vector3(CX,0,CZ),buildingScale=new T.Vector3(.76,1,.76);
+ const buildingFrame=new T.Group();buildingFrame.position.set(CX+1.66,0,CZ-3);buildingFrame.rotation.y=buildingAngle;buildingFrame.scale.copy(buildingScale);scene.add(buildingFrame);
  const interiorWorld=new T.Group();interiorWorld.position.copy(pivot).multiplyScalar(-1);buildingFrame.add(interiorWorld);
- const intoBuilding=p=>new T.Vector3(...p).sub(pivot).applyAxisAngle(new T.Vector3(0,1,0),buildingAngle).add(buildingFrame.position);
+ const intoBuilding=p=>new T.Vector3(...p).sub(pivot).multiply(buildingScale).applyAxisAngle(new T.Vector3(0,1,0),buildingAngle).add(buildingFrame.position);
  const loader=new T.TextureLoader();
  const [exterior,interior,environmentPhoto]=await Promise.all([
   './assets/guil-elevator-building-photoreal.webp','./assets/guil-elevator-cabin-photoreal-v3.webp','../assets/guil-seoul-city-skyline.webp'
@@ -98,7 +98,7 @@ export async function createWorld(host,onAction){
  const weight=new T.Group();shaft.add(weight);box(weight,2.66,0,.6,.34,3.4,1.05,charcoal);for(let i=0;i<10;i++)box(weight,2.66,-1.45+i*.31,.6,.4,.25,1.1,galvanized);
  const lowLight=new T.PointLight(0xd7e5f2,22,22,1.7);lowLight.position.set(CX-1.5,17,.4);interiorWorld.add(lowLight);
  // The cabin is a geometric space. Photographic projection supplies its brushed-metal detail.
- const cabin=new T.Group();cabin.position.set(CX,5,CZ);cabin.rotation.y=Math.PI;interiorWorld.add(cabin);
+ const cabin=new T.Group();cabin.scale.y=CABIN_HEIGHT_SCALE;cabin.position.set(CX,5,CZ);cabin.rotation.y=Math.PI;interiorWorld.add(cabin);
  const refCamera=new T.PerspectiveCamera(56,1672/941,.01,50);refCamera.position.set(0,1.9,-1.8);refCamera.lookAt(0,1.9,2.05);refCamera.updateMatrixWorld();
  const photoMatrix=new T.Matrix4().multiplyMatrices(refCamera.projectionMatrix,refCamera.matrixWorldInverse);
  const photoMaterial=new T.ShaderMaterial({uniforms:{photo:{value:interior},grain:{value:metalTexture},baseColor:{value:new T.Color(0x727b82)},layerOpacity:{value:1}},side:T.DoubleSide,toneMapped:false,
@@ -158,26 +158,28 @@ export async function createWorld(host,onAction){
   return a[field].map((v,j)=>{const d0=(a[field][j]-p[field][j])/Math.max(.01,a.u-p.u),d1=(b[field][j]-a[field][j])/dt,d2=(n[field][j]-b[field][j])/Math.max(.01,n.u-b.u);const tangent=(x,y)=>x*y<=0?0:Math.sign(x)*Math.min(Math.abs((x+y)/2),3*Math.min(Math.abs(x),Math.abs(y)));const m0=tangent(d0,d1)*dt,m1=tangent(d1,d2)*dt;return(2*t*t*t-3*t*t+1)*v+(t*t*t-2*t*t+t)*m0+(-2*t*t*t+3*t*t)*b[field][j]+(t*t*t-t*t)*m1;});
  }
  function update(u,peek,door,reduced){
-  const interiorFov=mobile?100:56;
+  const interiorFov=2*T.MathUtils.radToDeg(Math.atan(Math.tan(T.MathUtils.degToRad((mobile?100:56)/2))*CABIN_HEIGHT_SCALE/buildingScale.z));
+  const eyeY=18+1.9*CABIN_HEIGHT_SCALE;
   const poses=[
    {u:0,p:initial,l:[initial[0],20,8]},
-   {u:.55,p:[CX,31,32],l:intoBuilding([CX,30,4]).toArray()},
-   {u:1.05,p:[CX,33.3,6.5],l:[CX,24.5,3.7]},
-   {u:1.45,p:[CX,29,3.7],l:[CX,18,3.65]},
-   {u:1.85,p:[CX,25,3.7],l:[CX,18.5,3.5]},
-   {u:2.15,p:[CX,21.75,3.7],l:[CX,19.9,1.8]},
-   {u:2.5,p:[CX,19.9,5.5],l:[CX,19.9,1.65]},
-   {u:2.85,p:[CX,19.9,5.5],l:[CX,19.9,1.65]},
-   {u:3.55,p:[CX,19.9,5.5],l:[CX,19.9,1.65]},
-   {u:4.2,p:[CX,19.9,-6],l:[CX,19.9,-12]}
+   {u:.55,p:[CX,30.8,34],l:intoBuilding([CX,30,4]).toArray()},
+   {u:.9,p:[CX,33,13.5],l:[CX,28.8,3.7],local:true},
+   {u:1.15,p:[CX,33.2,6.5],l:[CX,24.7,3.7],local:true},
+   {u:1.45,p:[CX,29,3.7],l:[CX,18,3.65],local:true},
+   {u:1.85,p:[CX,24.4,3.7],l:[CX,18.5,3.5],local:true},
+   {u:2.15,p:[CX,20.85,3.7],l:[CX,eyeY,1.8],local:true},
+   {u:2.5,p:[CX,eyeY,5.5],l:[CX,eyeY,1.65],local:true},
+   {u:2.85,p:[CX,eyeY,5.5],l:[CX,eyeY,1.65],local:true},
+   {u:3.55,p:[CX,eyeY,5.5],l:[CX,eyeY,1.65],local:true},
+   {u:4.2,p:[CX,eyeY,-6],l:[CX,eyeY,-12],local:true}
   ];
-  for(const pose of poses){if(pose.u>=1.05){pose.p=intoBuilding(pose.p).toArray();pose.l=intoBuilding(pose.l).toArray();}}
+  for(const pose of poses){if(pose.local){pose.p=intoBuilding(pose.p).toArray();pose.l=intoBuilding(pose.l).toArray();}}
   const p=interpolate(poses,u,'p'),l=interpolate(poses,u,'l');
-  camera.position.set(...p);const tilt=phase(u,.85,1.35)*(1-phase(u,1.85,2.45));camera.up.set(0,1-tilt,-tilt).normalize().applyAxisAngle(new T.Vector3(0,1,0),buildingAngle);camera.lookAt(new T.Vector3(...l));
+  camera.position.set(...p);const tilt=phase(u,.82,1.43)*(1-phase(u,1.78,2.48));camera.up.set(0,1-tilt,-tilt).normalize().applyAxisAngle(new T.Vector3(0,1,0),buildingAngle);camera.lookAt(new T.Vector3(...l));
   camera.fov=mix(34,mobile?65:51,phase(u,.5,1.45));camera.fov=mix(camera.fov,interiorFov,phase(u,1.85,2.5));camera.updateProjectionMatrix();camera.updateMatrixWorld();
   reveal.value=Math.max(peek*.98,phase(u,.04,.58));updateOpening();cityPlane.visible=camera.position.z>8.05;
   const rise=phase(u,.92,2.12);cabin.position.y=mix(5,18,rise);weight.position.y=31-(cabin.position.y-5);
-  const cable=Math.max(.1,36.9-(cabin.position.y+4.45));ropes.scale.y=cable;ropes.position.y=cabin.position.y+4.45+cable*.5;
+  const cable=Math.max(.1,36.9-(cabin.position.y+4.45*CABIN_HEIGHT_SCALE));ropes.scale.y=cable;ropes.position.y=cabin.position.y+4.45*CABIN_HEIGHT_SCALE+cable*.5;
   const roofOpacity=1-phase(u,1.48,2.04)*(1-phase(u,2.32,2.58));
   for(const mat of roofMaterials.values())mat.opacity=roofOpacity;ceiling.material.uniforms.layerOpacity.value=roofOpacity;roof.visible=ceiling.visible=roofOpacity>.002;
   // Rails and walls stay in the same world; the camera physically passes their foreground edges.
