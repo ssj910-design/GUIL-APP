@@ -8,16 +8,46 @@
   <title>구일엘리베이터 · KV 검토 시안</title>
   <meta name="description" content="구일엘리베이터 KV 검토 시안. 건물에서 승강로, 승강기 내부, 구일 브랜드로 이어지는 공간 체험.">
   <link rel="icon" href="../assets/guil-elevator-logo.webp">
-  <link rel="stylesheet" href="./preview.css?v=20261126-v2">
+  <link rel="stylesheet" href="./preview.css?v=20261126-v3">
 </head>
 <body data-stage="0" class="loading">
   <div class="scroll-track"><main class="experience" aria-label="구일엘리베이터 KV 검토 시안">
-    <div id="scene" aria-hidden="true"></div>
-    <img class="exterior-photo" src="./assets/guil-elevator-building-photoreal.webp" width="1672" height="941" alt="" aria-hidden="true" fetchpriority="high">
+    <div id="scene">
+      <div class="exterior-scene visual-layer" aria-hidden="true"><div class="exterior-art photo-art"><img class="exterior-photo" src="./assets/guil-elevator-building-photoreal.webp" width="1672" height="941" alt="" fetchpriority="high"><div class="xray-window"><img src="./assets/guil-elevator-hoistway-photoreal-v3.webp" alt=""><i></i></div></div></div>
+      <div class="shaft-scene visual-layer" aria-hidden="true"><div class="shaft-art photo-art"><img src="./assets/guil-elevator-hoistway-photoreal-v3.webp" width="1672" height="941" alt=""></div></div>
+          <section class="brand-ending" aria-label="구일엘리베이터 브랜드" aria-hidden="true">
+      <div class="ending-content"><div class="ending-lockup"><img src="../assets/guil-elevator-logo.webp" width="90" height="103" alt="구일 로고"><h2>구일엘리베이터</h2></div>
+      <p class="ending-description">승강기 유지관리 · 교체공사 · 설치</p>
+      <div class="brand-promises"><span>최고의 기술력</span><span>최고의 서비스</span><span>합리적인 비용</span></div>
+      <button id="ending-replay" tabindex="-1">처음부터 다시 보기 <span aria-hidden="true">↺</span></button>
+</div>    </section>
+      <div class="cabin-scene visual-layer">
+        <div class="cabin-ambient" aria-hidden="true"></div>
+        <div class="cabin-art photo-art">
+          <svg class="cabin-visual" viewBox="0 0 1672 941" aria-hidden="true">
+            <defs>
+              <mask id="cabin-frame-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1672" height="941"><rect width="1672" height="941" fill="white"/><rect x="561" y="153" width="545" height="723" fill="black"/></mask>
+              <clipPath id="door-opening-clip"><rect x="561" y="153" width="545" height="723"/></clipPath>
+              <clipPath id="door-left-clip"><rect x="560" y="152" width="274" height="725"/></clipPath>
+              <clipPath id="door-right-clip"><rect x="833" y="152" width="274" height="725"/></clipPath>
+              <linearGradient id="door-edge-shadow"><stop stop-color="#000" stop-opacity=".25"/><stop offset=".03" stop-color="#000" stop-opacity="0"/><stop offset=".97" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".25"/></linearGradient>
+            </defs>
+            <g clip-path="url(#door-opening-clip)">
+              <g id="door-left"><image href="./assets/guil-elevator-cabin-photoreal-v3.webp" width="1672" height="941" clip-path="url(#door-left-clip)"/></g>
+              <g id="door-right"><image href="./assets/guil-elevator-cabin-photoreal-v3.webp" width="1672" height="941" clip-path="url(#door-right-clip)"/></g>
+            </g>
+            <image href="./assets/guil-elevator-cabin-photoreal-v3.webp" width="1672" height="941" mask="url(#cabin-frame-mask)"/>
+            <rect id="door-shadow" x="561" y="153" width="545" height="723" fill="url(#door-edge-shadow)" opacity="0"/>
+          </svg>
+          <div class="floor-display" aria-hidden="true">↑ <span>07</span></div>
+          <div class="photo-panel" aria-label="승강기 층수 및 문 조작반" hidden></div>
+        </div>
+      </div>
+    </div>
     <div class="scene-vignette" aria-hidden="true"></div>
     <header class="preview-header">
       <a class="brand" href="./" aria-label="구일엘리베이터 시안 처음으로"><img src="../assets/guil-elevator-logo.webp" width="34" height="40" alt=""><span>구일엘리베이터</span></a>
-      <div class="header-actions"><span class="review-badge">검토 시안 02 <i></i></span><button id="about-preview" aria-label="시안 안내 열기">안내 <span aria-hidden="true">↗</span></button></div>
+      <div class="header-actions"><span class="review-badge">검토 시안 03 <i></i></span><button id="about-preview" aria-label="시안 안내 열기">안내 <span aria-hidden="true">↗</span></button></div>
     </header>
 
     <section class="scene-copy" aria-live="polite" aria-atomic="true">
@@ -32,15 +62,10 @@
     </button>
 
     <div class="cabin-controls" hidden aria-label="승강기 조작반 체험"><span class="cabin-control-label">조작반 체험 <b id="floor-readout">↑ 07</b></span><div><button id="open-doors">문 열림 <span aria-hidden="true">◀│▶</span></button><button id="close-doors">문 닫힘 <span aria-hidden="true">▶│◀</span></button></div><span id="door-status" class="sr-only" role="status">문이 닫혀 있습니다.</span></div>
-    <section class="brand-ending" aria-label="구일엘리베이터 브랜드" aria-hidden="true">
-      <div class="ending-lockup"><img src="../assets/guil-elevator-logo.webp" width="90" height="103" alt="구일 로고"><h2>구일엘리베이터</h2></div>
-      <p class="ending-description">승강기 유지관리 · 교체공사 · 설치</p>
-      <div class="brand-promises"><span>최고의 기술력</span><span>최고의 서비스</span><span>합리적인 비용</span></div>
-      <button id="ending-replay" tabindex="-1">처음부터 다시 보기 <span aria-hidden="true">↺</span></button>
-    </section>
+
 
     <div id="loader" class="loader" role="status"><span class="loading-line"></span><span id="loading-text">공간을 준비하고 있습니다</span></div>
-    <div id="fallback" class="fallback" hidden><img src="../assets/guil-elevator-building.webp" alt="유리 외벽의 현대적인 건물"><div><h2>구일엘리베이터 KV 시안</h2><p>이 환경에서는 3D 화면을 표시할 수 없습니다.<br>최신 Chrome 또는 Safari에서 다시 열어주세요.</p><button id="retry">다시 불러오기 ↻</button></div></div>
+    <div id="fallback" class="fallback" hidden><img src="../assets/guil-elevator-building.webp" alt="유리 외벽의 현대적인 건물"><div><h2>구일엘리베이터 KV 시안</h2><p>장면 이미지를 불러오지 못했습니다.<br>네트워크 연결을 확인하고 다시 열어주세요.</p><button id="retry">다시 불러오기 ↻</button></div></div>
     <noscript><div class="no-script">공간 체험을 보려면 브라우저의 JavaScript를 켜주세요.</div></noscript>
 
     <div class="journey-progress" aria-hidden="true"><i id="journey-progress-bar"></i></div><footer class="experience-footer">
@@ -54,7 +79,7 @@
       <button id="reset" class="reset" disabled aria-label="첫 장면으로 돌아가기"><span aria-hidden="true">↺</span> 다시 보기</button>
     </footer>
   </main></div>
-  <dialog id="preview-info" aria-labelledby="info-title"><button id="close-info" aria-label="안내 닫기">×</button><p class="dialog-label">KV CONCEPT · 02</p><h2 id="info-title">건물에서, 구일까지.</h2><p>건물 전체 → 승강로 → 올라오는 승강기 내부 → 구일 로고 순서로 이어지는 검토용 시안입니다.</p><p>스크롤·트랙패드·모바일 스와이프로 공간을 오갈 수 있습니다. 첫 장면의 승강로에 마우스를 올리면 외벽이 투명해집니다. 모바일에서는 ‘승강로 투시 보기’를 눌러주세요.</p><p>실내의 문 열림·닫힘과 층수 버튼도 체험해 보세요. 하단 메뉴로 장면을 바로 선택할 수 있습니다. 실제 건물·제품의 구조를 재현한 도면은 아닙니다.</p><button id="start-review">시안 살펴보기 →</button></dialog>
-  <script type="module" src="./preview.js?v=20261126-v2"></script>
+  <dialog id="preview-info" aria-labelledby="info-title"><button id="close-info" aria-label="안내 닫기">×</button><p class="dialog-label">KV CONCEPT · 03</p><h2 id="info-title">건물에서, 구일까지.</h2><p>건물 전체 → 승강로 → 승강기 내부 → 문 열림 → 구일 로고 순서로 이어지는 검토용 시안입니다.</p><p>스크롤·트랙패드·모바일 스와이프로 공간을 오갈 수 있습니다. 첫 장면의 승강로에 마우스를 올리면 외벽이 투명해집니다. 모바일에서는 ‘승강로 투시 보기’를 눌러주세요.</p><p>실내에서 계속 스크롤하면 문이 열리고 구일 로고가 드러납니다. 문 열림·닫힘과 층수 버튼도 체험할 수 있습니다. AI 실사풍 이미지와 레이어 모션으로 만든 연출 시안이며, 실제 건물·제품의 촬영본은 아닙니다.</p><button id="start-review">시안 살펴보기 →</button></dialog>
+  <script type="module" src="./preview.js?v=20261126-v3"></script>
 </body>
 </html>
