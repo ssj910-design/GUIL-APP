@@ -1,4 +1,4 @@
-import { mkdir, copyFile, rm, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, copyFile, cp, rm, readdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 await rm(`${root}public`, {recursive:true, force:true});
@@ -39,3 +39,6 @@ for (const file of assets) {
   await copyFile(`${root}assets/${file}`, `${root}public/assets/${file}`);
 }
 console.log(`Homepage static files prepared with ${assets.size} referenced assets. Unused assets, server code and packages excluded.`);
+// Standalone client review. Not linked from the homepage or included in its sitemap.
+// Remove this copy step and kv-preview/ together after the concept is reviewed.
+await cp(`${root}kv-preview`, `${root}public/kv-preview`, {recursive:true, filter: source => !source.endsWith('README.md')});
