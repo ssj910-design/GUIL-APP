@@ -17,6 +17,7 @@ import { billingQuoteRef } from "@/lib/todoEdit";
 // target = { type: "material" | "quote" | "restock", data }
 // 취소는 관리자가 아직 처리 전(자재: 승인대기, 견적: 요청접수)일 때만 — 그 이후엔 버튼 자체가 안 뜬다.
 function RequestDetailSheet({ target, onClose, onPhotoClick, todos, onCancelMaterialRequest, onCancelQuoteRequest }) {
+  const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [cancelling, setCancelling] = useState(false);
   if (!target) return null;
   const { type, data } = target;
@@ -31,7 +32,9 @@ function RequestDetailSheet({ target, onClose, onPhotoClick, todos, onCancelMate
     ? (data.supplyPhotoUrls?.length ? data.supplyPhotoUrls : data.supplyPhotoUrl ? [data.supplyPhotoUrl] : [])
     : [];
   const cancelHandler = type === "material" ? onCancelMaterialRequest : type === "quote" ? onCancelQuoteRequest : null;
-  const cancelable = cancelHandler && ((type === "material" && data.status === "승인대기") || (type === "quote" && data.status === "요청접수"));
+  // 남이 올린 신청은 보기만 — 취소는 올린 기사 몫이다.
+  const cancelable = cancelHandler && data.engineer === CURRENT_ENGINEER
+    && ((type === "material" && data.status === "승인대기") || (type === "quote" && data.status === "요청접수"));
   async function handleCancelClick() {
     if (!(await confirmAsync("이 신청을 취소할까요? 취소 후엔 되돌릴 수 없습니다."))) return;
     setCancelling(true);
@@ -99,8 +102,8 @@ function RequestDetailSheet({ target, onClose, onPhotoClick, todos, onCancelMate
             </div>
           )}
           <div className="bg-slate-100 rounded-xl p-3">
-            <p className="text-[11px] text-slate-500">신청일</p>
-            <p className="font-bold text-slate-800">{data.requestedDate}</p>
+            <p className="text-[11px] text-slate-500">신청일 · 신청자</p>
+            <p className="font-bold text-slate-800">{data.requestedDate}{data.engineer ? ` · ${data.engineer}` : ""}</p>
           </div>
         </div>
         {type === "restock" && (
@@ -165,6 +168,7 @@ function RequestDetailSheet({ target, onClose, onPhotoClick, todos, onCancelMate
 
 
 function MaterialHistoryScreen({ requests, todos, isBilled, onBack, onCancelMaterialRequest }) {
+  const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState("전체");
   const [detailTarget, setDetailTarget] = useState(null);
@@ -230,6 +234,7 @@ function MaterialHistoryScreen({ requests, todos, isBilled, onBack, onCancelMate
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">{r.urgency} · 신청일 {r.requestedDate}{r.suppliedDate ? ` · 지급일 ${r.suppliedDate}` : ""}</p>
+                {r.engineer !== CURRENT_ENGINEER && <p className="text-[11px] font-bold text-indigo-600 mt-0.5">{r.engineer} 신청</p>}
                 {(linkedTodo?.billingAmount != null || billingQuoteRef(linkedTodo)) && (
                   <p className="text-[11px] font-bold text-blue-700 mt-1">
                     교체부품·청구금액 · {linkedTodo.billingPart ? `${linkedTodo.billingPart} · ` : ""}{linkedTodo.billingAmount != null ? `₩${Number(linkedTodo.billingAmount).toLocaleString()}` : "견적서 참조"}
@@ -266,6 +271,7 @@ function MaterialHistoryScreen({ requests, todos, isBilled, onBack, onCancelMate
 
 
 function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack, onCancelQuoteRequest, title }) {
+  const { name: CURRENT_ENGINEER } = useContext(AuthContext);
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState("전체");
   const [detailTarget, setDetailTarget] = useState(null);
@@ -333,6 +339,7 @@ function QuoteHistoryScreen({ quoteRequests, isQuoteBilled, onBack, onCancelQuot
                   <div className="min-w-0">
                     <p className="text-[15px] font-bold text-slate-800 truncate">{q.siteName} · {q.constructionType}</p>
                     <p className="text-[11px] text-slate-400">신청일 {q.requestedDate} · 사진 {q.photoCount}장</p>
+                    {q.engineer && q.engineer !== CURRENT_ENGINEER && <p className="text-[11px] font-bold text-indigo-600">{q.engineer} 신청</p>}
                   </div>
                 </div>
                 <span
@@ -718,6 +725,10 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
   // 관리자는 전체 견적을 본다 — 관리자웹에서 발행한 견적(요청자 없음, engineer null)은
   // "내가 요청한 것"만 거르면 앱에서 영영 안 보인다.
   const isAdmin = role === "admin";
+  // 신청현황은 "내가 올린 것"만 봤다 — 내 배정 현장인데 다른 기사가 올린 건은 담당자인 내게 안 보였다.
+  // 내 현장 건도 함께 보되(신청자 배지로 구분), 취소·반려 같은 조작은 본인 신청 건에만 남긴다.
+  const mySiteIds = new Set(sites.filter((s) => s.assignedEngineers?.includes(CURRENT_ENGINEER)).map((s) => s.id));
+  const isMineOrMySite = (r) => r.engineer === CURRENT_ENGINEER || mySiteIds.has(r.siteId);
   const quoteHistoryTitle = isAdmin ? "견적 요청 전체보기" : "나의 견적 요청 전체보기";
   const units = useContext(UnitsContext);
   const v2Ready = units.length > 0;
@@ -840,7 +851,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
     return t?.done === true;
   }
 
-  const myRequests = requests.filter((r) => r.engineer === CURRENT_ENGINEER && !isBilled(r.id));
+  const myRequests = requests.filter((r) => isMineOrMySite(r) && !isBilled(r.id));
   // 호기를 2개 이상 고르면(현장 1건으로 합쳐 접수) 부품도 호기별로 따로 받아, 내용에
   // "1호기 신청부품 / 2호기 신청부품"으로 나눠 보이게 한다. 1개(또는 미선택)면 기존처럼
   // 공용 목록 하나만 쓴다.
@@ -959,7 +970,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
   if (showMaterialHistory) {
     return (
       <MaterialHistoryScreen
-        requests={requests.filter((r) => r.engineer === CURRENT_ENGINEER)}
+        requests={requests.filter(isMineOrMySite)}
         todos={todos}
         isBilled={isBilled}
         onBack={() => setShowMaterialHistory(false)}
@@ -971,7 +982,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
   if (showQuoteHistory) {
     return (
       <QuoteHistoryScreen
-        quoteRequests={isAdmin ? quoteRequests : quoteRequests.filter((q) => q.engineer === CURRENT_ENGINEER)}
+        quoteRequests={isAdmin ? quoteRequests : quoteRequests.filter(isMineOrMySite)}
         title={quoteHistoryTitle}
         isQuoteBilled={isQuoteBilled}
         onBack={() => setShowQuoteHistory(false)}
@@ -1125,6 +1136,7 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
                       <div className="min-w-0">
                         <p className="text-[15px] font-bold text-slate-800 truncate">{r.siteName} · {r.part}</p>
                         <p className="text-[11px] text-slate-400 mt-0.5">{r.urgency} · 신청일 {r.requestedDate} · 사진 {r.photoCount ?? 1}장</p>
+                        {r.engineer !== CURRENT_ENGINEER && <p className="text-[11px] font-bold text-indigo-600 mt-0.5">{r.engineer} 신청</p>}
                       </div>
                     </button>
                     <span
@@ -1164,6 +1176,8 @@ export function MaterialTab({ requests, onAddMaterialRequest, onCancelMaterialRe
                       </p>
                       {isBilled(r.id) ? (
                         <p className="text-[11px] text-slate-400 mt-1.5">비용청구 완료 · 반려 불가</p>
+                      ) : r.engineer !== CURRENT_ENGINEER ? (
+                        <p className="text-[11px] text-slate-400 mt-1.5">{r.engineer} 신청 건 · 반려는 신청한 기사가 합니다</p>
                       ) : (
                         <button
                           onClick={() => { setRejectTarget(r); setRejectReason(""); }}
