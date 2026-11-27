@@ -65,10 +65,39 @@ export async function createWorld(host,onAction){
  diffuseColor.rgb=mix(vec3(${base}),diffuseColor.rgb,${detail});`);};
   mat.customProgramCacheKey=()=>`finish-${base}-${detail}`;return mat;
  }
- const concrete=finishAlbedo(material(new T.Color(1.65,1.64,1.60),1,0,{map:concreteTexture,normalMap:concreteNormal,normalScale:new T.Vector2(.32,.32),roughnessMap:concreteRoughness,envMapIntensity:.12}),'.32,.315,.30','.55');concrete.userData.tileSize=2.2;
+ const concrete=finishAlbedo(material(new T.Color(1.55,1.54,1.49),1,0,{map:concreteTexture,normalMap:concreteNormal,normalScale:new T.Vector2(.27,.27),roughnessMap:concreteRoughness,envMapIntensity:.12}),'.42,.412,.39','.34');concrete.userData.tileSize=1.4;
+ // Cast-concrete formwork follows metre-scaled wall UVs, independent of the
+ // small PBR grain. Derivative filtering keeps thin joints stable at a distance.
+ const concreteColorFinish=concrete.onBeforeCompile;
+ concrete.onBeforeCompile=shader=>{
+  concreteColorFinish(shader);
+  shader.vertexShader='varying vec3 vFormNormal;\n'+shader.vertexShader;
+  shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n vFormNormal=normal;');
+  shader.fragmentShader=`varying vec3 vFormNormal;
+   float formHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+   `+shader.fragmentShader;
+  shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`
+   vec2 wall=vMapUv*1.4,pitch=vec2(1.22,2.44);
+   vec2 cell=floor(wall/pitch),local=mod(wall,pitch),fw=max(fwidth(wall),vec2(.0005));
+   vec2 edge=min(local,pitch-local);
+   vec2 joint=1.0-smoothstep(vec2(.003)-fw,vec2(.007)+fw,edge);
+   float vertical=1.0-smoothstep(.3,.7,abs(vFormNormal.y));
+   float jointMask=max(joint.x,joint.y)*vertical;
+   float panelVariation=(formHash(cell)-.5)*.055;
+   vec2 ties=vec2(.61,1.22),tieCell=floor(wall/ties);
+   vec2 offset=vec2(formHash(tieCell),formHash(tieCell+31.7))-.5;
+   vec2 tie=mod(wall,ties)-ties*.5-offset*.025;
+   float radius=length(tie),aa=max(fw.x,fw.y);
+   float holes=(1.0-smoothstep(.008-aa,.014+aa,radius))*step(.17,formHash(tieCell+7.1))*vertical;
+   float rim=(1.0-smoothstep(.016-aa,.022+aa,radius))*(1.0-holes)*vertical;
+   float drips=exp(-abs(tie.x)*75.0)*smoothstep(-.27,-.04,tie.y)*(1.0-smoothstep(-.035,.0,tie.y))*vertical;
+   diffuseColor.rgb*=1.0+panelVariation*vertical-jointMask*.17-holes*.34-rim*.045-drips*.035;
+   #include <color_fragment>`);
+ };
+ concrete.customProgramCacheKey=()=> 'cast-concrete-reference-v16';
  const steel=new T.MeshPhysicalMaterial({color:0xf3f5f6,map:stainlessColor,roughness:.82,metalness:.96,normalMap:stainlessNormal,normalScale:new T.Vector2(.12,.12),roughnessMap:stainlessRoughness,anisotropy:.45,anisotropyRotation:Math.PI/2,envMapIntensity:.95});steel.userData.tileSize=.65;
- const railFace=finishAlbedo(new T.MeshPhysicalMaterial({color:0xffffff,map:railMaps[0],metalness:1,roughness:.58,roughnessMap:railMaps[2],normalMap:railMaps[1],normalScale:new T.Vector2(.12,.12),anisotropy:.32,anisotropyRotation:Math.PI/2,envMapIntensity:1.7}),'.78,.80,.82','.20');
- const railSide=finishAlbedo(material(0xced4da,.92,1,{map:railMaps[0],normalMap:railMaps[1],normalScale:new T.Vector2(.18,.18),roughnessMap:railMaps[2],envMapIntensity:1.4}),'.57,.60,.63','.25');
+ const railFace=finishAlbedo(new T.MeshPhysicalMaterial({color:0xffffff,map:railMaps[0],metalness:1,roughness:.48,roughnessMap:railMaps[2],normalMap:railMaps[1],normalScale:new T.Vector2(.10,.10),anisotropy:.58,anisotropyRotation:Math.PI/2,envMapIntensity:1.5}),'.72,.74,.76','.20');
+ const railSide=finishAlbedo(material(0xced4da,.92,1,{map:railMaps[0],normalMap:railMaps[1],normalScale:new T.Vector2(.18,.18),roughnessMap:railMaps[2],envMapIntensity:1.2}),'.40,.43,.46','.25');
  const cableSteel=material(0x555d63,.62,.88,{roughnessMap:metalTexture,envMapIntensity:.3});
  const charcoal=material(0x353a3c,.72,.28,{roughnessMap:metalTexture,envMapIntensity:.3}),dark=material(0x1c2022,.88,.05),galvanized=material(0xb7bab8,.68,.82,{map:roofColor,normalMap:roofNormal,normalScale:new T.Vector2(.18,.18),roughnessMap:roofRoughness,envMapIntensity:.7});galvanized.userData.tileSize=1.2;
  const joint=material(0x64635e,.96,0);
@@ -303,7 +332,7 @@ export async function createWorld(host,onAction){
  // opening. Only roof-specific materials fade, leaving walls and rails unchanged.
  const roof=new T.Group();cabin.add(roof);
  // Dedicated satin steel maps retain the approved folded-sheet geometry.
- const roofSteel=finishAlbedo(new T.MeshPhysicalMaterial({color:0xf1f2f2,map:roofColor,metalness:.97,roughness:.58,roughnessMap:roofRoughness,normalMap:roofNormal,normalScale:new T.Vector2(.09,.09),anisotropy:.3,envMapIntensity:1.65}),'.66,.68,.69','.22');roofSteel.userData.tileSize=.9;
+ const roofSteel=finishAlbedo(new T.MeshPhysicalMaterial({color:0xf1f2f2,map:roofColor,metalness:.82,roughness:.88,roughnessMap:roofRoughness,normalMap:roofNormal,normalScale:new T.Vector2(.10,.10),anisotropy:.2,envMapIntensity:1.1}),'.38,.405,.42','.18');roofSteel.userData.tileSize=.9;
  const foldedEdge=material(0xe0e5e8,.72,.96,{map:stainlessColor,normalMap:stainlessNormal,normalScale:new T.Vector2(.12,.12),roughnessMap:stainlessRoughness,envMapIntensity:1.0});foldedEdge.userData.tileSize=.7;
  box(roof,0,3.63,0,4.5,.1,4.5,foldedEdge,true);
  for(const x of[-1.48,0,1.48])box(roof,x,3.689,0,1.465,.018,4.42,roofSteel,true);
