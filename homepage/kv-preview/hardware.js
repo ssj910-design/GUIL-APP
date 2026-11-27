@@ -105,40 +105,41 @@ export function addShaftHardware(shaft,landingDoors,levels,m){
 }
 
 export function addRoofHardware(roof,m){
- const h=hardwareBatch(roof),frame=h.channel(3.75,.22,.26,.016),cross=h.channel(3.72,.20,.28,.016);
+ const h=hardwareBatch(roof),frame=h.channel(3.75,.30,.40,.025),cross=h.channel(3.72,.28,.42,.025);
  // Open channels make the depth and folded plate edges visible from above.
- for(const x of [-1.58,1.58])h.put(frame,m.frame,[x,3.85,0]);
+ for(const x of [-1.58,1.58])h.put(frame,m.frame,[x,3.92,0]);
  for(const z of [-.88,.88]){
-  h.put(cross,m.frame,[0,3.99,z],[0,Math.PI/2,0]);
+  h.put(cross,m.frame,[0,4.13,z],[0,Math.PI/2,0]);
   for(const x of [-1.58,1.58]){
-   h.put(h.plate(.34,.32,.018),m.zinc,[x,4.14,z],[-Math.PI/2,0,0]);
-   for(const dx of [-.10,.10])for(const dz of [-.095,.095])h.bolt([x+dx,4.15,z+dz],[0,1,0],m.bolt,m.washer,.026);
+   h.put(h.plate(.38,.36,.028),m.zinc,[x,4.356,z],[-Math.PI/2,0,0]);
+   for(const dx of [-.10,.10])for(const dz of [-.095,.095])h.bolt([x+dx,4.371,z+dz],[0,1,0],m.bolt,m.washer,.026);
   }
  }
- // Low inspection enclosure with a separate lid, pushbuttons, stop and glands.
- const control=h.plate(.64,.74,.25),lid=h.plate(.66,.76,.016);
- h.put(control,m.frame,[-1.05,3.84,-1.42],[-Math.PI/2,0,0]);
- h.put(lid,m.zinc,[-1.05,3.98,-1.42],[-Math.PI/2,0,0]);
- for(const dx of [-.265,.265])for(const dz of [-.315,.315])h.bolt([-1.05+dx,3.994,-1.42+dz],[0,1,0],m.bolt,m.washer,.012);
- h.cylinder(.075,.014,m.yellow,[-1.17,4.005,-1.5]);
- h.cylinder(.041,.032,m.cable,[-1.17,4.026,-1.5]);
- h.cylinder(.058,.037,m.red,[-1.17,4.057,-1.5]);
- for(const z of [-1.29,-1.12]){h.cylinder(.036,.012,m.bolt,[-.96,4.006,z]);h.cylinder(.027,.018,m.cable,[-.96,4.02,z]);}
- h.put(h.plate(.21,.08,.003),m.label,[-1.07,4.004,-1.70],[-Math.PI/2,0,0]);
- for(const x of [-1.19,-.94])h.cylinder(.03,.07,m.cable,[x,3.84,-1.02],[Math.PI/2,0,0]);
+ // Raised enclosure: short feet, a thick body and a separate overhanging lid.
+ for(const dx of [-.23,.23])for(const dz of [-.27,.27])h.box([.10,.07,.10],m.frame,[-1.05+dx,3.735,-1.42+dz]);
+ const control=h.plate(.64,.74,.44),lid=h.plate(.68,.78,.024);
+ h.put(control,m.frame,[-1.05,3.99,-1.42],[-Math.PI/2,0,0]);
+ h.put(lid,m.zinc,[-1.05,4.222,-1.42],[-Math.PI/2,0,0]);
+ for(const dx of [-.265,.265])for(const dz of [-.315,.315])h.bolt([-1.05+dx,4.236,-1.42+dz],[0,1,0],m.bolt,m.washer,.012);
+ h.cylinder(.075,.014,m.yellow,[-1.17,4.247,-1.5]);
+ h.cylinder(.041,.032,m.cable,[-1.17,4.268,-1.5]);
+ h.cylinder(.058,.037,m.red,[-1.17,4.299,-1.5]);
+ for(const z of [-1.29,-1.12]){h.cylinder(.036,.012,m.bolt,[-.96,4.248,z]);h.cylinder(.027,.018,m.cable,[-.96,4.262,z]);}
+ h.put(h.plate(.21,.08,.003),m.label,[-1.07,4.246,-1.70],[-Math.PI/2,0,0]);
+ for(const x of [-1.19,-.94])h.cylinder(.03,.07,m.cable,[x,3.99,-1.02],[Math.PI/2,0,0]);
  // Compact door operator, motor and belt above the doorway; no free-floating parts.
- h.put(h.channel(3.48,.23,.18,.014),m.zinc,[0,3.92,1.82],[0,Math.PI/2,0]);
- h.cylinder(.14,.43,m.frame,[-1.16,4.13,1.82],[0,0,Math.PI/2],20);
- for(const x of [-1.34,-1.27,-1.20,-1.13,-1.06])h.cylinder(.145,.016,m.zinc,[x,4.13,1.82],[0,0,Math.PI/2],16);
+ h.put(h.channel(3.48,.27,.22,.020),m.zinc,[0,3.94,1.82],[0,Math.PI/2,0]);
+ h.cylinder(.18,.48,m.frame,[-1.16,4.22,1.82],[0,0,Math.PI/2],20);
+ for(const x of [-1.34,-1.27,-1.20,-1.13,-1.06])h.cylinder(.185,.020,m.zinc,[x,4.22,1.82],[0,0,Math.PI/2],16);
  for(const x of [-.88,1.30]){
-  h.cylinder(.108,.052,m.bolt,[x,4.13,1.82],[Math.PI/2,0,0],24);
-  h.cylinder(.042,.068,m.cable,[x,4.13,1.82],[Math.PI/2,0,0]);
+  h.cylinder(.13,.066,m.bolt,[x,4.22,1.82],[Math.PI/2,0,0],24);
+  h.cylinder(.05,.082,m.cable,[x,4.22,1.82],[Math.PI/2,0,0]);
  }
- h.cable([[-.88,4.23,1.82],[.25,4.23,1.82],[1.30,4.23,1.82],[1.4,4.13,1.82],[1.30,4.03,1.82],[.25,4.03,1.82],[-.88,4.03,1.82],[-.98,4.13,1.82],[-.88,4.23,1.82]],.014,m.cable);
+ h.cable([[-.88,4.35,1.82],[.25,4.35,1.82],[1.30,4.35,1.82],[1.4,4.22,1.82],[1.30,4.09,1.82],[.25,4.09,1.82],[-.88,4.09,1.82],[-.98,4.22,1.82],[-.88,4.35,1.82]],.014,m.cable);
  // Routed cable loops rest on the deck and turn around the structural members.
- h.cable([[-1.19,3.84,-.99],[-1.22,3.77,-.78],[-1.26,3.77,-.48],[-1.30,3.77,.35],[-1.27,3.77,1.30],[-1.16,3.88,1.62]],.021,m.cable);
- h.cable([[-.94,3.84,-.99],[-.87,3.77,-.75],[-.72,3.77,-.42],[.25,3.77,-.34],[.8,3.77,-.46],[1.24,3.77,-.44],[1.30,3.77,.25],[1.27,3.89,.73]],.018,m.cable);
- h.cable([[-1.36,3.84,-1.32],[-1.48,3.76,-1.24],[-1.70,3.76,-1.13],[-1.73,3.86,-.9]],.009,m.yellow);
+ h.cable([[-1.19,3.99,-.99],[-1.22,3.77,-.78],[-1.26,3.77,-.48],[-1.30,3.77,.35],[-1.27,3.77,1.30],[-1.16,3.88,1.62]],.021,m.cable);
+ h.cable([[-.94,3.99,-.99],[-.87,3.77,-.75],[-.72,3.77,-.42],[.25,3.77,-.34],[.8,3.77,-.46],[1.24,3.77,-.44],[1.30,3.77,.25],[1.27,3.89,.73]],.018,m.cable);
+ h.cable([[-1.36,3.99,-1.32],[-1.48,3.76,-1.24],[-1.70,3.76,-1.13],[-1.73,3.86,-.9]],.009,m.yellow);
  for(const z of [-.5,.1,.6,1.2])h.put(h.plate(.12,.05,.009),m.zinc,[-1.29,3.797,z],[-Math.PI/2,0,0]);
  // Tubular perimeter guard, with base shoes instead of rectangular sticks.
  for(const x of [-1.98,1.98]){

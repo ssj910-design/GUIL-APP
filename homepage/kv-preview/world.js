@@ -1,5 +1,5 @@
 import * as T from './vendor/three.module.min.js';
-import {addShaftHardware,addRoofHardware} from './hardware.js?v=20261127-v17';
+import {addShaftHardware,addRoofHardware} from './hardware.js?v=20261127-v18';
 const clamp=(n,a=0,b=1)=>Math.min(b,Math.max(a,n));
 const smooth=n=>{const t=clamp(n);return t*t*(3-2*t);};
 const phase=(u,a,b)=>smooth((u-a)/(b-a));
@@ -334,8 +334,31 @@ export async function createWorld(host,onAction){
  // The intact roof fades away as the camera approaches; no hatch or mechanical
  // opening. Only roof-specific materials fade, leaving walls and rails unchanged.
  const roof=new T.Group();cabin.add(roof);
+ // A local maintenance light follows the car. Its tightly bounded shadow map
+ // resolves the frame cavities, mounting feet and equipment cast shadows.
+ const roofKey=new T.SpotLight(0xf5f3ed,38,11,.55,.8,2);
+ roofKey.position.set(-2.5,8.2,-2.7);roofKey.target.position.set(.1,3.69,.15);roof.add(roofKey,roofKey.target);
+ roofKey.castShadow=true;roofKey.shadow.mapSize.set(1024,1024);roofKey.shadow.camera.near=.3;roofKey.shadow.camera.far=11;
+ roofKey.shadow.bias=-.00005;roofKey.shadow.normalBias=.004;roofKey.shadow.radius=2;
  // Dedicated satin steel maps retain the approved folded-sheet geometry.
  const roofSteel=finishAlbedo(new T.MeshPhysicalMaterial({color:0xf1f2f2,map:roofColor,metalness:.82,roughness:.88,roughnessMap:roofRoughness,normalMap:roofNormal,normalScale:new T.Vector2(.10,.10),anisotropy:.2,envMapIntensity:1.1}),'.38,.405,.42','.18');roofSteel.userData.tileSize=.9;
+ // Restrained contact occlusion stays fixed to the deck and fades with it.
+ // It complements the local cast shadows at narrow frame/foot intersections.
+ const roofFinish=roofSteel.onBeforeCompile;
+ roofSteel.onBeforeCompile=shader=>{
+  roofFinish(shader);
+  shader.fragmentShader=`float roofBoxDistance(vec2 p,vec2 center,vec2 halfSize){vec2 q=abs(p-center)-halfSize;return length(max(q,0.0))+min(max(q.x,q.y),0.0);}
+   float roofContact(vec2 p,vec2 center,vec2 size,float softness){return 1.0-smoothstep(-.018,softness,roofBoxDistance(p,center,size));}
+   `+shader.fragmentShader;
+  shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`
+   vec2 deck=vMapUv*.9;
+   float sideContact=max(roofContact(deck,vec2(-1.58,0.),vec2(.15,1.875),.09),roofContact(deck,vec2(1.58,0.),vec2(.15,1.875),.09));
+   float crossShadow=max(roofContact(deck,vec2(.12,-.75),vec2(1.86,.14),.13),roofContact(deck,vec2(.12,1.01),vec2(1.86,.14),.13));
+   float enclosureContact=roofContact(deck,vec2(-1.02,-1.39),vec2(.32,.37),.10);
+   diffuseColor.rgb*=1.0-.32*max(sideContact,enclosureContact)-.18*crossShadow;
+   #include <color_fragment>`);
+ };
+ roofSteel.customProgramCacheKey=()=> 'roof-depth-contact-v18';
  const foldedEdge=material(0xe0e5e8,.72,.96,{map:stainlessColor,normalMap:stainlessNormal,normalScale:new T.Vector2(.12,.12),roughnessMap:stainlessRoughness,envMapIntensity:1.0});foldedEdge.userData.tileSize=.7;
  box(roof,0,3.63,0,4.5,.1,4.5,foldedEdge,true);
  for(const x of[-1.48,0,1.48])box(roof,x,3.689,0,1.465,.018,4.42,roofSteel,true);
@@ -418,6 +441,7 @@ export async function createWorld(host,onAction){
   const rise=phase(u,.92,2.12);cabin.position.y=mix(5,18,rise);weight.position.y=31-(cabin.position.y-5);
   const cable=Math.max(.1,36.9-(cabin.position.y+4.45*CABIN_HEIGHT_SCALE));ropes.scale.y=cable;ropes.position.y=cabin.position.y+4.45*CABIN_HEIGHT_SCALE+cable*.5;
   const roofOpacity=1-phase(u,1.48,2.04)*(1-phase(u,2.32,2.58));
+  roofKey.intensity=38*roofOpacity;
   for(const mat of roofMaterials.values()){
    const fading=roofOpacity<.999;if(mat.transparent!==fading){mat.transparent=fading;mat.depthWrite=!fading;mat.needsUpdate=true;}mat.opacity=roofOpacity;
   }ceiling.material.uniforms.layerOpacity.value=roofOpacity;roof.visible=ceiling.visible=roofOpacity>.002;
