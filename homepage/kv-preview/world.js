@@ -1,5 +1,5 @@
 import * as T from './vendor/three.module.min.js';
-import {addShaftHardware,addRoofHardware,createShaftWallMaterial} from './hardware.js?v=20261127-v19';
+import {addShaftHardware,addRoofHardware,createShaftWallMaterial} from './hardware.js?v=20261127-v20';
 const clamp=(n,a=0,b=1)=>Math.min(b,Math.max(a,n));
 const smooth=n=>{const t=clamp(n);return t*t*(3-2*t);};
 const phase=(u,a,b)=>smooth((u-a)/(b-a));
@@ -242,11 +242,37 @@ export async function createWorld(host,onAction){
  const lowLight=new T.PointLight(0xe9edf0,16,22,1.7);lowLight.position.set(CX-1.5,17,.4);interiorWorld.add(lowLight);
  // The cabin is a geometric space. Photographic projection supplies its brushed-metal detail.
  const cabin=new T.Group();cabin.scale.y=CABIN_HEIGHT_SCALE;cabin.position.set(CX,5,CZ);cabin.rotation.y=Math.PI;interiorWorld.add(cabin);
+ // Cabin-only reflected lighting: neutral wall bounce and two broad ceiling
+ // diffusers. Generated once, in cabin coordinates; the shaft lighting is unchanged.
+ const cabinEnvironment=(()=>{
+  const room=new T.Scene();room.background=new T.Color(.16,.17,.18);
+  const walls=[.22,.22,.36,.075,.19,.16].map(v=>new T.MeshBasicMaterial({color:new T.Color(v,v*1.01,v*1.015),side:T.BackSide}));
+  const shell=new T.Mesh(new T.BoxGeometry(4.4,3.6,4.5),walls);room.add(shell);
+  const c=document.createElement('canvas');c.width=64;c.height=256;const ctx=c.getContext('2d'),pixels=ctx.createImageData(64,256);
+  for(let y=0;y<256;y++)for(let x=0;x<64;x++){
+   const a=Math.pow(Math.sin(Math.PI*(x+.5)/64),.8)*Math.pow(Math.sin(Math.PI*(y+.5)/256),.35);
+   pixels.data.set([255,255,255,Math.round(a*255)],(y*64+x)*4);
+  }
+  ctx.putImageData(pixels,0,0);const diffuser=new T.CanvasTexture(c);diffuser.colorSpace=T.SRGBColorSpace;
+  for(const x of[-1.55,1.55]){
+   const light=new T.Mesh(new T.PlaneGeometry(.5,3.8),new T.MeshBasicMaterial({map:diffuser,color:new T.Color(3.1,3.06,2.96),transparent:true,depthWrite:false,side:T.DoubleSide}));
+   light.position.set(x,1.76,0);light.rotation.x=Math.PI/2;room.add(light);
+  }
+  const generator=new T.PMREMGenerator(renderer),result=generator.fromScene(room,.025);generator.dispose();
+  room.traverse(o=>{if(o.isMesh){o.geometry.dispose();for(const m of(Array.isArray(o.material)?o.material:[o.material]))m.dispose();}});diffuser.dispose();
+  return result;
+ })();
  const refCamera=new T.PerspectiveCamera(50,1672/941,.01,50);refCamera.position.set(0,1.9,-1.8);refCamera.lookAt(0,1.9,2.05);refCamera.updateMatrixWorld();
  const photoMatrix=new T.Matrix4().multiplyMatrices(refCamera.projectionMatrix,refCamera.matrixWorldInverse);
  const photoMaterial=new T.ShaderMaterial({uniforms:{photo:{value:interior},grain:{value:metalTexture},baseColor:{value:new T.Color(0x848682)},surfaceMetal:{value:1},surfaceKind:{value:0},pbrColor:{value:stainlessColor},pbrNormal:{value:stainlessNormal},pbrRoughness:{value:stainlessRoughness},reflectionMap:{value:null},layerOpacity:{value:1}},side:T.DoubleSide,toneMapped:false,
-  defines:{ENVMAP_TYPE_CUBE_UV:'',CUBEUV_TEXEL_WIDTH:1/environment.texture.image.width,CUBEUV_TEXEL_HEIGHT:1/environment.texture.image.height,CUBEUV_MAX_MIP:(Math.log2(environment.texture.image.height)-2).toFixed(1)},
-  vertexShader:'attribute vec4 photoCoord; varying vec4 vPhoto; varying vec3 vLocal; varying vec3 vLocalNormal; varying vec3 vSurfaceNormal; varying vec3 vView; void main(){ vPhoto=photoCoord; vLocal=position; vLocalNormal=normal; vSurfaceNormal=normalize(normalMatrix*normal); vec4 mv=modelViewMatrix*vec4(position,1.0); vView=-mv.xyz; gl_Position=projectionMatrix*mv; }',
+  defines:{ENVMAP_TYPE_CUBE_UV:'',CUBEUV_TEXEL_WIDTH:1/cabinEnvironment.texture.image.width,CUBEUV_TEXEL_HEIGHT:1/cabinEnvironment.texture.image.height,CUBEUV_MAX_MIP:(Math.log2(cabinEnvironment.texture.image.height)-2).toFixed(1)},
+  vertexShader:`attribute vec4 photoCoord; varying vec4 vPhoto; varying vec3 vLocal; varying vec3 vLocalNormal; varying vec3 vSurfaceNormal; varying vec3 vView; varying vec3 vCabinView;
+   void main(){
+    vPhoto=photoCoord;vLocal=position;vLocalNormal=normal;vSurfaceNormal=normalize(normalMatrix*normal);
+    vec3 eye=cameraPosition-(modelMatrix*vec4(position,1.0)).xyz;
+    vCabinView=vec3(dot(eye,modelMatrix[0].xyz)/dot(modelMatrix[0].xyz,modelMatrix[0].xyz),dot(eye,modelMatrix[1].xyz)/dot(modelMatrix[1].xyz,modelMatrix[1].xyz),dot(eye,modelMatrix[2].xyz)/dot(modelMatrix[2].xyz,modelMatrix[2].xyz));
+    vec4 mv=modelViewMatrix*vec4(position,1.0);vView=-mv.xyz;gl_Position=projectionMatrix*mv;
+   }`,
   fragmentShader:`#include <common>
    #include <cube_uv_reflection_fragment>
    varying vec4 vPhoto;
@@ -254,6 +280,7 @@ export async function createWorld(host,onAction){
    varying vec3 vLocalNormal;
    varying vec3 vSurfaceNormal;
    varying vec3 vView;
+   varying vec3 vCabinView;
    uniform float surfaceMetal;
    uniform float surfaceKind;
    uniform sampler2D photo;
@@ -292,32 +319,35 @@ export async function createWorld(host,onAction){
     float indicator=step(770.0/1672.0,uv.x)*step(uv.x,902.0/1672.0)*step(1.0-110.0/941.0,uv.y)*step(uv.y,1.0-60.0/941.0);
     sampleColor=mix(sampleColor,vec3(.0025,.004,.006),indicator);
     sampleColor=mix(sampleColor,vec3(dot(sampleColor,vec3(.2126,.7152,.0722))),.025);
-    float brush=texture2D(grain,vLocal.xy*1.4).r;
-    sampleColor*=1.0+(brush-.66)*.045*surfaceMetal;
     vec3 n=normalize(vSurfaceNormal),v=normalize(vView);
-    float grazing=pow(1.0-abs(dot(n,v)),3.0);
-    float strip=smoothstep(.65,.98,abs(reflect(-v,n).x));
-    vec3 finish=mix(fallback,sampleColor,valid)+vec3(.024,.023,.021)*strip*grazing*surfaceMetal;
-    // Hairline direction, microscopic normal and varying roughness respond to
-    // the same service-light environment as the real steel outside the cabin.
+    float grazing=pow(1.0-abs(dot(n,v)),5.0);
+    vec3 finish=mix(fallback,sampleColor,valid);
+    // Soft satin reflection follows the car's ceiling rather than the external
+    // shaft. A mild anisotropic spread retains hairlines without glitter.
     vec2 metalUv=abs(vLocalNormal.y)>.5?vLocal.xz/.65:vec2(vLocal.y,abs(vLocalNormal.x)>.5?vLocal.z:vLocal.x)/.65;
-    float rough=clamp(texture2D(pbrRoughness,metalUv).g*.7+.22,.3,.7);
-    vec3 detail=texture2D(pbrNormal,metalUv).xyz*2.0-1.0;detail.xy*=.16;
-    vec3 brushedNormal=normalize(materialFrame(-vView,n,metalUv)*detail);
-    vec3 reflected=inverseTransformDirection(reflect(-v,brushedNormal),viewMatrix);
-    vec3 reflectedLight=textureCubeUV(reflectionMap,reflected,rough).rgb;
+    float rough=clamp(texture2D(pbrRoughness,metalUv).g*.28+.36,.40,.60);
+    vec3 detail=texture2D(pbrNormal,metalUv).xyz*2.0-1.0;detail.xy*=.085;
+    vec3 localNormal=normalize(vLocalNormal),brushedNormal=normalize(materialFrame(-vCabinView,localNormal,metalUv)*detail);
+    vec3 reflected=reflect(-normalize(vCabinView),brushedNormal);
+    vec3 grainDirection=abs(vLocalNormal.y)>.5?vec3(0.0,0.0,1.0):vec3(0.0,1.0,0.0);
+    vec3 reflectedLight=textureCubeUV(reflectionMap,reflected,rough).rgb*.5;
+    reflectedLight+=textureCubeUV(reflectionMap,normalize(reflected+grainDirection*.14),rough).rgb*.25;
+    reflectedLight+=textureCubeUV(reflectionMap,normalize(reflected-grainDirection*.14),rough).rgb*.25;
+    reflectedLight=reflectedLight/(vec3(1.0)+reflectedLight*.7);
     float panel=step(1168.0/1672.0,uv.x)*step(uv.x,1265.0/1672.0)*step(1.0-640.0/941.0,uv.y)*step(uv.y,1.0-300.0/941.0);
-    float finishMask=surfaceMetal*(1.0-indicator)*(1.0-panel)*smoothstep(.015,.08,dot(finish,vec3(.2126,.7152,.0722)));
+    float luminance=dot(finish,vec3(.2126,.7152,.0722));
+    float finishMask=surfaceMetal*(1.0-indicator)*(1.0-panel)*smoothstep(.015,.08,luminance)*(1.0-smoothstep(.65,.95,luminance));
     vec3 tint=texture2D(pbrColor,metalUv).rgb;
-    finish*=1.0+(tint-vec3(.42))*.14*finishMask;
-    finish=mix(finish,reflectedLight*vec3(.84,.87,.89),(.11+.08*grazing)*finishMask);
+    finish=mix(finish,vec3(luminance)*vec3(.99,1.0,1.01),.17*finishMask);
+    finish*=1.0+(tint-vec3(.42))*.08*finishMask;
+    finish=mix(finish,reflectedLight*vec3(.96,.98,1.0),(.18+.12*grazing)*finishMask);
     gl_FragColor=vec4(finish,layerOpacity);
     #include <colorspace_fragment>
    }`
  });
  // Render-target textures must be shared explicitly rather than cloned with uniforms.
- photoMaterial.uniforms.reflectionMap.value=environment.texture;
- function clonePhotoMaterial(){photoMaterial.uniforms.reflectionMap.value=null;const mat=photoMaterial.clone();photoMaterial.uniforms.reflectionMap.value=mat.uniforms.reflectionMap.value=environment.texture;return mat;}
+ photoMaterial.uniforms.reflectionMap.value=cabinEnvironment.texture;
+ function clonePhotoMaterial(){photoMaterial.uniforms.reflectionMap.value=null;const mat=photoMaterial.clone();photoMaterial.uniforms.reflectionMap.value=mat.uniforms.reflectionMap.value=cabinEnvironment.texture;return mat;}
  function photoQuad(points){const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(points.flat(),3));g.setIndex([0,1,2,0,2,3]);g.computeVertexNormals();const coords=[];for(const p of points){const q=new T.Vector4(...p,1).applyMatrix4(photoMatrix);coords.push(q.x,q.y,q.z,q.w);}g.setAttribute('photoCoord',new T.Float32BufferAttribute(coords,4));const mesh=new T.Mesh(g,photoMaterial);cabin.add(mesh);return mesh;}
  // Closed reference front dimensions derived from the photograph's door edges.
  function frontPoint(px,py,z=2.05){const v=new T.Vector3(px/1672*2-1,1-py/941*2,.5).unproject(refCamera);const dir=v.sub(refCamera.position).normalize();return refCamera.position.clone().addScaledVector(dir,(z-refCamera.position.z)/dir.z);}
@@ -454,6 +484,6 @@ export async function createWorld(host,onAction){
   const projected=openingWorld.map(p=>p.clone().project(camera));
   return {hotspot:{x:(hotspot.x*.5+.5)*w,y:(-.5*hotspot.y+.5)*h},hoverBox:{left:Math.min(...projected.map(p=>(p.x*.5+.5)*w)),right:Math.max(...projected.map(p=>(p.x*.5+.5)*w)),top:Math.min(...projected.map(p=>(-.5*p.y+.5)*h)),bottom:Math.max(...projected.map(p=>(-.5*p.y+.5)*h))},camera:p,carY:cabin.position.y,roofOpacity};
  }
- function dispose(){renderer.dispose();environment.dispose();pbrTextures.forEach(t=>t.dispose());railMaps.forEach(t=>t.dispose());scene.traverse(o=>{if(o.isMesh){o.geometry.dispose();}});}
+ function dispose(){renderer.dispose();environment.dispose();cabinEnvironment.dispose();pbrTextures.forEach(t=>t.dispose());railMaps.forEach(t=>t.dispose());scene.traverse(o=>{if(o.isMesh){o.geometry.dispose();}});}
  setFloor(7);return {resize,update,setFloor,dispose,canvas:renderer.domElement};
 }
