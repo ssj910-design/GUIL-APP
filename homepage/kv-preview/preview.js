@@ -1,5 +1,5 @@
-import {createWorld} from './world.js?v=20261127-v16';
-import {sceneAtScroll,scrollAtScene,advanceMotion,autoplayAtTime,AUTOPLAY_HOLD,AUTOPLAY_DURATION} from './motion.js?v=20261127-v16';
+import {createWorld} from './world.js?v=20261127-v17';
+import {sceneAtScroll,scrollAtScene,advanceMotion,autoplayAtTime,AUTOPLAY_HOLD,AUTOPLAY_DURATION} from './motion.js?v=20261127-v17';
 const $=s=>document.querySelector(s);
 const ui={experience:$('.experience'),world:$('#world'),hotspot:$('#hotspot'),copy:$('.scene-copy'),title:$('#stage-title'),label:$('#stage-label'),description:$('#stage-description'),index:$('#stage-index'),kicker:$('#hotspot-kicker'),action:$('#hotspot-title'),ending:$('.brand-ending'),endingContent:$('.ending-content'),hint:$('#interaction-hint'),steps:[...document.querySelectorAll('[data-go]')],controls:$('.cabin-controls'),vignette:$('.scene-vignette')};
 const clamp=(n,a=0,b=1)=>Math.min(b,Math.max(a,n)),mix=(a,b,t)=>a+(b-a)*t;

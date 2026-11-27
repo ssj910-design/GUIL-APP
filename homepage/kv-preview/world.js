@@ -1,4 +1,5 @@
 import * as T from './vendor/three.module.min.js';
+import {addShaftHardware,addRoofHardware} from './hardware.js?v=20261127-v17';
 const clamp=(n,a=0,b=1)=>Math.min(b,Math.max(a,n));
 const smooth=n=>{const t=clamp(n);return t*t*(3-2*t);};
 const phase=(u,a,b)=>smooth((u-a)/(b-a));
@@ -65,7 +66,7 @@ export async function createWorld(host,onAction){
  diffuseColor.rgb=mix(vec3(${base}),diffuseColor.rgb,${detail});`);};
   mat.customProgramCacheKey=()=>`finish-${base}-${detail}`;return mat;
  }
- const concrete=finishAlbedo(material(new T.Color(1.55,1.54,1.49),1,0,{map:concreteTexture,normalMap:concreteNormal,normalScale:new T.Vector2(.27,.27),roughnessMap:concreteRoughness,envMapIntensity:.12}),'.42,.412,.39','.34');concrete.userData.tileSize=1.4;
+ const concrete=finishAlbedo(material(new T.Color(1.55,1.54,1.49),1,0,{map:concreteTexture,normalMap:concreteNormal,normalScale:new T.Vector2(.34,.34),roughnessMap:concreteRoughness,envMapIntensity:.12}),'.42,.412,.39','.39');concrete.userData.tileSize=1.4;
  // Cast-concrete formwork follows metre-scaled wall UVs, independent of the
  // small PBR grain. Derivative filtering keeps thin joints stable at a distance.
  const concreteColorFinish=concrete.onBeforeCompile;
@@ -88,18 +89,27 @@ export async function createWorld(host,onAction){
    vec2 offset=vec2(formHash(tieCell),formHash(tieCell+31.7))-.5;
    vec2 tie=mod(wall,ties)-ties*.5-offset*.025;
    float radius=length(tie),aa=max(fw.x,fw.y);
-   float holes=(1.0-smoothstep(.008-aa,.014+aa,radius))*step(.17,formHash(tieCell+7.1))*vertical;
-   float rim=(1.0-smoothstep(.016-aa,.022+aa,radius))*(1.0-holes)*vertical;
+   float holes=(1.0-smoothstep(.012-aa,.019+aa,radius))*step(.17,formHash(tieCell+7.1))*vertical;
+   float rim=(1.0-smoothstep(.022-aa,.028+aa,radius))*(1.0-holes)*vertical;
    float drips=exp(-abs(tie.x)*75.0)*smoothstep(-.27,-.04,tie.y)*(1.0-smoothstep(-.035,.0,tie.y))*vertical;
-   diffuseColor.rgb*=1.0+panelVariation*vertical-jointMask*.17-holes*.34-rim*.045-drips*.035;
+   vec2 grainCell=floor(wall*42.0),grainLocal=fract(wall*42.0);
+   vec2 grainCenter=.2+.6*vec2(formHash(grainCell+19.0),formHash(grainCell+47.0));
+   float grainRadius=.06+.10*formHash(grainCell+8.0),grainAA=max(fw.x,fw.y)*42.0;
+   float pores=(1.0-smoothstep(grainRadius-grainAA,grainRadius+grainAA,length(grainLocal-grainCenter)))*exp(-grainAA*grainAA*2.0)*step(.4,formHash(grainCell+63.0));
+   diffuseColor.rgb*=1.0+panelVariation*vertical-jointMask*.17-holes*.38-rim*.045-drips*.035-pores*.18;
    #include <color_fragment>`);
  };
- concrete.customProgramCacheKey=()=> 'cast-concrete-reference-v16';
+ concrete.customProgramCacheKey=()=> 'cast-concrete-reference-v17';
  const steel=new T.MeshPhysicalMaterial({color:0xf3f5f6,map:stainlessColor,roughness:.82,metalness:.96,normalMap:stainlessNormal,normalScale:new T.Vector2(.12,.12),roughnessMap:stainlessRoughness,anisotropy:.45,anisotropyRotation:Math.PI/2,envMapIntensity:.95});steel.userData.tileSize=.65;
  const railFace=finishAlbedo(new T.MeshPhysicalMaterial({color:0xffffff,map:railMaps[0],metalness:1,roughness:.48,roughnessMap:railMaps[2],normalMap:railMaps[1],normalScale:new T.Vector2(.10,.10),anisotropy:.58,anisotropyRotation:Math.PI/2,envMapIntensity:1.5}),'.72,.74,.76','.20');
  const railSide=finishAlbedo(material(0xced4da,.92,1,{map:railMaps[0],normalMap:railMaps[1],normalScale:new T.Vector2(.18,.18),roughnessMap:railMaps[2],envMapIntensity:1.2}),'.40,.43,.46','.25');
  const cableSteel=material(0x555d63,.62,.88,{roughnessMap:metalTexture,envMapIntensity:.3});
  const charcoal=material(0x353a3c,.72,.28,{roughnessMap:metalTexture,envMapIntensity:.3}),dark=material(0x1c2022,.88,.05),galvanized=material(0xb7bab8,.68,.82,{map:roofColor,normalMap:roofNormal,normalScale:new T.Vector2(.18,.18),roughnessMap:roofRoughness,envMapIntensity:.7});galvanized.userData.tileSize=1.2;
+ const fittingZinc=finishAlbedo(material(0xd2d8d9,.82,.87,{map:roofColor,normalMap:roofNormal,normalScale:new T.Vector2(.06,.06),roughnessMap:roofRoughness,envMapIntensity:1.05}),'.48,.51,.52','.15');
+ const framePaint=material(0x707e7e,.72,.5,{normalMap:roofNormal,normalScale:new T.Vector2(.04,.04),envMapIntensity:.75});
+ const fittingBolt=material(0xb9c0c4,.36,.93,{envMapIntensity:1.25}),washer=material(0x50575b,.67,.82);
+ const cableRubber=material(0x272d30,.9,.03),safetyYellow=material(0xc2a344,.73,.12),stopRed=material(0x9e3025,.55,.08),labelPlate=material(0xc8c9bd,.9,.05);
+ const fittings={zinc:fittingZinc,frame:framePaint,bolt:fittingBolt,washer,cable:cableRubber,yellow:safetyYellow,red:stopRed,label:labelPlate};
  const joint=material(0x64635e,.96,0);
  const conduit=material(0x3a4144,.66,.5),rubber=material(0x11171b,.9,0),lightMat=new T.MeshBasicMaterial({color:0xe9f3ff,toneMapped:false});
  const boxGeometry=new T.BoxGeometry(1,1,1),cylGeometry=new T.CylinderGeometry(1,1,1,12);
@@ -207,27 +217,20 @@ export async function createWorld(host,onAction){
  const shaft=new T.Group();shaft.position.x=CX;interiorWorld.add(shaft);
  box(shaft,-3.2,18.3,3.7,.28,37,8.5,concrete);box(shaft,3.2,18.3,3.7,.28,37,8.5,concrete);const backWall=box(shaft,0,18.3,-.55,6.6,37,.3,concrete);const landingDoors=new T.Group();shaft.add(landingDoors);
  box(shaft,0,-.3,3.7,6.5,.3,8.6,concrete);
- const bolts=[];
  for(let floor=0;floor<floorLevels.length-1;floor++){
   const y=floorLevels[floor],height=floorLevels[floor+1]-y,doorHeight=Math.min(2.45,height-.24);
   for(const x of [-3.04,3.04]){
    box(shaft,x,y,3.7,.012,.018,8.2,joint);
-   for(const z of [.2,3.7,7]){box(shaft,x,y+.35,z,.14,.32,.25,galvanized);bolts.push([x+(x<0?.1:-.1),y+.35,z]);}
   }
   box(landingDoors,0,y,-.35,6.1,.06,.04,charcoal);
   // Back of landing door assembly and header, visible between rails.
   box(landingDoors,0,y+.12+doorHeight/2,-.28,2.5,doorHeight,.06,galvanized);box(landingDoors,0,y+.12+doorHeight/2,-.235,.035,doorHeight-.05,.015,dark);
   box(landingDoors,0,y+height-.12,-.12,2.9,.22,.28,charcoal);box(landingDoors,0,y+.05,-.1,2.9,.12,.35,steel);
-  for(const x of [-2.38,2.38]){box(shaft,x,y+.28,3.7,.5,.12,.45,charcoal);box(shaft,x,y+.37,3.7,.32,.06,.35,steel);}
   if(floor%2===0){box(shaft,-2.96,y+1.5,.15,.07,.68,.16,charcoal);box(shaft,-2.9,y+1.5,.15,.025,.57,.08,lightMat);}
  }
  for(const sign of[-1,1]){railBar(sign*2.43,3.7,.065,.3);railBar(sign*2.30,3.7,.24,.1,true);}
- for(let i=0;i<5;i++)cyl(shaft,-2.92+i*.09,18.4,.2,.025,36.8,conduit);
- box(shaft,2.95,18.4,1,.09,36.8,.38,charcoal);
- for(let n=0;n<76;n++)box(shaft,2.87,.5+n*.48,1,.06,.035,.38,galvanized);
- // Instanced fixings avoid hundreds of individual draw calls.
- const fasteners=new T.InstancedMesh(new T.CylinderGeometry(.044,.044,.025,6),steel,bolts.length),dummy=new T.Object3D();
- bolts.forEach((p,i)=>{dummy.position.set(...p);dummy.rotation.z=Math.PI/2;dummy.updateMatrix();fasteners.setMatrixAt(i,dummy.matrix);});shaft.add(fasteners);
+ addShaftHardware(shaft,landingDoors,floorLevels,fittings);
+ const dummy=new T.Object3D();
  const machinery=new T.Group();machinery.position.set(0,36.5,3.7);shaft.add(machinery);
  for(const x of [-2.5,2.5])box(machinery,x,0,0,.28,.35,5.4,charcoal);
  box(machinery,0,.22,0,3.7,.16,2.1,galvanized);box(machinery,-.8,.55,0,1.2,.62,1.3,charcoal);
@@ -345,8 +348,7 @@ export async function createWorld(host,onAction){
  for(const x of[.15,1.15])for(const z of[.01,.83])roofFixings.push([x,3.733,z]);
  const roofBolts=new T.InstancedMesh(new T.CylinderGeometry(.026,.026,.012,6),steel,roofFixings.length);
  roofFixings.forEach((p,i)=>{dummy.position.set(...p);dummy.rotation.set(0,0,0);dummy.updateMatrix();roofBolts.setMatrixAt(i,dummy.matrix);});roof.add(roofBolts);
- for(const x of[-1.9,1.9]){box(roof,x,4.03,-1.7,.035,.7,.035,steel);box(roof,x,4.03,1.7,.035,.7,.035,steel);box(roof,x,4.39,0,.035,.035,3.4,steel);}
- box(roof,0,3.82,-1.65,1.3,.25,.5,charcoal);for(let i=0;i<4;i++)box(roof,-.45+i*.3,3.97,-1.65,.02,.02,.4,steel);
+ addRoofHardware(roof,fittings);
  const roofMaterials=new Map();
  roof.traverse(o=>{if(!o.isMesh)return;const original=o.material;if(!roofMaterials.has(original)){const faded=original.clone();faded.onBeforeCompile=original.onBeforeCompile;faded.customProgramCacheKey=original.customProgramCacheKey;faded.transparent=false;faded.depthWrite=true;roofMaterials.set(original,faded);}o.material=roofMaterials.get(original);});
  const ceiling=photoQuad([[-2.15,3.52,-2.15],[2.15,3.52,-2.15],[2.15,3.52,2.05],[-2.15,3.52,2.05]]);
