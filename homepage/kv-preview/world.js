@@ -1,5 +1,5 @@
 import * as T from './vendor/three.module.min.js';
-import {addShaftHardware,addRoofHardware} from './hardware.js?v=20261127-v18';
+import {addShaftHardware,addRoofHardware,createShaftWallMaterial} from './hardware.js?v=20261127-v19';
 const clamp=(n,a=0,b=1)=>Math.min(b,Math.max(a,n));
 const smooth=n=>{const t=clamp(n);return t*t*(3-2*t);};
 const phase=(u,a,b)=>smooth((u-a)/(b-a));
@@ -215,7 +215,8 @@ export async function createWorld(host,onAction){
  for(const y of floorLevels.slice(2,-1))box(floorReturns,(openingBounds.left+openingBounds.right)/2,y-.08,(openingBounds.front+openingBounds.back)/2,openingBounds.right-openingBounds.left,.16,openingBounds.front-openingBounds.back,slab);
  // A full-scale enclosed shaft: floor divisions, real rail profiles, brackets and service runs.
  const shaft=new T.Group();shaft.position.x=CX;interiorWorld.add(shaft);
- box(shaft,-3.2,18.3,3.7,.28,37,8.5,concrete);box(shaft,3.2,18.3,3.7,.28,37,8.5,concrete);const backWall=box(shaft,0,18.3,-.55,6.6,37,.3,concrete);const landingDoors=new T.Group();shaft.add(landingDoors);
+ for(const side of[-1,1])box(shaft,side*3.2,18.3,3.7,.28,37,8.5,createShaftWallMaterial(concrete,side,floorLevels));
+ const backWall=box(shaft,0,18.3,-.55,6.6,37,.3,concrete);const landingDoors=new T.Group();shaft.add(landingDoors);
  box(shaft,0,-.3,3.7,6.5,.3,8.6,concrete);
  for(let floor=0;floor<floorLevels.length-1;floor++){
   const y=floorLevels[floor],height=floorLevels[floor+1]-y,doorHeight=Math.min(2.45,height-.24);

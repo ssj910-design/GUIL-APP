@@ -61,6 +61,49 @@ function hardwareBatch(parent) {
  return {put,plate,channel,box,cylinder,bar,bolt,cable,flush};
 }
 
+// Fixed contact occlusion supplements the broad shaft shadow map without new
+// lights, shadow passes or translucent decals. Use the same floor heights as
+// the fittings, so the soft shadows remain attached during camera movement.
+export function createShaftWallMaterial(concrete,side,levels){
+ const mat=concrete.clone(),finish=concrete.onBeforeCompile;
+ const anchors=levels.slice(0,-1).map(y=>y+.35);
+ mat.onBeforeCompile=shader=>{
+  finish(shader);
+  shader.uniforms.uAnchorHeights={value:anchors};
+  shader.fragmentShader=`uniform float uAnchorHeights[${anchors.length}];
+   float fittingDistance(vec2 p,vec2 halfSize){vec2 q=abs(p)-halfSize;return length(max(q,0.0))+min(max(q.x,q.y),0.0);}
+   float fittingFalloff(float distance,float spread,float aa){return 1.0-smoothstep(-aa,spread+aa,distance);}
+   `+shader.fragmentShader;
+  shader.fragmentShader=shader.fragmentShader.replace('#include <aomap_fragment>',`
+   #include <aomap_fragment>
+   // metre-scaled UVs on the two inner wall faces: horizontal = z, vertical = y.
+   vec2 contactWall=vMapUv*1.4;
+   float anchorDy=100.0;
+   for(int i=0;i<${anchors.length};i++){
+    float dy=contactWall.y-uAnchorHeights[i];
+    if(abs(dy)<abs(anchorDy))anchorDy=dy;
+   }
+   float contactAA=max(max(fwidth(contactWall.x),fwidth(contactWall.y))*.65,.001);
+   float plateDistance=fittingDistance(vec2(contactWall.x-3.7,anchorDy),vec2(.23,.16));
+   float plateContact=.48*fittingFalloff(plateDistance,.045,contactAA)+.13*fittingFalloff(plateDistance,.14,contactAA);
+   // The open arm sits off the wall: a softer, slightly lower shadow, not a black outline.
+   float armDistance=fittingDistance(vec2(contactWall.x-3.73,anchorDy+.085),vec2(.145,.075));
+   float armShade=.12*fittingFalloff(armDistance,.23,contactAA);
+   float railShade=.055*exp(-pow((contactWall.x-3.74)/.29,2.0));
+   float serviceCenter=${side<0?'.28':'1.0'};
+   float serviceDistance=fittingDistance(vec2(contactWall.x-serviceCenter,anchorDy),vec2(${side<0?'.31,.05':'.24,.06'}));
+   float serviceShade=.25*fittingFalloff(serviceDistance,.055,contactAA);
+   float inward=step(.5,vFormNormal.x*${(-side).toFixed(1)});
+   float wallOcclusion=clamp(max(plateContact,serviceShade)+armShade+railShade,0.0,.72)*inward;
+   reflectedLight.indirectDiffuse*=1.0-wallOcclusion;
+   reflectedLight.indirectSpecular*=1.0-wallOcclusion*.65;
+   reflectedLight.directDiffuse*=1.0-wallOcclusion*.30;
+   `);
+ };
+ mat.customProgramCacheKey=()=>`shaft-contact-v19-${side}-${anchors.length}`;
+ return mat;
+}
+
 export function addShaftHardware(shaft,landingDoors,levels,m){
  const h=hardwareBatch(shaft),doors=hardwareBatch(landingDoors);
  const anchorPlate=h.plate(.46,.32,.014,[[0,.105,.022],[0,-.105,.022]]);
