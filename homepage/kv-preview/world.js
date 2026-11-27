@@ -19,11 +19,15 @@ export async function createWorld(host,onAction){
  const interiorWorld=new T.Group();interiorWorld.position.copy(pivot).multiplyScalar(-1);buildingFrame.add(interiorWorld);
  const intoBuilding=p=>new T.Vector3(...p).sub(pivot).multiply(buildingScale).applyAxisAngle(new T.Vector3(0,1,0),buildingAngle).add(buildingFrame.position);
  const loader=new T.TextureLoader();
- const [exterior,interior,concreteTexture]=await Promise.all([
-  './assets/guil-elevator-building-photoreal.webp','./assets/guil-elevator-cabin-photoreal-v3.webp','./assets/guil-elevator-shaft-concrete.webp'
+ const [exterior,interior,concreteTexture,concreteNormal,concreteRoughness,stainlessColor,stainlessNormal,stainlessRoughness,roofColor,roofNormal,roofRoughness]=await Promise.all([
+  './assets/guil-elevator-building-photoreal.webp','./assets/guil-elevator-cabin-photoreal-v3.webp',
+  ...['guil-hoistway-concrete','guil-brushed-stainless','guil-car-roof-steel'].flatMap(name=>['color','normal','roughness'].map(map=>`./assets/materials/${name}-${map}.webp`))
  ].map(p=>loader.loadAsync(p)));
- for(const t of [exterior,interior,concreteTexture]){t.colorSpace=T.SRGBColorSpace;t.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),8);}
- concreteTexture.wrapS=concreteTexture.wrapT=T.RepeatWrapping;
+ for(const t of [exterior,interior,concreteTexture,stainlessColor,roofColor]){t.colorSpace=T.SRGBColorSpace;t.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),8);}
+ const pbrTextures=[concreteTexture,concreteNormal,concreteRoughness,stainlessColor,stainlessNormal,stainlessRoughness,roofColor,roofNormal,roofRoughness];
+ for(const t of pbrTextures){t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),8);}
+ // Rotate the rail maps together so machining follows the vertical running face.
+ const railMaps=[stainlessColor,stainlessNormal,stainlessRoughness].map(t=>{const m=t.clone();m.center.set(.5,.5);m.rotation=Math.PI/2;m.needsUpdate=true;return m;});
  // Dark surroundings and feathered service lights keep steel reflections from
  // flattening into a uniformly gray surface or a clipped white stripe.
  const reflectionRoom=new T.Scene();reflectionRoom.background=new T.Color(0x151a20);
@@ -52,35 +56,21 @@ export async function createWorld(host,onAction){
   const t=new T.CanvasTexture(c);t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),4);return t;
  };
  const metalTexture=texture('metal');
- // A separate small-scale normal field adds grit without darkening the concrete
- // photo or turning its broad mottling into oversized dents. Mipmaps suppress
- // shimmer in distant floors. No additional downloaded texture is needed.
- function concreteFinish(){
-  const size=512,heights=new Float32Array(size*size);let seed=21733;
-  const random=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
-  for(let i=0;i<heights.length;i++)heights[i]=.5+(random()-.5)*.12;
-  for(let p=0;p<1300;p++){
-   const cx=random()*size,cy=random()*size,r=.8+random()*2.2,depth=.09+random()*.18;
-   for(let y=Math.floor(cy-r);y<=Math.ceil(cy+r);y++)for(let x=Math.floor(cx-r);x<=Math.ceil(cx+r);x++){
-    const distance=Math.hypot(x-cx,y-cy)/r;if(distance<1)heights[((y+size)%size)*size+(x+size)%size]-=depth*(1-distance*distance);
-   }
-  }
-  const normals=new Uint8Array(size*size*4),roughness=new Uint8Array(size*size*4);
-  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
-   const i=y*size+x,nx=(heights[y*size+(x+size-1)%size]-heights[y*size+(x+1)%size])*2.4,ny=(heights[((y+size-1)%size)*size+x]-heights[((y+1)%size)*size+x])*2.4,length=Math.hypot(nx,ny,1);
-   normals.set([Math.round((nx/length*.5+.5)*255),Math.round((ny/length*.5+.5)*255),Math.round((1/length*.5+.5)*255),255],i*4);
-   const r=Math.round(231+clamp(.6-heights[i])*35);roughness.set([r,r,r,255],i*4);
-  }
-  return [normals,roughness].map(data=>{const t=new T.DataTexture(data,size,size,T.RGBAFormat);t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(3,3);t.generateMipmaps=true;t.minFilter=T.LinearMipmapLinearFilter;t.magFilter=T.LinearFilter;t.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),8);t.needsUpdate=true;return t;});
- }
- const [concreteNormal,concreteRoughness]=concreteFinish();
+ // CC0 PBR sets provide correlated color, normal and roughness detail.
+ // Normal maps use OpenGL orientation and linear color space; only color is sRGB.
  const material=(color,roughness=.5,metalness=0,extra={})=>new T.MeshStandardMaterial({color,roughness,metalness,...extra});
- const concrete=material(0xe5e4e0,.99,0,{map:concreteTexture,bumpMap:concreteTexture,bumpScale:.022,normalMap:concreteNormal,normalScale:new T.Vector2(.42,.42),roughnessMap:concreteRoughness,envMapIntensity:.12});concrete.userData.tileSize=1.8;
- const steel=new T.MeshPhysicalMaterial({color:0xc5c8c8,roughness:.54,metalness:.96,roughnessMap:metalTexture,bumpMap:metalTexture,bumpScale:.003,anisotropy:.45,anisotropyRotation:Math.PI/2,envMapIntensity:.72});steel.userData.tileSize=.8;
- const railFace=new T.MeshPhysicalMaterial({color:0xd2d6da,metalness:1,roughness:.36,roughnessMap:metalTexture,bumpMap:metalTexture,bumpScale:.00065,anisotropy:.22,anisotropyRotation:Math.PI/2,envMapIntensity:1.25});
- const railSide=material(0xa4acb3,.49,1,{roughnessMap:metalTexture,envMapIntensity:1.05});
+ // Keep macro color variation restrained while retaining the fine-scale pores.
+ function finishAlbedo(mat,base,detail){
+  mat.onBeforeCompile=shader=>{shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`#include <map_fragment>
+ diffuseColor.rgb=mix(vec3(${base}),diffuseColor.rgb,${detail});`);};
+  mat.customProgramCacheKey=()=>`finish-${base}-${detail}`;return mat;
+ }
+ const concrete=finishAlbedo(material(new T.Color(1.65,1.64,1.60),1,0,{map:concreteTexture,normalMap:concreteNormal,normalScale:new T.Vector2(.32,.32),roughnessMap:concreteRoughness,envMapIntensity:.12}),'.32,.315,.30','.55');concrete.userData.tileSize=2.2;
+ const steel=new T.MeshPhysicalMaterial({color:0xf3f5f6,map:stainlessColor,roughness:.82,metalness:.96,normalMap:stainlessNormal,normalScale:new T.Vector2(.12,.12),roughnessMap:stainlessRoughness,anisotropy:.45,anisotropyRotation:Math.PI/2,envMapIntensity:.95});steel.userData.tileSize=.65;
+ const railFace=finishAlbedo(new T.MeshPhysicalMaterial({color:0xffffff,map:railMaps[0],metalness:1,roughness:.58,roughnessMap:railMaps[2],normalMap:railMaps[1],normalScale:new T.Vector2(.12,.12),anisotropy:.32,anisotropyRotation:Math.PI/2,envMapIntensity:1.7}),'.78,.80,.82','.20');
+ const railSide=finishAlbedo(material(0xced4da,.92,1,{map:railMaps[0],normalMap:railMaps[1],normalScale:new T.Vector2(.18,.18),roughnessMap:railMaps[2],envMapIntensity:1.4}),'.57,.60,.63','.25');
  const cableSteel=material(0x555d63,.62,.88,{roughnessMap:metalTexture,envMapIntensity:.3});
- const charcoal=material(0x353a3c,.72,.28,{roughnessMap:metalTexture,envMapIntensity:.3}),dark=material(0x1c2022,.88,.05),galvanized=material(0xb7bab8,.68,.82,{roughnessMap:concreteRoughness,bumpMap:metalTexture,bumpScale:.003,envMapIntensity:.48});galvanized.userData.tileSize=1.2;
+ const charcoal=material(0x353a3c,.72,.28,{roughnessMap:metalTexture,envMapIntensity:.3}),dark=material(0x1c2022,.88,.05),galvanized=material(0xb7bab8,.68,.82,{map:roofColor,normalMap:roofNormal,normalScale:new T.Vector2(.18,.18),roughnessMap:roofRoughness,envMapIntensity:.7});galvanized.userData.tileSize=1.2;
  const joint=material(0x64635e,.96,0);
  const conduit=material(0x3a4144,.66,.5),rubber=material(0x11171b,.9,0),lightMat=new T.MeshBasicMaterial({color:0xe9f3ff,toneMapped:false});
  const boxGeometry=new T.BoxGeometry(1,1,1),cylGeometry=new T.CylinderGeometry(1,1,1,12);
@@ -172,7 +162,7 @@ export async function createWorld(host,onAction){
  // All four reveals are planar. The sill and head are horizontal; the jambs,
  // rail brackets and facade edges use the same axes and vanishing directions.
  const recess=new T.Group();scene.add(recess);
- const recessMaterial=concrete.clone();recessMaterial.side=T.DoubleSide;recessMaterial.vertexColors=true;
+ const recessMaterial=concrete.clone();recessMaterial.onBeforeCompile=concrete.onBeforeCompile;recessMaterial.customProgramCacheKey=concrete.customProgramCacheKey;recessMaterial.side=T.DoubleSide;recessMaterial.vertexColors=true;
  for(let i=0;i<4;i++){
   const j=(i+1)%4,points=[openingWorld[i],openingWorld[j],innerOpening[j],innerOpening[i]];
   const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(points.flatMap(p=>p.toArray()),3));g.setIndex([0,1,2,0,2,3]);
@@ -221,19 +211,33 @@ export async function createWorld(host,onAction){
  const cabin=new T.Group();cabin.scale.y=CABIN_HEIGHT_SCALE;cabin.position.set(CX,5,CZ);cabin.rotation.y=Math.PI;interiorWorld.add(cabin);
  const refCamera=new T.PerspectiveCamera(50,1672/941,.01,50);refCamera.position.set(0,1.9,-1.8);refCamera.lookAt(0,1.9,2.05);refCamera.updateMatrixWorld();
  const photoMatrix=new T.Matrix4().multiplyMatrices(refCamera.projectionMatrix,refCamera.matrixWorldInverse);
- const photoMaterial=new T.ShaderMaterial({uniforms:{photo:{value:interior},grain:{value:metalTexture},baseColor:{value:new T.Color(0x848682)},surfaceMetal:{value:1},surfaceKind:{value:0},layerOpacity:{value:1}},side:T.DoubleSide,toneMapped:false,
-  vertexShader:'attribute vec4 photoCoord; varying vec4 vPhoto; varying vec3 vLocal; varying vec3 vSurfaceNormal; varying vec3 vView; void main(){ vPhoto=photoCoord; vLocal=position; vSurfaceNormal=normalize(normalMatrix*normal); vec4 mv=modelViewMatrix*vec4(position,1.0); vView=-mv.xyz; gl_Position=projectionMatrix*mv; }',
+ const photoMaterial=new T.ShaderMaterial({uniforms:{photo:{value:interior},grain:{value:metalTexture},baseColor:{value:new T.Color(0x848682)},surfaceMetal:{value:1},surfaceKind:{value:0},pbrColor:{value:stainlessColor},pbrNormal:{value:stainlessNormal},pbrRoughness:{value:stainlessRoughness},reflectionMap:{value:null},layerOpacity:{value:1}},side:T.DoubleSide,toneMapped:false,
+  defines:{ENVMAP_TYPE_CUBE_UV:'',CUBEUV_TEXEL_WIDTH:1/environment.texture.image.width,CUBEUV_TEXEL_HEIGHT:1/environment.texture.image.height,CUBEUV_MAX_MIP:(Math.log2(environment.texture.image.height)-2).toFixed(1)},
+  vertexShader:'attribute vec4 photoCoord; varying vec4 vPhoto; varying vec3 vLocal; varying vec3 vLocalNormal; varying vec3 vSurfaceNormal; varying vec3 vView; void main(){ vPhoto=photoCoord; vLocal=position; vLocalNormal=normal; vSurfaceNormal=normalize(normalMatrix*normal); vec4 mv=modelViewMatrix*vec4(position,1.0); vView=-mv.xyz; gl_Position=projectionMatrix*mv; }',
   fragmentShader:`#include <common>
+   #include <cube_uv_reflection_fragment>
    varying vec4 vPhoto;
    varying vec3 vLocal;
+   varying vec3 vLocalNormal;
    varying vec3 vSurfaceNormal;
    varying vec3 vView;
    uniform float surfaceMetal;
    uniform float surfaceKind;
    uniform sampler2D photo;
    uniform sampler2D grain;
+   uniform sampler2D pbrColor;
+   uniform sampler2D pbrNormal;
+   uniform sampler2D pbrRoughness;
+   uniform sampler2D reflectionMap;
    uniform vec3 baseColor;
    uniform float layerOpacity;
+   mat3 materialFrame(vec3 eye,vec3 n,vec2 uv){
+    vec3 q0=dFdx(eye),q1=dFdy(eye),q1p=cross(q1,n),q0p=cross(n,q0);
+    vec2 s0=dFdx(uv),s1=dFdy(uv);
+    vec3 t=q1p*s0.x+q0p*s1.x,b=q1p*s0.y+q0p*s1.y;
+    float scale=inversesqrt(max(max(dot(t,t),dot(b,b)),.00000001));
+    return mat3(t*scale,b*scale,n);
+   }
    void main(){
     vec2 uv=vPhoto.xy/max(vPhoto.w,.001)*.5+.5;
     float valid=smoothstep(.15,.7,vPhoto.w)*smoothstep(0.0,.05,uv.x)*(1.0-smoothstep(.95,1.0,uv.x))*smoothstep(0.0,.05,uv.y)*(1.0-smoothstep(.95,1.0,uv.y));
@@ -261,10 +265,26 @@ export async function createWorld(host,onAction){
     float grazing=pow(1.0-abs(dot(n,v)),3.0);
     float strip=smoothstep(.65,.98,abs(reflect(-v,n).x));
     vec3 finish=mix(fallback,sampleColor,valid)+vec3(.024,.023,.021)*strip*grazing*surfaceMetal;
+    // Hairline direction, microscopic normal and varying roughness respond to
+    // the same service-light environment as the real steel outside the cabin.
+    vec2 metalUv=abs(vLocalNormal.y)>.5?vLocal.xz/.65:vec2(vLocal.y,abs(vLocalNormal.x)>.5?vLocal.z:vLocal.x)/.65;
+    float rough=clamp(texture2D(pbrRoughness,metalUv).g*.7+.22,.3,.7);
+    vec3 detail=texture2D(pbrNormal,metalUv).xyz*2.0-1.0;detail.xy*=.16;
+    vec3 brushedNormal=normalize(materialFrame(-vView,n,metalUv)*detail);
+    vec3 reflected=inverseTransformDirection(reflect(-v,brushedNormal),viewMatrix);
+    vec3 reflectedLight=textureCubeUV(reflectionMap,reflected,rough).rgb;
+    float panel=step(1168.0/1672.0,uv.x)*step(uv.x,1265.0/1672.0)*step(1.0-640.0/941.0,uv.y)*step(uv.y,1.0-300.0/941.0);
+    float finishMask=surfaceMetal*(1.0-indicator)*(1.0-panel)*smoothstep(.015,.08,dot(finish,vec3(.2126,.7152,.0722)));
+    vec3 tint=texture2D(pbrColor,metalUv).rgb;
+    finish*=1.0+(tint-vec3(.42))*.14*finishMask;
+    finish=mix(finish,reflectedLight*vec3(.84,.87,.89),(.11+.08*grazing)*finishMask);
     gl_FragColor=vec4(finish,layerOpacity);
     #include <colorspace_fragment>
    }`
  });
+ // Render-target textures must be shared explicitly rather than cloned with uniforms.
+ photoMaterial.uniforms.reflectionMap.value=environment.texture;
+ function clonePhotoMaterial(){photoMaterial.uniforms.reflectionMap.value=null;const mat=photoMaterial.clone();photoMaterial.uniforms.reflectionMap.value=mat.uniforms.reflectionMap.value=environment.texture;return mat;}
  function photoQuad(points){const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(points.flat(),3));g.setIndex([0,1,2,0,2,3]);g.computeVertexNormals();const coords=[];for(const p of points){const q=new T.Vector4(...p,1).applyMatrix4(photoMatrix);coords.push(q.x,q.y,q.z,q.w);}g.setAttribute('photoCoord',new T.Float32BufferAttribute(coords,4));const mesh=new T.Mesh(g,photoMaterial);cabin.add(mesh);return mesh;}
  // Closed reference front dimensions derived from the photograph's door edges.
  function frontPoint(px,py,z=2.05){const v=new T.Vector3(px/1672*2-1,1-py/941*2,.5).unproject(refCamera);const dir=v.sub(refCamera.position).normalize();return refCamera.position.clone().addScaledVector(dir,(z-refCamera.position.z)/dir.z);}
@@ -275,25 +295,16 @@ export async function createWorld(host,onAction){
  const leafLeft=front(left,bottom,mid,top),leafRight=front(mid,bottom,right,top);
  photoQuad([[-2.15,.1,-2.15],[-2.15,.1,2.05],[-2.15,3.55,2.05],[-2.15,3.55,-2.15]]);
  photoQuad([[2.15,.1,2.05],[2.15,.1,-2.15],[2.15,3.55,-2.15],[2.15,3.55,2.05]]);
- const floorPhoto=photoQuad([[-2.15,.1,-2.15],[2.15,.1,-2.15],[2.15,.1,2.05],[-2.15,.1,2.05]]);floorPhoto.material=photoMaterial.clone();floorPhoto.material.uniforms.baseColor.value=new T.Color(0x343b40);floorPhoto.material.uniforms.grain.value=concreteTexture;floorPhoto.material.uniforms.surfaceMetal.value=0;floorPhoto.material.uniforms.surfaceKind.value=1;
+ const floorPhoto=photoQuad([[-2.15,.1,-2.15],[2.15,.1,-2.15],[2.15,.1,2.05],[-2.15,.1,2.05]]);floorPhoto.material=clonePhotoMaterial();floorPhoto.material.uniforms.baseColor.value=new T.Color(0x343b40);floorPhoto.material.uniforms.grain.value=concreteTexture;floorPhoto.material.uniforms.surfaceMetal.value=0;floorPhoto.material.uniforms.surfaceKind.value=1;
  box(cabin,0,1.82,-2.24,4.4,3.65,.15,galvanized,true);
  for(const x of [-2.22,2.22])box(cabin,x,1.8,0,.13,3.6,4.45,galvanized,true);
  box(cabin,0,0,0,4.5,.18,4.5,charcoal);
  // The intact roof fades away as the camera approaches; no hatch or mechanical
  // opening. Only roof-specific materials fade, leaving walls and rails unchanged.
  const roof=new T.Group();cabin.add(roof);
- // Fine zinc mottling and separate folded sheets keep the car top from reading
- // as a single smooth plastic lid. These textures/materials belong to the roof.
- const zincCanvas=document.createElement('canvas');zincCanvas.width=zincCanvas.height=256;
- const zincCtx=zincCanvas.getContext('2d'),zincPixels=zincCtx.createImageData(256,256);let zincSeed=71839;
- for(let y=0;y<256;y++)for(let x=0;x<256;x++){
-  zincSeed=(zincSeed*16807)%2147483647;
-  const grain=zincSeed/2147483647-.5,mottle=Math.sin(x*.19+Math.sin(y*.11))*Math.cos(y*.23+x*.025),v=Math.round(192+grain*14+mottle*9);
-  zincPixels.data.set([v,v+1,v+2,255],(y*256+x)*4);
- }
- zincCtx.putImageData(zincPixels,0,0);const zincTexture=new T.CanvasTexture(zincCanvas);zincTexture.colorSpace=T.SRGBColorSpace;zincTexture.wrapS=zincTexture.wrapT=T.RepeatWrapping;zincTexture.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),8);
- const roofSteel=new T.MeshPhysicalMaterial({color:0xd1d5d8,map:zincTexture,metalness:.94,roughness:.43,roughnessMap:metalTexture,bumpMap:metalTexture,bumpScale:.0012,anisotropy:.25,envMapIntensity:.85});roofSteel.userData.tileSize=.65;
- const foldedEdge=material(0x929ca5,.4,.96,{roughnessMap:metalTexture,envMapIntensity:.7});foldedEdge.userData.tileSize=.7;
+ // Dedicated satin steel maps retain the approved folded-sheet geometry.
+ const roofSteel=finishAlbedo(new T.MeshPhysicalMaterial({color:0xf1f2f2,map:roofColor,metalness:.97,roughness:.58,roughnessMap:roofRoughness,normalMap:roofNormal,normalScale:new T.Vector2(.09,.09),anisotropy:.3,envMapIntensity:1.65}),'.66,.68,.69','.22');roofSteel.userData.tileSize=.9;
+ const foldedEdge=material(0xe0e5e8,.72,.96,{map:stainlessColor,normalMap:stainlessNormal,normalScale:new T.Vector2(.12,.12),roughnessMap:stainlessRoughness,envMapIntensity:1.0});foldedEdge.userData.tileSize=.7;
  box(roof,0,3.63,0,4.5,.1,4.5,foldedEdge,true);
  for(const x of[-1.48,0,1.48])box(roof,x,3.689,0,1.465,.018,4.42,roofSteel,true);
  for(const x of[-2.22,2.22])box(roof,x,3.70,0,.045,.065,4.5,foldedEdge,true);
@@ -308,9 +319,9 @@ export async function createWorld(host,onAction){
  for(const x of[-1.9,1.9]){box(roof,x,4.03,-1.7,.035,.7,.035,steel);box(roof,x,4.03,1.7,.035,.7,.035,steel);box(roof,x,4.39,0,.035,.035,3.4,steel);}
  box(roof,0,3.82,-1.65,1.3,.25,.5,charcoal);for(let i=0;i<4;i++)box(roof,-.45+i*.3,3.97,-1.65,.02,.02,.4,steel);
  const roofMaterials=new Map();
- roof.traverse(o=>{if(!o.isMesh)return;const original=o.material;if(!roofMaterials.has(original)){const faded=original.clone();faded.transparent=false;faded.depthWrite=true;roofMaterials.set(original,faded);}o.material=roofMaterials.get(original);});
+ roof.traverse(o=>{if(!o.isMesh)return;const original=o.material;if(!roofMaterials.has(original)){const faded=original.clone();faded.onBeforeCompile=original.onBeforeCompile;faded.customProgramCacheKey=original.customProgramCacheKey;faded.transparent=false;faded.depthWrite=true;roofMaterials.set(original,faded);}o.material=roofMaterials.get(original);});
  const ceiling=photoQuad([[-2.15,3.52,-2.15],[2.15,3.52,-2.15],[2.15,3.52,2.05],[-2.15,3.52,2.05]]);
- ceiling.material=photoMaterial.clone();ceiling.material.uniforms.surfaceKind.value=2;ceiling.material.transparent=true;ceiling.material.depthWrite=false;ceiling.material.side=T.FrontSide;
+ ceiling.material=clonePhotoMaterial();ceiling.material.uniforms.surfaceKind.value=2;ceiling.material.transparent=true;ceiling.material.depthWrite=false;ceiling.material.side=T.FrontSide;
  // A shallow textured door recess and sill add true depth at the opening.
  for(const x of[left-.04,right+.04])box(cabin,x,(top+bottom)/2,2.12,.07,top-bottom+.1,.22,charcoal);
  box(cabin,mid,bottom-.03,2.15,right-left+.12,.07,.35,steel);
@@ -387,6 +398,6 @@ export async function createWorld(host,onAction){
   const projected=openingWorld.map(p=>p.clone().project(camera));
   return {hotspot:{x:(hotspot.x*.5+.5)*w,y:(-.5*hotspot.y+.5)*h},hoverBox:{left:Math.min(...projected.map(p=>(p.x*.5+.5)*w)),right:Math.max(...projected.map(p=>(p.x*.5+.5)*w)),top:Math.min(...projected.map(p=>(-.5*p.y+.5)*h)),bottom:Math.max(...projected.map(p=>(-.5*p.y+.5)*h))},camera:p,carY:cabin.position.y,roofOpacity};
  }
- function dispose(){renderer.dispose();environment.dispose();zincTexture.dispose();concreteNormal.dispose();concreteRoughness.dispose();scene.traverse(o=>{if(o.isMesh){o.geometry.dispose();}});}
+ function dispose(){renderer.dispose();environment.dispose();pbrTextures.forEach(t=>t.dispose());railMaps.forEach(t=>t.dispose());scene.traverse(o=>{if(o.isMesh){o.geometry.dispose();}});}
  setFloor(7);return {resize,update,setFloor,dispose,canvas:renderer.domElement};
 }
